@@ -278,6 +278,15 @@ impl DeliverablesService {
         .execute(&mut **tx)
         .await?;
 
+        // Auto-create review_task pour le workflow H.2
+        crate::services::ReviewQueueService::create_task_for_slice_claim(
+            tx,
+            deliverable_id,
+            slice.id,
+            &slice.primary_domain,
+        )
+        .await?;
+
         Ok(PrMergedOutcome::PendingManualReview { deliverable_id })
     }
 

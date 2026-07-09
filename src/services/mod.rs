@@ -25,6 +25,8 @@ pub mod queue;
 pub mod scim;
 pub mod sandbox;
 pub mod deliverables;
+pub mod review_queue;
+pub mod reviews;
 pub mod session;
 pub mod slices;
 pub mod webauthn;
@@ -49,6 +51,11 @@ pub use dm::DmConversation;
 pub use queue::QueueService;
 pub use sandbox::SandboxService;
 pub use deliverables::{DeliverablesService, PrMergedOutcome, PrMergedParams};
+pub use review_queue::{
+    QueueFilter as ReviewQueueFilter, ReviewQueueService, ReviewTask, SeniorityLevel,
+};
+pub use reviews::{ReviewsService, SubmitOutcome as ReviewSubmitOutcome,
+                   SubmitParams as ReviewSubmitParams, Verdict};
 pub use session::SessionService;
 pub use slices::{ListFilter as SlicesListFilter, SlicesService};
 pub use webauthn::WebauthnService;

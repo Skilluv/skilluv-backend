@@ -28,9 +28,11 @@ pub mod attestations;
 pub mod deliverables;
 pub mod review_queue;
 pub mod reviews;
+pub mod seasons;
 pub mod session;
 pub mod skills;
 pub mod slices;
+pub mod stewards;
 pub mod tracks;
 pub mod webauthn;
 pub mod social;
@@ -60,12 +62,14 @@ pub use review_queue::{
 };
 pub use reviews::{ReviewsService, SubmitOutcome as ReviewSubmitOutcome,
                    SubmitParams as ReviewSubmitParams, Verdict};
+pub use seasons::{CreateSeasonParams, Season, SeasonsService};
 pub use session::SessionService;
 pub use skills::{
     RecommendationSkillMatch, SkillTalent, SkillsService, SliceRecommendation,
     TalentSearchFilter, UserSkillEnriched,
 };
 pub use slices::{ListFilter as SlicesListFilter, SlicesService};
+pub use stewards::{ProjectSteward, StewardsService};
 pub use tracks::{EligibilityCheck, Track, TrackProgress, TracksService, UserTrack};
 pub use webauthn::WebauthnService;
 pub use storage::StorageService;

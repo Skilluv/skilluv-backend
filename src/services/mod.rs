@@ -28,6 +28,7 @@ pub mod attestations;
 pub mod deliverables;
 pub mod review_queue;
 pub mod reviews;
+pub mod portfolio;
 pub mod seasons;
 pub mod session;
 pub mod skills;
@@ -62,6 +63,7 @@ pub use review_queue::{
 };
 pub use reviews::{ReviewsService, SubmitOutcome as ReviewSubmitOutcome,
                    SubmitParams as ReviewSubmitParams, Verdict};
+pub use portfolio::{PortfolioService, PublicUserSnapshot};
 pub use seasons::{CreateSeasonParams, Season, SeasonsService};
 pub use session::SessionService;
 pub use skills::{

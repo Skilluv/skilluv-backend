@@ -28,6 +28,7 @@ pub mod deliverables;
 pub mod review_queue;
 pub mod reviews;
 pub mod session;
+pub mod skills;
 pub mod slices;
 pub mod tracks;
 pub mod webauthn;
@@ -58,6 +59,10 @@ pub use review_queue::{
 pub use reviews::{ReviewsService, SubmitOutcome as ReviewSubmitOutcome,
                    SubmitParams as ReviewSubmitParams, Verdict};
 pub use session::SessionService;
+pub use skills::{
+    RecommendationSkillMatch, SkillTalent, SkillsService, SliceRecommendation,
+    TalentSearchFilter, UserSkillEnriched,
+};
 pub use slices::{ListFilter as SlicesListFilter, SlicesService};
 pub use tracks::{EligibilityCheck, Track, TrackProgress, TracksService, UserTrack};
 pub use webauthn::WebauthnService;

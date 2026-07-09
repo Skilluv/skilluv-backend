@@ -1,0 +1,395 @@
+//! Service `skills` — expose le skill graph aux profils, recherche recruteur,
+//! et recommandations de slices (Phase P4).
+//!
+//! Voir docs/challenges-target-model-and-roadmap.md sections B.3, B.9, 8.3, 8.6.
+//!
+//! Le skill graph est un cœur produit : il rend visible ce qu'un contributeur
+//! sait faire (profil), permet aux recruteurs de chercher précisément, et guide
+//! les contributeurs vers leurs prochains slices via des recommandations
+//! ciblées sur les skills proches d'un level-up.
+
+use chrono::{DateTime, Utc};
+use serde::Serialize;
+use sqlx::PgPool;
+use uuid::Uuid;
+
+use crate::errors::AppError;
+
+pub struct SkillsService;
+
+/// Une skill enrichie avec la progression du user (vue "mes skills").
+#[derive(Debug, Serialize)]
+pub struct UserSkillEnriched {
+    pub skill_id: Uuid,
+    pub skill_slug: String,
+    pub skill_display_name: String,
+    pub skill_domain: String,
+    pub skill_parent_id: Option<Uuid>,
+    pub proven_count: i32,
+    pub weighted_proven_count: i32,
+    pub proficiency_level: i16,
+    pub first_proven_at: Option<DateTime<Utc>>,
+    pub last_proven_at: Option<DateTime<Utc>>,
+    pub top_proof_deliverable_ids: Vec<Uuid>,
+}
+
+/// Un talent trouvé pour un skill donné (vue recruteur).
+#[derive(Debug, Serialize)]
+pub struct SkillTalent {
+    pub user_id: Uuid,
+    pub username: String,
+    pub display_name: String,
+    pub proficiency_level: i16,
+    pub proven_count: i32,
+    pub weighted_proven_count: i32,
+    pub last_proven_at: Option<DateTime<Utc>>,
+}
+
+/// Une recommandation de slice basée sur les skills proches d'un level-up.
+#[derive(Debug, Serialize)]
+pub struct SliceRecommendation {
+    pub slice_id: Uuid,
+    pub slice_title: String,
+    pub slice_primary_domain: String,
+    pub slice_difficulty: i16,
+    pub project_id: Uuid,
+    pub project_name: String,
+    /// Skills touchés par cette slice pour lesquels le user est près d'un level-up.
+    pub matched_skills: Vec<RecommendationSkillMatch>,
+    pub total_match_score: i32,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RecommendationSkillMatch {
+    pub skill_id: Uuid,
+    pub skill_slug: String,
+    pub skill_display_name: String,
+    pub current_wpc: i32,
+    pub current_level: i16,
+    pub next_level_wpc_threshold: i32,
+    pub weight_in_slice: i16,
+}
+
+/// Filtre pour rechercher des talents par skill.
+#[derive(Debug, Clone, Default)]
+pub struct TalentSearchFilter {
+    pub min_level: i16,
+    pub page: i64,
+    pub per_page: i64,
+}
+
+impl SkillsService {
+    // ═══════════════════════════════════════════════════════════════════
+    // Consultation : profils et catalogue
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// Liste toutes les skills (catégories + atomiques) filtrable par domaine.
+    pub async fn list_skills(
+        db: &PgPool,
+        domain: Option<&str>,
+    ) -> Result<Vec<crate::models::SkillNode>, AppError> {
+        let skills = sqlx::query_as::<_, crate::models::SkillNode>(
+            r#"
+            SELECT * FROM skill_nodes
+            WHERE ($1::text IS NULL OR domain = $1)
+            ORDER BY domain, parent_id NULLS FIRST, slug
+            "#,
+        )
+        .bind(domain)
+        .fetch_all(db)
+        .await?;
+        Ok(skills)
+    }
+
+    /// Skill map du user, triée par proficiency puis récence.
+    ///
+    /// N'inclut que les skills où le user a au moins un proven_count > 0.
+    /// Utilisé pour le profil public "voici ce que je sais faire".
+    pub async fn list_user_skills(
+        db: &PgPool,
+        user_id: Uuid,
+    ) -> Result<Vec<UserSkillEnriched>, AppError> {
+        let rows: Vec<(Uuid, String, String, String, Option<Uuid>,
+                       i32, i32, i16,
+                       Option<DateTime<Utc>>, Option<DateTime<Utc>>,
+                       Vec<Uuid>)> = sqlx::query_as(
+            r#"
+            SELECT
+                us.skill_id,
+                sn.slug,
+                sn.display_name,
+                sn.domain,
+                sn.parent_id,
+                us.proven_count,
+                us.weighted_proven_count,
+                us.proficiency_level,
+                us.first_proven_at,
+                us.last_proven_at,
+                us.top_proof_deliverable_ids
+            FROM user_skills us
+            JOIN skill_nodes sn ON sn.id = us.skill_id
+            WHERE us.user_id = $1
+              AND us.proven_count > 0
+            ORDER BY us.proficiency_level DESC, us.last_proven_at DESC NULLS LAST
+            "#,
+        )
+        .bind(user_id)
+        .fetch_all(db)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(
+                |(skill_id, slug, display_name, domain, parent_id,
+                  proven_count, wpc, level, first, last, top)| {
+                    UserSkillEnriched {
+                        skill_id,
+                        skill_slug: slug,
+                        skill_display_name: display_name,
+                        skill_domain: domain,
+                        skill_parent_id: parent_id,
+                        proven_count,
+                        weighted_proven_count: wpc,
+                        proficiency_level: level,
+                        first_proven_at: first,
+                        last_proven_at: last,
+                        top_proof_deliverable_ids: top,
+                    }
+                },
+            )
+            .collect())
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Recherche recruteur : talents par skill
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// Trouve les talents qui maîtrisent un skill donné à un niveau minimum.
+    ///
+    /// Trié par proficiency DESC, puis wpc DESC (le plus prouvé d'abord).
+    /// Ne retourne que les users avec `profile_active = TRUE` — les profils
+    /// non activés ne sont pas exposés aux recruteurs.
+    pub async fn find_talents_by_skill(
+        db: &PgPool,
+        skill_slug: &str,
+        filter: &TalentSearchFilter,
+    ) -> Result<(Vec<SkillTalent>, i64), AppError> {
+        let min_level = filter.min_level.clamp(1, 5);
+        let per_page = filter.per_page.clamp(1, 100);
+        let page = filter.page.max(1);
+        let offset = (page - 1) * per_page;
+
+        // Resolve skill_id from slug
+        let skill_id: Option<Uuid> = sqlx::query_scalar(
+            "SELECT id FROM skill_nodes WHERE slug = $1",
+        )
+        .bind(skill_slug)
+        .fetch_optional(db)
+        .await?;
+
+        let Some(skill_id) = skill_id else {
+            return Err(AppError::NotFound(format!(
+                "Skill '{skill_slug}' not found"
+            )));
+        };
+
+        let talents: Vec<SkillTalent> = sqlx::query_as::<_, (Uuid, String, String, i16, i32, i32, Option<DateTime<Utc>>)>(
+            r#"
+            SELECT
+                u.id,
+                u.username,
+                u.display_name,
+                us.proficiency_level,
+                us.proven_count,
+                us.weighted_proven_count,
+                us.last_proven_at
+            FROM user_skills us
+            JOIN users u ON u.id = us.user_id
+            WHERE us.skill_id = $1
+              AND us.proficiency_level >= $2
+              AND u.profile_active = TRUE
+            ORDER BY us.proficiency_level DESC, us.weighted_proven_count DESC,
+                     us.last_proven_at DESC NULLS LAST
+            LIMIT $3 OFFSET $4
+            "#,
+        )
+        .bind(skill_id)
+        .bind(min_level)
+        .bind(per_page)
+        .bind(offset)
+        .fetch_all(db)
+        .await?
+        .into_iter()
+        .map(|(user_id, username, display_name, level, count, wpc, last)| SkillTalent {
+            user_id,
+            username,
+            display_name,
+            proficiency_level: level,
+            proven_count: count,
+            weighted_proven_count: wpc,
+            last_proven_at: last,
+        })
+        .collect();
+
+        let total: i64 = sqlx::query_scalar(
+            r#"
+            SELECT COUNT(*)
+            FROM user_skills us
+            JOIN users u ON u.id = us.user_id
+            WHERE us.skill_id = $1
+              AND us.proficiency_level >= $2
+              AND u.profile_active = TRUE
+            "#,
+        )
+        .bind(skill_id)
+        .bind(min_level)
+        .fetch_one(db)
+        .await?;
+
+        Ok((talents, total))
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Recommandations de slices basées sur les skills près d'un level-up
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// Retourne le seuil WPC pour atteindre le niveau supérieur.
+    ///
+    /// Formule inverse de `UserSkill::proficiency_level_for` :
+    ///   level 1 → WPC 3 pour passer à 2
+    ///   level 2 → WPC 7 pour passer à 3
+    ///   level 3 → WPC 15 pour passer à 4
+    ///   level 4 → WPC 31 pour passer à 5
+    ///   level 5 → déjà max, retourne None
+    fn wpc_threshold_for_next_level(current_level: i16) -> Option<i32> {
+        match current_level {
+            1 => Some(3),
+            2 => Some(7),
+            3 => Some(15),
+            4 => Some(31),
+            _ => None,
+        }
+    }
+
+    /// Un skill est "proche d'un level-up" si son WPC est à ≤ 3 points de la
+    /// prochaine threshold. Utilisé pour prioriser les recommandations sur des
+    /// skills que le user peut débloquer avec ~1-2 slices supplémentaires.
+    const RECOMMENDATION_WPC_WINDOW: i32 = 3;
+
+    /// Recommande des slices ouvertes pour un user, priorisées par les skills
+    /// où il est proche d'un level-up.
+    ///
+    /// Algorithme :
+    /// 1. Identifier les skills du user proches d'un level-up
+    ///    (`level < 5` AND `WPC` dans [next_threshold - 3, next_threshold - 1])
+    /// 2. Chercher les slices status='open' avec au moins un slice_skills sur
+    ///    ces skills
+    /// 3. Scorer chaque slice par la somme des weights sur les skills matchés
+    /// 4. Trier par score DESC, retourner top N
+    pub async fn recommend_slices_for_user(
+        db: &PgPool,
+        user_id: Uuid,
+        limit: i64,
+    ) -> Result<Vec<SliceRecommendation>, AppError> {
+        let limit = limit.clamp(1, 50);
+
+        // 1. Skills du user proches d'un level-up
+        let user_skills = Self::list_user_skills(db, user_id).await?;
+
+        let near_levelup: Vec<(Uuid, String, String, i32, i16, i32)> = user_skills
+            .into_iter()
+            .filter_map(|us| {
+                let threshold = Self::wpc_threshold_for_next_level(us.proficiency_level)?;
+                let gap = threshold - us.weighted_proven_count;
+                if gap > 0 && gap <= Self::RECOMMENDATION_WPC_WINDOW {
+                    Some((
+                        us.skill_id,
+                        us.skill_slug,
+                        us.skill_display_name,
+                        us.weighted_proven_count,
+                        us.proficiency_level,
+                        threshold,
+                    ))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        if near_levelup.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let near_skill_ids: Vec<Uuid> = near_levelup.iter().map(|(id, ..)| *id).collect();
+
+        // 2. Slices ouvertes touchant au moins un de ces skills
+        let candidate_slices: Vec<(Uuid, String, String, i16, Uuid, String, Uuid, i16)> =
+            sqlx::query_as(
+                r#"
+                SELECT
+                    ps.id,
+                    ps.title,
+                    ps.primary_domain,
+                    ps.difficulty,
+                    ps.project_id,
+                    p.name,
+                    ss.skill_id,
+                    ss.weight
+                FROM project_slices ps
+                JOIN slice_skills ss ON ss.slice_id = ps.id
+                JOIN projects p ON p.id = ps.project_id
+                WHERE ps.status = 'open'
+                  AND ss.skill_id = ANY($1)
+                "#,
+            )
+            .bind(&near_skill_ids)
+            .fetch_all(db)
+            .await?;
+
+        // 3. Aggréger par slice
+        use std::collections::HashMap;
+        let mut by_slice: HashMap<Uuid, SliceRecommendation> = HashMap::new();
+
+        for (slice_id, title, domain, difficulty, project_id, project_name, skill_id, weight) in
+            candidate_slices
+        {
+            let matched_info = near_levelup
+                .iter()
+                .find(|(sid, ..)| *sid == skill_id)
+                .cloned();
+            let Some((_, slug, display, wpc, level, threshold)) = matched_info else {
+                continue;
+            };
+
+            let entry = by_slice.entry(slice_id).or_insert(SliceRecommendation {
+                slice_id,
+                slice_title: title,
+                slice_primary_domain: domain,
+                slice_difficulty: difficulty,
+                project_id,
+                project_name,
+                matched_skills: Vec::new(),
+                total_match_score: 0,
+            });
+
+            entry.matched_skills.push(RecommendationSkillMatch {
+                skill_id,
+                skill_slug: slug,
+                skill_display_name: display,
+                current_wpc: wpc,
+                current_level: level,
+                next_level_wpc_threshold: threshold,
+                weight_in_slice: weight,
+            });
+            entry.total_match_score += weight as i32;
+        }
+
+        // 4. Trier par total_match_score DESC + limiter
+        let mut recommendations: Vec<SliceRecommendation> = by_slice.into_values().collect();
+        recommendations.sort_by(|a, b| b.total_match_score.cmp(&a.total_match_score));
+        recommendations.truncate(limit as usize);
+
+        Ok(recommendations)
+    }
+
+}

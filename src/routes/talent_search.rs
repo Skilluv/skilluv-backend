@@ -65,12 +65,19 @@ fn try_extract_auth(parts: &Parts, state: &AppState) -> Option<AuthUser> {
 
     let claims = AuthService::verify_access_token(token, &state.config.jwt_secret).ok()?;
     let user_id = claims.sub.parse::<Uuid>().ok()?;
+    let active_enterprise_id = cookie_header
+        .split(';')
+        .map(|s| s.trim())
+        .find(|s| s.starts_with("active_enterprise="))
+        .and_then(|s| s.strip_prefix("active_enterprise="))
+        .and_then(|v| Uuid::parse_str(v).ok());
     Some(AuthUser {
         user_id,
         role: claims.role,
         login_method: claims
             .login_method
             .unwrap_or_else(|| "password".to_string()),
+        active_enterprise_id,
     })
 }
 

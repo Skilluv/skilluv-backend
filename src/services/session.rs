@@ -43,6 +43,34 @@ impl SessionService {
         Self::create_with_method(db, user_id, ip, user_agent, "password").await
     }
 
+    /// If the incoming request already carries a `refresh_token` cookie for
+    /// this user, revoke that prior session. Called from every login handler
+    /// before minting a new session — otherwise the browser overwrites the
+    /// cookie but the DB row stays `revoked_at IS NULL`, and every fresh
+    /// login for the same account visibly accumulates a ghost row in the
+    /// user's "active sessions" list.
+    ///
+    /// Best-effort: failures are swallowed on purpose. A stale cookie
+    /// pointing to a non-existent or already-revoked session is expected on
+    /// the happy path (fresh browser, prior logout, expired session).
+    pub async fn revoke_prior_from_cookie(
+        db: &PgPool,
+        user_id: Uuid,
+        cookie_header: Option<&str>,
+    ) {
+        let Some(header) = cookie_header else { return };
+        let Some(sid) = header
+            .split(';')
+            .map(|s| s.trim())
+            .find_map(|s| s.strip_prefix("refresh_token="))
+            .and_then(|v| v.split_once(':').map(|(sid, _)| sid))
+            .and_then(|s| Uuid::parse_str(s).ok())
+        else {
+            return;
+        };
+        let _ = Self::revoke_one(db, user_id, sid).await;
+    }
+
     /// Same as `create` but records how this session was authenticated (see the
     /// `user_sessions.login_method` column added by migration 0050).
     pub async fn create_with_method(

@@ -18,7 +18,8 @@ use std::sync::Arc;
 use axum::Router;
 use redis::aio::ConnectionManager;
 use sqlx::PgPool;
-use tower_http::cors::CorsLayer;
+use axum::http::{HeaderValue, Method, header};
+use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::trace::TraceLayer;
 
 use grpc::AiClient;
@@ -60,6 +61,7 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::email_prefs_routes())
         .nest("/api", routes::challenge_routes())
         .nest("/api", routes::sandbox_routes())
+        .nest("/api", routes::slice_routes())
         .nest("/api", routes::admin_routes())
         .nest("/api", routes::gamification_routes())
         .nest("/api", routes::geo_routes())
@@ -116,10 +118,55 @@ pub fn build_router(state: AppState) -> Router {
         .merge(websocket::ws_routes().with_state(state.clone()))
         .layer(middleware::SecurityHeadersLayer)
         .layer(TraceLayer::new_for_http())
-        .layer(CorsLayer::permissive())
+        .layer(build_cors_layer())
         // Sentry layers (outermost so they wrap everything). NewSentryLayer creates a
         // per-request Hub so user/tag context set in handlers doesn't leak across requests.
         .layer(sentry_tower::SentryHttpLayer::with_transaction())
         .layer(sentry_tower::NewSentryLayer::new_from_top())
         .with_state(state)
+}
+
+/// Build the CORS layer with an explicit origin allowlist. Reads
+/// `ALLOWED_ORIGINS` from env — comma-separated, e.g.
+/// `http://localhost:5173,http://localhost:5174,https://skilluv.com,https://admin.skilluv.com`.
+/// Falls back to the two dev origins so `cargo run` on a fresh checkout works
+/// out of the box. `credentials: true` is required for the httpOnly cookie
+/// auth flow — the previous `permissive` layer set `Access-Control-Allow-*`
+/// wildcards which browsers refuse to combine with credentials, meaning we
+/// were quietly relying on same-origin requests.
+fn build_cors_layer() -> CorsLayer {
+    let raw = std::env::var("ALLOWED_ORIGINS").unwrap_or_else(|_| {
+        "http://localhost:5173,http://localhost:5174".to_string()
+    });
+    let origins: Vec<HeaderValue> = raw
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .filter_map(|s| HeaderValue::from_str(s).ok())
+        .collect();
+    tracing::info!(
+        origins = ?origins.iter().map(|v| v.to_str().unwrap_or("<invalid>")).collect::<Vec<_>>(),
+        "CORS allowlist active"
+    );
+    CorsLayer::new()
+        .allow_origin(AllowOrigin::list(origins))
+        .allow_credentials(true)
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::PATCH,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
+        .allow_headers([
+            header::CONTENT_TYPE,
+            header::AUTHORIZATION,
+            header::ACCEPT,
+            header::HeaderName::from_static("x-csrf-token"),
+            header::HeaderName::from_static("x-skilluv-tenant"),
+        ])
+        .expose_headers([
+            header::HeaderName::from_static("x-request-id"),
+        ])
 }

@@ -213,6 +213,73 @@ impl EmailService {
         Ok(true)
     }
 
+    // ─── Email shell ─────────────────────────────────────────────
+
+    /// Wraps a template body in the shared Skilluv shell — brand wordmark,
+    /// consistent typography, framed card on a soft neutral background, and
+    /// a footer. `preheader` is the short teaser Gmail / Outlook show under
+    /// the subject in the inbox (kept hidden in the body).
+    ///
+    /// Values are inline styles because CSS classes are stripped or ignored
+    /// by most inbox rendering engines. Font stack starts with Space Grotesk
+    /// (loaded on the web app) and falls back to a robust system stack —
+    /// most clients will render with the fallback since custom fonts don't
+    /// load reliably in email.
+    fn shell(&self, preheader: &str, body: &str) -> String {
+        // Brand tokens mirror the frontend (`app.css` :root).
+        const FONT_STACK: &str =
+            "'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif";
+        const ACCENT: &str = "#ea580c"; // forge accent
+        const TEXT: &str = "#1c1917";
+        const TEXT_MUTED: &str = "#78716c";
+        const SURFACE: &str = "#ffffff";
+        const SURFACE_BG: &str = "#fafaf9";
+        const BORDER: &str = "#e7e5e4";
+        let year = chrono::Utc::now().format("%Y");
+        format!(
+            r#"<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+</head>
+<body style="margin:0;padding:32px 16px;background:{SURFACE_BG};font-family:{FONT_STACK};color:{TEXT};line-height:1.55;-webkit-font-smoothing:antialiased;">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">{preheader}</div>
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:560px;margin:0 auto;background:{SURFACE};border:1px solid {BORDER};border-radius:16px;overflow:hidden;">
+        <tr>
+            <td style="padding:32px 32px 0;">
+                <div style="font-size:22px;font-weight:900;letter-spacing:-0.02em;line-height:1;">
+                    <span style="color:{ACCENT};">Skill</span><span style="color:{TEXT};">uv</span>
+                </div>
+            </td>
+        </tr>
+        <tr>
+            <td style="padding:24px 32px 32px;font-size:15px;">
+                {body}
+            </td>
+        </tr>
+        <tr>
+            <td style="padding:16px 32px 20px;border-top:1px solid {BORDER};background:{SURFACE_BG};">
+                <p style="margin:0;color:{TEXT_MUTED};font-size:11px;line-height:1.4;">
+                    Skilluv © {year} — Prouve ce que tu sais faire.<br />
+                    Tu reçois cet email parce qu'une action a été effectuée sur ton compte. Si ce n'est pas toi, ignore et supprime.
+                </p>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>"#
+        )
+    }
+
+    /// Standard CTA button — inline-styled so it survives Gmail / Outlook.
+    fn cta_button(label: &str, href: &str) -> String {
+        const ACCENT: &str = "#ea580c";
+        format!(
+            r#"<a href="{href}" style="display:inline-block;background:{ACCENT};color:#ffffff;text-decoration:none;padding:12px 26px;border-radius:9999px;font-weight:600;font-size:14px;letter-spacing:0.02em;">{label}</a>"#
+        )
+    }
+
     // ─── Email templates ────────────────────────────────────────
 
     pub async fn send_email_verification(
@@ -222,23 +289,32 @@ impl EmailService {
         token: &str,
         base_url: &str,
     ) -> Result<(), AppError> {
-        let link = format!("{base_url}/api/auth/verify-email?token={token}");
-        let html = format!(
+        // Points at the frontend page (not the JSON API endpoint) so the user
+        // lands on a friendly UI that calls the backend on their behalf and
+        // then routes them to /auth/login. `base_url` MUST be the user-facing
+        // origin (frontend dev server in dev, shared domain in prod).
+        let link = format!("{base_url}/auth/verify-email?token={token}");
+        let button = Self::cta_button("Confirmer mon adresse", &link);
+        let body = format!(
             r#"
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #1a1a2e;">Bienvenue sur Skilluv, {display_name} !</h2>
-                <p>Confirme ton adresse email pour activer ton compte :</p>
-                <p style="text-align: center; margin: 30px 0;">
-                    <a href="{link}" style="background-color: #6c5ce7; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold;">
-                        Verifier mon email
-                    </a>
-                </p>
-                <p style="color: #666; font-size: 12px;">Ce lien expire dans 24 heures. Si tu n'as pas cree de compte, ignore cet email.</p>
-            </div>
+            <h1 style="margin:0 0 12px;font-size:24px;font-weight:800;letter-spacing:-0.01em;line-height:1.2;">
+                Bienvenue, {display_name}.
+            </h1>
+            <p style="margin:0 0 20px;color:#44403c;">
+                Il te reste une étape pour activer ton compte : confirme que cette adresse email est bien la tienne.
+            </p>
+            <p style="margin:24px 0;">{button}</p>
+            <p style="margin:24px 0 0;color:#78716c;font-size:13px;line-height:1.5;">
+                Le lien expire dans 24 heures. Tu peux aussi le copier-coller dans ton navigateur :<br />
+                <span style="word-break:break-all;color:#57534e;font-size:12px;">{link}</span>
+            </p>
             "#
         );
-
-        self.send(email, display_name, "Skilluv — Verifie ton email", &html)
+        let html = self.shell(
+            "Confirme ton adresse email pour activer ton compte Skilluv.",
+            &body,
+        );
+        self.send(email, display_name, "Confirme ton adresse email", &html)
             .await
     }
 
@@ -249,26 +325,31 @@ impl EmailService {
         token: &str,
         base_url: &str,
     ) -> Result<(), AppError> {
-        let link = format!("{base_url}/reset-password?token={token}");
-        let html = format!(
+        // Same rule as verify-email: link to the frontend page, not the API.
+        let link = format!("{base_url}/auth/reset-password?token={token}");
+        let button = Self::cta_button("Choisir un nouveau mot de passe", &link);
+        let body = format!(
             r#"
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #1a1a2e;">Reinitialisation de mot de passe</h2>
-                <p>Salut {display_name}, tu as demande a reinitialiser ton mot de passe :</p>
-                <p style="text-align: center; margin: 30px 0;">
-                    <a href="{link}" style="background-color: #6c5ce7; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold;">
-                        Reinitialiser mon mot de passe
-                    </a>
-                </p>
-                <p style="color: #666; font-size: 12px;">Ce lien expire dans 1 heure. Si tu n'as pas fait cette demande, ignore cet email.</p>
-            </div>
+            <h1 style="margin:0 0 12px;font-size:24px;font-weight:800;letter-spacing:-0.01em;line-height:1.2;">
+                Réinitialisation de ton mot de passe
+            </h1>
+            <p style="margin:0 0 20px;color:#44403c;">
+                Salut {display_name}, on a bien reçu ta demande. Choisis un nouveau mot de passe en cliquant sur le bouton ci-dessous.
+            </p>
+            <p style="margin:24px 0;">{button}</p>
+            <p style="margin:24px 0 0;color:#78716c;font-size:13px;line-height:1.5;">
+                Ce lien est valable 1 heure et à usage unique. Si tu n'as pas fait cette demande, ignore cet email : ton mot de passe actuel reste inchangé.
+            </p>
             "#
         );
-
+        let html = self.shell(
+            "Un lien pour choisir un nouveau mot de passe Skilluv.",
+            &body,
+        );
         self.send(
             email,
             display_name,
-            "Skilluv — Reinitialisation de mot de passe",
+            "Réinitialisation de ton mot de passe",
             &html,
         )
         .await
@@ -282,23 +363,24 @@ impl EmailService {
         event_title: &str,
         event_detail: &str,
     ) -> Result<(), AppError> {
-        let html = format!(
+        let body = format!(
             r#"
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #1a1a2e;">🔒 Alerte de sécurité</h2>
-                <p>Salut {display_name},</p>
-                <p><strong>{event_title}</strong></p>
-                <p style="color: #444;">{event_detail}</p>
-                <p style="color: #666; font-size: 12px; margin-top: 24px;">
-                    Si ce n'est pas toi, change immédiatement ton mot de passe et contacte notre support.
-                </p>
+            <h1 style="margin:0 0 12px;font-size:22px;font-weight:800;letter-spacing:-0.01em;line-height:1.2;">
+                Activité de sécurité sur ton compte
+            </h1>
+            <p style="margin:0 0 8px;color:#44403c;">Salut {display_name},</p>
+            <p style="margin:0 0 8px;font-weight:600;color:#1c1917;">{event_title}</p>
+            <p style="margin:0 0 20px;color:#44403c;">{event_detail}</p>
+            <div style="border-left:3px solid #ea580c;padding:10px 14px;background:#fff7ed;color:#9a3412;font-size:13px;border-radius:0 8px 8px 0;">
+                Si ce n'est pas toi, change ton mot de passe immédiatement et révoque toutes tes sessions depuis <strong>Paramètres → Sécurité</strong>.
             </div>
             "#
         );
+        let html = self.shell(event_title, &body);
         self.send(
             email,
             display_name,
-            &format!("Skilluv — {event_title}"),
+            &format!("Sécurité — {event_title}"),
             &html,
         )
         .await
@@ -311,26 +393,34 @@ impl EmailService {
         token: &str,
         base_url: &str,
     ) -> Result<(), AppError> {
-        let link = format!("{base_url}/enterprise/invite?token={token}");
-        let html = format!(
+        // /auth/invite/{token} is the frontend landing page that offers OAuth
+        // signup for the invited email + a link to the standard accept flow
+        // for existing users. The frontend enforces the email-match check
+        // client-side, the backend enforces it again server-side on accept.
+        let link = format!("{base_url}/auth/invite/{token}");
+        let button = Self::cta_button("Rejoindre l'équipe", &link);
+        let body = format!(
             r#"
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #1a1a2e;">Invitation recruteur</h2>
-                <p>L'entreprise <strong>{company_name}</strong> t'invite a rejoindre son equipe de recrutement sur Skilluv.</p>
-                <p style="text-align: center; margin: 30px 0;">
-                    <a href="{link}" style="background-color: #6c5ce7; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold;">
-                        Accepter l'invitation
-                    </a>
-                </p>
-                <p style="color: #666; font-size: 12px;">Cette invitation expire dans 7 jours.</p>
-            </div>
+            <h1 style="margin:0 0 12px;font-size:24px;font-weight:800;letter-spacing:-0.01em;line-height:1.2;">
+                {company_name} t'invite à recruter avec eux
+            </h1>
+            <p style="margin:0 0 12px;color:#44403c;">
+                Une place de recruteur t'est réservée dans l'espace <strong>{company_name}</strong> sur Skilluv. En acceptant, tu pourras sourcer des talents vérifiés par leurs performances, ouvrir des conversations et gérer les crédits partagés avec ton équipe.
+            </p>
+            <p style="margin:24px 0;">{button}</p>
+            <p style="margin:24px 0 0;color:#78716c;font-size:13px;line-height:1.5;">
+                L'invitation expire dans 7 jours. Elle est liée à cette adresse email uniquement — connecte-toi (ou crée un compte) avec la même pour l'accepter.
+            </p>
             "#
         );
-
+        let html = self.shell(
+            &format!("{company_name} t'invite à rejoindre son équipe de recrutement sur Skilluv."),
+            &body,
+        );
         self.send(
             email,
             company_name,
-            &format!("Skilluv — Invitation recruteur de {company_name}"),
+            &format!("Invitation : rejoins l'équipe de {company_name}"),
             &html,
         )
         .await
@@ -342,22 +432,29 @@ impl EmailService {
         display_name: &str,
         code: &str,
     ) -> Result<(), AppError> {
-        let html = format!(
+        let body = format!(
             r#"
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #1a1a2e;">Code de verification</h2>
-                <p>Salut {display_name}, voici ton code de verification :</p>
-                <p style="text-align: center; margin: 30px 0;">
-                    <span style="background-color: #f0f0f0; padding: 16px 32px; font-size: 32px; font-weight: bold; letter-spacing: 8px; border-radius: 8px; font-family: monospace;">
-                        {code}
-                    </span>
-                </p>
-                <p style="color: #666; font-size: 12px;">Ce code expire dans 10 minutes. Ne le partage avec personne.</p>
+            <h1 style="margin:0 0 12px;font-size:22px;font-weight:800;letter-spacing:-0.01em;line-height:1.2;">
+                Ton code de vérification
+            </h1>
+            <p style="margin:0 0 20px;color:#44403c;">
+                Salut {display_name}, saisis ce code dans la fenêtre de connexion pour finaliser ton accès.
+            </p>
+            <div style="text-align:center;margin:28px 0;">
+                <div style="display:inline-block;padding:16px 28px;background:#fafaf9;border:1px solid #e7e5e4;border-radius:12px;font-family:'JetBrains Mono',SFMono-Regular,Consolas,monospace;font-size:30px;font-weight:700;letter-spacing:0.5em;color:#1c1917;">
+                    {code}
+                </div>
             </div>
+            <p style="margin:24px 0 0;color:#78716c;font-size:13px;line-height:1.5;">
+                Le code expire dans 10 minutes. Personne de chez Skilluv ne te le demandera jamais — ne le communique à personne.
+            </p>
             "#
         );
-
-        self.send(email, display_name, "Skilluv — Code de verification", &html)
+        let html = self.shell(
+            &format!("Code de vérification Skilluv : {code}"),
+            &body,
+        );
+        self.send(email, display_name, "Ton code de vérification", &html)
             .await
     }
 }

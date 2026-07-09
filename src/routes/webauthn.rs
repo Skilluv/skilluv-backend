@@ -52,7 +52,7 @@ fn envelope(data: serde_json::Value) -> serde_json::Value {
 
 fn build_access_cookie(access_token: &str) -> String {
     format!(
-        "access_token={access_token}; HttpOnly; Secure; SameSite=Strict; Path=/api; Max-Age=900"
+        "access_token={access_token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=900"
     )
 }
 
@@ -107,9 +107,21 @@ async fn register_start(
     let mut redis = state.redis.clone();
     let handle = wa_state::stash_registration(&mut redis, &reg_state).await?;
 
+    // webauthn-rs's CreationChallengeResponse serializes as
+    // `{ "publicKey": { challenge, user, ... } }`. `@simplewebauthn/browser`
+    // expects the FLAT `PublicKeyCredentialCreationOptionsJSON` (challenge,
+    // user, rp, …) at the top level of `optionsJSON`. Unwrap here so the
+    // client can pass our `publicKey` field straight through.
+    let ccr_json = serde_json::to_value(&ccr)
+        .map_err(|e| AppError::Internal(format!("ccr serialize: {e}")))?;
+    let public_key = ccr_json
+        .get("publicKey")
+        .cloned()
+        .unwrap_or(serde_json::Value::Null);
+
     Ok(Json(envelope(json!({
         "ceremony_handle": handle,
-        "publicKey": ccr,
+        "publicKey": public_key,
         "label": body.label,
     }))))
 }
@@ -328,9 +340,19 @@ async fn login_start(
     )
     .await?;
 
+    // Same unwrap as register_start: webauthn-rs wraps the options under a
+    // `publicKey` field, but the frontend passes our `publicKey` straight to
+    // `startAuthentication({ optionsJSON })` which expects the flat options.
+    let rcr_json = serde_json::to_value(&rcr)
+        .map_err(|e| AppError::Internal(format!("rcr serialize: {e}")))?;
+    let public_key = rcr_json
+        .get("publicKey")
+        .cloned()
+        .unwrap_or(serde_json::Value::Null);
+
     Ok(Json(envelope(json!({
         "ceremony_handle": handle,
-        "publicKey": rcr,
+        "publicKey": public_key,
     }))))
 }
 
@@ -409,10 +431,25 @@ async fn login_finish(
 
     let ip = extract_ip(&headers);
     let ua = headers.get("user-agent").and_then(|v| v.to_str().ok());
-    let access_token =
-        AuthService::generate_access_token(user.id, &user.role, &state.config.jwt_secret)?;
+    // Label the session as webauthn so the JWT claim + user_sessions row
+    // reflect the actual factor. Downstream gates (require_enterprise,
+    // AuthUserComplete) can then decide policy per method — today they treat
+    // webauthn like password, but the labeling is a prerequisite for changing
+    // that later without an audit rewrite.
+    let access_token = AuthService::generate_access_token_with_method(
+        user.id,
+        &user.role,
+        "webauthn",
+        &state.config.jwt_secret,
+    )?;
+    SessionService::revoke_prior_from_cookie(
+        &state.db,
+        user.id,
+        headers.get("cookie").and_then(|v| v.to_str().ok()),
+    )
+    .await;
     let (session_id, refresh_token) =
-        SessionService::create(&state.db, user.id, Some(&ip), ua).await?;
+        SessionService::create_with_method(&state.db, user.id, Some(&ip), ua, "webauthn").await?;
 
     let csrf = generate_csrf_token();
     let csrf_cookie = build_csrf_cookie(&csrf, "/api", 15 * 60);
@@ -428,6 +465,9 @@ async fn login_finish(
         Json(envelope(json!({
             "user": user_private,
             "csrf_token": csrf,
+            "login_method": "webauthn",
+            // Kept for backwards-compat with older frontends that read
+            // auth_method on the passkey login response.
             "auth_method": "passkey",
         }))),
     ))

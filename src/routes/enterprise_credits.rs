@@ -119,11 +119,16 @@ async fn create_checkout(
     auth: AuthUser,
     Json(body): Json<CheckoutBody>,
 ) -> Result<Json<Value>, AppError> {
+    // Owner-only: buying credits engages the enterprise's card, so we don't
+    // want a recruiter to top-up (or worse, drain the CB) without the owner's
+    // knowledge. `require_enterprise_owner_pub` also enforces the standard
+    // enterprise gates (verified email, active membership, 2FA).
+    let enterprise = crate::routes::enterprise::require_enterprise_owner_pub(&state, &auth).await?;
     let cfg = stripe::StripeConfig::from_env()
         .ok_or(AppError::Internal("Stripe not configured".into()))?;
     let pack = stripe::pack_by_slug(&body.pack_slug)
         .ok_or(AppError::Validation("unknown pack".into()))?;
-    let enterprise_id = current_enterprise_for(&state.db, auth.user_id).await?;
+    let enterprise_id = enterprise.id;
 
     // Resolve buyer email (the requesting recruiter)
     let email: (String,) = sqlx::query_as("SELECT email FROM users WHERE id = $1")
@@ -151,10 +156,14 @@ async fn billing_portal(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
+    // Owner-only: the portal lets the caller update the card, download every
+    // invoice, and — crucially — cancel the subscription. Recruiters must not
+    // be able to nuke the enterprise's billing state.
+    let enterprise = crate::routes::enterprise::require_enterprise_owner_pub(&state, &auth).await?;
     let cfg = stripe::StripeConfig::from_env()
         .ok_or(AppError::Internal("Stripe not configured".into()))?;
     // Look up the most recent Stripe customer for the enterprise (cached in metadata)
-    let enterprise_id = current_enterprise_for(&state.db, auth.user_id).await?;
+    let enterprise_id = enterprise.id;
     let row: Option<(Option<String>,)> = sqlx::query_as(
         "SELECT notes FROM credit_transactions WHERE enterprise_id = $1 AND reason = 'purchase' AND notes LIKE 'cus_%' ORDER BY created_at DESC LIMIT 1",
     )

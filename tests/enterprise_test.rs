@@ -28,6 +28,76 @@ async fn test_enterprise_profile() {
 }
 
 #[tokio::test]
+async fn test_enterprise_webauthn_session_bypasses_totp_gate() {
+    // WebAuthn is a strong factor (device + biometric, phishing-resistant),
+    // so a session labelled `webauthn` in user_sessions should satisfy the
+    // enterprise TOTP requirement without an explicit TOTP setup.
+    let app = common::TestApp::spawn().await;
+    app.register_enterprise("StrongCorp").await;
+    app.login("strongcorp").await;
+
+    // The register helper flips email_verified=true ; deliberately leave
+    // totp_enabled=false so we're isolating the strong-factor bypass.
+    // Simulate a webauthn login by rewriting the login_method on the current
+    // session (in real life this happens via /auth/webauthn/login/finish).
+    let user_id: (uuid::Uuid,) =
+        sqlx::query_as("SELECT id FROM users WHERE username = 'strongcorp'")
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
+    sqlx::query(
+        "UPDATE user_sessions SET login_method = 'webauthn' WHERE user_id = $1 AND revoked_at IS NULL",
+    )
+    .bind(user_id.0)
+    .execute(&app.db)
+    .await
+    .unwrap();
+    // The client's access token was minted with login_method='password' by the
+    // login helper — for the JWT claim to reflect the new session label we
+    // rotate through /auth/refresh, which pulls the updated method.
+    let refresh = app.post("/api/auth/refresh", &json!({})).await;
+    assert_eq!(refresh.status(), StatusCode::OK);
+    let refresh_body: serde_json::Value = refresh.json().await.unwrap();
+    assert_eq!(refresh_body["data"]["login_method"], "webauthn");
+
+    // No TOTP configured, but the enterprise workspace is accessible because
+    // the session is on a strong factor.
+    let profile = app.get("/api/enterprise/profile").await;
+    assert_eq!(profile.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_enterprise_magic_link_session_still_needs_totp() {
+    // Magic link only proves email possession — it's a low-assurance factor
+    // and MUST NOT bypass the mandatory-TOTP gate on enterprise/recruiter
+    // accounts. This test locks in the policy so a future "just add
+    // 'magic_link' to the strong factors" refactor is caught.
+    let app = common::TestApp::spawn().await;
+    app.register_enterprise("MagicCorp").await;
+    app.login("magiccorp").await;
+
+    let user_id: (uuid::Uuid,) =
+        sqlx::query_as("SELECT id FROM users WHERE username = 'magiccorp'")
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
+    sqlx::query(
+        "UPDATE user_sessions SET login_method = 'magic_link' WHERE user_id = $1 AND revoked_at IS NULL",
+    )
+    .bind(user_id.0)
+    .execute(&app.db)
+    .await
+    .unwrap();
+    let refresh = app.post("/api/auth/refresh", &json!({})).await;
+    assert_eq!(refresh.status(), StatusCode::OK);
+
+    let profile = app.get("/api/enterprise/profile").await;
+    assert_eq!(profile.status(), StatusCode::FORBIDDEN);
+    let err: serde_json::Value = profile.json().await.unwrap();
+    assert_eq!(err["error"]["code"], "AUTH_TOTP_SETUP_REQUIRED");
+}
+
+#[tokio::test]
 async fn test_enterprise_routes_require_totp_setup() {
     let app = common::TestApp::spawn().await;
 

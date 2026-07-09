@@ -13,7 +13,10 @@ use uuid::Uuid;
 
 use crate::AppState;
 use crate::errors::AppError;
-use crate::middleware::{AuthUser, RateLimiter, build_csrf_cookie, extract_ip, generate_csrf_token};
+use crate::middleware::{
+    AuthUser, RateLimiter, build_csrf_cookie, build_csrf_cookie_with_prefix, extract_ip,
+    generate_csrf_token,
+};
 use crate::models::{User, UserPrivate};
 use crate::routes::analytics_consent;
 use crate::services::analytics::{events, props};
@@ -287,25 +290,77 @@ fn clear_cookie(name: &str, path: &str) -> String {
 const REFRESH_COOKIE_PATH: &str = "/api/auth";
 const REFRESH_COOKIE_MAX_AGE: i64 = 7 * 24 * 60 * 60;
 
+/// True when the incoming request originated from the admin frontend (dev
+/// server on :5174 or `admin.*` in prod). Login handlers use this to emit
+/// admin-prefixed cookies so an admin session on `admin.skilluv.com` and a
+/// candidate session on `skilluv.com` can coexist in the same browser cookie
+/// jar without stepping on each other. The `AuthUser` extractor accepts
+/// either prefix, so downstream endpoints don't have to care.
+pub fn is_admin_origin(headers: &axum::http::HeaderMap) -> bool {
+    let origin = headers
+        .get("origin")
+        .or_else(|| headers.get("referer"))
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default();
+    if origin.is_empty() {
+        return false;
+    }
+    // Match dev (`http://localhost:5174`) and prod (`https://admin.…`) alike.
+    origin.contains("://admin.")
+        || origin.starts_with("http://localhost:5174")
+        || origin.starts_with("http://127.0.0.1:5174")
+        || std::env::var("ADMIN_ORIGINS")
+            .ok()
+            .map(|list| {
+                list.split(',')
+                    .map(str::trim)
+                    .any(|allowed| !allowed.is_empty() && origin.starts_with(allowed))
+            })
+            .unwrap_or(false)
+}
+
+/// Cookie name prefix bound to the caller's frontend. `""` for the public app,
+/// `"admin_"` for the admin app. Kept as a helper so every login handler
+/// converges on the same rule without duplicating origin parsing.
+pub fn cookie_prefix(headers: &axum::http::HeaderMap) -> &'static str {
+    if is_admin_origin(headers) { "admin_" } else { "" }
+}
+
 /// Refresh cookie encodes `{session_id}:{opaque_token}`. The server verifies the token against
-/// the SHA-256 stored in `user_sessions.refresh_hash`.
-fn build_refresh_cookie(session_id: Uuid, token: &str) -> String {
+/// the SHA-256 stored in `user_sessions.refresh_hash`. The `prefix` picks
+/// between the public (`refresh_token`) and admin (`admin_refresh_token`)
+/// cookie namespace.
+fn build_refresh_cookie_with_prefix(prefix: &str, session_id: Uuid, token: &str) -> String {
     let value = format!("{session_id}:{token}");
     build_cookie(
-        "refresh_token",
+        &format!("{prefix}refresh_token"),
         &value,
         REFRESH_COOKIE_MAX_AGE,
         REFRESH_COOKIE_PATH,
     )
 }
 
+/// Back-compat shorthand used by the SSO/OAuth/magic-link handlers that haven't
+/// been migrated yet — they always emit public cookies.
+fn build_refresh_cookie(session_id: Uuid, token: &str) -> String {
+    build_refresh_cookie_with_prefix("", session_id, token)
+}
+
 fn parse_refresh_cookie(headers: &axum::http::HeaderMap) -> Option<(Uuid, String)> {
     let raw = headers.get("cookie")?.to_str().ok()?;
+    // Prefer admin_ when present — an admin session should be the one we
+    // revoke/rotate when both cookies happen to live in the same jar (rare
+    // but possible: dev with two frontends open, or a user who logged in on
+    // both apps intentionally). The AuthUser extractor uses the same rule.
     let val = raw
         .split(';')
         .map(|s| s.trim())
-        .find(|s| s.starts_with("refresh_token="))
-        .and_then(|s| s.strip_prefix("refresh_token="))?;
+        .find_map(|s| s.strip_prefix("admin_refresh_token="))
+        .or_else(|| {
+            raw.split(';')
+                .map(|s| s.trim())
+                .find_map(|s| s.strip_prefix("refresh_token="))
+        })?;
     let (sid_str, token) = val.split_once(':')?;
     let sid = sid_str.parse::<Uuid>().ok()?;
     if token.is_empty() {
@@ -442,6 +497,12 @@ async fn register(
     // Generate tokens
     let access_token =
         AuthService::generate_access_token(user.id, &user.role, &state.config.jwt_secret)?;
+    SessionService::revoke_prior_from_cookie(
+        &state.db,
+        user.id,
+        headers.get("cookie").and_then(|v| v.to_str().ok()),
+    )
+    .await;
     let (session_id, refresh_token) =
         SessionService::create(&state.db, user.id, Some(&ip), extract_ua(&headers)).await?;
 
@@ -478,7 +539,7 @@ async fn register(
     .await;
 
     let user_private: UserPrivate = user.into();
-    let access_cookie = build_cookie("access_token", &access_token, 15 * 60, "/api");
+    let access_cookie = build_cookie("access_token", &access_token, 15 * 60, "/");
     let refresh_cookie = build_refresh_cookie(session_id, &refresh_token);
     let csrf = generate_csrf_token();
     let csrf_cookie = build_csrf_cookie(&csrf, "/api", 15 * 60);
@@ -493,6 +554,7 @@ async fn register(
         Json(build_response(json!({
             "user": user_private,
             "csrf_token": csrf,
+            "login_method": "password",
             "message": "Account created. Please verify your email."
         }))),
     ))
@@ -662,6 +724,12 @@ async fn login(
 
     let access_token =
         AuthService::generate_access_token(user.id, &user.role, &state.config.jwt_secret)?;
+    SessionService::revoke_prior_from_cookie(
+        &state.db,
+        user.id,
+        headers.get("cookie").and_then(|v| v.to_str().ok()),
+    )
+    .await;
     let (session_id, refresh_token) =
         SessionService::create(&state.db, user.id, Some(&ip), extract_ua(&headers)).await?;
 
@@ -692,13 +760,31 @@ async fn login(
     )
     .await;
 
-    let requires_totp_setup =
-        matches!(user.role.as_str(), "enterprise" | "recruiter") && !user.totp_enabled;
+    // Enterprise/recruiter accounts need SOME strong 2FA method — TOTP or a
+    // passkey. If neither is present, the frontend routes them into the
+    // /enterprise/onboarding wizard where they pick and complete one.
+    let has_passkey: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM webauthn_credentials WHERE user_id = $1)",
+    )
+    .bind(user.id)
+    .fetch_one(&state.db)
+    .await?;
+    let requires_totp_setup = matches!(user.role.as_str(), "enterprise" | "recruiter")
+        && !user.totp_enabled
+        && !has_passkey;
     let user_private: UserPrivate = user.into();
-    let access_cookie = build_cookie("access_token", &access_token, 15 * 60, "/api");
-    let refresh_cookie = build_refresh_cookie(session_id, &refresh_token);
+    // Origin-aware cookie namespace — admin.skilluv.com → admin_* cookies,
+    // everything else → the standard names.
+    let prefix = cookie_prefix(&headers);
+    let access_cookie = build_cookie(
+        &format!("{prefix}access_token"),
+        &access_token,
+        15 * 60,
+        "/",
+    );
+    let refresh_cookie = build_refresh_cookie_with_prefix(prefix, session_id, &refresh_token);
     let csrf = generate_csrf_token();
-    let csrf_cookie = build_csrf_cookie(&csrf, "/api", 15 * 60);
+    let csrf_cookie = build_csrf_cookie_with_prefix(prefix, &csrf, "/api", 15 * 60);
 
     Ok((
         AppendHeaders([
@@ -709,6 +795,8 @@ async fn login(
         Json(build_response(json!({
             "user": user_private,
             "csrf_token": csrf,
+            "login_method": "password",
+            "has_passkey": has_passkey,
             "requires_totp_setup": requires_totp_setup,
         }))),
     ))
@@ -758,13 +846,28 @@ async fn email_2fa_verify(
     let ip = extract_ip(&headers);
     let access_token =
         AuthService::generate_access_token(user.id, &user.role, &state.config.jwt_secret)?;
+    SessionService::revoke_prior_from_cookie(
+        &state.db,
+        user.id,
+        headers.get("cookie").and_then(|v| v.to_str().ok()),
+    )
+    .await;
     let (session_id, refresh_token) =
         SessionService::create(&state.db, user.id, Some(&ip), extract_ua(&headers)).await?;
 
-    let requires_totp_setup =
-        matches!(user.role.as_str(), "enterprise" | "recruiter") && !user.totp_enabled;
+    // Same 2FA-satisfaction check as the password login handler above:
+    // enterprise/recruiter needs TOTP OR a passkey — either counts.
+    let has_passkey: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM webauthn_credentials WHERE user_id = $1)",
+    )
+    .bind(user.id)
+    .fetch_one(&state.db)
+    .await?;
+    let requires_totp_setup = matches!(user.role.as_str(), "enterprise" | "recruiter")
+        && !user.totp_enabled
+        && !has_passkey;
     let user_private: UserPrivate = user.into();
-    let access_cookie = build_cookie("access_token", &access_token, 15 * 60, "/api");
+    let access_cookie = build_cookie("access_token", &access_token, 15 * 60, "/");
     let refresh_cookie = build_refresh_cookie(session_id, &refresh_token);
     let csrf = generate_csrf_token();
     let csrf_cookie = build_csrf_cookie(&csrf, "/api", 15 * 60);
@@ -778,6 +881,8 @@ async fn email_2fa_verify(
         Json(build_response(json!({
             "user": user_private,
             "csrf_token": csrf,
+            "login_method": "password",
+            "has_passkey": has_passkey,
             "requires_totp_setup": requires_totp_setup,
         }))),
     ))
@@ -802,13 +907,35 @@ async fn refresh(
         return Err(AppError::Forbidden);
     }
 
-    let access_token =
-        AuthService::generate_access_token(user.id, &user.role, &state.config.jwt_secret)?;
+    // Preserve the session's original login_method across refresh so the JWT
+    // claim stays faithful — otherwise a passkey / SSO / magic-link session
+    // would silently downgrade to "password" on every refresh, losing the
+    // enterprise TOTP-bypass semantics.
+    let login_method: (String,) =
+        sqlx::query_as("SELECT login_method FROM user_sessions WHERE id = $1")
+            .bind(session_id)
+            .fetch_one(&state.db)
+            .await?;
+    let access_token = AuthService::generate_access_token_with_method(
+        user.id,
+        &user.role,
+        &login_method.0,
+        &state.config.jwt_secret,
+    )?;
 
-    let access_cookie = build_cookie("access_token", &access_token, 15 * 60, "/api");
-    let refresh_cookie = build_refresh_cookie(session_id, &new_refresh_token);
+    // Preserve the caller's namespace on rotate — if they refreshed via the
+    // admin app we want to re-emit `admin_*` cookies so the SPA doesn't lose
+    // its handle mid-session.
+    let prefix = cookie_prefix(&headers);
+    let access_cookie = build_cookie(
+        &format!("{prefix}access_token"),
+        &access_token,
+        15 * 60,
+        "/",
+    );
+    let refresh_cookie = build_refresh_cookie_with_prefix(prefix, session_id, &new_refresh_token);
     let csrf = generate_csrf_token();
-    let csrf_cookie = build_csrf_cookie(&csrf, "/api", 15 * 60);
+    let csrf_cookie = build_csrf_cookie_with_prefix(prefix, &csrf, "/api", 15 * 60);
 
     Ok((
         AppendHeaders([
@@ -816,29 +943,60 @@ async fn refresh(
             (SET_COOKIE, refresh_cookie),
             (SET_COOKIE, csrf_cookie),
         ]),
-        Json(build_response(json!({ "ok": true, "csrf_token": csrf }))),
+        Json(build_response(json!({
+            "ok": true,
+            "csrf_token": csrf,
+            "login_method": login_method.0,
+        }))),
     ))
 }
 
 // POST /api/auth/logout
+//
+// Deliberately does NOT require a valid `AuthUser`: an expired access_token
+// would otherwise 401 before we reach the revocation code, leaving the DB
+// row orphaned even though the client considers itself logged out. The
+// refresh_token cookie carries a `session_id` we can trust structurally
+// (uuid + opaque token) — we look the row up ourselves and revoke it,
+// regardless of whether the JWT is still valid.
 async fn logout(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
-    auth: AuthUser,
 ) -> Result<impl IntoResponse, AppError> {
     if let Some((session_id, _)) = parse_refresh_cookie(&headers) {
-        SessionService::revoke_one(&state.db, auth.user_id, session_id).await?;
+        // Look up the owning user_id from the session row itself so we don't
+        // need the JWT. `revoke_one` filters on user_id, so we must supply
+        // it — but no need to trust anything the client sent.
+        let owner: Option<(Uuid,)> = sqlx::query_as(
+            "SELECT user_id FROM user_sessions WHERE id = $1 AND revoked_at IS NULL",
+        )
+        .bind(session_id)
+        .fetch_optional(&state.db)
+        .await?;
+        if let Some((user_id,)) = owner {
+            SessionService::revoke_one(&state.db, user_id, session_id).await?;
+        }
     }
 
-    let clear_access = clear_cookie("access_token", "/api");
+    // Clear BOTH cookie namespaces on logout — we don't know which app the
+    // caller signed in on (or if both were set in the jar for whatever
+    // reason), and leaving one orphaned would let a stale token linger.
+    let clear_access = clear_cookie("access_token", "/");
     let clear_refresh = clear_cookie("refresh_token", REFRESH_COOKIE_PATH);
-    let clear_csrf = format!("csrf_token=; Secure; SameSite=Strict; Path=/api; Max-Age=0");
+    let clear_csrf = "csrf_token=; Secure; SameSite=Strict; Path=/api; Max-Age=0".to_string();
+    let clear_admin_access = clear_cookie("admin_access_token", "/");
+    let clear_admin_refresh = clear_cookie("admin_refresh_token", REFRESH_COOKIE_PATH);
+    let clear_admin_csrf =
+        "admin_csrf_token=; Secure; SameSite=Strict; Path=/api; Max-Age=0".to_string();
 
     Ok((
         AppendHeaders([
             (SET_COOKIE, clear_access),
             (SET_COOKIE, clear_refresh),
             (SET_COOKIE, clear_csrf),
+            (SET_COOKIE, clear_admin_access),
+            (SET_COOKIE, clear_admin_refresh),
+            (SET_COOKIE, clear_admin_csrf),
         ]),
         Json(build_response(json!({
             "message": "Logged out successfully"
@@ -860,6 +1018,15 @@ async fn me(
     let skill_domain = user.skill_domain.clone();
     let user_private: UserPrivate = user.into();
 
+    // Any strong-factor enrolment satisfies the enterprise 2FA gate, so the
+    // frontend needs to know whether a passkey exists alongside TOTP.
+    let has_passkey: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM webauthn_credentials WHERE user_id = $1)",
+    )
+    .bind(auth.user_id)
+    .fetch_one(&state.db)
+    .await?;
+
     // Fetch ranks from Redis. Users still onboarding (no skill_domain) get null domain rank.
     let mut redis = state.redis.clone();
     let global_rank =
@@ -871,6 +1038,10 @@ async fn me(
 
     Ok(Json(build_response(json!({
         "user": user_private,
+        // Surfaced so the frontend can decide policy without decoding the JWT
+        // (e.g. skipping the enterprise TOTP redirect for `sso` / `webauthn`).
+        "login_method": auth.login_method,
+        "has_passkey": has_passkey,
         "rank": {
             "global": global_rank,
             "domain": domain_rank,
@@ -1384,9 +1555,13 @@ async fn delete_account(
     let _: Result<(), _> = redis.del(&email_2fa).await;
     let _: Result<(), _> = redis.del(&pending).await;
 
-    let clear_access = clear_cookie("access_token", "/api");
+    let clear_access = clear_cookie("access_token", "/");
     let clear_refresh = clear_cookie("refresh_token", REFRESH_COOKIE_PATH);
-    let clear_csrf = format!("csrf_token=; Secure; SameSite=Strict; Path=/api; Max-Age=0");
+    let clear_csrf = "csrf_token=; Secure; SameSite=Strict; Path=/api; Max-Age=0".to_string();
+    let clear_admin_access = clear_cookie("admin_access_token", "/");
+    let clear_admin_refresh = clear_cookie("admin_refresh_token", REFRESH_COOKIE_PATH);
+    let clear_admin_csrf =
+        "admin_csrf_token=; Secure; SameSite=Strict; Path=/api; Max-Age=0".to_string();
 
     tracing::info!(user_id = %auth.user_id, email = %user.email, "Account deleted (RGPD right to erasure)");
 
@@ -1395,6 +1570,9 @@ async fn delete_account(
             (SET_COOKIE, clear_access),
             (SET_COOKIE, clear_refresh),
             (SET_COOKIE, clear_csrf),
+            (SET_COOKIE, clear_admin_access),
+            (SET_COOKIE, clear_admin_refresh),
+            (SET_COOKIE, clear_admin_csrf),
         ]),
         Json(build_response(json!({
             "message": "Your account and all personal data have been permanently deleted."

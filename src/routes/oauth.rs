@@ -342,9 +342,20 @@ async fn finalise_login_or_link(
                 .bind(user_id)
                 .fetch_one(&state.db)
                 .await?;
-            let access = AuthService::generate_access_token(user_id, &user_row.0, &state.config.jwt_secret)?;
-            let (session_id, refresh) = SessionService::create(&state.db, user_id, None, None).await?;
-            let cookie = build_cookie("access_token", &access, 15 * 60, "/api");
+            // OAuth signup/login goes through the consumer providers (Google,
+            // LinkedIn, GitHub) — distinct from enterprise SSO which is
+            // labelled 'sso' in enterprise_sso.rs. Keeping them separate lets
+            // require_enterprise apply the enforce_sso rule without treating
+            // "signed in with my personal Google" as an enterprise IdP proof.
+            let access = AuthService::generate_access_token_with_method(
+                user_id,
+                &user_row.0,
+                "oauth",
+                &state.config.jwt_secret,
+            )?;
+            let (session_id, refresh) =
+                SessionService::create_with_method(&state.db, user_id, None, None, "oauth").await?;
+            let cookie = build_cookie("access_token", &access, 15 * 60, "/");
             let refresh_cookie = format!(
                 "refresh_token={session_id}:{refresh}; HttpOnly; Secure; SameSite=Strict; Path=/api/auth; Max-Age={}",
                 7 * 24 * 60 * 60
@@ -364,6 +375,7 @@ async fn finalise_login_or_link(
                 Json(build_response(json!({
                     "user_id": user_id,
                     "provider": profile.provider,
+                    "login_method": "oauth",
                 }))),
             )
                 .into_response())

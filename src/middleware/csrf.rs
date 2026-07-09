@@ -22,11 +22,27 @@ use axum::response::Response;
 use crate::errors::AppError;
 
 pub const CSRF_COOKIE_NAME: &str = "csrf_token";
+pub const ADMIN_CSRF_COOKIE_NAME: &str = "admin_csrf_token";
 
 pub fn build_csrf_cookie(value: &str, path: &str, max_age_secs: i64) -> String {
     // NOT httpOnly: the SPA reads it from JS to echo in the request header.
     format!(
         "{CSRF_COOKIE_NAME}={value}; Secure; SameSite=Strict; Path={path}; Max-Age={max_age_secs}"
+    )
+}
+
+/// Same as `build_csrf_cookie` but with an origin-bound prefix. Login handlers
+/// pass `"admin_"` when the caller came from the admin frontend so the SPA
+/// reads the right cookie name — the public app's `csrf_token` and the admin
+/// app's `admin_csrf_token` live independently in the browser jar.
+pub fn build_csrf_cookie_with_prefix(
+    prefix: &str,
+    value: &str,
+    path: &str,
+    max_age_secs: i64,
+) -> String {
+    format!(
+        "{prefix}{CSRF_COOKIE_NAME}={value}; Secure; SameSite=Strict; Path={path}; Max-Age={max_age_secs}"
     )
 }
 
@@ -38,10 +54,17 @@ pub fn generate_csrf_token() -> String {
 
 fn extract_csrf_cookie(headers: &HeaderMap) -> Option<String> {
     let raw = headers.get("cookie")?.to_str().ok()?;
+    // Same admin-first / public-fallback rule as the AuthUser cookie parser
+    // (see middleware::auth). Whichever CSRF cookie the current session used
+    // is what the client will echo in the header.
     raw.split(';')
         .map(|s| s.trim())
-        .find(|s| s.starts_with(&format!("{CSRF_COOKIE_NAME}=")))
-        .and_then(|s| s.strip_prefix(&format!("{CSRF_COOKIE_NAME}=")))
+        .find_map(|s| s.strip_prefix(&format!("{ADMIN_CSRF_COOKIE_NAME}=")))
+        .or_else(|| {
+            raw.split(';')
+                .map(|s| s.trim())
+                .find_map(|s| s.strip_prefix(&format!("{CSRF_COOKIE_NAME}=")))
+        })
         .map(|s| s.to_string())
 }
 

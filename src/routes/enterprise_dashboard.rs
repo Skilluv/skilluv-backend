@@ -26,13 +26,12 @@ fn build_response(data: serde_json::Value) -> serde_json::Value {
 }
 
 async fn require_enterprise(state: &AppState, auth: &AuthUser) -> Result<Enterprise, AppError> {
-    sqlx::query_as(
-        "SELECT e.* FROM enterprises e JOIN enterprise_members em ON em.enterprise_id = e.id WHERE em.user_id = $1 AND em.status = 'active'",
+    crate::routes::enterprise::resolve_active_enterprise(
+        &state.db,
+        auth.user_id,
+        auth.active_enterprise_id,
     )
-    .bind(auth.user_id)
-    .fetch_optional(&state.db)
-    .await?
-    .ok_or(AppError::NotFound("Enterprise not found".to_string()))
+    .await
 }
 
 #[derive(Debug, sqlx::FromRow)]

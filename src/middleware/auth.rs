@@ -14,6 +14,20 @@ pub struct AuthUser {
     /// `require_enterprise` to bypass mandatory-TOTP when set to "sso" — the
     /// external IdP is responsible for MFA in that case.
     pub login_method: String,
+    /// UUID of the enterprise the user has selected in the workspace switcher
+    /// (`active_enterprise` cookie). `None` when the user has never picked one
+    /// or was signed out — callers should fall back to the most recent
+    /// membership. Also `None` for non-enterprise personas.
+    pub active_enterprise_id: Option<Uuid>,
+}
+
+fn parse_active_enterprise(cookie_header: &str) -> Option<Uuid> {
+    cookie_header
+        .split(';')
+        .map(|s| s.trim())
+        .find(|s| s.starts_with("active_enterprise="))
+        .and_then(|s| s.strip_prefix("active_enterprise="))
+        .and_then(|v| Uuid::parse_str(v).ok())
 }
 
 impl FromRequestParts<AppState> for AuthUser {
@@ -29,11 +43,21 @@ impl FromRequestParts<AppState> for AuthUser {
             .and_then(|v| v.to_str().ok())
             .ok_or(AppError::Unauthorized)?;
 
+        // Admin app emits `admin_access_token`; public app emits `access_token`.
+        // The JWT signing key is shared so verification is identical — the
+        // separate cookie name is the isolation vector (different Set-Cookie
+        // scope in the browser jar, defense-in-depth against XSS-hijack of an
+        // admin session by JS running on the public origin).
         let token = cookie_header
             .split(';')
             .map(|s| s.trim())
-            .find(|s| s.starts_with("access_token="))
-            .and_then(|s| s.strip_prefix("access_token="))
+            .find_map(|s| s.strip_prefix("admin_access_token="))
+            .or_else(|| {
+                cookie_header
+                    .split(';')
+                    .map(|s| s.trim())
+                    .find_map(|s| s.strip_prefix("access_token="))
+            })
             .ok_or(AppError::Unauthorized)?;
 
         let claims = AuthService::verify_access_token(token, &state.config.jwt_secret)?;
@@ -59,6 +83,7 @@ impl FromRequestParts<AppState> for AuthUser {
             login_method: claims
                 .login_method
                 .unwrap_or_else(|| "password".to_string()),
+            active_enterprise_id: parse_active_enterprise(cookie_header),
         })
     }
 }
@@ -155,11 +180,17 @@ impl FromRequestParts<AppState> for OptionalAuth {
 fn extract_auth(parts: &Parts, state: &AppState) -> Option<AuthUser> {
     let cookie_header = parts.headers.get("cookie").and_then(|v| v.to_str().ok())?;
 
+    // Same admin-first / public-fallback rule as the mandatory extractor.
     let token = cookie_header
         .split(';')
         .map(|s| s.trim())
-        .find(|s| s.starts_with("access_token="))
-        .and_then(|s| s.strip_prefix("access_token="))?;
+        .find_map(|s| s.strip_prefix("admin_access_token="))
+        .or_else(|| {
+            cookie_header
+                .split(';')
+                .map(|s| s.trim())
+                .find_map(|s| s.strip_prefix("access_token="))
+        })?;
 
     let claims = AuthService::verify_access_token(token, &state.config.jwt_secret).ok()?;
     let user_id = claims.sub.parse::<Uuid>().ok()?;
@@ -170,5 +201,6 @@ fn extract_auth(parts: &Parts, state: &AppState) -> Option<AuthUser> {
         login_method: claims
             .login_method
             .unwrap_or_else(|| "password".to_string()),
+        active_enterprise_id: parse_active_enterprise(cookie_header),
     })
 }

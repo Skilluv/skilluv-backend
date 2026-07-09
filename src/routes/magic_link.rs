@@ -216,11 +216,36 @@ async fn consume_link(
         }
     };
 
-    let access = AuthService::generate_access_token(user_id, &role, &state.config.jwt_secret)?;
+    // Clicking the magic link is proof of email possession — flip email_verified
+    // to true if it wasn't already. Without this, a candidate/enterprise who
+    // signed up but never verified stays locked out of the write endpoints
+    // and /enterprise/* even though they've now proven they own the address.
+    sqlx::query(
+        "UPDATE users SET email_verified = TRUE WHERE id = $1 AND email_verified = FALSE",
+    )
+    .bind(user_id)
+    .execute(&state.db)
+    .await?;
+
+    // Label the session as magic_link so audit + downstream gates can tell it
+    // apart from a password login.
+    let access = AuthService::generate_access_token_with_method(
+        user_id,
+        &role,
+        "magic_link",
+        &state.config.jwt_secret,
+    )?;
     let ua = headers.get("user-agent").and_then(|v| v.to_str().ok());
     let ip = crate::middleware::extract_ip(&headers);
-    let (session_id, refresh) = SessionService::create(&state.db, user_id, Some(&ip), ua).await?;
-    let cookie = build_cookie("access_token", &access, 15 * 60, "/api");
+    SessionService::revoke_prior_from_cookie(
+        &state.db,
+        user_id,
+        headers.get("cookie").and_then(|v| v.to_str().ok()),
+    )
+    .await;
+    let (session_id, refresh) =
+        SessionService::create_with_method(&state.db, user_id, Some(&ip), ua, "magic_link").await?;
+    let cookie = build_cookie("access_token", &access, 15 * 60, "/");
     let refresh_cookie = format!(
         "refresh_token={session_id}:{refresh}; HttpOnly; Secure; SameSite=Strict; Path=/api/auth; Max-Age={}",
         7 * 24 * 60 * 60
@@ -233,6 +258,7 @@ async fn consume_link(
         ]),
         Json(build_response(json!({
             "user_id": user_id,
+            "login_method": "magic_link",
         }))),
     ))
 }

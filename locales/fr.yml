@@ -1,0 +1,40 @@
+_version: 1
+
+auth:
+  unauthorized: "Non autorisé"
+  invalid_credentials: "Email/identifiant ou mot de passe incorrect"
+  forbidden: "Accès refusé"
+  email_not_verified: "Vérifie ton email avant de continuer"
+  account_banned: "Ce compte a été banni"
+  totp_required: "Code TOTP requis"
+  totp_invalid: "Code TOTP invalide"
+  email_2fa_required: "Code 2FA par email requis"
+  email_2fa_invalid: "Code 2FA invalide"
+
+validation:
+  email_invalid: "Adresse email invalide"
+  username_invalid: "Le pseudo doit faire 3 à 30 caractères, alphanumériques ou _-"
+  password_too_weak: "Le mot de passe doit faire au moins 8 caractères, avec au moins un chiffre et une lettre"
+  required_field: "Champ requis manquant"
+  too_long: "Valeur trop longue"
+  account_exists: "Un compte existe déjà avec cet email ou ce pseudo"
+
+resources:
+  not_found: "Introuvable"
+  challenge_not_found: "Challenge introuvable"
+  user_not_found: "Utilisateur introuvable"
+  challenge_prerequisite_not_met: "Tu n'as pas assez de fragments pour démarrer ce challenge"
+
+rate_limit:
+  exceeded: "Trop de requêtes. Réessaie dans un instant."
+
+emails:
+  verify_subject: "Skilluv — Vérifie ton email"
+  password_reset_subject: "Skilluv — Réinitialisation de mot de passe"
+  data_export_subject: "Skilluv — Ton export de données est prêt"
+  digest_subject: "Ta semaine Skilluv — {challenges_completed} challenges / {fragments_earned} fragments"
+
+system:
+  internal_error: "Une erreur est survenue. Réessaie."
+  service_unavailable: "Service temporairement indisponible"
+  insufficient_credits: "Crédits insuffisants pour cette action"

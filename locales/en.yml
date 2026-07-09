@@ -1,0 +1,46 @@
+_version: 1
+
+# Authentication errors
+auth:
+  unauthorized: "Unauthorized"
+  invalid_credentials: "Invalid email/username or password"
+  forbidden: "Forbidden"
+  email_not_verified: "Please verify your email before continuing"
+  account_banned: "This account has been banned"
+  totp_required: "TOTP code is required"
+  totp_invalid: "Invalid TOTP code"
+  email_2fa_required: "Email 2FA code required"
+  email_2fa_invalid: "Invalid 2FA code"
+
+# Validation errors
+validation:
+  email_invalid: "Invalid email address"
+  username_invalid: "Username must be 3-30 characters, alphanumeric or _-"
+  password_too_weak: "Password must be at least 8 characters with a digit and a letter"
+  required_field: "Required field is missing"
+  too_long: "Value exceeds the maximum length"
+  account_exists: "An account with this email or username already exists"
+
+# Resource errors
+resources:
+  not_found: "Not found"
+  challenge_not_found: "Challenge not found"
+  user_not_found: "User not found"
+  challenge_prerequisite_not_met: "You don't have enough fragments to start this challenge"
+
+# Rate limiting
+rate_limit:
+  exceeded: "Too many requests. Please try again later."
+
+# Email templates (subjects only, body in HTML templates)
+emails:
+  verify_subject: "Skilluv — Verify your email"
+  password_reset_subject: "Skilluv — Reset your password"
+  data_export_subject: "Skilluv — Your data archive is ready"
+  digest_subject: "Your Skilluv week — {challenges_completed} challenges / {fragments_earned} fragments"
+
+# System messages
+system:
+  internal_error: "Something went wrong. Please try again."
+  service_unavailable: "Service temporarily unavailable"
+  insufficient_credits: "Insufficient credits to perform this action"

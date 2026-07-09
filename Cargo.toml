@@ -1,0 +1,126 @@
+[package]
+name = "skilluv-backend"
+version = "0.1.0"
+edition = "2024"
+description = "Skilluv — Plateforme gamifiée de démonstration de compétences"
+default-run = "skilluv-backend"
+
+[dependencies]
+# Web framework
+axum = { version = "0.8", features = ["macros", "ws", "multipart"] }
+tokio = { version = "1", features = ["full"] }
+tower = { version = "0.5", features = ["timeout", "limit"] }
+tower-http = { version = "0.6", features = ["cors", "trace", "compression-gzip"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Database
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "migrate", "bigdecimal"] }
+bigdecimal = { version = "0.4", features = ["serde"] }
+num-traits = "0.2"
+
+# Multi-PSP abstraction (Phase 4)
+async-trait = "0.1"
+
+# Redis
+redis = { version = "0.27", features = ["tokio-comp", "connection-manager"] }
+
+# Auth
+argon2 = "0.5"
+jsonwebtoken = "9"
+totp-rs = { version = "5", features = ["gen_secret", "otpauth"] }
+base32 = "0.5"
+
+# Utils
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+dotenvy = "0.15"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+thiserror = "2"
+
+# HTTP client (Judge0)
+reqwest = { version = "0.12", features = ["json"] }
+
+# SMTP transport (used for local dev via Mailpit; production still uses Brevo HTTP API)
+lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "tokio1-rustls-tls", "builder"] }
+
+# WebAuthn / passkeys — relies on system OpenSSL (see .cargo/config.toml on Windows).
+webauthn-rs = { version = "0.5", features = ["danger-allow-state-serialisation"] }
+url = "2"
+
+
+# HMAC for webhook signatures
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
+base64 = "0.22"
+getrandom = "0.2"
+rand_core = "0.6"
+
+# S3/MinIO storage
+rust-s3 = { version = "0.35", features = ["tokio-rustls-tls"], default-features = false }
+
+# Monitoring
+metrics = "0.24"
+metrics-exporter-prometheus = "0.16"
+
+# gRPC
+tonic = "0.12"
+prost = "0.13"
+
+# WebSocket
+futures-util = "0.3"
+
+# CLI for auxiliary binaries (backup, etc.)
+clap = { version = "4", features = ["derive"] }
+anyhow = "1"
+
+# Error tracking (Sentry-compatible; works with self-hosted GlitchTip)
+sentry = { version = "0.36", default-features = false, features = ["backtrace", "contexts", "panic", "reqwest", "rustls"] }
+sentry-tower = { version = "0.36", features = ["http"] }
+sentry-tracing = "0.36"
+
+# ZIP for GDPR data export
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
+# i18n (FR/EN bundled)
+rust-i18n = "3"
+
+# Authenticated encryption for at-rest secrets (GitHub OAuth tokens, etc.)
+chacha20poly1305 = "0.10"
+
+# Web push VAPID natif (pure Rust, sans OpenSSL) — RFC 8291 + 8292
+p256 = { version = "0.13", features = ["ecdh", "ecdsa", "pkcs8"] }
+aes-gcm = "0.10"
+hkdf = "0.12"
+
+# OIDC B2B SSO (enterprise) — discovery, PKCE, JWKS rotation, ID token verify.
+openidconnect = "3"
+elliptic-curve = { version = "0.13", features = ["sec1"] }
+
+[[bin]]
+name = "skilluv-backend"
+path = "src/main.rs"
+
+[[bin]]
+name = "skilluv-backup"
+path = "src/bin/backup.rs"
+
+[[bin]]
+name = "skilluv-seed"
+path = "src/bin/seed.rs"
+
+[build-dependencies]
+tonic-build = { version = "0.12", features = ["prost"] }
+protox = "0.7"
+
+[dev-dependencies]
+reqwest = { version = "0.12", features = ["json", "cookies"] }
+tokio = { version = "1", features = ["full"] }
+totp-rs = { version = "5", features = ["gen_secret", "otpauth"] }
+# Mock OIDC IdP for enterprise SSO integration tests.
+rsa = { version = "0.9", features = ["sha2"] }
+rand = "0.8"

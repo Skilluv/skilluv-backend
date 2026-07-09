@@ -1,0 +1,59 @@
+# Rust
+target/
+*.pdb
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Tests
+tests/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+docs/
+*.md
+
+# BMAD workflow
+_bmad/
+_bmad.*
+_bmad-*/
+_bmad-output/
+design-artifacts/
+
+# Claude Code
+.claude/
+.claude.*
+
+# IDEs
+.idea/
+.vscode/
+*.iml
+*.sln
+*.user
+*.suo
+
+# OS
+*.DS_Store
+Thumbs.db
+
+# Logs & temp
+*.log
+*.tmp
+*.bak
+*.swp
+*.swo
+*.cache
+
+# Archives
+*.zip
+*.tar.gz
+*.7z

@@ -1,0 +1,65 @@
+# Rust
+/target
+*.pdb
+
+# GeoNames data (downloaded at setup, ~31MB)
+/data/cities*.txt
+/data/countryInfo.txt
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# BMAD workflow
+_bmad/
+_bmad.*
+_bmad-*/
+_bmad-output/
+
+# Claude Code
+.claude/
+.claude.*
+
+# Project docs (generated)
+docs/
+design-artifacts/
+
+# OS
+*.DS_Store
+Thumbs.db
+
+# IDEs
+.idea/
+.vscode/
+*.iml
+*.sln
+*.user
+*.suo
+
+# Logs & temp
+*.log
+*.tmp
+*.bak
+*.swp
+*.swo
+*.cache
+
+# Binaries
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Archives
+*.zip
+*.tar.gz
+*.7z
+
+# Python (skilluv-ai)
+*.pyc
+*.pyo
+*.egg
+*.egg-info/
+dist/
+build/

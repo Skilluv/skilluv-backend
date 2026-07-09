@@ -1,0 +1,41 @@
+# Staging environment overlay.
+#
+# Usage:
+#   docker compose -f docker-compose.prod.yml -f docker-compose.staging.yml up -d
+#
+# Differences from prod:
+#   - MailHog instead of Brevo (no real emails sent, all captured locally)
+#   - SENTRY_DSN can point to a separate staging GlitchTip project
+#   - ENVIRONMENT=staging tag
+#   - Seed data via skilluv-seed binary on first boot
+#   - Subdomain assumption: staging.skilluv.com / staging-api.skilluv.com
+
+services:
+  skilluv-backend:
+    environment:
+      ENVIRONMENT: staging
+      RUST_LOG: ${RUST_LOG:-skilluv_backend=debug,tower_http=info}
+      # Override email to use MailHog (no real sends)
+      BREVO_API_KEY: ""
+      EMAIL_FROM: noreply@staging.skilluv.com
+      EMAIL_FROM_NAME: "Skilluv (staging)"
+      # SMTP via MailHog for transactional emails in staging
+      SMTP_HOST: mailhog
+      SMTP_PORT: "1025"
+      # Sentry: staging project DSN — set in deploy env, not in compose
+      SENTRY_DSN: ${SENTRY_DSN_STAGING:-}
+      SENTRY_TRACES_SAMPLE_RATE: "0.5"
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: skilluv-mailhog-staging
+    ports:
+      - "${MAILHOG_SMTP_PORT:-1025}:1025"   # SMTP listening
+      - "${MAILHOG_HTTP_PORT:-8025}:8025"   # Web UI
+    restart: unless-stopped
+    networks:
+      - skilluv-net
+
+  # Optional: dedicated GlitchTip instance for staging (or share with prod via env)
+  # Not added here by default; share the GlitchTip prod instance with a separate
+  # project DSN — cheaper and simpler.

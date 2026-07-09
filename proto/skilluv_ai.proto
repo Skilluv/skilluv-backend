@@ -1,0 +1,167 @@
+syntax = "proto3";
+
+package skilluv.ai;
+
+// ─── Code Review Service ────────────────────────────────────────
+
+service CodeReviewService {
+  rpc ReviewCode (CodeReviewRequest) returns (CodeReviewResponse);
+}
+
+message CodeReviewRequest {
+  string submission_id = 1;
+  string code = 2;
+  string language = 3;
+  string challenge_title = 4;
+  string challenge_instructions = 5;
+  int32 difficulty = 6;
+}
+
+message CodeReviewResponse {
+  int32 quality_score = 1;        // 0-100
+  string summary = 2;             // Resume du feedback
+  repeated string strengths = 3;  // Points forts
+  repeated string improvements = 4; // Axes d'amelioration
+  repeated CodeIssue issues = 5;  // Problemes specifiques
+  string complexity_rating = 6;   // "simple", "moderate", "complex"
+  string style_rating = 7;        // "clean", "acceptable", "messy"
+}
+
+message CodeIssue {
+  string severity = 1;   // "info", "warning", "error"
+  string message = 2;
+  int32 line = 3;         // Numero de ligne (0 si pas applicable)
+  string suggestion = 4;  // Suggestion de correction
+}
+
+// ─── Challenge Generation Service ───────────────────────────────
+
+service ChallengeGenerationService {
+  rpc GenerateChallenge (GenerateChallengeRequest) returns (GenerateChallengeResponse);
+  rpc GenerateVariant (GenerateVariantRequest) returns (GenerateChallengeResponse);
+}
+
+message GenerateChallengeRequest {
+  string prompt = 1;           // Description libre du challenge voulu
+  string skill_domain = 2;    // "code", "design", "game", "security"
+  int32 difficulty = 3;        // 1-5
+  string language = 4;         // Langage cible (optionnel)
+  repeated string tags = 5;    // Tags souhaites
+  string tone = 6;             // "serious", "fun", "educational"
+}
+
+message GenerateVariantRequest {
+  string challenge_id = 1;     // Challenge existant a varier
+  string variation_type = 2;   // "harder", "easier", "similar", "different_language"
+}
+
+message GenerateChallengeResponse {
+  string title = 1;
+  string description = 2;
+  string instructions = 3;
+  string expected_output = 4;
+  string test_cases_json = 5;  // JSON serialise des test cases
+  int32 reward_fragments = 6;
+  int32 estimated_duration_minutes = 7;
+  repeated string suggested_tags = 8;
+}
+
+// ─── Talent Detection Service ───────────────────────────────────
+
+service TalentDetectionService {
+  rpc AnalyzePerformance (AnalyzePerformanceRequest) returns (AnalyzePerformanceResponse);
+  rpc SuggestCareerPath (CareerPathRequest) returns (CareerPathResponse);
+}
+
+message AnalyzePerformanceRequest {
+  string user_id = 1;
+  repeated SubmissionSummary submissions = 2;
+  repeated SkillData skills = 3;
+}
+
+message SubmissionSummary {
+  string challenge_id = 1;
+  string skill_domain = 2;
+  int32 difficulty = 3;
+  string status = 4;          // "success", "failure"
+  int32 attempt_number = 5;
+  int32 fragments_earned = 6;
+  string language = 7;
+}
+
+message SkillData {
+  string domain = 1;
+  string sub_skill = 2;
+  int32 fragments = 3;
+}
+
+message AnalyzePerformanceResponse {
+  repeated StrengthArea strengths = 1;
+  repeated WeaknessArea weaknesses = 2;
+  string overall_assessment = 3;
+  repeated string recommendations = 4;
+  double consistency_score = 5;  // 0.0-1.0
+}
+
+message StrengthArea {
+  string domain = 1;
+  string sub_skill = 2;
+  string description = 3;
+  double percentile = 4;  // vs other users at same level
+}
+
+message WeaknessArea {
+  string domain = 1;
+  string sub_skill = 2;
+  string description = 3;
+  string suggested_challenge_type = 4;
+}
+
+message CareerPathRequest {
+  string user_id = 1;
+  repeated SkillData skills = 2;
+  string current_title = 3;
+  int32 total_fragments = 4;
+}
+
+message CareerPathResponse {
+  repeated CareerSuggestion suggestions = 1;
+  string primary_orientation = 2;
+  string assessment = 3;
+}
+
+message CareerSuggestion {
+  string role = 1;           // "Backend Developer", "UX Designer", etc.
+  double match_score = 2;   // 0.0-1.0
+  string reasoning = 3;
+  repeated string skills_to_develop = 4;
+}
+
+// ─── Plagiarism Detection Service ───────────────────────────────
+
+service PlagiarismService {
+  rpc CheckPlagiarism (PlagiarismRequest) returns (PlagiarismResponse);
+}
+
+message PlagiarismRequest {
+  string submission_id = 1;
+  string code = 2;
+  string language = 3;
+  string challenge_id = 4;
+  string user_id = 5;
+}
+
+message PlagiarismResponse {
+  bool is_suspicious = 1;
+  double similarity_score = 2;    // 0.0-1.0 (1.0 = identical)
+  double ai_generated_score = 3;  // 0.0-1.0 (1.0 = definitely AI)
+  repeated SimilarSubmission matches = 4;
+  string verdict = 5;             // "clean", "suspicious", "plagiarized", "ai_generated"
+  string explanation = 6;
+}
+
+message SimilarSubmission {
+  string submission_id = 1;
+  string user_id = 2;
+  double similarity = 3;
+}

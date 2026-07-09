@@ -1,0 +1,41 @@
+_version: 1
+_direction: rtl
+
+auth:
+  unauthorized: "غير مصرح لك"
+  invalid_credentials: "البريد الإلكتروني/اسم المستخدم أو كلمة المرور غير صحيحة"
+  forbidden: "الوصول مرفوض"
+  email_not_verified: "يرجى التحقق من بريدك الإلكتروني قبل المتابعة"
+  account_banned: "تم حظر هذا الحساب"
+  totp_required: "رمز TOTP مطلوب"
+  totp_invalid: "رمز TOTP غير صحيح"
+  email_2fa_required: "رمز التحقق بخطوتين عبر البريد مطلوب"
+  email_2fa_invalid: "رمز التحقق بخطوتين غير صحيح"
+
+validation:
+  email_invalid: "عنوان بريد إلكتروني غير صحيح"
+  username_invalid: "يجب أن يكون اسم المستخدم بين 3 و30 حرفًا (أحرف/أرقام أو _-)"
+  password_too_weak: "يجب أن تحتوي كلمة المرور على 8 أحرف على الأقل، مع رقم واحد وحرف واحد"
+  required_field: "حقل مطلوب مفقود"
+  too_long: "القيمة تتجاوز الحد الأقصى"
+  account_exists: "حساب بهذا البريد أو الاسم المستخدم موجود بالفعل"
+
+resources:
+  not_found: "غير موجود"
+  challenge_not_found: "التحدي غير موجود"
+  user_not_found: "المستخدم غير موجود"
+  challenge_prerequisite_not_met: "ليس لديك ما يكفي من الشظايا لبدء هذا التحدي"
+
+rate_limit:
+  exceeded: "طلبات كثيرة جدًا. حاول لاحقًا."
+
+emails:
+  verify_subject: "Skilluv — تحقق من بريدك الإلكتروني"
+  password_reset_subject: "Skilluv — إعادة تعيين كلمة المرور"
+  data_export_subject: "Skilluv — أرشيف بياناتك جاهز"
+  digest_subject: "أسبوعك على Skilluv — {challenges_completed} تحديات / {fragments_earned} شظية"
+
+system:
+  internal_error: "حدث خطأ ما. يرجى المحاولة مرة أخرى."
+  service_unavailable: "الخدمة غير متوفرة مؤقتًا"
+  insufficient_credits: "أرصدة غير كافية لإجراء هذه العملية"

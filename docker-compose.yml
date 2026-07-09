@@ -1,0 +1,155 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: skilluv-postgres
+    environment:
+      POSTGRES_USER: skilluv
+      POSTGRES_PASSWORD: skilluv_secret
+      POSTGRES_DB: skilluv
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+      LC_ALL: C.UTF-8
+      LANG: C.UTF-8
+    command: ["postgres", "-c", "lc_messages=C", "-c", "password_encryption=scram-sha-256"]
+    ports:
+      - "5433:5432"
+    volumes:
+      - skilluv_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U skilluv"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: skilluv-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - skilluv_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # MinIO — S3-compatible object storage (avatars)
+  minio:
+    image: minio/minio:latest
+    container_name: skilluv-minio
+    ports:
+      - "9004:9000"
+      - "9005:9001"
+    environment:
+      MINIO_ROOT_USER: skilluv
+      MINIO_ROOT_PASSWORD: skilluv_secret
+    command: server /data --console-address ":9001"
+    volumes:
+      - skilluv_miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Judge0 CE — Code execution engine
+  judge0:
+    image: judge0/judge0:1.13.1
+    container_name: skilluv-judge0
+    ports:
+      - "2358:2358"
+    environment:
+      REDIS_URL: redis://judge0-redis:6379
+      POSTGRES_HOST: judge0-postgres
+      POSTGRES_DB: judge0
+      POSTGRES_USER: judge0
+      POSTGRES_PASSWORD: judge0_secret
+      RAILS_MAX_THREADS: 4
+      ENABLE_WAIT_RESULT: "true"
+      ENABLE_BATCHED_SUBMISSIONS: "true"
+      MAX_CPU_TIME_LIMIT: 30
+      MAX_MEMORY_LIMIT: 512000
+      MAX_MAX_PROCESSES_AND_OR_THREADS: 60
+      ENABLE_NETWORK: "false"
+    depends_on:
+      judge0-postgres:
+        condition: service_healthy
+      judge0-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:2358/system_info"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  judge0-postgres:
+    image: postgres:17-alpine
+    container_name: skilluv-judge0-postgres
+    environment:
+      POSTGRES_USER: judge0
+      POSTGRES_PASSWORD: judge0_secret
+      POSTGRES_DB: judge0
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+      LC_ALL: C.UTF-8
+      LANG: C.UTF-8
+    command: ["postgres", "-c", "lc_messages=C"]
+    volumes:
+      - judge0_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U judge0"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  judge0-redis:
+    image: redis:7-alpine
+    container_name: skilluv-judge0-redis
+    volumes:
+      - judge0_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Mailpit — Local SMTP catcher for dev (SMTP :1025, Web UI :8025)
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: skilluv-mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    environment:
+      MP_MAX_MESSAGES: 5000
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8025/api/v1/info"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  judge0-workers:
+    image: judge0/judge0:1.13.1
+    container_name: skilluv-judge0-workers
+    command: ["./scripts/workers"]
+    environment:
+      REDIS_URL: redis://judge0-redis:6379
+      POSTGRES_HOST: judge0-postgres
+      POSTGRES_DB: judge0
+      POSTGRES_USER: judge0
+      POSTGRES_PASSWORD: judge0_secret
+      ENABLE_NETWORK: "false"
+    depends_on:
+      judge0-postgres:
+        condition: service_healthy
+      judge0-redis:
+        condition: service_healthy
+
+volumes:
+  skilluv_pgdata:
+  skilluv_redisdata:
+  skilluv_miniodata:
+  judge0_pgdata:
+  judge0_redisdata:

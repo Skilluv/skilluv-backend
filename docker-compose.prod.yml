@@ -1,0 +1,204 @@
+services:
+  skilluv-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: skilluv-backend
+    ports:
+      - "${PORT:-3001}:3001"
+    environment:
+      DATABASE_URL: postgres://skilluv:${POSTGRES_PASSWORD:-skilluv_secret}@postgres:5432/skilluv
+      REDIS_URL: redis://redis:6379
+      HOST: "0.0.0.0"
+      PORT: "3001"
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
+      BASE_URL: ${BASE_URL:-http://localhost:3001}
+      JUDGE0_URL: http://judge0:2358
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-skilluv}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-skilluv_secret}
+      MINIO_BUCKET: ${MINIO_BUCKET:-avatars}
+      RUST_LOG: ${RUST_LOG:-skilluv_backend=info,tower_http=info}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - skilluv-net
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: skilluv-postgres
+    environment:
+      POSTGRES_USER: skilluv
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-skilluv_secret}
+      POSTGRES_DB: skilluv
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+      LC_ALL: C.UTF-8
+      LANG: C.UTF-8
+    command: ["postgres", "-c", "lc_messages=C", "-c", "password_encryption=scram-sha-256"]
+    volumes:
+      - skilluv_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U skilluv"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - skilluv-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: skilluv-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - skilluv_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - skilluv-net
+
+  minio:
+    image: minio/minio:latest
+    container_name: skilluv-minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-skilluv}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-skilluv_secret}
+    command: server /data --console-address ":9001"
+    volumes:
+      - skilluv_miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - skilluv-net
+
+  # Judge0 CE (optionnel — le backend fonctionne sans via fallback)
+  judge0:
+    image: judge0/judge0:1.13.1
+    container_name: skilluv-judge0
+    environment:
+      REDIS_URL: redis://judge0-redis:6379
+      POSTGRES_HOST: judge0-postgres
+      POSTGRES_DB: judge0
+      POSTGRES_USER: judge0
+      POSTGRES_PASSWORD: judge0_secret
+      RAILS_MAX_THREADS: 4
+      ENABLE_WAIT_RESULT: "true"
+      ENABLE_BATCHED_SUBMISSIONS: "true"
+      MAX_CPU_TIME_LIMIT: 30
+      MAX_MEMORY_LIMIT: 512000
+      MAX_MAX_PROCESSES_AND_OR_THREADS: 60
+      ENABLE_NETWORK: "false"
+    depends_on:
+      judge0-postgres:
+        condition: service_healthy
+      judge0-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:2358/system_info"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - skilluv-net
+
+  judge0-postgres:
+    image: postgres:17-alpine
+    container_name: skilluv-judge0-postgres
+    environment:
+      POSTGRES_USER: judge0
+      POSTGRES_PASSWORD: judge0_secret
+      POSTGRES_DB: judge0
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+      LC_ALL: C.UTF-8
+      LANG: C.UTF-8
+    command: ["postgres", "-c", "lc_messages=C"]
+    volumes:
+      - judge0_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U judge0"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - skilluv-net
+
+  judge0-redis:
+    image: redis:7-alpine
+    container_name: skilluv-judge0-redis
+    volumes:
+      - judge0_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - skilluv-net
+
+  judge0-workers:
+    image: judge0/judge0:1.13.1
+    container_name: skilluv-judge0-workers
+    command: ["./scripts/workers"]
+    environment:
+      REDIS_URL: redis://judge0-redis:6379
+      POSTGRES_HOST: judge0-postgres
+      POSTGRES_DB: judge0
+      POSTGRES_USER: judge0
+      POSTGRES_PASSWORD: judge0_secret
+      ENABLE_NETWORK: "false"
+    depends_on:
+      judge0-postgres:
+        condition: service_healthy
+      judge0-redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - skilluv-net
+
+  # Uptime Kuma — self-host uptime monitor + status page (Phase 1.4)
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: skilluv-uptime-kuma
+    ports:
+      - "${UPTIME_KUMA_PORT:-3010}:3001"
+    volumes:
+      - uptime_kuma_data:/app/data
+    restart: unless-stopped
+    networks:
+      - skilluv-net
+
+volumes:
+  skilluv_pgdata:
+  skilluv_redisdata:
+  skilluv_miniodata:
+  judge0_pgdata:
+  judge0_redisdata:
+  uptime_kuma_data:
+
+networks:
+  skilluv-net:
+    driver: bridge

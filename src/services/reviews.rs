@@ -345,6 +345,12 @@ impl ReviewsService {
             .bind(skill_id)
             .execute(&mut **tx)
             .await?;
+
+            // P5 auto-issue attestations (idempotent via UNIQUE index)
+            let _issued = crate::services::AttestationsService::check_and_issue_for_skill_levelup(
+                tx, user_id, skill_id, new_level,
+            )
+            .await?;
         }
         Ok(())
     }

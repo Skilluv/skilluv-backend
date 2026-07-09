@@ -469,6 +469,14 @@ impl DeliverablesService {
             .bind(skill_id)
             .execute(&mut **tx)
             .await?;
+
+            // P5 auto-issue : le UNIQUE index sur attestations garantit qu'une
+            // seconde émission active ne se fera pas, donc c'est safe d'appeler
+            // même quand aucun level-up réel n'a eu lieu.
+            let _issued = crate::services::AttestationsService::check_and_issue_for_skill_levelup(
+                tx, user_id, skill_id, new_level,
+            )
+            .await?;
         }
 
         Ok(())

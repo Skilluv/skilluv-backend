@@ -24,6 +24,7 @@ pub mod oauth;
 pub mod queue;
 pub mod scim;
 pub mod sandbox;
+pub mod attestations;
 pub mod deliverables;
 pub mod review_queue;
 pub mod reviews;
@@ -52,6 +53,7 @@ pub use notification::NotificationService;
 pub use dm::DmConversation;
 pub use queue::QueueService;
 pub use sandbox::SandboxService;
+pub use attestations::{Attestation, AttestationsService, CompagnonnageParams};
 pub use deliverables::{DeliverablesService, PrMergedOutcome, PrMergedParams};
 pub use review_queue::{
     QueueFilter as ReviewQueueFilter, ReviewQueueService, ReviewTask, SeniorityLevel,

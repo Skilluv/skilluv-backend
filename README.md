@@ -95,7 +95,7 @@ For security disclosures, see [SECURITY.md](SECURITY.md). **Do not** open public
 
 ## Roadmap
 
-- **Now → autumn 2026**: consolidating the challenge → real artifact pipeline (see [`docs/vision-and-gap-analysis.md`](docs/vision-and-gap-analysis.md) if published for the internal roadmap)
+- **Now → autumn 2026**: consolidating the challenge → real artifact pipeline (from Judge0-evaluated code snippets to verifiable OSS contributions)
 - **Autumn 2026**: private beta with 20–50 selected users
 - **January 2027**: public launch — first wedge = French-speaking African autodidacts and career-changers
 - **2027**: onboarding of the first curated OSS projects (African design systems, community game engine, banking OS proof-of-concept, etc.)

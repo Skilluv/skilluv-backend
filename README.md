@@ -503,4 +503,13 @@ Events serveur :
 
 ## Licence
 
-Proprietary - Skilluv
+Ce projet est distribue sous licence [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).
+
+## Contribuer
+
+Voir [CONTRIBUTING.md](CONTRIBUTING.md) pour les modalites de contribution.
+Voir [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) pour les regles de la communaute.
+
+## Securite
+
+Pour signaler une vulnerabilite, voir [SECURITY.md](SECURITY.md).

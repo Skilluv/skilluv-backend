@@ -56,6 +56,7 @@ mod talent_search;
 mod talent_search_v2;
 mod tenants;
 mod tournament;
+mod tracks;
 mod user_profile;
 mod webauthn;
 
@@ -117,5 +118,6 @@ pub use talent_search::talent_search_routes;
 pub use talent_search_v2::talent_search_v2_routes;
 pub use tenants::{ROOT_TENANT_ID, is_root_tenant, resolve_tenant_from_headers, tenant_routes};
 pub use tournament::tournament_routes;
+pub use tracks::track_routes;
 pub use user_profile::user_profile_routes;
 pub use webauthn::webauthn_routes;

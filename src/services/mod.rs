@@ -29,6 +29,7 @@ pub mod review_queue;
 pub mod reviews;
 pub mod session;
 pub mod slices;
+pub mod tracks;
 pub mod webauthn;
 pub mod social;
 pub mod storage;
@@ -58,6 +59,7 @@ pub use reviews::{ReviewsService, SubmitOutcome as ReviewSubmitOutcome,
                    SubmitParams as ReviewSubmitParams, Verdict};
 pub use session::SessionService;
 pub use slices::{ListFilter as SlicesListFilter, SlicesService};
+pub use tracks::{EligibilityCheck, Track, TrackProgress, TracksService, UserTrack};
 pub use webauthn::WebauthnService;
 pub use storage::StorageService;
 pub use webhook::WebhookService;

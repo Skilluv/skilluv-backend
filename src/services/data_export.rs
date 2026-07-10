@@ -80,6 +80,15 @@ pub async fn generate_export(
             &fetch_table(&db, "skill_fragments", user_id, "user_id").await?,
             options,
         )?;
+        // P8.6c : le graphe de skills atomiques (user_skills) devient la source
+        // de vérité — on l'exporte à côté du legacy skill_fragments. Le fichier
+        // legacy sera retiré en P8.7 après drop de la table.
+        write_json(
+            &mut zip,
+            "user_skills.json",
+            &fetch_table(&db, "user_skills", user_id, "user_id").await?,
+            options,
+        )?;
         write_json(
             &mut zip,
             "badges.json",

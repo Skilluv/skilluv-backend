@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use crate::AppState;
 use crate::errors::AppError;
-use crate::models::{BadgeWithEarnedAt, SkillFragment};
+use crate::models::BadgeWithEarnedAt;
 use crate::services::LeaderboardService;
 
 pub fn profile_routes() -> Router<AppState> {
@@ -100,14 +100,20 @@ async fn public_profile(
         show_streak: true,
     });
 
-    // Run parallel queries
+    // Run parallel queries.
+    // P8.6 : les skill_fragments retombent sur user_skills en fallback.
+    // La signature du helper retourne AppError alors que les autres futures
+    // retournent sqlx::Error — on encapsule manuellement pour try_join!.
     let (fragments_result, challenges_count_result, heatmap_result, badges_result) = tokio::try_join!(
-        // Skill fragments
-        sqlx::query_as::<_, SkillFragment>(
-            "SELECT * FROM skill_fragments WHERE user_id = $1 ORDER BY fragments DESC"
-        )
-        .bind(user.id)
-        .fetch_all(&state.db),
+        async {
+            crate::services::SkillsService::list_user_skill_fragments_or_backfill(
+                &state.db,
+                user.id,
+                crate::services::SkillFragmentOrder::ByFragmentsDesc,
+            )
+            .await
+            .map_err(|_| sqlx::Error::RowNotFound)
+        },
 
         // Challenges completed count
         sqlx::query_scalar::<_, i64>(

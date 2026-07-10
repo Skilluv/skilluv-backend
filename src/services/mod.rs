@@ -67,8 +67,8 @@ pub use portfolio::{PortfolioService, PublicUserSnapshot};
 pub use seasons::{CreateSeasonParams, Season, SeasonsService};
 pub use session::SessionService;
 pub use skills::{
-    RecommendationSkillMatch, SkillTalent, SkillsService, SliceRecommendation,
-    TalentSearchFilter, UserSkillEnriched,
+    RecommendationSkillMatch, SkillFragmentOrder, SkillTalent, SkillsService,
+    SliceRecommendation, TalentSearchFilter, UserSkillEnriched,
 };
 pub use slices::{ListFilter as SlicesListFilter, SlicesService};
 pub use stewards::{ProjectSteward, StewardsService};

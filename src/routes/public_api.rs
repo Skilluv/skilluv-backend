@@ -141,12 +141,14 @@ async fn get_user_skills(
     .await?
     .ok_or(AppError::NotFound("User not found".to_string()))?;
 
-    let fragments: Vec<SkillFragment> = sqlx::query_as(
-        "SELECT * FROM skill_fragments WHERE user_id = $1 ORDER BY skill_domain, fragments DESC",
-    )
-    .bind(user_id)
-    .fetch_all(&state.db)
-    .await?;
+    // P8.6 : fallback vers user_skills si skill_fragments vide pour ce user.
+    let fragments: Vec<SkillFragment> =
+        crate::services::SkillsService::list_user_skill_fragments_or_backfill(
+            &state.db,
+            user_id,
+            crate::services::SkillFragmentOrder::ByDomainThenFragmentsDesc,
+        )
+        .await?;
 
     // Group by domain
     let mut domains: std::collections::HashMap<String, Vec<serde_json::Value>> =

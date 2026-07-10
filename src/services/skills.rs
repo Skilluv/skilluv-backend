@@ -17,6 +17,20 @@ use crate::errors::AppError;
 
 pub struct SkillsService;
 
+/// Ordering options pour `list_user_skill_fragments_or_backfill` (P8.6).
+///
+/// Miroir les 3 ORDER BY différents utilisés par les consumers legacy :
+/// gamification, profile, public_api.
+#[derive(Debug, Clone, Copy)]
+pub enum SkillFragmentOrder {
+    /// gamification.rs, public_api.rs (variant 1)
+    ByDomainThenSubskill,
+    /// profile.rs
+    ByFragmentsDesc,
+    /// public_api.rs (variant 2)
+    ByDomainThenFragmentsDesc,
+}
+
 /// Une skill enrichie avec la progression du user (vue "mes skills").
 #[derive(Debug, Serialize)]
 pub struct UserSkillEnriched {
@@ -79,6 +93,101 @@ pub struct TalentSearchFilter {
 }
 
 impl SkillsService {
+    // ═══════════════════════════════════════════════════════════════════
+    // P8.6 : consumers legacy `skill_fragments` — fallback vers user_skills
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// Retourne des `SkillFragment` compatibles avec l'ancien format legacy.
+    ///
+    /// Stratégie de fallback (P8.6) :
+    /// 1. Si `skill_fragments` contient au moins une ligne pour le user → SELECT direct
+    ///    (comportement historique conservé).
+    /// 2. Sinon → SELECT depuis `user_skills` + JOIN `skill_nodes`, construit
+    ///    des SkillFragment "synthétiques" avec :
+    ///    - skill_domain = skill_nodes.domain
+    ///    - sub_skill = skill_nodes.slug
+    ///    - fragments = weighted_proven_count (approximation raisonnable)
+    ///    - id = fresh Uuid (les consumers legacy ne persistent pas cet id)
+    ///    - updated_at = user_skills.last_proven_at (fallback NOW si NULL)
+    ///
+    /// L'ORDER BY est appliqué côté SQL selon le paramètre. Les 3 consumers
+    /// legacy (gamification, profile, public_api) ont des ORDER BY différents ;
+    /// on paramètre pour préserver leur ordering historique.
+    pub async fn list_user_skill_fragments_or_backfill(
+        db: &sqlx::PgPool,
+        user_id: uuid::Uuid,
+        order: SkillFragmentOrder,
+    ) -> Result<Vec<crate::models::SkillFragment>, AppError> {
+        // Existe-t-il des skill_fragments legacy pour ce user ?
+        let has_legacy: bool = sqlx::query_scalar(
+            "SELECT EXISTS (SELECT 1 FROM skill_fragments WHERE user_id = $1)",
+        )
+        .bind(user_id)
+        .fetch_one(db)
+        .await?;
+
+        if has_legacy {
+            let order_by = match order {
+                SkillFragmentOrder::ByDomainThenSubskill => "skill_domain, sub_skill",
+                SkillFragmentOrder::ByFragmentsDesc => "fragments DESC",
+                SkillFragmentOrder::ByDomainThenFragmentsDesc => "skill_domain, fragments DESC",
+            };
+            let sql = format!(
+                "SELECT * FROM skill_fragments WHERE user_id = $1 ORDER BY {order_by}"
+            );
+            let rows = sqlx::query_as::<_, crate::models::SkillFragment>(&sql)
+                .bind(user_id)
+                .fetch_all(db)
+                .await?;
+            return Ok(rows);
+        }
+
+        // Fallback : construire depuis user_skills + skill_nodes
+        use chrono::Utc;
+        let rows: Vec<(String, String, i32, Option<chrono::DateTime<Utc>>)> = sqlx::query_as(
+            r#"
+            SELECT sn.domain, sn.slug, us.weighted_proven_count, us.last_proven_at
+            FROM user_skills us
+            JOIN skill_nodes sn ON sn.id = us.skill_id
+            WHERE us.user_id = $1 AND us.proven_count > 0
+            "#,
+        )
+        .bind(user_id)
+        .fetch_all(db)
+        .await?;
+
+        let mut fragments: Vec<crate::models::SkillFragment> = rows
+            .into_iter()
+            .map(|(domain, slug, wpc, last)| crate::models::SkillFragment {
+                id: uuid::Uuid::new_v4(),
+                user_id,
+                skill_domain: domain,
+                sub_skill: slug,
+                fragments: wpc,
+                updated_at: last.unwrap_or_else(Utc::now),
+            })
+            .collect();
+
+        // Appliquer l'ordering côté Rust puisqu'on n'a pas persisté
+        match order {
+            SkillFragmentOrder::ByDomainThenSubskill => fragments.sort_by(|a, b| {
+                a.skill_domain
+                    .cmp(&b.skill_domain)
+                    .then_with(|| a.sub_skill.cmp(&b.sub_skill))
+            }),
+            SkillFragmentOrder::ByFragmentsDesc => {
+                fragments.sort_by(|a, b| b.fragments.cmp(&a.fragments))
+            }
+            SkillFragmentOrder::ByDomainThenFragmentsDesc => fragments.sort_by(|a, b| {
+                a.skill_domain
+                    .cmp(&b.skill_domain)
+                    .then_with(|| b.fragments.cmp(&a.fragments))
+            }),
+        }
+
+        Ok(fragments)
+    }
+
     // ═══════════════════════════════════════════════════════════════════
     // Consultation : profils et catalogue
     // ═══════════════════════════════════════════════════════════════════

@@ -236,7 +236,7 @@ async fn cv_html(
     .fetch_all(&state.db)
     .await?;
 
-    // Top 3 skills. P8.6b : fallback vers user_skills si skill_fragments vide.
+    // Top 3 skills (source user_skills — skill_fragments droppée en P8.7).
     let top_skills =
         crate::services::SkillsService::list_user_top_skills(&state.db, user_id, 3).await?;
 

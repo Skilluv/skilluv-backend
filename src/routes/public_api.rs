@@ -141,7 +141,7 @@ async fn get_user_skills(
     .await?
     .ok_or(AppError::NotFound("User not found".to_string()))?;
 
-    // P8.6 : fallback vers user_skills si skill_fragments vide pour ce user.
+    // Source unique user_skills (skill_fragments droppée en P8.7).
     let fragments: Vec<SkillFragment> =
         crate::services::SkillsService::list_user_skill_fragments_or_backfill(
             &state.db,

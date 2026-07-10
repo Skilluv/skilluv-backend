@@ -17,10 +17,11 @@ use crate::errors::AppError;
 
 pub struct SkillsService;
 
-/// Ordering options pour `list_user_skill_fragments_or_backfill` (P8.6).
+/// Ordering options pour `list_user_skill_fragments_or_backfill`.
 ///
-/// Miroir les 3 ORDER BY différents utilisés par les consumers legacy :
-/// gamification, profile, public_api.
+/// Miroir les 3 ORDER BY différents utilisés par les consumers (gamification,
+/// profile, public_api) — chacun affiche les skills d'un user avec un tri
+/// spécifique et on préserve leur comportement historique.
 #[derive(Debug, Clone, Copy)]
 pub enum SkillFragmentOrder {
     /// gamification.rs, public_api.rs (variant 1)
@@ -94,7 +95,10 @@ pub struct TalentSearchFilter {
 
 impl SkillsService {
     // ═══════════════════════════════════════════════════════════════════
-    // P8.6 : consumers legacy `skill_fragments` — fallback vers user_skills
+    // Backfill "SkillFragment" pour les 3 consumers historiques
+    // (gamification / profile / public_api). Depuis P8.7 la table
+    // `skill_fragments` est droppée : cette API est synthétisée depuis
+    // `user_skills` + `skill_nodes`.
     // ═══════════════════════════════════════════════════════════════════
 
     /// Retourne des `SkillFragment` compatibles avec l'ancien format legacy,

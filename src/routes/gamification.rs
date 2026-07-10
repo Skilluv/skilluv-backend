@@ -58,7 +58,7 @@ async fn skill_tree_for_user(
     state: &AppState,
     user_id: Uuid,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    // P8.6 : fallback vers user_skills si skill_fragments vide pour ce user.
+    // Source unique user_skills + skill_nodes (skill_fragments droppée en P8.7).
     let fragments: Vec<SkillFragment> =
         crate::services::SkillsService::list_user_skill_fragments_or_backfill(
             &state.db,

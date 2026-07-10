@@ -247,7 +247,7 @@ async fn talent_card(
 
     let talent = talent.ok_or(AppError::NotFound("Talent not found".to_string()))?;
 
-    // Get top 3 skills. P8.6b : fallback vers user_skills si skill_fragments vide.
+    // Top 3 skills (source user_skills — skill_fragments droppée en P8.7).
     let top_skills =
         crate::services::SkillsService::list_user_top_skills(&state.db, talent.id, 3).await?;
 

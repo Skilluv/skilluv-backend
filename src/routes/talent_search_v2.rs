@@ -179,7 +179,7 @@ async fn search_v2(
     for r in &rows {
         let uid: Uuid = r.get("id");
         // Top 3 skills (small extra query — fine at 20 rows/page).
-        // P8.6b : fallback vers user_skills si skill_fragments vide.
+        // Source user_skills (skill_fragments droppée en P8.7).
         let top_skills =
             crate::services::SkillsService::list_user_top_skills(&state.db, uid, 3)
                 .await

@@ -101,7 +101,7 @@ async fn public_profile(
     });
 
     // Run parallel queries.
-    // P8.6 : les skill_fragments retombent sur user_skills en fallback.
+    // Source unique user_skills (skill_fragments droppée en P8.7).
     // La signature du helper retourne AppError alors que les autres futures
     // retournent sqlx::Error — on encapsule manuellement pour try_join!.
     let (fragments_result, challenges_count_result, heatmap_result, badges_result) = tokio::try_join!(

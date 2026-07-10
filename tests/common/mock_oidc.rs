@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 use axum::extract::{Form, Query, State};
 use axum::http::HeaderMap;
-use axum::response::{IntoResponse, Redirect};
+use axum::response::Redirect;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};

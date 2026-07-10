@@ -1,7 +1,6 @@
 mod common;
 
 use reqwest::StatusCode;
-use serde_json::json;
 
 #[tokio::test]
 async fn test_leaderboard_empty() {

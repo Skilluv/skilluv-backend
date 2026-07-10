@@ -44,16 +44,19 @@ async fn test_ban_unban_user() {
         .json(&json!({
             "email": "banme@test.com",
             "username": "banme",
-            "password": "TestPass123",
+            "password": common::TestApp::TEST_PASSWORD,
             "first_name": "Ban",
             "last_name": "Me",
             "skill_domain": "code",
+            "terms_accepted": true,
         }))
         .send()
         .await
         .unwrap();
     let victim_body: serde_json::Value = victim_resp.json().await.unwrap();
-    let victim_id = victim_body["data"]["user"]["id"].as_str().unwrap();
+    let victim_id = victim_body["data"]["user"]["id"]
+        .as_str()
+        .unwrap_or_else(|| panic!("register response missing user.id: {victim_body}"));
 
     // Now register + login admin (this sets the admin cookie on app.client)
     app.register_admin("modadmin").await;
@@ -71,7 +74,7 @@ async fn test_ban_unban_user() {
     // Verify banned user can't login
     let login_resp = tmp_client
         .post(format!("{}/api/auth/login", app.addr))
-        .json(&json!({ "identifier": "banme", "password": "TestPass123" }))
+        .json(&json!({ "identifier": "banme", "password": common::TestApp::TEST_PASSWORD }))
         .send()
         .await
         .unwrap();
@@ -86,7 +89,7 @@ async fn test_ban_unban_user() {
     // Verify can login again
     let login_resp2 = tmp_client
         .post(format!("{}/api/auth/login", app.addr))
-        .json(&json!({ "identifier": "banme", "password": "TestPass123" }))
+        .json(&json!({ "identifier": "banme", "password": common::TestApp::TEST_PASSWORD }))
         .send()
         .await
         .unwrap();

@@ -365,13 +365,30 @@ async fn publish_challenge(
 ) -> Result<Json<serde_json::Value>, AppError> {
     require_admin(&state, &auth).await?;
 
-    let challenge: Challenge = sqlx::query_as(
-        "UPDATE challenges SET status = 'published', updated_at = NOW() WHERE id = $1 RETURNING *",
+    // Pre-check règle dure #1 : un challenge publishé doit être is_training=TRUE
+    // ou avoir un project_id. La contrainte challenges_project_or_training (mig
+    // 0061) le refuserait autrement avec un DB error opaque ; on renvoie une
+    // erreur explicite côté API.
+    let (is_training, project_id): (bool, Option<Uuid>) = sqlx::query_as(
+        "SELECT is_training, project_id FROM challenges WHERE id = $1",
     )
     .bind(id)
     .fetch_optional(&state.db)
     .await?
     .ok_or(AppError::NotFound("Challenge not found".to_string()))?;
+
+    if !is_training && project_id.is_none() {
+        return Err(AppError::Validation(
+            "Cannot publish : challenge doit être is_training=TRUE ou avoir un project_id (règle dure #1)".to_string(),
+        ));
+    }
+
+    let challenge: Challenge = sqlx::query_as(
+        "UPDATE challenges SET status = 'published', updated_at = NOW() WHERE id = $1 RETURNING *",
+    )
+    .bind(id)
+    .fetch_one(&state.db)
+    .await?;
 
     Ok(Json(build_response(json!({ "challenge": challenge }))))
 }

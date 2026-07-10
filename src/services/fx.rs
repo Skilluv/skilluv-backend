@@ -227,13 +227,11 @@ mod tests {
 </Cube>
 </Cube>
 </gesmes:Envelope>"#;
-        let rates = parse_ecb_xml(sample);
         // Attribute quotes in the ECB feed are double; adjust our test-parser check.
         let sample_dq = sample.replace('\'', "\"");
         let rates = parse_ecb_xml(&sample_dq);
         assert_eq!(rates.len(), 3);
         assert_eq!(rates[0].0, "USD");
         assert!((rates[0].1 - 1.0850).abs() < 1e-6);
-        let _ = rates; // silence unused warning if refactored
     }
 }

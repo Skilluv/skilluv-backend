@@ -100,14 +100,17 @@ async fn create_community_challenge(
         "draft"
     };
 
+    // Community challenges sont user-generated, sans project_id : on les marque
+    // is_training=TRUE pour satisfaire la règle dure #1 (contrainte
+    // challenges_project_or_training, migration 0061) au moment du publish.
     let challenge: Challenge = sqlx::query_as(
         r#"
         INSERT INTO challenges (
             title, description, instructions, skill_domain, difficulty,
             language, expected_output, test_cases,
             reward_fragments, duration_minutes,
-            is_community, community_status, created_by, status
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,TRUE,$11,$12,'draft')
+            is_community, community_status, created_by, status, is_training
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,TRUE,$11,$12,'draft',TRUE)
         RETURNING *
         "#,
     )

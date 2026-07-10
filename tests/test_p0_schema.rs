@@ -8,7 +8,6 @@
 //!
 //! Voir docs/challenges-target-model-and-roadmap.md pour le rationale.
 
-use bigdecimal::BigDecimal;
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use sqlx::Row;
 use uuid::Uuid;

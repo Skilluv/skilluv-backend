@@ -85,6 +85,7 @@ async fn test_vote_challenge() {
                 "instructions": "Do it",
                 "skill_domain": "code",
                 "difficulty": 1,
+                "is_training": true,
             }),
         )
         .await;

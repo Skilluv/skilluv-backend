@@ -13,8 +13,7 @@ use sqlx::postgres::{PgPool, PgPoolOptions};
 use uuid::Uuid;
 
 use skilluv_backend::services::{
-    AttestationsService, CompagnonnageParams, DeliverablesService, PrMergedOutcome,
-    PrMergedParams, ReviewSubmitParams, ReviewsService, Verdict,
+    AttestationsService, DeliverablesService, PrMergedOutcome, PrMergedParams,
 };
 
 async fn setup_test_db() -> (PgPool, String) {

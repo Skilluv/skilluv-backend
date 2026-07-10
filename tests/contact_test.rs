@@ -3,6 +3,23 @@ mod common;
 use reqwest::StatusCode;
 use serde_json::json;
 
+/// Contact interest cost = 1 credit ; enterprise_credits default balance = 0.
+/// Seed 100 credits pour un enterprise donné (par company_name).
+async fn seed_enterprise_credits(app: &common::TestApp, company_name: &str) {
+    sqlx::query(
+        r#"
+        INSERT INTO enterprise_credits (enterprise_id, balance, total_purchased)
+        SELECT id, 100, 100 FROM enterprises WHERE company_name = $1
+        ON CONFLICT (enterprise_id) DO UPDATE SET
+            balance = enterprise_credits.balance + 100
+        "#,
+    )
+    .bind(company_name)
+    .execute(&app.db)
+    .await
+    .expect("seed credits");
+}
+
 #[tokio::test]
 async fn test_send_interest_and_receive() {
     let app = common::TestApp::spawn().await;
@@ -17,6 +34,7 @@ async fn test_send_interest_and_receive() {
 
     // Create enterprise and send interest
     app.register_enterprise("ContactCorp").await;
+    seed_enterprise_credits(&app, "ContactCorp").await;
     app.login("contactcorp").await;
 
     let resp = app
@@ -51,6 +69,7 @@ async fn test_accept_interest_opens_conversation() {
         .unwrap();
 
     app.register_enterprise("AcceptCorp").await;
+    seed_enterprise_credits(&app, "AcceptCorp").await;
     app.login("acceptcorp").await;
     app.post(
         "/api/contact/interest",
@@ -99,6 +118,7 @@ async fn test_decline_sets_cooldown() {
         .unwrap();
 
     app.register_enterprise("DeclineCorp").await;
+    seed_enterprise_credits(&app, "DeclineCorp").await;
     app.login("declinecorp").await;
     app.post(
         "/api/contact/interest",

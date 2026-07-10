@@ -1,3 +1,8 @@
+// Ce module est partagé entre plusieurs binaires de test ; Rust émet un
+// dead_code par binaire pour chaque helper qui n'est pas utilisé dans CE
+// binaire — même si un autre s'en sert. On les tolère globalement.
+#![allow(dead_code)]
+
 pub mod mock_oidc;
 
 use reqwest::{Client, StatusCode};

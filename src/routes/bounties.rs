@@ -209,7 +209,14 @@ async fn create_bounty(
     let expires_at = body
         .expires_in_days
         .map(|d| chrono::Utc::now() + chrono::Duration::days(d as i64));
-    let inserted: (Uuid,) = sqlx::query_as(
+
+    // P8.4 : dual-write bounty + project_slice dans une même transaction.
+    // Si aucun project Skilluv ne matche `github_repo_owner/name`, la bounty est
+    // créée sans slice associée (backward compat — un admin pourra la lier plus
+    // tard). Si un match existe, on crée la slice + on lie via oss_bounties.slice_id.
+    let mut tx = state.db.begin().await?;
+
+    let bounty_id: Uuid = sqlx::query_scalar(
         r#"
         INSERT INTO oss_bounties
             (enterprise_id, posted_by_user_id, repo_owner, repo_name, issue_number, issue_url,
@@ -228,15 +235,84 @@ async fn create_bounty(
     .bind(&body.description)
     .bind(&reward)
     .bind(body.fragments_bonus.unwrap_or(100))
-    .bind(body.required_skills.unwrap_or_default())
+    .bind(body.required_skills.clone().unwrap_or_default())
     .bind(body.difficulty.unwrap_or(3))
-    .bind(body.tags.unwrap_or_default())
+    .bind(body.tags.clone().unwrap_or_default())
     .bind(expires_at)
-    .fetch_one(&state.db)
+    .fetch_one(&mut *tx)
     .await?;
 
+    // Cherche un project matchant le repo GitHub
+    let matched_project_id: Option<Uuid> = sqlx::query_scalar(
+        "SELECT id FROM projects
+         WHERE github_repo_owner = $1 AND github_repo_name = $2
+         LIMIT 1",
+    )
+    .bind(&body.repo_owner)
+    .bind(&body.repo_name)
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    let mut slice_id_created: Option<Uuid> = None;
+    if let Some(project_id) = matched_project_id {
+        // Crée le project_slice miroir de la bounty
+        let slice_id: Uuid = sqlx::query_scalar(
+            r#"
+            INSERT INTO project_slices
+                (project_id, slice_type, external_ref, external_metadata,
+                 title, description,
+                 primary_domain, difficulty, fragments_reward, credits_reward,
+                 status, claim_expires_at,
+                 created_by_user_id, ingested_from)
+            VALUES ($1, 'github_issue', $2, $3,
+                    $4, $5,
+                    'code', $6, $7, $8,
+                    'open', $9,
+                    $10, 'legacy_bounty')
+            RETURNING id
+            "#,
+        )
+        .bind(project_id)
+        .bind(body.issue_number.to_string())
+        .bind(serde_json::json!({
+            "source": "bounty_dual_write",
+            "issue_url": body.issue_url,
+            "tags": body.tags.clone().unwrap_or_default(),
+            "required_skills": body.required_skills.clone().unwrap_or_default(),
+        }))
+        .bind(&body.title)
+        .bind(&body.description)
+        .bind(body.difficulty.unwrap_or(3) as i16)
+        .bind(body.fragments_bonus.unwrap_or(100))
+        .bind(&reward)
+        .bind(expires_at)
+        .bind(auth.user_id)
+        .fetch_one(&mut *tx)
+        .await?;
+
+        // Lier la bounty à sa slice
+        sqlx::query(
+            "UPDATE oss_bounties SET slice_id = $1, updated_at = NOW() WHERE id = $2",
+        )
+        .bind(slice_id)
+        .bind(bounty_id)
+        .execute(&mut *tx)
+        .await?;
+
+        slice_id_created = Some(slice_id);
+    }
+
+    tx.commit().await?;
+
     metrics::counter!("skilluv_bounties_posted_total").increment(1);
-    Ok(Json(build_response(json!({ "bounty_id": inserted.0 }))))
+    if slice_id_created.is_some() {
+        metrics::counter!("skilluv_bounty_slices_created_total").increment(1);
+    }
+
+    Ok(Json(build_response(json!({
+        "bounty_id": bounty_id,
+        "slice_id": slice_id_created,
+    }))))
 }
 
 // ─── Claim + submit PR (talent) ──────────────────────────────────

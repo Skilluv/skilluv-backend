@@ -212,6 +212,95 @@ impl SkillsService {
     }
 
     // ═══════════════════════════════════════════════════════════════════
+    // P8.5c : propagation legacy challenge → user_skills (best-effort)
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// Best-effort : au succès d'un challenge legacy, tente de propager le proof
+    /// vers `user_skills` en résolvant le `skill_id` depuis un slug matchant :
+    ///   1. `language` (ex: "python", "rust", "typescript") — matche une catégorie
+    ///      du skill graph seedé en 0057.
+    ///   2. À défaut, `slug_hint` optionnel (ex: challenge tag futur).
+    ///
+    /// Si aucun match → skip silencieusement (log debug). Le `deliverable`
+    /// créé en P8.5a reste, mais sans propagation user_skills : c'est le
+    /// comportement acceptable retenu (option 3 du plan P8).
+    ///
+    /// Retourne `Some(skill_id)` si propagation faite, `None` sinon.
+    pub async fn propagate_legacy_challenge_success_to_user_skills(
+        db: &PgPool,
+        user_id: Uuid,
+        language: Option<&str>,
+        skill_domain: &str,
+        weight: i32,
+    ) -> Result<Option<Uuid>, AppError> {
+        if weight <= 0 {
+            return Ok(None);
+        }
+
+        let mut skill_id: Option<Uuid> = None;
+        if let Some(lang) = language {
+            let lower = lang.to_lowercase();
+            skill_id = sqlx::query_scalar(
+                "SELECT id FROM skill_nodes WHERE slug = $1 LIMIT 1",
+            )
+            .bind(&lower)
+            .fetch_optional(db)
+            .await?;
+        }
+
+        let Some(skill_id) = skill_id else {
+            tracing::debug!(
+                user_id = %user_id, ?language, skill_domain,
+                "P8.5c skip user_skills propagation (no skill_node slug match)"
+            );
+            return Ok(None);
+        };
+
+        sqlx::query(
+            r#"
+            INSERT INTO user_skills (
+                user_id, skill_id, proven_count, weighted_proven_count,
+                proficiency_level, first_proven_at, last_proven_at
+            )
+            VALUES ($1, $2, 1, $3, 1, NOW(), NOW())
+            ON CONFLICT (user_id, skill_id) DO UPDATE SET
+                proven_count = user_skills.proven_count + 1,
+                weighted_proven_count = user_skills.weighted_proven_count + $3,
+                last_proven_at = NOW(),
+                first_proven_at = COALESCE(user_skills.first_proven_at, NOW())
+            "#,
+        )
+        .bind(user_id)
+        .bind(skill_id)
+        .bind(weight)
+        .execute(db)
+        .await?;
+
+        let wpc: i32 = sqlx::query_scalar(
+            "SELECT weighted_proven_count FROM user_skills
+             WHERE user_id = $1 AND skill_id = $2",
+        )
+        .bind(user_id)
+        .bind(skill_id)
+        .fetch_one(db)
+        .await?;
+
+        let new_level = crate::models::UserSkill::proficiency_level_for(wpc);
+
+        sqlx::query(
+            "UPDATE user_skills SET proficiency_level = $1
+             WHERE user_id = $2 AND skill_id = $3",
+        )
+        .bind(new_level)
+        .bind(user_id)
+        .bind(skill_id)
+        .execute(db)
+        .await?;
+
+        Ok(Some(skill_id))
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
     // Consultation : profils et catalogue
     // ═══════════════════════════════════════════════════════════════════
 

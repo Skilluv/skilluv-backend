@@ -516,6 +516,35 @@ async fn submit_challenge(
         .execute(&state.db)
         .await?;
 
+        // P8.5c : dual-write best-effort vers user_skills quand un skill_node
+        // matche la langue du challenge. Ne fail pas le submit si absent.
+        match crate::services::SkillsService::propagate_legacy_challenge_success_to_user_skills(
+            &state.db,
+            auth.user_id,
+            challenge.language.as_deref(),
+            &challenge.skill_domain,
+            total_fragments,
+        )
+        .await
+        {
+            Ok(Some(_)) => {
+                metrics::counter!(
+                    "skilluv_challenge_user_skills_propagated_total",
+                    "domain" => challenge.skill_domain.clone()
+                )
+                .increment(1);
+            }
+            Ok(None) => {}
+            Err(e) => {
+                tracing::warn!(
+                    error = %e,
+                    user_id = %auth.user_id,
+                    challenge_id = %challenge.id,
+                    "P8.5c user_skills propagation failed (best-effort, submission still succeeded)"
+                );
+            }
+        }
+
         // Update title based on total fragments
         update_user_title(&state, auth.user_id).await?;
 

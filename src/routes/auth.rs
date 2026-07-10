@@ -1524,8 +1524,12 @@ async fn delete_account(
     }
 
     // Delete all user data (cascade order matters)
-    // 1. Skill fragments
+    // 1. Skill fragments (legacy) + user_skills (P8.5c new source of truth)
     sqlx::query("DELETE FROM skill_fragments WHERE user_id = $1")
+        .bind(auth.user_id)
+        .execute(&state.db)
+        .await?;
+    sqlx::query("DELETE FROM user_skills WHERE user_id = $1")
         .bind(auth.user_id)
         .execute(&state.db)
         .await?;

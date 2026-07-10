@@ -491,33 +491,9 @@ async fn submit_challenge(
         .execute(&state.db)
         .await?;
 
-        // Upsert skill fragment
-        let sub_skill = if challenge.is_onboarding {
-            "onboarding".to_string()
-        } else {
-            challenge
-                .language
-                .clone()
-                .unwrap_or_else(|| "general".to_string())
-        };
-
-        sqlx::query(
-            r#"
-            INSERT INTO skill_fragments (user_id, skill_domain, sub_skill, fragments)
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT (user_id, skill_domain, sub_skill)
-            DO UPDATE SET fragments = skill_fragments.fragments + $4, updated_at = NOW()
-            "#,
-        )
-        .bind(auth.user_id)
-        .bind(&challenge.skill_domain)
-        .bind(&sub_skill)
-        .bind(total_fragments)
-        .execute(&state.db)
-        .await?;
-
-        // P8.5c : dual-write best-effort vers user_skills quand un skill_node
-        // matche la langue du challenge. Ne fail pas le submit si absent.
+        // P8.7 : skill_fragments legacy retiré. Propagation user_skills seule.
+        // P8.5c : best-effort vers user_skills quand un skill_node matche la
+        // langue du challenge. Ne fail pas le submit si absent.
         match crate::services::SkillsService::propagate_legacy_challenge_success_to_user_skills(
             &state.db,
             auth.user_id,

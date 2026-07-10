@@ -65,7 +65,7 @@ async fn main() -> Result<()> {
 async fn wipe_seed_data(db: &PgPool) -> Result<()> {
     tracing::info!("wiping previously seeded data");
     let pattern = format!("%{SEED_EMAIL_DOMAIN}");
-    // submissions/skill_fragments are cascaded via foreign keys
+    // submissions/user_skills are cascaded via foreign keys
     let res = sqlx::query("DELETE FROM users WHERE email LIKE $1")
         .bind(&pattern)
         .execute(db)

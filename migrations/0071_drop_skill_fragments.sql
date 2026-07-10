@@ -1,0 +1,22 @@
+-- Phase P8.7 — Drop table legacy `skill_fragments`.
+--
+-- Rationale :
+--   Après P8.5c (dual-write challenge submission → user_skills) et P8.6c
+--   (readers leaderboard + data_export migrés vers user_skills seul), la
+--   table `skill_fragments` n'a plus aucun consumer live dans le code Rust.
+--
+--   Le graphe atomique `user_skills` + `skill_nodes` est la source de vérité :
+--     - Rétrocompat consumer via `SkillsService::list_user_skill_fragments_or_backfill`
+--       qui synthétise des SkillFragment depuis user_skills (voir services/skills.rs).
+--     - Leaderboards agrègent sur `weighted_proven_count` JOIN `skill_nodes.domain`.
+--     - Export GDPR expose `user_skills.json` (le `skill_fragments.json` disparaît).
+--
+-- Prérequis vérifiés (grep -rn "skill_fragments" src/ → uniquement docs & tests) :
+--   - Aucun INSERT/UPDATE/SELECT/DELETE actif sur `skill_fragments` dans src/.
+--   - `models/challenge.rs::SkillFragment` reste comme shape en mémoire (retour
+--     du helper de backfill), pas de binding table.
+--
+-- Irréversible : les données historiques ne seront pas reconstruites depuis
+-- user_skills (qui est déjà alimenté via dual-write P8.5c depuis 2 sous-phases).
+
+DROP TABLE IF EXISTS skill_fragments;

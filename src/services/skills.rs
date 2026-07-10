@@ -97,52 +97,24 @@ impl SkillsService {
     // P8.6 : consumers legacy `skill_fragments` — fallback vers user_skills
     // ═══════════════════════════════════════════════════════════════════
 
-    /// Retourne des `SkillFragment` compatibles avec l'ancien format legacy.
+    /// Retourne des `SkillFragment` compatibles avec l'ancien format legacy,
+    /// construits depuis `user_skills` + `skill_nodes` (P8.7 : la table
+    /// `skill_fragments` a été droppée, plus de fallback legacy).
     ///
-    /// Stratégie de fallback (P8.6) :
-    /// 1. Si `skill_fragments` contient au moins une ligne pour le user → SELECT direct
-    ///    (comportement historique conservé).
-    /// 2. Sinon → SELECT depuis `user_skills` + JOIN `skill_nodes`, construit
-    ///    des SkillFragment "synthétiques" avec :
-    ///    - skill_domain = skill_nodes.domain
-    ///    - sub_skill = skill_nodes.slug
-    ///    - fragments = weighted_proven_count (approximation raisonnable)
-    ///    - id = fresh Uuid (les consumers legacy ne persistent pas cet id)
-    ///    - updated_at = user_skills.last_proven_at (fallback NOW si NULL)
+    /// - skill_domain = skill_nodes.domain
+    /// - sub_skill = skill_nodes.slug
+    /// - fragments = weighted_proven_count (approximation raisonnable)
+    /// - id = fresh Uuid (les consumers legacy ne persistent pas cet id)
+    /// - updated_at = user_skills.last_proven_at (fallback NOW si NULL)
     ///
-    /// L'ORDER BY est appliqué côté SQL selon le paramètre. Les 3 consumers
-    /// legacy (gamification, profile, public_api) ont des ORDER BY différents ;
-    /// on paramètre pour préserver leur ordering historique.
+    /// Les 3 consumers legacy (gamification, profile, public_api) ont des
+    /// ORDER BY différents ; on paramètre pour préserver leur ordering historique.
     pub async fn list_user_skill_fragments_or_backfill(
         db: &sqlx::PgPool,
         user_id: uuid::Uuid,
         order: SkillFragmentOrder,
     ) -> Result<Vec<crate::models::SkillFragment>, AppError> {
-        // Existe-t-il des skill_fragments legacy pour ce user ?
-        let has_legacy: bool = sqlx::query_scalar(
-            "SELECT EXISTS (SELECT 1 FROM skill_fragments WHERE user_id = $1)",
-        )
-        .bind(user_id)
-        .fetch_one(db)
-        .await?;
-
-        if has_legacy {
-            let order_by = match order {
-                SkillFragmentOrder::ByDomainThenSubskill => "skill_domain, sub_skill",
-                SkillFragmentOrder::ByFragmentsDesc => "fragments DESC",
-                SkillFragmentOrder::ByDomainThenFragmentsDesc => "skill_domain, fragments DESC",
-            };
-            let sql = format!(
-                "SELECT * FROM skill_fragments WHERE user_id = $1 ORDER BY {order_by}"
-            );
-            let rows = sqlx::query_as::<_, crate::models::SkillFragment>(&sql)
-                .bind(user_id)
-                .fetch_all(db)
-                .await?;
-            return Ok(rows);
-        }
-
-        // Fallback : construire depuis user_skills + skill_nodes
+        // P8.7 : source unique user_skills + skill_nodes
         use chrono::Utc;
         let rows: Vec<(String, String, i32, Option<chrono::DateTime<Utc>>)> = sqlx::query_as(
             r#"

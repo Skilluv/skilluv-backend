@@ -1,14 +1,5 @@
-//! Tests d'intégration P8.6c : aggrégations leaderboard sur skill_fragments
-//! (legacy) UNION user_skills (nouveau graph).
-//!
-//! Le service `LeaderboardService` fait deux requêtes clés :
-//! 1. `update_score` — total par domaine pour un user (MAX legacy vs graph).
-//! 2. `seed_from_db` — batch tous users × domaines (MAX legacy vs graph).
-//!
-//! On mirore ici la logique SQL pour valider :
-//! - Legacy seul (skill_fragments présent, user_skills vide) → total legacy.
-//! - Graph seul (skill_fragments vide, user_skills présent) → total graph.
-//! - Les deux présents (cas dual-write P8.5a+c) → MAX pour éviter le double-comptage.
+//! Tests d'intégration P8.6c (post-P8.7) : aggrégations leaderboard sur
+//! `user_skills` + `skill_nodes` (source unique après drop de `skill_fragments`).
 
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use uuid::Uuid;
@@ -81,17 +72,8 @@ async fn insert_user(db: &PgPool) -> Uuid {
     user_id
 }
 
-/// Mirror update_score's domain aggregation logic.
+/// Mirror update_score's domain aggregation (P8.7 : user_skills seul).
 async fn compute_domain_total(db: &PgPool, user_id: Uuid, domain: &str) -> i64 {
-    let legacy: Option<i64> = sqlx::query_scalar(
-        "SELECT COALESCE(SUM(fragments), 0) FROM skill_fragments WHERE user_id = $1 AND skill_domain = $2",
-    )
-    .bind(user_id)
-    .bind(domain)
-    .fetch_one(db)
-    .await
-    .expect("legacy");
-
     let graph: Option<i64> = sqlx::query_scalar(
         r#"
         SELECT COALESCE(SUM(us.weighted_proven_count)::BIGINT, 0)
@@ -105,24 +87,7 @@ async fn compute_domain_total(db: &PgPool, user_id: Uuid, domain: &str) -> i64 {
     .fetch_one(db)
     .await
     .expect("graph");
-
-    legacy.unwrap_or(0).max(graph.unwrap_or(0))
-}
-
-async fn seed_legacy(db: &PgPool, user_id: Uuid, domain: &str, sub: &str, frags: i32) {
-    sqlx::query(
-        "INSERT INTO skill_fragments (user_id, skill_domain, sub_skill, fragments)
-         VALUES ($1, $2, $3, $4)
-         ON CONFLICT (user_id, skill_domain, sub_skill)
-         DO UPDATE SET fragments = skill_fragments.fragments + $4",
-    )
-    .bind(user_id)
-    .bind(domain)
-    .bind(sub)
-    .bind(frags)
-    .execute(db)
-    .await
-    .expect("skill_fragments");
+    graph.unwrap_or(0)
 }
 
 async fn seed_graph(db: &PgPool, user_id: Uuid, slug: &str, wpc: i32) {
@@ -148,92 +113,87 @@ async fn seed_graph(db: &PgPool, user_id: Uuid, slug: &str, wpc: i32) {
 }
 
 #[tokio::test]
-async fn domain_total_legacy_only() {
+async fn domain_total_sums_wpc_within_domain() {
     let (db, name) = setup_test_db().await;
     let uid = insert_user(&db).await;
 
-    seed_legacy(&db, uid, "code", "python", 42).await;
+    seed_graph(&db, uid, "python", 20).await;
+    seed_graph(&db, uid, "rust", 15).await; // même domaine 'code'
+    seed_graph(&db, uid, "figma-craft", 100).await; // domaine 'design'
 
-    let t = compute_domain_total(&db, uid, "code").await;
-    assert_eq!(t, 42);
+    assert_eq!(compute_domain_total(&db, uid, "code").await, 35);
+    assert_eq!(compute_domain_total(&db, uid, "design").await, 100);
+    assert_eq!(compute_domain_total(&db, uid, "game").await, 0);
 
     db.close().await;
     cleanup_test_db(&name).await;
 }
 
 #[tokio::test]
-async fn domain_total_graph_only() {
+async fn seed_from_db_query_aggregates_by_domain() {
     let (db, name) = setup_test_db().await;
     let uid = insert_user(&db).await;
 
-    seed_graph(&db, uid, "python", 17).await;
-
-    let t = compute_domain_total(&db, uid, "code").await;
-    assert_eq!(t, 17);
-
-    db.close().await;
-    cleanup_test_db(&name).await;
-}
-
-#[tokio::test]
-async fn domain_total_uses_max_when_both_present() {
-    let (db, name) = setup_test_db().await;
-    let uid = insert_user(&db).await;
-
-    // Legacy = 30 ; graph = 50 → MAX = 50 (pas 80 — évite double-comptage)
-    seed_legacy(&db, uid, "code", "python", 30).await;
-    seed_graph(&db, uid, "python", 50).await;
-
-    let t = compute_domain_total(&db, uid, "code").await;
-    assert_eq!(t, 50, "max({}, {}) attendu, pas la somme", 30, 50);
-
-    db.close().await;
-    cleanup_test_db(&name).await;
-}
-
-#[tokio::test]
-async fn seed_from_db_query_deduplicates_domains() {
-    let (db, name) = setup_test_db().await;
-    let uid = insert_user(&db).await;
-
-    seed_legacy(&db, uid, "code", "python", 30).await;
-    seed_graph(&db, uid, "python", 50).await;
+    seed_graph(&db, uid, "python", 20).await;
+    seed_graph(&db, uid, "rust", 15).await;
+    seed_graph(&db, uid, "figma-craft", 100).await;
 
     let rows: Vec<(Uuid, String, i64)> = sqlx::query_as(
         r#"
-        SELECT user_id, domain, MAX(total)::BIGINT as total
-        FROM (
-            SELECT sf.user_id, sf.skill_domain AS domain,
-                   SUM(sf.fragments)::BIGINT AS total
-            FROM skill_fragments sf
-            JOIN users u ON u.id = sf.user_id
-            WHERE u.profile_active = TRUE AND u.is_banned = FALSE
-            GROUP BY sf.user_id, sf.skill_domain
-            UNION ALL
-            SELECT us.user_id, sn.domain,
-                   SUM(us.weighted_proven_count)::BIGINT AS total
-            FROM user_skills us
-            JOIN skill_nodes sn ON sn.id = us.skill_id
-            JOIN users u ON u.id = us.user_id
-            WHERE u.profile_active = TRUE AND u.is_banned = FALSE
-            GROUP BY us.user_id, sn.domain
-        ) merged
-        GROUP BY user_id, domain
-        HAVING MAX(total) > 0
+        SELECT us.user_id, sn.domain,
+               SUM(us.weighted_proven_count)::BIGINT AS total
+        FROM user_skills us
+        JOIN skill_nodes sn ON sn.id = us.skill_id
+        JOIN users u ON u.id = us.user_id
+        WHERE u.profile_active = TRUE AND u.is_banned = FALSE
+        GROUP BY us.user_id, sn.domain
+        HAVING SUM(us.weighted_proven_count) > 0
         "#,
     )
     .fetch_all(&db)
     .await
     .expect("agg");
 
-    let code_row = rows
-        .iter()
-        .find(|(u, d, _)| *u == uid && d == "code")
-        .expect("row for code");
-    assert_eq!(code_row.2, 50, "MAX(30, 50) == 50");
+    let code = rows.iter().find(|(u, d, _)| *u == uid && d == "code").unwrap();
+    assert_eq!(code.2, 35);
+    let design = rows.iter().find(|(u, d, _)| *u == uid && d == "design").unwrap();
+    assert_eq!(design.2, 100);
+    let count = rows.iter().filter(|(u, _, _)| *u == uid).count();
+    assert_eq!(count, 2, "un row par (user, domain)");
 
-    let count_for_code = rows.iter().filter(|(u, d, _)| *u == uid && d == "code").count();
-    assert_eq!(count_for_code, 1, "un seul row par (user, domain)");
+    db.close().await;
+    cleanup_test_db(&name).await;
+}
+
+#[tokio::test]
+async fn banned_users_excluded_from_seed() {
+    let (db, name) = setup_test_db().await;
+    let uid = insert_user(&db).await;
+
+    seed_graph(&db, uid, "python", 20).await;
+    sqlx::query("UPDATE users SET is_banned = TRUE WHERE id = $1")
+        .bind(uid)
+        .execute(&db)
+        .await
+        .expect("ban");
+
+    let rows: Vec<(Uuid, String, i64)> = sqlx::query_as(
+        r#"
+        SELECT us.user_id, sn.domain,
+               SUM(us.weighted_proven_count)::BIGINT AS total
+        FROM user_skills us
+        JOIN skill_nodes sn ON sn.id = us.skill_id
+        JOIN users u ON u.id = us.user_id
+        WHERE u.profile_active = TRUE AND u.is_banned = FALSE
+        GROUP BY us.user_id, sn.domain
+        HAVING SUM(us.weighted_proven_count) > 0
+        "#,
+    )
+    .fetch_all(&db)
+    .await
+    .expect("agg");
+
+    assert!(rows.iter().all(|(u, _, _)| *u != uid));
 
     db.close().await;
     cleanup_test_db(&name).await;

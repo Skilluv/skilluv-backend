@@ -67,21 +67,9 @@ impl LeaderboardService {
             .zadd(&key, &user_id_str, new_total_fragments as f64)
             .await?;
 
-        // 2. Domain alltime — sum of fragments in that domain
-        // P8.6c : lecture legacy `skill_fragments` (comportement historique) +
-        // ajout des `user_skills` (nouveau graph). Dedup via addition simple :
-        // les mêmes challenges vont maintenant en dual-write (P8.5a + P8.5c),
-        // donc pour éviter le double-comptage on ne prend que la source ayant
-        // le plus gros total. Concrètement : max(legacy, user_skills).
-        let legacy_total: Option<i64> = sqlx::query_scalar(
-            "SELECT COALESCE(SUM(fragments), 0) FROM skill_fragments WHERE user_id = $1 AND skill_domain = $2",
-        )
-        .bind(user_id)
-        .bind(skill_domain)
-        .fetch_one(db)
-        .await?;
-
-        let graph_total: Option<i64> = sqlx::query_scalar(
+        // 2. Domain alltime — sum of weighted_proven_count in that domain.
+        // P8.7 : skill_fragments retiré, source unique = user_skills + skill_nodes.
+        let domain_total: Option<i64> = sqlx::query_scalar(
             r#"
             SELECT COALESCE(SUM(us.weighted_proven_count)::BIGINT, 0)
             FROM user_skills us
@@ -93,8 +81,6 @@ impl LeaderboardService {
         .bind(skill_domain)
         .fetch_one(db)
         .await?;
-
-        let domain_total = Some(legacy_total.unwrap_or(0).max(graph_total.unwrap_or(0)));
 
         let key = Self::leaderboard_key(skill_domain, "alltime");
         let () = redis
@@ -225,30 +211,18 @@ impl LeaderboardService {
             let () = redis.zadd(&key, user_id.to_string(), *total as f64).await?;
         }
 
-        // Per-domain alltime: aggregate from skill_fragments (legacy) UNIONed with
-        // user_skills + skill_nodes (P8.6c) puis MAX pour éviter le double-comptage
-        // avec le dual-write P8.5a/c.
+        // Per-domain alltime: aggregate from user_skills + skill_nodes.
+        // P8.7 : skill_fragments legacy retiré, source unique.
         let domain_scores: Vec<(Uuid, String, i64)> = sqlx::query_as(
             r#"
-            SELECT user_id, domain, MAX(total)::BIGINT as total
-            FROM (
-                SELECT sf.user_id, sf.skill_domain AS domain,
-                       SUM(sf.fragments)::BIGINT AS total
-                FROM skill_fragments sf
-                JOIN users u ON u.id = sf.user_id
-                WHERE u.profile_active = TRUE AND u.is_banned = FALSE
-                GROUP BY sf.user_id, sf.skill_domain
-                UNION ALL
-                SELECT us.user_id, sn.domain,
-                       SUM(us.weighted_proven_count)::BIGINT AS total
-                FROM user_skills us
-                JOIN skill_nodes sn ON sn.id = us.skill_id
-                JOIN users u ON u.id = us.user_id
-                WHERE u.profile_active = TRUE AND u.is_banned = FALSE
-                GROUP BY us.user_id, sn.domain
-            ) merged
-            GROUP BY user_id, domain
-            HAVING MAX(total) > 0
+            SELECT us.user_id, sn.domain,
+                   SUM(us.weighted_proven_count)::BIGINT AS total
+            FROM user_skills us
+            JOIN skill_nodes sn ON sn.id = us.skill_id
+            JOIN users u ON u.id = us.user_id
+            WHERE u.profile_active = TRUE AND u.is_banned = FALSE
+            GROUP BY us.user_id, sn.domain
+            HAVING SUM(us.weighted_proven_count) > 0
             "#,
         )
         .fetch_all(db)

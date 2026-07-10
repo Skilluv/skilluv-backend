@@ -17,9 +17,10 @@ use crate::services::{NotificationService, tournament};
 
 pub fn tournament_routes() -> Router<AppState> {
     Router::new()
-        // Seasons
-        .route("/seasons", get(list_seasons))
-        .route("/seasons/current", get(current_season))
+        // Seasons admin (les GET /seasons + /seasons/current publics vivent dans
+        // seasons.rs Phase P6 ; on ne les redéclare pas ici pour éviter le
+        // conflit de routes axum). Les endpoints /admin/seasons/* sont propres
+        // à ce module (workflow tournois) et n'existent pas dans seasons.rs.
         .route("/admin/seasons", post(admin_create_season))
         .route("/admin/seasons/{id}/status", post(admin_set_season_status))
         .route("/admin/seasons/{id}/close", post(admin_close_season))
@@ -46,17 +47,8 @@ fn build_response(data: Value) -> Value {
     })
 }
 
-// ─── Seasons ─────────────────────────────────────────────────────
-
-async fn list_seasons(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
-    let rows = tournament::list_seasons(&state.db).await?;
-    Ok(Json(build_response(json!({ "seasons": rows }))))
-}
-
-async fn current_season(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
-    let s = tournament::current_season(&state.db).await?;
-    Ok(Json(build_response(json!({ "season": s }))))
-}
+// ─── Seasons admin ───────────────────────────────────────────────
+// GET /seasons + /seasons/current publics : voir routes/seasons.rs (P6).
 
 async fn admin_create_season(
     State(state): State<AppState>,

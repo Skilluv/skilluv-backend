@@ -120,23 +120,14 @@ async fn setup_project_with_open_slice(db: &PgPool) -> (Uuid, Uuid, Uuid) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Migrations 0062 + 0063
+// Migration 0062 : curated_labels sur projects.
+// (Le volet oss_bounties.slice_id de 0062 est obsolète depuis P9.2 —
+//  la table oss_bounties est droppée en mig 0074.)
 // ═══════════════════════════════════════════════════════════════════
 
 #[tokio::test]
-async fn migration_0062_adds_slice_id_and_curated_labels() {
+async fn migration_0062_adds_curated_labels_on_projects() {
     let (db, db_name) = setup_test_db().await;
-
-    let bounty_slice_id_exists: bool = sqlx::query_scalar(
-        "SELECT EXISTS (
-            SELECT 1 FROM information_schema.columns
-            WHERE table_name = 'oss_bounties' AND column_name = 'slice_id'
-        )",
-    )
-    .fetch_one(&db)
-    .await
-    .expect("query");
-    assert!(bounty_slice_id_exists, "oss_bounties.slice_id must exist");
 
     let projects_curated: bool = sqlx::query_scalar(
         "SELECT EXISTS (
@@ -183,89 +174,10 @@ async fn migration_0062_adds_slice_id_and_curated_labels() {
     cleanup_test_db(&db_name).await;
 }
 
-#[tokio::test]
-async fn migration_0063_backfills_bounties_with_matching_project() {
-    let (db, db_name) = setup_test_db().await;
-
-    // Setup : enterprise + user + project pointant vers un repo GitHub
-    let owner_user_id = Uuid::new_v4();
-    insert_test_user(&db, owner_user_id).await;
-
-    let enterprise_id: Uuid = sqlx::query_scalar(
-        "INSERT INTO enterprises (company_name, slug, company_size, owner_id)
-         VALUES ('Test Enterprise', $1, '1-10', $2)
-         RETURNING id",
-    )
-    .bind(format!("test-ent-{}", Uuid::new_v4()))
-    .bind(owner_user_id)
-    .fetch_one(&db)
-    .await
-    .expect("insert enterprise");
-
-    let project_id: Uuid = sqlx::query_scalar(
-        "INSERT INTO projects (slug, name, owner_type, owner_id,
-                               github_repo_owner, github_repo_name)
-         VALUES ($1, 'Backfill Test', 'user', $2, 'acme', 'widgets')
-         RETURNING id",
-    )
-    .bind(format!("bf-{}", Uuid::new_v4()))
-    .bind(owner_user_id)
-    .fetch_one(&db)
-    .await
-    .expect("insert project");
-
-    // Insert a bounty pointing to the same repo (predates the backfill logic since
-    // the migration 0063 already ran during setup — we re-run it explicitly below)
-    let bounty_id: Uuid = sqlx::query_scalar(
-        "INSERT INTO oss_bounties
-            (enterprise_id, posted_by_user_id, repo_owner, repo_name, issue_number,
-             issue_url, title, description, reward_credits, fragments_bonus,
-             difficulty, tags, status)
-         VALUES ($1, $2, 'acme', 'widgets', 42, 'http://gh/acme/widgets/issues/42',
-                 'Fix bug', 'A bug to fix', 50.00, 100, 3, '{}', 'open')
-         RETURNING id",
-    )
-    .bind(enterprise_id)
-    .bind(owner_user_id)
-    .fetch_one(&db)
-    .await
-    .expect("insert bounty");
-
-    // Bounty was inserted AFTER 0063 ran, so its slice_id is NULL.
-    // Re-run 0063's DO block manually to verify idempotence + backfill.
-    sqlx::query(&std::fs::read_to_string(
-        "migrations/0063_backfill_bounties_as_slices.sql",
-    ).expect("read migration 0063"))
-        .execute(&db)
-        .await
-        .expect("re-run 0063");
-
-    // The bounty should now be linked to a slice
-    let linked_slice_id: Option<Uuid> = sqlx::query_scalar(
-        "SELECT slice_id FROM oss_bounties WHERE id = $1",
-    )
-    .bind(bounty_id)
-    .fetch_one(&db)
-    .await
-    .expect("query bounty");
-    assert!(
-        linked_slice_id.is_some(),
-        "Bounty should be linked to a slice after 0063 re-run"
-    );
-
-    // The slice should point to our project
-    let slice_project_id: Uuid = sqlx::query_scalar(
-        "SELECT project_id FROM project_slices WHERE id = $1",
-    )
-    .bind(linked_slice_id.unwrap())
-    .fetch_one(&db)
-    .await
-    .expect("query slice");
-    assert_eq!(slice_project_id, project_id);
-
-    db.close().await;
-    cleanup_test_db(&db_name).await;
-}
+// (Le test du backfill 0063 est retiré en P9.2 — oss_bounties est droppée
+// en mig 0074, on ne peut plus insérer dans cette table pour re-jouer 0063.
+// Les invariants qu'il vérifiait sont désormais couverts par test_phase5_bounties
+// via l'API bounties qui écrit directement dans project_slices.)
 
 // ═══════════════════════════════════════════════════════════════════
 // SlicesService::list_open

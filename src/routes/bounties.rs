@@ -1,9 +1,15 @@
-//! OSS Bounties — Phase 5.6.
+//! OSS Bounties — flow (P9.2 : entirely backed by `project_slices`).
 //!
-//! Flow :
+//! Historique : originellement 2 tables dédiées `oss_bounties` + `oss_bounty_claims`
+//! (Phase 5.6). Depuis P9.2 les bounties sont un cas particulier de `project_slice`
+//! avec `funder_enterprise_id NOT NULL` et `credits_reward > 0` — les colonnes
+//! `pr_url/pr_number/pr_submitted_at/merged_at/paid_at` sur project_slices
+//! remplacent l'ancien oss_bounty_claims.
+//!
+//! Flow inchangé côté API publique :
 //!   1. Entreprise POST /api/bounties (crédits débités séquestre)
 //!   2. Talent POST /api/bounties/{id}/claim
-//!   3. Talent POST /api/bounties/{id}/pr {url}
+//!   3. Talent POST /api/bounties/{id}/pr {url, number}
 //!   4. Webhook GitHub `pull_request.closed` merged=true → payout auto
 //!      (crédits séquestrés → transférés au talent + bonus fragments)
 
@@ -56,6 +62,83 @@ async fn current_enterprise_for(db: &sqlx::PgPool, user_id: Uuid) -> Result<Uuid
     row.map(|(id,)| id).ok_or(AppError::Forbidden)
 }
 
+/// Résout ou crée un project miroir du repo GitHub. Si un project existe déjà
+/// avec le même (owner, name), on le réutilise. Sinon on en crée un attaché au
+/// user posteur (owner_type='user'), qui pourra être re-attribué à un guild par
+/// un steward plus tard. Simplifie la création B2B : plus besoin de créer un
+/// project au préalable via l'admin UI.
+async fn resolve_or_create_project(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    repo_owner: &str,
+    repo_name: &str,
+    posted_by: Uuid,
+) -> Result<Uuid, AppError> {
+    if let Some(project_id) = sqlx::query_scalar::<_, Uuid>(
+        "SELECT id FROM projects
+         WHERE github_repo_owner = $1 AND github_repo_name = $2
+         LIMIT 1",
+    )
+    .bind(repo_owner)
+    .bind(repo_name)
+    .fetch_optional(&mut **tx)
+    .await?
+    {
+        return Ok(project_id);
+    }
+
+    // Slug basé sur repo + suffixe court pour éviter collisions si plusieurs
+    // enterprises créent une bounty sur des forks du même owner/name — le slug
+    // est UNIQUE.
+    let slug = format!(
+        "{}-{}-{}",
+        repo_owner.to_lowercase(),
+        repo_name.to_lowercase(),
+        &Uuid::new_v4().to_string()[..8]
+    );
+    let project_id: Uuid = sqlx::query_scalar(
+        r#"
+        INSERT INTO projects
+            (slug, name, description, github_repo_owner, github_repo_name,
+             owner_type, owner_id)
+        VALUES ($1, $2, $3, $4, $5, 'user', $6)
+        RETURNING id
+        "#,
+    )
+    .bind(&slug)
+    .bind(format!("{repo_owner}/{repo_name}"))
+    .bind(format!(
+        "Auto-created for bounty on {repo_owner}/{repo_name}"
+    ))
+    .bind(repo_owner)
+    .bind(repo_name)
+    .bind(posted_by)
+    .fetch_one(&mut **tx)
+    .await?;
+
+    metrics::counter!("skilluv_bounty_projects_auto_created_total").increment(1);
+    Ok(project_id)
+}
+
+/// Renvoie une valeur JSON depuis l'external_metadata d'une slice, avec un
+/// fallback vide. Sert à extraire les tags/required_skills/issue_url historiques.
+fn meta_str(meta: &Value, key: &str) -> String {
+    meta.get(key)
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string()
+}
+
+fn meta_array(meta: &Value, key: &str) -> Vec<String> {
+    meta.get(key)
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 // ─── Listing ─────────────────────────────────────────────────────
 
 #[derive(Deserialize)]
@@ -78,17 +161,21 @@ async fn list_bounties(
 
     let rows = sqlx::query(
         r#"
-        SELECT b.id, b.title, b.description, b.repo_owner, b.repo_name, b.issue_number,
-               b.issue_url, b.reward_credits::TEXT AS reward_credits,
-               b.fragments_bonus, b.required_skills, b.difficulty, b.tags, b.status,
-               b.expires_at, b.created_at,
+        SELECT ps.id, ps.title, ps.description,
+               p.github_repo_owner, p.github_repo_name,
+               ps.external_ref, ps.external_metadata,
+               ps.credits_reward::TEXT AS credits_reward,
+               ps.fragments_reward, ps.difficulty, ps.status,
+               ps.claim_expires_at, ps.created_at,
                e.company_name
-        FROM oss_bounties b
-        JOIN enterprises e ON e.id = b.enterprise_id
-        WHERE b.status = $1
-          AND ($2::TEXT IS NULL OR $2 = ANY(b.required_skills))
-          AND ($3::TEXT IS NULL OR $3 = ANY(b.tags))
-        ORDER BY b.created_at DESC
+        FROM project_slices ps
+        JOIN projects p ON p.id = ps.project_id
+        LEFT JOIN enterprises e ON e.id = ps.funder_enterprise_id
+        WHERE ps.status = $1
+          AND ps.funder_enterprise_id IS NOT NULL
+          AND ($2::TEXT IS NULL OR ps.external_metadata->'required_skills' ? $2)
+          AND ($3::TEXT IS NULL OR ps.external_metadata->'tags' ? $3)
+        ORDER BY ps.created_at DESC
         LIMIT $4 OFFSET $5
         "#,
     )
@@ -103,27 +190,59 @@ async fn list_bounties(
     let items: Vec<Value> = rows
         .iter()
         .map(|r| {
+            let meta: Value = r
+                .try_get::<Value, _>("external_metadata")
+                .unwrap_or(Value::Null);
+            let repo_owner: String = r.get("github_repo_owner");
+            let repo_name: String = r.get("github_repo_name");
+            let issue_number = r
+                .try_get::<Option<String>, _>("external_ref")
+                .ok()
+                .flatten()
+                .and_then(|s| s.parse::<i32>().ok())
+                .unwrap_or(0);
             json!({
                 "id": r.get::<Uuid, _>("id"),
                 "title": r.get::<String, _>("title"),
                 "description": r.get::<String, _>("description"),
-                "repo": format!("{}/{}", r.get::<String, _>("repo_owner"), r.get::<String, _>("repo_name")),
-                "issue_url": r.get::<String, _>("issue_url"),
-                "issue_number": r.get::<i32, _>("issue_number"),
-                "reward_credits": r.get::<String, _>("reward_credits"),
-                "fragments_bonus": r.get::<i32, _>("fragments_bonus"),
-                "required_skills": r.get::<Vec<String>, _>("required_skills"),
-                "tags": r.get::<Vec<String>, _>("tags"),
-                "difficulty": r.get::<i32, _>("difficulty"),
-                "status": r.get::<String, _>("status"),
-                "expires_at": r.get::<Option<chrono::DateTime<chrono::Utc>>, _>("expires_at"),
+                "repo": format!("{repo_owner}/{repo_name}"),
+                "issue_url": meta_str(&meta, "issue_url"),
+                "issue_number": issue_number,
+                "reward_credits": r.get::<String, _>("credits_reward"),
+                "fragments_bonus": r.get::<i32, _>("fragments_reward"),
+                "required_skills": meta_array(&meta, "required_skills"),
+                "tags": meta_array(&meta, "tags"),
+                "difficulty": r.get::<i16, _>("difficulty") as i32,
+                "status": bounty_status_from_slice(&r.get::<String, _>("status")),
+                "expires_at": r.get::<Option<chrono::DateTime<chrono::Utc>>, _>("claim_expires_at"),
                 "created_at": r.get::<chrono::DateTime<chrono::Utc>, _>("created_at"),
-                "company_name": r.get::<String, _>("company_name"),
+                "company_name": r
+                    .try_get::<Option<String>, _>("company_name")
+                    .ok()
+                    .flatten()
+                    .unwrap_or_default(),
             })
         })
         .collect();
 
-    Ok(Json(build_response(json!({ "bounties": items, "page": page, "per_page": per_page }))))
+    Ok(Json(build_response(
+        json!({ "bounties": items, "page": page, "per_page": per_page }),
+    )))
+}
+
+/// Mapping status project_slice → status bounty exposé côté API.
+/// Le vocabulaire historique bounty est plus détaillé (pr_submitted, paid) que
+/// project_slice ; on utilise les champs pr_url/paid_at pour raffiner.
+fn bounty_status_from_slice(slice_status: &str) -> String {
+    match slice_status {
+        "open" => "open".into(),
+        "claimed" => "claimed".into(),
+        "in_review" => "in_review".into(),
+        "merged" => "paid".into(),
+        "closed" => "cancelled".into(),
+        "expired" => "expired".into(),
+        other => other.to_string(),
+    }
 }
 
 async fn get_bounty(
@@ -132,11 +251,13 @@ async fn get_bounty(
 ) -> Result<Json<Value>, AppError> {
     let row = sqlx::query(
         r#"
-        SELECT b.*, e.company_name,
-               (SELECT COUNT(*)::BIGINT FROM oss_bounty_claims c WHERE c.bounty_id = b.id AND c.status IN ('claimed', 'pr_submitted')) AS active_claims
-        FROM oss_bounties b
-        JOIN enterprises e ON e.id = b.enterprise_id
-        WHERE b.id = $1
+        SELECT ps.*, p.github_repo_owner, p.github_repo_name,
+               e.company_name,
+               CASE WHEN ps.status IN ('claimed', 'in_review') THEN 1 ELSE 0 END::BIGINT AS active_claims
+        FROM project_slices ps
+        JOIN projects p ON p.id = ps.project_id
+        LEFT JOIN enterprises e ON e.id = ps.funder_enterprise_id
+        WHERE ps.id = $1
         "#,
     )
     .bind(id)
@@ -144,19 +265,29 @@ async fn get_bounty(
     .await?
     .ok_or(AppError::NotFound("bounty not found".into()))?;
 
+    let meta: Value = row
+        .try_get::<Value, _>("external_metadata")
+        .unwrap_or(Value::Null);
+    let repo_owner: String = row.get("github_repo_owner");
+    let repo_name: String = row.get("github_repo_name");
+
     Ok(Json(build_response(json!({
         "id": row.get::<Uuid, _>("id"),
         "title": row.get::<String, _>("title"),
         "description": row.get::<String, _>("description"),
-        "repo": format!("{}/{}", row.get::<String, _>("repo_owner"), row.get::<String, _>("repo_name")),
-        "issue_url": row.get::<String, _>("issue_url"),
-        "reward_credits": row.get::<BigDecimal, _>("reward_credits").to_string(),
-        "fragments_bonus": row.get::<i32, _>("fragments_bonus"),
-        "required_skills": row.get::<Vec<String>, _>("required_skills"),
-        "tags": row.get::<Vec<String>, _>("tags"),
-        "difficulty": row.get::<i32, _>("difficulty"),
-        "status": row.get::<String, _>("status"),
-        "company_name": row.get::<String, _>("company_name"),
+        "repo": format!("{repo_owner}/{repo_name}"),
+        "issue_url": meta_str(&meta, "issue_url"),
+        "reward_credits": row.get::<BigDecimal, _>("credits_reward").to_string(),
+        "fragments_bonus": row.get::<i32, _>("fragments_reward"),
+        "required_skills": meta_array(&meta, "required_skills"),
+        "tags": meta_array(&meta, "tags"),
+        "difficulty": row.get::<i16, _>("difficulty") as i32,
+        "status": bounty_status_from_slice(&row.get::<String, _>("status")),
+        "company_name": row
+            .try_get::<Option<String>, _>("company_name")
+            .ok()
+            .flatten()
+            .unwrap_or_default(),
         "active_claims": row.get::<i64, _>("active_claims"),
     }))))
 }
@@ -190,8 +321,7 @@ async fn create_bounty(
     if reward <= BigDecimal::from(0) {
         return Err(AppError::Validation("reward_credits must be > 0".into()));
     }
-    // Séquestre : on débite immédiatement l'entreprise (spend_bounty_escrow) —
-    // le payout final ré-attribuera au talent lors du merge.
+
     let escrow_notes = format!("bounty:{}#{}", body.repo_name, body.issue_number);
     crate::services::credits::spend(
         &state.db,
@@ -210,108 +340,58 @@ async fn create_bounty(
         .expires_in_days
         .map(|d| chrono::Utc::now() + chrono::Duration::days(d as i64));
 
-    // P8.4 : dual-write bounty + project_slice dans une même transaction.
-    // Si aucun project Skilluv ne matche `github_repo_owner/name`, la bounty est
-    // créée sans slice associée (backward compat — un admin pourra la lier plus
-    // tard). Si un match existe, on crée la slice + on lie via oss_bounties.slice_id.
     let mut tx = state.db.begin().await?;
 
-    let bounty_id: Uuid = sqlx::query_scalar(
+    // Résout (ou crée) le project miroir du repo GitHub — évite d'exiger que
+    // l'admin ait pré-créé le project côté enterprise.
+    let project_id =
+        resolve_or_create_project(&mut tx, &body.repo_owner, &body.repo_name, auth.user_id)
+            .await?;
+
+    let metadata = json!({
+        "source": "bounty_create",
+        "issue_url": body.issue_url,
+        "tags": body.tags.clone().unwrap_or_default(),
+        "required_skills": body.required_skills.clone().unwrap_or_default(),
+    });
+
+    let slice_id: Uuid = sqlx::query_scalar(
         r#"
-        INSERT INTO oss_bounties
-            (enterprise_id, posted_by_user_id, repo_owner, repo_name, issue_number, issue_url,
-             title, description, reward_credits, fragments_bonus, required_skills, difficulty, tags, expires_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        INSERT INTO project_slices
+            (project_id, slice_type, external_ref, external_metadata,
+             title, description,
+             primary_domain, difficulty, fragments_reward, credits_reward,
+             status, claim_expires_at,
+             created_by_user_id, funded_by_user_id, funder_enterprise_id, ingested_from)
+        VALUES ($1, 'github_issue', $2, $3,
+                $4, $5,
+                'code', $6, $7, $8,
+                'open', $9,
+                $10, $10, $11, 'manual')
         RETURNING id
         "#,
     )
-    .bind(enterprise_id)
-    .bind(auth.user_id)
-    .bind(&body.repo_owner)
-    .bind(&body.repo_name)
-    .bind(body.issue_number)
-    .bind(&body.issue_url)
+    .bind(project_id)
+    .bind(body.issue_number.to_string())
+    .bind(&metadata)
     .bind(&body.title)
     .bind(&body.description)
-    .bind(&reward)
+    .bind(body.difficulty.unwrap_or(3) as i16)
     .bind(body.fragments_bonus.unwrap_or(100))
-    .bind(body.required_skills.clone().unwrap_or_default())
-    .bind(body.difficulty.unwrap_or(3))
-    .bind(body.tags.clone().unwrap_or_default())
+    .bind(&reward)
     .bind(expires_at)
+    .bind(auth.user_id)
+    .bind(enterprise_id)
     .fetch_one(&mut *tx)
     .await?;
-
-    // Cherche un project matchant le repo GitHub
-    let matched_project_id: Option<Uuid> = sqlx::query_scalar(
-        "SELECT id FROM projects
-         WHERE github_repo_owner = $1 AND github_repo_name = $2
-         LIMIT 1",
-    )
-    .bind(&body.repo_owner)
-    .bind(&body.repo_name)
-    .fetch_optional(&mut *tx)
-    .await?;
-
-    let mut slice_id_created: Option<Uuid> = None;
-    if let Some(project_id) = matched_project_id {
-        // Crée le project_slice miroir de la bounty
-        let slice_id: Uuid = sqlx::query_scalar(
-            r#"
-            INSERT INTO project_slices
-                (project_id, slice_type, external_ref, external_metadata,
-                 title, description,
-                 primary_domain, difficulty, fragments_reward, credits_reward,
-                 status, claim_expires_at,
-                 created_by_user_id, ingested_from)
-            VALUES ($1, 'github_issue', $2, $3,
-                    $4, $5,
-                    'code', $6, $7, $8,
-                    'open', $9,
-                    $10, 'legacy_bounty')
-            RETURNING id
-            "#,
-        )
-        .bind(project_id)
-        .bind(body.issue_number.to_string())
-        .bind(serde_json::json!({
-            "source": "bounty_dual_write",
-            "issue_url": body.issue_url,
-            "tags": body.tags.clone().unwrap_or_default(),
-            "required_skills": body.required_skills.clone().unwrap_or_default(),
-        }))
-        .bind(&body.title)
-        .bind(&body.description)
-        .bind(body.difficulty.unwrap_or(3) as i16)
-        .bind(body.fragments_bonus.unwrap_or(100))
-        .bind(&reward)
-        .bind(expires_at)
-        .bind(auth.user_id)
-        .fetch_one(&mut *tx)
-        .await?;
-
-        // Lier la bounty à sa slice
-        sqlx::query(
-            "UPDATE oss_bounties SET slice_id = $1, updated_at = NOW() WHERE id = $2",
-        )
-        .bind(slice_id)
-        .bind(bounty_id)
-        .execute(&mut *tx)
-        .await?;
-
-        slice_id_created = Some(slice_id);
-    }
 
     tx.commit().await?;
 
     metrics::counter!("skilluv_bounties_posted_total").increment(1);
-    if slice_id_created.is_some() {
-        metrics::counter!("skilluv_bounty_slices_created_total").increment(1);
-    }
 
     Ok(Json(build_response(json!({
-        "bounty_id": bounty_id,
-        "slice_id": slice_id_created,
+        "bounty_id": slice_id,
+        "slice_id": slice_id,
     }))))
 }
 
@@ -322,38 +402,41 @@ async fn claim_bounty(
     auth: AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Value>, AppError> {
-    let bounty_status: Option<(String,)> =
-        sqlx::query_as("SELECT status FROM oss_bounties WHERE id = $1")
-            .bind(id)
-            .fetch_optional(&state.db)
-            .await?;
-    let status = bounty_status
-        .map(|(s,)| s)
-        .ok_or(AppError::NotFound("bounty not found".into()))?;
-    if status != "open" && status != "claimed" {
+    // Récupère la slice + verrouille jusqu'à la fin du claim
+    let mut tx = state.db.begin().await?;
+    let row: Option<(String, Option<Uuid>)> = sqlx::query_as(
+        "SELECT status, claimed_by_user_id FROM project_slices WHERE id = $1 FOR UPDATE",
+    )
+    .bind(id)
+    .fetch_optional(&mut *tx)
+    .await?;
+    let (status, current_claimant) =
+        row.ok_or(AppError::NotFound("bounty not found".into()))?;
+    if status != "open" && (status != "claimed" || current_claimant != Some(auth.user_id)) {
         return Err(AppError::Validation(format!(
             "bounty status '{status}' does not accept new claims"
         )));
     }
-    let inserted: (Uuid,) = sqlx::query_as(
+    let default_ttl_days: i64 = 7;
+    let expires = chrono::Utc::now() + chrono::Duration::days(default_ttl_days);
+    sqlx::query(
         r#"
-        INSERT INTO oss_bounty_claims (bounty_id, user_id)
-        VALUES ($1, $2)
-        ON CONFLICT (bounty_id, user_id) DO UPDATE SET status = 'claimed', claimed_at = NOW()
-        RETURNING id
+        UPDATE project_slices
+        SET status = 'claimed',
+            claimed_by_user_id = $1,
+            claimed_at = COALESCE(claimed_at, NOW()),
+            claim_expires_at = COALESCE(claim_expires_at, $2)
+        WHERE id = $3
         "#,
     )
-    .bind(id)
     .bind(auth.user_id)
-    .fetch_one(&state.db)
+    .bind(expires)
+    .bind(id)
+    .execute(&mut *tx)
     .await?;
-    // Passe la bounty en "claimed" si elle était open
-    sqlx::query("UPDATE oss_bounties SET status = 'claimed', updated_at = NOW() WHERE id = $1 AND status = 'open'")
-        .bind(id)
-        .execute(&state.db)
-        .await?;
+    tx.commit().await?;
     metrics::counter!("skilluv_bounties_claimed_total").increment(1);
-    Ok(Json(build_response(json!({ "claim_id": inserted.0 }))))
+    Ok(Json(build_response(json!({ "claim_id": id }))))
 }
 
 #[derive(Deserialize)]
@@ -370,10 +453,12 @@ async fn submit_pr(
 ) -> Result<Json<Value>, AppError> {
     let res = sqlx::query(
         r#"
-        UPDATE oss_bounty_claims
-        SET pull_request_url = $1, pull_request_number = $2,
-            status = 'pr_submitted', pr_submitted_at = NOW()
-        WHERE bounty_id = $3 AND user_id = $4 AND status IN ('claimed', 'pr_submitted')
+        UPDATE project_slices
+        SET pr_url = $1, pr_number = $2,
+            pr_submitted_at = NOW(),
+            status = 'in_review'
+        WHERE id = $3 AND claimed_by_user_id = $4
+          AND status IN ('claimed', 'in_review')
         "#,
     )
     .bind(&body.pull_request_url)
@@ -385,10 +470,6 @@ async fn submit_pr(
     if res.rows_affected() == 0 {
         return Err(AppError::Validation("no active claim to attach PR".into()));
     }
-    sqlx::query("UPDATE oss_bounties SET status = 'in_review', updated_at = NOW() WHERE id = $1")
-        .bind(id)
-        .execute(&state.db)
-        .await?;
     Ok(Json(build_response(json!({ "attached": true }))))
 }
 
@@ -398,15 +479,15 @@ async fn cancel_bounty(
     Path(id): Path<Uuid>,
 ) -> Result<Json<Value>, AppError> {
     let enterprise_id = current_enterprise_for(&state.db, auth.user_id).await?;
-    // Récupérer la bounty et le montant à rembourser
-    let row: Option<(String, BigDecimal, Uuid)> = sqlx::query_as(
-        "SELECT status, reward_credits, enterprise_id FROM oss_bounties WHERE id = $1",
+    let row: Option<(String, BigDecimal, Option<Uuid>)> = sqlx::query_as(
+        "SELECT status, credits_reward, funder_enterprise_id
+         FROM project_slices WHERE id = $1",
     )
     .bind(id)
     .fetch_optional(&state.db)
     .await?;
-    let (status, reward, ent) = row.ok_or(AppError::NotFound("bounty not found".into()))?;
-    if ent != enterprise_id {
+    let (status, reward, funder) = row.ok_or(AppError::NotFound("bounty not found".into()))?;
+    if funder != Some(enterprise_id) {
         return Err(AppError::Forbidden);
     }
     if !matches!(status.as_str(), "open" | "claimed") {
@@ -414,7 +495,6 @@ async fn cancel_bounty(
             "cannot cancel bounty in status '{status}'"
         )));
     }
-    // Remboursement crédits (grant reason refund_bounty_cancelled)
     crate::services::credits::grant(
         &state.db,
         crate::services::credits::GrantInput {
@@ -430,7 +510,7 @@ async fn cancel_bounty(
     )
     .await?;
     sqlx::query(
-        "UPDATE oss_bounties SET status = 'cancelled', updated_at = NOW() WHERE id = $1",
+        "UPDATE project_slices SET status = 'closed', closed_at = NOW() WHERE id = $1",
     )
     .bind(id)
     .execute(&state.db)
@@ -474,7 +554,6 @@ async fn github_webhook(
         .unwrap_or("")
         .to_string();
 
-    // Idempotence
     let already: Option<(String,)> = sqlx::query_as(
         "SELECT delivery_id FROM github_webhook_events WHERE delivery_id = $1",
     )
@@ -517,58 +596,49 @@ async fn handle_pull_request_event(state: &AppState, payload: &Value) -> Result<
     if pr_url.is_empty() || pr_number == 0 {
         return Ok(());
     }
+    let repo_full_name = pr
+        .get("base")
+        .and_then(|b| b.get("repo"))
+        .and_then(|r| r.get("full_name"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
 
-    // Match sur PR URL ou (repo + PR number)
-    let claim_row: Option<(Uuid, Uuid, Uuid)> = sqlx::query_as(
+    // Trouve la slice ciblée : pr_url exact OU (repo + pr_number).
+    let row: Option<(Uuid, Uuid, BigDecimal, i32, Uuid, String)> = sqlx::query_as(
         r#"
-        SELECT c.id, c.bounty_id, c.user_id
-        FROM oss_bounty_claims c
-        JOIN oss_bounties b ON b.id = c.bounty_id
-        WHERE c.status = 'pr_submitted'
-          AND (c.pull_request_url = $1 OR (c.pull_request_number = $2 AND b.repo_owner || '/' || b.repo_name = $3))
+        SELECT ps.id, ps.claimed_by_user_id, ps.credits_reward,
+               ps.fragments_reward, ps.funder_enterprise_id, ps.status
+        FROM project_slices ps
+        JOIN projects p ON p.id = ps.project_id
+        WHERE ps.status = 'in_review'
+          AND ps.claimed_by_user_id IS NOT NULL
+          AND ps.funder_enterprise_id IS NOT NULL
+          AND (
+              ps.pr_url = $1
+              OR (
+                  ps.pr_number = $2
+                  AND (p.github_repo_owner || '/' || p.github_repo_name) = $3
+              )
+          )
         LIMIT 1
         "#,
     )
     .bind(pr_url)
     .bind(pr_number)
-    .bind(
-        pr.get("base")
-            .and_then(|b| b.get("repo"))
-            .and_then(|r| r.get("full_name"))
-            .and_then(|v| v.as_str())
-            .unwrap_or(""),
-    )
+    .bind(repo_full_name)
     .fetch_optional(&state.db)
     .await?;
 
-    let Some((claim_id, bounty_id, talent_user_id)) = claim_row else {
+    let Some((slice_id, talent_user_id, reward, fragments_bonus, enterprise_id, slice_status)) =
+        row
+    else {
         return Ok(());
     };
-    // Récupérer la bounty (pool, fragments_bonus, entreprise)
-    let brow = sqlx::query(
-        r#"
-        SELECT enterprise_id, reward_credits::TEXT AS reward_credits, fragments_bonus, status
-        FROM oss_bounties WHERE id = $1 FOR UPDATE
-        "#,
-    )
-    .bind(bounty_id)
-    .fetch_one(&state.db)
-    .await?;
-    let bounty_status: String = brow.get("status");
-    if bounty_status == "paid" {
+    if slice_status == "merged" {
         return Ok(());
     }
-    let enterprise_id: Uuid = brow.get("enterprise_id");
-    let reward = BigDecimal::from_str(&brow.get::<String, _>("reward_credits"))
-        .map_err(|_| AppError::Internal("bad reward decimal".into()))?;
-    let fragments_bonus: i32 = brow.get("fragments_bonus");
 
-    // Payout : les crédits ont été séquestrés au create. Le talent n'a pas
-    // de wallet crédits (les crédits Skilluv sont B2B), donc :
-    //   - trace le payout côté enterprise (delta=0, juste une écriture d'audit)
-    //   - convertit les crédits séquestrés en fragments pour le talent
-    //     (1 crédit = 500 fragments par défaut, override via env
-    //     BOUNTY_CREDIT_TO_FRAGMENTS)
+    // Conversion crédits séquestrés → fragments talent (les crédits sont B2B).
     let credit_to_frag: i64 = std::env::var("BOUNTY_CREDIT_TO_FRAGMENTS")
         .ok()
         .and_then(|s| s.parse().ok())
@@ -588,12 +658,11 @@ async fn handle_pull_request_event(state: &AppState, payload: &Value) -> Result<
     .bind(enterprise_id)
     .bind(talent_user_id)
     .bind(format!(
-        "bounty:{bounty_id} payout_credits={reward} fragments={total_fragments_award} pr={pr_url}"
+        "bounty:{slice_id} payout_credits={reward} fragments={total_fragments_award} pr={pr_url}"
     ))
     .execute(&state.db)
     .await?;
 
-    // Attribution fragments au talent
     sqlx::query("UPDATE users SET total_fragments = total_fragments + $1 WHERE id = $2")
         .bind(total_fragments_award)
         .bind(talent_user_id)
@@ -601,21 +670,21 @@ async fn handle_pull_request_event(state: &AppState, payload: &Value) -> Result<
         .await?;
 
     sqlx::query(
-        "UPDATE oss_bounty_claims SET status = 'merged', merged_at = NOW() WHERE id = $1",
+        r#"
+        UPDATE project_slices
+        SET status = 'merged',
+            merged_at = NOW(),
+            paid_at = NOW()
+        WHERE id = $1
+        "#,
     )
-    .bind(claim_id)
-    .execute(&state.db)
-    .await?;
-    sqlx::query(
-        "UPDATE oss_bounties SET status = 'paid', updated_at = NOW() WHERE id = $1",
-    )
-    .bind(bounty_id)
+    .bind(slice_id)
     .execute(&state.db)
     .await?;
 
     metrics::counter!("skilluv_bounties_paid_total").increment(1);
     tracing::info!(
-        bounty_id = %bounty_id,
+        slice_id = %slice_id,
         talent = %talent_user_id,
         reward = %reward,
         "bounty payout completed"

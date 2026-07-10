@@ -236,16 +236,9 @@ async fn cv_html(
     .fetch_all(&state.db)
     .await?;
 
-    // Top 3 skill fragments
-    let top_skills: Vec<(String, String, i32)> = sqlx::query_as(
-        r#"
-        SELECT skill_domain, sub_skill, fragments FROM skill_fragments
-        WHERE user_id = $1 ORDER BY fragments DESC LIMIT 3
-        "#,
-    )
-    .bind(user_id)
-    .fetch_all(&state.db)
-    .await?;
+    // Top 3 skills. P8.6b : fallback vers user_skills si skill_fragments vide.
+    let top_skills =
+        crate::services::SkillsService::list_user_top_skills(&state.db, user_id, 3).await?;
 
     // Badges (slug + name)
     let badges: Vec<(String, String)> = sqlx::query_as(

@@ -258,6 +258,80 @@ async fn zero_proven_count_skills_excluded_from_backfill() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// P8.6b : helper list_user_top_skills respecte limit + fallback
+// ═══════════════════════════════════════════════════════════════════
+
+#[tokio::test]
+async fn top_skills_respects_limit_and_ordering() {
+    let (db, db_name) = setup_test_db().await;
+    let user_id = Uuid::new_v4();
+    insert_test_user(&db, user_id).await;
+
+    sqlx::query(
+        "INSERT INTO skill_fragments (user_id, skill_domain, sub_skill, fragments)
+         VALUES ($1, 'code', 'rust', 500),
+                ($1, 'code', 'python', 300),
+                ($1, 'design', 'figma', 200),
+                ($1, 'code', 'go', 100),
+                ($1, 'security', 'owasp', 50)",
+    )
+    .bind(user_id)
+    .execute(&db)
+    .await
+    .expect("insert");
+
+    let top3 = SkillsService::list_user_top_skills(&db, user_id, 3)
+        .await
+        .expect("top3");
+    assert_eq!(top3.len(), 3);
+    assert_eq!(top3[0].1, "rust");
+    assert_eq!(top3[1].1, "python");
+    assert_eq!(top3[2].1, "figma");
+
+    let top10 = SkillsService::list_user_top_skills(&db, user_id, 10)
+        .await
+        .expect("top10");
+    assert_eq!(top10.len(), 5, "capped at total rows count");
+
+    db.close().await;
+    cleanup_test_db(&db_name).await;
+}
+
+#[tokio::test]
+async fn top_skills_fallback_when_no_legacy() {
+    let (db, db_name) = setup_test_db().await;
+    let user_id = Uuid::new_v4();
+    insert_test_user(&db, user_id).await;
+
+    let skill_id: Uuid = sqlx::query_scalar(
+        "SELECT id FROM skill_nodes WHERE parent_id IS NOT NULL LIMIT 1",
+    )
+    .fetch_one(&db)
+    .await
+    .expect("skill");
+    sqlx::query(
+        "INSERT INTO user_skills
+            (user_id, skill_id, proven_count, weighted_proven_count, proficiency_level,
+             first_proven_at, last_proven_at)
+         VALUES ($1, $2, 3, 12, 3, NOW(), NOW())",
+    )
+    .bind(user_id)
+    .bind(skill_id)
+    .execute(&db)
+    .await
+    .expect("user_skills");
+
+    let top3 = SkillsService::list_user_top_skills(&db, user_id, 3)
+        .await
+        .expect("top3");
+    assert_eq!(top3.len(), 1);
+    assert_eq!(top3[0].2, 12, "fragments = weighted_proven_count");
+
+    db.close().await;
+    cleanup_test_db(&db_name).await;
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // Cas 5 : ordering ByDomainThenFragmentsDesc
 // ═══════════════════════════════════════════════════════════════════
 

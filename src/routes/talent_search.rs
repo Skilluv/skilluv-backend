@@ -247,13 +247,9 @@ async fn talent_card(
 
     let talent = talent.ok_or(AppError::NotFound("Talent not found".to_string()))?;
 
-    // Get top 3 skills
-    let top_skills: Vec<(String, String, i32)> = sqlx::query_as(
-        "SELECT skill_domain, sub_skill, fragments FROM skill_fragments WHERE user_id = $1 ORDER BY fragments DESC LIMIT 3",
-    )
-    .bind(talent.id)
-    .fetch_all(&state.db)
-    .await?;
+    // Get top 3 skills. P8.6b : fallback vers user_skills si skill_fragments vide.
+    let top_skills =
+        crate::services::SkillsService::list_user_top_skills(&state.db, talent.id, 3).await?;
 
     // Badge count
     let badge_count: i64 =

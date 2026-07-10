@@ -179,16 +179,11 @@ async fn search_v2(
     for r in &rows {
         let uid: Uuid = r.get("id");
         // Top 3 skills (small extra query — fine at 20 rows/page).
-        let top_skills: Vec<(String, String, i32)> = sqlx::query_as(
-            r#"
-            SELECT skill_domain, sub_skill, fragments FROM skill_fragments
-            WHERE user_id = $1 ORDER BY fragments DESC LIMIT 3
-            "#,
-        )
-        .bind(uid)
-        .fetch_all(&state.db)
-        .await
-        .unwrap_or_default();
+        // P8.6b : fallback vers user_skills si skill_fragments vide.
+        let top_skills =
+            crate::services::SkillsService::list_user_top_skills(&state.db, uid, 3)
+                .await
+                .unwrap_or_default();
         talents.push(json!({
             "id": uid,
             "username": r.get::<String, _>("username"),

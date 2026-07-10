@@ -188,6 +188,29 @@ impl SkillsService {
         Ok(fragments)
     }
 
+    /// Top N skills d'un user au format tuple `(skill_domain, sub_skill, fragments)`.
+    ///
+    /// Utilisé par les endpoints talent_search + github qui affichent un aperçu
+    /// compact du profil skills. Réutilise `list_user_skill_fragments_or_backfill`
+    /// avec l'ordering `ByFragmentsDesc` puis coupe à `limit`.
+    pub async fn list_user_top_skills(
+        db: &sqlx::PgPool,
+        user_id: uuid::Uuid,
+        limit: usize,
+    ) -> Result<Vec<(String, String, i32)>, AppError> {
+        let fragments = Self::list_user_skill_fragments_or_backfill(
+            db,
+            user_id,
+            SkillFragmentOrder::ByFragmentsDesc,
+        )
+        .await?;
+        Ok(fragments
+            .into_iter()
+            .take(limit)
+            .map(|f| (f.skill_domain, f.sub_skill, f.fragments))
+            .collect())
+    }
+
     // ═══════════════════════════════════════════════════════════════════
     // Consultation : profils et catalogue
     // ═══════════════════════════════════════════════════════════════════

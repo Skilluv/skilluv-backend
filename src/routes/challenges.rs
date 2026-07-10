@@ -1,5 +1,5 @@
 use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -308,13 +308,41 @@ async fn start_challenge(
     ))
 }
 
+/// Deadline de retrait de l'endpoint legacy `/challenges/{id}/submit`.
+///
+/// La date suit la décision Q5 (session 2026-07-09) : les endpoints legacy
+/// restent actifs jusqu'au 31 décembre 2027. À l'échéance, la route est
+/// retirée et remplacée entièrement par `POST /deliverables` +
+/// `POST /webhooks/github/slices/{project_id}`.
+const SUBMIT_SUNSET_DATE: &str = "Fri, 31 Dec 2027 23:59:59 GMT";
+
+/// Headers HTTP standards signalant la deprecation d'un endpoint.
+///
+/// Utilise les standards :
+/// - RFC 8594 `Sunset` — date de retrait effective
+/// - `Deprecation: true` — draft IETF, largement supporté par les proxies/API gateways
+/// - RFC 8288 `Link` avec rel="successor-version" — pointe vers le remplaçant
+fn submit_deprecation_headers() -> HeaderMap {
+    let mut headers = HeaderMap::new();
+    headers.insert("Deprecation", HeaderValue::from_static("true"));
+    headers.insert("Sunset", HeaderValue::from_static(SUBMIT_SUNSET_DATE));
+    headers.insert(
+        "Link",
+        HeaderValue::from_static(
+            "</deliverables>; rel=\"successor-version\", \
+             </webhooks/github/slices/{project_id}>; rel=\"alternate\"",
+        ),
+    );
+    headers
+}
+
 // POST /api/challenges/:id/submit
 async fn submit_challenge(
     State(state): State<AppState>,
     auth: AuthUserComplete,
     Path(challenge_id): Path<Uuid>,
     Json(body): Json<SubmitRequest>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<impl IntoResponse, AppError> {
     // Find the in-progress submission
     let submission: ChallengeSubmission = sqlx::query_as(
         "SELECT * FROM challenge_submissions WHERE user_id = $1 AND challenge_id = $2 AND status = 'in_progress'",
@@ -343,11 +371,14 @@ async fn submit_challenge(
             .execute(&state.db)
             .await?;
 
-            return Ok(Json(build_response(json!({
-                "submission": { "id": submission.id, "status": "failure" },
-                "fragments_earned": 0,
-                "message": "Time expired. Submission rejected."
-            }))));
+            return Ok((
+                submit_deprecation_headers(),
+                Json(build_response(json!({
+                    "submission": { "id": submission.id, "status": "failure" },
+                    "fragments_earned": 0,
+                    "message": "Time expired. Submission rejected."
+                }))),
+            ));
         }
     }
 
@@ -658,7 +689,10 @@ async fn submit_challenge(
             .await;
     }
 
-    Ok(Json(build_response(response)))
+    Ok((
+        submit_deprecation_headers(),
+        Json(build_response(response)),
+    ))
 }
 
 // GET /api/challenges/:id/submissions
@@ -946,6 +980,45 @@ async fn check_and_award_badges(state: &AppState, user_id: Uuid) -> Result<Vec<B
     }
 
     Ok(newly_earned)
+}
+
+#[cfg(test)]
+mod submit_deprecation_tests {
+    use super::*;
+
+    #[test]
+    fn deprecation_header_is_true() {
+        let headers = submit_deprecation_headers();
+        assert_eq!(headers.get("Deprecation").unwrap(), "true");
+    }
+
+    #[test]
+    fn sunset_date_is_rfc7231_format() {
+        let headers = submit_deprecation_headers();
+        let sunset = headers.get("Sunset").unwrap().to_str().unwrap();
+        assert_eq!(sunset, SUBMIT_SUNSET_DATE);
+        // Format RFC 7231 : "day-name, day month year hour:minute:second GMT"
+        assert!(sunset.contains("GMT"));
+        assert!(sunset.contains("2027"));
+    }
+
+    #[test]
+    fn link_header_contains_successor_and_alternate() {
+        let headers = submit_deprecation_headers();
+        let link = headers.get("Link").unwrap().to_str().unwrap();
+        assert!(link.contains("rel=\"successor-version\""));
+        assert!(link.contains("rel=\"alternate\""));
+        assert!(link.contains("/deliverables"));
+        assert!(link.contains("/webhooks/github/slices"));
+    }
+
+    #[test]
+    fn all_three_deprecation_headers_are_present() {
+        let headers = submit_deprecation_headers();
+        assert!(headers.contains_key("Deprecation"));
+        assert!(headers.contains_key("Sunset"));
+        assert!(headers.contains_key("Link"));
+    }
 }
 
 async fn log_activity(state: &AppState, user_id: Uuid, fragments: i32) -> Result<(), AppError> {

@@ -40,6 +40,9 @@ struct CreateTeamRequest {
 
 #[derive(Debug, Deserialize)]
 struct SubmitTeamRequest {
+    /// Reçu du frontend pour compat, non persisté depuis P9.1 (le pipeline
+    /// team submit ne fait pas encore de dual-write vers deliverables).
+    #[allow(dead_code)]
     code: String,
     language: Option<String>,
 }
@@ -251,18 +254,18 @@ async fn submit_team(
         .fetch_one(&state.db)
         .await?;
 
-    // Create submission for team
+    // P9.1 : `code` n'est plus persisté sur challenge_submissions ; le contenu
+    // vit dans le deliverable lié (créé plus tard dans le pipeline de vérif).
     let submission: crate::models::ChallengeSubmission = sqlx::query_as(
         r#"
-        INSERT INTO challenge_submissions (challenge_id, user_id, team_id, code, language, status, submitted_at, attempt_number)
-        VALUES ($1, $2, $3, $4, $5, 'submitted', NOW(), 1)
+        INSERT INTO challenge_submissions (challenge_id, user_id, team_id, language, status, submitted_at, attempt_number)
+        VALUES ($1, $2, $3, $4, 'submitted', NOW(), 1)
         RETURNING *
         "#,
     )
     .bind(challenge_id)
     .bind(auth.user_id)
     .bind(team_id)
-    .bind(&body.code)
     .bind(&body.language)
     .fetch_one(&state.db)
     .await?;

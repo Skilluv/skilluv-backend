@@ -365,7 +365,7 @@ async fn submit_challenge(
         if chrono::Utc::now() > expires_at {
             // Mark as expired
             sqlx::query(
-                "UPDATE challenge_submissions SET status = 'failure', stderr = 'Time expired', submitted_at = NOW(), evaluated_at = NOW() WHERE id = $1",
+                "UPDATE challenge_submissions SET status = 'failure', submitted_at = NOW(), evaluated_at = NOW() WHERE id = $1",
             )
             .bind(submission.id)
             .execute(&state.db)
@@ -403,23 +403,21 @@ async fn submit_challenge(
 
     let total_fragments = fragments_earned + perseverance_bonus;
 
-    // Update submission
+    // P9.1 : code/stdout/stderr sont désormais persistés dans le deliverable
+    // (artifact_metadata) via create_from_challenge_submission ci-dessous.
+    // La submission garde uniquement la trace de progression.
     let updated_submission: ChallengeSubmission = sqlx::query_as(
         r#"
         UPDATE challenge_submissions
-        SET status = $1, code = $2, language = $3, fragments_earned = $4,
-            stdout = $5, stderr = $6,
+        SET status = $1, language = $2, fragments_earned = $3,
             submitted_at = NOW(), evaluated_at = NOW()
-        WHERE id = $7
+        WHERE id = $4
         RETURNING *
         "#,
     )
     .bind(&eval_status)
-    .bind(&body.code)
     .bind(&body.language)
     .bind(total_fragments)
-    .bind(&exec_stdout)
-    .bind(&exec_stderr)
     .bind(submission.id)
     .fetch_one(&state.db)
     .await?;
@@ -442,6 +440,9 @@ async fn submit_challenge(
             updated_submission.id,
             &body.code,
             total_fragments,
+            body.language.as_deref(),
+            exec_stdout.as_deref(),
+            exec_stderr.as_deref(),
         )
         .await
         {

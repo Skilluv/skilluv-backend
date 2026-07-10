@@ -41,16 +41,17 @@ pub struct Challenge {
     pub updated_at: DateTime<Utc>,
 }
 
+/// P9.1 : `code|stdout|stderr` retirés (mig 0072) — le contenu de la submission
+/// vit désormais dans `deliverables.artifact_metadata` (règle A.4 : immuabilité
+/// des preuves). La ligne `challenge_submissions` sert de trace de progression
+/// (status, fragments_earned, timestamps) uniquement.
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct ChallengeSubmission {
     pub id: Uuid,
     pub challenge_id: Uuid,
     pub user_id: Uuid,
     pub status: String,
-    pub code: Option<String>,
     pub language: Option<String>,
-    pub stdout: Option<String>,
-    pub stderr: Option<String>,
     pub fragments_earned: i32,
     pub attempt_number: i32,
     pub started_at: DateTime<Utc>,

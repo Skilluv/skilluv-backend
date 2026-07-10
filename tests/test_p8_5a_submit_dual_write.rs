@@ -109,6 +109,9 @@ async fn create_from_submission_produces_verified_deliverable() {
         submission_id,
         "print('Hello, Skilluv!')",
         50,
+        Some("python"),
+        Some("Hello, Skilluv!\n"),
+        None,
     )
     .await
     .expect("create");
@@ -168,6 +171,9 @@ async fn same_submission_code_is_idempotent() {
         submission_id,
         code,
         10,
+        None,
+        None,
+        None,
     )
     .await
     .expect("first");
@@ -179,6 +185,9 @@ async fn same_submission_code_is_idempotent() {
         submission_id,
         code, // même code → même hash → même deliverable
         10,
+        None,
+        None,
+        None,
     )
     .await
     .expect("second");
@@ -217,6 +226,9 @@ async fn different_code_creates_distinct_deliverables() {
         Uuid::new_v4(),
         "first attempt",
         5,
+        None,
+        None,
+        None,
     )
     .await
     .expect("d1");
@@ -228,6 +240,9 @@ async fn different_code_creates_distinct_deliverables() {
         Uuid::new_v4(),
         "second attempt",
         10,
+        None,
+        None,
+        None,
     )
     .await
     .expect("d2");
@@ -269,6 +284,9 @@ async fn artifact_hash_is_deterministic() {
         Uuid::new_v4(),
         code,
         1,
+        None,
+        None,
+        None,
     )
     .await
     .expect("a");
@@ -280,6 +298,9 @@ async fn artifact_hash_is_deterministic() {
         Uuid::new_v4(),
         code,
         1,
+        None,
+        None,
+        None,
     )
     .await
     .expect("b");
@@ -296,6 +317,91 @@ async fn artifact_hash_is_deterministic() {
         .await
         .expect("h_b");
     assert_eq!(hash_a, hash_b, "same code → same SHA-256 hash across users");
+
+    db.close().await;
+    cleanup_test_db(&db_name).await;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// P9.1 : code + stdout + stderr embarqués dans artifact_metadata
+// ═══════════════════════════════════════════════════════════════════
+
+#[tokio::test]
+async fn artifact_metadata_captures_code_stdout_stderr() {
+    let (db, db_name) = setup_test_db().await;
+
+    let user_id = Uuid::new_v4();
+    insert_test_user(&db, user_id).await;
+    let challenge_id = insert_training_challenge(&db).await;
+    let submission_id = Uuid::new_v4();
+
+    let deliverable_id = DeliverablesService::create_from_challenge_submission(
+        &db,
+        user_id,
+        challenge_id,
+        submission_id,
+        "print(42)",
+        10,
+        Some("python"),
+        Some("42\n"),
+        Some(""),
+    )
+    .await
+    .expect("create");
+
+    let meta: serde_json::Value = sqlx::query_scalar(
+        "SELECT artifact_metadata FROM deliverables WHERE id = $1",
+    )
+    .bind(deliverable_id)
+    .fetch_one(&db)
+    .await
+    .expect("meta");
+
+    assert_eq!(meta["code_content"], "print(42)");
+    assert_eq!(meta["language"], "python");
+    assert_eq!(meta["stdout"], "42\n");
+    assert_eq!(meta["stderr"], "");
+    assert_eq!(meta["submission_id"], submission_id.to_string());
+
+    db.close().await;
+    cleanup_test_db(&db_name).await;
+}
+
+// Absence d'infos : stdout/stderr None → clés absentes du JSON.
+#[tokio::test]
+async fn artifact_metadata_omits_optional_when_none() {
+    let (db, db_name) = setup_test_db().await;
+
+    let user_id = Uuid::new_v4();
+    insert_test_user(&db, user_id).await;
+    let challenge_id = insert_training_challenge(&db).await;
+
+    let deliverable_id = DeliverablesService::create_from_challenge_submission(
+        &db,
+        user_id,
+        challenge_id,
+        Uuid::new_v4(),
+        "code",
+        1,
+        None,
+        None,
+        None,
+    )
+    .await
+    .expect("create");
+
+    let meta: serde_json::Value = sqlx::query_scalar(
+        "SELECT artifact_metadata FROM deliverables WHERE id = $1",
+    )
+    .bind(deliverable_id)
+    .fetch_one(&db)
+    .await
+    .expect("meta");
+
+    assert_eq!(meta["code_content"], "code");
+    assert!(meta.get("language").is_none());
+    assert!(meta.get("stdout").is_none());
+    assert!(meta.get("stderr").is_none());
 
     db.close().await;
     cleanup_test_db(&db_name).await;

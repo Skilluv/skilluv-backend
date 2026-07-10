@@ -529,6 +529,9 @@ impl DeliverablesService {
         submission_id: Uuid,
         submission_code: &str,
         fragments_awarded: i32,
+        language: Option<&str>,
+        stdout: Option<&str>,
+        stderr: Option<&str>,
     ) -> Result<Uuid, AppError> {
         use sha2::{Digest, Sha256};
 
@@ -540,6 +543,23 @@ impl DeliverablesService {
         // Cette convention `skilluv:submission:<uuid>` évite les collisions avec
         // les vrais artifact_url et signale clairement l'origine legacy.
         let artifact_url = format!("skilluv:submission:{submission_id}");
+
+        // P9.1 : embarquer le contenu du code + stdout + stderr dans artifact_metadata
+        // pour préserver la preuve après drop des colonnes challenge_submissions.code|*.
+        let mut metadata = serde_json::json!({
+            "source": "challenge_submission_dual_write",
+            "submission_id": submission_id.to_string(),
+            "code_content": submission_code,
+        });
+        if let (Some(obj), Some(lang)) = (metadata.as_object_mut(), language) {
+            obj.insert("language".into(), serde_json::Value::String(lang.to_string()));
+        }
+        if let (Some(obj), Some(s)) = (metadata.as_object_mut(), stdout) {
+            obj.insert("stdout".into(), serde_json::Value::String(s.to_string()));
+        }
+        if let (Some(obj), Some(s)) = (metadata.as_object_mut(), stderr) {
+            obj.insert("stderr".into(), serde_json::Value::String(s.to_string()));
+        }
 
         let inserted: Option<Uuid> = sqlx::query_scalar(
             r#"
@@ -563,10 +583,7 @@ impl DeliverablesService {
         .bind(user_id)
         .bind(&artifact_url)
         .bind(&artifact_hash)
-        .bind(serde_json::json!({
-            "source": "challenge_submission_dual_write",
-            "submission_id": submission_id.to_string(),
-        }))
+        .bind(&metadata)
         .bind(serde_json::json!({
             "source": "legacy_submit_pipeline",
             "submission_id": submission_id.to_string(),

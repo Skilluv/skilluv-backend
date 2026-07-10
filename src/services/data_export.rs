@@ -124,16 +124,28 @@ pub async fn generate_export(
             options,
         )?;
 
-        // Individual code submissions as .txt for easier reading
-        let subs: Vec<(String, Option<String>, i32)> = sqlx::query_as(
-            "SELECT challenge_id::text, code, attempt_number FROM challenge_submissions WHERE user_id = $1 AND code IS NOT NULL ORDER BY started_at",
+        // P9.1 : le code des submissions vit désormais dans
+        // `deliverables.artifact_metadata.code_content`. On extrait les .txt à
+        // partir de là pour les challenge_submissions liées.
+        let subs: Vec<(String, Option<serde_json::Value>)> = sqlx::query_as(
+            r#"
+            SELECT COALESCE(d.challenge_id::text, ''), d.artifact_metadata
+            FROM deliverables d
+            WHERE d.user_id = $1
+              AND d.artifact_metadata ? 'code_content'
+            ORDER BY d.submitted_at
+            "#,
         )
         .bind(user_id)
         .fetch_all(&db)
         .await?;
-        for (cidx, (challenge_id, code, attempt)) in subs.iter().enumerate() {
+        for (cidx, (challenge_id, meta)) in subs.iter().enumerate() {
+            let code = meta
+                .as_ref()
+                .and_then(|m| m.get("code_content"))
+                .and_then(|c| c.as_str());
             if let Some(code) = code {
-                let path = format!("submissions/{cidx:03}_{challenge_id}_attempt{attempt}.txt");
+                let path = format!("deliverables/{cidx:03}_{challenge_id}.txt");
                 zip.start_file(&path, options).map_err(zip_err)?;
                 zip.write_all(code.as_bytes())
                     .map_err(|e| AppError::Internal(format!("zip write: {e}")))?;

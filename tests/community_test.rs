@@ -110,7 +110,7 @@ async fn test_vote_challenge() {
 
     // Check vote count in DB
     let count: i32 =
-        sqlx::query_scalar("SELECT vote_count FROM challenges WHERE id = $1::UUID")
+        sqlx::query_scalar("SELECT vote_count FROM challenge_templates WHERE id = $1::UUID")
             .bind(&cid)
             .fetch_one(&app.db)
             .await
@@ -124,7 +124,7 @@ async fn test_vote_challenge() {
     assert_eq!(unvote_resp.status(), StatusCode::OK);
 
     let count2: i32 =
-        sqlx::query_scalar("SELECT vote_count FROM challenges WHERE id = $1::UUID")
+        sqlx::query_scalar("SELECT vote_count FROM challenge_templates WHERE id = $1::UUID")
             .bind(&cid)
             .fetch_one(&app.db)
             .await

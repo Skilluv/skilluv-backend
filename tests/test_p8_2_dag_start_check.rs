@@ -82,7 +82,7 @@ async fn insert_test_user(db: &PgPool, user_id: Uuid, total_fragments: i32) {
 
 async fn insert_training_challenge(db: &PgPool, title: &str) -> Uuid {
     sqlx::query_scalar(
-        "INSERT INTO challenges
+        "INSERT INTO challenge_templates
             (title, description, instructions, skill_domain, difficulty,
              reward_fragments, is_onboarding, is_training, status)
          VALUES ($1, 'D', 'I', 'code', 1, 10, TRUE, TRUE, 'published')

@@ -231,7 +231,7 @@ async fn admin_link_challenge(
     let mut tx = state.db.begin().await?;
     sqlx::query(
         r#"
-        UPDATE challenges SET
+        UPDATE challenge_templates SET
             sponsor_enterprise_id = $1,
             sponsor_logo_url = $2,
             sponsor_blurb = $3,
@@ -276,7 +276,7 @@ async fn public_active(State(state): State<AppState>) -> Result<Json<Value>, App
         r#"
         SELECT c.id, c.title, c.skill_domain, c.difficulty, c.sponsor_logo_url, c.sponsor_blurb,
                c.sponsor_visible_until, e.company_name AS sponsor_name
-        FROM challenges c
+        FROM challenge_templates c
         JOIN enterprises e ON e.id = c.sponsor_enterprise_id
         WHERE c.sponsor_enterprise_id IS NOT NULL
           AND c.sponsor_visible_until > NOW()

@@ -290,7 +290,7 @@ async fn deliverables_verified_status_requires_signal_fields() {
 
     // Insert a training challenge (safe: onboarding, no project needed)
     let challenge_id: Uuid = sqlx::query_scalar(
-        "INSERT INTO challenges
+        "INSERT INTO challenge_templates
             (title, description, instructions, skill_domain, difficulty, is_onboarding, is_training)
          VALUES ($1, $2, $3, 'code', 1, TRUE, TRUE)
          RETURNING id",

@@ -71,7 +71,7 @@ async fn wipe_seed_data(db: &PgPool) -> Result<()> {
         .execute(db)
         .await?;
     tracing::info!(rows = res.rows_affected(), "seed users deleted");
-    sqlx::query("DELETE FROM challenges WHERE slug LIKE 'seed-%'")
+    sqlx::query("DELETE FROM challenge_templates WHERE slug LIKE 'seed-%'")
         .execute(db)
         .await?;
     Ok(())
@@ -185,7 +185,7 @@ async fn seed_challenges(
         let difficulty: i16 = (i % 5) as i16 + 1;
         let reward_fragments = 50 + (i as i32) * 10;
 
-        let existing: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM challenges WHERE slug = $1")
+        let existing: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM challenge_templates WHERE slug = $1")
             .bind(&slug)
             .fetch_optional(db)
             .await?;
@@ -200,7 +200,7 @@ async fn seed_challenges(
         // pour l'instant — à populer manuellement par un admin si besoin.
         let inserted: (Uuid,) = sqlx::query_as(
             r#"
-            INSERT INTO challenges (
+            INSERT INTO challenge_templates (
                 slug, title, description, instructions, skill_domain,
                 difficulty, reward_fragments,
                 expected_output, language, status, is_onboarding

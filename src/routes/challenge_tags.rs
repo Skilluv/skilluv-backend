@@ -73,7 +73,7 @@ async fn featured_challenges(
     State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let challenges: Vec<Challenge> = sqlx::query_as(
-        "SELECT * FROM challenges WHERE featured = TRUE AND status = 'published' ORDER BY vote_count DESC, created_at DESC LIMIT 20",
+        "SELECT * FROM challenge_templates WHERE featured = TRUE AND status = 'published' ORDER BY vote_count DESC, created_at DESC LIMIT 20",
     )
     .fetch_all(&state.db)
     .await?;

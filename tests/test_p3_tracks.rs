@@ -80,7 +80,7 @@ async fn insert_test_user(db: &PgPool, user_id: Uuid) {
 
 async fn insert_training_challenge(db: &PgPool, title: &str) -> Uuid {
     sqlx::query_scalar(
-        "INSERT INTO challenges
+        "INSERT INTO challenge_templates
             (title, description, instructions, skill_domain, difficulty, is_training)
          VALUES ($1, 'Test description', 'Test instructions', 'code', 1, TRUE)
          RETURNING id",
@@ -110,7 +110,7 @@ async fn migration_0066_creates_dag_and_capstone() {
 
     let capstone_col: bool = sqlx::query_scalar(
         "SELECT EXISTS (SELECT 1 FROM information_schema.columns
-                        WHERE table_name='challenges' AND column_name='is_capstone')",
+                        WHERE table_name='challenge_templates' AND column_name='is_capstone')",
     )
     .fetch_one(&db)
     .await

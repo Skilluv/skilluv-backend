@@ -235,7 +235,7 @@ async fn create_challenge(
 
     let challenge: Challenge = sqlx::query_as(
         r#"
-        INSERT INTO challenges (
+        INSERT INTO challenge_templates (
             title, description, instructions, skill_domain, difficulty,
             mode, duration_minutes, ai_policy, tone, language,
             reward_fragments, is_onboarding, is_training,
@@ -278,7 +278,7 @@ async fn list_all_challenges(
     require_admin(&state, &auth).await?;
 
     let challenges: Vec<Challenge> =
-        sqlx::query_as("SELECT * FROM challenges ORDER BY created_at DESC")
+        sqlx::query_as("SELECT * FROM challenge_templates ORDER BY created_at DESC")
             .fetch_all(&state.db)
             .await?;
 
@@ -299,7 +299,7 @@ async fn update_challenge(
 ) -> Result<Json<serde_json::Value>, AppError> {
     require_admin(&state, &auth).await?;
 
-    let existing: Challenge = sqlx::query_as("SELECT * FROM challenges WHERE id = $1")
+    let existing: Challenge = sqlx::query_as("SELECT * FROM challenge_templates WHERE id = $1")
         .bind(id)
         .fetch_optional(&state.db)
         .await?
@@ -312,7 +312,7 @@ async fn update_challenge(
 
     let challenge: Challenge = sqlx::query_as(
         r#"
-        UPDATE challenges SET
+        UPDATE challenge_templates SET
             title = $1, description = $2, instructions = $3, skill_domain = $4,
             difficulty = $5, mode = $6, duration_minutes = $7,
             ai_policy = $8, tone = $9, language = $10,
@@ -370,7 +370,7 @@ async fn publish_challenge(
     // 0061) le refuserait autrement avec un DB error opaque ; on renvoie une
     // erreur explicite côté API.
     let (is_training, project_id): (bool, Option<Uuid>) = sqlx::query_as(
-        "SELECT is_training, project_id FROM challenges WHERE id = $1",
+        "SELECT is_training, project_id FROM challenge_templates WHERE id = $1",
     )
     .bind(id)
     .fetch_optional(&state.db)
@@ -384,7 +384,7 @@ async fn publish_challenge(
     }
 
     let challenge: Challenge = sqlx::query_as(
-        "UPDATE challenges SET status = 'published', updated_at = NOW() WHERE id = $1 RETURNING *",
+        "UPDATE challenge_templates SET status = 'published', updated_at = NOW() WHERE id = $1 RETURNING *",
     )
     .bind(id)
     .fetch_one(&state.db)
@@ -402,7 +402,7 @@ async fn archive_challenge(
     require_admin(&state, &auth).await?;
 
     let challenge: Challenge = sqlx::query_as(
-        "UPDATE challenges SET status = 'archived', updated_at = NOW() WHERE id = $1 RETURNING *",
+        "UPDATE challenge_templates SET status = 'archived', updated_at = NOW() WHERE id = $1 RETURNING *",
     )
     .bind(id)
     .fetch_optional(&state.db)
@@ -426,11 +426,11 @@ async fn admin_stats(
         sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE profile_active = TRUE")
             .fetch_one(&state.db)
             .await?;
-    let total_challenges: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM challenges")
+    let total_challenges: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM challenge_templates")
         .fetch_one(&state.db)
         .await?;
     let published_challenges: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM challenges WHERE status = 'published'")
+        sqlx::query_scalar("SELECT COUNT(*) FROM challenge_templates WHERE status = 'published'")
             .fetch_one(&state.db)
             .await?;
     let total_submissions: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM challenge_submissions")

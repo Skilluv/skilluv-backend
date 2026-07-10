@@ -105,7 +105,7 @@ async fn create_community_challenge(
     // challenges_project_or_training, migration 0061) au moment du publish.
     let challenge: Challenge = sqlx::query_as(
         r#"
-        INSERT INTO challenges (
+        INSERT INTO challenge_templates (
             title, description, instructions, skill_domain, difficulty,
             language, expected_output, test_cases,
             reward_fragments, duration_minutes,
@@ -161,7 +161,7 @@ async fn my_challenges(
     auth: AuthUser,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let challenges: Vec<Challenge> = sqlx::query_as(
-        "SELECT * FROM challenges WHERE created_by = $1 AND is_community = TRUE ORDER BY created_at DESC",
+        "SELECT * FROM challenge_templates WHERE created_by = $1 AND is_community = TRUE ORDER BY created_at DESC",
     )
     .bind(auth.user_id)
     .fetch_all(&state.db)
@@ -178,7 +178,7 @@ async fn update_community_challenge(
     Json(body): Json<UpdateCommunityChallenge>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let existing: Challenge = sqlx::query_as(
-        "SELECT * FROM challenges WHERE id = $1 AND created_by = $2 AND is_community = TRUE",
+        "SELECT * FROM challenge_templates WHERE id = $1 AND created_by = $2 AND is_community = TRUE",
     )
     .bind(id)
     .bind(auth.user_id)
@@ -204,7 +204,7 @@ async fn update_community_challenge(
 
     let challenge: Challenge = sqlx::query_as(
         r#"
-        UPDATE challenges SET
+        UPDATE challenge_templates SET
             title = COALESCE($1, title),
             description = COALESCE($2, description),
             instructions = COALESCE($3, instructions),
@@ -241,7 +241,7 @@ async fn vote_challenge(
 ) -> Result<impl IntoResponse, AppError> {
     // Verify challenge is published
     let exists: Option<(Uuid,)> =
-        sqlx::query_as("SELECT id FROM challenges WHERE id = $1 AND status = 'published'")
+        sqlx::query_as("SELECT id FROM challenge_templates WHERE id = $1 AND status = 'published'")
             .bind(id)
             .fetch_optional(&state.db)
             .await?;
@@ -260,7 +260,7 @@ async fn vote_challenge(
 
     // Update vote count
     sqlx::query(
-        "UPDATE challenges SET vote_count = (SELECT COUNT(*) FROM challenge_votes WHERE challenge_id = $1) WHERE id = $1",
+        "UPDATE challenge_templates SET vote_count = (SELECT COUNT(*) FROM challenge_votes WHERE challenge_id = $1) WHERE id = $1",
     )
     .bind(id)
     .execute(&state.db)
@@ -286,7 +286,7 @@ async fn unvote_challenge(
 
     // Update vote count
     sqlx::query(
-        "UPDATE challenges SET vote_count = (SELECT COUNT(*) FROM challenge_votes WHERE challenge_id = $1) WHERE id = $1",
+        "UPDATE challenge_templates SET vote_count = (SELECT COUNT(*) FROM challenge_votes WHERE challenge_id = $1) WHERE id = $1",
     )
     .bind(id)
     .execute(&state.db)
@@ -305,7 +305,7 @@ async fn popular_challenges(
     let offset = (page - 1) * per_page;
 
     let challenges: Vec<Challenge> = sqlx::query_as(
-        "SELECT * FROM challenges WHERE status = 'published' AND is_community = TRUE ORDER BY vote_count DESC, created_at DESC LIMIT $1 OFFSET $2",
+        "SELECT * FROM challenge_templates WHERE status = 'published' AND is_community = TRUE ORDER BY vote_count DESC, created_at DESC LIMIT $1 OFFSET $2",
     )
     .bind(per_page)
     .bind(offset)
@@ -313,7 +313,7 @@ async fn popular_challenges(
     .await?;
 
     let total: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM challenges WHERE status = 'published' AND is_community = TRUE",
+        "SELECT COUNT(*) FROM challenge_templates WHERE status = 'published' AND is_community = TRUE",
     )
     .fetch_one(&state.db)
     .await?;

@@ -634,7 +634,7 @@ async fn psql_exec(cfg: &BackupConfig, url: &str, sql: &str) -> Result<()> {
 async fn count_critical_tables(cfg: &BackupConfig, db_name: &str) -> Result<TableCounts> {
     let url = replace_database_in_url(&cfg.database_url, db_name);
     let users = scalar_count(cfg, &url, "SELECT COUNT(*) FROM users").await?;
-    let challenges = scalar_count(cfg, &url, "SELECT COUNT(*) FROM challenges").await?;
+    let challenges = scalar_count(cfg, &url, "SELECT COUNT(*) FROM challenge_templates").await?;
     let submissions =
         scalar_count(cfg, &url, "SELECT COUNT(*) FROM challenge_submissions").await?;
     Ok(TableCounts {

@@ -227,7 +227,7 @@ async fn cv_html(
     let top_subs: Vec<(String, i32, chrono::DateTime<chrono::Utc>)> = sqlx::query_as(
         r#"
         SELECT c.title, cs.fragments_earned, cs.evaluated_at
-        FROM challenge_submissions cs JOIN challenges c ON c.id = cs.challenge_id
+        FROM challenge_submissions cs JOIN challenge_templates c ON c.id = cs.challenge_id
         WHERE cs.user_id = $1 AND cs.status = 'success' AND cs.evaluated_at IS NOT NULL
         ORDER BY cs.fragments_earned DESC, cs.evaluated_at DESC LIMIT 5
         "#,

@@ -352,7 +352,7 @@ impl ReviewQueueService {
 
         if let Some(cid) = challenge_id {
             let domain: Option<String> = sqlx::query_scalar(
-                "SELECT skill_domain FROM challenges WHERE id = $1",
+                "SELECT skill_domain FROM challenge_templates WHERE id = $1",
             )
             .bind(cid)
             .fetch_optional(&mut **tx)

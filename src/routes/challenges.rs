@@ -72,7 +72,7 @@ async fn get_onboarding(
     }
 
     let challenge: Challenge = sqlx::query_as(
-        "SELECT * FROM challenges WHERE is_onboarding = TRUE AND skill_domain = $1 AND status = 'published' LIMIT 1",
+        "SELECT * FROM challenge_templates WHERE is_onboarding = TRUE AND skill_domain = $1 AND status = 'published' LIMIT 1",
     )
     .bind(&query.domain)
     .fetch_optional(&state.db)
@@ -117,10 +117,10 @@ async fn list_challenges(
         " AND (tenant_id IS NULL OR tenant_id = $__TENANT__)"
     };
     let mut sql = format!(
-        "SELECT * FROM challenges WHERE status = 'published' AND is_onboarding = FALSE{tenant_clause}"
+        "SELECT * FROM challenge_templates WHERE status = 'published' AND is_onboarding = FALSE{tenant_clause}"
     );
     let mut count_sql = format!(
-        "SELECT COUNT(*) FROM challenges WHERE status = 'published' AND is_onboarding = FALSE{tenant_clause}"
+        "SELECT COUNT(*) FROM challenge_templates WHERE status = 'published' AND is_onboarding = FALSE{tenant_clause}"
     );
     // Le placeholder $__TENANT__ sera remplacé plus bas selon param_idx.
     let has_tenant_bind = !crate::routes::is_root_tenant(tenant.tenant_id);
@@ -207,7 +207,7 @@ async fn get_challenge(
     Path(id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let challenge: Challenge =
-        sqlx::query_as("SELECT * FROM challenges WHERE id = $1 AND status = 'published'")
+        sqlx::query_as("SELECT * FROM challenge_templates WHERE id = $1 AND status = 'published'")
             .bind(id)
             .fetch_optional(&state.db)
             .await?
@@ -223,7 +223,7 @@ async fn start_challenge(
     Path(challenge_id): Path<Uuid>,
 ) -> Result<impl IntoResponse, AppError> {
     let challenge: Challenge =
-        sqlx::query_as("SELECT * FROM challenges WHERE id = $1 AND status = 'published'")
+        sqlx::query_as("SELECT * FROM challenge_templates WHERE id = $1 AND status = 'published'")
             .bind(challenge_id)
             .fetch_optional(&state.db)
             .await?
@@ -355,7 +355,7 @@ async fn submit_challenge(
         "No in-progress submission found. Start the challenge first.".to_string(),
     ))?;
 
-    let challenge: Challenge = sqlx::query_as("SELECT * FROM challenges WHERE id = $1")
+    let challenge: Challenge = sqlx::query_as("SELECT * FROM challenge_templates WHERE id = $1")
         .bind(challenge_id)
         .fetch_one(&state.db)
         .await?;

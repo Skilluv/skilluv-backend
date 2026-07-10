@@ -48,7 +48,7 @@ async fn my_feed(
         r#"
         SELECT cs.id, cs.challenge_id, c.title, cs.fragments_earned, cs.evaluated_at
         FROM challenge_submissions cs
-        JOIN challenges c ON c.id = cs.challenge_id
+        JOIN challenge_templates c ON c.id = cs.challenge_id
         WHERE cs.user_id = $1 AND cs.status = 'success' AND cs.evaluated_at IS NOT NULL
         ORDER BY cs.evaluated_at DESC
         LIMIT $2

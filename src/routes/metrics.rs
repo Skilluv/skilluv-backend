@@ -128,7 +128,7 @@ async fn metrics_summary(
     .await?;
 
     let total_challenges: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM challenges WHERE status = 'published'")
+        sqlx::query_scalar("SELECT COUNT(*) FROM challenge_templates WHERE status = 'published'")
             .fetch_one(&state.db)
             .await?;
 

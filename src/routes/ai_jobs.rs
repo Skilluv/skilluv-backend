@@ -67,7 +67,7 @@ async fn request_code_review(
     let source_code: String = sub.get("source_code");
     let test_output: Option<String> = sub.get("test_output");
 
-    let ch = sqlx::query("SELECT title, description, difficulty FROM challenges WHERE id = $1")
+    let ch = sqlx::query("SELECT title, description, difficulty FROM challenge_templates WHERE id = $1")
         .bind(body.challenge_id)
         .fetch_optional(&state.db)
         .await?

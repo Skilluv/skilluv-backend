@@ -52,7 +52,7 @@ async fn pending_review(
     require_admin(&state, &auth).await?;
 
     let challenges: Vec<Challenge> = sqlx::query_as(
-        "SELECT * FROM challenges WHERE is_community = TRUE AND community_status = 'review' ORDER BY created_at ASC",
+        "SELECT * FROM challenge_templates WHERE is_community = TRUE AND community_status = 'review' ORDER BY created_at ASC",
     )
     .fetch_all(&state.db)
     .await?;
@@ -100,7 +100,7 @@ async fn approve_challenge(
 
     let challenge: Challenge = sqlx::query_as(
         r#"
-        UPDATE challenges SET
+        UPDATE challenge_templates SET
             community_status = 'approved',
             status = 'published',
             updated_at = NOW()
@@ -147,7 +147,7 @@ async fn reject_challenge(
 
     let challenge: Challenge = sqlx::query_as(
         r#"
-        UPDATE challenges SET
+        UPDATE challenge_templates SET
             community_status = 'rejected',
             review_feedback = $1,
             updated_at = NOW()

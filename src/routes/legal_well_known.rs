@@ -170,7 +170,7 @@ async fn dashboard_overview(
 
     let sponsored_live: i64 = sqlx::query_scalar(
         r#"
-        SELECT COUNT(*) FROM challenges
+        SELECT COUNT(*) FROM challenge_templates
         WHERE sponsor_enterprise_id = $1 AND sponsor_visible_until > NOW()
         "#,
     )

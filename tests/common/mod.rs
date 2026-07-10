@@ -33,6 +33,9 @@ impl TestApp {
             std::env::set_var("SMTP_HOST", "localhost");
             std::env::set_var("SMTP_PORT", "1025");
             std::env::set_var("SMTP_TLS", "none");
+            // Bypass RateLimiter dans les tests d'intégration : plusieurs
+            // binaires parallèles partagent Redis et se rate-limitent mutuellement.
+            std::env::set_var("SKILLUV_DISABLE_RATELIMIT", "1");
         }
 
         // Unique DB name for test isolation
@@ -69,9 +72,16 @@ impl TestApp {
             .await
             .expect("Failed to run migrations on test DB");
 
-        // Connect to Redis (shared, keys are isolated by test via unique user IDs)
+        // Redis : chaque binaire de test s'attribue une DB distincte via PID % 16
+        // (Redis fournit 16 DBs par défaut). Cela évite les races inter-binaires
+        // quand `cargo test --jobs 2+` fait tourner plusieurs suites en parallèle
+        // qui écrasent mutuellement les clés partagées (rate-limit, leaderboards,
+        // notifications:unread:*, etc.). Les tests d'un même binaire partagent
+        // néanmoins la DB — c'est OK, ils utilisent des user_ids uniques.
+        let redis_db = (std::process::id() as usize) % 16;
+        let redis_url = format!("redis://localhost:6379/{redis_db}");
         let redis_client =
-            redis::Client::open("redis://localhost:6379").expect("Invalid Redis URL");
+            redis::Client::open(redis_url.clone()).expect("Invalid Redis URL");
         let redis = redis::aio::ConnectionManager::new(redis_client.clone())
             .await
             .expect("Failed to connect to Redis");
@@ -91,7 +101,7 @@ impl TestApp {
             port: 0,
             jwt_secret: "test-secret-key-for-testing".to_string(),
             database_url: db_url,
-            redis_url: "redis://localhost:6379".to_string(),
+            redis_url: redis_url.clone(),
             base_url: "http://localhost:3001".to_string(),
             judge0_url: "http://localhost:2358".to_string(),
             minio_endpoint: "http://localhost:9004".to_string(),
@@ -178,8 +188,23 @@ impl TestApp {
             }
         }
 
+        // Chaque TestApp fabrique un X-Forwarded-For unique — le RateLimiter
+        // clé par IP, sinon toutes les requêtes tests partageraient le même
+        // bucket "unknown" et se rate-limiteraient mutuellement en parallèle.
+        let mut headers = reqwest::header::HeaderMap::new();
+        let uniq_ip = format!(
+            "10.{}.{}.{}",
+            (db_name.as_bytes()[10] & 0x7f),
+            db_name.as_bytes()[11],
+            db_name.as_bytes()[12]
+        );
+        headers.insert(
+            reqwest::header::HeaderName::from_static("x-forwarded-for"),
+            reqwest::header::HeaderValue::from_str(&uniq_ip).unwrap(),
+        );
         let client = Client::builder()
             .cookie_store(true)
+            .default_headers(headers)
             .build()
             .expect("Failed to build HTTP client");
 

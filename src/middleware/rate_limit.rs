@@ -13,6 +13,11 @@ impl RateLimiter {
     /// - `identifier`: IP address or user_id
     /// - `max_requests`: max allowed in window
     /// - `window_secs`: window duration in seconds
+    ///
+    /// L'env var `SKILLUV_DISABLE_RATELIMIT=1` désactive complètement le check
+    /// (utilisé exclusivement par la suite de tests d'intégration : plusieurs
+    /// binaires en parallèle sur le même Redis heurtaient le bucket partagé et
+    /// se mangeaient mutuellement les 5 registers/heure).
     pub async fn check(
         redis: &mut ConnectionManager,
         category: &str,
@@ -20,6 +25,9 @@ impl RateLimiter {
         max_requests: u64,
         window_secs: u64,
     ) -> Result<(), AppError> {
+        if std::env::var("SKILLUV_DISABLE_RATELIMIT").as_deref() == Ok("1") {
+            return Ok(());
+        }
         let key = format!("ratelimit:{category}:{identifier}");
 
         let count: i64 = redis.incr(&key, 1).await?;

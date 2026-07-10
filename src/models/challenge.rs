@@ -12,12 +12,25 @@ pub struct Challenge {
     pub difficulty: i16,
     pub mode: String,
     pub duration_minutes: Option<i32>,
+    /// **Deprecated en P8** au profit de `ai_policy`. Reste NOT NULL le temps
+    /// de la transition. Sera drop en P8.3.
     pub ai_allowed: bool,
+    /// Politique IA typée introduite en P3 (migration 0061). Remplace `ai_allowed`.
+    /// Défaut : `disclosure_required`. Valeurs : unrestricted | disclosure_required |
+    /// human_verified | no_ai_declared | ai_native. Voir docs partie 10.
+    pub ai_policy: String,
     pub tone: String,
     pub language: Option<String>,
     pub prerequisite_fragments: i32,
     pub reward_fragments: i32,
     pub is_onboarding: bool,
+    /// Introduit en P3 (migration 0061). Flag "onboarding/training" hors règle
+    /// dure #1 (aucun challenge published sans project_id sauf training).
+    pub is_training: bool,
+    /// Introduit en P3 (migration 0061). Flag capstone (chef-d'œuvre de fin de phase).
+    pub is_capstone: bool,
+    /// Introduit en P3 (migration 0061). Lien projet réel (règle dure #1).
+    pub project_id: Option<Uuid>,
     pub status: String,
     pub test_cases: Option<serde_json::Value>,
     pub expected_output: Option<String>,

@@ -176,16 +176,14 @@ async fn list_challenges(
     let challenges: Vec<Challenge> = challenges_query.fetch_all(&state.db).await?;
     let total: i64 = count_query.fetch_one(&state.db).await?;
 
-    // Mark challenges as locked/unlocked (anonymous users see all as locked if prerequisites > 0)
+    // P8.3 : le flag `locked` est retiré du listing. La progression suit
+    // désormais le DAG via GET /api/challenges/{id}/eligibility qui donne
+    // une réponse détaillée (missing_required, missing_recommended, reason).
+    // Le frontend interroge cet endpoint quand il a besoin du gate status.
+    let _ = user_fragments; // conservé pour compat future (personnalisation feed)
     let challenges_with_status: Vec<serde_json::Value> = challenges
         .into_iter()
-        .map(|c| {
-            let locked = c.prerequisite_fragments > user_fragments;
-            json!({
-                "challenge": c,
-                "locked": locked,
-            })
-        })
+        .map(|c| json!({ "challenge": c }))
         .collect();
 
     Ok(Json(json!({
@@ -237,29 +235,19 @@ async fn start_challenge(
         .fetch_one(&state.db)
         .await?;
 
-    // P8.2 : le DAG `challenge_prerequisites` prime sur `prerequisite_fragments`.
-    // Si l'admin a défini des prérequis DAG pour ce challenge, on utilise
-    // TracksService::check_eligibility (qui vérifie les deliverables verified sur
-    // les prérequis). Sinon fallback sur le seuil de fragments (legacy, sera
-    // droppé en P8.3 après migration complète des challenges vers le DAG).
-    let has_dag_prereqs: bool = sqlx::query_scalar(
-        "SELECT EXISTS (SELECT 1 FROM challenge_prerequisites WHERE challenge_id = $1)",
+    // P8.3 : le check des prérequis est désormais 100% DAG (via
+    // challenge_prerequisites + deliverables verified). La colonne
+    // prerequisite_fragments a été supprimée. Un challenge sans entrée DAG
+    // n'a aucun prérequis à vérifier — il est démarrable par tout user
+    // profile_active.
+    let _ = &user; // conservé pour compat future (rate limiting, etc.)
+    let eligibility = crate::services::TracksService::check_eligibility(
+        &state.db,
+        auth.user_id,
+        challenge_id,
     )
-    .bind(challenge_id)
-    .fetch_one(&state.db)
     .await?;
-
-    if has_dag_prereqs {
-        let eligibility = crate::services::TracksService::check_eligibility(
-            &state.db,
-            auth.user_id,
-            challenge_id,
-        )
-        .await?;
-        if !eligibility.eligible {
-            return Err(AppError::ChallengePrerequisiteNotMet);
-        }
-    } else if challenge.prerequisite_fragments > user.total_fragments {
+    if !eligibility.eligible {
         return Err(AppError::ChallengePrerequisiteNotMet);
     }
 

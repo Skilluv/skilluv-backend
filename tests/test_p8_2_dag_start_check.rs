@@ -3,7 +3,7 @@
 //! Vérifie que TracksService::check_eligibility fonctionne côté service pour
 //! les deux cas d'usage :
 //! - Challenge avec prérequis DAG → check via deliverables verified
-//! - Challenge sans prérequis DAG → fallback legacy (prerequisite_fragments)
+//! - Challenge sans prérequis DAG → autorisé sans check (P8.3 : gate 100% DAG)
 //!
 //! Le endpoint HTTP n'est pas testé directement ici car il demande le stack
 //! auth complet ; le comportement est testé au niveau service.
@@ -84,8 +84,8 @@ async fn insert_training_challenge(db: &PgPool, title: &str) -> Uuid {
     sqlx::query_scalar(
         "INSERT INTO challenges
             (title, description, instructions, skill_domain, difficulty,
-             prerequisite_fragments, reward_fragments, is_onboarding, is_training, status)
-         VALUES ($1, 'D', 'I', 'code', 1, 0, 10, TRUE, TRUE, 'published')
+             reward_fragments, is_onboarding, is_training, status)
+         VALUES ($1, 'D', 'I', 'code', 1, 10, TRUE, TRUE, 'published')
          RETURNING id",
     )
     .bind(title)
@@ -253,34 +253,22 @@ async fn dag_optional_prereq_does_not_block() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Cas 5 : DAG a priorité — user peut avoir 0 fragments et start un challenge
-// avec prerequisite_fragments > 0 SI le DAG est satisfait
+// Cas 5 : le check est 100% DAG en P8.3 — un user avec 0 fragments peut
+// démarrer un challenge dès que le DAG est satisfait
 // ═══════════════════════════════════════════════════════════════════
 
 #[tokio::test]
-async fn dag_priority_bypasses_legacy_fragments_gate() {
+async fn dag_only_gating_allows_zero_fragments_when_dag_satisfied() {
     let (db, db_name) = setup_test_db().await;
 
     let prereq_id = insert_training_challenge(&db, "Prereq").await;
-
-    // Target avec prerequisite_fragments élevé mais DAG rempli
-    let target_id: Uuid = sqlx::query_scalar(
-        "INSERT INTO challenges
-            (title, description, instructions, skill_domain, difficulty,
-             prerequisite_fragments, reward_fragments, is_onboarding, is_training, status)
-         VALUES ('Target Gated', 'D', 'I', 'code', 1, 500, 10, TRUE, TRUE, 'published')
-         RETURNING id",
-    )
-    .fetch_one(&db)
-    .await
-    .expect("target");
+    let target_id = insert_training_challenge(&db, "Target").await;
 
     TracksService::add_prerequisite(&db, target_id, prereq_id, true)
         .await
         .expect("add prereq");
 
     let user_id = Uuid::new_v4();
-    // 0 fragments — le fallback legacy bloquerait, mais le DAG prime
     insert_test_user(&db, user_id, 0).await;
     add_verified_deliverable_for_challenge(&db, user_id, prereq_id).await;
 
@@ -288,8 +276,6 @@ async fn dag_priority_bypasses_legacy_fragments_gate() {
         TracksService::check_eligibility(&db, user_id, target_id)
             .await
             .expect("elig");
-    // Le service dit eligible=true car le DAG est satisfait, indépendamment
-    // du seuil fragments. C'est le comportement voulu : DAG > legacy.
     assert!(eligibility.eligible);
 
     db.close().await;

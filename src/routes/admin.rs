@@ -118,15 +118,12 @@ struct CreateChallengeRequest {
     difficulty: i16,
     mode: Option<String>,
     duration_minutes: Option<i32>,
-    /// **Deprecated en P8** au profit de `ai_policy`. Toujours accepté pour
-    /// backward compat : si `ai_policy` n'est pas fourni, on dérive de `ai_allowed`.
-    ai_allowed: Option<bool>,
     /// Politique IA typée. Valeurs : unrestricted | disclosure_required |
     /// human_verified | no_ai_declared | ai_native. Défaut : disclosure_required.
+    /// L'ancien `ai_allowed` bool est droppé en P8.3.
     ai_policy: Option<String>,
     tone: Option<String>,
     language: Option<String>,
-    prerequisite_fragments: Option<i32>,
     reward_fragments: Option<i32>,
     is_onboarding: Option<bool>,
     /// Introduit en P8.1 pour aligner avec la règle dure #1.
@@ -146,11 +143,9 @@ struct UpdateChallengeRequest {
     difficulty: Option<i16>,
     mode: Option<String>,
     duration_minutes: Option<i32>,
-    ai_allowed: Option<bool>,
     ai_policy: Option<String>,
     tone: Option<String>,
     language: Option<String>,
-    prerequisite_fragments: Option<i32>,
     reward_fragments: Option<i32>,
     is_training: Option<bool>,
     project_id: Option<Uuid>,
@@ -166,25 +161,19 @@ const VALID_AI_POLICIES: &[&str] = &[
     "ai_native",
 ];
 
-/// Résout `ai_policy` selon les données du body :
-/// 1. Si `ai_policy` explicite fourni → valide et utilise
-/// 2. Sinon, si `ai_allowed` fourni → dérive : true → 'unrestricted', false → 'no_ai_declared'
-/// 3. Sinon → défaut 'disclosure_required'
-fn resolve_ai_policy(
-    ai_policy: Option<&str>,
-    ai_allowed: Option<bool>,
-) -> Result<String, AppError> {
-    if let Some(p) = ai_policy {
-        if !VALID_AI_POLICIES.contains(&p) {
-            return Err(AppError::Validation(format!(
-                "Invalid ai_policy '{p}'; valid: {VALID_AI_POLICIES:?}"
-            )));
+/// Résout `ai_policy` : valide si fourni, sinon défaut `disclosure_required`.
+///
+/// L'ancien fallback via `ai_allowed` est supprimé en P8.3.
+fn resolve_ai_policy(ai_policy: Option<&str>) -> Result<String, AppError> {
+    match ai_policy {
+        Some(p) => {
+            if !VALID_AI_POLICIES.contains(&p) {
+                return Err(AppError::Validation(format!(
+                    "Invalid ai_policy '{p}'; valid: {VALID_AI_POLICIES:?}"
+                )));
+            }
+            Ok(p.to_string())
         }
-        return Ok(p.to_string());
-    }
-    match ai_allowed {
-        Some(true) => Ok("unrestricted".to_string()),
-        Some(false) => Ok("no_ai_declared".to_string()),
         None => Ok("disclosure_required".to_string()),
     }
 }
@@ -238,10 +227,7 @@ async fn create_challenge(
         ));
     }
 
-    // Résolution ai_policy (P8.1) : privilégie ai_policy explicite, fallback dérivé
-    // depuis ai_allowed pour backward compat.
-    let ai_policy = resolve_ai_policy(body.ai_policy.as_deref(), body.ai_allowed)?;
-    let ai_allowed_bool = matches!(ai_policy.as_str(), "unrestricted" | "ai_native");
+    let ai_policy = resolve_ai_policy(body.ai_policy.as_deref())?;
 
     // is_training auto-marqué si is_onboarding=true (règle dure #1 aligned)
     let is_onboarding = body.is_onboarding.unwrap_or(false);
@@ -251,10 +237,10 @@ async fn create_challenge(
         r#"
         INSERT INTO challenges (
             title, description, instructions, skill_domain, difficulty,
-            mode, duration_minutes, ai_allowed, ai_policy, tone, language,
-            prerequisite_fragments, reward_fragments, is_onboarding, is_training,
+            mode, duration_minutes, ai_policy, tone, language,
+            reward_fragments, is_onboarding, is_training,
             project_id, expected_output, test_cases, created_by, status
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,'draft')
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,'draft')
         RETURNING *
         "#,
     )
@@ -265,11 +251,9 @@ async fn create_challenge(
     .bind(body.difficulty)
     .bind(body.mode.as_deref().unwrap_or("solo"))
     .bind(body.duration_minutes)
-    .bind(ai_allowed_bool)
     .bind(&ai_policy)
     .bind(body.tone.as_deref().unwrap_or("serious"))
     .bind(&body.language)
-    .bind(body.prerequisite_fragments.unwrap_or(0))
     .bind(body.reward_fragments.unwrap_or(10))
     .bind(is_onboarding)
     .bind(is_training)
@@ -321,27 +305,21 @@ async fn update_challenge(
         .await?
         .ok_or(AppError::NotFound("Challenge not found".to_string()))?;
 
-    // P8.1 : accepte ai_policy en update. Si non fourni, on garde l'existant.
-    // Si ai_policy fourni → valide + met à jour ai_allowed en cohérence
-    // (le temps que la colonne ai_allowed soit droppée en P8.3).
-    let ai_policy = match (body.ai_policy.as_deref(), body.ai_allowed) {
-        (Some(_), _) | (None, Some(_)) => {
-            resolve_ai_policy(body.ai_policy.as_deref(), body.ai_allowed)?
-        }
-        (None, None) => existing.ai_policy.clone(),
+    let ai_policy = match body.ai_policy.as_deref() {
+        Some(_) => resolve_ai_policy(body.ai_policy.as_deref())?,
+        None => existing.ai_policy.clone(),
     };
-    let ai_allowed_bool = matches!(ai_policy.as_str(), "unrestricted" | "ai_native");
 
     let challenge: Challenge = sqlx::query_as(
         r#"
         UPDATE challenges SET
             title = $1, description = $2, instructions = $3, skill_domain = $4,
-            difficulty = $5, mode = $6, duration_minutes = $7, ai_allowed = $8,
-            ai_policy = $9, tone = $10, language = $11, prerequisite_fragments = $12,
-            reward_fragments = $13, is_training = $14, project_id = $15,
-            expected_output = $16, test_cases = $17,
+            difficulty = $5, mode = $6, duration_minutes = $7,
+            ai_policy = $8, tone = $9, language = $10,
+            reward_fragments = $11, is_training = $12, project_id = $13,
+            expected_output = $14, test_cases = $15,
             updated_at = NOW()
-        WHERE id = $18
+        WHERE id = $16
         RETURNING *
         "#,
     )
@@ -360,14 +338,9 @@ async fn update_challenge(
     .bind(body.difficulty.unwrap_or(existing.difficulty))
     .bind(body.mode.as_deref().unwrap_or(&existing.mode))
     .bind(body.duration_minutes.or(existing.duration_minutes))
-    .bind(ai_allowed_bool)
     .bind(&ai_policy)
     .bind(body.tone.as_deref().unwrap_or(&existing.tone))
     .bind(body.language.as_ref().or(existing.language.as_ref()))
-    .bind(
-        body.prerequisite_fragments
-            .unwrap_or(existing.prerequisite_fragments),
-    )
     .bind(body.reward_fragments.unwrap_or(existing.reward_fragments))
     .bind(body.is_training.unwrap_or(existing.is_training))
     .bind(body.project_id.or(existing.project_id))

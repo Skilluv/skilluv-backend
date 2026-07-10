@@ -184,7 +184,6 @@ async fn seed_challenges(
         let domain = DOMAINS[i % DOMAINS.len()];
         let difficulty: i16 = (i % 5) as i16 + 1;
         let reward_fragments = 50 + (i as i32) * 10;
-        let prerequisite_fragments = (i as i32) * 25;
 
         let existing: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM challenges WHERE slug = $1")
             .bind(&slug)
@@ -196,14 +195,17 @@ async fn seed_challenges(
             continue;
         }
 
+        // P8.3 : prerequisite_fragments retiré, la progression est gérée via
+        // challenge_prerequisites (DAG) + tracks. Les seeds restent sans DAG
+        // pour l'instant — à populer manuellement par un admin si besoin.
         let inserted: (Uuid,) = sqlx::query_as(
             r#"
             INSERT INTO challenges (
                 slug, title, description, instructions, skill_domain,
-                difficulty, prerequisite_fragments, reward_fragments,
+                difficulty, reward_fragments,
                 expected_output, language, status, is_onboarding
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'published', FALSE)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'published', FALSE)
             RETURNING id
             "#,
         )
@@ -213,7 +215,6 @@ async fn seed_challenges(
         .bind("Print 'Hello, Skilluv!' to stdout.")
         .bind(domain)
         .bind(difficulty)
-        .bind(prerequisite_fragments)
         .bind(reward_fragments)
         .bind("Hello, Skilluv!")
         .bind(if domain == "code" { Some("python") } else { None })

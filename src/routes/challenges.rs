@@ -237,7 +237,29 @@ async fn start_challenge(
         .fetch_one(&state.db)
         .await?;
 
-    if challenge.prerequisite_fragments > user.total_fragments {
+    // P8.2 : le DAG `challenge_prerequisites` prime sur `prerequisite_fragments`.
+    // Si l'admin a défini des prérequis DAG pour ce challenge, on utilise
+    // TracksService::check_eligibility (qui vérifie les deliverables verified sur
+    // les prérequis). Sinon fallback sur le seuil de fragments (legacy, sera
+    // droppé en P8.3 après migration complète des challenges vers le DAG).
+    let has_dag_prereqs: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM challenge_prerequisites WHERE challenge_id = $1)",
+    )
+    .bind(challenge_id)
+    .fetch_one(&state.db)
+    .await?;
+
+    if has_dag_prereqs {
+        let eligibility = crate::services::TracksService::check_eligibility(
+            &state.db,
+            auth.user_id,
+            challenge_id,
+        )
+        .await?;
+        if !eligibility.eligible {
+            return Err(AppError::ChallengePrerequisiteNotMet);
+        }
+    } else if challenge.prerequisite_fragments > user.total_fragments {
         return Err(AppError::ChallengePrerequisiteNotMet);
     }
 

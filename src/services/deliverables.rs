@@ -510,6 +510,88 @@ impl DeliverablesService {
     }
 
     // ═══════════════════════════════════════════════════════════════════
+    // P8.5a : dual-write challenge_submissions → deliverables
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// Crée un deliverable "verified" à partir d'un `challenge_submissions.status='success'`.
+    ///
+    /// Appelé depuis `routes/challenges.rs::submit_challenge` en best-effort après
+    /// que la submission legacy soit finalisée avec succès. Le deliverable pointe
+    /// vers le challenge (pas de slice) et marque `verifiable_by='automated_diff'`
+    /// pour tracer l'origine du pipeline legacy Judge0.
+    ///
+    /// Idempotent via UNIQUE (user_id, artifact_hash). Si le même hash de
+    /// submission a déjà produit un deliverable, retourne l'existant.
+    pub async fn create_from_challenge_submission(
+        db: &PgPool,
+        user_id: Uuid,
+        challenge_id: Uuid,
+        submission_id: Uuid,
+        submission_code: &str,
+        fragments_awarded: i32,
+    ) -> Result<Uuid, AppError> {
+        use sha2::{Digest, Sha256};
+
+        let mut hasher = Sha256::new();
+        hasher.update(submission_code.as_bytes());
+        let artifact_hash = hex::encode(hasher.finalize());
+
+        // Format URI interne : la submission n'est pas exposée en HTTP public.
+        // Cette convention `skilluv:submission:<uuid>` évite les collisions avec
+        // les vrais artifact_url et signale clairement l'origine legacy.
+        let artifact_url = format!("skilluv:submission:{submission_id}");
+
+        let inserted: Option<Uuid> = sqlx::query_scalar(
+            r#"
+            INSERT INTO deliverables (
+                challenge_id, user_id,
+                artifact_type, artifact_url, artifact_hash, artifact_metadata,
+                verifiable_by, verification_status, verified_at, verification_signal,
+                fragments_awarded, public, submitted_at, created_at
+            )
+            VALUES (
+                $1, $2,
+                'other', $3, $4, $5,
+                'automated_diff', 'verified', NOW(), $6,
+                $7, TRUE, NOW(), NOW()
+            )
+            ON CONFLICT (user_id, artifact_hash) WHERE artifact_hash IS NOT NULL DO NOTHING
+            RETURNING id
+            "#,
+        )
+        .bind(challenge_id)
+        .bind(user_id)
+        .bind(&artifact_url)
+        .bind(&artifact_hash)
+        .bind(serde_json::json!({
+            "source": "challenge_submission_dual_write",
+            "submission_id": submission_id.to_string(),
+        }))
+        .bind(serde_json::json!({
+            "source": "legacy_submit_pipeline",
+            "submission_id": submission_id.to_string(),
+        }))
+        .bind(fragments_awarded)
+        .fetch_optional(db)
+        .await?;
+
+        if let Some(id) = inserted {
+            return Ok(id);
+        }
+
+        // Idempotence hit : la submission a déjà été convertie en deliverable
+        let existing_id: Uuid = sqlx::query_scalar(
+            "SELECT id FROM deliverables
+             WHERE user_id = $1 AND artifact_hash = $2 LIMIT 1",
+        )
+        .bind(user_id)
+        .bind(&artifact_hash)
+        .fetch_one(db)
+        .await?;
+        Ok(existing_id)
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
     // Lectures
     // ═══════════════════════════════════════════════════════════════════
 

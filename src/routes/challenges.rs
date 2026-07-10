@@ -399,6 +399,38 @@ async fn submit_challenge(
             "domain" => challenge.skill_domain.clone()
         )
         .increment(1);
+
+        // P8.5a : dual-write vers la nouvelle table `deliverables`. Best-effort :
+        // si l'INSERT échoue (ex: contrainte, DB blip), on log et on continue —
+        // le pipeline legacy reste la source de vérité pour l'instant. En P8.7
+        // le legacy sera droppé et deliverables deviendra unique source.
+        match crate::services::DeliverablesService::create_from_challenge_submission(
+            &state.db,
+            auth.user_id,
+            challenge.id,
+            updated_submission.id,
+            &body.code,
+            total_fragments,
+        )
+        .await
+        {
+            Ok(_deliverable_id) => {
+                metrics::counter!(
+                    "skilluv_challenge_deliverables_created_total",
+                    "domain" => challenge.skill_domain.clone()
+                )
+                .increment(1);
+            }
+            Err(e) => {
+                tracing::warn!(
+                    error = %e,
+                    submission_id = %updated_submission.id,
+                    user_id = %auth.user_id,
+                    challenge_id = %challenge.id,
+                    "P8.5a dual-write deliverable failed (best-effort, submission still succeeded)"
+                );
+            }
+        }
     }
     metrics::counter!(
         "skilluv_fragments_awarded_total",

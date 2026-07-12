@@ -20,6 +20,11 @@ pub fn challenge_team_routes() -> Router<AppState> {
         .route("/challenges/{id}/team/{team_id}/submit", post(submit_team))
         .route("/challenges/{id}/timer", get(get_timer))
         .route("/challenges/{id}/timer/extend", post(extend_timer))
+        // P10.1 — teams persistentes (indépendantes d'un challenge)
+        .route("/teams", post(create_persistent_team))
+        .route("/teams/{team_id}", get(get_team).post(join_persistent_team))
+        .route("/teams/{team_id}/disband", post(disband_team))
+        .route("/users/me/teams", get(my_teams))
 }
 
 fn build_response(data: serde_json::Value) -> serde_json::Value {
@@ -55,11 +60,16 @@ struct ExtendTimerRequest {
 #[derive(Debug, serde::Serialize, sqlx::FromRow)]
 struct Team {
     id: Uuid,
-    challenge_id: Uuid,
+    /// P10.1 : nullable pour supporter les teams persistentes hors challenge.
+    challenge_id: Option<Uuid>,
     name: String,
     created_by: Uuid,
     max_members: i32,
     status: String,
+    /// P10.1 : true pour les teams réutilisables sur plusieurs challenges/slices.
+    is_persistent: bool,
+    description: Option<String>,
+    disbanded_at: Option<chrono::DateTime<chrono::Utc>>,
     created_at: chrono::DateTime<chrono::Utc>,
 }
 
@@ -377,4 +387,184 @@ async fn extend_timer(
         "message": format!("Extended timer by {} minutes", body.minutes),
         "submissions_affected": updated.rows_affected(),
     }))))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// P10.1 — Teams persistentes (indépendantes d'un challenge)
+// ═══════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Deserialize)]
+struct CreatePersistentTeamRequest {
+    name: String,
+    description: Option<String>,
+    max_members: Option<i32>,
+}
+
+/// POST /api/teams — crée une team persistente réutilisable.
+///
+/// Le créateur est automatiquement ajouté comme premier membre.
+async fn create_persistent_team(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Json(body): Json<CreatePersistentTeamRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    if body.name.trim().is_empty() || body.name.len() > 100 {
+        return Err(AppError::Validation(
+            "Team name must be between 1 and 100 characters".to_string(),
+        ));
+    }
+    let max_members = body.max_members.unwrap_or(4).clamp(2, 10);
+
+    let mut tx = state.db.begin().await?;
+    let team: Team = sqlx::query_as(
+        r#"
+        INSERT INTO challenge_teams
+            (challenge_id, name, description, created_by, max_members, is_persistent, status)
+        VALUES (NULL, $1, $2, $3, $4, TRUE, 'open')
+        RETURNING *
+        "#,
+    )
+    .bind(body.name.trim())
+    .bind(body.description.as_deref())
+    .bind(auth.user_id)
+    .bind(max_members)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    sqlx::query("INSERT INTO team_members (team_id, user_id) VALUES ($1, $2)")
+        .bind(team.id)
+        .bind(auth.user_id)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+
+    metrics::counter!("skilluv_persistent_teams_created_total").increment(1);
+
+    Ok((
+        StatusCode::CREATED,
+        Json(build_response(json!({ "team": team }))),
+    ))
+}
+
+/// GET /api/teams/{team_id} — détail d'une team + membres.
+async fn get_team(
+    State(state): State<AppState>,
+    _auth: AuthUser,
+    Path(team_id): Path<Uuid>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let team: Team = sqlx::query_as("SELECT * FROM challenge_teams WHERE id = $1")
+        .bind(team_id)
+        .fetch_optional(&state.db)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Team not found".to_string()))?;
+
+    let members: Vec<(Uuid, String, String)> = sqlx::query_as(
+        "SELECT u.id, u.username, u.display_name
+         FROM team_members tm JOIN users u ON u.id = tm.user_id
+         WHERE tm.team_id = $1
+         ORDER BY tm.joined_at",
+    )
+    .bind(team_id)
+    .fetch_all(&state.db)
+    .await?;
+
+    Ok(Json(build_response(json!({
+        "team": team,
+        "members": members.iter().map(|(id, u, dn)| json!({
+            "id": id,
+            "username": u,
+            "display_name": dn,
+        })).collect::<Vec<_>>(),
+        "member_count": members.len(),
+    }))))
+}
+
+/// POST /api/teams/{team_id} — join une team persistente ouverte.
+async fn join_persistent_team(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(team_id): Path<Uuid>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let team: Team = sqlx::query_as(
+        "SELECT * FROM challenge_teams WHERE id = $1 AND is_persistent = TRUE AND disbanded_at IS NULL",
+    )
+    .bind(team_id)
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or_else(|| AppError::NotFound("Persistent team not found or disbanded".to_string()))?;
+
+    if team.status != "open" {
+        return Err(AppError::Validation(
+            "Team is not open for joining".to_string(),
+        ));
+    }
+
+    let count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM team_members WHERE team_id = $1")
+            .bind(team_id)
+            .fetch_one(&state.db)
+            .await?;
+    if count >= team.max_members as i64 {
+        return Err(AppError::Validation("Team is full".to_string()));
+    }
+
+    sqlx::query(
+        "INSERT INTO team_members (team_id, user_id) VALUES ($1, $2)
+         ON CONFLICT DO NOTHING",
+    )
+    .bind(team_id)
+    .bind(auth.user_id)
+    .execute(&state.db)
+    .await?;
+
+    if count + 1 >= team.max_members as i64 {
+        sqlx::query("UPDATE challenge_teams SET status = 'full' WHERE id = $1")
+            .bind(team_id)
+            .execute(&state.db)
+            .await?;
+    }
+
+    Ok(Json(build_response(json!({ "joined": true }))))
+}
+
+/// POST /api/teams/{team_id}/disband — le créateur dissout la team.
+async fn disband_team(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(team_id): Path<Uuid>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let res = sqlx::query(
+        "UPDATE challenge_teams
+         SET disbanded_at = NOW()
+         WHERE id = $1 AND created_by = $2 AND is_persistent = TRUE AND disbanded_at IS NULL",
+    )
+    .bind(team_id)
+    .bind(auth.user_id)
+    .execute(&state.db)
+    .await?;
+    if res.rows_affected() == 0 {
+        return Err(AppError::Forbidden);
+    }
+    Ok(Json(build_response(json!({ "disbanded": true }))))
+}
+
+/// GET /api/users/me/teams — teams (challenge ou persistentes) où je suis membre.
+async fn my_teams(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let teams: Vec<Team> = sqlx::query_as(
+        r#"
+        SELECT ct.*
+        FROM challenge_teams ct
+        JOIN team_members tm ON tm.team_id = ct.id
+        WHERE tm.user_id = $1
+          AND (ct.disbanded_at IS NULL OR ct.is_persistent = FALSE)
+        ORDER BY ct.is_persistent DESC, ct.created_at DESC
+        "#,
+    )
+    .bind(auth.user_id)
+    .fetch_all(&state.db)
+    .await?;
+    Ok(Json(build_response(json!({ "teams": teams }))))
 }

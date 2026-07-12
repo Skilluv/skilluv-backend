@@ -204,6 +204,103 @@ impl SlicesService {
     }
 
     // ═══════════════════════════════════════════════════════════════════
+    // P10.1 : claim en team (persistent) — alternative au claim solo user
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// Claim une slice pour une team persistente. XOR avec le claim solo user.
+    ///
+    /// L'appelant doit être membre de la team (validation faite côté route).
+    /// Erreurs : `Validation` si slice pas `open` ou team déjà claim ailleurs.
+    pub async fn claim_as_team(
+        db: &PgPool,
+        slice_id: Uuid,
+        team_id: Uuid,
+    ) -> Result<ProjectSlice, AppError> {
+        let expires_at = Utc::now() + Duration::days(CLAIM_DURATION_DAYS);
+
+        let slice = sqlx::query_as::<_, ProjectSlice>(
+            r#"
+            UPDATE project_slices
+            SET status = 'claimed',
+                claimed_by_team_id = $1,
+                claimed_by_user_id = NULL,
+                claimed_at = NOW(),
+                claim_expires_at = $2,
+                updated_at = NOW()
+            WHERE id = $3
+              AND status = 'open'
+            RETURNING *
+            "#,
+        )
+        .bind(team_id)
+        .bind(expires_at)
+        .bind(slice_id)
+        .fetch_optional(db)
+        .await?
+        .ok_or_else(|| {
+            AppError::Validation(
+                "Slice is not available for team claim (not found or already claimed / closed)"
+                    .to_string(),
+            )
+        })?;
+
+        Ok(slice)
+    }
+
+    /// Un membre de la team relâche le claim collectif de la slice.
+    pub async fn unclaim_by_team(
+        db: &PgPool,
+        slice_id: Uuid,
+        team_id: Uuid,
+    ) -> Result<ProjectSlice, AppError> {
+        let slice = sqlx::query_as::<_, ProjectSlice>(
+            r#"
+            UPDATE project_slices
+            SET status = 'open',
+                claimed_by_team_id = NULL,
+                claimed_at = NULL,
+                claim_expires_at = NULL,
+                updated_at = NOW()
+            WHERE id = $1
+              AND claimed_by_team_id = $2
+              AND status = 'claimed'
+            RETURNING *
+            "#,
+        )
+        .bind(slice_id)
+        .bind(team_id)
+        .fetch_optional(db)
+        .await?
+        .ok_or_else(|| {
+            AppError::Validation(
+                "This team does not currently claim this slice".to_string(),
+            )
+        })?;
+
+        Ok(slice)
+    }
+
+    /// Slices claimed par une team (dashboard team).
+    pub async fn list_claimed_by_team(
+        db: &PgPool,
+        team_id: Uuid,
+    ) -> Result<Vec<ProjectSlice>, AppError> {
+        let slices = sqlx::query_as::<_, ProjectSlice>(
+            r#"
+            SELECT * FROM project_slices
+            WHERE claimed_by_team_id = $1
+              AND status IN ('claimed', 'in_review')
+            ORDER BY claim_expires_at ASC NULLS LAST, claimed_at DESC
+            "#,
+        )
+        .bind(team_id)
+        .fetch_all(db)
+        .await?;
+
+        Ok(slices)
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
     // Maintenance : expire les claims dépassés (appelé par cron)
     // ═══════════════════════════════════════════════════════════════════
 
@@ -222,6 +319,7 @@ impl SlicesService {
             UPDATE project_slices
             SET status = 'open',
                 claimed_by_user_id = NULL,
+                claimed_by_team_id = NULL,
                 claimed_at = NULL,
                 claim_expires_at = NULL,
                 updated_at = NOW()

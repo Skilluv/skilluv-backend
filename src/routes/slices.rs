@@ -30,7 +30,10 @@ pub fn slice_routes() -> Router<AppState> {
         .route("/slices/{id}", get(get_slice))
         .route("/slices/{id}/claim", post(claim_slice))
         .route("/slices/{id}/unclaim", post(unclaim_slice))
+        .route("/slices/{id}/claim-as-team", post(claim_slice_as_team))
+        .route("/slices/{id}/unclaim-team", post(unclaim_slice_by_team))
         .route("/users/me/slices", get(my_slices))
+        .route("/teams/{team_id}/slices", get(team_slices))
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -162,5 +165,81 @@ async fn my_slices(
 ) -> Result<Json<serde_json::Value>, AppError> {
     let slices = SlicesService::list_claimed_by(&state.db, auth.user_id).await?;
 
+    Ok(Json(build_response(json!({ "slices": slices }))))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// P10.1 : claim collectif par une team persistente
+// ═══════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Deserialize)]
+struct ClaimAsTeamBody {
+    team_id: Uuid,
+}
+
+/// Vérifie que le user est membre de la team (best-effort validation).
+async fn require_team_member(
+    db: &sqlx::PgPool,
+    team_id: Uuid,
+    user_id: Uuid,
+) -> Result<(), AppError> {
+    let is_member: Option<(Uuid,)> = sqlx::query_as(
+        "SELECT user_id FROM team_members WHERE team_id = $1 AND user_id = $2",
+    )
+    .bind(team_id)
+    .bind(user_id)
+    .fetch_optional(db)
+    .await?;
+    if is_member.is_none() {
+        return Err(AppError::Forbidden);
+    }
+    Ok(())
+}
+
+/// POST /api/slices/{id}/claim-as-team
+///
+/// Auth requis + être membre de la team. Claim collectif 7 jours.
+async fn claim_slice_as_team(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<ClaimAsTeamBody>,
+) -> Result<impl IntoResponse, AppError> {
+    require_team_member(&state.db, body.team_id, auth.user_id).await?;
+    let slice = SlicesService::claim_as_team(&state.db, id, body.team_id).await?;
+    Ok((
+        StatusCode::CREATED,
+        Json(build_response(json!({
+            "slice": slice,
+            "message": "Slice claimed by team. 7 days to submit a deliverable."
+        }))),
+    ))
+}
+
+/// POST /api/slices/{id}/unclaim-team
+async fn unclaim_slice_by_team(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<ClaimAsTeamBody>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    require_team_member(&state.db, body.team_id, auth.user_id).await?;
+    let slice = SlicesService::unclaim_by_team(&state.db, id, body.team_id).await?;
+    Ok(Json(build_response(json!({
+        "slice": slice,
+        "message": "Team released the slice. Others can now claim it."
+    }))))
+}
+
+/// GET /api/teams/{team_id}/slices
+///
+/// Auth requis + membre de la team. Slices actives de la team.
+async fn team_slices(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(team_id): Path<Uuid>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    require_team_member(&state.db, team_id, auth.user_id).await?;
+    let slices = SlicesService::list_claimed_by_team(&state.db, team_id).await?;
     Ok(Json(build_response(json!({ "slices": slices }))))
 }

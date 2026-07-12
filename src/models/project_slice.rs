@@ -37,6 +37,8 @@ pub struct ProjectSlice {
 
     pub status: String,
     pub claimed_by_user_id: Option<Uuid>,
+    /// P10.1 : claim par une team persistente (XOR avec claimed_by_user_id).
+    pub claimed_by_team_id: Option<Uuid>,
     pub claimed_at: Option<DateTime<Utc>>,
     pub claim_expires_at: Option<DateTime<Utc>>,
 

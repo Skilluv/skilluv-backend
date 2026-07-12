@@ -25,6 +25,12 @@ pub fn challenge_team_routes() -> Router<AppState> {
         .route("/teams/{team_id}", get(get_team).post(join_persistent_team))
         .route("/teams/{team_id}/disband", post(disband_team))
         .route("/users/me/teams", get(my_teams))
+        // P10.2 — role slots multidisciplinaires
+        .route("/teams/{team_id}/slots", get(list_team_slots).post(create_team_slot))
+        .route("/teams/{team_id}/slots/{slot_id}/fill", post(fill_team_slot))
+        .route("/teams/{team_id}/slots/{slot_id}/leave", post(leave_team_slot))
+        .route("/teams/{team_id}/slots/{slot_id}", axum::routing::delete(delete_team_slot))
+        .route("/team-slots/open", get(list_open_slots_by_role))
 }
 
 fn build_response(data: serde_json::Value) -> serde_json::Value {
@@ -567,4 +573,124 @@ async fn my_teams(
     .fetch_all(&state.db)
     .await?;
     Ok(Json(build_response(json!({ "teams": teams }))))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// P10.2 — Role slots multidisciplinaires
+// ═══════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Deserialize)]
+struct CreateSlotBody {
+    role_slug: String,
+    role_display_name: Option<String>,
+    required_skill_slug: Option<String>,
+    min_proficiency_level: Option<i16>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OpenSlotsQuery {
+    role: String,
+    limit: Option<i64>,
+}
+
+/// Vérifie que le user est le créateur ou un membre de la team.
+async fn require_team_creator(
+    db: &sqlx::PgPool,
+    team_id: Uuid,
+    user_id: Uuid,
+) -> Result<(), AppError> {
+    let creator: Option<(Uuid,)> =
+        sqlx::query_as("SELECT created_by FROM challenge_teams WHERE id = $1")
+            .bind(team_id)
+            .fetch_optional(db)
+            .await?;
+    match creator {
+        Some((c,)) if c == user_id => Ok(()),
+        Some(_) => Err(AppError::Forbidden),
+        None => Err(AppError::NotFound("Team not found".into())),
+    }
+}
+
+/// GET /api/teams/{team_id}/slots
+async fn list_team_slots(
+    State(state): State<AppState>,
+    _auth: AuthUser,
+    Path(team_id): Path<Uuid>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let slots = crate::services::TeamRolesService::list_slots(&state.db, team_id).await?;
+    Ok(Json(build_response(json!({ "slots": slots }))))
+}
+
+/// POST /api/teams/{team_id}/slots — le créateur de la team définit un slot.
+async fn create_team_slot(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(team_id): Path<Uuid>,
+    Json(body): Json<CreateSlotBody>,
+) -> Result<impl IntoResponse, AppError> {
+    require_team_creator(&state.db, team_id, auth.user_id).await?;
+    let slot = crate::services::TeamRolesService::create_slot(
+        &state.db,
+        crate::services::CreateSlotParams {
+            team_id,
+            role_slug: body.role_slug.trim(),
+            role_display_name: body.role_display_name.as_deref(),
+            required_skill_slug: body.required_skill_slug.as_deref(),
+            min_proficiency_level: body.min_proficiency_level.unwrap_or(1),
+        },
+    )
+    .await?;
+    Ok((
+        StatusCode::CREATED,
+        Json(build_response(json!({ "slot": slot }))),
+    ))
+}
+
+/// POST /api/teams/{team_id}/slots/{slot_id}/fill — user prend le slot.
+async fn fill_team_slot(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path((_team_id, slot_id)): Path<(Uuid, Uuid)>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let slot =
+        crate::services::TeamRolesService::fill_slot(&state.db, slot_id, auth.user_id).await?;
+    Ok(Json(build_response(json!({ "slot": slot }))))
+}
+
+/// POST /api/teams/{team_id}/slots/{slot_id}/leave — user libère son slot.
+async fn leave_team_slot(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path((_team_id, slot_id)): Path<(Uuid, Uuid)>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let slot =
+        crate::services::TeamRolesService::leave_slot(&state.db, slot_id, auth.user_id).await?;
+    Ok(Json(build_response(json!({ "slot": slot }))))
+}
+
+/// DELETE /api/teams/{team_id}/slots/{slot_id} — créateur supprime un slot vide.
+async fn delete_team_slot(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path((team_id, slot_id)): Path<(Uuid, Uuid)>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    require_team_creator(&state.db, team_id, auth.user_id).await?;
+    crate::services::TeamRolesService::delete_slot(&state.db, slot_id).await?;
+    Ok(Json(build_response(json!({ "deleted": true }))))
+}
+
+/// GET /api/team-slots/open?role=musician&limit=20
+/// Marketplace : trouver les teams qui cherchent mon rôle.
+async fn list_open_slots_by_role(
+    State(state): State<AppState>,
+    _auth: AuthUser,
+    axum::extract::Query(q): axum::extract::Query<OpenSlotsQuery>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let slots = crate::services::TeamRolesService::find_open_slots_by_role(
+        &state.db,
+        q.role.trim(),
+        q.limit.unwrap_or(20),
+    )
+    .await?;
+    Ok(Json(build_response(json!({ "slots": slots }))))
 }

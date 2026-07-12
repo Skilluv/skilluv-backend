@@ -34,6 +34,7 @@ pub mod session;
 pub mod skills;
 pub mod slices;
 pub mod stewards;
+pub mod team_roles;
 pub mod tracks;
 pub mod webauthn;
 pub mod social;
@@ -72,6 +73,7 @@ pub use skills::{
 };
 pub use slices::{ListFilter as SlicesListFilter, SlicesService};
 pub use stewards::{ProjectSteward, StewardsService};
+pub use team_roles::{CreateSlotParams, TeamRolesService};
 pub use tracks::{EligibilityCheck, Track, TrackProgress, TracksService, UserTrack};
 pub use webauthn::WebauthnService;
 pub use storage::StorageService;

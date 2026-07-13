@@ -40,6 +40,8 @@ pub fn guild_routes() -> Router<AppState> {
         .route("/guild-wars/{id}/conclude", post(conclude_war))
         // Moderation
         .route("/admin/guilds/{id}/dissolve", post(admin_dissolve))
+        // P10.6 — skill matrix (agrégat par domaine)
+        .route("/guilds/{slug}/composition", get(guild_composition))
 }
 
 fn build_response(data: Value) -> Value {
@@ -563,4 +565,29 @@ async fn admin_dissolve(
     }
     guild::admin_dissolve(&state.db, id).await?;
     Ok(Json(build_response(json!({ "dissolved": true }))))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// P10.6 — Skill matrix (dashboard officer + matching guilde ↔ project)
+// ═══════════════════════════════════════════════════════════════════
+
+/// GET /api/guilds/{slug}/composition
+///
+/// Retourne l'agrégat par domaine des skills des membres :
+/// { domain, member_count, avg_level, top_skills }.
+async fn guild_composition(
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+) -> Result<Json<Value>, AppError> {
+    let guild_id: Option<Uuid> =
+        sqlx::query_scalar("SELECT id FROM guilds WHERE slug = $1 AND disbanded_at IS NULL")
+            .bind(&slug)
+            .fetch_optional(&state.db)
+            .await?;
+    let guild_id = guild_id.ok_or_else(|| AppError::NotFound("Guild not found".into()))?;
+    let matrix = guild::guild_skill_matrix(&state.db, guild_id).await?;
+    Ok(Json(build_response(json!({
+        "guild_id": guild_id,
+        "composition": matrix,
+    }))))
 }

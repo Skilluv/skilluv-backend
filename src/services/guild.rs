@@ -599,6 +599,71 @@ pub async fn award_gp_for_fragments(
     Ok(gp_to_add)
 }
 
+// ─── P10.6 : skill matrix par guilde ─────────────────────────────
+
+/// Ligne d'agrégat par (guilde, domaine) : combien de membres pratiquent ce
+/// domaine, leur niveau moyen, et les 3 skills les plus pratiqués dedans.
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+pub struct GuildDomainRow {
+    pub domain: String,
+    pub member_count: i64,
+    pub avg_level: Option<f64>,
+    pub top_skills: Vec<String>,
+}
+
+/// Skill matrix d'une guilde : agrégat par domaine.
+///
+/// Computed à la volée (pas de matview) — le volume est petit (30 members × ~10 skills
+/// prouvés/membre × 7 domaines = ~2100 rows max). Cache Redis peut être ajouté
+/// plus tard si mesure de perf le justifie.
+pub async fn guild_skill_matrix(
+    db: &PgPool,
+    guild_id: Uuid,
+) -> Result<Vec<GuildDomainRow>, AppError> {
+    let rows: Vec<GuildDomainRow> = sqlx::query_as(
+        r#"
+        WITH member_skills AS (
+            SELECT us.user_id, us.skill_id, us.proficiency_level,
+                   sn.slug, sn.domain
+            FROM guild_members gm
+            JOIN user_skills us ON us.user_id = gm.user_id
+            JOIN skill_nodes sn ON sn.id = us.skill_id
+            WHERE gm.guild_id = $1
+              AND us.proven_count > 0
+        ),
+        per_domain AS (
+            SELECT domain,
+                   COUNT(DISTINCT user_id) AS member_count,
+                   AVG(proficiency_level)::DOUBLE PRECISION AS avg_level
+            FROM member_skills
+            GROUP BY domain
+        ),
+        top_slugs AS (
+            SELECT domain, slug,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY domain
+                       ORDER BY COUNT(*) DESC, MAX(proficiency_level) DESC
+                   ) AS rn
+            FROM member_skills
+            GROUP BY domain, slug
+        )
+        SELECT pd.domain,
+               pd.member_count,
+               pd.avg_level,
+               COALESCE(ARRAY_AGG(ts.slug ORDER BY ts.rn)
+                        FILTER (WHERE ts.rn <= 3), ARRAY[]::TEXT[]) AS top_skills
+        FROM per_domain pd
+        LEFT JOIN top_slugs ts ON ts.domain = pd.domain AND ts.rn <= 3
+        GROUP BY pd.domain, pd.member_count, pd.avg_level
+        ORDER BY pd.member_count DESC, pd.domain
+        "#,
+    )
+    .bind(guild_id)
+    .fetch_all(db)
+    .await?;
+    Ok(rows)
+}
+
 // ─── Leaderboards ─────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]

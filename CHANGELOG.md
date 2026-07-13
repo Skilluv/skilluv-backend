@@ -7,12 +7,31 @@ and the project will follow semantic versioning once 1.0 is reached.
 
 ## [Unreleased]
 
-The target model from the roadmap `docs/challenges-target-model-and-roadmap.md`
-is now fully in place at the DB level. The backend is ready for product-driven
-iteration beyond P0-P9.
+The target model plus the P10 teams/guilds bridge are now fully in place at
+the DB level. Roadmap `docs/roadmap-p10-p15.md` covers the remaining phases
+(GitHub ingestion, discovery, real-money payouts, multi-tenancy, push).
 
 ### Added
 
+- **P10.6** — `GET /api/guilds/{slug}/composition` — per-domain skill matrix
+  (member_count, avg_level, top 3 skills) computed via CTE + window functions.
+- **P10.5** — `POST /api/teams/{id}/guild` links a team as "official" of a guild;
+  each team submit then also grants a 10% collective GP bonus to that guild
+  (on top of the per-member 10%).
+- **P10.4** — Team challenge submits now create a shared `deliverable` with
+  contributors materialized in `artifact_metadata.contributors`. Hash includes
+  `team_id` so two different teams with the same code produce distinct
+  deliverables. Fragment distribution follows role slots (or equal split if none).
+- **P10.3** — `challenge_templates.team_composition` JSONB template. Creating
+  a team for such a challenge auto-provisions the role slots. Admin API
+  (`POST/PUT /api/admin/challenges/*`) accepts `team_composition`.
+- **P10.2** — `team_role_slots` table + marketplace endpoint
+  `GET /api/team-slots/open?role=musician` to find teams looking for a role.
+  Multi-disciplinary team compositions now first-class (musician + animator_3d
+  + coder + designer with skill prerequisites per slot).
+- **P10.1** — Persistent teams (`challenge_teams.is_persistent`) survive
+  across challenges. Slice team-claims (`project_slices.claimed_by_team_id`
+  XOR user claim). New `POST /api/teams` + `/api/slices/{id}/claim-as-team`.
 - **P9.2** — Auto-creation of a mirror `project` for the GitHub repo on
   `POST /api/bounties` when no project matches `(repo_owner, repo_name)`.
   Simplifies the B2B onboarding path.
@@ -145,6 +164,37 @@ Delivered in 3 sub-phases:
 - **P9.1** (`dbcb28e`) — Migration 0072 DROP `challenge_submissions.code|stdout|stderr` with backfill into `deliverables.artifact_metadata`. `create_from_challenge_submission` extended (language, stdout, stderr).
 - **P9.2** (`d9d402b`) — Migrations 0073 + 0074: merge `oss_bounties` + `oss_bounty_claims` into `project_slices` + DROP tables. `routes/bounties.rs` fully rewritten. Auto-created mirror projects.
 - **P9.3** (`52ad13b`) — Migration 0075: `ALTER TABLE challenges RENAME TO challenge_templates`. 15 `src/` files + 5 `tests/` files updated for SQL. HTTP API unchanged.
+
+### P10 — Teams multi-rôles + Guilds bridge (`dcac145` → `33daf75`)
+
+Delivered in 6 sub-phases. Unlocks multi-disciplinary game-dev teams
+(musician + animator_3d + coder + designer with per-role skill prerequisites)
+and connects the ephemeral team system with the persistent guild economy.
+
+- **P10.1** (`dcac145`) — Migration 0076: `challenge_teams.is_persistent` +
+  `challenge_id` nullable; `project_slices.claimed_by_team_id` XOR user claim.
+  `SlicesService::claim_as_team/unclaim_by_team/list_claimed_by_team`. Endpoints
+  `POST /api/teams`, `POST /api/slices/{id}/claim-as-team`.
+- **P10.2** (`9ad04f1`) — Migration 0077: `team_role_slots` table (free-form
+  `role_slug`, optional `required_skill_id`, `min_proficiency_level`).
+  `TeamRolesService` with create/fill/leave/delete + marketplace
+  `find_open_slots_by_role`. UNIQUE partial prevents dual-slot per user per team.
+- **P10.3** (`8473441`) — Migration 0078: `challenge_templates.team_composition`
+  JSONB. `create_team` auto-provisions slots from the template. Admin API
+  accepts `team_composition` on create/update.
+- **P10.4** (`9ebc59a`) — `DeliverablesService::create_from_team_submission`
+  with `TeamContributor` in `artifact_metadata`. Hash includes `team_id`.
+  `submit_team` distributes fragments per contributor + per-user GP + creates
+  the deliverable. Retires `#[allow(dead_code)]` on `body.code`.
+- **P10.5** (`738517a`) — Migration 0079: `challenge_teams.guild_id`.
+  `guild::award_bonus_gp_for_team` grants 10% collective bonus to the linked
+  guild on team submits. Endpoints `POST/DELETE /api/teams/{id}/guild`.
+- **P10.6** (`33daf75`) — `guild::guild_skill_matrix` (CTE + window func) →
+  per-domain aggregate: member_count, avg_level, top 3 skills. Endpoint
+  `GET /api/guilds/{slug}/composition`.
+
+Full parallel regression after P10: 303 tests pass, 0 real failure
+(1 flaky Mailpit test on `test_change_email_end_to_end` passes individually).
 
 ---
 

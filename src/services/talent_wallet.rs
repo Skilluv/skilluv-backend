@@ -325,6 +325,65 @@ pub async fn list_transactions(
     Ok(rows)
 }
 
+/// P13.5 — Somme des débits (montants sortants) sur une fenêtre glissante.
+///
+/// Utilisé pour enforcer les limites journalières / mensuelles avant d'accepter
+/// un withdraw. `delta < 0` = débit ; on retourne la somme en valeur absolue.
+pub async fn debits_within(
+    db: &PgPool,
+    user_id: Uuid,
+    currency: Currency,
+    hours: i32,
+) -> Result<BigDecimal, AppError> {
+    let sum: Option<BigDecimal> = sqlx::query_scalar(
+        r#"
+        SELECT COALESCE(SUM(-delta), 0)::NUMERIC(14,2)
+        FROM talent_transactions
+        WHERE user_id = $1 AND currency = $2 AND delta < 0
+          AND created_at > NOW() - ($3::TEXT || ' hours')::INTERVAL
+        "#,
+    )
+    .bind(user_id)
+    .bind(currency.as_str())
+    .bind(hours.to_string())
+    .fetch_one(db)
+    .await?;
+    Ok(sum.unwrap_or_else(|| BigDecimal::from(0)))
+}
+
+/// P13.5 — Export CSV statement (obligation fiscale + auto-consultation user).
+///
+/// Colonnes : `id,created_at,reason,delta,currency,related_slice_id,related_provider_txn_id`.
+pub async fn statement_csv(db: &PgPool, user_id: Uuid) -> Result<String, AppError> {
+    let rows = sqlx::query_as::<_, TalentTransaction>(
+        "SELECT * FROM talent_transactions
+         WHERE user_id = $1
+         ORDER BY created_at ASC, id ASC",
+    )
+    .bind(user_id)
+    .fetch_all(db)
+    .await?;
+
+    let mut out = String::from(
+        "id,created_at,reason,delta,currency,related_slice_id,related_provider_txn_id\n",
+    );
+    for r in rows {
+        out.push_str(&format!(
+            "{},{},{},{},{},{},{}\n",
+            r.id,
+            r.created_at.to_rfc3339(),
+            r.reason,
+            r.delta,
+            r.currency,
+            r.related_slice_id
+                .map(|u| u.to_string())
+                .unwrap_or_default(),
+            r.related_provider_txn_id.unwrap_or_default(),
+        ));
+    }
+    Ok(out)
+}
+
 /// Vérifie l'intégrité de la chaîne de hash pour un user.
 ///
 /// Retourne `Ok(true)` si la chaîne est cohérente, `Ok(false)` si une

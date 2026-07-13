@@ -30,6 +30,8 @@ pub fn talent_wallet_routes() -> Router<AppState> {
         // P13.3 — Mobile Money (Orange, MTN, Wave)
         .route("/users/me/wallet/momo/phone", post(register_momo_phone))
         .route("/users/me/wallet/withdraw/momo", post(momo_withdraw))
+        // P13.5 — Compliance : limites journalières/mensuelles + statement CSV
+        .route("/users/me/wallet/statement.csv", get(wallet_statement_csv))
 }
 
 fn build_response(data: Value) -> Value {
@@ -224,6 +226,28 @@ async fn stripe_withdraw(
         )));
     }
 
+    // P13.5 : enforce limites journalière + mensuelle (via env).
+    enforce_limit(
+        &state.db,
+        auth.user_id,
+        talent_wallet::Currency::Eur,
+        &amount,
+        "WALLET_DAILY_LIMIT_EUR",
+        24,
+        "daily",
+    )
+    .await?;
+    enforce_limit(
+        &state.db,
+        auth.user_id,
+        talent_wallet::Currency::Eur,
+        &amount,
+        "WALLET_MONTHLY_LIMIT_EUR",
+        30 * 24,
+        "monthly",
+    )
+    .await?;
+
     // Debit d'abord (guardé par balance) puis transfer.
     let debit_entry = talent_wallet::LedgerEntry {
         user_id: auth.user_id,
@@ -378,6 +402,64 @@ async fn stripe_connect_webhook(
 use std::str::FromStr;
 
 // ═══════════════════════════════════════════════════════════════════
+// P13.5 — Compliance : limites journalière / mensuelle + statement CSV
+// ═══════════════════════════════════════════════════════════════════
+
+/// Vérifie qu'un débit projeté ne dépasse pas la limite configurée pour la
+/// fenêtre. `label` sert au message d'erreur ("daily", "monthly").
+async fn enforce_limit(
+    db: &sqlx::PgPool,
+    user_id: uuid::Uuid,
+    currency: talent_wallet::Currency,
+    proposed: &bigdecimal::BigDecimal,
+    env_key: &str,
+    hours: i32,
+    label: &str,
+) -> Result<(), AppError> {
+    let limit = std::env::var(env_key)
+        .ok()
+        .and_then(|s| bigdecimal::BigDecimal::from_str(&s).ok());
+    let Some(limit) = limit else {
+        return Ok(()); // Limite non configurée = pas de gate.
+    };
+    let already = talent_wallet::debits_within(db, user_id, currency, hours).await?;
+    let projected = &already + proposed;
+    if projected > limit {
+        return Err(AppError::Validation(format!(
+            "{label} withdraw limit exceeded ({} {} already withdrawn + {} proposed > {} limit)",
+            already,
+            currency.as_str(),
+            proposed,
+            limit
+        )));
+    }
+    Ok(())
+}
+
+/// GET /api/users/me/wallet/statement.csv
+///
+/// Export CSV du ledger complet du user — obligation fiscale + audit personnel.
+async fn wallet_statement_csv(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<axum::response::Response, AppError> {
+    use axum::response::IntoResponse;
+    let csv = talent_wallet::statement_csv(&state.db, auth.user_id).await?;
+    let body = axum::body::Body::from(csv);
+    Ok((
+        [
+            (axum::http::header::CONTENT_TYPE, "text/csv; charset=utf-8"),
+            (
+                axum::http::header::CONTENT_DISPOSITION,
+                "attachment; filename=\"skilluv-wallet-statement.csv\"",
+            ),
+        ],
+        body,
+    )
+        .into_response())
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // P13.3 — Mobile Money (channel Africa-first)
 // ═══════════════════════════════════════════════════════════════════
 
@@ -483,6 +565,28 @@ async fn momo_withdraw(
             "Amount exceeds KYC-lite limit ({KYC_LITE_LIMIT_XOF} XOF). Complete full KYC first."
         )));
     }
+
+    // P13.5 : limites journalière + mensuelle en XOF.
+    enforce_limit(
+        &state.db,
+        auth.user_id,
+        talent_wallet::Currency::Xof,
+        &amount,
+        "WALLET_DAILY_LIMIT_XOF",
+        24,
+        "daily",
+    )
+    .await?;
+    enforce_limit(
+        &state.db,
+        auth.user_id,
+        talent_wallet::Currency::Xof,
+        &amount,
+        "WALLET_MONTHLY_LIMIT_XOF",
+        30 * 24,
+        "monthly",
+    )
+    .await?;
 
     let provider_name = crate::services::mobile_money::ProviderName::from_str(&body.provider)?;
     let provider = crate::services::mobile_money::get_provider(provider_name);

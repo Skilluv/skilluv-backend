@@ -820,6 +820,67 @@ async fn handle_pull_request_event(state: &AppState, payload: &Value) -> Result<
         .execute(&state.db)
         .await?;
 
+    // P13.4 : dual payout — en plus des fragments, crédite le talent_wallet
+    // en devise réelle (EUR ou XOF selon residency_country). Best-effort :
+    // si le wallet n'existe pas ou le taux est 0, on skip silencieusement.
+    let residency: Option<String> = sqlx::query_scalar(
+        "SELECT residency_country FROM talent_wallets WHERE user_id = $1",
+    )
+    .bind(talent_user_id)
+    .fetch_optional(&state.db)
+    .await?
+    .flatten();
+    let is_xof_country = matches!(
+        residency.as_deref(),
+        Some("CI" | "SN" | "BJ" | "TG" | "ML" | "BF" | "NE" | "GW")
+    );
+    let (wallet_currency, rate_env) = if is_xof_country {
+        (crate::services::talent_wallet::Currency::Xof, "BOUNTY_CREDIT_TO_XOF")
+    } else {
+        (crate::services::talent_wallet::Currency::Eur, "BOUNTY_CREDIT_TO_EUR")
+    };
+    let rate: f64 = std::env::var(rate_env)
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0.0);
+    if rate > 0.0 {
+        // fiat_amount = reward × rate. On garde BigDecimal pour éviter précision.
+        let rate_bd = BigDecimal::try_from(rate).unwrap_or(BigDecimal::from(0));
+        let fiat_amount = &reward * &rate_bd;
+        if fiat_amount > BigDecimal::from(0) {
+            let entry = crate::services::talent_wallet::LedgerEntry {
+                user_id: talent_user_id,
+                delta: &fiat_amount,
+                currency: wallet_currency,
+                reason: "bounty_payout",
+                related_slice_id: Some(slice_id),
+                related_provider_txn_id: None,
+                notes: Some("automatic bounty merge payout"),
+            };
+            match crate::services::talent_wallet::credit(&state.db, entry).await {
+                Ok(txn) => {
+                    metrics::counter!(
+                        "skilluv_bounty_wallet_payouts_total",
+                        "currency" => wallet_currency.as_str().to_string()
+                    )
+                    .increment(1);
+                    tracing::info!(
+                        talent = %talent_user_id, slice_id = %slice_id,
+                        currency = wallet_currency.as_str(), amount = %fiat_amount,
+                        tx_id = %txn.id,
+                        "bounty wallet payout credited"
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        error = %e, talent = %talent_user_id, slice_id = %slice_id,
+                        "P13.4 dual payout to wallet failed (best-effort, fragments still awarded)"
+                    );
+                }
+            }
+        }
+    }
+
     sqlx::query(
         r#"
         UPDATE project_slices

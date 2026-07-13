@@ -73,7 +73,8 @@ pub use skills::{
     SliceRecommendation, TalentSearchFilter, UserSkillEnriched,
 };
 pub use slice_ingestion::{
-    poll_all_github_projects, GitHubIngestor, IngestReport, SliceIngestor,
+    dispatch_ingestors, poll_all_github_projects, FigmaIngestor, GitHubIngestor,
+    IngestReport, SliceIngestor,
 };
 pub use slices::{ListFilter as SlicesListFilter, SlicesService};
 pub use stewards::{ProjectSteward, StewardsService};

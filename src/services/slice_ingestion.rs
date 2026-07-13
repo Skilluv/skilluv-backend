@@ -253,6 +253,57 @@ fn truncate(s: &str, max: usize) -> String {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// P11.3 — Stubs pour futures sources (Figma, Notion, partenaires)
+// ═══════════════════════════════════════════════════════════════════
+
+/// Stub Figma : futur ingestor qui lira les nouveaux frames d'un projet Figma
+/// et les matérialisera comme `project_slices` de type `figma_frame`. En
+/// attente de l'API Figma OAuth (post-P13). No-op actuellement.
+pub struct FigmaIngestor;
+
+#[async_trait]
+impl SliceIngestor for FigmaIngestor {
+    fn name(&self) -> &'static str {
+        "figma"
+    }
+
+    async fn ingest_for_project(
+        &self,
+        _db: &PgPool,
+        project_id: Uuid,
+    ) -> Result<IngestReport, AppError> {
+        tracing::debug!(project_id = %project_id, "FigmaIngestor is a stub — no-op");
+        Ok(IngestReport {
+            project_id,
+            ..Default::default()
+        })
+    }
+}
+
+/// Dispatcher générique : appelle chaque ingestor pour un projet donné.
+///
+/// Le worker `bin/github_ingest.rs` utilise uniquement `GitHubIngestor` en P11 ;
+/// cette fn est là pour prouver que le pattern scale à N sources sans coupler
+/// tout au GitHub. Un futur worker pourra faire :
+///
+///   let ingestors: Vec<Box<dyn SliceIngestor>> = vec![
+///       Box::new(GitHubIngestor),
+///       Box::new(FigmaIngestor),
+///   ];
+///   let reports = dispatch_ingestors(&ingestors, &db, project_id).await;
+pub async fn dispatch_ingestors(
+    ingestors: &[Box<dyn SliceIngestor>],
+    db: &PgPool,
+    project_id: Uuid,
+) -> Vec<Result<IngestReport, AppError>> {
+    let mut out = Vec::with_capacity(ingestors.len());
+    for ing in ingestors {
+        out.push(ing.ingest_for_project(db, project_id).await);
+    }
+    out
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // Fonction utilitaire — parcourt tous les projets éligibles
 // ═══════════════════════════════════════════════════════════════════
 

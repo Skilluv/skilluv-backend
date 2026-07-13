@@ -578,7 +578,158 @@ async fn github_webhook(
     if event_type == "pull_request" {
         handle_pull_request_event(&state, &payload).await?;
     }
+    // P11.2 : issues.labeled → ingestion real-time d'une nouvelle slice
+    // pour tout projet Skilluv qui a le label ajouté dans curated_labels.
+    if event_type == "issues" {
+        handle_issues_event(&state, &payload).await?;
+    }
     Ok(Json(build_response(json!({ "processed": true }))))
+}
+
+/// P11.2 — Handler `issues.labeled`. Quand un mainteneur GitHub ajoute un
+/// label curé (ex: 'good-first-issue') à une issue, on crée immédiatement une
+/// slice draft (curator_review) ou open (auto) sans attendre le prochain cycle
+/// de polling.
+async fn handle_issues_event(state: &AppState, payload: &Value) -> Result<(), AppError> {
+    let action = payload.get("action").and_then(|v| v.as_str()).unwrap_or("");
+    if action != "labeled" {
+        return Ok(());
+    }
+    let added_label = payload
+        .get("label")
+        .and_then(|l| l.get("name"))
+        .and_then(|n| n.as_str())
+        .unwrap_or("");
+    if added_label.is_empty() {
+        return Ok(());
+    }
+
+    let issue = payload.get("issue").cloned().unwrap_or(Value::Null);
+    // Skip si l'issue est en réalité un PR
+    if issue.get("pull_request").is_some() {
+        return Ok(());
+    }
+
+    let issue_number = issue.get("number").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+    let issue_url = issue
+        .get("html_url")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let title = issue
+        .get("title")
+        .and_then(|v| v.as_str())
+        .unwrap_or("(untitled)")
+        .to_string();
+    let body_text = issue
+        .get("body")
+        .and_then(|v| v.as_str())
+        .unwrap_or("(no description)")
+        .to_string();
+    if issue_number == 0 {
+        return Ok(());
+    }
+
+    let repository = payload.get("repository").cloned().unwrap_or(Value::Null);
+    let full_name = repository
+        .get("full_name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let (owner, name) = match full_name.split_once('/') {
+        Some(pair) => pair,
+        None => return Ok(()),
+    };
+
+    // Trouver un project Skilluv qui match le repo ET qui liste ce label.
+    let project_row: Option<(Uuid, String)> = sqlx::query_as(
+        r#"
+        SELECT id, slice_ingestion_mode
+        FROM projects
+        WHERE github_repo_owner = $1
+          AND github_repo_name = $2
+          AND slice_ingestion_mode IN ('auto', 'curator_review')
+          AND $3 = ANY(curated_labels)
+          AND archived_at IS NULL
+        LIMIT 1
+        "#,
+    )
+    .bind(owner)
+    .bind(name)
+    .bind(added_label)
+    .fetch_optional(&state.db)
+    .await?;
+
+    let Some((project_id, mode)) = project_row else {
+        return Ok(()); // Ce label n'est pas curé pour ce projet.
+    };
+
+    let default_status = if mode == "auto" { "open" } else { "draft" };
+    let existing_labels: Vec<String> = issue
+        .get("labels")
+        .and_then(|l| l.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| {
+                    v.get("name").and_then(|n| n.as_str()).map(String::from)
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let metadata = json!({
+        "source": "github_webhook_issues_labeled",
+        "issue_url": issue_url,
+        "issue_number": issue_number,
+        "labels": existing_labels,
+        "trigger_label": added_label,
+    });
+
+    let inserted: Option<Uuid> = sqlx::query_scalar(
+        r#"
+        INSERT INTO project_slices
+            (project_id, slice_type, external_ref, external_metadata,
+             title, description, primary_domain, difficulty, fragments_reward,
+             status, ingested_from)
+        VALUES ($1, 'github_issue', $2, $3,
+                $4, $5, 'code', 3, 50,
+                $6, 'github_webhook')
+        ON CONFLICT (project_id, external_ref)
+            WHERE slice_type = 'github_issue' AND external_ref IS NOT NULL
+            DO NOTHING
+        RETURNING id
+        "#,
+    )
+    .bind(project_id)
+    .bind(issue_number.to_string())
+    .bind(&metadata)
+    .bind(truncate(&title, 300))
+    .bind(truncate(&body_text, 4000))
+    .bind(default_status)
+    .fetch_optional(&state.db)
+    .await?;
+
+    if inserted.is_some() {
+        metrics::counter!(
+            "skilluv_github_slices_ingested_total",
+            "source" => "webhook"
+        )
+        .increment(1);
+    }
+    Ok(())
+}
+
+fn truncate(s: &str, max: usize) -> String {
+    if s.len() <= max {
+        s.to_string()
+    } else {
+        let cut = s
+            .char_indices()
+            .take_while(|(i, _)| *i < max.saturating_sub(1))
+            .last()
+            .map(|(i, c)| i + c.len_utf8())
+            .unwrap_or(max);
+        format!("{}…", &s[..cut])
+    }
 }
 
 async fn handle_pull_request_event(state: &AppState, payload: &Value) -> Result<(), AppError> {

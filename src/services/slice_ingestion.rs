@@ -219,7 +219,8 @@ async fn insert_slice_from_issue(
                 $4, $5,
                 'code', 3, 50,
                 $6, 'github_webhook')
-        ON CONFLICT (project_id, external_ref) WHERE slice_type = 'github_issue'
+        ON CONFLICT (project_id, external_ref)
+            WHERE slice_type = 'github_issue' AND external_ref IS NOT NULL
             DO NOTHING
         RETURNING id
         "#,

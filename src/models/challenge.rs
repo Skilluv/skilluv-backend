@@ -37,6 +37,10 @@ pub struct Challenge {
     pub featured: bool,
     pub vote_count: i32,
     pub created_by: Option<Uuid>,
+    /// P10.3 : composition team attendue (musicien + coder + …). JSONB array
+    /// de { role_slug, role_display_name?, required_skill_slug?, min_proficiency_level, count }.
+    /// NULL = pas de contrainte, team libre-forme.
+    pub team_composition: Option<serde_json::Value>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

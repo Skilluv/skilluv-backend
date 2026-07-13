@@ -132,6 +132,9 @@ struct CreateChallengeRequest {
     project_id: Option<Uuid>,
     expected_output: Option<String>,
     test_cases: Option<serde_json::Value>,
+    /// P10.3 : composition team attendue si mode='team'.
+    /// Format: JSON array de { role_slug, role_display_name?, required_skill_slug?, min_proficiency_level?, count }.
+    team_composition: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -151,6 +154,8 @@ struct UpdateChallengeRequest {
     project_id: Option<Uuid>,
     expected_output: Option<String>,
     test_cases: Option<serde_json::Value>,
+    /// P10.3 : update de la composition team (JSONB) ou clear si null explicite.
+    team_composition: Option<serde_json::Value>,
 }
 
 const VALID_AI_POLICIES: &[&str] = &[
@@ -239,8 +244,9 @@ async fn create_challenge(
             title, description, instructions, skill_domain, difficulty,
             mode, duration_minutes, ai_policy, tone, language,
             reward_fragments, is_onboarding, is_training,
-            project_id, expected_output, test_cases, created_by, status
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,'draft')
+            project_id, expected_output, test_cases, created_by, status,
+            team_composition
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,'draft',$18)
         RETURNING *
         "#,
     )
@@ -261,6 +267,7 @@ async fn create_challenge(
     .bind(&body.expected_output)
     .bind(&body.test_cases)
     .bind(auth.user_id)
+    .bind(&body.team_composition)
     .fetch_one(&state.db)
     .await?;
 
@@ -318,8 +325,9 @@ async fn update_challenge(
             ai_policy = $8, tone = $9, language = $10,
             reward_fragments = $11, is_training = $12, project_id = $13,
             expected_output = $14, test_cases = $15,
+            team_composition = $16,
             updated_at = NOW()
-        WHERE id = $16
+        WHERE id = $17
         RETURNING *
         "#,
     )
@@ -350,6 +358,11 @@ async fn update_challenge(
             .or(existing.expected_output.as_ref()),
     )
     .bind(body.test_cases.as_ref().or(existing.test_cases.as_ref()))
+    .bind(
+        body.team_composition
+            .as_ref()
+            .or(existing.team_composition.as_ref()),
+    )
     .bind(id)
     .fetch_one(&state.db)
     .await?;

@@ -63,6 +63,25 @@ struct ExtendTimerRequest {
     minutes: i32,
 }
 
+/// P10.3 — Format d'une entrée dans challenge_templates.team_composition JSONB.
+/// L'admin définit N slots par rôle : `count` détermine combien créer.
+#[derive(Debug, Deserialize)]
+struct CompositionSlot {
+    role_slug: String,
+    #[serde(default)]
+    role_display_name: Option<String>,
+    #[serde(default)]
+    required_skill_slug: Option<String>,
+    #[serde(default)]
+    min_proficiency_level: Option<i16>,
+    #[serde(default = "default_count")]
+    count: i32,
+}
+
+fn default_count() -> i32 {
+    1
+}
+
 #[derive(Debug, serde::Serialize, sqlx::FromRow)]
 struct Team {
     id: Uuid,
@@ -106,7 +125,19 @@ async fn create_team(
         ));
     }
 
-    let max_members = body.max_members.unwrap_or(4).clamp(2, 10);
+    // P10.3 : si le challenge prescrit une composition, la somme des `count`
+    // définit max_members (override le default 4). Sinon fallback body.max_members.
+    let template_slots: Vec<CompositionSlot> = challenge
+        .team_composition
+        .as_ref()
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+        .unwrap_or_default();
+    let template_total: i32 = template_slots.iter().map(|s| s.count.max(1)).sum();
+    let max_members = if template_total > 0 {
+        template_total.clamp(2, 20)
+    } else {
+        body.max_members.unwrap_or(4).clamp(2, 10)
+    };
 
     let team: Team = sqlx::query_as(
         "INSERT INTO challenge_teams (challenge_id, name, created_by, max_members) VALUES ($1, $2, $3, $4) RETURNING *",
@@ -117,6 +148,24 @@ async fn create_team(
     .bind(max_members)
     .fetch_one(&state.db)
     .await?;
+
+    // P10.3 : auto-création des slots depuis le template (best-effort ;
+    // si un slug de skill n'existe pas, on skip juste ce slot).
+    for tmpl in &template_slots {
+        for _ in 0..tmpl.count.max(1) {
+            let _ = crate::services::TeamRolesService::create_slot(
+                &state.db,
+                crate::services::CreateSlotParams {
+                    team_id: team.id,
+                    role_slug: &tmpl.role_slug,
+                    role_display_name: tmpl.role_display_name.as_deref(),
+                    required_skill_slug: tmpl.required_skill_slug.as_deref(),
+                    min_proficiency_level: tmpl.min_proficiency_level.unwrap_or(1),
+                },
+            )
+            .await;
+        }
+    }
 
     // Auto-join creator
     sqlx::query("INSERT INTO team_members (team_id, user_id) VALUES ($1, $2)")

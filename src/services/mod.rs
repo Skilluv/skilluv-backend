@@ -32,6 +32,7 @@ pub mod portfolio;
 pub mod seasons;
 pub mod session;
 pub mod skills;
+pub mod slice_ingestion;
 pub mod slices;
 pub mod stewards;
 pub mod team_roles;
@@ -70,6 +71,9 @@ pub use session::SessionService;
 pub use skills::{
     RecommendationSkillMatch, SkillFragmentOrder, SkillTalent, SkillsService,
     SliceRecommendation, TalentSearchFilter, UserSkillEnriched,
+};
+pub use slice_ingestion::{
+    poll_all_github_projects, GitHubIngestor, IngestReport, SliceIngestor,
 };
 pub use slices::{ListFilter as SlicesListFilter, SlicesService};
 pub use stewards::{ProjectSteward, StewardsService};

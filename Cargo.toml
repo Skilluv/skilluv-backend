@@ -117,6 +117,10 @@ path = "src/bin/seed.rs"
 name = "skilluv-seed-admin"
 path = "src/bin/seed_admin.rs"
 
+[[bin]]
+name = "skilluv-github-ingest"
+path = "src/bin/github_ingest.rs"
+
 [build-dependencies]
 tonic-build = { version = "0.12", features = ["prost"] }
 protox = "0.7"

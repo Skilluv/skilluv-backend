@@ -7,12 +7,25 @@ and the project will follow semantic versioning once 1.0 is reached.
 
 ## [Unreleased]
 
-The target model plus the P10 teams/guilds bridge are now fully in place at
-the DB level. Roadmap `docs/roadmap-p10-p15.md` covers the remaining phases
-(GitHub ingestion, discovery, real-money payouts, multi-tenancy, push).
+Target model + P10 teams/guilds + P11 GitHub ingestion pipeline are all in
+place. Roadmap `docs/roadmap-p10-p15.md` covers the remaining phases
+(discovery, real-money payouts, multi-tenancy, push).
 
 ### Added
 
+- **P11.4** — `GET /api/stewards/{project_id}/inbox` lists ingested drafts;
+  `POST /api/slices/{id}/publish` (draft → open) and `POST /api/slices/{id}/reject`
+  (draft → closed) require admin OR active steward on the project.
+- **P11.3** — `SliceIngestor` trait exposes a `FigmaIngestor` stub (documentary,
+  no-op) and `dispatch_ingestors` generic dispatcher — proves the ingestion
+  pipeline is extensible to Notion, Trello, partner imports without coupling.
+- **P11.2** — Extended `POST /api/webhooks/github`: `issues.labeled` events
+  now ingest a slice in real-time if the label matches the project's
+  `curated_labels` and the mode is `auto` or `curator_review`. PRs skipped.
+- **P11.1** — New binary `skilluv-github-ingest`: polls all projects with
+  `slice_ingestion_mode IN ('auto','curator_review')` and materializes issues
+  with curated labels as `project_slices` (draft or open). Deploy as hourly
+  cron. Idempotent via `uniq_slices_github_issue_per_project`.
 - **P10.6** — `GET /api/guilds/{slug}/composition` — per-domain skill matrix
   (member_count, avg_level, top 3 skills) computed via CTE + window functions.
 - **P10.5** — `POST /api/teams/{id}/guild` links a team as "official" of a guild;
@@ -195,6 +208,30 @@ and connects the ephemeral team system with the persistent guild economy.
 
 Full parallel regression after P10: 303 tests pass, 0 real failure
 (1 flaky Mailpit test on `test_change_email_end_to_end` passes individually).
+
+### P11 — Automatic GitHub slice ingestion (`2a3ec93` → `ec904e3`)
+
+Delivered in 4 sub-phases. Completes the G.1 workflow: Skilluv-tracked
+projects auto-detect new GitHub issues with curated labels and materialize
+them as `project_slices` for humans to claim.
+
+- **P11.1** (`2a3ec93`) — `services/slice_ingestion.rs` with `SliceIngestor`
+  trait + `GitHubIngestor` impl. New binary `skilluv-github-ingest` for
+  cron-based polling. Reuses `uniq_slices_github_issue_per_project` for
+  idempotency. Mode `auto` → status='open', `curator_review` → 'draft'.
+- **P11.2** (`59d4cce`) — Real-time webhook path: `POST /api/webhooks/github`
+  now handles `issues.labeled`, matching repo + `curated_labels` +
+  `slice_ingestion_mode`. Fixes ON CONFLICT WHERE to match the partial UNIQUE
+  index (needed both `slice_type='github_issue'` AND `external_ref IS NOT NULL`).
+- **P11.3** (`7ae29f2`) — `FigmaIngestor` stub + `dispatch_ingestors` generic
+  dispatcher. 3 tests including a `FakeIngestor` composed via `Box<dyn SliceIngestor>`
+  — proves the trait accepts third-party impls without coupling.
+- **P11.4** (`ec904e3`) — `SlicesService::list_drafts_for_project` +
+  `publish_draft` + `reject_draft`. Steward inbox endpoints. Admin OR
+  `StewardsService::is_steward` authorization on all three.
+
+Full parallel regression after P11: 319 tests pass, 0 real failure
+(1 flaky Mailpit on `test_change_email_end_to_end`, passes individually).
 
 ---
 

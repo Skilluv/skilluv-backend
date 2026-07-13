@@ -51,11 +51,15 @@ struct CreateTeamRequest {
 
 #[derive(Debug, Deserialize)]
 struct SubmitTeamRequest {
-    /// Reçu du frontend pour compat, non persisté depuis P9.1 (le pipeline
-    /// team submit ne fait pas encore de dual-write vers deliverables).
-    #[allow(dead_code)]
+    /// Contenu de la submission — depuis P10.4 persisté dans le deliverable
+    /// via `DeliverablesService::create_from_team_submission` (SHA-256 dans
+    /// artifact_metadata.code_content).
     code: String,
     language: Option<String>,
+    #[serde(default)]
+    stdout: Option<String>,
+    #[serde(default)]
+    stderr: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -319,8 +323,6 @@ async fn submit_team(
         .fetch_one(&state.db)
         .await?;
 
-    // P9.1 : `code` n'est plus persisté sur challenge_submissions ; le contenu
-    // vit dans le deliverable lié (créé plus tard dans le pipeline de vérif).
     let submission: crate::models::ChallengeSubmission = sqlx::query_as(
         r#"
         INSERT INTO challenge_submissions (challenge_id, user_id, team_id, language, status, submitted_at, attempt_number)
@@ -335,34 +337,110 @@ async fn submit_team(
     .fetch_one(&state.db)
     .await?;
 
-    // Mark team as submitted
     sqlx::query("UPDATE challenge_teams SET status = 'submitted' WHERE id = $1")
         .bind(team_id)
         .execute(&state.db)
         .await?;
 
-    // Award fragments to all team members
-    let members: Vec<(Uuid,)> =
-        sqlx::query_as("SELECT user_id FROM team_members WHERE team_id = $1")
-            .bind(team_id)
-            .fetch_all(&state.db)
-            .await?;
+    // P10.4 : liste des contributeurs (via team_role_slots si présents, sinon
+    // fallback team_members équirépartition). Chaque contributeur reçoit sa
+    // part de fragments, et le tout est matérialisé dans le deliverable.
+    let slot_contributors: Vec<(Uuid, String)> = sqlx::query_as(
+        "SELECT filled_by_user_id, role_slug
+         FROM team_role_slots
+         WHERE team_id = $1 AND filled_by_user_id IS NOT NULL",
+    )
+    .bind(team_id)
+    .fetch_all(&state.db)
+    .await?;
 
-    let fragments_per_member = challenge.reward_fragments;
-    for (member_id,) in &members {
+    // Si aucun slot rempli, fallback sur team_members
+    let contributors_source: Vec<(Uuid, Option<String>)> = if slot_contributors.is_empty() {
+        let members: Vec<(Uuid,)> =
+            sqlx::query_as("SELECT user_id FROM team_members WHERE team_id = $1")
+                .bind(team_id)
+                .fetch_all(&state.db)
+                .await?;
+        members.into_iter().map(|(u,)| (u, None)).collect()
+    } else {
+        slot_contributors
+            .into_iter()
+            .map(|(u, r)| (u, Some(r)))
+            .collect()
+    };
+
+    if contributors_source.is_empty() {
+        return Err(AppError::Validation(
+            "Team has no members to distribute fragments to".to_string(),
+        ));
+    }
+
+    // Équirépartition simple : reward_fragments / N par tête, remainder au team leader.
+    let n = contributors_source.len() as i32;
+    let per_member = challenge.reward_fragments / n;
+    let remainder = challenge.reward_fragments % n;
+
+    let contributors: Vec<crate::services::TeamContributor> = contributors_source
+        .iter()
+        .enumerate()
+        .map(|(idx, (user_id, role))| {
+            let bonus = if idx == 0 { remainder } else { 0 };
+            crate::services::TeamContributor {
+                user_id: *user_id,
+                role_slug: role.clone(),
+                fragments_awarded: per_member + bonus,
+            }
+        })
+        .collect();
+
+    // Distribue effectivement les fragments
+    for c in &contributors {
         sqlx::query(
             "UPDATE users SET total_fragments = total_fragments + $1, updated_at = NOW() WHERE id = $2",
         )
-        .bind(fragments_per_member)
-        .bind(member_id)
+        .bind(c.fragments_awarded)
+        .bind(c.user_id)
         .execute(&state.db)
         .await?;
     }
 
+    // Créé le deliverable partagé (idempotent via SHA-256 code + team_id)
+    let deliverable_id_result = crate::services::DeliverablesService::create_from_team_submission(
+        &state.db,
+        team_id,
+        auth.user_id,
+        challenge_id,
+        submission.id,
+        &body.code,
+        &contributors,
+        body.language.as_deref(),
+        body.stdout.as_deref(),
+        body.stderr.as_deref(),
+    )
+    .await;
+
+    match deliverable_id_result {
+        Ok(_) => {
+            metrics::counter!(
+                "skilluv_team_deliverables_created_total",
+                "domain" => challenge.skill_domain.clone()
+            )
+            .increment(1);
+        }
+        Err(e) => {
+            tracing::warn!(
+                error = %e,
+                team_id = %team_id,
+                challenge_id = %challenge_id,
+                "P10.4 team deliverable dual-write failed (best-effort, submission succeeded)"
+            );
+        }
+    }
+
     Ok(Json(build_response(json!({
         "submission": submission,
-        "fragments_per_member": fragments_per_member,
-        "team_members": members.len(),
+        "contributors": contributors,
+        "team_members": contributors.len(),
         "message": "Team submission recorded"
     }))))
 }

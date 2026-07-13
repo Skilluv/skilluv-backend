@@ -58,7 +58,7 @@ pub use dm::DmConversation;
 pub use queue::QueueService;
 pub use sandbox::SandboxService;
 pub use attestations::{Attestation, AttestationsService, CompagnonnageParams};
-pub use deliverables::{DeliverablesService, PrMergedOutcome, PrMergedParams};
+pub use deliverables::{DeliverablesService, PrMergedOutcome, PrMergedParams, TeamContributor};
 pub use review_queue::{
     QueueFilter as ReviewQueueFilter, ReviewQueueService, ReviewTask, SeniorityLevel,
 };

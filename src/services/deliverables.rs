@@ -22,6 +22,18 @@ pub const AI_DISCLOSURE_WINDOW_DAYS: i64 = 7;
 
 pub struct DeliverablesService;
 
+/// P10.4 — Un contributeur d'une team submission avec son rôle et sa part de fragments.
+///
+/// Utilisé pour matérialiser dans `deliverables.artifact_metadata.contributors`
+/// qui a participé et comment les fragments ont été répartis (proportionnel au
+/// nombre de slots occupés, ou équirépartition si pas de slots).
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct TeamContributor {
+    pub user_id: Uuid,
+    pub role_slug: Option<String>,
+    pub fragments_awarded: i32,
+}
+
 /// Payload extrait d'un webhook GitHub `pull_request.closed` avec merged=true.
 ///
 /// Utilisé par [`DeliverablesService::create_from_pr_merged`].
@@ -602,6 +614,110 @@ impl DeliverablesService {
              WHERE user_id = $1 AND artifact_hash = $2 LIMIT 1",
         )
         .bind(user_id)
+        .bind(&artifact_hash)
+        .fetch_one(db)
+        .await?;
+        Ok(existing_id)
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // P10.4 : team submission → deliverable partagé
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// Crée un deliverable "verified" à partir d'une team submission.
+    ///
+    /// Sémantique identique à `create_from_challenge_submission` (SHA-256 + idempotence)
+    /// avec en plus la matérialisation des contributeurs dans artifact_metadata.
+    ///
+    /// Le deliverable est rattaché au *team leader* (créateur de la team) comme
+    /// `user_id` primaire — les autres contributeurs vivent dans les metadata.
+    /// Cette convention permet de garder l'invariant `deliverables.user_id NOT NULL`
+    /// tout en traçant l'auteur collectif.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn create_from_team_submission(
+        db: &PgPool,
+        team_id: Uuid,
+        team_leader_id: Uuid,
+        challenge_id: Uuid,
+        submission_id: Uuid,
+        submission_code: &str,
+        contributors: &[TeamContributor],
+        language: Option<&str>,
+        stdout: Option<&str>,
+        stderr: Option<&str>,
+    ) -> Result<Uuid, AppError> {
+        use sha2::{Digest, Sha256};
+
+        let mut hasher = Sha256::new();
+        hasher.update(submission_code.as_bytes());
+        // Hash inclut aussi les contributeurs pour éviter que 2 teams différentes
+        // avec le même code partagent le hash.
+        hasher.update(team_id.as_bytes());
+        let artifact_hash = hex::encode(hasher.finalize());
+
+        let artifact_url = format!("skilluv:team_submission:{team_id}:{submission_id}");
+
+        let total_fragments: i32 = contributors.iter().map(|c| c.fragments_awarded).sum();
+
+        let mut metadata = serde_json::json!({
+            "source": "team_challenge_submission",
+            "team_id": team_id.to_string(),
+            "submission_id": submission_id.to_string(),
+            "code_content": submission_code,
+            "contributors": contributors,
+        });
+        if let (Some(obj), Some(lang)) = (metadata.as_object_mut(), language) {
+            obj.insert("language".into(), serde_json::Value::String(lang.to_string()));
+        }
+        if let (Some(obj), Some(s)) = (metadata.as_object_mut(), stdout) {
+            obj.insert("stdout".into(), serde_json::Value::String(s.to_string()));
+        }
+        if let (Some(obj), Some(s)) = (metadata.as_object_mut(), stderr) {
+            obj.insert("stderr".into(), serde_json::Value::String(s.to_string()));
+        }
+
+        let inserted: Option<Uuid> = sqlx::query_scalar(
+            r#"
+            INSERT INTO deliverables (
+                challenge_id, user_id,
+                artifact_type, artifact_url, artifact_hash, artifact_metadata,
+                verifiable_by, verification_status, verified_at, verification_signal,
+                fragments_awarded, public, submitted_at, created_at
+            )
+            VALUES (
+                $1, $2,
+                'other', $3, $4, $5,
+                'automated_diff', 'verified', NOW(), $6,
+                $7, TRUE, NOW(), NOW()
+            )
+            ON CONFLICT (user_id, artifact_hash) WHERE artifact_hash IS NOT NULL DO NOTHING
+            RETURNING id
+            "#,
+        )
+        .bind(challenge_id)
+        .bind(team_leader_id)
+        .bind(&artifact_url)
+        .bind(&artifact_hash)
+        .bind(&metadata)
+        .bind(serde_json::json!({
+            "source": "team_challenge_submission",
+            "submission_id": submission_id.to_string(),
+            "team_id": team_id.to_string(),
+        }))
+        .bind(total_fragments)
+        .fetch_optional(db)
+        .await?;
+
+        if let Some(id) = inserted {
+            return Ok(id);
+        }
+
+        // Idempotence hit : même code + même team → même deliverable.
+        let existing_id: Uuid = sqlx::query_scalar(
+            "SELECT id FROM deliverables
+             WHERE user_id = $1 AND artifact_hash = $2 LIMIT 1",
+        )
+        .bind(team_leader_id)
         .bind(&artifact_hash)
         .fetch_one(db)
         .await?;

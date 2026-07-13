@@ -33,6 +33,8 @@ pub fn project_routes() -> Router<AppState> {
         .route("/u/{username}/projects", get(by_user))
         .route("/guilds/{slug}/projects", get(by_guild_slug))
         .route("/admin/projects/{slug}/curated", post(admin_set_curated))
+        // P12.1 — recommandations projets pour le user courant
+        .route("/users/me/recommendations/projects", get(my_project_recommendations))
 }
 
 fn build_response(data: Value) -> Value {
@@ -199,4 +201,30 @@ async fn admin_set_curated(
     let project = projects::by_slug(&state.db, &slug).await?;
     projects::admin_set_curated(&state.db, project.id, body.curated).await?;
     Ok(Json(build_response(json!({ "curated": body.curated }))))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// P12.1 — Recommandations projets
+// ═══════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Deserialize)]
+struct RecoQuery {
+    limit: Option<i64>,
+}
+
+/// GET /api/users/me/recommendations/projects?limit=10
+///
+/// Retourne les projets qui matchent les skills prouvés du user, exclut ceux
+/// où il a déjà un deliverable verified, triés par match_score DESC.
+async fn my_project_recommendations(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Query(q): Query<RecoQuery>,
+) -> Result<Json<Value>, AppError> {
+    let recos =
+        projects::recommend_for_user(&state.db, auth.user_id, q.limit.unwrap_or(10)).await?;
+    Ok(Json(build_response(json!({
+        "recommendations": recos,
+        "count": recos.len(),
+    }))))
 }

@@ -3,6 +3,7 @@
 //! Owners are either users or guilds (via owner_type + owner_id discriminator).
 //! Discussions reuse the polymorphic `comments` table with `target_type='project'`.
 
+use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
@@ -29,6 +30,13 @@ pub struct Project {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub archived_at: Option<DateTime<Utc>>,
+    /// P12.1 : agrégat de domaines exposé pour le matching skills ↔ project.
+    /// Rempli par la migration 0055.
+    #[serde(default)]
+    pub skill_domains: Vec<String>,
+    /// P12.1 : score de santé projet (0.0-1.0), pondération du match reco.
+    #[serde(default)]
+    pub health_score: Option<BigDecimal>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -173,6 +181,121 @@ pub async fn list_curated(db: &PgPool, limit: i64) -> Result<Vec<Project>, AppEr
     .fetch_all(db)
     .await?;
     Ok(rows)
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// P12.1 — Recommandations projets pour un user
+// ═══════════════════════════════════════════════════════════════════
+
+/// Recommendation avec le score de match et les domaines qui matchent.
+///
+/// Le score = somme des WPC du user sur les domaines matchés, pondérée par
+/// `health_score` (défaut 0.5 si NULL), + bonus 50% si `looking_for_contributors`.
+#[derive(Debug, Clone, Serialize)]
+pub struct ProjectRecommendation {
+    pub project: Project,
+    pub match_score: f64,
+    pub matched_domains: Vec<String>,
+    pub user_wpc_on_matched_domains: i64,
+}
+
+/// Recommande des projets à un user en fonction de ses skills prouvés.
+///
+/// Algorithme :
+/// 1. Aggréger `user_skills.weighted_proven_count` par domaine (via `skill_nodes.domain`).
+/// 2. Trouver les projets dont `skill_domains && user_top_domains`.
+/// 3. Exclure les projets où le user a déjà un deliverable verified (déjà exploré).
+/// 4. Scorer : `sum(user_wpc_on_domain) × coalesce(health_score, 0.5) ×
+///             (1.5 si looking_for_contributors else 1.0)`.
+/// 5. Retourner top `limit`.
+///
+/// Retourne un vec vide si le user n'a aucune skill prouvée.
+pub async fn recommend_for_user(
+    db: &PgPool,
+    user_id: Uuid,
+    limit: i64,
+) -> Result<Vec<ProjectRecommendation>, AppError> {
+    let limit = limit.clamp(1, 50);
+
+    // 1. Top domaines du user via WPC agrégé.
+    let user_domains: Vec<(String, i64)> = sqlx::query_as(
+        r#"
+        SELECT sn.domain, SUM(us.weighted_proven_count)::BIGINT AS total_wpc
+        FROM user_skills us
+        JOIN skill_nodes sn ON sn.id = us.skill_id
+        WHERE us.user_id = $1 AND us.weighted_proven_count > 0
+        GROUP BY sn.domain
+        ORDER BY total_wpc DESC
+        "#,
+    )
+    .bind(user_id)
+    .fetch_all(db)
+    .await?;
+
+    if user_domains.is_empty() {
+        return Ok(Vec::new());
+    }
+    let domain_names: Vec<String> = user_domains.iter().map(|(d, _)| d.clone()).collect();
+    let domain_wpc: std::collections::HashMap<String, i64> =
+        user_domains.iter().cloned().collect();
+
+    // 2 + 3 : projets candidats, sans ceux où le user a déjà un deliverable verified.
+    let projects: Vec<Project> = sqlx::query_as(
+        r#"
+        SELECT * FROM projects p
+        WHERE p.archived_at IS NULL
+          AND p.skill_domains && $1::TEXT[]
+          AND NOT EXISTS (
+              SELECT 1 FROM project_slices ps
+              JOIN deliverables d ON d.slice_id = ps.id
+              WHERE ps.project_id = p.id
+                AND d.user_id = $2
+                AND d.verification_status = 'verified'
+          )
+        "#,
+    )
+    .bind(&domain_names)
+    .bind(user_id)
+    .fetch_all(db)
+    .await?;
+
+    // 4. Scorer + garder les infos matchées.
+    let mut recos: Vec<ProjectRecommendation> = projects
+        .into_iter()
+        .map(|project| {
+            let matched_domains: Vec<String> = project
+                .skill_domains
+                .iter()
+                .filter(|d| domain_wpc.contains_key(*d))
+                .cloned()
+                .collect();
+            let user_wpc_on_matched: i64 = matched_domains
+                .iter()
+                .filter_map(|d| domain_wpc.get(d).copied())
+                .sum();
+            let health_f: f64 = project
+                .health_score
+                .as_ref()
+                .and_then(|b| {
+                    use num_traits::ToPrimitive;
+                    b.to_f64()
+                })
+                .unwrap_or(0.5);
+            let contributor_boost = if project.looking_for_contributors { 1.5 } else { 1.0 };
+            let match_score = (user_wpc_on_matched as f64) * health_f * contributor_boost;
+            ProjectRecommendation {
+                project,
+                match_score,
+                matched_domains,
+                user_wpc_on_matched_domains: user_wpc_on_matched,
+            }
+        })
+        .collect();
+
+    // 5. Tri + truncate.
+    recos.sort_by(|a, b| b.match_score.partial_cmp(&a.match_score).unwrap_or(std::cmp::Ordering::Equal));
+    recos.truncate(limit as usize);
+    Ok(recos)
 }
 
 pub async fn by_slug(db: &PgPool, slug: &str) -> Result<Project, AppError> {

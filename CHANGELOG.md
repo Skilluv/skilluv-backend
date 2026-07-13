@@ -7,12 +7,25 @@ and the project will follow semantic versioning once 1.0 is reached.
 
 ## [Unreleased]
 
-Target model + P10 teams/guilds + P11 GitHub ingestion pipeline are all in
-place. Roadmap `docs/roadmap-p10-p15.md` covers the remaining phases
-(discovery, real-money payouts, multi-tenancy, push).
+Target model + P10 teams/guilds + P11 GitHub ingestion + P12 discovery are
+all in place. Roadmap `docs/roadmap-p10-p15.md` covers the remaining phases
+(real-money payouts, multi-tenancy, push).
 
 ### Added
 
+- **P12.4** — `GET /api/explore` — unified multi-criteria search across
+  `project_slices` + `challenge_templates` with filters (kind, domain,
+  difficulty, language, project_id, q text) and cross-source pagination.
+- **P12.3** — `GET /api/feed/for-you` — personalized feed mixing 4 sources:
+  open slices in favorite projects, level-up slice recommendations (P4),
+  new challenges from enrolled tracks, and recent community attestations.
+- **P12.2** — `POST/GET/DELETE /api/users/me/interests/projects` — user
+  marks projects as interesting (onboarding + feed scoping). New table
+  `user_project_interests` with score 0-100 (migration 0080).
+- **P12.1** — `GET /api/users/me/recommendations/projects` — project
+  recommendations scored by (matched_domain_wpc × health_score ×
+  contributor_boost), excluding projects where the user already has a
+  verified deliverable.
 - **P11.4** — `GET /api/stewards/{project_id}/inbox` lists ingested drafts;
   `POST /api/slices/{id}/publish` (draft → open) and `POST /api/slices/{id}/reject`
   (draft → closed) require admin OR active steward on the project.
@@ -232,6 +245,28 @@ them as `project_slices` for humans to claim.
 
 Full parallel regression after P11: 319 tests pass, 0 real failure
 (1 flaky Mailpit on `test_change_email_end_to_end`, passes individually).
+
+### P12 — Discovery & recommendations (`f86d220` → `239d93f`)
+
+Delivered in 4 sub-phases. Answers "the new user just landed on the home,
+what do they claim first?" — the platform now surfaces matched projects,
+personalized feeds, and open exploration.
+
+- **P12.1** (`f86d220`) — `projects::recommend_for_user(db, user_id, limit)`
+  scores projects by (sum of user WPC on matched domains × health_score ×
+  1.5 contributor-boost). Excludes projects with existing verified deliverable.
+  `Project` struct extended with `skill_domains` + `health_score`.
+- **P12.2** (`f78a639`) — Migration 0080: `user_project_interests` table.
+  `mark_interested_batch` for the onboarding "cochez les projets" step,
+  `list_interests` scoped to non-archived projects with score > 0.
+- **P12.3** (`5de34dc`) — `for_you_feed` handler mixes 4 sources with
+  unified `FeedItem { kind, happened_at, payload }` shape. Uses P4 slice
+  recommendations, P3 track enrollment, and P5 recent community attestations.
+- **P12.4** (`239d93f`) — New `routes/explore.rs`. Cross-source SQL fetches
+  `page * per_page` items each to guarantee in-memory pagination works.
+  Mounted at `/api/explore` in `lib.rs`.
+
+Full parallel regression after P12: 347 tests pass, 0 real failure.
 
 ---
 

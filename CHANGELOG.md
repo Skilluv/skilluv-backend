@@ -7,12 +7,27 @@ and the project will follow semantic versioning once 1.0 is reached.
 
 ## [Unreleased]
 
-Target model + P10 teams/guilds + P11 GitHub ingestion + P12 discovery are
-all in place. Roadmap `docs/roadmap-p10-p15.md` covers the remaining phases
-(real-money payouts, multi-tenancy, push).
+Target model + P10-P13 (teams, GitHub ingestion, discovery, real-money
+payouts) all in place. Roadmap `docs/roadmap-p10-p15.md` covers what's
+left (multi-tenancy, push).
 
 ### Added
 
+- **P13.5** — `GET /api/users/me/wallet/statement.csv` (fiscal obligation
+  + user self-audit). `WALLET_{DAILY,MONTHLY}_LIMIT_{EUR,XOF}` env vars
+  enforce sliding-window withdraw limits.
+- **P13.4** — Bounty merge webhook now credits the talent wallet in real
+  currency (EUR or XOF based on `residency_country`) on top of fragments.
+  Rates configured via `BOUNTY_CREDIT_TO_{EUR,XOF}` env vars.
+- **P13.3** — `MobileMoneyProvider` trait + Orange/MTN/Wave impls.
+  `POST /wallet/momo/phone` + `POST /wallet/withdraw/momo`. KYC-lite gate
+  at 100 000 XOF before full KYC.
+- **P13.2** — Stripe Connect Express onboarding + withdraw.
+  `POST /wallet/stripe/onboard`, `POST /wallet/withdraw/stripe`,
+  `POST /webhooks/stripe-connect` for `account.updated`.
+- **P13.1** — Talent wallet (EUR + XOF balances). SHA-256 hash-chained
+  ledger for audit-proof `talent_transactions`. `GET /wallet`,
+  `/wallet/transactions`, `POST /wallet/residency`.
 - **P12.4** — `GET /api/explore` — unified multi-criteria search across
   `project_slices` + `challenge_templates` with filters (kind, domain,
   difficulty, language, project_id, q text) and cross-source pagination.
@@ -267,6 +282,39 @@ personalized feeds, and open exploration.
   Mounted at `/api/explore` in `lib.rs`.
 
 Full parallel regression after P12: 347 tests pass, 0 real failure.
+
+### P13 — Real-money payouts (`a5a6807` → `5ee97ca`)
+
+Delivered in 5 sub-phases. Fulfills the product promise "companies pay
+talents, not the other way around" — talents can now withdraw real EUR
+via Stripe Connect or XOF via Mobile Money (Orange/MTN/Wave).
+
+- **P13.1** (`a5a6807`) — Migration 0081: `talent_wallets` +
+  `talent_transactions` with SHA-256 hash-chained ledger (`prev_ledger_hash`,
+  `ledger_hash`). `credit()`, `debit()` atomic with balance guard,
+  `verify_ledger_chain()` for audit. `Utc::now()` truncated to microseconds
+  before hash (PG TIMESTAMPTZ precision).
+- **P13.2** (`0b52c0d`) — Stripe Connect Express onboarding + withdraw.
+  Reuses `services/stripe.rs` from Phase 5.11 (mentorship payouts).
+  Rollback (credit refund) if Stripe rejects the transfer.
+- **P13.3** (`dfd5f97`) — `MobileMoneyProvider` trait +
+  `OrangeMoneyProvider`, `MtnMobileMoneyProvider`, `WaveProvider` stubs.
+  Orange checks for `ORANGE_MONEY_API_KEY` — stub returns `Pending` in dev.
+  E.164 phone validation + XOF-only in this phase.
+- **P13.4** (`1ce4c53`) — `handle_pull_request_event` in `bounties.rs`
+  extended: on merge, in addition to fragments, credits the talent wallet
+  in EUR or XOF based on `residency_country`. UEMOA countries →
+  `BOUNTY_CREDIT_TO_XOF`, others → `BOUNTY_CREDIT_TO_EUR`. Best-effort.
+- **P13.5** (`b6d53cf`) — `debits_within(user, currency, hours)` sums
+  outgoing amounts on a sliding window. `enforce_limit()` helper called
+  in stripe_withdraw + momo_withdraw with per-env limits. CSV statement
+  export with proper Content-Type / Content-Disposition headers.
+
+Test fix (`5ee97ca`): P13.2 + P13.5 tests mutate process-global env vars
+(`STRIPE_SECRET_KEY`, `WALLET_DAILY_LIMIT_XOF`). A per-binary static
+`Mutex<()>` serializes them so parallel tokio tests don't race on env.
+
+Full parallel regression after P13: 375 tests pass, 0 real failure.
 
 ---
 

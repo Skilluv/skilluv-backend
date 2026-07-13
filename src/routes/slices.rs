@@ -34,6 +34,10 @@ pub fn slice_routes() -> Router<AppState> {
         .route("/slices/{id}/unclaim-team", post(unclaim_slice_by_team))
         .route("/users/me/slices", get(my_slices))
         .route("/teams/{team_id}/slices", get(team_slices))
+        // P11.4 — steward inbox : validation des drafts ingérés
+        .route("/stewards/{project_id}/inbox", get(steward_inbox))
+        .route("/slices/{id}/publish", post(publish_slice))
+        .route("/slices/{id}/reject", post(reject_slice))
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -242,4 +246,94 @@ async fn team_slices(
     require_team_member(&state.db, team_id, auth.user_id).await?;
     let slices = SlicesService::list_claimed_by_team(&state.db, team_id).await?;
     Ok(Json(build_response(json!({ "slices": slices }))))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// P11.4 — Steward inbox : validation des drafts ingérés
+// ═══════════════════════════════════════════════════════════════════
+
+/// Vérifie que l'user est admin OU steward actif du project.
+async fn require_admin_or_steward(
+    db: &sqlx::PgPool,
+    project_id: Uuid,
+    user_id: Uuid,
+    role: &str,
+) -> Result<(), AppError> {
+    if role == "admin" {
+        return Ok(());
+    }
+    let is_steward = crate::services::StewardsService::is_steward(db, project_id, user_id).await?;
+    if is_steward {
+        Ok(())
+    } else {
+        Err(AppError::Forbidden)
+    }
+}
+
+/// GET /api/stewards/{project_id}/inbox
+///
+/// Liste des slices `status='draft'` du project qui attendent validation.
+async fn steward_inbox(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(project_id): Path<Uuid>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    require_admin_or_steward(&state.db, project_id, auth.user_id, &auth.role).await?;
+    let drafts = SlicesService::list_drafts_for_project(&state.db, project_id).await?;
+    Ok(Json(build_response(json!({
+        "drafts": drafts,
+        "count": drafts.len(),
+    }))))
+}
+
+/// POST /api/slices/{id}/publish
+///
+/// Steward (ou admin) valide la slice draft → status='open'.
+async fn publish_slice(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    // On récupère le project_id AVANT le publish pour valider les droits.
+    let project_id: Option<Uuid> =
+        sqlx::query_scalar("SELECT project_id FROM project_slices WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&state.db)
+            .await?;
+    let project_id = project_id.ok_or_else(|| AppError::NotFound("Slice not found".into()))?;
+    require_admin_or_steward(&state.db, project_id, auth.user_id, &auth.role).await?;
+
+    let slice = SlicesService::publish_draft(&state.db, id).await?;
+    metrics::counter!(
+        "skilluv_steward_slices_published_total",
+        "project" => project_id.to_string()
+    )
+    .increment(1);
+    Ok(Json(build_response(json!({
+        "slice": slice,
+        "message": "Slice published — now open for claim."
+    }))))
+}
+
+/// POST /api/slices/{id}/reject
+///
+/// Steward refuse une slice draft (pas pertinente / hors scope) → status='closed'.
+async fn reject_slice(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let project_id: Option<Uuid> =
+        sqlx::query_scalar("SELECT project_id FROM project_slices WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&state.db)
+            .await?;
+    let project_id = project_id.ok_or_else(|| AppError::NotFound("Slice not found".into()))?;
+    require_admin_or_steward(&state.db, project_id, auth.user_id, &auth.role).await?;
+
+    let slice = SlicesService::reject_draft(&state.db, id).await?;
+    Ok(Json(build_response(json!({
+        "slice": slice,
+        "message": "Slice rejected — moved to closed."
+    }))))
 }

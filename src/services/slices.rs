@@ -204,6 +204,77 @@ impl SlicesService {
     }
 
     // ═══════════════════════════════════════════════════════════════════
+    // P11.4 : steward inbox — validation des drafts ingérées auto
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// Liste les slices en `status='draft'` pour un project — dashboard
+    /// steward "voici ce que le poller GitHub / webhook a ingesté, à valider".
+    ///
+    /// L'appelant doit être steward du project (validation côté route).
+    pub async fn list_drafts_for_project(
+        db: &PgPool,
+        project_id: Uuid,
+    ) -> Result<Vec<ProjectSlice>, AppError> {
+        let slices = sqlx::query_as::<_, ProjectSlice>(
+            r#"
+            SELECT * FROM project_slices
+            WHERE project_id = $1 AND status = 'draft'
+            ORDER BY created_at DESC
+            "#,
+        )
+        .bind(project_id)
+        .fetch_all(db)
+        .await?;
+        Ok(slices)
+    }
+
+    /// Publie une slice draft (draft → open). Autorisation à faire côté
+    /// route via `StewardsService::is_steward` OU admin.
+    pub async fn publish_draft(
+        db: &PgPool,
+        slice_id: Uuid,
+    ) -> Result<ProjectSlice, AppError> {
+        let slice = sqlx::query_as::<_, ProjectSlice>(
+            r#"
+            UPDATE project_slices
+            SET status = 'open', updated_at = NOW()
+            WHERE id = $1 AND status = 'draft'
+            RETURNING *
+            "#,
+        )
+        .bind(slice_id)
+        .fetch_optional(db)
+        .await?
+        .ok_or_else(|| {
+            AppError::Validation("Slice not found or not in draft".into())
+        })?;
+        Ok(slice)
+    }
+
+    /// Ferme une slice draft rejetée (draft → closed avec raison).
+    /// Le steward peut refuser une slice ingérée non pertinente sans la publier.
+    pub async fn reject_draft(
+        db: &PgPool,
+        slice_id: Uuid,
+    ) -> Result<ProjectSlice, AppError> {
+        let slice = sqlx::query_as::<_, ProjectSlice>(
+            r#"
+            UPDATE project_slices
+            SET status = 'closed', closed_at = NOW(), updated_at = NOW()
+            WHERE id = $1 AND status = 'draft'
+            RETURNING *
+            "#,
+        )
+        .bind(slice_id)
+        .fetch_optional(db)
+        .await?
+        .ok_or_else(|| {
+            AppError::Validation("Slice not found or not in draft".into())
+        })?;
+        Ok(slice)
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
     // P10.1 : claim en team (persistent) — alternative au claim solo user
     // ═══════════════════════════════════════════════════════════════════
 

@@ -31,6 +31,8 @@ pub fn challenge_team_routes() -> Router<AppState> {
         .route("/teams/{team_id}/slots/{slot_id}/leave", post(leave_team_slot))
         .route("/teams/{team_id}/slots/{slot_id}", axum::routing::delete(delete_team_slot))
         .route("/team-slots/open", get(list_open_slots_by_role))
+        // P10.5 — bridge Guild ↔ Team
+        .route("/teams/{team_id}/guild", post(attach_team_to_guild).delete(detach_team_from_guild))
 }
 
 fn build_response(data: serde_json::Value) -> serde_json::Value {
@@ -99,6 +101,8 @@ struct Team {
     is_persistent: bool,
     description: Option<String>,
     disbanded_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// P10.5 : team officielle d'une guilde → bonus GP collectif à la guilde.
+    guild_id: Option<Uuid>,
     created_at: chrono::DateTime<chrono::Utc>,
 }
 
@@ -393,7 +397,7 @@ async fn submit_team(
         })
         .collect();
 
-    // Distribue effectivement les fragments
+    // Distribue effectivement les fragments + push GP par membre à sa guilde perso
     for c in &contributors {
         sqlx::query(
             "UPDATE users SET total_fragments = total_fragments + $1, updated_at = NOW() WHERE id = $2",
@@ -402,6 +406,25 @@ async fn submit_team(
         .bind(c.user_id)
         .execute(&state.db)
         .await?;
+        // Best-effort : 10% GP à la guilde individuelle du contributeur.
+        let _ = crate::services::guild::award_gp_for_fragments(
+            &state.db,
+            c.user_id,
+            c.fragments_awarded,
+        )
+        .await;
+    }
+
+    // P10.5 : bonus collectif si la team est officielle d'une guilde.
+    // 10% supp du total va à la guilde (en plus du 10% par membre déjà distribué).
+    if let Some(guild_id) = team.guild_id {
+        let total: i32 = contributors.iter().map(|c| c.fragments_awarded).sum();
+        match crate::services::guild::award_bonus_gp_for_team(&state.db, guild_id, total).await {
+            Ok(bonus) if bonus > 0 => {
+                metrics::counter!("skilluv_team_guild_bonus_gp_total").increment(bonus as u64);
+            }
+            _ => {}
+        }
     }
 
     // Créé le deliverable partagé (idempotent via SHA-256 code + team_id)
@@ -820,4 +843,67 @@ async fn list_open_slots_by_role(
     )
     .await?;
     Ok(Json(build_response(json!({ "slots": slots }))))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// P10.5 — Bridge Guild ↔ Team
+// ═══════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Deserialize)]
+struct AttachGuildBody {
+    guild_id: Uuid,
+}
+
+/// POST /api/teams/{team_id}/guild — le créateur de la team la lie à une guilde.
+///
+/// Prérequis : le créateur doit être membre de la guilde ciblée. La team
+/// devient "officielle" de cette guilde → chaque submit qui rapporte des
+/// fragments donne un bonus GP collectif à la guilde (P10.5).
+async fn attach_team_to_guild(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(team_id): Path<Uuid>,
+    Json(body): Json<AttachGuildBody>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    require_team_creator(&state.db, team_id, auth.user_id).await?;
+
+    // Le créateur doit être membre actif de la guilde cible.
+    let is_member: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)",
+    )
+    .bind(body.guild_id)
+    .bind(auth.user_id)
+    .fetch_one(&state.db)
+    .await?;
+    if !is_member {
+        return Err(AppError::Forbidden);
+    }
+
+    sqlx::query(
+        "UPDATE challenge_teams SET guild_id = $1 WHERE id = $2",
+    )
+    .bind(body.guild_id)
+    .bind(team_id)
+    .execute(&state.db)
+    .await?;
+
+    Ok(Json(build_response(json!({
+        "team_id": team_id,
+        "guild_id": body.guild_id,
+        "message": "Team attached to guild — GP bonuses now flow collectively."
+    }))))
+}
+
+/// DELETE /api/teams/{team_id}/guild — détache la team de sa guilde.
+async fn detach_team_from_guild(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(team_id): Path<Uuid>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    require_team_creator(&state.db, team_id, auth.user_id).await?;
+    sqlx::query("UPDATE challenge_teams SET guild_id = NULL WHERE id = $1")
+        .bind(team_id)
+        .execute(&state.db)
+        .await?;
+    Ok(Json(build_response(json!({ "detached": true }))))
 }

@@ -529,6 +529,37 @@ pub async fn kick_member(
 
 // ─── GP integration ───────────────────────────────────────────────
 
+/// P10.5 — Push a collective GP bonus to a specific guild, independent of individual members.
+///
+/// Utilisé quand une team liée à une guilde submit un team challenge : en plus
+/// du 10% par membre distribué via `award_gp_for_fragments`, on abonde la guilde
+/// avec 10% du total collectif — la victoire team = coup de force pour la guilde.
+pub async fn award_bonus_gp_for_team(
+    db: &PgPool,
+    guild_id: Uuid,
+    total_fragments: i32,
+) -> Result<i64, AppError> {
+    if total_fragments <= 0 {
+        return Ok(0);
+    }
+    let gp_to_add = (total_fragments as i64) * (GP_PERCENT_FROM_FRAGMENTS as i64) / 100;
+    if gp_to_add <= 0 {
+        return Ok(0);
+    }
+    sqlx::query(
+        "UPDATE guilds
+         SET gp_total = gp_total + $1,
+             gp_season = gp_season + $1,
+             updated_at = NOW()
+         WHERE id = $2 AND disbanded_at IS NULL",
+    )
+    .bind(gp_to_add)
+    .bind(guild_id)
+    .execute(db)
+    .await?;
+    Ok(gp_to_add)
+}
+
 /// Push 10% of `fragments_earned` to the user's guild (if any). Returns the GP added.
 pub async fn award_gp_for_fragments(
     db: &PgPool,

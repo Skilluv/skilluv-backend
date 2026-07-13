@@ -27,6 +27,9 @@ pub fn talent_wallet_routes() -> Router<AppState> {
         .route("/users/me/wallet/stripe/onboard", post(stripe_onboard))
         .route("/users/me/wallet/withdraw/stripe", post(stripe_withdraw))
         .route("/webhooks/stripe-connect", post(stripe_connect_webhook))
+        // P13.3 — Mobile Money (Orange, MTN, Wave)
+        .route("/users/me/wallet/momo/phone", post(register_momo_phone))
+        .route("/users/me/wallet/withdraw/momo", post(momo_withdraw))
 }
 
 fn build_response(data: Value) -> Value {
@@ -373,3 +376,171 @@ async fn stripe_connect_webhook(
 }
 
 use std::str::FromStr;
+
+// ═══════════════════════════════════════════════════════════════════
+// P13.3 — Mobile Money (channel Africa-first)
+// ═══════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Deserialize)]
+struct RegisterMomoBody {
+    /// Format E.164, ex "+22507xxxxxxxx".
+    phone: String,
+    /// En P13.3, on suppose que le user a validé son OTP côté client. Une
+    /// impl complète chainera vers `services::otp::verify` (à ajouter en P15).
+    verified: bool,
+}
+
+/// POST /api/users/me/wallet/momo/phone
+///
+/// Enregistre / met à jour le téléphone Mobile Money du user. `verified=true`
+/// débloque les payouts < seuil KYC lite. Idempotent.
+async fn register_momo_phone(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Json(body): Json<RegisterMomoBody>,
+) -> Result<Json<Value>, AppError> {
+    // Validation E.164 minimale
+    if !body.phone.starts_with('+')
+        || body.phone[1..].chars().filter(|c| c.is_ascii_digit()).count() < 8
+    {
+        return Err(AppError::Validation(
+            "phone must be E.164 format (starts with '+' and 8-15 digits)".into(),
+        ));
+    }
+
+    let _ = talent_wallet::get_or_init_wallet(&state.db, auth.user_id).await?;
+    sqlx::query(
+        "UPDATE talent_wallets
+         SET momo_phone = $1, momo_phone_verified = $2, updated_at = NOW()
+         WHERE user_id = $3",
+    )
+    .bind(&body.phone)
+    .bind(body.verified)
+    .bind(auth.user_id)
+    .execute(&state.db)
+    .await?;
+
+    Ok(Json(build_response(json!({
+        "phone": body.phone,
+        "verified": body.verified,
+    }))))
+}
+
+#[derive(Debug, Deserialize)]
+struct MomoWithdrawBody {
+    /// "orange" | "mtn" | "wave"
+    provider: String,
+    /// Montant en devise (XOF ex: "5000").
+    amount: String,
+    /// XOF par défaut.
+    #[serde(default = "default_xof")]
+    currency: String,
+}
+
+fn default_xof() -> String {
+    "XOF".into()
+}
+
+/// KYC lite : au-delà de 100 000 XOF (~150 EUR) on refuse tant que le user
+/// n'a pas complété un KYC full (à implémenter en P14).
+const KYC_LITE_LIMIT_XOF: i64 = 100_000;
+
+/// POST /api/users/me/wallet/withdraw/momo
+async fn momo_withdraw(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Json(body): Json<MomoWithdrawBody>,
+) -> Result<Json<Value>, AppError> {
+    if body.currency.to_uppercase() != "XOF" {
+        return Err(AppError::Validation(
+            "Mobile Money currently supports XOF only".into(),
+        ));
+    }
+    let amount = bigdecimal::BigDecimal::from_str(&body.amount)
+        .map_err(|_| AppError::Validation("invalid amount".into()))?;
+
+    let (phone, phone_verified): (Option<String>, bool) = sqlx::query_as(
+        "SELECT momo_phone, momo_phone_verified FROM talent_wallets WHERE user_id = $1",
+    )
+    .bind(auth.user_id)
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or_else(|| AppError::Validation("Wallet not initialized".into()))?;
+    let phone = phone.ok_or_else(|| {
+        AppError::Validation("Register your mobile money phone first".into())
+    })?;
+    if !phone_verified {
+        return Err(AppError::Validation(
+            "Phone not verified — complete the SMS OTP first".into(),
+        ));
+    }
+
+    // KYC lite gate
+    use num_traits::ToPrimitive;
+    let amount_i64 = amount.to_i64().unwrap_or(0);
+    if amount_i64 > KYC_LITE_LIMIT_XOF {
+        return Err(AppError::Validation(format!(
+            "Amount exceeds KYC-lite limit ({KYC_LITE_LIMIT_XOF} XOF). Complete full KYC first."
+        )));
+    }
+
+    let provider_name = crate::services::mobile_money::ProviderName::from_str(&body.provider)?;
+    let provider = crate::services::mobile_money::get_provider(provider_name);
+
+    // Débit d'abord, puis payout provider — rollback si le provider refuse.
+    let debit_entry = talent_wallet::LedgerEntry {
+        user_id: auth.user_id,
+        delta: &amount,
+        currency: talent_wallet::Currency::Xof,
+        reason: "withdraw_momo",
+        related_slice_id: None,
+        related_provider_txn_id: None,
+        notes: Some(&format!("{provider_name} withdraw", provider_name = provider_name.as_str())),
+    };
+    let debit_row = talent_wallet::debit(&state.db, debit_entry).await?;
+
+    let payout_params = crate::services::mobile_money::PayoutParams {
+        user_id: auth.user_id,
+        phone: &phone,
+        currency: "XOF",
+        amount: &amount,
+        note: "skilluv talent payout",
+    };
+    match provider.initiate_payout(&payout_params).await {
+        Ok(result) => {
+            sqlx::query(
+                "UPDATE talent_transactions SET related_provider_txn_id = $1 WHERE id = $2",
+            )
+            .bind(&result.provider_txn_id)
+            .bind(debit_row.id)
+            .execute(&state.db)
+            .await?;
+            metrics::counter!(
+                "skilluv_momo_payouts_total",
+                "provider" => provider_name.as_str().to_string()
+            )
+            .increment(1);
+            Ok(Json(build_response(json!({
+                "transaction_id": debit_row.id,
+                "provider": provider_name.as_str(),
+                "provider_txn_id": result.provider_txn_id,
+                "status": result.status,
+                "message": result.message,
+            }))))
+        }
+        Err(e) => {
+            // Rollback : ré-crédite le user.
+            let refund_entry = talent_wallet::LedgerEntry {
+                user_id: auth.user_id,
+                delta: &amount,
+                currency: talent_wallet::Currency::Xof,
+                reason: "withdraw_momo_refund",
+                related_slice_id: None,
+                related_provider_txn_id: None,
+                notes: Some("momo provider rejected"),
+            };
+            let _ = talent_wallet::credit(&state.db, refund_entry).await;
+            Err(e)
+        }
+    }
+}

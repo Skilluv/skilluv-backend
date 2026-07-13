@@ -32,6 +32,7 @@ pub mod portfolio;
 pub mod seasons;
 pub mod session;
 pub mod skills;
+pub mod mobile_money;
 pub mod slice_ingestion;
 pub mod slices;
 pub mod talent_wallet;

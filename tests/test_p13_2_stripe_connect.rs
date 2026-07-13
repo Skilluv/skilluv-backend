@@ -13,9 +13,15 @@ use common::TestApp;
 use hmac::{Hmac, Mac};
 use serde_json::json;
 use sha2::Sha256;
+use std::sync::Mutex;
 use uuid::Uuid;
 
 type HmacSha256 = Hmac<Sha256>;
+
+// Sérialise les tests P13.2 : ils mutent des env vars process-globales
+// (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET). Sans mutex, un test qui unset
+// pendant qu'un autre est mid-request → race.
+static ENV_MUTEX: Mutex<()> = Mutex::new(());
 
 fn sign_stripe_webhook(secret: &str, payload: &[u8]) -> String {
     let ts = chrono::Utc::now().timestamp();
@@ -40,10 +46,15 @@ fn set_stripe_env() {
 
 #[tokio::test]
 async fn stripe_onboard_fails_without_config() {
-    // SAFETY: single-threaded env set before test.
+    let _env_guard = ENV_MUTEX.lock().unwrap();
+    // Snapshot + clear + restore : évite de piéger les autres tests parallèles
+    // qui partagent le même process env.
+    let saved_key = std::env::var("STRIPE_SECRET_KEY").ok();
+    let saved_wh = std::env::var("STRIPE_WEBHOOK_SECRET").ok();
+    // SAFETY: env set + restore encadre le HTTP call.
     unsafe {
-        std::env::remove_var("STRIPE_SECRET_KEY");
-        std::env::remove_var("STRIPE_WEBHOOK_SECRET");
+        std::env::set_var("STRIPE_SECRET_KEY", "");
+        std::env::set_var("STRIPE_WEBHOOK_SECRET", "");
     }
     let app = TestApp::spawn().await;
     app.register_user("u_no_stripe").await;
@@ -55,8 +66,22 @@ async fn stripe_onboard_fails_without_config() {
             &json!({ "country": "FR" }),
         )
         .await;
-    assert_eq!(resp.status(), 500, "Stripe non configuré → 500");
+    let status = resp.status();
     let body: serde_json::Value = resp.json().await.unwrap();
+
+    // Restore avant les assertions pour libérer l'env pour les autres tests.
+    unsafe {
+        match saved_key {
+            Some(v) => std::env::set_var("STRIPE_SECRET_KEY", v),
+            None => std::env::remove_var("STRIPE_SECRET_KEY"),
+        }
+        match saved_wh {
+            Some(v) => std::env::set_var("STRIPE_WEBHOOK_SECRET", v),
+            None => std::env::remove_var("STRIPE_WEBHOOK_SECRET"),
+        }
+    }
+
+    assert_eq!(status, 500, "Stripe non configuré → 500");
     assert!(body["error"]["message"]
         .as_str()
         .unwrap()
@@ -71,6 +96,7 @@ async fn stripe_onboard_fails_without_config() {
 
 #[tokio::test]
 async fn stripe_withdraw_refuses_when_kyc_not_verified() {
+    let _env_guard = ENV_MUTEX.lock().unwrap();
     set_stripe_env();
     let app = TestApp::spawn().await;
     let body = app.register_user("u_kyc").await;
@@ -113,6 +139,7 @@ async fn stripe_withdraw_refuses_when_kyc_not_verified() {
 
 #[tokio::test]
 async fn stripe_withdraw_refuses_non_eur() {
+    let _env_guard = ENV_MUTEX.lock().unwrap();
     set_stripe_env();
     let app = TestApp::spawn().await;
     app.register_user("u_xof").await;
@@ -135,6 +162,7 @@ async fn stripe_withdraw_refuses_non_eur() {
 
 #[tokio::test]
 async fn webhook_account_updated_marks_kyc_verified() {
+    let _env_guard = ENV_MUTEX.lock().unwrap();
     set_stripe_env();
     let app = TestApp::spawn().await;
     let body = app.register_user("u_wh").await;
@@ -195,6 +223,7 @@ async fn webhook_account_updated_marks_kyc_verified() {
 
 #[tokio::test]
 async fn webhook_ignores_unrelated_events() {
+    let _env_guard = ENV_MUTEX.lock().unwrap();
     set_stripe_env();
     let app = TestApp::spawn().await;
 
@@ -223,6 +252,7 @@ async fn webhook_ignores_unrelated_events() {
 
 #[tokio::test]
 async fn webhook_rejects_invalid_signature() {
+    let _env_guard = ENV_MUTEX.lock().unwrap();
     set_stripe_env();
     let app = TestApp::spawn().await;
 

@@ -34,6 +34,7 @@ pub mod session;
 pub mod skills;
 pub mod slice_ingestion;
 pub mod slices;
+pub mod talent_wallet;
 pub mod stewards;
 pub mod team_roles;
 pub mod tracks;

@@ -35,6 +35,15 @@ pub fn project_routes() -> Router<AppState> {
         .route("/admin/projects/{slug}/curated", post(admin_set_curated))
         // P12.1 — recommandations projets pour le user courant
         .route("/users/me/recommendations/projects", get(my_project_recommendations))
+        // P12.2 — marque d'intérêt (onboarding + feed)
+        .route(
+            "/users/me/interests/projects",
+            get(list_my_project_interests).post(mark_projects_interested),
+        )
+        .route(
+            "/users/me/interests/projects/{project_id}",
+            delete(unmark_project_interested),
+        )
 }
 
 fn build_response(data: Value) -> Value {
@@ -227,4 +236,64 @@ async fn my_project_recommendations(
         "recommendations": recos,
         "count": recos.len(),
     }))))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// P12.2 — Marque d'intérêt user → project
+// ═══════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Deserialize)]
+struct MarkInterestedBody {
+    /// Batch d'IDs projets (onboarding : le user coche les projets qui l'intéressent).
+    project_ids: Vec<Uuid>,
+}
+
+/// POST /api/users/me/interests/projects
+///
+/// Marque plusieurs projets comme intéressants. Score par défaut 50.
+async fn mark_projects_interested(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Json(body): Json<MarkInterestedBody>,
+) -> Result<Json<Value>, AppError> {
+    if body.project_ids.is_empty() {
+        return Err(AppError::Validation(
+            "project_ids must not be empty".into(),
+        ));
+    }
+    if body.project_ids.len() > 50 {
+        return Err(AppError::Validation(
+            "cannot mark more than 50 projects at once".into(),
+        ));
+    }
+    let count =
+        projects::mark_interested_batch(&state.db, auth.user_id, &body.project_ids).await?;
+    metrics::counter!("skilluv_project_interests_marked_total").increment(count as u64);
+    Ok(Json(build_response(json!({ "marked": count }))))
+}
+
+/// GET /api/users/me/interests/projects
+///
+/// Liste mes projets d'intérêt (score > 0), triés par score DESC.
+async fn list_my_project_interests(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Json<Value>, AppError> {
+    let rows = projects::list_interests(&state.db, auth.user_id).await?;
+    Ok(Json(build_response(json!({
+        "interests": rows,
+    }))))
+}
+
+/// DELETE /api/users/me/interests/projects/{project_id}
+///
+/// Retire un projet de mes intérêts (score → 0).
+async fn unmark_project_interested(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(project_id): Path<Uuid>,
+) -> Result<Json<Value>, AppError> {
+    let affected =
+        projects::unmark_interested(&state.db, auth.user_id, project_id).await?;
+    Ok(Json(build_response(json!({ "removed": affected > 0 }))))
 }

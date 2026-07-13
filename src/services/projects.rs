@@ -298,6 +298,123 @@ pub async fn recommend_for_user(
     Ok(recos)
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// P12.2 — Marque d'intérêt user → project (onboarding + feed for-you)
+// ═══════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+pub struct UserProjectInterest {
+    pub user_id: Uuid,
+    pub project_id: Uuid,
+    pub interest_score: i16,
+    pub decided_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Marque un projet comme intéressant pour le user (onboarding step).
+/// Score par défaut 50 ; upsert idempotent — un click répété = même score.
+pub async fn mark_interested(
+    db: &PgPool,
+    user_id: Uuid,
+    project_id: Uuid,
+    score: i16,
+) -> Result<UserProjectInterest, AppError> {
+    let score = score.clamp(0, 100);
+    let row = sqlx::query_as::<_, UserProjectInterest>(
+        r#"
+        INSERT INTO user_project_interests (user_id, project_id, interest_score)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (user_id, project_id) DO UPDATE SET
+            interest_score = EXCLUDED.interest_score,
+            updated_at = NOW()
+        RETURNING *
+        "#,
+    )
+    .bind(user_id)
+    .bind(project_id)
+    .bind(score)
+    .fetch_one(db)
+    .await?;
+    Ok(row)
+}
+
+/// Retire l'intérêt (score → 0). Utilisé pour "je n'aime plus ce projet".
+pub async fn unmark_interested(
+    db: &PgPool,
+    user_id: Uuid,
+    project_id: Uuid,
+) -> Result<u64, AppError> {
+    let res = sqlx::query(
+        "UPDATE user_project_interests SET interest_score = 0, updated_at = NOW()
+         WHERE user_id = $1 AND project_id = $2",
+    )
+    .bind(user_id)
+    .bind(project_id)
+    .execute(db)
+    .await?;
+    Ok(res.rows_affected())
+}
+
+/// Batch onboarding : marque plusieurs projets d'un coup.
+pub async fn mark_interested_batch(
+    db: &PgPool,
+    user_id: Uuid,
+    project_ids: &[Uuid],
+) -> Result<u32, AppError> {
+    if project_ids.is_empty() {
+        return Ok(0);
+    }
+    let mut tx = db.begin().await?;
+    let mut count: u32 = 0;
+    for pid in project_ids {
+        sqlx::query(
+            r#"
+            INSERT INTO user_project_interests (user_id, project_id, interest_score)
+            VALUES ($1, $2, 50)
+            ON CONFLICT (user_id, project_id) DO UPDATE SET
+                interest_score = GREATEST(user_project_interests.interest_score, 50),
+                updated_at = NOW()
+            "#,
+        )
+        .bind(user_id)
+        .bind(pid)
+        .execute(&mut *tx)
+        .await?;
+        count += 1;
+    }
+    tx.commit().await?;
+    Ok(count)
+}
+
+/// Un projet enrichi de l'interest_score du user courant.
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+pub struct ProjectWithInterest {
+    #[sqlx(flatten)]
+    pub project: Project,
+    pub interest_score: i16,
+}
+
+/// Liste les projets d'intérêt d'un user, triés par score DESC puis récence.
+pub async fn list_interests(
+    db: &PgPool,
+    user_id: Uuid,
+) -> Result<Vec<ProjectWithInterest>, AppError> {
+    let rows = sqlx::query_as::<_, ProjectWithInterest>(
+        r#"
+        SELECT p.*, upi.interest_score
+        FROM user_project_interests upi
+        JOIN projects p ON p.id = upi.project_id
+        WHERE upi.user_id = $1 AND upi.interest_score > 0
+          AND p.archived_at IS NULL
+        ORDER BY upi.interest_score DESC, upi.updated_at DESC
+        "#,
+    )
+    .bind(user_id)
+    .fetch_all(db)
+    .await?;
+    Ok(rows)
+}
+
 pub async fn by_slug(db: &PgPool, slug: &str) -> Result<Project, AppError> {
     let row: Option<Project> =
         sqlx::query_as("SELECT * FROM projects WHERE slug = $1 AND archived_at IS NULL")

@@ -10,7 +10,7 @@ use uuid::Uuid;
 use crate::AppState;
 use crate::errors::AppError;
 use crate::middleware::{AuthUser, AuthUserComplete, OptionalAuth};
-use crate::models::{Badge, Challenge, ChallengeSubmission};
+use crate::models::{Badge, ChallengeTemplate, ChallengeSubmission};
 use crate::services::LeaderboardService;
 use crate::websocket::WsMessage;
 
@@ -71,7 +71,7 @@ async fn get_onboarding(
         ));
     }
 
-    let challenge: Challenge = sqlx::query_as(
+    let challenge: ChallengeTemplate = sqlx::query_as(
         "SELECT * FROM challenge_templates WHERE is_onboarding = TRUE AND skill_domain = $1 AND status = 'published' LIMIT 1",
     )
     .bind(&query.domain)
@@ -156,7 +156,7 @@ async fn list_challenges(
     ));
 
     // Build queries dynamically
-    let mut challenges_query = sqlx::query_as::<_, Challenge>(&sql);
+    let mut challenges_query = sqlx::query_as::<_, ChallengeTemplate>(&sql);
     let mut count_query = sqlx::query_scalar::<_, i64>(&count_sql);
 
     if has_tenant_bind {
@@ -173,7 +173,7 @@ async fn list_challenges(
         count_query = count_query.bind(diff);
     }
 
-    let challenges: Vec<Challenge> = challenges_query.fetch_all(&state.db).await?;
+    let challenges: Vec<ChallengeTemplate> = challenges_query.fetch_all(&state.db).await?;
     let total: i64 = count_query.fetch_one(&state.db).await?;
 
     // P8.3 : le flag `locked` est retiré du listing. La progression suit
@@ -206,7 +206,7 @@ async fn get_challenge(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let challenge: Challenge =
+    let challenge: ChallengeTemplate =
         sqlx::query_as("SELECT * FROM challenge_templates WHERE id = $1 AND status = 'published'")
             .bind(id)
             .fetch_optional(&state.db)
@@ -222,7 +222,7 @@ async fn start_challenge(
     auth: AuthUser,
     Path(challenge_id): Path<Uuid>,
 ) -> Result<impl IntoResponse, AppError> {
-    let challenge: Challenge =
+    let challenge: ChallengeTemplate =
         sqlx::query_as("SELECT * FROM challenge_templates WHERE id = $1 AND status = 'published'")
             .bind(challenge_id)
             .fetch_optional(&state.db)
@@ -355,7 +355,7 @@ async fn submit_challenge(
         "No in-progress submission found. Start the challenge first.".to_string(),
     ))?;
 
-    let challenge: Challenge = sqlx::query_as("SELECT * FROM challenge_templates WHERE id = $1")
+    let challenge: ChallengeTemplate = sqlx::query_as("SELECT * FROM challenge_templates WHERE id = $1")
         .bind(challenge_id)
         .fetch_one(&state.db)
         .await?;
@@ -723,7 +723,7 @@ async fn my_submissions(
 /// Returns (status, fragments_earned, stdout, stderr)
 async fn evaluate_submission(
     state: &AppState,
-    challenge: &Challenge,
+    challenge: &ChallengeTemplate,
     code: &str,
     language: Option<&str>,
 ) -> Result<(String, i32, Option<String>, Option<String>), AppError> {
@@ -797,7 +797,7 @@ async fn evaluate_submission(
 
 /// Fallback when Judge0 is unavailable or for non-code domains
 fn evaluate_basic(
-    challenge: &Challenge,
+    challenge: &ChallengeTemplate,
     code: &str,
 ) -> Result<(String, i32, Option<String>, Option<String>), AppError> {
     if challenge.is_onboarding && challenge.skill_domain == "code" {
@@ -859,7 +859,7 @@ fn evaluate_basic(
     ))
 }
 
-fn failure_fragments(challenge: &Challenge) -> i32 {
+fn failure_fragments(challenge: &ChallengeTemplate) -> i32 {
     (challenge.reward_fragments / 5).max(1)
 }
 

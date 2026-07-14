@@ -10,7 +10,7 @@ use uuid::Uuid;
 use crate::AppState;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
-use crate::models::Challenge;
+use crate::models::ChallengeTemplate;
 
 pub fn challenge_team_routes() -> Router<AppState> {
     Router::new()
@@ -116,7 +116,7 @@ async fn create_team(
     Json(body): Json<CreateTeamRequest>,
 ) -> Result<impl IntoResponse, AppError> {
     // Verify challenge exists and is team mode
-    let challenge: Challenge =
+    let challenge: ChallengeTemplate =
         sqlx::query_as("SELECT * FROM challenge_templates WHERE id = $1 AND status = 'published'")
             .bind(challenge_id)
             .fetch_optional(&state.db)
@@ -324,7 +324,7 @@ async fn submit_team(
         ));
     }
 
-    let challenge: Challenge = sqlx::query_as("SELECT * FROM challenge_templates WHERE id = $1")
+    let challenge: ChallengeTemplate = sqlx::query_as("SELECT * FROM challenge_templates WHERE id = $1")
         .bind(challenge_id)
         .fetch_one(&state.db)
         .await?;

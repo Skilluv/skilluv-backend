@@ -13,7 +13,7 @@ mod user;
 mod user_skill;
 
 pub use badge::{Badge, BadgeWithEarnedAt, UserBadge};
-pub use challenge::{Challenge, ChallengeSubmission, SkillFragment};
+pub use challenge::{ChallengeTemplate, ChallengeSubmission, SkillFragment};
 pub use contact::{Conversation, InterestRequest, Message};
 pub use deliverable::{
     AiAssistanceLevel, Deliverable, VerifiableBy, VerificationStatus,

@@ -10,7 +10,7 @@ use uuid::Uuid;
 use crate::AppState;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
-use crate::models::Challenge;
+use crate::models::ChallengeTemplate;
 use crate::services::LeaderboardService;
 
 pub fn admin_routes() -> Router<AppState> {
@@ -238,7 +238,7 @@ async fn create_challenge(
     let is_onboarding = body.is_onboarding.unwrap_or(false);
     let is_training = body.is_training.unwrap_or(is_onboarding);
 
-    let challenge: Challenge = sqlx::query_as(
+    let challenge: ChallengeTemplate = sqlx::query_as(
         r#"
         INSERT INTO challenge_templates (
             title, description, instructions, skill_domain, difficulty,
@@ -284,7 +284,7 @@ async fn list_all_challenges(
 ) -> Result<Json<serde_json::Value>, AppError> {
     require_admin(&state, &auth).await?;
 
-    let challenges: Vec<Challenge> =
+    let challenges: Vec<ChallengeTemplate> =
         sqlx::query_as("SELECT * FROM challenge_templates ORDER BY created_at DESC")
             .fetch_all(&state.db)
             .await?;
@@ -306,7 +306,7 @@ async fn update_challenge(
 ) -> Result<Json<serde_json::Value>, AppError> {
     require_admin(&state, &auth).await?;
 
-    let existing: Challenge = sqlx::query_as("SELECT * FROM challenge_templates WHERE id = $1")
+    let existing: ChallengeTemplate = sqlx::query_as("SELECT * FROM challenge_templates WHERE id = $1")
         .bind(id)
         .fetch_optional(&state.db)
         .await?
@@ -317,7 +317,7 @@ async fn update_challenge(
         None => existing.ai_policy.clone(),
     };
 
-    let challenge: Challenge = sqlx::query_as(
+    let challenge: ChallengeTemplate = sqlx::query_as(
         r#"
         UPDATE challenge_templates SET
             title = $1, description = $2, instructions = $3, skill_domain = $4,
@@ -396,7 +396,7 @@ async fn publish_challenge(
         ));
     }
 
-    let challenge: Challenge = sqlx::query_as(
+    let challenge: ChallengeTemplate = sqlx::query_as(
         "UPDATE challenge_templates SET status = 'published', updated_at = NOW() WHERE id = $1 RETURNING *",
     )
     .bind(id)
@@ -414,7 +414,7 @@ async fn archive_challenge(
 ) -> Result<Json<serde_json::Value>, AppError> {
     require_admin(&state, &auth).await?;
 
-    let challenge: Challenge = sqlx::query_as(
+    let challenge: ChallengeTemplate = sqlx::query_as(
         "UPDATE challenge_templates SET status = 'archived', updated_at = NOW() WHERE id = $1 RETURNING *",
     )
     .bind(id)

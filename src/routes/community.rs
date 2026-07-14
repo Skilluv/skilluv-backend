@@ -10,7 +10,7 @@ use uuid::Uuid;
 use crate::AppState;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
-use crate::models::Challenge;
+use crate::models::ChallengeTemplate;
 
 pub fn community_routes() -> Router<AppState> {
     Router::new()
@@ -103,7 +103,7 @@ async fn create_community_challenge(
     // Community challenges sont user-generated, sans project_id : on les marque
     // is_training=TRUE pour satisfaire la règle dure #1 (contrainte
     // challenges_project_or_training, migration 0061) au moment du publish.
-    let challenge: Challenge = sqlx::query_as(
+    let challenge: ChallengeTemplate = sqlx::query_as(
         r#"
         INSERT INTO challenge_templates (
             title, description, instructions, skill_domain, difficulty,
@@ -160,7 +160,7 @@ async fn my_challenges(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let challenges: Vec<Challenge> = sqlx::query_as(
+    let challenges: Vec<ChallengeTemplate> = sqlx::query_as(
         "SELECT * FROM challenge_templates WHERE created_by = $1 AND is_community = TRUE ORDER BY created_at DESC",
     )
     .bind(auth.user_id)
@@ -177,7 +177,7 @@ async fn update_community_challenge(
     Path(id): Path<Uuid>,
     Json(body): Json<UpdateCommunityChallenge>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let existing: Challenge = sqlx::query_as(
+    let existing: ChallengeTemplate = sqlx::query_as(
         "SELECT * FROM challenge_templates WHERE id = $1 AND created_by = $2 AND is_community = TRUE",
     )
     .bind(id)
@@ -202,7 +202,7 @@ async fn update_community_challenge(
         existing.community_status.as_deref().unwrap_or("draft")
     };
 
-    let challenge: Challenge = sqlx::query_as(
+    let challenge: ChallengeTemplate = sqlx::query_as(
         r#"
         UPDATE challenge_templates SET
             title = COALESCE($1, title),
@@ -304,7 +304,7 @@ async fn popular_challenges(
     let per_page = query.per_page.unwrap_or(20).clamp(1, 50);
     let offset = (page - 1) * per_page;
 
-    let challenges: Vec<Challenge> = sqlx::query_as(
+    let challenges: Vec<ChallengeTemplate> = sqlx::query_as(
         "SELECT * FROM challenge_templates WHERE status = 'published' AND is_community = TRUE ORDER BY vote_count DESC, created_at DESC LIMIT $1 OFFSET $2",
     )
     .bind(per_page)

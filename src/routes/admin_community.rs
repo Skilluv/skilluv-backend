@@ -8,7 +8,7 @@ use uuid::Uuid;
 use crate::AppState;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
-use crate::models::Challenge;
+use crate::models::ChallengeTemplate;
 use crate::services::NotificationService;
 
 pub fn admin_community_routes() -> Router<AppState> {
@@ -51,7 +51,7 @@ async fn pending_review(
 ) -> Result<Json<serde_json::Value>, AppError> {
     require_admin(&state, &auth).await?;
 
-    let challenges: Vec<Challenge> = sqlx::query_as(
+    let challenges: Vec<ChallengeTemplate> = sqlx::query_as(
         "SELECT * FROM challenge_templates WHERE is_community = TRUE AND community_status = 'review' ORDER BY created_at ASC",
     )
     .fetch_all(&state.db)
@@ -98,7 +98,7 @@ async fn approve_challenge(
 ) -> Result<Json<serde_json::Value>, AppError> {
     require_admin(&state, &auth).await?;
 
-    let challenge: Challenge = sqlx::query_as(
+    let challenge: ChallengeTemplate = sqlx::query_as(
         r#"
         UPDATE challenge_templates SET
             community_status = 'approved',
@@ -145,7 +145,7 @@ async fn reject_challenge(
 ) -> Result<Json<serde_json::Value>, AppError> {
     require_admin(&state, &auth).await?;
 
-    let challenge: Challenge = sqlx::query_as(
+    let challenge: ChallengeTemplate = sqlx::query_as(
         r#"
         UPDATE challenge_templates SET
             community_status = 'rejected',

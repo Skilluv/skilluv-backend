@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use crate::AppState;
 use crate::errors::AppError;
-use crate::models::Challenge;
+use crate::models::ChallengeTemplate;
 
 pub fn challenge_tag_routes() -> Router<AppState> {
     Router::new()
@@ -72,7 +72,7 @@ async fn list_categories(
 async fn featured_challenges(
     State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let challenges: Vec<Challenge> = sqlx::query_as(
+    let challenges: Vec<ChallengeTemplate> = sqlx::query_as(
         "SELECT * FROM challenge_templates WHERE featured = TRUE AND status = 'published' ORDER BY vote_count DESC, created_at DESC LIMIT 20",
     )
     .fetch_all(&state.db)

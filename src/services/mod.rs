@@ -35,6 +35,7 @@ pub mod skills;
 pub mod fingerprint;
 pub mod llm_verifier;
 pub mod orientations_playlist;
+pub mod badge_engine;
 pub mod mobile_money;
 pub mod mobile_push;
 pub mod plagiarism;

@@ -56,6 +56,20 @@ impl NotificationService {
         )
         .await;
 
+        // P15.1 : push mobile best-effort (FCM/APNS). Ne fail pas la notif si
+        // les push échouent — la ligne DB + WS reste la source de vérité.
+        let msg = crate::services::mobile_push::MobilePushMessage {
+            title,
+            body: body.unwrap_or(""),
+            data: data.clone(),
+        };
+        if let Err(e) = crate::services::mobile_push::push_to_user_mobile(db, user_id, msg).await {
+            tracing::debug!(
+                error = %e, user_id = %user_id,
+                "P15.1 mobile push best-effort failed (notif still persisted)"
+            );
+        }
+
         Ok(notification_id)
     }
 

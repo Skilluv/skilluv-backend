@@ -34,6 +34,7 @@ pub mod session;
 pub mod skills;
 pub mod fingerprint;
 pub mod mobile_money;
+pub mod mobile_push;
 pub mod plagiarism;
 pub mod slice_ingestion;
 pub mod slices;

@@ -84,7 +84,7 @@ pub use slice_ingestion::{
 };
 pub use slices::{ListFilter as SlicesListFilter, SlicesService};
 pub use stewards::{ProjectSteward, StewardsService};
-pub use team_roles::{CreateSlotParams, TeamRolesService};
+pub use team_roles::{CreateSlotParams, MarketplaceSlot, TeamRolesService};
 pub use tracks::{EligibilityCheck, Track, TrackProgress, TracksService, UserTrack};
 pub use webauthn::WebauthnService;
 pub use storage::StorageService;

@@ -15,6 +15,22 @@ use crate::models::TeamRoleSlot;
 
 pub struct TeamRolesService;
 
+/// P15.3 — Vue enrichie d'un slot pour le marketplace public.
+#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize)]
+pub struct MarketplaceSlot {
+    pub slot_id: Uuid,
+    pub role_slug: String,
+    pub role_display_name: Option<String>,
+    pub min_proficiency_level: i16,
+    pub required_skill_id: Option<Uuid>,
+    pub required_skill_slug: Option<String>,
+    pub team_id: Uuid,
+    pub team_name: String,
+    pub challenge_id: Uuid,
+    pub challenge_title: String,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
 /// Paramètres de création d'un slot. `required_skill_slug` optionnel — si set,
 /// on résout le skill_id via `skill_nodes.slug`.
 #[derive(Debug, Clone)]
@@ -206,6 +222,136 @@ impl TeamRolesService {
             AppError::Validation("You are not the current holder of this slot".into())
         })?;
         Ok(slot)
+    }
+
+    /// P15.3 — Marketplace : liste globale des slots ouverts, enrichis avec
+    /// team.name + challenge_template.title, filtrable par rôle et skill.
+    pub async fn marketplace_open_slots(
+        db: &PgPool,
+        role_filter: Option<&str>,
+        skill_slug_filter: Option<&str>,
+        limit: i64,
+    ) -> Result<Vec<MarketplaceSlot>, AppError> {
+        let rows = sqlx::query_as::<_, MarketplaceSlot>(
+            r#"
+            SELECT
+                s.id                        AS slot_id,
+                s.role_slug                 AS role_slug,
+                s.role_display_name         AS role_display_name,
+                s.min_proficiency_level     AS min_proficiency_level,
+                s.required_skill_id         AS required_skill_id,
+                sn.slug                     AS required_skill_slug,
+                t.id                        AS team_id,
+                t.name                      AS team_name,
+                ct.id                       AS challenge_id,
+                ct.title                    AS challenge_title,
+                s.created_at                AS created_at
+            FROM team_role_slots s
+            JOIN challenge_teams t   ON t.id = s.team_id
+            JOIN challenge_templates ct ON ct.id = t.challenge_id
+            LEFT JOIN skill_nodes sn ON sn.id = s.required_skill_id
+            WHERE s.filled_by_user_id IS NULL
+              AND ($1::VARCHAR IS NULL OR s.role_slug = $1)
+              AND ($2::VARCHAR IS NULL OR sn.slug = $2)
+            ORDER BY s.created_at DESC
+            LIMIT $3
+            "#,
+        )
+        .bind(role_filter)
+        .bind(skill_slug_filter)
+        .bind(limit.clamp(1, 100))
+        .fetch_all(db)
+        .await?;
+        Ok(rows)
+    }
+
+    /// P15.3 — Notifie les users éligibles (skill + proficiency match) qu'un
+    /// slot vient d'être ouvert. Insère une ligne dans `notifications` par user.
+    /// Best-effort : push mobile via `push_to_user_mobile` (silencieux si absent).
+    /// Retourne le nombre de users notifiés.
+    pub async fn notify_eligible_users_for_slot(
+        db: &PgPool,
+        slot_id: Uuid,
+    ) -> Result<usize, AppError> {
+        let slot: Option<TeamRoleSlot> = sqlx::query_as::<_, TeamRoleSlot>(
+            "SELECT * FROM team_role_slots WHERE id = $1",
+        )
+        .bind(slot_id)
+        .fetch_optional(db)
+        .await?;
+        let Some(slot) = slot else {
+            return Ok(0);
+        };
+        let Some(required_skill_id) = slot.required_skill_id else {
+            // Pas de skill requis → pas de targeting précis, on ne spamme pas.
+            return Ok(0);
+        };
+
+        let team_row: Option<(String, Uuid)> = sqlx::query_as(
+            "SELECT t.name, t.challenge_id
+             FROM challenge_teams t WHERE t.id = $1",
+        )
+        .bind(slot.team_id)
+        .fetch_optional(db)
+        .await?;
+        let (team_name, challenge_id) =
+            team_row.unwrap_or_else(|| ("(team)".into(), Uuid::nil()));
+        let challenge_title: String = sqlx::query_scalar(
+            "SELECT title FROM challenge_templates WHERE id = $1",
+        )
+        .bind(challenge_id)
+        .fetch_optional(db)
+        .await?
+        .unwrap_or_else(|| "(challenge)".into());
+
+        let user_ids: Vec<Uuid> = sqlx::query_scalar(
+            "SELECT user_id FROM user_skills
+             WHERE skill_id = $1 AND proficiency_level >= $2
+             LIMIT 500",
+        )
+        .bind(required_skill_id)
+        .bind(slot.min_proficiency_level)
+        .fetch_all(db)
+        .await?;
+
+        let title = format!("New team slot: {}", slot.role_slug);
+        let body = format!(
+            "\"{team_name}\" is looking for a {} on challenge {challenge_title}",
+            slot.role_display_name.clone().unwrap_or_else(|| slot.role_slug.clone())
+        );
+        let data = serde_json::json!({
+            "kind": "team_slot_open",
+            "slot_id": slot.id,
+            "team_id": slot.team_id,
+            "role_slug": slot.role_slug,
+        });
+
+        let mut notified = 0usize;
+        for uid in &user_ids {
+            let inserted = sqlx::query(
+                "INSERT INTO notifications (user_id, notification_type, title, body, data)
+                 VALUES ($1, 'team_slot_open', $2, $3, $4)",
+            )
+            .bind(uid)
+            .bind(&title)
+            .bind(&body)
+            .bind(&data)
+            .execute(db)
+            .await;
+            if inserted.is_ok() {
+                notified += 1;
+                let msg = crate::services::mobile_push::MobilePushMessage {
+                    title: &title,
+                    body: &body,
+                    data: Some(data.clone()),
+                };
+                let _ = crate::services::mobile_push::push_to_user_mobile(db, *uid, msg).await;
+            }
+        }
+
+        metrics::counter!("skilluv_team_slot_notifications_total")
+            .increment(notified as u64);
+        Ok(notified)
     }
 
     /// Delete un slot vide (nettoyage par le créateur de la team).

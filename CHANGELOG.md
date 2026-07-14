@@ -15,6 +15,52 @@ address KYC full, live AI wiring in prod, and RLS enforcement.
 
 ### Added
 
+- **P16.5** — Onboarding playlist per orientation: `GET
+  /api/users/me/orientations/{slug}/playlist` returns 3 training
+  challenges (in the orientation's primary+secondary domains, not
+  already verified by the user) + up to 5 open team-role-slots whose
+  `required_skill_id` matches an orientation core skill (excluding the
+  user's own teams). Data-driven via
+  `services::orientations_playlist::playlist_for`.
+- **P16.4** — Recruiter search v3 (`routes/talent_search_v3.rs`):
+  `GET /api/talents/search/v3?orientation=X&skills=Y,Z&mode=active&only_primary=true&min_proficiency=3&working_language=fr`.
+  Joins `user_orientations` + `user_skills` matched via slugs; sorts by
+  cumulative weighted_proven_count on matched skills + primary + active.
+  Excludes `mode=learning` by default (no aspirational-only pollution);
+  `mode=both` opts them back in for internships/junior-hiring flows.
+  Ended orientations always excluded.
+- **P16.3** — Orientations routes (`routes/orientations.rs`):
+  `GET /api/orientations` (paginated + domain/tag filters + archived
+  toggle), `GET /api/orientations/{slug}` (detail with joined recommended
+  skills), `GET/POST /api/users/me/orientations`, `PATCH/DELETE
+  /api/users/me/orientations/{slug}`. Enforces app-level cap of 3 active
+  orientations, auto-promotes the first registered to primary, ON
+  CONFLICT DO UPDATE re-activates a previously ended orientation. DELETE
+  historises via `ended_at` (never deletes rows — historical value for
+  reconversion profiles).
+- **P16.2** — Migration 0089: `user_orientations` — the link between
+  each user and the orientations they claim. Columns: `mode` ∈
+  {`learning`, `active`}, `is_primary` (partial UNIQUE per user
+  amongst non-ended rows), `started_at`, `ended_at` (history-preserving
+  soft-close), `working_languages TEXT[]`, `timezone`, `notes`. CHECK
+  `ended_at >= started_at`. Backfill from `users.skill_domain` with
+  deterministic mapping (code → dev-fullstack, design → web-designer,
+  game → game-programmer, security → pentester-web, ai →
+  prompt-engineer, ops → devops-engineer, soft_skills → tech-writer).
+  Mode is `active` if the user has any proven `user_skills` row, else
+  `learning`.
+- **P16.1** — Migration 0088: `orientations` (career-track catalog) +
+  `orientation_skill_map` (many-to-many with `is_core`, `is_recommended`,
+  `weight`). Seed of 31 curated orientations covering all 7 domains:
+  dev-frontend/backend/fullstack, mobile-android/ios/cross,
+  systems-programmer, smart-contract-dev, web/mobile/motion-designer,
+  illustrator, 3d-artist, game-artist-2d/3d, game-programmer/designer/
+  sound-engineer, data/ml/prompt-engineer, data-analyst,
+  devops-engineer, sre, cloud-architect, pentester-web/mobile,
+  soc-analyst, security-engineer, tech-writer, open-source-maintainer.
+  Slug regex + length constraint. Kept named `orientations` (not
+  `tracks`) to avoid collision with the pre-existing P3 `tracks` table
+  (curriculum sequences — different concept).
 - **P15.4** — Rust model rename: `models::Challenge` → `models::ChallengeTemplate`.
   The DB has held the `challenge_templates` table since P9.3 (mig 0075);
   the Rust struct now aligns with the target vocabulary. All routes

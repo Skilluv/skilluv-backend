@@ -7,13 +7,52 @@ and the project will follow semantic versioning once 1.0 is reached.
 
 ## [Unreleased]
 
-Target model + P10-P14 (teams, GitHub ingestion, discovery, real-money
-payouts, multi-tenancy + anti-fraud) all in place. Roadmap
-`docs/roadmap-p10-p15.md` covers what's left (P15 push mobiles +
-AI-native verifier + housekeeping).
+Target model + P10-P15 (teams multi-role, GitHub ingestion, discovery,
+real-money payouts, multi-tenancy + anti-fraud, mobile push +
+AI-native verifier + team marketplace) all in place. The P10-P15
+roadmap in `docs/roadmap-p10-p15.md` is closed; next iteration will
+address KYC full, live AI wiring in prod, and RLS enforcement.
 
 ### Added
 
+- **P15.4** — Rust model rename: `models::Challenge` → `models::ChallengeTemplate`.
+  The DB has held the `challenge_templates` table since P9.3 (mig 0075);
+  the Rust struct now aligns with the target vocabulary. All routes
+  (`admin`, `admin_community`, `challenges`, `challenge_tags`,
+  `challenge_teams`, `community`) updated. Error message strings and
+  test seed labels intentionally preserved.
+- **P15.3** — Team marketplace: `GET /api/teams/marketplace?role=&skill=&limit=`
+  returns open `team_role_slots` enriched with team name + challenge
+  title + required skill slug. Slot creation now fires an async
+  `TeamRolesService::notify_eligible_users_for_slot`: queries
+  `user_skills` matching the slot's `required_skill_id` at
+  `proficiency_level >= min_proficiency_level`, inserts one
+  `notifications` row per user (type `team_slot_open`), and pushes
+  via mobile FCM/APNS best-effort. Slots without a `required_skill_id`
+  do not broadcast (anti-spam by design).
+- **P15.2** — AI-native challenge verifier: migration 0087 adds
+  `'llm_evaluation'` to `deliverables.verifiable_by` CHECK and
+  `challenge_templates.evaluation_rubric JSONB` (+ GIN index).
+  `services/llm_verifier.rs` wraps the existing `AiClient::review_code`
+  gRPC call to `skilluv-ia` (Python), normalizes `quality_score` to
+  `[0,1]`, auto-verifies at ≥ 0.7 else routes to `pending_manual_review`
+  with the full LLM report stored under `verification_signal.llm_verifier`.
+  Fallback when `AiClient` is None marks the deliverable
+  `pending_manual_review` with reason `ai_client_not_connected`. Admin
+  endpoint `POST /api/admin/fraud/llm-evaluate/{id}` triggers evaluation.
+  **No AI model is retrained here — Rust delegates to the existing
+  `skilluv-ia` service per architecture rule.**
+- **P15.1** — Mobile push: migration 0086 adds
+  `user_push_tokens(user_id, platform 'fcm'|'apns', token, device_id,
+  last_seen_at)` UNIQUE(user_id, device_id). `services/mobile_push.rs`
+  ships `Platform` enum, `register_token`, `revoke_token`,
+  `purge_stale`, `list_tokens_for_user`, `MobilePushProvider` trait
+  with `FcmProvider` + `ApnsProvider` stubs (gated on `FCM_SERVER_KEY` /
+  `APNS_KEY_ID`), and `push_to_user_mobile`. Routes
+  `POST /users/me/push-tokens/register`, `DELETE /users/me/push-tokens/{device_id}`,
+  `GET /users/me/push-tokens`. `NotificationService::send` now
+  best-effort pushes mobile after WS. Web VAPID push remains
+  untouched.
 - **P14.5** — `routes/admin_fraud.rs` : `GET /api/admin/fraud/queue`,
   `POST /admin/fraud/deliverables/{id}/mark-valid|revoke`, `POST
   /admin/fraud/users/{id}/mark-valid`, `POST /admin/fraud/scan-deliverable/{id}`,

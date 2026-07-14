@@ -115,6 +115,7 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::webauthn_routes())
         .nest("/api", routes::push_routes())
         .nest("/api", routes::admin_dashboard_routes())
+        .nest("/api", routes::admin_fraud_routes())
         // Phase 5
         .nest("/api", routes::bounty_routes())
         .nest("/api", routes::certification_routes())

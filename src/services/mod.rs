@@ -33,6 +33,7 @@ pub mod seasons;
 pub mod session;
 pub mod skills;
 pub mod fingerprint;
+pub mod llm_verifier;
 pub mod mobile_money;
 pub mod mobile_push;
 pub mod plagiarism;

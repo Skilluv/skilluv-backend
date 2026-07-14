@@ -38,6 +38,10 @@ pub fn admin_fraud_routes() -> Router<AppState> {
             "/admin/fraud/detect-multi-accounts",
             post(detect_multi_accounts_endpoint),
         )
+        .route(
+            "/admin/fraud/llm-evaluate/{id}",
+            post(llm_evaluate_endpoint),
+        )
 }
 
 fn build_response(data: Value) -> Value {
@@ -253,4 +257,23 @@ async fn detect_multi_accounts_endpoint(
         "users_flagged": total_users,
         "groups": groups,
     }))))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// POST /admin/fraud/llm-evaluate/{id} — P15.2 déclenche évaluation LLM
+// ═══════════════════════════════════════════════════════════════════
+
+async fn llm_evaluate_endpoint(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<Value>, AppError> {
+    require_admin(&auth)?;
+    let outcome = crate::services::llm_verifier::evaluate_deliverable(
+        &state.db,
+        state.ai.as_deref(),
+        id,
+    )
+    .await?;
+    Ok(Json(build_response(json!(outcome))))
 }

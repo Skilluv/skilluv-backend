@@ -7,12 +7,30 @@ and the project will follow semantic versioning once 1.0 is reached.
 
 ## [Unreleased]
 
-Target model + P10-P13 (teams, GitHub ingestion, discovery, real-money
-payouts) all in place. Roadmap `docs/roadmap-p10-p15.md` covers what's
-left (multi-tenancy, push).
+Target model + P10-P14 (teams, GitHub ingestion, discovery, real-money
+payouts, multi-tenancy + anti-fraud) all in place. Roadmap
+`docs/roadmap-p10-p15.md` covers what's left (P15 push mobiles +
+AI-native verifier + housekeeping).
 
 ### Added
 
+- **P14.5** — `routes/admin_fraud.rs` : `GET /api/admin/fraud/queue`,
+  `POST /admin/fraud/deliverables/{id}/mark-valid|revoke`, `POST
+  /admin/fraud/users/{id}/mark-valid`, `POST /admin/fraud/scan-deliverable/{id}`,
+  `POST /admin/fraud/detect-multi-accounts`. Toutes require_admin.
+- **P14.4** — Migration 0085: `user_fingerprints` (SHA-256 hashed IP/UA/canvas)
+  + `users.suspected_multi_account`. `fingerprint::record/detect_multi_accounts/purge_old`.
+- **P14.3** — Migration 0084: `deliverable_embeddings(embedding FLOAT4[])` +
+  `deliverables.plagiarism_score/similar_to`. `plagiarism::cosine_similarity/
+  store_embedding/scan_deliverable/list_flagged` — détection anti-copie
+  cross-user par cosine sim > threshold sur fenêtre 30j tenant-scopée.
+- **P14.2** — Migration 0083: RLS POC — policies `tenant_isolation_deliverables`
+  + `tenant_isolation_attestations` + fonction `set_tenant_context(uuid)`.
+  RLS DISABLED par défaut (activation prod = créer role NOSUPERUSER NOBYPASSRLS).
+- **P14.1** — Migration 0082: `tenant_id` UUID sur 5 tables sensibles
+  (challenge_submissions, deliverables, user_skills, attestations, project_slices).
+  5 triggers BEFORE INSERT auto-tag depuis parent (challenge_templates,
+  users.primary_tenant_id, funded/created_by).
 - **P13.5** — `GET /api/users/me/wallet/statement.csv` (fiscal obligation
   + user self-audit). `WALLET_{DAILY,MONTHLY}_LIMIT_{EUR,XOF}` env vars
   enforce sliding-window withdraw limits.
@@ -315,6 +333,29 @@ Test fix (`5ee97ca`): P13.2 + P13.5 tests mutate process-global env vars
 `Mutex<()>` serializes them so parallel tokio tests don't race on env.
 
 Full parallel regression after P13: 375 tests pass, 0 real failure.
+
+### P14 — Multi-tenancy + anti-fraude (`b67dd25` → `a6c3b39`)
+
+Delivered in 5 sub-phases. Cross-tenant isolation en profondeur (5 tables
+sensibles taggées via triggers, RLS POC prête à activer en prod) + moteurs
+anti-fraude (plagiat cross-user via cosine similarity, détection multi-account
+via fingerprinting) + dashboard admin de triage.
+
+- **P14.1** (`b67dd25`) — Migration 0082 : `tenant_id` NULLABLE + FK sur 5
+  tables + backfill via JOIN + 5 triggers BEFORE INSERT auto-tag depuis
+  parent (respectent explicit tenant_id fourni).
+- **P14.2** (`906f7e7`) — Migration 0083 : policies + `set_tenant_context()`.
+  Tests documentent POC via SELECT explicite (rôle skilluv dev = superuser
+  bypass RLS).
+- **P14.3** (`b1accde`) — Migration 0084 : `deliverable_embeddings`
+  (FLOAT4[], pas de dep pgvector) + `plagiarism_score`. `cosine_similarity`
+  in-memory Rust, scan tenant-scoped fenêtre 30j.
+- **P14.4** (`7244ced`) — Migration 0085 : `user_fingerprints` SHA-256
+  (ip/ua/canvas) + `users.suspected_multi_account`. `detect_multi_accounts`
+  GROUP BY (ip,ua) HAVING count >= min flag les groupes.
+- **P14.5** (`a6c3b39`) — 6 endpoints admin fraud queue/mark-valid/revoke/scan/detect.
+
+Full parallel regression after P14: 396 tests pass, 0 real failure.
 
 ---
 

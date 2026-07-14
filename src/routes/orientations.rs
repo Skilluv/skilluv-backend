@@ -34,6 +34,10 @@ pub fn orientation_routes() -> Router<AppState> {
             "/users/me/orientations/{slug}",
             patch(update_orientation).delete(end_orientation),
         )
+        .route(
+            "/users/me/orientations/{slug}/playlist",
+            get(orientation_playlist),
+        )
 }
 
 fn wrap(data: Value) -> Value {
@@ -371,6 +375,24 @@ async fn update_orientation(
 // ═══════════════════════════════════════════════════════════════════
 // DELETE /users/me/orientations/{slug} — historise (ended_at = NOW)
 // ═══════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════
+// GET /users/me/orientations/{slug}/playlist — P16.5
+// ═══════════════════════════════════════════════════════════════════
+
+async fn orientation_playlist(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(slug): Path<String>,
+) -> Result<Json<Value>, AppError> {
+    let playlist = crate::services::orientations_playlist::playlist_for(
+        &state.db,
+        auth.user_id,
+        &slug,
+    )
+    .await?;
+    Ok(Json(wrap(json!(playlist))))
+}
 
 async fn end_orientation(
     State(state): State<AppState>,

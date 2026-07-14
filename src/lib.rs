@@ -112,6 +112,7 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::enterprise_pipeline_routes())
         .nest("/api", routes::enterprise_kyc_routes())
         .nest("/api", routes::talent_search_v2_routes())
+        .nest("/api", routes::talent_search_v3_routes())
         .nest("/api", routes::magic_link_routes())
         .nest("/api", routes::webauthn_routes())
         .nest("/api", routes::push_routes())

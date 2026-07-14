@@ -73,6 +73,7 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::admin_routes())
         .nest("/api", routes::gamification_routes())
         .nest("/api", routes::badge_routes())
+        .nest("/api", routes::event_routes())
         .nest("/api", routes::geo_routes())
         .nest("/api", routes::legal_routes())
         .nest("/api", routes::i18n_routes())

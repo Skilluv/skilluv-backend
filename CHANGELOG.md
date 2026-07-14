@@ -15,6 +15,58 @@ address KYC full, live AI wiring in prod, and RLS enforcement.
 
 ### Added
 
+- **P17.6** — Events + participation (`migrations/0093`,
+  `routes/events.rs`): `events(slug, name, starts_at, ends_at,
+  visual_theme JSONB, is_partner, is_active)` +
+  `user_event_participation(user_id, event_id, joined_at,
+  contribution_ref)`. Routes namespaced as `/badge-events` to avoid
+  collision with the pre-existing `/events` from tournaments. `GET
+  /api/badge-events` (active only), `POST
+  /api/badge-events/{slug}/join` (idempotent), `GET
+  /api/users/me/badge-events`. Wires up Skilluv Fest / Hacktoberfest /
+  seasons to eventually mint `event_stamp` badges via the P17.3 rules
+  engine.
+- **P17.5** — Badge API (`routes/badges.rs`): polymorphic `GET
+  /api/users/{id}/badges` returns the rank + skill_patches[] +
+  medals[] + seals_count + stamps_count + guild_crests[], with per-item
+  rarity and source_proofs_count. Revoked badges are excluded. Fallback
+  rank `apprenti` when the user has no `user_ranks` row (temporary
+  until the P18 auto-create trigger lands). `GET /api/badge-rules`
+  exposes the non-deprecated rules catalog for the frontend to render
+  "badges you can earn".
+- **P17.4** — Rank system (`migrations/0092`, `services/ranks.rs`):
+  `user_ranks(user_id, rank, achieved_at, previous_rank)` +
+  `user_rank_history`. `recompute_rank_for_user` derives one of
+  {apprenti, ranger, artisan, maitre, doyen} from verified deliverables
+  + received attestations + `users.role='mentor'`. Thresholds match the
+  BMAD UX spec (4 → 11+1 → 26+3 → 50+5+mentor). **Unidirectional**:
+  never demotes, transitions are audited in `user_rank_history` with a
+  reason.
+- **P17.3** — Rules engine (`services/badge_engine.rs`):
+  `recompute_badges_for_user(user_id)` iterates non-deprecated
+  `badge_rules`, interprets JSONB `conditions` (proof_types,
+  min_count, skill_tag, display_category), counts matching proofs from
+  `deliverables` verified + `attestations`. Auto-rarity from count (0-4
+  common, 5-14 rare, 15-49 epic, 50+ legendary) when the rule is on
+  `rarity='auto'`. Idempotent, revokes when conditions no longer met.
+  Deprecated rules never produce new awards.
+- **P17.2** — Display category (`migrations/0091`): added
+  `skill_nodes.display_category ∈ {craft, create, understand, operate,
+  share, meta}` aligned with the BMAD UX spec's 6 skill families.
+  Deterministic backfill: code → craft, design + game → create,
+  security + ops → operate, ai → understand, soft_skills → share. Meta
+  is admin-curated (open-source-governance, product-thinking,
+  growth-experimentation, strategy, community-building,
+  roadmap-planning).
+- **P17.1** — Proof Engine foundation (`migrations/0090`): new
+  `badge_rules(slug, output_type ∈ {skill_patch, rank, guild_crest,
+  challenge_seal, event_stamp, medal}, conditions JSONB, rarity,
+  admin_editable, deprecated_at)` + extends `user_badges` with
+  `rule_id`, `source_proofs UUID[]` (traceability), `rarity`,
+  `revoked_at`, `revoked_reason`. Migrated the 9 legacy badges
+  (streak/challenges/fragments) to `legacy_*` rules marked deprecated —
+  no more auto-awards for connection streaks or raw action counts;
+  those are now absorbed into the P17.4 rank system.
 - **P16.5** — Onboarding playlist per orientation: `GET
   /api/users/me/orientations/{slug}/playlist` returns 3 training
   challenges (in the orientation's primary+secondary domains, not

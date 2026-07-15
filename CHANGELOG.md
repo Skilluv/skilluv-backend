@@ -15,6 +15,36 @@ address KYC full, live AI wiring in prod, and RLS enforcement.
 
 ### Added
 
+- **P19.4** — Prometheus metrics on proof engine recompute:
+  `skilluv_capabilities_granted_total{capability}`,
+  `skilluv_badges_awarded_total{rule}`,
+  `skilluv_badges_revoked_total{rule}`,
+  `skilluv_ranks_promoted_total{rank}`,
+  `skilluv_proof_hook_recompute_total{result=ok|partial}`,
+  `skilluv_proof_sweep_users_processed_total`. Unblocks a Grafana
+  "engine health" dashboard.
+- **P19.3** — `start_proof_sweep_task` background job wired in
+  `main.rs`: weekly tokio interval (`SKILLUV_PROOF_SWEEP_INTERVAL_SECS`,
+  default 604 800) that recomputes proof engines for every user with
+  activity in the last N days (`SKILLUV_PROOF_SWEEP_WINDOW_DAYS`,
+  default 30). Env-gated via `SKILLUV_PROOF_SWEEP_ENABLED=1` (off in
+  dev). Safety net catching threshold changes, new rules, or failed
+  inline hooks.
+- **P19.2** — Inline `proof_hooks::recompute_all_for_user` calls (async
+  `tokio::spawn`, best-effort) wired into the three proof-producing
+  paths: `ReviewsService::submit_verdict` on `Verdict::Approve`,
+  `DeliverablesService::create_from_pr_merged` when outcome is
+  `Verified`, and `create_from_challenge_submission` on new insert.
+  End-to-end test proves that 4 review approvals promote the author to
+  Ranger within ~800 ms of the last verdict.
+- **P19.1** — `services/proof_hooks.rs`:
+  `recompute_all_for_user(db, user_id) -> ProofRecomputeReport` runs
+  capabilities → badges → rank in sequence (order matters: Doyen
+  depends on the mentor capability from P18.5). Per-engine
+  best-effort with `tracing::warn` on failure, aggregated in
+  `errors[]` for observability. Companion `sweep_active_users(days)`
+  recomputes every user with a `deliverable.verified_at` or
+  `attestation.issued_at` inside the window.
 - **P18.5** — `services/ranks.rs` now reads mentor status from
   `user_capabilities` (canonical source) with a fallback on
   `users.role='mentor'` for pre-backfill DBs. The P17.4 hardcoded

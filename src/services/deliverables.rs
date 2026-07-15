@@ -132,6 +132,21 @@ impl DeliverablesService {
         };
 
         tx.commit().await?;
+
+        // P19.2 — Best-effort recompute proof engines si le deliverable est
+        // devenu verified via cet event (author_match). Le hook est async pour
+        // ne pas bloquer le webhook GitHub.
+        if matches!(outcome, PrMergedOutcome::Verified { .. }) {
+            let db_clone = db.clone();
+            tokio::spawn(async move {
+                let _ = crate::services::proof_hooks::recompute_all_for_user(
+                    &db_clone,
+                    author_user_id,
+                )
+                .await;
+            });
+        }
+
         Ok(outcome)
     }
 
@@ -605,6 +620,11 @@ impl DeliverablesService {
         .await?;
 
         if let Some(id) = inserted {
+            // P19.2 — Best-effort recompute proof engines pour ce user.
+            let db_clone = db.clone();
+            tokio::spawn(async move {
+                let _ = crate::services::proof_hooks::recompute_all_for_user(&db_clone, user_id).await;
+            });
             return Ok(id);
         }
 

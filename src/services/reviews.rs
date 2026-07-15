@@ -226,6 +226,21 @@ impl ReviewsService {
 
         tx.commit().await?;
 
+        // P19.2 — Best-effort recompute des badges + rank + capabilities
+        // pour l'auteur du deliverable dès qu'un verdict 'approve' passe.
+        // Spawn async pour ne pas bloquer la réponse HTTP ; erreurs loggées
+        // via tracing dans proof_hooks.
+        if params.verdict == Verdict::Approve {
+            let db_clone = db.clone();
+            tokio::spawn(async move {
+                let _ = crate::services::proof_hooks::recompute_all_for_user(
+                    &db_clone,
+                    deliverable_user_id,
+                )
+                .await;
+            });
+        }
+
         Ok(SubmitOutcome {
             review_id,
             new_deliverable_status: new_status.to_string(),

@@ -125,7 +125,21 @@ async fn issue_compagnonnage(
         linked_skill_node_ids: body.linked_skill_node_ids,
     };
 
+    let recipient_id = params.user_id;
     let id = AttestationsService::issue_compagnonnage(&state.db, auth.user_id, params).await?;
+
+    // P20.1 — Best-effort recompute proof engines pour le récipiendaire.
+    // Attestation reçue peut débloquer capability mentor (5 attestations) et
+    // les rangs artisan/maitre/doyen (seuils attestations reçues).
+    let db_clone = state.db.clone();
+    tokio::spawn(async move {
+        let _ = crate::services::proof_hooks::recompute_all_for_user(
+            &db_clone,
+            recipient_id,
+        )
+        .await;
+    });
+
     Ok(Json(build_response(json!({
         "attestation_id": id,
         "message": "Compagnonnage attestation issued."

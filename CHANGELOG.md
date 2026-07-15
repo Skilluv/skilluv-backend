@@ -15,6 +15,32 @@ address KYC full, live AI wiring in prod, and RLS enforcement.
 
 ### Added
 
+- **P22.1** — RLS enforcement scaffolding: `services/rls.rs` exposes
+  `set_tenant_context_on_tx(tx, tenant_id)` — no-op unless
+  `SKILLUV_RLS_ENFORCED=1`. Companion doc
+  `docs/RLS-ENFORCEMENT.md` walks through the production activation
+  (create `skilluv_app` NOSUPERUSER NOBYPASSRLS role, wrap
+  tenant-scoped code paths in transactions, run cross-tenant leak
+  tests). Recommendation: only turn on when a compliance-driven
+  enterprise customer requires it.
+- **P21.1** — Unified `require_admin` across all 5 admin route
+  modules (admin, admin_community, admin_moderation, admin_fraud,
+  seasons) to delegate to
+  `middleware::capabilities::require_capability("admin")`. Net −34
+  lines of duplicated `SELECT role FROM users WHERE id = $1` logic.
+  admin_fraud went sync → async (7 call sites updated). Test helper
+  `register_admin` grants both `users.role='admin'` and the
+  `admin` capability to keep pre-P18 tests green.
+- **P20.2** — `routes/mentorship.rs::mark_completed` now spawns a
+  best-effort `proof_hooks::recompute_all_for_user` for the mentor
+  after incrementing `mentor_profiles.total_sessions`. Third
+  completed session auto-grants the `mentor` capability.
+- **P20.1** — `routes/attestations.rs::issue_compagnonnage` spawns a
+  best-effort recompute for the recipient. gesture/skill attestation
+  issuance was already covered transitively by the P19.2 hook in
+  `ReviewsService::submit_verdict` (attestations are inserted
+  in-transaction via `check_and_issue_for_skill_levelup`, so the
+  post-commit recompute already sees them).
 - **P19.4** — Prometheus metrics on proof engine recompute:
   `skilluv_capabilities_granted_total{capability}`,
   `skilluv_badges_awarded_total{rule}`,

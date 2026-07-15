@@ -15,6 +15,29 @@ address KYC full, live AI wiring in prod, and RLS enforcement.
 
 ### Added
 
+- **P25.3** — `middleware::capabilities::require_any_capability(db,
+  user_id, &[caps])` — passes if any listed capability is active (not
+  revoked, not expired). Empty list rejects (defense in depth). New
+  doc `docs/MODERATION-vs-ADMIN.md` maps every capability to its
+  authorized front (`skilluv-frontend` vs `skilluv-admin`), lists what
+  moderators can NOT do, and shows wiring examples for
+  `require_any_capability` on shared moderation endpoints.
+- **P25.2** — `capabilities_engine` auto-promotes 3 community
+  moderator caps: `community_curator` at ≥3 published community
+  `challenge_templates` (co-granted with `issue_proposer`),
+  `forum_moderator` at ≥20 forum `posts` authored, and the umbrella
+  `community_moderator` auto-granted whenever any sub-cap
+  (`forum_moderator` / `plagiarism_reviewer` / `kyc_reviewer` /
+  `community_curator`) is active. `plagiarism_reviewer` and
+  `kyc_reviewer` remain manual-only (nomination by admin) — those
+  actions touch users' economic life so no threshold auto-promotion.
+- **P25.1** — Migration 0098 extends the `user_capabilities`
+  capability CHECK to include 5 new values: `community_moderator`
+  (umbrella), `forum_moderator`, `plagiarism_reviewer`,
+  `kyc_reviewer`, `community_curator`. These caps unlock inline
+  moderation UI on `skilluv-frontend` without ever granting access to
+  the `skilluv-admin` staff panel — `admin` remains a distinct
+  capability strictly reserved for Skilluv HQ staff.
 - **P24.3** — Enterprise type-specific config (`migrations/0097`,
   `routes/agency_clients.rs`): `enterprises.type_config JSONB
   NOT NULL DEFAULT '{}'` + GIN index. `GET/PATCH

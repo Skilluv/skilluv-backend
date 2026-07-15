@@ -51,6 +51,39 @@ pub async fn require_capability(
     Ok(())
 }
 
+/// P25.3 — Retourne Ok(()) si l'user a AU MOINS UNE des capabilities listées
+/// active. Utile pour les endpoints modération accessibles à plusieurs
+/// personas (ex: admin OU plagiarism_reviewer peuvent revoker un deliverable).
+pub async fn require_any_capability(
+    db: &PgPool,
+    user_id: Uuid,
+    capabilities: &[&str],
+) -> Result<(), AppError> {
+    if capabilities.is_empty() {
+        return Err(AppError::Forbidden);
+    }
+    let caps_vec: Vec<String> = capabilities.iter().map(|c| c.to_string()).collect();
+    let has: bool = sqlx::query_scalar(
+        r#"
+        SELECT EXISTS (
+            SELECT 1 FROM user_capabilities
+            WHERE user_id = $1
+              AND capability = ANY($2)
+              AND revoked_at IS NULL
+              AND (expires_at IS NULL OR expires_at > NOW())
+        )
+        "#,
+    )
+    .bind(user_id)
+    .bind(&caps_vec)
+    .fetch_one(db)
+    .await?;
+    if !has {
+        return Err(AppError::Forbidden);
+    }
+    Ok(())
+}
+
 /// Retourne toutes les capabilities actives d'un user (utile pour /me/capabilities).
 pub async fn list_active_capabilities(
     db: &PgPool,

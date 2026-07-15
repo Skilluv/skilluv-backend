@@ -26,6 +26,103 @@ pub fn agency_client_routes() -> Router<AppState> {
             "/enterprises/me/agency-clients/{id}",
             patch(update).delete(deactivate),
         )
+        // P24.3 — config JSONB par type
+        .route(
+            "/enterprises/me/type-config",
+            get(get_type_config).patch(patch_type_config),
+        )
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// P24.3 — GET / PATCH /enterprises/me/type-config
+// ═══════════════════════════════════════════════════════════════════
+
+/// Clés autorisées par type. Toute clé hors de cette allowlist est rejetée.
+fn allowed_keys_for(ent_type: &str) -> &'static [&'static str] {
+    match ent_type {
+        "staffing_agency" => &["commission_rate", "brand_white_label", "default_client_id"],
+        "remote_international" => &[
+            "eor_provider",
+            "preferred_currency",
+            "timezone_requirement",
+            "tax_withholding_country",
+        ],
+        _ => &[],
+    }
+}
+
+/// Résout l'enterprise active du user (tous types).
+async fn resolve_enterprise(
+    state: &AppState,
+    auth: &AuthUser,
+) -> Result<(Uuid, String), AppError> {
+    let ent: Option<(Uuid, String)> = sqlx::query_as(
+        r#"
+        SELECT e.id, e.enterprise_type
+        FROM enterprise_members em
+        JOIN enterprises e ON e.id = em.enterprise_id
+        WHERE em.user_id = $1
+        ORDER BY em.created_at DESC
+        LIMIT 1
+        "#,
+    )
+    .bind(auth.user_id)
+    .fetch_optional(&state.db)
+    .await?;
+    ent.ok_or(AppError::Forbidden)
+}
+
+async fn get_type_config(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Json<Value>, AppError> {
+    let (ent_id, ent_type) = resolve_enterprise(&state, &auth).await?;
+    let cfg: serde_json::Value = sqlx::query_scalar(
+        "SELECT type_config FROM enterprises WHERE id = $1",
+    )
+    .bind(ent_id)
+    .fetch_one(&state.db)
+    .await?;
+    Ok(Json(wrap(json!({
+        "enterprise_type": ent_type,
+        "type_config": cfg,
+        "allowed_keys": allowed_keys_for(&ent_type),
+    }))))
+}
+
+async fn patch_type_config(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Json(patch): Json<serde_json::Value>,
+) -> Result<Json<Value>, AppError> {
+    let (ent_id, ent_type) = resolve_enterprise(&state, &auth).await?;
+    let allowed = allowed_keys_for(&ent_type);
+    if allowed.is_empty() {
+        return Err(AppError::Validation(format!(
+            "enterprise_type '{ent_type}' has no configurable type_config keys"
+        )));
+    }
+    let patch_obj = patch.as_object().ok_or_else(|| {
+        AppError::Validation("body must be a JSON object".into())
+    })?;
+    for key in patch_obj.keys() {
+        if !allowed.contains(&key.as_str()) {
+            return Err(AppError::Validation(format!(
+                "key '{key}' not allowed for enterprise_type '{ent_type}' (allowed: {allowed:?})"
+            )));
+        }
+    }
+
+    // Merge : type_config = type_config || $patch (les nouvelles clés overwrite).
+    sqlx::query(
+        "UPDATE enterprises SET type_config = type_config || $2::jsonb, updated_at = NOW()
+         WHERE id = $1",
+    )
+    .bind(ent_id)
+    .bind(&patch)
+    .execute(&state.db)
+    .await?;
+    Ok(Json(wrap(json!({ "updated": true, "keys_set": patch_obj.keys().collect::<Vec<_>>() }))))
 }
 
 fn wrap(data: Value) -> Value {

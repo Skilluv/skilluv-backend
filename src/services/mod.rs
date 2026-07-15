@@ -38,6 +38,7 @@ pub mod orientations_playlist;
 pub mod badge_engine;
 pub mod ranks;
 pub mod capabilities_engine;
+pub mod proof_hooks;
 pub mod mobile_money;
 pub mod mobile_push;
 pub mod plagiarism;

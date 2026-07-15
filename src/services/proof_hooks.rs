@@ -83,11 +83,36 @@ pub async fn recompute_all_for_user(
         }
     };
 
+    // P19.4 — Metrics granulaires.
     metrics::counter!(
         "skilluv_proof_hook_recompute_total",
         "result" => if errors.is_empty() { "ok" } else { "partial" },
     )
     .increment(1);
+    for slug in &caps.granted {
+        metrics::counter!(
+            "skilluv_capabilities_granted_total",
+            "capability" => slug.clone(),
+        ).increment(1);
+    }
+    for slug in &badges.awarded {
+        metrics::counter!(
+            "skilluv_badges_awarded_total",
+            "rule" => slug.clone(),
+        ).increment(1);
+    }
+    for slug in &badges.revoked {
+        metrics::counter!(
+            "skilluv_badges_revoked_total",
+            "rule" => slug.clone(),
+        ).increment(1);
+    }
+    if rank_promoted {
+        metrics::counter!(
+            "skilluv_ranks_promoted_total",
+            "rank" => rank_new.clone(),
+        ).increment(1);
+    }
 
     Ok(ProofRecomputeReport {
         user_id,

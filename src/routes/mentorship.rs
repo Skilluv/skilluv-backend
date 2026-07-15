@@ -711,6 +711,15 @@ async fn mark_completed(
     .bind(mentor_id)
     .execute(&state.db)
     .await?;
+
+    // P20.2 — Best-effort recompute proof engines pour le mentor : la 3ᵉ
+    // session complétée peut débloquer la capability `mentor`
+    // (capabilities_engine seuil).
+    let db_clone = state.db.clone();
+    tokio::spawn(async move {
+        let _ = crate::services::proof_hooks::recompute_all_for_user(&db_clone, mentor_id).await;
+    });
+
     Ok(Json(build_response(json!({
         "completed": true,
         "stripe_transfer_id": transfer_id,

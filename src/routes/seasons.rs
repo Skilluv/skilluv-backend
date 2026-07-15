@@ -53,15 +53,9 @@ fn build_response(data: Value) -> Value {
     })
 }
 
+// P21.1 : délègue à user_capabilities (source de vérité canonique).
 async fn require_admin(state: &AppState, auth: &AuthUser) -> Result<(), AppError> {
-    let role: String = sqlx::query_scalar("SELECT role FROM users WHERE id = $1")
-        .bind(auth.user_id)
-        .fetch_one(&state.db)
-        .await?;
-    if role != "admin" {
-        return Err(AppError::Forbidden);
-    }
-    Ok(())
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await
 }
 
 // ═══════════════════════════════════════════════════════════════════

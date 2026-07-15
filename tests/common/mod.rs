@@ -283,6 +283,18 @@ impl TestApp {
             .await
             .expect("Failed to set admin role");
 
+        // P21.1 — require_admin lit désormais depuis user_capabilities.
+        // On grant explicitement la capability admin pour rester compatible.
+        sqlx::query(
+            "INSERT INTO user_capabilities (user_id, capability, granted_reason)
+             VALUES ($1::UUID, 'admin', 'test_setup')
+             ON CONFLICT DO NOTHING",
+        )
+        .bind(user_id)
+        .execute(&self.db)
+        .await
+        .expect("Failed to grant admin capability");
+
         // Re-login to get token with admin role
         self.login(username).await
     }

@@ -193,16 +193,11 @@ fn build_response(data: serde_json::Value) -> serde_json::Value {
     })
 }
 
+// P21.1 : délègue à la source de vérité canonique (user_capabilities).
+// Backfill 0094 garantit que tout users.role='admin' historique a la
+// capability. Fait fallback nul — plus de query users.role directe.
 async fn require_admin(state: &AppState, auth: &AuthUser) -> Result<(), AppError> {
-    let role: String = sqlx::query_scalar("SELECT role FROM users WHERE id = $1")
-        .bind(auth.user_id)
-        .fetch_one(&state.db)
-        .await?;
-
-    if role != "admin" {
-        return Err(AppError::Forbidden);
-    }
-    Ok(())
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await
 }
 
 // POST /api/admin/challenges

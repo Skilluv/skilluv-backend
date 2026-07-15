@@ -54,11 +54,11 @@ fn build_response(data: Value) -> Value {
     })
 }
 
-fn require_admin(auth: &AuthUser) -> Result<(), AppError> {
-    if auth.role != "admin" {
-        return Err(AppError::Forbidden);
-    }
-    Ok(())
+// P21.1 : délègue à user_capabilities (source de vérité canonique).
+// Note: signature devient async, tous les call sites `require_admin(&state, &auth).await?`
+// ont été mis à jour en `require_admin(&state, &auth).await?`.
+async fn require_admin(state: &AppState, auth: &AuthUser) -> Result<(), AppError> {
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -76,7 +76,7 @@ async fn fraud_queue(
     auth: AuthUser,
     Query(q): Query<QueueQuery>,
 ) -> Result<Json<Value>, AppError> {
-    require_admin(&auth)?;
+    require_admin(&state, &auth).await?;
 
     let threshold: BigDecimal = q
         .threshold
@@ -123,7 +123,7 @@ async fn mark_deliverable_valid(
     auth: AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Value>, AppError> {
-    require_admin(&auth)?;
+    require_admin(&state, &auth).await?;
     let res = sqlx::query(
         "UPDATE deliverables
          SET plagiarism_score = NULL,
@@ -156,7 +156,7 @@ async fn revoke_deliverable(
     Path(id): Path<Uuid>,
     Json(body): Json<RevokeBody>,
 ) -> Result<Json<Value>, AppError> {
-    require_admin(&auth)?;
+    require_admin(&state, &auth).await?;
     let res = sqlx::query(
         "UPDATE deliverables
          SET revoked_at = NOW(),
@@ -183,7 +183,7 @@ async fn mark_user_valid(
     auth: AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Value>, AppError> {
-    require_admin(&auth)?;
+    require_admin(&state, &auth).await?;
     let res = sqlx::query(
         "UPDATE users
          SET suspected_multi_account = FALSE,
@@ -215,7 +215,7 @@ async fn scan_deliverable_endpoint(
     Path(id): Path<Uuid>,
     Query(q): Query<ScanQuery>,
 ) -> Result<Json<Value>, AppError> {
-    require_admin(&auth)?;
+    require_admin(&state, &auth).await?;
     let threshold = q.threshold.unwrap_or(0.9);
     let window = q.window_days.unwrap_or(30);
     let res = plagiarism::scan_deliverable(&state.db, id, threshold, window).await?;
@@ -244,7 +244,7 @@ async fn detect_multi_accounts_endpoint(
     auth: AuthUser,
     Json(body): Json<DetectBody>,
 ) -> Result<Json<Value>, AppError> {
-    require_admin(&auth)?;
+    require_admin(&state, &auth).await?;
     let groups = fingerprint::detect_multi_accounts(
         &state.db,
         body.window_hours.unwrap_or(24),
@@ -268,7 +268,7 @@ async fn llm_evaluate_endpoint(
     auth: AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Value>, AppError> {
-    require_admin(&auth)?;
+    require_admin(&state, &auth).await?;
     let outcome = crate::services::llm_verifier::evaluate_deliverable(
         &state.db,
         state.ai.as_deref(),

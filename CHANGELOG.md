@@ -15,6 +15,29 @@ address KYC full, live AI wiring in prod, and RLS enforcement.
 
 ### Added
 
+- **P24.3** — Enterprise type-specific config (`migrations/0097`,
+  `routes/agency_clients.rs`): `enterprises.type_config JSONB
+  NOT NULL DEFAULT '{}'` + GIN index. `GET/PATCH
+  /api/enterprises/me/type-config` with per-type allowlist:
+  `staffing_agency` accepts `{commission_rate, brand_white_label,
+  default_client_id}`, `remote_international` accepts `{eor_provider,
+  preferred_currency, timezone_requirement, tax_withholding_country}`,
+  `direct_hire` accepts nothing. PATCH uses JSONB `||` merge to
+  preserve untouched keys.
+- **P24.2** — Staffing agency client book (`migrations/0096`,
+  `routes/agency_clients.rs`): `agency_clients(id, enterprise_id,
+  client_name, client_contact_email, notes, active)` with UNIQUE
+  (enterprise_id, client_name). PG trigger
+  `check_agency_client_enterprise_type` refuses inserts unless the
+  parent enterprise is `staffing_agency` (defense in depth). CRUD
+  routes at `/api/enterprises/me/agency-clients[/{id}]`.
+- **P24.1** — Enterprise types (`migrations/0095`):
+  `enterprises.enterprise_type` NOT NULL DEFAULT `'direct_hire'` CHECK
+  IN `('direct_hire', 'staffing_agency', 'remote_international')`.
+  All existing enterprises implicitly backfilled to `direct_hire` via
+  DEFAULT. Splits enterprise workflows at the organization level, not
+  the user level — `enterprise_recruiter` capability remains a single
+  persona; what changes is the enterprise context.
 - **P22.1** — RLS enforcement scaffolding: `services/rls.rs` exposes
   `set_tenant_context_on_tx(tx, tenant_id)` — no-op unless
   `SKILLUV_RLS_ENFORCED=1`. Companion doc

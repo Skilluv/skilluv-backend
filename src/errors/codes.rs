@@ -26,6 +26,18 @@ pub enum AppError {
     #[error("TOTP setup required for this account")]
     TotpSetupRequired,
 
+    /// BE-A — admin sans TOTP ni WebAuthn tentant d'accéder à une route admin.
+    /// Le login lui-même reste possible (soft flag), mais toute route
+    /// `/api/admin/*` est bloquée par le middleware `require_admin_2fa`
+    /// tant que l'admin n'a pas activé un second facteur.
+    #[error("Admin 2FA (TOTP or passkey) setup required before accessing admin surfaces")]
+    AdminTwoFaSetupRequired,
+
+    /// BE-C — requête vers `/api/admin/*` depuis une origin non autorisée.
+    /// Défense en profondeur en plus du CORS.
+    #[error("Admin origin required — request rejected")]
+    AdminOriginRequired,
+
     #[error("SSO login is required for this account")]
     SsoRequired { start_url: String },
 
@@ -79,6 +91,8 @@ impl AppError {
             Self::Validation(_) => StatusCode::BAD_REQUEST,
             Self::TotpRequired => StatusCode::FORBIDDEN,
             Self::TotpSetupRequired => StatusCode::FORBIDDEN,
+            Self::AdminTwoFaSetupRequired => StatusCode::FORBIDDEN,
+            Self::AdminOriginRequired => StatusCode::FORBIDDEN,
             Self::SsoRequired { .. } => StatusCode::FORBIDDEN,
             Self::EmailVerificationRequired => StatusCode::FORBIDDEN,
             Self::TotpInvalid => StatusCode::UNAUTHORIZED,
@@ -105,6 +119,8 @@ impl AppError {
             Self::Validation(_) => "VALIDATION_ERROR",
             Self::TotpRequired => "AUTH_TOTP_REQUIRED",
             Self::TotpSetupRequired => "AUTH_TOTP_SETUP_REQUIRED",
+            Self::AdminTwoFaSetupRequired => "AUTH_ADMIN_2FA_SETUP_REQUIRED",
+            Self::AdminOriginRequired => "AUTH_ADMIN_ORIGIN_REQUIRED",
             Self::SsoRequired { .. } => "AUTH_SSO_REQUIRED",
             Self::EmailVerificationRequired => "AUTH_EMAIL_VERIFY_REQUIRED",
             Self::TotpInvalid => "AUTH_TOTP_INVALID",

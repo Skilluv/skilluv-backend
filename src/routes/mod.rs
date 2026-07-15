@@ -80,7 +80,7 @@ pub use admin_dashboard::admin_dashboard_routes;
 pub use admin_fraud::admin_fraud_routes;
 pub use admin_moderation::admin_moderation_routes;
 pub use attestations::attestation_routes;
-pub use auth::auth_routes;
+pub use auth::{auth_routes, is_admin_origin};
 pub use bounties::bounty_routes;
 pub use certifications::certification_routes;
 pub use email_prefs::email_prefs_routes;

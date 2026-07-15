@@ -55,6 +55,21 @@ pub struct AppStateConfig {
 }
 
 pub fn build_router(state: AppState) -> Router {
+    // BE-A + BE-C — helper qui applique les 2 middlewares "admin gate" sur
+    // les routers réservés aux surfaces admin (origin check + 2FA mandatory).
+    // L'ordre importe : `ensure_admin_origin` d'abord (rejette avant même de
+    // consulter la DB), puis `ensure_admin_2fa` (lookup role + totp/passkey).
+    let admin_gate = |r: Router<AppState>| {
+        r.layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            middleware::admin_gate::ensure_admin_2fa,
+        ))
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            middleware::admin_gate::ensure_admin_origin,
+        ))
+    };
+
     Router::new()
         .nest("/api", routes::health_routes())
         .nest("/api", routes::auth_routes())
@@ -70,7 +85,7 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::attestation_routes())
         .nest("/api", routes::season_routes())
         .nest("/api", routes::portfolio_routes())
-        .nest("/api", routes::admin_routes())
+        .nest("/api", admin_gate(routes::admin_routes()))
         .nest("/api", routes::gamification_routes())
         .nest("/api", routes::badge_routes())
         .nest("/api", routes::capability_routes())
@@ -103,10 +118,10 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::profile_extras_routes())
         .nest("/api", routes::oauth_routes())
         .nest("/api", routes::report_routes())
-        .nest("/api", routes::admin_moderation_routes())
+        .nest("/api", admin_gate(routes::admin_moderation_routes()))
         .nest("/api", routes::challenge_tag_routes())
         .nest("/api", routes::community_routes())
-        .nest("/api", routes::admin_community_routes())
+        .nest("/api", admin_gate(routes::admin_community_routes()))
         .nest("/api", routes::challenge_team_routes())
         .nest("/api", routes::developer_routes())
         .nest("/api", routes::public_api_routes())
@@ -120,8 +135,8 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::magic_link_routes())
         .nest("/api", routes::webauthn_routes())
         .nest("/api", routes::push_routes())
-        .nest("/api", routes::admin_dashboard_routes())
-        .nest("/api", routes::admin_fraud_routes())
+        .nest("/api", admin_gate(routes::admin_dashboard_routes()))
+        .nest("/api", admin_gate(routes::admin_fraud_routes()))
         // Phase 5
         .nest("/api", routes::bounty_routes())
         .nest("/api", routes::certification_routes())

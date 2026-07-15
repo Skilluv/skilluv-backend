@@ -1,5 +1,6 @@
 pub mod api_key;
 mod auth;
+pub mod admin_gate;
 pub mod capabilities;
 pub mod csrf;
 pub mod rate_limit;

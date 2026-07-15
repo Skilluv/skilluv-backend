@@ -769,7 +769,11 @@ async fn login(
     .bind(user.id)
     .fetch_one(&state.db)
     .await?;
-    let requires_totp_setup = matches!(user.role.as_str(), "enterprise" | "recruiter")
+    // BE-A : admin doit aussi configurer un second facteur (TOTP ou passkey).
+    // Le login réussit pour permettre l'accès à /auth/setup-2fa ; les routes
+    // /api/admin/* sont bloquées par le middleware `require_admin_2fa` tant
+    // que le facteur n'est pas actif.
+    let requires_totp_setup = matches!(user.role.as_str(), "enterprise" | "recruiter" | "admin")
         && !user.totp_enabled
         && !has_passkey;
     let user_private: UserPrivate = user.into();
@@ -863,7 +867,11 @@ async fn email_2fa_verify(
     .bind(user.id)
     .fetch_one(&state.db)
     .await?;
-    let requires_totp_setup = matches!(user.role.as_str(), "enterprise" | "recruiter")
+    // BE-A : admin doit aussi configurer un second facteur (TOTP ou passkey).
+    // Le login réussit pour permettre l'accès à /auth/setup-2fa ; les routes
+    // /api/admin/* sont bloquées par le middleware `require_admin_2fa` tant
+    // que le facteur n'est pas actif.
+    let requires_totp_setup = matches!(user.role.as_str(), "enterprise" | "recruiter" | "admin")
         && !user.totp_enabled
         && !has_passkey;
     let user_private: UserPrivate = user.into();

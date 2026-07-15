@@ -28,6 +28,106 @@ pub fn admin_routes() -> Router<AppState> {
         // Enterprise B2B SSO — visibility on active IdP-authenticated sessions.
         .route("/admin/sso/sessions", get(list_sso_sessions))
         .route("/admin/sso/sessions/{id}/revoke", post(revoke_sso_session))
+        // BE-B — reset 2FA d'un user (TOTP + WebAuthn credentials wiped).
+        // Réservé à admin, log audit obligatoire.
+        .route("/admin/users/{id}/reset-2fa", post(admin_reset_2fa))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// BE-B — POST /admin/users/{id}/reset-2fa
+// ═══════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Deserialize)]
+struct Reset2faBody {
+    /// Raison obligatoire (audit trail).
+    reason: String,
+}
+
+async fn admin_reset_2fa(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(target_user_id): Path<Uuid>,
+    Json(body): Json<Reset2faBody>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
+
+    if body.reason.trim().len() < 8 {
+        return Err(AppError::Validation(
+            "reason must be at least 8 chars for audit trail".into(),
+        ));
+    }
+
+    let mut tx = state.db.begin().await?;
+
+    // 1. Vérifier que le user cible existe.
+    let target_exists: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)",
+    )
+    .bind(target_user_id)
+    .fetch_one(&mut *tx)
+    .await?;
+    if !target_exists {
+        return Err(AppError::NotFound(format!("user {target_user_id} not found")));
+    }
+
+    // 2. Reset TOTP secret + backup codes.
+    sqlx::query(
+        "UPDATE users
+         SET totp_enabled = FALSE,
+             totp_secret = NULL,
+             email_2fa_enabled = FALSE
+         WHERE id = $1",
+    )
+    .bind(target_user_id)
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query("DELETE FROM totp_backup_codes WHERE user_id = $1")
+        .bind(target_user_id)
+        .execute(&mut *tx)
+        .await?;
+
+    // 3. Supprimer TOUS les webauthn credentials du user cible.
+    sqlx::query("DELETE FROM webauthn_credentials WHERE user_id = $1")
+        .bind(target_user_id)
+        .execute(&mut *tx)
+        .await?;
+
+    // 4. Révoquer toutes les sessions actives du user cible (force re-login).
+    sqlx::query(
+        "UPDATE user_sessions
+         SET revoked_at = NOW()
+         WHERE user_id = $1 AND revoked_at IS NULL",
+    )
+    .bind(target_user_id)
+    .execute(&mut *tx)
+    .await?;
+
+    // 5. Audit log (schéma legacy admin_audit_log — la migration append-only
+    //    et le rôle audit_admin arriveront en BE-E).
+    sqlx::query(
+        "INSERT INTO admin_audit_log
+            (admin_id, action, target_type, target_id, details)
+         VALUES ($1, 'reset_2fa', 'user', $2, $3::jsonb)",
+    )
+    .bind(auth.user_id)
+    .bind(target_user_id)
+    .bind(serde_json::json!({
+        "reason": body.reason,
+        "wiped": ["totp_secret", "totp_backup_codes", "webauthn_credentials"],
+        "sessions_revoked": true,
+    }))
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+
+    metrics::counter!("skilluv_admin_2fa_resets_total").increment(1);
+
+    Ok(Json(serde_json::json!({
+        "reset": true,
+        "user_id": target_user_id,
+        "message": "TOTP, backup codes, and WebAuthn credentials wiped. All sessions revoked. User must re-login and re-configure 2FA."
+    })))
 }
 
 #[derive(Debug, Deserialize)]

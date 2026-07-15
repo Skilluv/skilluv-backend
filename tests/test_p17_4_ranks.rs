@@ -161,6 +161,21 @@ async fn artisan_requires_deliverables_and_attestation() {
 }
 
 #[tokio::test]
+async fn doyen_via_mentor_capability_not_role() {
+    let (db, name) = setup_test_db().await;
+    // User avec role='user' mais capability='mentor' explicite → doit passer.
+    let u = create_user(&db, "user").await;
+    sqlx::query("INSERT INTO user_capabilities (user_id, capability) VALUES ($1, 'mentor')")
+        .bind(u).execute(&db).await.unwrap();
+    for _ in 0..50 { add_verified_deliverable(&db, u).await; }
+    add_attestations(&db, u, 5).await;
+    let (_, c, _) = ranks::recompute_rank_for_user(&db, u).await.unwrap();
+    assert_eq!(c, "doyen", "capability mentor accordée doit débloquer doyen");
+    db.close().await;
+    cleanup_test_db(&name).await;
+}
+
+#[tokio::test]
 async fn doyen_requires_mentor_role() {
     let (db, name) = setup_test_db().await;
     let u_normal = create_user(&db, "user").await;

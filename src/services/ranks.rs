@@ -49,13 +49,27 @@ pub async fn recompute_rank_for_user(
     .fetch_one(db)
     .await?;
 
+    // P18.5 : "mentor" est désormais lu depuis user_capabilities (source de
+    // vérité canonique). On garde le fallback sur users.role='mentor' pour
+    // la rétro-compat pré-backfill 0094 (dev DBs anciennes).
     let is_mentor: bool = sqlx::query_scalar(
-        "SELECT COALESCE(role = 'mentor', FALSE) FROM users WHERE id = $1",
+        r#"
+        SELECT EXISTS (
+            SELECT 1 FROM user_capabilities
+            WHERE user_id = $1
+              AND capability = 'mentor'
+              AND revoked_at IS NULL
+              AND (expires_at IS NULL OR expires_at > NOW())
+        )
+        OR COALESCE(
+            (SELECT role = 'mentor' FROM users WHERE id = $1),
+            FALSE
+        )
+        "#,
     )
     .bind(user_id)
-    .fetch_optional(db)
-    .await?
-    .unwrap_or(false);
+    .fetch_one(db)
+    .await?;
 
     let computed = compute_rank(deliverables, attestations, is_mentor);
 

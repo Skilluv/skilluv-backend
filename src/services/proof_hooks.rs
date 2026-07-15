@@ -13,11 +13,18 @@
 //!
 //! Retourne un rapport agrégé pour l'observabilité (metrics + admin dashboard).
 
+use std::time::Duration;
+
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::errors::AppError;
 use crate::services::{badge_engine, capabilities_engine, ranks};
+
+/// P19.3 — Sweep interval par défaut (7 jours = 604 800 secondes).
+const DEFAULT_SWEEP_INTERVAL_SECS: u64 = 60 * 60 * 24 * 7;
+/// Fenêtre de "user actif" (30 jours) — évite de recomputer tout le monde.
+const DEFAULT_SWEEP_WINDOW_DAYS: i32 = 30;
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ProofRecomputeReport {
@@ -129,4 +136,53 @@ pub async fn sweep_active_users(
         }
     }
     Ok(processed)
+}
+
+/// P19.3 — Task de fond : sweep hebdomadaire des users actifs.
+///
+/// Contrôlée par env :
+///   - `SKILLUV_PROOF_SWEEP_ENABLED=1` pour activer (default OFF en dev).
+///   - `SKILLUV_PROOF_SWEEP_INTERVAL_SECS` (default 604800 = 7 jours).
+///   - `SKILLUV_PROOF_SWEEP_WINDOW_DAYS` (default 30).
+///
+/// Le sweep sert de filet de sécurité : les hooks inline (P19.2) attrapent
+/// 99 % des cas ; ce job rattrape les evolutions de seuils (nouvelles rules
+/// ajoutées, capabilities engine mis à jour), ou les hooks qui auraient
+/// échoué silencieusement.
+pub fn start_proof_sweep_task(db: PgPool) {
+    if std::env::var("SKILLUV_PROOF_SWEEP_ENABLED").as_deref() != Ok("1") {
+        tracing::info!("P19.3: proof sweep disabled (set SKILLUV_PROOF_SWEEP_ENABLED=1)");
+        return;
+    }
+    let interval_secs = std::env::var("SKILLUV_PROOF_SWEEP_INTERVAL_SECS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(DEFAULT_SWEEP_INTERVAL_SECS);
+    let window_days = std::env::var("SKILLUV_PROOF_SWEEP_WINDOW_DAYS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(DEFAULT_SWEEP_WINDOW_DAYS);
+
+    tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(Duration::from_secs(interval_secs));
+        loop {
+            ticker.tick().await;
+            match sweep_active_users(&db, window_days).await {
+                Ok(processed) => {
+                    tracing::info!(
+                        count = processed.len(),
+                        window_days,
+                        "P19.3: proof sweep completed"
+                    );
+                    metrics::counter!(
+                        "skilluv_proof_sweep_users_processed_total",
+                    )
+                    .increment(processed.len() as u64);
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "P19.3: proof sweep failed");
+                }
+            }
+        }
+    });
 }

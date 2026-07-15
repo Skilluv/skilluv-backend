@@ -89,6 +89,11 @@ async fn async_main(config: AppConfig) {
     // Drip sequences (Phase 3.15) — hourly background task, idempotent via email_log.
     skilluv_backend::services::drip::start_drip_task(db.clone(), email.clone());
 
+    // P19.3 — Proof engine sweep (weekly by default). Filet de sécurité qui
+    // rattrape les évolutions de seuils/rules et les hooks inline en échec.
+    // Activation via SKILLUV_PROOF_SWEEP_ENABLED=1.
+    skilluv_backend::services::proof_hooks::start_proof_sweep_task(db.clone());
+
     // Connect to AI service (optional — backend works without it)
     let ai = if let Some(ref grpc_url) = config.grpc_ai_url {
         tracing::info!("Connecting to AI service at {grpc_url}...");

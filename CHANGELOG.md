@@ -15,6 +15,45 @@ address KYC full, live AI wiring in prod, and RLS enforcement.
 
 ### Added
 
+- **P18.5** — `services/ranks.rs` now reads mentor status from
+  `user_capabilities` (canonical source) with a fallback on
+  `users.role='mentor'` for pre-backfill DBs. The P17.4 hardcoded
+  `users.role='mentor'` check is gone; Doyen requirement is now clean.
+  New test covers the capability path explicitly.
+- **P18.4** — Capabilities API (`routes/capabilities.rs`):
+  `GET /api/users/{id}/capabilities` (public, active only),
+  `GET /api/users/me/capabilities` (auth), `POST
+  /api/admin/users/{id}/capabilities` body `{capability,
+  granted_reason?, expires_at?}` protected by
+  `require_capability("admin")`, `DELETE
+  /api/admin/users/{id}/capabilities/{cap}` (soft revoke with
+  `revoked_reason='admin_revoke:by_<uuid>'`).
+- **P18.3** — `middleware/capabilities.rs`: `require_capability(db,
+  user_id, cap)` returns `Forbidden` if the capability is absent,
+  revoked, or expired. Companion helper `list_active_capabilities`
+  filters by the same rules for `/me/capabilities`. Legacy per-route
+  `require_admin` helpers still work (JWT-based `auth.role='admin'`),
+  and the backfill from P18.1 keeps both mechanisms in sync during
+  transition.
+- **P18.2** — `services/capabilities_engine.rs`:
+  `recompute_capabilities_for_user(user_id)` auto-promotes based on
+  measurable activity — everyone gets `challenger`, mentor at ≥5
+  attestations received OR ≥3 mentorship_sessions as mentor,
+  pr_reviewer at ≥10 `reviews.verdict='approve'`, issue_proposer at ≥3
+  published community `challenge_templates`, project_steward at ≥1
+  owned project. Idempotent; never demotes (like the rank system).
+  `admin`, `jury_tournament`, `bounty_funder`, and
+  `enterprise_recruiter` remain manual-only.
+- **P18.1** — Migration 0094: `user_capabilities(user_id, capability ∈
+  9-value enum, granted_at, granted_reason, granted_by, expires_at,
+  revoked_at, revoked_reason)`. Enum: challenger, mentor,
+  project_steward, pr_reviewer, bounty_funder, issue_proposer,
+  jury_tournament, admin, enterprise_recruiter. Partial UNIQUE (user_id,
+  capability) WHERE revoked_at IS NULL — cumulable, revocable,
+  auditable. Backfill from `users.role`: every user gets
+  `challenger`, `role='mentor'`→`mentor`, `'admin'`→`admin`,
+  `'enterprise'`/`'recruiter'`→`enterprise_recruiter`. Introduces the
+  3rd orthogonal user axis alongside skills and orientations.
 - **P17.6** — Events + participation (`migrations/0093`,
   `routes/events.rs`): `events(slug, name, starts_at, ends_at,
   visual_theme JSONB, is_partner, is_active)` +

@@ -83,6 +83,65 @@ pub async fn recompute_capabilities_for_user(
     // modèle actuel passe par project_slices.funder_enterprise_id (côté
     // enterprise, pas user). Pas de règle auto ici.
 
+    // ═══════════════════════════════════════════════════════════════════
+    // P25.2 — Community moderator sub-caps (front-only, jamais admin panel)
+    // ═══════════════════════════════════════════════════════════════════
+
+    // community_curator : 3+ challenges community publiés = même seuil que
+    // issue_proposer. En pratique co-granted. On garde la 2ᵉ cap distincte
+    // pour permettre à un admin de révoquer curator sans toucher proposer.
+    if props >= 3 {
+        grant_if_missing(db, user_id, "community_curator",
+            &format!("auto:threshold(published_proposals={props})"),
+            &mut granted, &mut already).await?;
+    }
+
+    // forum_moderator : 20+ posts qui n'ont PAS de reports pending contre eux.
+    // Signal simple : activité forum + réputation propre. À raffiner via
+    // score reactions upvote/downvote plus tard.
+    let clean_posts: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*) FROM posts p
+        WHERE p.author_id = $1
+          AND NOT EXISTS (
+              SELECT 1 FROM reports r
+              WHERE r.target_type = 'post' AND r.target_id = p.id
+                AND r.status = 'pending'
+          )
+        "#,
+    )
+    .bind(user_id).fetch_optional(db).await.unwrap_or(None).unwrap_or(0);
+    if clean_posts >= 20 {
+        grant_if_missing(db, user_id, "forum_moderator",
+            &format!("auto:threshold(clean_posts={clean_posts})"),
+            &mut granted, &mut already).await?;
+    }
+
+    // plagiarism_reviewer + kyc_reviewer : manual-only (staff Skilluv nomme
+    // via POST /api/admin/users/{id}/capabilities). Trop sensible pour de
+    // l'auto-promotion basée sur des compteurs.
+
+    // community_moderator : meta-cap umbrella auto-granted si l'une des
+    // sous-caps modération est active. Permet require_capability
+    // ("community_moderator") pour endpoints "any moderator".
+    let has_any_sub: bool = sqlx::query_scalar(
+        r#"
+        SELECT EXISTS (
+            SELECT 1 FROM user_capabilities
+            WHERE user_id = $1
+              AND capability IN ('forum_moderator','plagiarism_reviewer',
+                                  'kyc_reviewer','community_curator')
+              AND revoked_at IS NULL
+        )
+        "#,
+    )
+    .bind(user_id).fetch_one(db).await?;
+    if has_any_sub {
+        grant_if_missing(db, user_id, "community_moderator",
+            "auto:umbrella_has_sub_moderator_cap",
+            &mut granted, &mut already).await?;
+    }
+
     // project_steward : owner (owner_type='user') d'au moins 1 project non archivé.
     let owned_projects: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM projects

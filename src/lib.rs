@@ -90,6 +90,7 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::badge_routes())
         .nest("/api", routes::capability_routes())
         .nest("/api", routes::agency_client_routes())
+        .nest("/api", routes::ai_coach_routes())
         .nest("/api", routes::event_routes())
         .nest("/api", routes::geo_routes())
         .nest("/api", routes::legal_routes())

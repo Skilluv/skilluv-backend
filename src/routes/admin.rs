@@ -31,6 +31,8 @@ pub fn admin_routes() -> Router<AppState> {
         // BE-B — reset 2FA d'un user (TOTP + WebAuthn credentials wiped).
         // Réservé à admin, log audit obligatoire.
         .route("/admin/users/{id}/reset-2fa", post(admin_reset_2fa))
+        // IA-C.1 — Générer une variante d'un challenge (harder/easier au MVP).
+        .route("/admin/challenges/{id}/variant", post(admin_generate_variant))
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -739,4 +741,152 @@ async fn revoke_sso_session(
     .await;
 
     Ok(Json(build_response(json!({ "revoked": true }))))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// IA-C.1 — POST /admin/challenges/{id}/variant
+// ═══════════════════════════════════════════════════════════════════
+//
+// Génère une variante d'un challenge existant via IA (skilluv-ai
+// GenerateVariant). Le nouveau challenge est créé en `status='draft'` —
+// l'admin devra le review + publier via l'endpoint existant.
+//
+// MVP scope : `variant_type ∈ {harder, easier}` uniquement (voir doc IA-C.1).
+// Post-MVP : ajouter `different_lang`, `shorter`, `longer`.
+
+#[derive(Debug, Deserialize)]
+struct GenerateVariantBody {
+    /// `harder` | `easier` au MVP.
+    variant_type: String,
+    /// Ex: '3' pour difficulty, '30' pour minutes. Vide accepté.
+    #[serde(default)]
+    target_param: String,
+}
+
+async fn admin_generate_variant(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(original_id): Path<Uuid>,
+    Json(body): Json<GenerateVariantBody>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
+    crate::middleware::admin_destructive::enforce_admin_destructive(&state, auth.user_id).await?;
+
+    if !matches!(body.variant_type.as_str(), "harder" | "easier") {
+        return Err(AppError::Validation(
+            "variant_type MVP: 'harder' | 'easier' uniquement".into(),
+        ));
+    }
+
+    let ai = state.ai.as_deref().ok_or_else(|| {
+        AppError::Internal("AI client not connected (grpc_ai_url absent)".into())
+    })?;
+
+    // 1. Fetch le challenge original + convert en GeneratedChallenge proto.
+    let orig: crate::models::ChallengeTemplate = sqlx::query_as(
+        "SELECT * FROM challenge_templates WHERE id = $1",
+    )
+    .bind(original_id)
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or(AppError::NotFound(format!("challenge {original_id} not found")))?;
+
+    let original_proto = crate::grpc::proto::GeneratedChallenge {
+        title: orig.title.clone(),
+        description: orig.description.clone(),
+        instructions: orig.instructions.clone(),
+        difficulty: orig.difficulty as i32,
+        duration_minutes: orig.duration_minutes.unwrap_or(60),
+        skill_domain: orig.skill_domain.clone(),
+        tone: orig.tone.clone(),
+        tags: Vec::new(),
+        starter_code: String::new(),
+        test_cases: Vec::new(),
+        evaluation_criteria: String::new(),
+        fragment_reward: orig.reward_fragments,
+        ai_allowed: orig.ai_policy != "no_ai_declared",
+        language: orig.language.clone().unwrap_or_default(),
+        orientation_slug: String::new(),
+    };
+
+    // 2. Appelle l'IA.
+    let request = crate::grpc::proto::GenerateVariantRequest {
+        original_challenge_id: original_id.to_string(),
+        variant_type: body.variant_type.clone(),
+        target_param: body.target_param.clone(),
+        original: Some(original_proto),
+    };
+    let resp = ai
+        .generate_variant(request)
+        .await
+        .map_err(|s| AppError::Internal(format!("gRPC generate_variant failed: {s}")))?;
+
+    if !resp.success {
+        return Err(AppError::Internal(format!(
+            "IA generate_variant failed: {}",
+            resp.error_message
+        )));
+    }
+    let generated = resp
+        .challenge
+        .ok_or_else(|| AppError::Internal("IA returned success but empty challenge".into()))?;
+
+    // 3. Persist comme NOUVEAU challenge en draft. Aucun update sur l'original.
+    let new_challenge: crate::models::ChallengeTemplate = sqlx::query_as(
+        r#"
+        INSERT INTO challenge_templates
+            (title, description, instructions, skill_domain, difficulty,
+             mode, duration_minutes, ai_policy, tone, language,
+             reward_fragments, is_training, created_by, status)
+        VALUES ($1, $2, $3, $4, $5, 'solo', $6, $7, $8, $9, $10, $11, $12, 'draft')
+        RETURNING *
+        "#,
+    )
+    .bind(&generated.title)
+    .bind(&generated.description)
+    .bind(&generated.instructions)
+    .bind(&generated.skill_domain)
+    .bind(generated.difficulty as i16)
+    .bind(generated.duration_minutes)
+    .bind(if generated.ai_allowed { "unrestricted" } else { "no_ai_declared" })
+    .bind(&generated.tone)
+    .bind(if generated.language.is_empty() { None } else { Some(&generated.language) })
+    .bind(generated.fragment_reward)
+    .bind(orig.is_training)
+    .bind(auth.user_id)
+    .fetch_one(&state.db)
+    .await?;
+
+    metrics::counter!(
+        "skilluv_challenge_variants_generated_total",
+        "variant_type" => body.variant_type.clone(),
+    )
+    .increment(1);
+
+    // Audit log.
+    crate::services::audit::record(
+        &state.db,
+        crate::services::audit::AuditEntry {
+            actor_type: crate::services::audit::ActorType::Admin,
+            actor_id: Some(auth.user_id),
+            action: "challenge_variant_generated",
+            target_type: Some("challenge_template"),
+            target_id: Some(new_challenge.id),
+            metadata: Some(json!({
+                "original_challenge_id": original_id,
+                "variant_type": body.variant_type,
+                "target_param": body.target_param,
+            })),
+            headers: None,
+        },
+    )
+    .await;
+
+    Ok(Json(build_response(json!({
+        "new_challenge_id": new_challenge.id,
+        "original_challenge_id": original_id,
+        "variant_type": body.variant_type,
+        "status": "draft",
+        "message": "Variant generated in draft — review and publish separately."
+    }))))
 }

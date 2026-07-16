@@ -42,6 +42,13 @@ pub fn admin_fraud_routes() -> Router<AppState> {
             "/admin/fraud/llm-evaluate/{id}",
             post(llm_evaluate_endpoint),
         )
+        // IA-B — deep plagiarism scan (LLM-assisted AST + embeddings via IA).
+        // Complémentaire au cosine local rapide (P14.3). Accessible admin
+        // OU plagiarism_reviewer (P25).
+        .route(
+            "/admin/fraud/deep-scan/{id}",
+            post(deep_plagiarism_scan_endpoint),
+        )
 }
 
 fn build_response(data: Value) -> Value {
@@ -276,4 +283,201 @@ async fn llm_evaluate_endpoint(
     )
     .await?;
     Ok(Json(build_response(json!(outcome))))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// IA-B — POST /admin/fraud/deep-scan/{id}
+// ═══════════════════════════════════════════════════════════════════
+//
+// Deep plagiarism scan via IA (AST + embeddings). Complémentaire au cosine
+// local (P14.3) qui reste la 1re ligne de défense automatique. Ce endpoint
+// sert 2 usages :
+//
+//   1. **Manual admin review** : un plagiarism_reviewer inspecte un cas gris
+//      (cosine score 0.3-0.7) et veut une seconde opinion IA.
+//   2. **Auto-escalation** : le hook post-cosine peut appeler ce endpoint
+//      quand `cosine_score >= 0.7` pour affiner la décision. (Câblage
+//      automatique post-MVP — on garde l'endpoint manuel au MVP.)
+//
+// Le résultat est mergé dans `deliverables.verification_signal.deep_plagiarism`
+// (JSONB) — préserve le cosine_score existant, ajoute une clé distincte.
+// Accessible : `admin` OU `plagiarism_reviewer` (require_any_capability).
+
+#[derive(Debug, Deserialize)]
+struct DeepScanQuery {
+    /// Threshold IA (0.0-1.0). Défaut 0.80 (aligné avec skilluv-ia settings).
+    /// Override utile pour scans stricts (0.95) sur cas déjà escaladés.
+    threshold: Option<f32>,
+    /// Fenêtre pour construire le comparison_pool (défaut 30 jours).
+    window_days: Option<i32>,
+    /// Cap du comparison_pool (défaut 200, voir doc §5).
+    pool_cap: Option<i64>,
+}
+
+async fn deep_plagiarism_scan_endpoint(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<Uuid>,
+    Query(q): Query<DeepScanQuery>,
+) -> Result<Json<Value>, AppError> {
+    crate::middleware::capabilities::require_any_capability(
+        &state.db,
+        auth.user_id,
+        &["admin", "plagiarism_reviewer"],
+    )
+    .await?;
+
+    // Rate-limit destructif (une deep scan coûte 2-5s IA + capacity queue Redis).
+    crate::middleware::admin_destructive::enforce_admin_destructive(&state, auth.user_id).await?;
+
+    // 1. Charge le deliverable cible + son code.
+    let target: Option<(Uuid, Option<Uuid>, Option<serde_json::Value>)> = sqlx::query_as(
+        "SELECT id, challenge_id, artifact_metadata FROM deliverables WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_optional(&state.db)
+    .await?;
+    let (deliverable_id, challenge_id, metadata) = target
+        .ok_or_else(|| AppError::NotFound("deliverable not found".into()))?;
+
+    let code = metadata
+        .as_ref()
+        .and_then(|m| m.get("code_content"))
+        .and_then(|c| c.as_str())
+        .unwrap_or("")
+        .to_string();
+    let language = metadata
+        .as_ref()
+        .and_then(|m| m.get("language"))
+        .and_then(|l| l.as_str())
+        .unwrap_or("text")
+        .to_string();
+
+    if code.trim().is_empty() {
+        return Err(AppError::Validation(
+            "artifact_metadata.code_content vide — rien à scanner".into(),
+        ));
+    }
+
+    let ai = state.ai.as_deref().ok_or_else(|| {
+        AppError::Internal("AI client not connected (grpc_ai_url absent en dev)".into())
+    })?;
+
+    // 2. Construit le comparison_pool (challenges similaires, cap 200).
+    let pool_cap = q.pool_cap.unwrap_or(200).clamp(1, 500);
+    let window = q.window_days.unwrap_or(30);
+    let pool_rows: Vec<(Uuid, String, chrono::DateTime<chrono::Utc>)> = if let Some(cid) = challenge_id {
+        sqlx::query_as(
+            r#"
+            SELECT d.id,
+                   COALESCE(d.artifact_metadata->>'code_content', ''),
+                   d.verified_at
+            FROM deliverables d
+            WHERE d.challenge_id = $1
+              AND d.id != $2
+              AND d.verification_status = 'verified'
+              AND d.verified_at >= NOW() - MAKE_INTERVAL(days => $3)
+              AND (d.artifact_metadata->>'code_content') IS NOT NULL
+            ORDER BY d.verified_at DESC
+            LIMIT $4
+            "#,
+        )
+        .bind(cid)
+        .bind(deliverable_id)
+        .bind(window)
+        .bind(pool_cap)
+        .fetch_all(&state.db)
+        .await?
+    } else {
+        Vec::new()
+    };
+
+    // Note : `PreviousSubmission` v2 n'inclut PAS user_id (le contrat proto
+    // délègue le lookup au backend via `similar_submission_id` retourné).
+    // On passe la même language que le deliverable cible (assumption : pool
+    // tenant-scoped d'un même challenge → même stack).
+    let comparison_pool: Vec<crate::grpc::proto::PreviousSubmission> = pool_rows
+        .into_iter()
+        .map(|(sid, c, sub_at)| crate::grpc::proto::PreviousSubmission {
+            submission_id: sid.to_string(),
+            code: c,
+            language: language.clone(),
+            submitted_at: sub_at.to_rfc3339(),
+        })
+        .collect();
+
+    let pool_size = comparison_pool.len();
+
+    // 3. Appelle l'IA.
+    let request = crate::grpc::proto::CheckPlagiarismRequest {
+        submission_id: deliverable_id.to_string(),
+        code,
+        language,
+        comparison_pool,
+        threshold: q.threshold.unwrap_or(0.80) as f64,
+    };
+    let resp = ai
+        .check_plagiarism(request)
+        .await
+        .map_err(|s| AppError::Internal(format!("gRPC check_plagiarism failed: {s}")))?;
+
+    // 4. Merge le résultat dans verification_signal.deep_plagiarism.
+    let signal = serde_json::json!({
+        "deep_plagiarism": {
+            "similarity_score": resp.similarity_score,
+            "similar_submission_id": resp.similar_submission_id,
+            "ast_similarity": resp.ast_similarity,
+            "embedding_similarity": resp.embedding_similarity,
+            "is_plagiarism": resp.is_plagiarism,
+            "matched_ranges_count": resp.matched_ranges.len(),
+            "model_version": resp.model_version,
+            "scanned_by": auth.user_id,
+            "scanned_at": chrono::Utc::now().to_rfc3339(),
+        }
+    });
+    sqlx::query(
+        "UPDATE deliverables
+         SET verification_signal = COALESCE(verification_signal, '{}'::jsonb) || $2::jsonb
+         WHERE id = $1",
+    )
+    .bind(deliverable_id)
+    .bind(&signal)
+    .execute(&state.db)
+    .await?;
+
+    metrics::counter!(
+        "skilluv_deep_plagiarism_scans_total",
+        "is_plagiarism" => resp.is_plagiarism.to_string(),
+    )
+    .increment(1);
+
+    // Audit log (l'action est destructive au sens signal enrichi).
+    crate::services::audit::record(
+        &state.db,
+        crate::services::audit::AuditEntry {
+            actor_type: crate::services::audit::ActorType::Admin,
+            actor_id: Some(auth.user_id),
+            action: "deep_plagiarism_scan",
+            target_type: Some("deliverable"),
+            target_id: Some(deliverable_id),
+            metadata: Some(serde_json::json!({
+                "similarity_score": resp.similarity_score,
+                "is_plagiarism": resp.is_plagiarism,
+                "pool_size": pool_size,
+            })),
+            headers: None,
+        },
+    )
+    .await;
+
+    Ok(Json(build_response(json!({
+        "deliverable_id": deliverable_id,
+        "similarity_score": resp.similarity_score,
+        "similar_submission_id": resp.similar_submission_id,
+        "ast_similarity": resp.ast_similarity,
+        "embedding_similarity": resp.embedding_similarity,
+        "is_plagiarism": resp.is_plagiarism,
+        "pool_size": pool_size,
+        "model_version": resp.model_version,
+    }))))
 }

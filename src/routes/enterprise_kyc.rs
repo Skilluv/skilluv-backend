@@ -245,6 +245,10 @@ async fn admin_decide(
     if auth.role != "admin" {
         return Err(AppError::Forbidden);
     }
+    // BE-F : on clone les champs `level`/`reason` avant `match` pour pouvoir
+    // les reprendre dans l'audit log après la mutation.
+    let audit_level = body.level.clone();
+    let audit_reason = body.reason.clone();
     match body.action.as_str() {
         "approve" => {
             let level = body.level.unwrap_or_else(|| "basic".into());
@@ -285,5 +289,25 @@ async fn admin_decide(
         }
         _ => return Err(AppError::Validation("action must be approve or reject".into())),
     }
+
+    // BE-F — audit log unifié.
+    crate::services::audit::record(
+        &state.db,
+        crate::services::audit::AuditEntry {
+            actor_type: crate::services::audit::ActorType::Admin,
+            actor_id: Some(auth.user_id),
+            action: "kyc_decide",
+            target_type: Some("enterprise"),
+            target_id: Some(enterprise_id),
+            metadata: Some(json!({
+                "action": body.action,
+                "level": audit_level,
+                "reason": audit_reason,
+            })),
+            headers: None,
+        },
+    )
+    .await;
+
     Ok(Json(build_response(json!({ "decided": true, "action": body.action }))))
 }

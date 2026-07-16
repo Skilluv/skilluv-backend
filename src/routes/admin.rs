@@ -51,10 +51,31 @@ async fn admin_reset_2fa(
 ) -> Result<Json<serde_json::Value>, AppError> {
     crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
 
+    // BE-D — rate-limit destructif (10/min, 100/heure).
+    crate::middleware::admin_destructive::enforce_admin_destructive(&state, auth.user_id).await?;
+
     if body.reason.trim().len() < 8 {
         return Err(AppError::Validation(
             "reason must be at least 8 chars for audit trail".into(),
         ));
+    }
+
+    // BE-D — dry-run : log l'intention et return sans écrire.
+    if crate::middleware::admin_destructive::is_admin_dry_run() {
+        tracing::info!(
+            admin_id = %auth.user_id, target_id = %target_user_id,
+            action = "reset_2fa", dry_run = true,
+            "BE-D dry-run: reset_2fa skipped"
+        );
+        return Ok(Json(serde_json::json!({
+            "dry_run": true,
+            "would_have_done": {
+                "action": "reset_2fa",
+                "target_user_id": target_user_id,
+                "wipes": ["totp_secret", "totp_backup_codes", "webauthn_credentials"],
+                "revokes_sessions": true,
+            }
+        })));
     }
 
     let mut tx = state.db.begin().await?;
@@ -701,5 +722,21 @@ async fn revoke_sso_session(
             "SSO session not found or already revoked".into(),
         ));
     }
+
+    // BE-F — audit log unifié.
+    crate::services::audit::record(
+        &state.db,
+        crate::services::audit::AuditEntry {
+            actor_type: crate::services::audit::ActorType::Admin,
+            actor_id: Some(auth.user_id),
+            action: "sso_session_revoke",
+            target_type: Some("user_session"),
+            target_id: Some(session_id),
+            metadata: None,
+            headers: None,
+        },
+    )
+    .await;
+
     Ok(Json(build_response(json!({ "revoked": true }))))
 }

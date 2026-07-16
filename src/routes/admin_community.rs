@@ -124,6 +124,21 @@ async fn approve_challenge(
         .await?;
     }
 
+    // BE-F — audit log unifié.
+    crate::services::audit::record(
+        &state.db,
+        crate::services::audit::AuditEntry {
+            actor_type: crate::services::audit::ActorType::Admin,
+            actor_id: Some(auth.user_id),
+            action: "community_challenge_approve",
+            target_type: Some("challenge_template"),
+            target_id: Some(id),
+            metadata: Some(json!({ "title": challenge.title })),
+            headers: None,
+        },
+    )
+    .await;
+
     Ok(Json(build_response(json!({
         "challenge": challenge,
         "message": "Challenge approved and published"
@@ -171,6 +186,24 @@ async fn reject_challenge(
         )
         .await?;
     }
+
+    // BE-F — audit log unifié.
+    crate::services::audit::record(
+        &state.db,
+        crate::services::audit::AuditEntry {
+            actor_type: crate::services::audit::ActorType::Admin,
+            actor_id: Some(auth.user_id),
+            action: "community_challenge_reject",
+            target_type: Some("challenge_template"),
+            target_id: Some(id),
+            metadata: Some(json!({
+                "title": challenge.title,
+                "feedback": body.feedback,
+            })),
+            headers: None,
+        },
+    )
+    .await;
 
     Ok(Json(build_response(json!({
         "challenge": challenge,

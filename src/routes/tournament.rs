@@ -270,6 +270,25 @@ async fn admin_conclude(
         }
     }
     metrics::counter!("skilluv_tournaments_concluded_total").increment(1);
+
+    // BE-F — audit log unifié.
+    crate::services::audit::record(
+        &state.db,
+        crate::services::audit::AuditEntry {
+            actor_type: crate::services::audit::ActorType::Admin,
+            actor_id: Some(auth.user_id),
+            action: "tournament_conclude",
+            target_type: Some("tournament"),
+            target_id: Some(id),
+            metadata: Some(json!({
+                "name": tname,
+                "podium_size": top.len(),
+            })),
+            headers: None,
+        },
+    )
+    .await;
+
     Ok(Json(build_response(json!({ "conclusion": report }))))
 }
 

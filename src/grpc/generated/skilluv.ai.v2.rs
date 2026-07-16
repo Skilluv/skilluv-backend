@@ -5,12 +5,14 @@ pub struct CodeReviewRequest {
     pub submission_id: ::prost::alloc::string::String,
     #[prost(string, tag = "2")]
     pub code: ::prost::alloc::string::String,
+    /// 'python' | 'rust' | 'js' | ...
     #[prost(string, tag = "3")]
     pub language: ::prost::alloc::string::String,
     #[prost(string, tag = "4")]
     pub challenge_title: ::prost::alloc::string::String,
     #[prost(string, tag = "5")]
     pub challenge_instructions: ::prost::alloc::string::String,
+    /// 1-5
     #[prost(int32, tag = "6")]
     pub difficulty: i32,
 }
@@ -19,234 +21,371 @@ pub struct CodeReviewResponse {
     /// 0-100
     #[prost(int32, tag = "1")]
     pub quality_score: i32,
-    /// Resume du feedback
+    /// 1-2 phrases
     #[prost(string, tag = "2")]
     pub summary: ::prost::alloc::string::String,
-    /// Points forts
     #[prost(string, repeated, tag = "3")]
     pub strengths: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
-    /// Axes d'amelioration
     #[prost(string, repeated, tag = "4")]
     pub improvements: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
-    /// Problemes specifiques
     #[prost(message, repeated, tag = "5")]
-    pub issues: ::prost::alloc::vec::Vec<CodeIssue>,
-    /// "simple", "moderate", "complex"
-    #[prost(string, tag = "6")]
-    pub complexity_rating: ::prost::alloc::string::String,
-    /// "clean", "acceptable", "messy"
+    pub issues: ::prost::alloc::vec::Vec<Issue>,
+    #[prost(message, repeated, tag = "6")]
+    pub resources: ::prost::alloc::vec::Vec<LearningResource>,
     #[prost(string, tag = "7")]
-    pub style_rating: ::prost::alloc::string::String,
+    pub model_version: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct CodeIssue {
-    /// "info", "warning", "error"
+pub struct Issue {
+    /// 'blocker' | 'critical' | 'major' | 'minor'
     #[prost(string, tag = "1")]
     pub severity: ::prost::alloc::string::String,
+    /// 'bug' | 'security' | 'perf' | 'style'
     #[prost(string, tag = "2")]
+    pub category: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
     pub message: ::prost::alloc::string::String,
-    /// Numero de ligne (0 si pas applicable)
-    #[prost(int32, tag = "3")]
-    pub line: i32,
-    /// Suggestion de correction
-    #[prost(string, tag = "4")]
-    pub suggestion: ::prost::alloc::string::String,
+    #[prost(int32, tag = "4")]
+    pub line_number: i32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct LearningResource {
+    #[prost(string, tag = "1")]
+    pub title: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub url: ::prost::alloc::string::String,
+    /// 'doc' | 'article' | 'video'
+    #[prost(string, tag = "3")]
+    pub kind: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GenerateChallengeRequest {
-    /// Description libre du challenge voulu
+    /// code | design | game | security
     #[prost(string, tag = "1")]
-    pub prompt: ::prost::alloc::string::String,
-    /// "code", "design", "game", "security"
-    #[prost(string, tag = "2")]
     pub skill_domain: ::prost::alloc::string::String,
     /// 1-5
-    #[prost(int32, tag = "3")]
+    #[prost(int32, tag = "2")]
     pub difficulty: i32,
-    /// Langage cible (optionnel)
+    /// 5-180
+    #[prost(int32, tag = "3")]
+    pub duration_minutes: i32,
+    /// solo | team
     #[prost(string, tag = "4")]
-    pub language: ::prost::alloc::string::String,
-    /// Tags souhaites
-    #[prost(string, repeated, tag = "5")]
-    pub tags: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
-    /// "serious", "fun", "educational"
-    #[prost(string, tag = "6")]
+    pub mode: ::prost::alloc::string::String,
+    /// serious | fun | absurd
+    #[prost(string, tag = "5")]
     pub tone: ::prost::alloc::string::String,
+    #[prost(bool, tag = "6")]
+    pub ai_allowed: bool,
+    /// fr | en
+    #[prost(string, tag = "7")]
+    pub language: ::prost::alloc::string::String,
+    #[prost(string, repeated, tag = "8")]
+    pub tags: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    #[prost(string, tag = "9")]
+    pub programming_language: ::prost::alloc::string::String,
+    /// P16 orientations métier
+    #[prost(string, tag = "10")]
+    pub orientation_slug: ::prost::alloc::string::String,
+    #[prost(bool, tag = "11")]
+    pub is_training: bool,
+    #[prost(string, tag = "12")]
+    pub project_id: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GenerateVariantRequest {
-    /// Challenge existant a varier
     #[prost(string, tag = "1")]
-    pub challenge_id: ::prost::alloc::string::String,
-    /// "harder", "easier", "similar", "different_language"
+    pub original_challenge_id: ::prost::alloc::string::String,
+    /// 'harder' | 'easier' | 'different_lang' | 'shorter' | 'longer'
     #[prost(string, tag = "2")]
-    pub variation_type: ::prost::alloc::string::String,
+    pub variant_type: ::prost::alloc::string::String,
+    /// ex: 'python' pour different_lang, '30' pour shorter
+    #[prost(string, tag = "3")]
+    pub target_param: ::prost::alloc::string::String,
+    /// Contexte original fourni par le backend (source de vérité : Postgres).
+    /// L'IA reste stateless — pas de dépendance à un cache inter-appels.
+    #[prost(message, optional, tag = "4")]
+    pub original: ::core::option::Option<GeneratedChallenge>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GenerateChallengeResponse {
+    #[prost(bool, tag = "1")]
+    pub success: bool,
+    #[prost(message, optional, tag = "2")]
+    pub challenge: ::core::option::Option<GeneratedChallenge>,
+    #[prost(string, tag = "3")]
+    pub error_message: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub model_version: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GeneratedChallenge {
     #[prost(string, tag = "1")]
     pub title: ::prost::alloc::string::String,
+    /// Markdown
     #[prost(string, tag = "2")]
     pub description: ::prost::alloc::string::String,
     #[prost(string, tag = "3")]
     pub instructions: ::prost::alloc::string::String,
-    #[prost(string, tag = "4")]
-    pub expected_output: ::prost::alloc::string::String,
-    /// JSON serialise des test cases
-    #[prost(string, tag = "5")]
-    pub test_cases_json: ::prost::alloc::string::String,
-    #[prost(int32, tag = "6")]
-    pub reward_fragments: i32,
-    #[prost(int32, tag = "7")]
-    pub estimated_duration_minutes: i32,
+    #[prost(int32, tag = "4")]
+    pub difficulty: i32,
+    #[prost(int32, tag = "5")]
+    pub duration_minutes: i32,
+    #[prost(string, tag = "6")]
+    pub skill_domain: ::prost::alloc::string::String,
+    #[prost(string, tag = "7")]
+    pub tone: ::prost::alloc::string::String,
     #[prost(string, repeated, tag = "8")]
-    pub suggested_tags: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    pub tags: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    #[prost(string, tag = "9")]
+    pub starter_code: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag = "10")]
+    pub test_cases: ::prost::alloc::vec::Vec<TestCase>,
+    #[prost(string, tag = "11")]
+    pub evaluation_criteria: ::prost::alloc::string::String,
+    #[prost(int32, tag = "12")]
+    pub fragment_reward: i32,
+    #[prost(bool, tag = "13")]
+    pub ai_allowed: bool,
+    #[prost(string, tag = "14")]
+    pub language: ::prost::alloc::string::String,
+    #[prost(string, tag = "15")]
+    pub orientation_slug: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct TestCase {
+    #[prost(string, tag = "1")]
+    pub input: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub expected_output: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub description: ::prost::alloc::string::String,
+    #[prost(bool, tag = "4")]
+    pub is_hidden: bool,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AnalyzePerformanceRequest {
     #[prost(string, tag = "1")]
     pub user_id: ::prost::alloc::string::String,
     #[prost(message, repeated, tag = "2")]
-    pub submissions: ::prost::alloc::vec::Vec<SubmissionSummary>,
+    pub deliverables: ::prost::alloc::vec::Vec<DeliverableSnapshot>,
     #[prost(message, repeated, tag = "3")]
-    pub skills: ::prost::alloc::vec::Vec<SkillData>,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct SubmissionSummary {
-    #[prost(string, tag = "1")]
-    pub challenge_id: ::prost::alloc::string::String,
-    #[prost(string, tag = "2")]
-    pub skill_domain: ::prost::alloc::string::String,
-    #[prost(int32, tag = "3")]
-    pub difficulty: i32,
-    /// "success", "failure"
-    #[prost(string, tag = "4")]
-    pub status: ::prost::alloc::string::String,
-    #[prost(int32, tag = "5")]
-    pub attempt_number: i32,
-    #[prost(int32, tag = "6")]
-    pub fragments_earned: i32,
-    #[prost(string, tag = "7")]
-    pub language: ::prost::alloc::string::String,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct SkillData {
-    #[prost(string, tag = "1")]
-    pub domain: ::prost::alloc::string::String,
-    #[prost(string, tag = "2")]
-    pub sub_skill: ::prost::alloc::string::String,
-    #[prost(int32, tag = "3")]
-    pub fragments: i32,
+    pub skills: ::prost::alloc::vec::Vec<SkillSnapshot>,
+    #[prost(message, repeated, tag = "4")]
+    pub orientations: ::prost::alloc::vec::Vec<OrientationSnapshot>,
+    /// ex: 'bronze', 'silver', ...
+    #[prost(string, tag = "5")]
+    pub current_rank: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AnalyzePerformanceResponse {
-    #[prost(message, repeated, tag = "1")]
-    pub strengths: ::prost::alloc::vec::Vec<StrengthArea>,
+    /// \[0-1\]
+    #[prost(double, tag = "1")]
+    pub overall_score: f64,
     #[prost(message, repeated, tag = "2")]
-    pub weaknesses: ::prost::alloc::vec::Vec<WeaknessArea>,
-    #[prost(string, tag = "3")]
-    pub overall_assessment: ::prost::alloc::string::String,
-    #[prost(string, repeated, tag = "4")]
-    pub recommendations: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
-    /// 0.0-1.0
-    #[prost(double, tag = "5")]
-    pub consistency_score: f64,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct StrengthArea {
-    #[prost(string, tag = "1")]
-    pub domain: ::prost::alloc::string::String,
-    #[prost(string, tag = "2")]
-    pub sub_skill: ::prost::alloc::string::String,
-    #[prost(string, tag = "3")]
-    pub description: ::prost::alloc::string::String,
-    /// vs other users at same level
-    #[prost(double, tag = "4")]
-    pub percentile: f64,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct WeaknessArea {
-    #[prost(string, tag = "1")]
-    pub domain: ::prost::alloc::string::String,
-    #[prost(string, tag = "2")]
-    pub sub_skill: ::prost::alloc::string::String,
-    #[prost(string, tag = "3")]
-    pub description: ::prost::alloc::string::String,
-    #[prost(string, tag = "4")]
-    pub suggested_challenge_type: ::prost::alloc::string::String,
+    pub strengths: ::prost::alloc::vec::Vec<StrengthItem>,
+    #[prost(message, repeated, tag = "3")]
+    pub gaps: ::prost::alloc::vec::Vec<GapItem>,
+    #[prost(message, repeated, tag = "4")]
+    pub next_actions: ::prost::alloc::vec::Vec<NextAction>,
+    #[prost(message, optional, tag = "5")]
+    pub rank_readiness: ::core::option::Option<RankReadiness>,
+    #[prost(string, tag = "6")]
+    pub model_version: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CareerPathRequest {
     #[prost(string, tag = "1")]
     pub user_id: ::prost::alloc::string::String,
     #[prost(message, repeated, tag = "2")]
-    pub skills: ::prost::alloc::vec::Vec<SkillData>,
-    #[prost(string, tag = "3")]
-    pub current_title: ::prost::alloc::string::String,
-    #[prost(int32, tag = "4")]
-    pub total_fragments: i32,
+    pub skills: ::prost::alloc::vec::Vec<SkillSnapshot>,
+    #[prost(string, repeated, tag = "3")]
+    pub working_languages: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// 'africa' | 'international'
+    #[prost(string, tag = "4")]
+    pub target_market: ::prost::alloc::string::String,
+    #[prost(int32, tag = "5")]
+    pub max_suggestions: i32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CareerPathResponse {
     #[prost(message, repeated, tag = "1")]
-    pub suggestions: ::prost::alloc::vec::Vec<CareerSuggestion>,
+    pub suggestions: ::prost::alloc::vec::Vec<OrientationSuggestion>,
     #[prost(string, tag = "2")]
-    pub primary_orientation: ::prost::alloc::string::String,
-    #[prost(string, tag = "3")]
-    pub assessment: ::prost::alloc::string::String,
+    pub primary_recommendation: ::prost::alloc::string::String,
+    #[prost(string, repeated, tag = "3")]
+    pub secondary_recommendations: ::prost::alloc::vec::Vec<
+        ::prost::alloc::string::String,
+    >,
+    #[prost(string, tag = "4")]
+    pub model_version: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct CareerSuggestion {
-    /// "Backend Developer", "UX Designer", etc.
+pub struct DeliverableSnapshot {
     #[prost(string, tag = "1")]
-    pub role: ::prost::alloc::string::String,
-    /// 0.0-1.0
-    #[prost(double, tag = "2")]
-    pub match_score: f64,
-    #[prost(string, tag = "3")]
-    pub reasoning: ::prost::alloc::string::String,
-    #[prost(string, repeated, tag = "4")]
-    pub skills_to_develop: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    pub deliverable_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub skill_slug: ::prost::alloc::string::String,
+    /// work-proven credits
+    #[prost(int32, tag = "3")]
+    pub wpc: i32,
+    /// RFC3339
+    #[prost(string, tag = "4")]
+    pub verified_at: ::prost::alloc::string::String,
+    /// 'test_suite' | 'llm_evaluation' | 'attestation'
+    #[prost(string, tag = "5")]
+    pub verifiable_by: ::prost::alloc::string::String,
+    #[prost(int32, tag = "6")]
+    pub difficulty: i32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct PlagiarismRequest {
+pub struct SkillSnapshot {
+    #[prost(string, tag = "1")]
+    pub skill_slug: ::prost::alloc::string::String,
+    #[prost(int32, tag = "2")]
+    pub wpc_total: i32,
+    #[prost(int32, tag = "3")]
+    pub evidence_count: i32,
+    #[prost(string, tag = "4")]
+    pub first_evidence_at: ::prost::alloc::string::String,
+    #[prost(string, tag = "5")]
+    pub last_evidence_at: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct OrientationSnapshot {
+    #[prost(string, tag = "1")]
+    pub orientation_slug: ::prost::alloc::string::String,
+    /// \[0-1\]
+    #[prost(double, tag = "2")]
+    pub completion_ratio: f64,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct StrengthItem {
+    #[prost(string, tag = "1")]
+    pub skill_slug: ::prost::alloc::string::String,
+    #[prost(int32, tag = "2")]
+    pub evidence_count: i32,
+    #[prost(int32, tag = "3")]
+    pub wpc_total: i32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GapItem {
+    #[prost(string, tag = "1")]
+    pub skill_slug: ::prost::alloc::string::String,
+    /// 'critical' | 'nice_to_have'
+    #[prost(string, tag = "2")]
+    pub importance: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub reason: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct NextAction {
+    /// 'attempt_challenge' | 'seek_mentor' | 'take_attestation'
+    #[prost(string, tag = "1")]
+    pub action_type: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub target_slug: ::prost::alloc::string::String,
+    /// 1 (high) - 5 (low)
+    #[prost(int32, tag = "3")]
+    pub priority: i32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RankReadiness {
+    #[prost(string, tag = "1")]
+    pub current_rank: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub next_rank: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag = "3")]
+    pub missing_criteria: ::prost::alloc::vec::Vec<MissingCriterion>,
+    #[prost(int32, tag = "4")]
+    pub estimated_days_to_promotion: i32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MissingCriterion {
+    /// ex: 'wpc_total', 'distinct_skills'
+    #[prost(string, tag = "1")]
+    pub criterion: ::prost::alloc::string::String,
+    #[prost(double, tag = "2")]
+    pub current_value: f64,
+    #[prost(double, tag = "3")]
+    pub threshold: f64,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct OrientationSuggestion {
+    #[prost(string, tag = "1")]
+    pub orientation_slug: ::prost::alloc::string::String,
+    /// \[0-1\]
+    #[prost(double, tag = "2")]
+    pub confidence: f64,
+    #[prost(string, tag = "3")]
+    pub match_reason: ::prost::alloc::string::String,
+    #[prost(string, repeated, tag = "4")]
+    pub required_skills_missing: ::prost::alloc::vec::Vec<
+        ::prost::alloc::string::String,
+    >,
+    /// 'low' | 'medium' | 'high'
+    #[prost(string, tag = "5")]
+    pub transition_effort: ::prost::alloc::string::String,
+    #[prost(int32, tag = "6")]
+    pub timeline_estimate_months: i32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct CheckPlagiarismRequest {
     #[prost(string, tag = "1")]
     pub submission_id: ::prost::alloc::string::String,
     #[prost(string, tag = "2")]
     pub code: ::prost::alloc::string::String,
     #[prost(string, tag = "3")]
     pub language: ::prost::alloc::string::String,
-    #[prost(string, tag = "4")]
-    pub challenge_id: ::prost::alloc::string::String,
-    #[prost(string, tag = "5")]
-    pub user_id: ::prost::alloc::string::String,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct PlagiarismResponse {
-    #[prost(bool, tag = "1")]
-    pub is_suspicious: bool,
-    /// 0.0-1.0 (1.0 = identical)
-    #[prost(double, tag = "2")]
-    pub similarity_score: f64,
-    /// 0.0-1.0 (1.0 = definitely AI)
-    #[prost(double, tag = "3")]
-    pub ai_generated_score: f64,
     #[prost(message, repeated, tag = "4")]
-    pub matches: ::prost::alloc::vec::Vec<SimilarSubmission>,
-    /// "clean", "suspicious", "plagiarized", "ai_generated"
-    #[prost(string, tag = "5")]
-    pub verdict: ::prost::alloc::string::String,
-    #[prost(string, tag = "6")]
-    pub explanation: ::prost::alloc::string::String,
+    pub comparison_pool: ::prost::alloc::vec::Vec<PreviousSubmission>,
+    /// \[0-1\], défaut 0.85
+    #[prost(double, tag = "5")]
+    pub threshold: f64,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct SimilarSubmission {
+pub struct PreviousSubmission {
     #[prost(string, tag = "1")]
     pub submission_id: ::prost::alloc::string::String,
     #[prost(string, tag = "2")]
-    pub user_id: ::prost::alloc::string::String,
+    pub code: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub language: ::prost::alloc::string::String,
+    /// RFC3339
+    #[prost(string, tag = "4")]
+    pub submitted_at: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct CheckPlagiarismResponse {
+    /// \[0-1\]
+    #[prost(double, tag = "1")]
+    pub similarity_score: f64,
+    /// vide si is_plagiarism=false
+    #[prost(string, tag = "2")]
+    pub similar_submission_id: ::prost::alloc::string::String,
     #[prost(double, tag = "3")]
-    pub similarity: f64,
+    pub ast_similarity: f64,
+    #[prost(double, tag = "4")]
+    pub embedding_similarity: f64,
+    #[prost(message, repeated, tag = "5")]
+    pub matched_ranges: ::prost::alloc::vec::Vec<MatchedRange>,
+    #[prost(bool, tag = "6")]
+    pub is_plagiarism: bool,
+    #[prost(string, tag = "7")]
+    pub model_version: ::prost::alloc::string::String,
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct MatchedRange {
+    #[prost(int32, tag = "1")]
+    pub source_start_line: i32,
+    #[prost(int32, tag = "2")]
+    pub source_end_line: i32,
+    #[prost(int32, tag = "3")]
+    pub target_start_line: i32,
+    #[prost(int32, tag = "4")]
+    pub target_end_line: i32,
+    #[prost(double, tag = "5")]
+    pub confidence: f64,
 }
 /// Generated client implementations.
 pub mod code_review_service_client {
@@ -259,6 +398,9 @@ pub mod code_review_service_client {
     )]
     use tonic::codegen::*;
     use tonic::codegen::http::Uri;
+    /// ===========================================================================
+    /// 1. CodeReviewService — utilisé par backend P15.2 llm_verifier
+    /// ===========================================================================
     #[derive(Debug, Clone)]
     pub struct CodeReviewServiceClient<T> {
         inner: tonic::client::Grpc<T>,
@@ -356,11 +498,13 @@ pub mod code_review_service_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/skilluv.ai.CodeReviewService/ReviewCode",
+                "/skilluv.ai.v2.CodeReviewService/ReviewCode",
             );
             let mut req = request.into_request();
             req.extensions_mut()
-                .insert(GrpcMethod::new("skilluv.ai.CodeReviewService", "ReviewCode"));
+                .insert(
+                    GrpcMethod::new("skilluv.ai.v2.CodeReviewService", "ReviewCode"),
+                );
             self.inner.unary(req, path, codec).await
         }
     }
@@ -376,6 +520,9 @@ pub mod challenge_generation_service_client {
     )]
     use tonic::codegen::*;
     use tonic::codegen::http::Uri;
+    /// ===========================================================================
+    /// 2. ChallengeGenerationService
+    /// ===========================================================================
     #[derive(Debug, Clone)]
     pub struct ChallengeGenerationServiceClient<T> {
         inner: tonic::client::Grpc<T>,
@@ -475,13 +622,13 @@ pub mod challenge_generation_service_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/skilluv.ai.ChallengeGenerationService/GenerateChallenge",
+                "/skilluv.ai.v2.ChallengeGenerationService/GenerateChallenge",
             );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(
                     GrpcMethod::new(
-                        "skilluv.ai.ChallengeGenerationService",
+                        "skilluv.ai.v2.ChallengeGenerationService",
                         "GenerateChallenge",
                     ),
                 );
@@ -504,13 +651,13 @@ pub mod challenge_generation_service_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/skilluv.ai.ChallengeGenerationService/GenerateVariant",
+                "/skilluv.ai.v2.ChallengeGenerationService/GenerateVariant",
             );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(
                     GrpcMethod::new(
-                        "skilluv.ai.ChallengeGenerationService",
+                        "skilluv.ai.v2.ChallengeGenerationService",
                         "GenerateVariant",
                     ),
                 );
@@ -529,6 +676,9 @@ pub mod talent_detection_service_client {
     )]
     use tonic::codegen::*;
     use tonic::codegen::http::Uri;
+    /// ===========================================================================
+    /// 3. TalentDetectionService — nouveau, backend attend ce contrat
+    /// ===========================================================================
     #[derive(Debug, Clone)]
     pub struct TalentDetectionServiceClient<T> {
         inner: tonic::client::Grpc<T>,
@@ -628,13 +778,13 @@ pub mod talent_detection_service_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/skilluv.ai.TalentDetectionService/AnalyzePerformance",
+                "/skilluv.ai.v2.TalentDetectionService/AnalyzePerformance",
             );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(
                     GrpcMethod::new(
-                        "skilluv.ai.TalentDetectionService",
+                        "skilluv.ai.v2.TalentDetectionService",
                         "AnalyzePerformance",
                     ),
                 );
@@ -657,13 +807,13 @@ pub mod talent_detection_service_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/skilluv.ai.TalentDetectionService/SuggestCareerPath",
+                "/skilluv.ai.v2.TalentDetectionService/SuggestCareerPath",
             );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(
                     GrpcMethod::new(
-                        "skilluv.ai.TalentDetectionService",
+                        "skilluv.ai.v2.TalentDetectionService",
                         "SuggestCareerPath",
                     ),
                 );
@@ -682,6 +832,9 @@ pub mod plagiarism_service_client {
     )]
     use tonic::codegen::*;
     use tonic::codegen::http::Uri;
+    /// ===========================================================================
+    /// 4. PlagiarismService — utilisé par backend P14.3
+    /// ===========================================================================
     #[derive(Debug, Clone)]
     pub struct PlagiarismServiceClient<T> {
         inner: tonic::client::Grpc<T>,
@@ -764,9 +917,9 @@ pub mod plagiarism_service_client {
         }
         pub async fn check_plagiarism(
             &mut self,
-            request: impl tonic::IntoRequest<super::PlagiarismRequest>,
+            request: impl tonic::IntoRequest<super::CheckPlagiarismRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::PlagiarismResponse>,
+            tonic::Response<super::CheckPlagiarismResponse>,
             tonic::Status,
         > {
             self.inner
@@ -779,12 +932,12 @@ pub mod plagiarism_service_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/skilluv.ai.PlagiarismService/CheckPlagiarism",
+                "/skilluv.ai.v2.PlagiarismService/CheckPlagiarism",
             );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(
-                    GrpcMethod::new("skilluv.ai.PlagiarismService", "CheckPlagiarism"),
+                    GrpcMethod::new("skilluv.ai.v2.PlagiarismService", "CheckPlagiarism"),
                 );
             self.inner.unary(req, path, codec).await
         }

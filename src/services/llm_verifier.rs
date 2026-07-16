@@ -127,7 +127,8 @@ pub async fn evaluate_deliverable(
         });
     };
 
-    match ai
+    let started = std::time::Instant::now();
+    let result = ai
         .review_code(
             &deliverable_id.to_string(),
             &code,
@@ -136,8 +137,20 @@ pub async fn evaluate_deliverable(
             &full_instructions,
             difficulty as i32,
         )
-        .await
-    {
+        .await;
+    // IA-D — log audit trail de l'appel.
+    let mv = result.as_ref().ok().map(|r| r.model_version.clone());
+    crate::services::ai_log::record(
+        db,
+        "ReviewCode",
+        Some(deliverable_id),
+        None,
+        started.elapsed(),
+        &result,
+        mv.as_deref(),
+    )
+    .await;
+    match result {
         Ok(resp) => {
             // Score attendu dans [0.0, 1.0]. Le proto expose des champs
             // score/feedback via CodeReviewResponse — on lit permissivement.

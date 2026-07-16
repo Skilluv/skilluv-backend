@@ -1,3 +1,4 @@
+pub mod ai_log;
 pub mod ai_queue;
 pub mod analytics;
 pub mod audit;

@@ -416,10 +416,20 @@ async fn deep_plagiarism_scan_endpoint(
         comparison_pool,
         threshold: q.threshold.unwrap_or(0.80) as f64,
     };
-    let resp = ai
-        .check_plagiarism(request)
-        .await
-        .map_err(|s| AppError::Internal(format!("gRPC check_plagiarism failed: {s}")))?;
+    let started = std::time::Instant::now();
+    let result = ai.check_plagiarism(request).await;
+    let mv = result.as_ref().ok().map(|r| r.model_version.clone());
+    crate::services::ai_log::record(
+        &state.db,
+        "CheckPlagiarism",
+        Some(deliverable_id),
+        Some(auth.user_id),
+        started.elapsed(),
+        &result,
+        mv.as_deref(),
+    )
+    .await;
+    let resp = result.map_err(|s| AppError::Internal(format!("gRPC check_plagiarism failed: {s}")))?;
 
     // 4. Merge le résultat dans verification_signal.deep_plagiarism.
     let signal = serde_json::json!({

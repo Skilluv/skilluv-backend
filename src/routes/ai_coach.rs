@@ -71,10 +71,20 @@ async fn my_performance(
     })?;
 
     let request = build_analyze_request(&state.db, auth.user_id).await?;
-    let resp = ai
-        .analyze_performance(request)
-        .await
-        .map_err(|s| AppError::Internal(format!("analyze_performance gRPC: {s}")))?;
+    let started = std::time::Instant::now();
+    let result = ai.analyze_performance(request).await;
+    let model_version = result.as_ref().ok().map(|r| r.model_version.clone());
+    crate::services::ai_log::record(
+        &state.db,
+        "AnalyzePerformance",
+        None,
+        Some(auth.user_id),
+        started.elapsed(),
+        &result,
+        model_version.as_deref(),
+    )
+    .await;
+    let resp = result.map_err(|s| AppError::Internal(format!("analyze_performance gRPC: {s}")))?;
 
     let payload = json!({
         "user_id": auth.user_id,
@@ -328,10 +338,20 @@ async fn suggest_orientations(
             .unwrap_or_else(|| "international".into()),
         max_suggestions: body.max_suggestions.unwrap_or(3).clamp(1, 10),
     };
-    let resp = ai
-        .suggest_career_path(request)
-        .await
-        .map_err(|s| AppError::Internal(format!("suggest_career_path gRPC: {s}")))?;
+    let started = std::time::Instant::now();
+    let result = ai.suggest_career_path(request).await;
+    let model_version = result.as_ref().ok().map(|r| r.model_version.clone());
+    crate::services::ai_log::record(
+        &state.db,
+        "SuggestCareerPath",
+        None,
+        Some(auth.user_id),
+        started.elapsed(),
+        &result,
+        model_version.as_deref(),
+    )
+    .await;
+    let resp = result.map_err(|s| AppError::Internal(format!("suggest_career_path gRPC: {s}")))?;
 
     // Validation : chaque orientation_slug retourné doit exister dans notre catalogue
     // (défense en profondeur — le catalogue IA peut diverger, voir doc §6.3).

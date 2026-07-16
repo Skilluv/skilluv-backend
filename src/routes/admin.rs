@@ -816,10 +816,19 @@ async fn admin_generate_variant(
         target_param: body.target_param.clone(),
         original: Some(original_proto),
     };
-    let resp = ai
-        .generate_variant(request)
-        .await
-        .map_err(|s| AppError::Internal(format!("gRPC generate_variant failed: {s}")))?;
+    let started = std::time::Instant::now();
+    let result = ai.generate_variant(request).await;
+    crate::services::ai_log::record(
+        &state.db,
+        "GenerateVariant",
+        None,
+        Some(auth.user_id),
+        started.elapsed(),
+        &result,
+        None,
+    )
+    .await;
+    let resp = result.map_err(|s| AppError::Internal(format!("gRPC generate_variant failed: {s}")))?;
 
     if !resp.success {
         return Err(AppError::Internal(format!(

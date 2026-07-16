@@ -789,14 +789,27 @@ async fn handle_pull_request_event(state: &AppState, payload: &Value) -> Result<
         return Ok(());
     }
 
+    // BE-P26 — Split fee Skilluv 8% (env override SKILLUV_BOUNTY_FEE_BPS,
+    // default 800 basis points = 8%). Sur bounty 500 crédits :
+    //   platform_share = 40, talent_share = 460.
+    // Le talent voit talent_share × credit_to_frag en fragments et un montant
+    // pré-fee (transparence UI côté enterprise ET talent doit indiquer le fee).
+    let fee_bps: i64 = std::env::var("SKILLUV_BOUNTY_FEE_BPS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(800);
+    let reward_i64 = num_traits::ToPrimitive::to_i64(&reward).unwrap_or(0);
+    let platform_share_i64 = (reward_i64 * fee_bps) / 10_000;
+    let talent_share_i64 = reward_i64 - platform_share_i64;
+    let platform_share_bd = BigDecimal::from(platform_share_i64);
+    let talent_share_bd = BigDecimal::from(talent_share_i64);
+
     // Conversion crédits séquestrés → fragments talent (les crédits sont B2B).
     let credit_to_frag: i64 = std::env::var("BOUNTY_CREDIT_TO_FRAGMENTS")
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(500);
-    let fragments_from_credits = num_traits::ToPrimitive::to_i64(&reward)
-        .map(|c| c * credit_to_frag)
-        .unwrap_or(0) as i32;
+    let fragments_from_credits = (talent_share_i64 * credit_to_frag) as i32;
     let total_fragments_award = fragments_from_credits + fragments_bonus;
 
     sqlx::query(
@@ -809,10 +822,32 @@ async fn handle_pull_request_event(state: &AppState, payload: &Value) -> Result<
     .bind(enterprise_id)
     .bind(talent_user_id)
     .bind(format!(
-        "bounty:{slice_id} payout_credits={reward} fragments={total_fragments_award} pr={pr_url}"
+        "bounty:{slice_id} total_credits={reward} platform_fee={platform_share_bd} talent_share={talent_share_bd} fragments={total_fragments_award} pr={pr_url}"
     ))
     .execute(&state.db)
     .await?;
+
+    // BE-P26 — Insert platform_revenues ligne pour la marge Skilluv.
+    if platform_share_i64 > 0 {
+        sqlx::query(
+            r#"
+            INSERT INTO platform_revenues
+                (source, source_slice_id, related_talent_id, related_enterprise_id,
+                 amount_credits, fee_rate_bps, notes)
+            VALUES ('bounty', $1, $2, $3, $4, $5, $6)
+            "#,
+        )
+        .bind(slice_id)
+        .bind(talent_user_id)
+        .bind(enterprise_id)
+        .bind(&platform_share_bd)
+        .bind(fee_bps as i32)
+        .bind(format!("bounty payout fee {fee_bps}bps on {reward} credits"))
+        .execute(&state.db)
+        .await?;
+
+        metrics::counter!("skilluv_bounty_platform_fees_total").increment(1);
+    }
 
     sqlx::query("UPDATE users SET total_fragments = total_fragments + $1 WHERE id = $2")
         .bind(total_fragments_award)
@@ -844,9 +879,10 @@ async fn handle_pull_request_event(state: &AppState, payload: &Value) -> Result<
         .and_then(|s| s.parse().ok())
         .unwrap_or(0.0);
     if rate > 0.0 {
-        // fiat_amount = reward × rate. On garde BigDecimal pour éviter précision.
+        // BE-P26 : le wallet talent reçoit talent_share (92% après fee 8%),
+        // pas le reward brut. Ex bounty 500€ → wallet 460€ EUR.
         let rate_bd = BigDecimal::try_from(rate).unwrap_or(BigDecimal::from(0));
-        let fiat_amount = &reward * &rate_bd;
+        let fiat_amount = &talent_share_bd * &rate_bd;
         if fiat_amount > BigDecimal::from(0) {
             let entry = crate::services::talent_wallet::LedgerEntry {
                 user_id: talent_user_id,

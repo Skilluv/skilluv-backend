@@ -25,8 +25,9 @@ pub fn admin_user_routes() -> Router<AppState> {
             "/admin/users/{id}/rank-override",
             post(admin_rank_override),
         )
-        // Non-admin path, mais monté sous admin_gate → admin origin + capability requis.
-        .route("/users/{id}/orientations", get(peek_user_orientations))
+    // Note: `GET /users/{id}/orientations` était monté ici en admin-scoped
+    // à l'origine. Déplacé dans `orientations.rs` en route publique respectant
+    // la privacy (BACKEND-GAPS FE-M1). Admin peut consommer la même route.
 }
 
 const ALLOWED_RANKS: &[&str] = &["apprenti", "ranger", "artisan", "maitre", "doyen"];
@@ -289,42 +290,4 @@ async fn admin_rank_override(
     }))))
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// GET /users/{id}/orientations  (admin-scoped via admin_gate)
-// ═══════════════════════════════════════════════════════════════════
-
-async fn peek_user_orientations(
-    State(state): State<AppState>,
-    auth: AuthUser,
-    Path(target_id): Path<Uuid>,
-) -> Result<Json<Value>, AppError> {
-    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
-
-    let rows: Vec<(String, String, String, bool, chrono::DateTime<chrono::Utc>)> = sqlx::query_as(
-        r#"
-        SELECT o.slug, o.name, uo.mode, uo.is_primary, uo.started_at
-        FROM user_orientations uo
-        JOIN orientations o ON o.id = uo.orientation_id
-        WHERE uo.user_id = $1
-        ORDER BY uo.ended_at NULLS FIRST, uo.is_primary DESC, uo.started_at DESC
-        "#,
-    )
-    .bind(target_id)
-    .fetch_all(&state.db)
-    .await?;
-
-    let orientations: Vec<Value> = rows
-        .into_iter()
-        .map(|(slug, name, mode, primary, picked)| {
-            json!({
-                "orientation_slug": slug,
-                "orientation_name": name,
-                "mode": mode,
-                "is_primary": primary,
-                "picked_at": picked.to_rfc3339(),
-            })
-        })
-        .collect();
-
-    Ok(Json(build_response(json!({ "orientations": orientations }))))
-}
+// (peek_user_orientations déplacé vers routes/orientations.rs en route publique.)

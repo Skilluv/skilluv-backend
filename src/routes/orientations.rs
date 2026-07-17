@@ -38,6 +38,8 @@ pub fn orientation_routes() -> Router<AppState> {
             "/users/me/orientations/{slug}/playlist",
             get(orientation_playlist),
         )
+        // FE-M1 — projection publique des orientations d'un user (profil public).
+        .route("/users/{id}/orientations", get(public_user_orientations))
 }
 
 fn wrap(data: Value) -> Value {
@@ -416,4 +418,61 @@ async fn end_orientation(
         return Err(AppError::NotFound(format!("active orientation '{slug}' not found")));
     }
     Ok(Json(wrap(json!({ "ended": true, "slug": slug }))))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// FE-M1 — GET /users/{id}/orientations (public, projection minimale)
+// ═══════════════════════════════════════════════════════════════════
+//
+// Retourne uniquement les orientations actives (ended_at IS NULL) et une
+// projection minimale (pas de notes/timezone). Pas de flag privacy dédié
+// (les orientations sont une info d'identité professionnelle, comme le
+// job title public sur LinkedIn). Si un user veut cacher son profil, il
+// utilise le mécanisme users.profile_active = FALSE (déjà existant).
+async fn public_user_orientations(
+    State(state): State<AppState>,
+    Path(user_id): Path<Uuid>,
+) -> Result<Json<Value>, AppError> {
+    // Si le user a désactivé son profil public, renvoie un tableau vide (pas
+    // une 403 : évite l'énumération).
+    let public: Option<bool> = sqlx::query_scalar(
+        "SELECT profile_active FROM users WHERE id = $1 AND is_banned = FALSE",
+    )
+    .bind(user_id)
+    .fetch_optional(&state.db)
+    .await?;
+    let Some(active) = public else {
+        return Err(AppError::NotFound("user not found".into()));
+    };
+    if !active {
+        return Ok(Json(wrap(json!({ "orientations": [] }))));
+    }
+
+    let rows: Vec<(String, String, String, bool, chrono::DateTime<chrono::Utc>)> = sqlx::query_as(
+        r#"
+        SELECT o.slug, o.name, uo.mode, uo.is_primary, uo.started_at
+        FROM user_orientations uo
+        JOIN orientations o ON o.id = uo.orientation_id
+        WHERE uo.user_id = $1 AND uo.ended_at IS NULL
+        ORDER BY uo.is_primary DESC, uo.started_at DESC
+        "#,
+    )
+    .bind(user_id)
+    .fetch_all(&state.db)
+    .await?;
+
+    let orientations: Vec<Value> = rows
+        .into_iter()
+        .map(|(slug, name, mode, primary, picked)| {
+            json!({
+                "orientation_slug": slug,
+                "orientation_name": name,
+                "mode": mode,
+                "is_primary": primary,
+                "picked_at": picked.to_rfc3339(),
+            })
+        })
+        .collect();
+
+    Ok(Json(wrap(json!({ "orientations": orientations }))))
 }

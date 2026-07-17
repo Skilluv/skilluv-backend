@@ -10,7 +10,56 @@ use crate::models::BadgeWithEarnedAt;
 use crate::services::LeaderboardService;
 
 pub fn profile_routes() -> Router<AppState> {
-    Router::new().route("/profile/{username}", get(public_profile))
+    Router::new()
+        .route("/profile/{username}", get(public_profile))
+        // MVP.md ligne 114 — historique des ranks (public, respecte profile_active).
+        .route("/users/{id}/rank-history", get(user_rank_history))
+}
+
+// GET /api/users/{id}/rank-history — historique public des transitions de rang.
+async fn user_rank_history(
+    State(state): State<AppState>,
+    Path(user_id): Path<Uuid>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    // Vérifie que le profil est public + non banni (évite énumération).
+    let ok: Option<bool> = sqlx::query_scalar(
+        "SELECT profile_active FROM users WHERE id = $1 AND is_banned = FALSE",
+    )
+    .bind(user_id)
+    .fetch_optional(&state.db)
+    .await?;
+    let Some(active) = ok else {
+        return Err(AppError::NotFound("user not found".into()));
+    };
+    if !active {
+        return Ok(Json(build_response(json!({ "history": [] }))));
+    }
+
+    let rows: Vec<(Option<String>, String, chrono::DateTime<chrono::Utc>, Option<String>)> =
+        sqlx::query_as(
+            r#"SELECT from_rank, to_rank, achieved_at, reason
+               FROM user_rank_history
+               WHERE user_id = $1
+               ORDER BY achieved_at DESC
+               LIMIT 100"#,
+        )
+        .bind(user_id)
+        .fetch_all(&state.db)
+        .await?;
+
+    let history: Vec<serde_json::Value> = rows
+        .into_iter()
+        .map(|(from, to, ts, reason)| {
+            json!({
+                "from_rank": from,
+                "to_rank": to,
+                "achieved_at": ts.to_rfc3339(),
+                "reason": reason,
+            })
+        })
+        .collect();
+
+    Ok(Json(build_response(json!({ "history": history }))))
 }
 
 fn build_response(data: serde_json::Value) -> serde_json::Value {

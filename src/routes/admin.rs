@@ -41,6 +41,8 @@ pub fn admin_routes() -> Router<AppState> {
         .merge(crate::routes::admin_enterprise_routes())
         // ADM-M5 — Recompute proofs + rank override + orientations peek.
         .merge(crate::routes::admin_user_routes())
+        // ADM-M5+ — proof-hooks sweep + admin-triggered GDPR export.
+        .merge(crate::routes::admin_ops_routes())
 }
 
 // ═══════════════════════════════════════════════════════════════════

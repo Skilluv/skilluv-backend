@@ -33,6 +33,14 @@ pub fn admin_routes() -> Router<AppState> {
         .route("/admin/users/{id}/reset-2fa", post(admin_reset_2fa))
         // IA-C.1 — Générer une variante d'un challenge (harder/easier au MVP).
         .route("/admin/challenges/{id}/variant", post(admin_generate_variant))
+        // ADM-M3.1 — CRUD orientations + orientation_skill_map.
+        .merge(crate::routes::admin_orientation_routes())
+        // ADM-M3.2 — CRUD badge_rules (proof engine editor).
+        .merge(crate::routes::admin_badge_rule_routes())
+        // ADM-M4 — Enterprise type manager.
+        .merge(crate::routes::admin_enterprise_routes())
+        // ADM-M5 — Recompute proofs + rank override + orientations peek.
+        .merge(crate::routes::admin_user_routes())
 }
 
 // ═══════════════════════════════════════════════════════════════════

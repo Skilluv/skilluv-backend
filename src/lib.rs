@@ -123,6 +123,8 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::challenge_tag_routes())
         .nest("/api", routes::community_routes())
         .nest("/api", admin_gate(routes::admin_community_routes()))
+        // FE-M9 — modération inline (non admin-gated, require_any_capability).
+        .nest("/api", routes::moderation_routes())
         .nest("/api", routes::challenge_team_routes())
         .nest("/api", routes::developer_routes())
         .nest("/api", routes::public_api_routes())

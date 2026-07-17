@@ -23,6 +23,8 @@ pub fn admin_ops_routes() -> Router<AppState> {
             "/admin/users/{id}/gdpr-export",
             post(admin_trigger_gdpr_export),
         )
+        // MVP.md Annexe A #8 — création d'un event (Hacktoberfest, Skilluv Fest).
+        .route("/admin/badge-events", post(admin_create_badge_event))
 }
 
 fn wrap(data: Value) -> Value {
@@ -180,5 +182,111 @@ async fn admin_trigger_gdpr_export(
         "status": "queued",
         "target_user_id": target_id,
         "message": "Export is being prepared; user will receive it by email within a few minutes.",
+    }))))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// POST /admin/badge-events — création d'un event (mig 0093).
+// ═══════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Deserialize)]
+struct CreateEventBody {
+    slug: String,
+    name: String,
+    #[serde(default)]
+    description: Option<String>,
+    starts_at: chrono::DateTime<chrono::Utc>,
+    #[serde(default)]
+    ends_at: Option<chrono::DateTime<chrono::Utc>>,
+    #[serde(default)]
+    visual_theme: Option<Value>,
+    #[serde(default)]
+    is_partner: Option<bool>,
+}
+
+async fn admin_create_badge_event(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Json(body): Json<CreateEventBody>,
+) -> Result<Json<Value>, AppError> {
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
+    crate::middleware::admin_destructive::enforce_admin_destructive(&state, auth.user_id).await?;
+
+    let slug_len = body.slug.len();
+    if !(3..=60).contains(&slug_len)
+        || !body.slug.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+    {
+        return Err(AppError::Validation(
+            "slug must be 3..=60 chars matching ^[a-z0-9-]+$".into(),
+        ));
+    }
+    if body.name.trim().is_empty() || body.name.len() > 120 {
+        return Err(AppError::Validation("name must be 1..=120 chars".into()));
+    }
+    if let Some(end) = body.ends_at {
+        if end < body.starts_at {
+            return Err(AppError::Validation("ends_at must be >= starts_at".into()));
+        }
+    }
+
+    if crate::middleware::admin_destructive::is_admin_dry_run() {
+        return Ok(Json(wrap(json!({
+            "dry_run": true,
+            "would_create": { "slug": body.slug, "name": body.name },
+        }))));
+    }
+
+    let visual = body.visual_theme.clone().unwrap_or_else(|| json!({}));
+    let partner = body.is_partner.unwrap_or(false);
+
+    let (id,): (Uuid,) = sqlx::query_as(
+        r#"INSERT INTO events
+                (slug, name, description, starts_at, ends_at, visual_theme, is_partner, created_by)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           RETURNING id"#,
+    )
+    .bind(&body.slug)
+    .bind(&body.name)
+    .bind(body.description.clone().unwrap_or_default())
+    .bind(body.starts_at)
+    .bind(body.ends_at)
+    .bind(&visual)
+    .bind(partner)
+    .bind(auth.user_id)
+    .fetch_one(&state.db)
+    .await
+    .map_err(|e| match e {
+        sqlx::Error::Database(ref db_err) if db_err.constraint() == Some("events_slug_key") => {
+            AppError::Validation(format!("event slug '{}' already exists", body.slug))
+        }
+        _ => AppError::Database(e),
+    })?;
+
+    crate::services::audit::record(
+        &state.db,
+        crate::services::audit::AuditEntry {
+            actor_type: crate::services::audit::ActorType::Admin,
+            actor_id: Some(auth.user_id),
+            action: "badge_event.create",
+            target_type: Some("event"),
+            target_id: Some(id),
+            metadata: Some(json!({
+                "slug": body.slug, "name": body.name,
+                "starts_at": body.starts_at.to_rfc3339(),
+                "ends_at": body.ends_at.map(|t| t.to_rfc3339()),
+                "is_partner": partner,
+            })),
+            headers: None,
+        },
+    )
+    .await;
+
+    Ok(Json(wrap(json!({
+        "event": {
+            "id": id, "slug": body.slug, "name": body.name,
+            "starts_at": body.starts_at.to_rfc3339(),
+            "ends_at": body.ends_at.map(|t| t.to_rfc3339()),
+            "visual_theme": visual, "is_partner": partner,
+        }
     }))))
 }

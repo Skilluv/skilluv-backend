@@ -25,6 +25,11 @@ pub fn admin_ops_routes() -> Router<AppState> {
         )
         // MVP.md Annexe A #8 — création d'un event (Hacktoberfest, Skilluv Fest).
         .route("/admin/badge-events", post(admin_create_badge_event))
+        // MVP.md §2.2 ligne 125 — recompute capabilities seul (scope réduit).
+        .route(
+            "/admin/users/{id}/recompute-capabilities",
+            post(admin_recompute_capabilities),
+        )
 }
 
 fn wrap(data: Value) -> Value {
@@ -182,6 +187,67 @@ async fn admin_trigger_gdpr_export(
         "status": "queued",
         "target_user_id": target_id,
         "message": "Export is being prepared; user will receive it by email within a few minutes.",
+    }))))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// POST /admin/users/{id}/recompute-capabilities
+// ═══════════════════════════════════════════════════════════════════
+
+async fn admin_recompute_capabilities(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(target_id): Path<Uuid>,
+) -> Result<Json<Value>, AppError> {
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
+    crate::middleware::admin_destructive::enforce_admin_destructive(&state, auth.user_id).await?;
+
+    let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)")
+        .bind(target_id)
+        .fetch_one(&state.db)
+        .await?;
+    if !exists {
+        return Err(AppError::NotFound(format!("user {target_id} not found")));
+    }
+
+    if crate::middleware::admin_destructive::is_admin_dry_run() {
+        let cap_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM user_capabilities WHERE user_id = $1 AND revoked_at IS NULL",
+        )
+        .bind(target_id)
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or(0);
+        return Ok(Json(wrap(json!({
+            "dry_run": true,
+            "current_active_count": cap_count,
+        }))));
+    }
+
+    let report =
+        crate::services::capabilities_engine::recompute_capabilities_for_user(&state.db, target_id)
+            .await?;
+
+    crate::services::audit::record(
+        &state.db,
+        crate::services::audit::AuditEntry {
+            actor_type: crate::services::audit::ActorType::Admin,
+            actor_id: Some(auth.user_id),
+            action: "user.recompute_capabilities",
+            target_type: Some("user"),
+            target_id: Some(target_id),
+            metadata: Some(json!({
+                "granted": report.granted.clone(),
+                "already_active": report.already_active.clone(),
+            })),
+            headers: None,
+        },
+    )
+    .await;
+
+    Ok(Json(wrap(json!({
+        "granted": report.granted,
+        "already_active": report.already_active,
     }))))
 }
 

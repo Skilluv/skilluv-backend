@@ -43,6 +43,8 @@ pub fn admin_routes() -> Router<AppState> {
         .merge(crate::routes::admin_user_routes())
         // ADM-M5+ — proof-hooks sweep + admin-triggered GDPR export.
         .merge(crate::routes::admin_ops_routes())
+        // MVP.md #14 — Skill nodes catalog CRUD.
+        .merge(crate::routes::admin_skill_routes())
 }
 
 // ═══════════════════════════════════════════════════════════════════

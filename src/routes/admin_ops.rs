@@ -6,7 +6,7 @@
 //!   user cible (background task) et envoie l'archive à son email.
 
 use axum::extract::{Path, Query, State};
-use axum::routing::post;
+use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -23,8 +23,11 @@ pub fn admin_ops_routes() -> Router<AppState> {
             "/admin/users/{id}/gdpr-export",
             post(admin_trigger_gdpr_export),
         )
-        // MVP.md Annexe A #8 — création d'un event (Hacktoberfest, Skilluv Fest).
-        .route("/admin/badge-events", post(admin_create_badge_event))
+        // MVP.md Annexe A #8 — CRUD event (Hacktoberfest, Skilluv Fest).
+        .route(
+            "/admin/badge-events",
+            get(admin_list_badge_events).post(admin_create_badge_event),
+        )
         // MVP.md §2.2 ligne 125 — recompute capabilities seul (scope réduit).
         .route(
             "/admin/users/{id}/recompute-capabilities",
@@ -249,6 +252,101 @@ async fn admin_recompute_capabilities(
         "granted": report.granted,
         "already_active": report.already_active,
     }))))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// GET /admin/badge-events — liste paginée (filtres is_active + is_partner).
+// ═══════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Deserialize)]
+struct ListEventsQuery {
+    #[serde(default)]
+    is_active: Option<bool>,
+    #[serde(default)]
+    is_partner: Option<bool>,
+    #[serde(default)]
+    page: Option<i64>,
+    #[serde(default)]
+    per_page: Option<i64>,
+}
+
+async fn admin_list_badge_events(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Query(q): Query<ListEventsQuery>,
+) -> Result<Json<Value>, AppError> {
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
+
+    let page = q.page.unwrap_or(1).max(1);
+    let per_page = q.per_page.unwrap_or(30).clamp(1, 100);
+    let offset = (page - 1) * per_page;
+
+    let rows: Vec<(
+        Uuid,
+        String,
+        String,
+        String,
+        chrono::DateTime<chrono::Utc>,
+        Option<chrono::DateTime<chrono::Utc>>,
+        Value,
+        bool,
+        bool,
+        chrono::DateTime<chrono::Utc>,
+    )> = sqlx::query_as(
+        r#"SELECT id, slug, name, description, starts_at, ends_at,
+                  visual_theme, is_partner, is_active, created_at
+           FROM events
+           WHERE ($1::bool IS NULL OR is_active = $1)
+             AND ($2::bool IS NULL OR is_partner = $2)
+           ORDER BY starts_at DESC
+           LIMIT $3 OFFSET $4"#,
+    )
+    .bind(q.is_active)
+    .bind(q.is_partner)
+    .bind(per_page)
+    .bind(offset)
+    .fetch_all(&state.db)
+    .await?;
+
+    let total: i64 = sqlx::query_scalar(
+        r#"SELECT COUNT(*) FROM events
+           WHERE ($1::bool IS NULL OR is_active = $1)
+             AND ($2::bool IS NULL OR is_partner = $2)"#,
+    )
+    .bind(q.is_active)
+    .bind(q.is_partner)
+    .fetch_one(&state.db)
+    .await?;
+
+    let items: Vec<Value> = rows
+        .into_iter()
+        .map(|(id, slug, name, desc, starts, ends, theme, partner, active, created)| {
+            json!({
+                "id": id, "slug": slug, "name": name, "description": desc,
+                "starts_at": starts.to_rfc3339(),
+                "ends_at": ends.map(|t| t.to_rfc3339()),
+                "visual_theme": theme, "is_partner": partner, "is_active": active,
+                "created_at": created.to_rfc3339(),
+            })
+        })
+        .collect();
+
+    let total_pages = if per_page > 0 {
+        (total + per_page - 1) / per_page
+    } else {
+        0
+    };
+
+    Ok(Json(json!({
+        "data": items,
+        "pagination": {
+            "page": page, "per_page": per_page, "total": total, "total_pages": total_pages,
+        },
+        "meta": {
+            "request_id": Uuid::new_v4().to_string(),
+            "timestamp": chrono::Utc::now().to_rfc3339(),
+        }
+    })))
 }
 
 // ═══════════════════════════════════════════════════════════════════

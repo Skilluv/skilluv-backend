@@ -19,6 +19,7 @@ use crate::middleware::AuthUser;
 pub fn admin_enterprise_routes() -> Router<AppState> {
     Router::new()
         .route("/admin/enterprises", get(list_enterprises))
+        .route("/admin/enterprises/{id}", get(get_enterprise))
         .route("/admin/enterprises/{id}/type", patch(patch_type))
         .route("/admin/enterprises/{id}/type-config", get(get_type_config))
         .route(
@@ -132,6 +133,39 @@ async fn list_enterprises(
             "timestamp": chrono::Utc::now().to_rfc3339(),
         }
     })))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// GET /admin/enterprises/{id}
+// ═══════════════════════════════════════════════════════════════════
+
+async fn get_enterprise(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<Value>, AppError> {
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
+
+    let row: Option<(Uuid, String, String, Option<String>, bool, String, Value, chrono::DateTime<chrono::Utc>)> =
+        sqlx::query_as(
+            r#"SELECT id, company_name, slug, industry, verified, enterprise_type,
+                      type_config, created_at
+               FROM enterprises WHERE id = $1"#,
+        )
+        .bind(id)
+        .fetch_optional(&state.db)
+        .await?;
+
+    let (eid, name, slug, industry, verified, etype, tconf, created) =
+        row.ok_or_else(|| AppError::NotFound(format!("enterprise {id} not found")))?;
+
+    Ok(Json(build_response(json!({
+        "enterprise": {
+            "id": eid, "company_name": name, "slug": slug, "industry": industry,
+            "verified": verified, "enterprise_type": etype, "type_config": tconf,
+            "created_at": created.to_rfc3339(),
+        }
+    }))))
 }
 
 // ═══════════════════════════════════════════════════════════════════

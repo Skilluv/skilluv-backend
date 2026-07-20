@@ -39,16 +39,16 @@ Multi-tenant, production-oriented, 54+ SQL migrations.
 
 ## Companion repositories
 
-- [`skilluv-frontend`](https://github.com/jeremie0342/skilluv-frontend) — SvelteKit 2 web app for talents and companies
-- [`skilluv-admin`](https://github.com/jeremie0342/skilluv-admin) — SvelteKit admin panel for platform operators
-- [`skilluv-ia`](https://github.com/jeremie0342/skilluv-ia) — Python AI microservice (gRPC + Redis Queue)
+- [`skilluv-frontend`](https://github.com/skilluv/skilluv-frontend) — SvelteKit 2 web app for talents and companies
+- [`skilluv-admin`](https://github.com/skilluv/skilluv-admin) — SvelteKit admin panel for platform operators
+- [`skilluv-ia`](https://github.com/skilluv/skilluv-ia) — Python AI microservice (gRPC + Redis Queue)
 
 ## Quick start
 
 **Prerequisites**: Rust 1.80+ (2024 edition), Docker, Git.
 
 ```bash
-git clone https://github.com/jeremie0342/skilluv-backend.git
+git clone https://github.com/skilluv/skilluv-backend.git
 cd skilluv-backend
 cp .env.example .env
 # edit .env with your values
@@ -111,4 +111,4 @@ Distributed under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.
 
 ## Origin
 
-Skilluv is built solo by [Jeremie Zitti](https://github.com/jeremie0342), a Beninese engineer, with the ambition of creating tangible, exportable proof of skill for the African OSS generation. If this resonates, get in touch — contributors, co-founders, mentors, and partner projects are all welcome.
+Skilluv is built solo by [Jeremie Zitti](https://github.com/skilluv), a Beninese engineer, with the ambition of creating tangible, exportable proof of skill for the African OSS generation. If this resonates, get in touch — contributors, co-founders, mentors, and partner projects are all welcome.

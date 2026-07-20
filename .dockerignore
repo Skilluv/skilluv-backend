@@ -29,7 +29,7 @@ _bmad-*/
 _bmad-output/
 design-artifacts/
 
-# Claude Code
+# AI coding assistant caches
 .claude/
 .claude.*
 

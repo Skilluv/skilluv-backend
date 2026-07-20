@@ -79,7 +79,7 @@ Communication avec le futur service IA (Python FastAPI) prevue via gRPC.
 
 ```bash
 # Cloner le repo
-git clone https://github.com/jeremie0342/skilluv-backend.git
+git clone https://github.com/skilluv/skilluv-backend.git
 cd skilluv-backend
 
 # Copier la configuration

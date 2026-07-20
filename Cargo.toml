@@ -29,7 +29,7 @@ redis = { version = "0.27", features = ["tokio-comp", "connection-manager"] }
 
 # Auth
 argon2 = "0.5"
-jsonwebtoken = "9"
+jsonwebtoken = "10"
 totp-rs = { version = "5", features = ["gen_secret", "otpauth"] }
 base32 = "0.5"
 

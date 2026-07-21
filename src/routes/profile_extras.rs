@@ -14,15 +14,35 @@ use crate::middleware::AuthUser;
 pub fn profile_extras_routes() -> Router<AppState> {
     Router::new()
         // Availability + salary
-        .route("/profile/me/availability", get(get_availability).put(update_availability))
+        .route(
+            "/profile/me/availability",
+            get(get_availability).put(update_availability),
+        )
         // Experiences
-        .route("/profile/me/experiences", get(list_experiences).post(add_experience))
-        .route("/profile/me/experiences/{id}", put(update_experience).delete(delete_experience))
+        .route(
+            "/profile/me/experiences",
+            get(list_experiences).post(add_experience),
+        )
+        .route(
+            "/profile/me/experiences/{id}",
+            put(update_experience).delete(delete_experience),
+        )
         // Education
-        .route("/profile/me/educations", get(list_educations).post(add_education))
-        .route("/profile/me/educations/{id}", put(update_education).delete(delete_education))
+        .route(
+            "/profile/me/educations",
+            get(list_educations).post(add_education),
+        )
+        .route(
+            "/profile/me/educations/{id}",
+            put(update_education).delete(delete_education),
+        )
         // Languages
-        .route("/profile/me/languages", get(list_languages).put(set_language).delete(clear_languages))
+        .route(
+            "/profile/me/languages",
+            get(list_languages)
+                .put(set_language)
+                .delete(clear_languages),
+        )
         .route("/profile/me/languages/{code}", delete(remove_language))
 }
 
@@ -71,20 +91,23 @@ async fn update_availability(
     auth: AuthUser,
     Json(body): Json<AvailabilityBody>,
 ) -> Result<Json<Value>, AppError> {
-    if let Some(ref lf) = body.looking_for {
-        if !matches!(lf.as_str(), "cdi" | "cdd" | "freelance" | "internship" | "contract") {
-            return Err(AppError::Validation("invalid looking_for".into()));
-        }
+    if let Some(ref lf) = body.looking_for
+        && !matches!(
+            lf.as_str(),
+            "cdi" | "cdd" | "freelance" | "internship" | "contract"
+        )
+    {
+        return Err(AppError::Validation("invalid looking_for".into()));
     }
-    if let Some(ref vis) = body.salary_visibility {
-        if !matches!(vis.as_str(), "private" | "enterprise_only" | "public") {
-            return Err(AppError::Validation("invalid salary_visibility".into()));
-        }
+    if let Some(ref vis) = body.salary_visibility
+        && !matches!(vis.as_str(), "private" | "enterprise_only" | "public")
+    {
+        return Err(AppError::Validation("invalid salary_visibility".into()));
     }
-    if let (Some(min), Some(max)) = (body.salary_range_min_eur, body.salary_range_max_eur) {
-        if min > max {
-            return Err(AppError::Validation("salary min cannot exceed max".into()));
-        }
+    if let (Some(min), Some(max)) = (body.salary_range_min_eur, body.salary_range_max_eur)
+        && min > max
+    {
+        return Err(AppError::Validation("salary min cannot exceed max".into()));
     }
     sqlx::query(
         r#"
@@ -132,15 +155,20 @@ async fn list_experiences(
     .fetch_all(&state.db)
     .await?;
     use sqlx::Row;
-    let items: Vec<Value> = rows.iter().map(|r| json!({
-        "id": r.get::<Uuid, _>("id"),
-        "company": r.get::<String, _>("company"),
-        "title": r.get::<String, _>("title"),
-        "description": r.get::<Option<String>, _>("description"),
-        "started_on": r.get::<chrono::NaiveDate, _>("started_on"),
-        "ended_on": r.get::<Option<chrono::NaiveDate>, _>("ended_on"),
-        "position": r.get::<i32, _>("position"),
-    })).collect();
+    let items: Vec<Value> = rows
+        .iter()
+        .map(|r| {
+            json!({
+                "id": r.get::<Uuid, _>("id"),
+                "company": r.get::<String, _>("company"),
+                "title": r.get::<String, _>("title"),
+                "description": r.get::<Option<String>, _>("description"),
+                "started_on": r.get::<chrono::NaiveDate, _>("started_on"),
+                "ended_on": r.get::<Option<chrono::NaiveDate>, _>("ended_on"),
+                "position": r.get::<i32, _>("position"),
+            })
+        })
+        .collect();
     Ok(Json(build_response(json!({ "experiences": items }))))
 }
 
@@ -232,15 +260,20 @@ async fn list_educations(
     .fetch_all(&state.db)
     .await?;
     use sqlx::Row;
-    let items: Vec<Value> = rows.iter().map(|r| json!({
-        "id": r.get::<Uuid, _>("id"),
-        "school": r.get::<String, _>("school"),
-        "degree": r.get::<Option<String>, _>("degree"),
-        "field": r.get::<Option<String>, _>("field"),
-        "started_on": r.get::<chrono::NaiveDate, _>("started_on"),
-        "ended_on": r.get::<Option<chrono::NaiveDate>, _>("ended_on"),
-        "position": r.get::<i32, _>("position"),
-    })).collect();
+    let items: Vec<Value> = rows
+        .iter()
+        .map(|r| {
+            json!({
+                "id": r.get::<Uuid, _>("id"),
+                "school": r.get::<String, _>("school"),
+                "degree": r.get::<Option<String>, _>("degree"),
+                "field": r.get::<Option<String>, _>("field"),
+                "started_on": r.get::<chrono::NaiveDate, _>("started_on"),
+                "ended_on": r.get::<Option<chrono::NaiveDate>, _>("ended_on"),
+                "position": r.get::<i32, _>("position"),
+            })
+        })
+        .collect();
     Ok(Json(build_response(json!({ "educations": items }))))
 }
 
@@ -341,7 +374,10 @@ async fn set_language(
             "language must be a 2-letter ISO 639-1 code".into(),
         ));
     }
-    if !matches!(body.proficiency.as_str(), "A1" | "A2" | "B1" | "B2" | "C1" | "C2" | "native") {
+    if !matches!(
+        body.proficiency.as_str(),
+        "A1" | "A2" | "B1" | "B2" | "C1" | "C2" | "native"
+    ) {
         return Err(AppError::Validation("invalid proficiency".into()));
     }
     sqlx::query(
@@ -356,7 +392,9 @@ async fn set_language(
     .bind(&body.proficiency)
     .execute(&state.db)
     .await?;
-    Ok(Json(build_response(json!({ "language": lang, "proficiency": body.proficiency }))))
+    Ok(Json(build_response(
+        json!({ "language": lang, "proficiency": body.proficiency }),
+    )))
 }
 
 async fn remove_language(

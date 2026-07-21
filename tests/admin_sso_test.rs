@@ -5,10 +5,7 @@ mod common;
 use reqwest::StatusCode;
 use serde_json::json;
 
-async fn insert_sso_session(
-    app: &common::TestApp,
-    user_id: uuid::Uuid,
-) -> uuid::Uuid {
+async fn insert_sso_session(app: &common::TestApp, user_id: uuid::Uuid) -> uuid::Uuid {
     // The refresh_hash is a sha256 blob — any 32-byte value is fine for this
     // test since we don't rotate the token, we only inspect / revoke.
     let hash: Vec<u8> = vec![0u8; 32];
@@ -73,13 +70,12 @@ async fn test_admin_revokes_sso_session() {
         .await;
     assert_eq!(revoke.status(), StatusCode::OK);
 
-    let revoked_at: (Option<chrono::DateTime<chrono::Utc>>,) = sqlx::query_as(
-        "SELECT revoked_at FROM user_sessions WHERE id = $1",
-    )
-    .bind(session_id)
-    .fetch_one(&app.db)
-    .await
-    .unwrap();
+    let revoked_at: (Option<chrono::DateTime<chrono::Utc>>,) =
+        sqlx::query_as("SELECT revoked_at FROM user_sessions WHERE id = $1")
+            .bind(session_id)
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
     assert!(revoked_at.0.is_some());
 
     // Listing again must not return the revoked session.

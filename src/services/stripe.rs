@@ -27,10 +27,30 @@ pub struct Pack {
 
 /// Default catalogue (cf. docs/monetization-strategy.md section 3).
 pub const PACKS: &[Pack] = &[
-    Pack { slug: "pack_1",   credits: 1,   price_eur_cents: 3_900,    stripe_price_lookup_key: "skilluv_credits_pack_1" },
-    Pack { slug: "pack_5",   credits: 5,   price_eur_cents: 16_900,   stripe_price_lookup_key: "skilluv_credits_pack_5" },
-    Pack { slug: "pack_20",  credits: 20,  price_eur_cents: 59_900,   stripe_price_lookup_key: "skilluv_credits_pack_20" },
-    Pack { slug: "pack_100", credits: 100, price_eur_cents: 249_900,  stripe_price_lookup_key: "skilluv_credits_pack_100" },
+    Pack {
+        slug: "pack_1",
+        credits: 1,
+        price_eur_cents: 3_900,
+        stripe_price_lookup_key: "skilluv_credits_pack_1",
+    },
+    Pack {
+        slug: "pack_5",
+        credits: 5,
+        price_eur_cents: 16_900,
+        stripe_price_lookup_key: "skilluv_credits_pack_5",
+    },
+    Pack {
+        slug: "pack_20",
+        credits: 20,
+        price_eur_cents: 59_900,
+        stripe_price_lookup_key: "skilluv_credits_pack_20",
+    },
+    Pack {
+        slug: "pack_100",
+        credits: 100,
+        price_eur_cents: 249_900,
+        stripe_price_lookup_key: "skilluv_credits_pack_100",
+    },
 ];
 
 pub fn pack_by_slug(slug: &str) -> Option<&'static Pack> {
@@ -49,10 +69,15 @@ pub struct StripeConfig {
 
 impl StripeConfig {
     pub fn from_env() -> Option<Self> {
-        let secret_key = std::env::var("STRIPE_SECRET_KEY").ok().filter(|s| !s.is_empty())?;
-        let webhook_secret = std::env::var("STRIPE_WEBHOOK_SECRET").ok().filter(|s| !s.is_empty())?;
-        let success_url = std::env::var("STRIPE_SUCCESS_URL")
-            .unwrap_or_else(|_| "https://skilluv.com/enterprise/credits/success?session_id={CHECKOUT_SESSION_ID}".into());
+        let secret_key = std::env::var("STRIPE_SECRET_KEY")
+            .ok()
+            .filter(|s| !s.is_empty())?;
+        let webhook_secret = std::env::var("STRIPE_WEBHOOK_SECRET")
+            .ok()
+            .filter(|s| !s.is_empty())?;
+        let success_url = std::env::var("STRIPE_SUCCESS_URL").unwrap_or_else(|_| {
+            "https://skilluv.com/enterprise/credits/success?session_id={CHECKOUT_SESSION_ID}".into()
+        });
         let cancel_url = std::env::var("STRIPE_CANCEL_URL")
             .unwrap_or_else(|_| "https://skilluv.com/enterprise/credits/canceled".into());
         Some(Self {
@@ -113,7 +138,10 @@ pub async fn create_checkout_session(
             pack.credits
         ),
     ));
-    form.push(("line_items[0][price_data][tax_behavior]".into(), "exclusive".into()));
+    form.push((
+        "line_items[0][price_data][tax_behavior]".into(),
+        "exclusive".into(),
+    ));
     form.push(("metadata[pack_slug]".into(), pack.slug.into()));
     form.push(("metadata[credit_count]".into(), pack.credits.to_string()));
     for (k, v) in metadata_pairs {
@@ -178,7 +206,10 @@ pub fn verify_webhook_signature(
     mac.update(signed_payload.as_bytes());
     let expected = mac.finalize().into_bytes();
     let expected_hex = hex::encode(expected);
-    if signatures.iter().any(|s| constant_time_eq(s.as_bytes(), expected_hex.as_bytes())) {
+    if signatures
+        .iter()
+        .any(|s| constant_time_eq(s.as_bytes(), expected_hex.as_bytes()))
+    {
         Ok(())
     } else {
         Err(AppError::Unauthorized)
@@ -237,8 +268,7 @@ pub async fn create_refund(
     reason: Option<&str>,
 ) -> Result<RefundResponse, AppError> {
     let client = reqwest::Client::new();
-    let mut form: Vec<(&str, String)> =
-        vec![("payment_intent", payment_intent_id.to_string())];
+    let mut form: Vec<(&str, String)> = vec![("payment_intent", payment_intent_id.to_string())];
     if let Some(a) = amount_cents {
         form.push(("amount", a.to_string()));
     }
@@ -430,10 +460,7 @@ pub async fn create_subscription_checkout(
         ("line_items[0][quantity]".into(), "1".into()),
     ];
     // Lookup par lookup_key : Stripe résoudra vers le price_id correspondant.
-    form.push((
-        "line_items[0][price_data][currency]".into(),
-        "eur".into(),
-    ));
+    form.push(("line_items[0][price_data][currency]".into(), "eur".into()));
     form.push((
         "line_items[0][price_data][recurring][interval]".into(),
         "month".into(),
@@ -444,15 +471,10 @@ pub async fn create_subscription_checkout(
     ));
     for (k, v) in metadata {
         form.push((format!("metadata[{k}]"), v.clone()));
-        form.push((
-            format!("subscription_data[metadata][{k}]"),
-            v.clone(),
-        ));
+        form.push((format!("subscription_data[metadata][{k}]"), v.clone()));
     }
-    let form_pairs: Vec<(&str, &str)> = form
-        .iter()
-        .map(|(k, v)| (k.as_str(), v.as_str()))
-        .collect();
+    let form_pairs: Vec<(&str, &str)> =
+        form.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
     let resp = client
         .post(format!("{STRIPE_API}/checkout/sessions"))
         .basic_auth(&cfg.secret_key, Some(""))

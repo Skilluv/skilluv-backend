@@ -45,9 +45,7 @@ fn build_response(data: Value) -> Value {
 // Tracks : lecture publique
 // ═══════════════════════════════════════════════════════════════════
 
-async fn list_tracks(
-    State(state): State<AppState>,
-) -> Result<Json<Value>, AppError> {
+async fn list_tracks(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
     let tracks = TracksService::list_active(&state.db).await?;
     Ok(Json(build_response(json!({ "tracks": tracks }))))
 }
@@ -85,10 +83,7 @@ async fn track_progress(
     Ok(Json(build_response(json!({ "progress": progress }))))
 }
 
-async fn my_tracks(
-    State(state): State<AppState>,
-    auth: AuthUser,
-) -> Result<Json<Value>, AppError> {
+async fn my_tracks(State(state): State<AppState>, auth: AuthUser) -> Result<Json<Value>, AppError> {
     let user_tracks = TracksService::list_user_tracks(&state.db, auth.user_id).await?;
     Ok(Json(build_response(json!({ "user_tracks": user_tracks }))))
 }
@@ -102,7 +97,6 @@ async fn challenge_eligibility(
     auth: AuthUser,
     Path(challenge_id): Path<Uuid>,
 ) -> Result<Json<Value>, AppError> {
-    let check =
-        TracksService::check_eligibility(&state.db, auth.user_id, challenge_id).await?;
+    let check = TracksService::check_eligibility(&state.db, auth.user_id, challenge_id).await?;
     Ok(Json(build_response(json!({ "eligibility": check }))))
 }

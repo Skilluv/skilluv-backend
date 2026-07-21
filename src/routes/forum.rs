@@ -19,7 +19,10 @@ pub fn forum_routes() -> Router<AppState> {
     Router::new()
         .route("/forum/categories", get(list_categories))
         .route("/forum/posts", get(list_posts).post(create_post))
-        .route("/forum/posts/{id}", get(get_post).put(edit_post).delete(delete_post))
+        .route(
+            "/forum/posts/{id}",
+            get(get_post).put(edit_post).delete(delete_post),
+        )
         .route("/forum/posts/{id}/accept-answer", post(accept_answer))
         .route("/forum/posts/{id}/pin", post(toggle_pin))
         .route("/forum/posts/{id}/lock", post(toggle_lock))
@@ -94,11 +97,10 @@ async fn create_post(
 
     // Tier-based rate limit for questions only (anti-spam)
     if body.kind == "question" {
-        let title: Option<(String,)> =
-            sqlx::query_as("SELECT title FROM users WHERE id = $1")
-                .bind(auth.user_id)
-                .fetch_optional(&state.db)
-                .await?;
+        let title: Option<(String,)> = sqlx::query_as("SELECT title FROM users WHERE id = $1")
+            .bind(auth.user_id)
+            .fetch_optional(&state.db)
+            .await?;
         let user_title = title.map(|(t,)| t).unwrap_or_else(|| "apprenti".into());
         let (limit, window) = forum::question_rate_limit_for_title(&user_title);
         if limit > 0 {
@@ -166,8 +168,15 @@ async fn edit_post(
     Path(id): Path<Uuid>,
     Json(body): Json<EditPostBody>,
 ) -> Result<Json<Value>, AppError> {
-    let post = forum::edit_post(&state.db, id, auth.user_id, &auth.role, &body.title, &body.body)
-        .await?;
+    let post = forum::edit_post(
+        &state.db,
+        id,
+        auth.user_id,
+        &auth.role,
+        &body.title,
+        &body.body,
+    )
+    .await?;
     Ok(Json(build_response(json!({ "post": post }))))
 }
 
@@ -203,15 +212,17 @@ async fn accept_answer(
         &state.db,
         &mut state.redis.clone(),
         &state.ws,
-        res.answer_author_id,
-        "answer.accepted",
-        "Ta réponse a été acceptée",
-        bounty_msg.as_deref(),
-        Some(json!({
-            "post_id": id,
-            "comment_id": res.answer_id,
-            "bounty_fragments": res.bounty_transferred,
-        })),
+        crate::services::notification::NotificationPayload {
+            user_id: res.answer_author_id,
+            notification_type: "answer.accepted",
+            title: "Ta réponse a été acceptée",
+            body: bounty_msg.as_deref(),
+            data: Some(json!({
+                "post_id": id,
+                "comment_id": res.answer_id,
+                "bounty_fragments": res.bounty_transferred,
+            })),
+        },
     )
     .await;
     metrics::counter!("skilluv_answers_accepted_total").increment(1);

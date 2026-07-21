@@ -149,12 +149,11 @@ async fn migration_0067_seeds_five_foundation_tracks() {
         .expect("count");
     assert_eq!(count, 5, "Expected 5 Foundation tracks seeded");
 
-    let slugs: Vec<String> = sqlx::query_scalar(
-        "SELECT slug FROM tracks WHERE active = TRUE ORDER BY slug",
-    )
-    .fetch_all(&db)
-    .await
-    .expect("slugs");
+    let slugs: Vec<String> =
+        sqlx::query_scalar("SELECT slug FROM tracks WHERE active = TRUE ORDER BY slug")
+            .fetch_all(&db)
+            .await
+            .expect("slugs");
     assert!(slugs.contains(&"frontend-foundations".to_string()));
     assert!(slugs.contains(&"backend-foundations".to_string()));
     assert!(slugs.contains(&"security-foundations".to_string()));
@@ -184,16 +183,17 @@ async fn enroll_creates_user_track_and_is_idempotent() {
 
     assert_eq!(ut1.user_id, user_id);
     assert_eq!(ut1.track_id, ut2.track_id);
-    assert_eq!(ut1.started_at, ut2.started_at, "Enroll should be idempotent");
+    assert_eq!(
+        ut1.started_at, ut2.started_at,
+        "Enroll should be idempotent"
+    );
 
     // One row in user_tracks
-    let count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM user_tracks WHERE user_id = $1",
-    )
-    .bind(user_id)
-    .fetch_one(&db)
-    .await
-    .expect("count");
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM user_tracks WHERE user_id = $1")
+        .bind(user_id)
+        .fetch_one(&db)
+        .await
+        .expect("count");
     assert_eq!(count, 1);
 
     db.close().await;
@@ -422,12 +422,11 @@ async fn progress_reflects_completed_challenges() {
     insert_test_user(&db, user_id).await;
 
     // Add 3 challenges to the frontend-foundations track
-    let track_id: Uuid = sqlx::query_scalar(
-        "SELECT id FROM tracks WHERE slug = 'frontend-foundations'",
-    )
-    .fetch_one(&db)
-    .await
-    .expect("track");
+    let track_id: Uuid =
+        sqlx::query_scalar("SELECT id FROM tracks WHERE slug = 'frontend-foundations'")
+            .fetch_one(&db)
+            .await
+            .expect("track");
 
     let c1 = insert_training_challenge(&db, "Track C1").await;
     let c2 = insert_training_challenge(&db, "Track C2").await;

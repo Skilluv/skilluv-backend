@@ -39,7 +39,9 @@ pub fn start_business_gauges(db: PgPool) {
 }
 
 async fn refresh_business_gauges(db: &PgPool) -> Result<(), sqlx::Error> {
-    let users_total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users").fetch_one(db).await?;
+    let users_total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users")
+        .fetch_one(db)
+        .await?;
     let users_active_24h: i64 = sqlx::query_scalar(
         "SELECT COUNT(DISTINCT user_id) FROM user_activity WHERE activity_date >= CURRENT_DATE - INTERVAL '1 day'",
     )
@@ -53,11 +55,10 @@ async fn refresh_business_gauges(db: &PgPool) -> Result<(), sqlx::Error> {
     let enterprises_total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM enterprises")
         .fetch_one(db)
         .await?;
-    let pending_reports: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM reports WHERE status = 'pending'",
-    )
-    .fetch_one(db)
-    .await?;
+    let pending_reports: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM reports WHERE status = 'pending'")
+            .fetch_one(db)
+            .await?;
     let active_conversations: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM conversations WHERE closed = FALSE")
             .fetch_one(db)
@@ -83,16 +84,16 @@ pub fn metrics_routes() -> Router<AppState> {
 /// If `METRICS_TOKEN` is set in env, requires `Authorization: Bearer <token>`.
 /// Otherwise public (dev convenience).
 async fn prometheus_metrics(headers: HeaderMap) -> impl IntoResponse {
-    if let Ok(expected) = std::env::var("METRICS_TOKEN") {
-        if !expected.is_empty() {
-            let provided = headers
-                .get("authorization")
-                .and_then(|v| v.to_str().ok())
-                .and_then(|s| s.strip_prefix("Bearer "))
-                .unwrap_or("");
-            if provided != expected {
-                return (StatusCode::UNAUTHORIZED, String::new()).into_response();
-            }
+    if let Ok(expected) = std::env::var("METRICS_TOKEN")
+        && !expected.is_empty()
+    {
+        let provided = headers
+            .get("authorization")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| s.strip_prefix("Bearer "))
+            .unwrap_or("");
+        if provided != expected {
+            return (StatusCode::UNAUTHORIZED, String::new()).into_response();
         }
     }
     let body = PROMETHEUS_HANDLE

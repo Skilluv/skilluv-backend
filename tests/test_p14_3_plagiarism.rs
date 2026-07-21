@@ -71,11 +71,7 @@ async fn create_user(db: &PgPool, tenant: Option<Uuid>) -> Uuid {
     uid
 }
 
-async fn create_deliverable(
-    db: &PgPool,
-    user_id: Uuid,
-    tenant: Option<Uuid>,
-) -> Uuid {
+async fn create_deliverable(db: &PgPool, user_id: Uuid, tenant: Option<Uuid>) -> Uuid {
     let challenge_id: Uuid = sqlx::query_scalar(
         "INSERT INTO challenge_templates
             (title, description, instructions, skill_domain, difficulty,
@@ -139,9 +135,13 @@ async fn store_embedding_upserts() {
     let d = create_deliverable(&db, user, None).await;
 
     let v1 = vec![0.5f32; 8];
-    plagiarism::store_embedding(&db, d, None, &v1).await.expect("s1");
+    plagiarism::store_embedding(&db, d, None, &v1)
+        .await
+        .expect("s1");
     let v2 = vec![0.9f32; 8];
-    plagiarism::store_embedding(&db, d, None, &v2).await.expect("s2");
+    plagiarism::store_embedding(&db, d, None, &v2)
+        .await
+        .expect("s2");
 
     let stored: Vec<f32> = sqlx::query_scalar(
         "SELECT embedding FROM deliverable_embeddings WHERE deliverable_id = $1",
@@ -170,23 +170,28 @@ async fn scan_flags_high_similarity_across_users() {
 
     let v = vec![1.0f32, 0.5, 0.25, 0.125];
     let close = vec![1.0f32, 0.5, 0.25, 0.13];
-    plagiarism::store_embedding(&db, d_a, None, &v).await.expect("a");
-    plagiarism::store_embedding(&db, d_b, None, &close).await.expect("b");
+    plagiarism::store_embedding(&db, d_a, None, &v)
+        .await
+        .expect("a");
+    plagiarism::store_embedding(&db, d_b, None, &close)
+        .await
+        .expect("b");
 
-    let res = plagiarism::scan_deliverable(&db, d_b, 0.9, 30).await.expect("scan");
+    let res = plagiarism::scan_deliverable(&db, d_b, 0.9, 30)
+        .await
+        .expect("scan");
     assert_eq!(res.best_match_id, Some(d_a));
     assert!(res.best_score >= 0.9);
     assert_eq!(res.compared_count, 1);
 
-    let (score, similar_to): (Option<BigDecimal>, Option<Uuid>) =
-        sqlx::query_as(
-            "SELECT plagiarism_score, plagiarism_similar_to
+    let (score, similar_to): (Option<BigDecimal>, Option<Uuid>) = sqlx::query_as(
+        "SELECT plagiarism_score, plagiarism_similar_to
              FROM deliverables WHERE id = $1",
-        )
-        .bind(d_b)
-        .fetch_one(&db)
-        .await
-        .expect("row");
+    )
+    .bind(d_b)
+    .fetch_one(&db)
+    .await
+    .expect("row");
     assert!(score.is_some(), "score set");
     assert_eq!(similar_to, Some(d_a));
 
@@ -209,21 +214,26 @@ async fn scan_does_not_flag_when_below_threshold() {
     // Vecteurs assez différents
     let v_a = vec![1.0f32, 0.0, 0.0, 0.0];
     let v_b = vec![0.0f32, 1.0, 0.0, 0.0];
-    plagiarism::store_embedding(&db, d_a, None, &v_a).await.expect("a");
-    plagiarism::store_embedding(&db, d_b, None, &v_b).await.expect("b");
+    plagiarism::store_embedding(&db, d_a, None, &v_a)
+        .await
+        .expect("a");
+    plagiarism::store_embedding(&db, d_b, None, &v_b)
+        .await
+        .expect("b");
 
-    let res = plagiarism::scan_deliverable(&db, d_b, 0.9, 30).await.expect("scan");
+    let res = plagiarism::scan_deliverable(&db, d_b, 0.9, 30)
+        .await
+        .expect("scan");
     assert!(res.best_score < 0.5);
 
-    let (score, similar_to): (Option<BigDecimal>, Option<Uuid>) =
-        sqlx::query_as(
-            "SELECT plagiarism_score, plagiarism_similar_to
+    let (score, similar_to): (Option<BigDecimal>, Option<Uuid>) = sqlx::query_as(
+        "SELECT plagiarism_score, plagiarism_similar_to
              FROM deliverables WHERE id = $1",
-        )
-        .bind(d_b)
-        .fetch_one(&db)
-        .await
-        .expect("row");
+    )
+    .bind(d_b)
+    .fetch_one(&db)
+    .await
+    .expect("row");
     assert!(score.is_none(), "score reste NULL car < threshold");
     assert!(similar_to.is_none());
 
@@ -252,11 +262,17 @@ async fn scan_only_compares_within_same_tenant() {
 
     // Même embedding sur tenant_a et pub
     let same = vec![1.0f32, 0.5, 0.25];
-    plagiarism::store_embedding(&db, d_a, Some(tenant_a), &same).await.expect("a");
-    plagiarism::store_embedding(&db, d_pub, None, &same).await.expect("pub");
+    plagiarism::store_embedding(&db, d_a, Some(tenant_a), &same)
+        .await
+        .expect("a");
+    plagiarism::store_embedding(&db, d_pub, None, &same)
+        .await
+        .expect("pub");
 
     // Scan de d_a : ne doit PAS voir d_pub (tenant différent).
-    let res = plagiarism::scan_deliverable(&db, d_a, 0.9, 30).await.expect("s");
+    let res = plagiarism::scan_deliverable(&db, d_a, 0.9, 30)
+        .await
+        .expect("s");
     assert_eq!(res.compared_count, 0, "pas de match cross-tenant");
 
     db.close().await;
@@ -276,11 +292,20 @@ async fn list_flagged_returns_sorted_by_score_desc() {
     let d3 = create_deliverable(&db, user, None).await;
 
     sqlx::query("UPDATE deliverables SET plagiarism_score = 0.95 WHERE id = $1")
-        .bind(d1).execute(&db).await.expect("u1");
+        .bind(d1)
+        .execute(&db)
+        .await
+        .expect("u1");
     sqlx::query("UPDATE deliverables SET plagiarism_score = 0.92 WHERE id = $1")
-        .bind(d2).execute(&db).await.expect("u2");
+        .bind(d2)
+        .execute(&db)
+        .await
+        .expect("u2");
     sqlx::query("UPDATE deliverables SET plagiarism_score = 0.5 WHERE id = $1")
-        .bind(d3).execute(&db).await.expect("u3");
+        .bind(d3)
+        .execute(&db)
+        .await
+        .expect("u3");
 
     let list = plagiarism::list_flagged(&db, BigDecimal::try_from(0.9).unwrap(), 10)
         .await

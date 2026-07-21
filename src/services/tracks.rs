@@ -134,13 +134,12 @@ impl TracksService {
     ) -> Result<TrackProgress, AppError> {
         let track = Self::get_by_slug(db, track_slug).await?;
 
-        let user_track: Option<UserTrack> = sqlx::query_as(
-            "SELECT * FROM user_tracks WHERE user_id = $1 AND track_id = $2",
-        )
-        .bind(user_id)
-        .bind(track.id)
-        .fetch_optional(db)
-        .await?;
+        let user_track: Option<UserTrack> =
+            sqlx::query_as("SELECT * FROM user_tracks WHERE user_id = $1 AND track_id = $2")
+                .bind(user_id)
+                .bind(track.id)
+                .fetch_optional(db)
+                .await?;
 
         let (started_at, completed_at, current_challenge_id) = match user_track {
             Some(ut) => (ut.started_at, ut.completed_at, ut.current_challenge_id),
@@ -151,12 +150,11 @@ impl TracksService {
             }
         };
 
-        let total_challenges: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM track_challenges WHERE track_id = $1",
-        )
-        .bind(track.id)
-        .fetch_one(db)
-        .await?;
+        let total_challenges: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM track_challenges WHERE track_id = $1")
+                .bind(track.id)
+                .fetch_one(db)
+                .await?;
 
         // Combien de challenges du track a-t-il vérifié via un deliverable ?
         let completed_challenges: i64 = sqlx::query_scalar(
@@ -189,10 +187,7 @@ impl TracksService {
     }
 
     /// Liste les tracks d'un user (enrolled).
-    pub async fn list_user_tracks(
-        db: &PgPool,
-        user_id: Uuid,
-    ) -> Result<Vec<UserTrack>, AppError> {
+    pub async fn list_user_tracks(db: &PgPool, user_id: Uuid) -> Result<Vec<UserTrack>, AppError> {
         let tracks = sqlx::query_as::<_, UserTrack>(
             "SELECT * FROM user_tracks WHERE user_id = $1 ORDER BY started_at DESC",
         )

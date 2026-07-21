@@ -129,7 +129,13 @@ async fn returns_not_found_when_deliverable_missing() {
 async fn rejects_deliverable_not_marked_for_llm_evaluation() {
     let (db, name) = setup_test_db().await;
     let user = create_user(&db).await;
-    let d = create_deliverable(&db, user, "human_review", Some(json!({"code_content": "x"}))).await;
+    let d = create_deliverable(
+        &db,
+        user,
+        "human_review",
+        Some(json!({"code_content": "x"})),
+    )
+    .await;
     let res = llm_verifier::evaluate_deliverable(&db, None, d).await;
     assert!(res.is_err(), "human_review deliverable must be rejected");
     db.close().await;
@@ -168,7 +174,9 @@ async fn falls_back_to_manual_review_when_ai_client_absent() {
     )
     .await;
 
-    let outcome = llm_verifier::evaluate_deliverable(&db, None, d).await.expect("outcome");
+    let outcome = llm_verifier::evaluate_deliverable(&db, None, d)
+        .await
+        .expect("outcome");
     assert_eq!(outcome.new_status, "pending_manual_review");
     assert!(!outcome.llm_reachable);
     assert!(outcome.score.is_none());

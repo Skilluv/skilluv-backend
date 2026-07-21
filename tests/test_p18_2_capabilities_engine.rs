@@ -68,23 +68,34 @@ async fn create_user(db: &PgPool) -> Uuid {
 }
 
 async fn add_attestations(db: &PgPool, user_id: Uuid, n: usize) {
-    let already: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM attestations WHERE user_id = $1",
-    )
-    .bind(user_id).fetch_one(db).await.unwrap_or(0);
-    let skill_ids: Vec<Uuid> = sqlx::query_scalar(
-        "SELECT id FROM skill_nodes ORDER BY slug OFFSET $1 LIMIT $2",
-    )
-    .bind(already).bind(n as i64).fetch_all(db).await.unwrap();
+    let already: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM attestations WHERE user_id = $1")
+        .bind(user_id)
+        .fetch_one(db)
+        .await
+        .unwrap_or(0);
+    let skill_ids: Vec<Uuid> =
+        sqlx::query_scalar("SELECT id FROM skill_nodes ORDER BY slug OFFSET $1 LIMIT $2")
+            .bind(already)
+            .bind(n as i64)
+            .fetch_all(db)
+            .await
+            .unwrap();
     for (i, sid) in skill_ids.iter().enumerate() {
         sqlx::query(
             "INSERT INTO attestations (user_id, attestation_type, title, description,
                                         linked_skill_node_ids, verification_code, issued_at)
              VALUES ($1, 'gesture', 'T', 'D', ARRAY[$2::UUID], $3, NOW())",
         )
-        .bind(user_id).bind(sid)
-        .bind(format!("{}-{}", &Uuid::new_v4().to_string().replace('-', "")[..7], i))
-        .execute(db).await.unwrap();
+        .bind(user_id)
+        .bind(sid)
+        .bind(format!(
+            "{}-{}",
+            &Uuid::new_v4().to_string().replace('-', "")[..7],
+            i
+        ))
+        .execute(db)
+        .await
+        .unwrap();
     }
 }
 
@@ -94,7 +105,9 @@ async fn add_attestations(db: &PgPool, user_id: Uuid, n: usize) {
 async fn new_user_gets_challenger_auto() {
     let (db, name) = setup_test_db().await;
     let u = create_user(&db).await;
-    let r = capabilities_engine::recompute_capabilities_for_user(&db, u).await.unwrap();
+    let r = capabilities_engine::recompute_capabilities_for_user(&db, u)
+        .await
+        .unwrap();
     assert!(r.granted.contains(&"challenger".to_string()));
     db.close().await;
     cleanup_test_db(&name).await;
@@ -106,12 +119,22 @@ async fn mentor_promoted_at_five_attestations() {
     let u = create_user(&db).await;
 
     add_attestations(&db, u, 4).await;
-    let r = capabilities_engine::recompute_capabilities_for_user(&db, u).await.unwrap();
-    assert!(!r.granted.contains(&"mentor".to_string()), "4 attestations insuffisantes");
+    let r = capabilities_engine::recompute_capabilities_for_user(&db, u)
+        .await
+        .unwrap();
+    assert!(
+        !r.granted.contains(&"mentor".to_string()),
+        "4 attestations insuffisantes"
+    );
 
     add_attestations(&db, u, 1).await; // total 5
-    let r = capabilities_engine::recompute_capabilities_for_user(&db, u).await.unwrap();
-    assert!(r.granted.contains(&"mentor".to_string()) || r.already_active.contains(&"mentor".to_string()));
+    let r = capabilities_engine::recompute_capabilities_for_user(&db, u)
+        .await
+        .unwrap();
+    assert!(
+        r.granted.contains(&"mentor".to_string())
+            || r.already_active.contains(&"mentor".to_string())
+    );
 
     db.close().await;
     cleanup_test_db(&name).await;
@@ -129,9 +152,15 @@ async fn issue_proposer_at_three_published_community_challenges() {
                  is_training, status, is_community, created_by)
              VALUES ($1, 'D', 'I', 'code', 2, TRUE, 'published', TRUE, $2)",
         )
-        .bind(format!("Prop {i}")).bind(u).execute(&db).await.unwrap();
+        .bind(format!("Prop {i}"))
+        .bind(u)
+        .execute(&db)
+        .await
+        .unwrap();
     }
-    let r = capabilities_engine::recompute_capabilities_for_user(&db, u).await.unwrap();
+    let r = capabilities_engine::recompute_capabilities_for_user(&db, u)
+        .await
+        .unwrap();
     assert!(r.granted.contains(&"issue_proposer".to_string()));
 
     db.close().await;
@@ -148,9 +177,14 @@ async fn project_steward_at_one_owned_project() {
          VALUES ($1, 'MyProj', 'D', 'user', $2)",
     )
     .bind(format!("p-{}", &Uuid::new_v4().to_string()[..8]))
-    .bind(u).execute(&db).await.unwrap();
+    .bind(u)
+    .execute(&db)
+    .await
+    .unwrap();
 
-    let r = capabilities_engine::recompute_capabilities_for_user(&db, u).await.unwrap();
+    let r = capabilities_engine::recompute_capabilities_for_user(&db, u)
+        .await
+        .unwrap();
     assert!(r.granted.contains(&"project_steward".to_string()));
 
     db.close().await;
@@ -163,9 +197,13 @@ async fn recompute_is_idempotent() {
     let u = create_user(&db).await;
     add_attestations(&db, u, 5).await;
 
-    let r1 = capabilities_engine::recompute_capabilities_for_user(&db, u).await.unwrap();
+    let r1 = capabilities_engine::recompute_capabilities_for_user(&db, u)
+        .await
+        .unwrap();
     assert!(!r1.granted.is_empty());
-    let r2 = capabilities_engine::recompute_capabilities_for_user(&db, u).await.unwrap();
+    let r2 = capabilities_engine::recompute_capabilities_for_user(&db, u)
+        .await
+        .unwrap();
     assert!(r2.granted.is_empty(), "no re-grant on idempotent call");
     assert!(r2.already_active.contains(&"mentor".to_string()));
 
@@ -173,7 +211,10 @@ async fn recompute_is_idempotent() {
         "SELECT COUNT(*) FROM user_capabilities
          WHERE user_id = $1 AND capability = 'mentor' AND revoked_at IS NULL",
     )
-    .bind(u).fetch_one(&db).await.unwrap();
+    .bind(u)
+    .fetch_one(&db)
+    .await
+    .unwrap();
     assert_eq!(count, 1);
 
     db.close().await;

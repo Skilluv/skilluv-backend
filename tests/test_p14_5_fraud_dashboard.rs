@@ -86,9 +86,17 @@ async fn queue_returns_flagged_and_suspects() {
     assert_eq!(resp.status(), 200);
     let body: serde_json::Value = resp.json().await.unwrap();
     let flagged = body["data"]["flagged_deliverables"].as_array().unwrap();
-    assert!(flagged.iter().any(|d| d["deliverable_id"].as_str() == Some(&del_id.to_string())));
+    assert!(
+        flagged
+            .iter()
+            .any(|d| d["deliverable_id"].as_str() == Some(&del_id.to_string()))
+    );
     let suspects = body["data"]["suspected_users"].as_array().unwrap();
-    assert!(suspects.iter().any(|u| u["user_id"].as_str() == Some(&owner_id.to_string())));
+    assert!(
+        suspects
+            .iter()
+            .any(|u| u["user_id"].as_str() == Some(&owner_id.to_string()))
+    );
 
     drop(app);
 }
@@ -313,11 +321,18 @@ async fn scan_deliverable_endpoint_computes_similarity() {
     .expect("db");
 
     let v = vec![1.0f32; 4];
-    plagiarism::store_embedding(&app.db, da, None, &v).await.expect("sa");
-    plagiarism::store_embedding(&app.db, db_, None, &v).await.expect("sb");
+    plagiarism::store_embedding(&app.db, da, None, &v)
+        .await
+        .expect("sa");
+    plagiarism::store_embedding(&app.db, db_, None, &v)
+        .await
+        .expect("sb");
 
     let resp = app
-        .post(&format!("/api/admin/fraud/scan-deliverable/{db_}"), &json!({}))
+        .post(
+            &format!("/api/admin/fraud/scan-deliverable/{db_}"),
+            &json!({}),
+        )
         .await;
     assert_eq!(resp.status(), 200);
     let body: serde_json::Value = resp.json().await.unwrap();

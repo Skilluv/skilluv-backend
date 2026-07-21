@@ -5,9 +5,7 @@
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use skilluv_backend::services::backup::{
-    self, BackupConfig, NotifyLevel,
-};
+use skilluv_backend::services::backup::{self, BackupConfig, NotifyLevel};
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser, Debug)]
@@ -97,10 +95,7 @@ async fn cmd_list(cfg: &BackupConfig) -> Result<()> {
 async fn cmd_prune(cfg: &BackupConfig) -> Result<()> {
     let report = backup::apply_retention(cfg).await?;
     println!("{}", serde_json::to_string_pretty(&report)?);
-    let message = format!(
-        "prune ok: kept {}, deleted {}",
-        report.kept, report.deleted
-    );
+    let message = format!("prune ok: kept {}, deleted {}", report.kept, report.deleted);
     backup::notify(cfg, NotifyLevel::Success, &message).await?;
     Ok(())
 }
@@ -110,10 +105,7 @@ async fn cmd_restore_test(cfg: &BackupConfig) -> Result<()> {
     println!("{}", serde_json::to_string_pretty(&report)?);
     let message = format!(
         "restore-test ok on {} (users={}, challenges={}, submissions={})",
-        report.backup_key,
-        report.counts.users,
-        report.counts.challenges,
-        report.counts.submissions
+        report.backup_key, report.counts.users, report.counts.challenges, report.counts.submissions
     );
     backup::notify(cfg, NotifyLevel::Success, &message).await?;
     Ok(())

@@ -85,10 +85,7 @@ pub async fn require_any_capability(
 }
 
 /// Retourne toutes les capabilities actives d'un user (utile pour /me/capabilities).
-pub async fn list_active_capabilities(
-    db: &PgPool,
-    user_id: Uuid,
-) -> Result<Vec<String>, AppError> {
+pub async fn list_active_capabilities(db: &PgPool, user_id: Uuid) -> Result<Vec<String>, AppError> {
     let rows: Vec<String> = sqlx::query_scalar(
         r#"
         SELECT capability FROM user_capabilities

@@ -9,12 +9,26 @@ use axum::extract::{Path, Query, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 use crate::AppState;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
+
+// Type aliases pour clippy::type_complexity (rangées sqlx::query_as).
+type AdminOpsRow286 = (
+    Uuid,
+    String,
+    String,
+    String,
+    chrono::DateTime<chrono::Utc>,
+    Option<chrono::DateTime<chrono::Utc>>,
+    Value,
+    bool,
+    bool,
+    chrono::DateTime<chrono::Utc>,
+);
 
 pub fn admin_ops_routes() -> Router<AppState> {
     Router::new()
@@ -137,7 +151,9 @@ async fn admin_trigger_gdpr_export(
     crate::middleware::admin_destructive::enforce_admin_destructive(&state, auth.user_id).await?;
 
     if body.reason.trim().len() < 8 {
-        return Err(AppError::Validation("reason must be at least 8 chars".into()));
+        return Err(AppError::Validation(
+            "reason must be at least 8 chars".into(),
+        ));
     }
 
     let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)")
@@ -281,18 +297,7 @@ async fn admin_list_badge_events(
     let per_page = q.per_page.unwrap_or(30).clamp(1, 100);
     let offset = (page - 1) * per_page;
 
-    let rows: Vec<(
-        Uuid,
-        String,
-        String,
-        String,
-        chrono::DateTime<chrono::Utc>,
-        Option<chrono::DateTime<chrono::Utc>>,
-        Value,
-        bool,
-        bool,
-        chrono::DateTime<chrono::Utc>,
-    )> = sqlx::query_as(
+    let rows: Vec<AdminOpsRow286> = sqlx::query_as(
         r#"SELECT id, slug, name, description, starts_at, ends_at,
                   visual_theme, is_partner, is_active, created_at
            FROM events
@@ -320,15 +325,17 @@ async fn admin_list_badge_events(
 
     let items: Vec<Value> = rows
         .into_iter()
-        .map(|(id, slug, name, desc, starts, ends, theme, partner, active, created)| {
-            json!({
-                "id": id, "slug": slug, "name": name, "description": desc,
-                "starts_at": starts.to_rfc3339(),
-                "ends_at": ends.map(|t| t.to_rfc3339()),
-                "visual_theme": theme, "is_partner": partner, "is_active": active,
-                "created_at": created.to_rfc3339(),
-            })
-        })
+        .map(
+            |(id, slug, name, desc, starts, ends, theme, partner, active, created)| {
+                json!({
+                    "id": id, "slug": slug, "name": name, "description": desc,
+                    "starts_at": starts.to_rfc3339(),
+                    "ends_at": ends.map(|t| t.to_rfc3339()),
+                    "visual_theme": theme, "is_partner": partner, "is_active": active,
+                    "created_at": created.to_rfc3339(),
+                })
+            },
+        )
         .collect();
 
     let total_pages = if per_page > 0 {
@@ -378,7 +385,10 @@ async fn admin_create_badge_event(
 
     let slug_len = body.slug.len();
     if !(3..=60).contains(&slug_len)
-        || !body.slug.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+        || !body
+            .slug
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
     {
         return Err(AppError::Validation(
             "slug must be 3..=60 chars matching ^[a-z0-9-]+$".into(),
@@ -387,10 +397,10 @@ async fn admin_create_badge_event(
     if body.name.trim().is_empty() || body.name.len() > 120 {
         return Err(AppError::Validation("name must be 1..=120 chars".into()));
     }
-    if let Some(end) = body.ends_at {
-        if end < body.starts_at {
-            return Err(AppError::Validation("ends_at must be >= starts_at".into()));
-        }
+    if let Some(end) = body.ends_at
+        && end < body.starts_at
+    {
+        return Err(AppError::Validation("ends_at must be >= starts_at".into()));
     }
 
     if crate::middleware::admin_destructive::is_admin_dry_run() {

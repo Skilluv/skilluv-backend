@@ -8,7 +8,7 @@ use axum::extract::{Path, Query, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 use crate::AppState;
@@ -21,10 +21,7 @@ pub fn admin_user_routes() -> Router<AppState> {
             "/admin/users/{id}/recompute-proofs",
             post(admin_recompute_proofs),
         )
-        .route(
-            "/admin/users/{id}/rank-override",
-            post(admin_rank_override),
-        )
+        .route("/admin/users/{id}/rank-override", post(admin_rank_override))
     // Note: `GET /users/{id}/orientations` était monté ici en admin-scoped
     // à l'origine. Déplacé dans `orientations.rs` en route publique respectant
     // la privacy (BACKEND-GAPS FE-M1). Admin peut consommer la même route.
@@ -86,18 +83,20 @@ async fn admin_recompute_proofs(
                 .bind(target_id)
                 .fetch_optional(&state.db)
                 .await?;
-        let cap_count: i64 =
-            sqlx::query_scalar("SELECT COUNT(*) FROM user_capabilities WHERE user_id = $1 AND revoked_at IS NULL")
-                .bind(target_id)
-                .fetch_one(&state.db)
-                .await
-                .unwrap_or(0);
-        let badge_count: i64 =
-            sqlx::query_scalar("SELECT COUNT(*) FROM user_badges WHERE user_id = $1 AND revoked_at IS NULL")
-                .bind(target_id)
-                .fetch_one(&state.db)
-                .await
-                .unwrap_or(0);
+        let cap_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM user_capabilities WHERE user_id = $1 AND revoked_at IS NULL",
+        )
+        .bind(target_id)
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or(0);
+        let badge_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM user_badges WHERE user_id = $1 AND revoked_at IS NULL",
+        )
+        .bind(target_id)
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or(0);
         return Ok(Json(build_response(json!({
             "dry_run": true,
             "current_state": {
@@ -181,7 +180,9 @@ async fn admin_rank_override(
         )));
     }
     if body.reason.trim().len() < 8 {
-        return Err(AppError::Validation("reason must be at least 8 chars".into()));
+        return Err(AppError::Validation(
+            "reason must be at least 8 chars".into(),
+        ));
     }
 
     let current: Option<(String,)> =
@@ -194,13 +195,11 @@ async fn admin_rank_override(
     let dry = q.dry_run || crate::middleware::admin_destructive::is_admin_dry_run();
     if dry {
         // Delta leaderboard estimé : nombre de users au new_rank (pour situer).
-        let peers: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM user_ranks WHERE rank = $1",
-        )
-        .bind(&body.new_rank)
-        .fetch_one(&state.db)
-        .await
-        .unwrap_or(0);
+        let peers: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM user_ranks WHERE rank = $1")
+            .bind(&body.new_rank)
+            .fetch_one(&state.db)
+            .await
+            .unwrap_or(0);
         return Ok(Json(build_response(json!({
             "dry_run": true,
             "would_override": {

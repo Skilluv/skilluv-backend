@@ -78,8 +78,7 @@ async fn find_talents(
         page: q.page.unwrap_or(1),
         per_page: q.per_page.unwrap_or(20),
     };
-    let (talents, total) =
-        SkillsService::find_talents_by_skill(&state.db, &slug, &filter).await?;
+    let (talents, total) = SkillsService::find_talents_by_skill(&state.db, &slug, &filter).await?;
 
     Ok(Json(json!({
         "data": talents,

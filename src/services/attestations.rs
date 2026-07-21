@@ -94,17 +94,17 @@ impl AttestationsService {
         let mut issued_ids = Vec::new();
 
         // 1. Gesture : proficiency ≥ 2, un par skill
-        if new_proficiency_level >= 2 {
-            if let Some(id) = Self::try_issue_gesture(tx, user_id, skill_id).await? {
-                issued_ids.push(id);
-            }
+        if new_proficiency_level >= 2
+            && let Some(id) = Self::try_issue_gesture(tx, user_id, skill_id).await?
+        {
+            issued_ids.push(id);
         }
 
         // 2. Skill : proficiency ≥ 4 + au moins une review par un sénior
-        if new_proficiency_level >= 4 {
-            if let Some(id) = Self::try_issue_skill(tx, user_id, skill_id).await? {
-                issued_ids.push(id);
-            }
+        if new_proficiency_level >= 4
+            && let Some(id) = Self::try_issue_skill(tx, user_id, skill_id).await?
+        {
+            issued_ids.push(id);
         }
 
         Ok(issued_ids)
@@ -137,12 +137,11 @@ impl AttestationsService {
         }
 
         // Récupérer le skill pour construire title/description
-        let (skill_slug, skill_display_name): (String, String) = sqlx::query_as(
-            "SELECT slug, display_name FROM skill_nodes WHERE id = $1",
-        )
-        .bind(skill_id)
-        .fetch_one(&mut **tx)
-        .await?;
+        let (skill_slug, skill_display_name): (String, String) =
+            sqlx::query_as("SELECT slug, display_name FROM skill_nodes WHERE id = $1")
+                .bind(skill_id)
+                .fetch_one(&mut **tx)
+                .await?;
 
         // Top 3 preuves : deliverables du user qui touchent ce skill
         let top_proofs: Vec<Uuid> = sqlx::query_scalar(
@@ -165,7 +164,7 @@ impl AttestationsService {
         .await?;
 
         let code = Self::generate_verification_code();
-        let title = format!("Sait {}", &skill_display_name);
+        let title = format!("Sait {skill_display_name}");
         let description = format!(
             "A démontré compétence sur \"{}\" ({}) via ses contributions vérifiées.",
             skill_display_name, skill_slug
@@ -247,12 +246,11 @@ impl AttestationsService {
             return Ok(None);
         }
 
-        let (_, skill_display_name): (String, String) = sqlx::query_as(
-            "SELECT slug, display_name FROM skill_nodes WHERE id = $1",
-        )
-        .bind(skill_id)
-        .fetch_one(&mut **tx)
-        .await?;
+        let (_, skill_display_name): (String, String) =
+            sqlx::query_as("SELECT slug, display_name FROM skill_nodes WHERE id = $1")
+                .bind(skill_id)
+                .fetch_one(&mut **tx)
+                .await?;
 
         let top_proofs: Vec<Uuid> = sqlx::query_scalar(
             r#"
@@ -272,7 +270,7 @@ impl AttestationsService {
         .await?;
 
         let code = Self::generate_verification_code();
-        let title = format!("Maîtrise de {}", &skill_display_name);
+        let title = format!("Maîtrise de {skill_display_name}");
         let description = format!(
             "A démontré maîtrise avancée (niveau 4+) sur \"{}\", validée par {} reviewer(s) sénior(s).",
             skill_display_name,
@@ -382,8 +380,7 @@ impl AttestationsService {
         // Pré-check éligibilité
         if !Self::check_compagnonnage_eligibility(db, params.user_id, params.project_id).await? {
             return Err(AppError::Validation(
-                "User is not eligible for compagnonnage attestation on this project"
-                    .to_string(),
+                "User is not eligible for compagnonnage attestation on this project".to_string(),
             ));
         }
 
@@ -438,10 +435,7 @@ impl AttestationsService {
 
     /// Vérification publique par code (URL /attestations/verify/{code}).
     /// Retourne Some(attestation) si trouvée + valide, None sinon.
-    pub async fn verify_by_code(
-        db: &PgPool,
-        code: &str,
-    ) -> Result<Option<Attestation>, AppError> {
+    pub async fn verify_by_code(db: &PgPool, code: &str) -> Result<Option<Attestation>, AppError> {
         let attestation = sqlx::query_as::<_, Attestation>(
             "SELECT * FROM attestations WHERE verification_code = $1 AND public = TRUE",
         )

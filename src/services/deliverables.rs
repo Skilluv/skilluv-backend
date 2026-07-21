@@ -67,7 +67,26 @@ pub enum PrMergedOutcome {
     /// Idempotence : ce commit hash a déjà produit un deliverable pour ce user.
     AlreadyProcessed { deliverable_id: Uuid },
     /// La slice matchée n'est pas dans un statut compatible avec merge (déjà fermée, etc.).
-    SliceNotActionable { slice_id: Uuid, slice_status: String },
+    SliceNotActionable {
+        slice_id: Uuid,
+        slice_status: String,
+    },
+}
+
+/// Paramètres pour [`DeliverablesService::create_from_challenge_submission`].
+///
+/// Regroupe les 8 champs non-DB de l'ancienne signature pour rester sous le
+/// seuil clippy `too_many_arguments`.
+#[derive(Debug, Clone)]
+pub struct ChallengeSubmissionInput<'a> {
+    pub user_id: Uuid,
+    pub challenge_id: Uuid,
+    pub submission_id: Uuid,
+    pub submission_code: &'a str,
+    pub fragments_awarded: i32,
+    pub language: Option<&'a str>,
+    pub stdout: Option<&'a str>,
+    pub stderr: Option<&'a str>,
 }
 
 impl DeliverablesService {
@@ -106,14 +125,19 @@ impl DeliverablesService {
         }
 
         // 2. Résolution de l'auteur Skilluv depuis son github_login
-        let Some(author_user_id) = Self::resolve_github_login(&mut tx, &params.github_login).await? else {
+        let Some(author_user_id) =
+            Self::resolve_github_login(&mut tx, &params.github_login).await?
+        else {
             // L'auteur PR n'est pas un user Skilluv connecté.
             // Best-effort : si la slice a un claimed_by, on suppose que la PR est
             // pour ce user et on marque pending_manual_review.
             let Some(claimed_by) = slice.claimed_by_user_id else {
                 return Ok(PrMergedOutcome::NoMatchingSlice);
             };
-            return Self::insert_deliverable_pending_manual_review(&mut tx, &slice, &params, claimed_by).await;
+            return Self::insert_deliverable_pending_manual_review(
+                &mut tx, &slice, &params, claimed_by,
+            )
+            .await;
         };
 
         // 3. Vérification legitimité
@@ -139,11 +163,9 @@ impl DeliverablesService {
         if matches!(outcome, PrMergedOutcome::Verified { .. }) {
             let db_clone = db.clone();
             tokio::spawn(async move {
-                let _ = crate::services::proof_hooks::recompute_all_for_user(
-                    &db_clone,
-                    author_user_id,
-                )
-                .await;
+                let _ =
+                    crate::services::proof_hooks::recompute_all_for_user(&db_clone, author_user_id)
+                        .await;
             });
         }
 
@@ -404,12 +426,11 @@ impl DeliverablesService {
                     .find(|c: char| !c.is_ascii_digit())
                     .map(|off| start + off)
                     .unwrap_or(lower.len());
-                if end > start {
-                    if let Ok(n) = lower[start..end].parse::<i32>() {
-                        if !result.contains(&n) {
-                            result.push(n);
-                        }
-                    }
+                if end > start
+                    && let Ok(n) = lower[start..end].parse::<i32>()
+                    && !result.contains(&n)
+                {
+                    result.push(n);
                 }
                 cursor = end;
             }
@@ -445,12 +466,11 @@ impl DeliverablesService {
         user_id: Uuid,
         _deliverable_id: Uuid,
     ) -> Result<(), AppError> {
-        let slice_skills: Vec<(Uuid, i16)> = sqlx::query_as(
-            "SELECT skill_id, weight FROM slice_skills WHERE slice_id = $1",
-        )
-        .bind(slice_id)
-        .fetch_all(&mut **tx)
-        .await?;
+        let slice_skills: Vec<(Uuid, i16)> =
+            sqlx::query_as("SELECT skill_id, weight FROM slice_skills WHERE slice_id = $1")
+                .bind(slice_id)
+                .fetch_all(&mut **tx)
+                .await?;
 
         for (skill_id, weight) in slice_skills {
             // Upsert user_skills row
@@ -540,6 +560,8 @@ impl DeliverablesService {
     // P8.5a : dual-write challenge_submissions → deliverables
     // ═══════════════════════════════════════════════════════════════════
 
+    // (struct ChallengeSubmissionInput défini au niveau module — voir plus bas)
+
     /// Crée un deliverable "verified" à partir d'un `challenge_submissions.status='success'`.
     ///
     /// Appelé depuis `routes/challenges.rs::submit_challenge` en best-effort après
@@ -551,16 +573,20 @@ impl DeliverablesService {
     /// submission a déjà produit un deliverable, retourne l'existant.
     pub async fn create_from_challenge_submission(
         db: &PgPool,
-        user_id: Uuid,
-        challenge_id: Uuid,
-        submission_id: Uuid,
-        submission_code: &str,
-        fragments_awarded: i32,
-        language: Option<&str>,
-        stdout: Option<&str>,
-        stderr: Option<&str>,
+        params: ChallengeSubmissionInput<'_>,
     ) -> Result<Uuid, AppError> {
         use sha2::{Digest, Sha256};
+
+        let ChallengeSubmissionInput {
+            user_id,
+            challenge_id,
+            submission_id,
+            submission_code,
+            fragments_awarded,
+            language,
+            stdout,
+            stderr,
+        } = params;
 
         let mut hasher = Sha256::new();
         hasher.update(submission_code.as_bytes());
@@ -579,7 +605,10 @@ impl DeliverablesService {
             "code_content": submission_code,
         });
         if let (Some(obj), Some(lang)) = (metadata.as_object_mut(), language) {
-            obj.insert("language".into(), serde_json::Value::String(lang.to_string()));
+            obj.insert(
+                "language".into(),
+                serde_json::Value::String(lang.to_string()),
+            );
         }
         if let (Some(obj), Some(s)) = (metadata.as_object_mut(), stdout) {
             obj.insert("stdout".into(), serde_json::Value::String(s.to_string()));
@@ -623,7 +652,8 @@ impl DeliverablesService {
             // P19.2 — Best-effort recompute proof engines pour ce user.
             let db_clone = db.clone();
             tokio::spawn(async move {
-                let _ = crate::services::proof_hooks::recompute_all_for_user(&db_clone, user_id).await;
+                let _ =
+                    crate::services::proof_hooks::recompute_all_for_user(&db_clone, user_id).await;
             });
             return Ok(id);
         }
@@ -687,7 +717,10 @@ impl DeliverablesService {
             "contributors": contributors,
         });
         if let (Some(obj), Some(lang)) = (metadata.as_object_mut(), language) {
-            obj.insert("language".into(), serde_json::Value::String(lang.to_string()));
+            obj.insert(
+                "language".into(),
+                serde_json::Value::String(lang.to_string()),
+            );
         }
         if let (Some(obj), Some(s)) = (metadata.as_object_mut(), stdout) {
             obj.insert("stdout".into(), serde_json::Value::String(s.to_string()));
@@ -750,13 +783,11 @@ impl DeliverablesService {
 
     /// Récupère un deliverable par id.
     pub async fn get(db: &PgPool, id: Uuid) -> Result<Deliverable, AppError> {
-        sqlx::query_as::<_, Deliverable>(
-            "SELECT * FROM deliverables WHERE id = $1",
-        )
-        .bind(id)
-        .fetch_optional(db)
-        .await?
-        .ok_or_else(|| AppError::NotFound("Deliverable not found".to_string()))
+        sqlx::query_as::<_, Deliverable>("SELECT * FROM deliverables WHERE id = $1")
+            .bind(id)
+            .fetch_optional(db)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Deliverable not found".to_string()))
     }
 
     /// Liste les deliverables publics vérifiés d'un user (profil public).

@@ -178,7 +178,9 @@ async fn reject_draft_transitions_to_closed_with_closed_at() {
     let project = insert_project(&db, owner).await;
     let draft = insert_draft(&db, project, "To reject").await;
 
-    let rejected = SlicesService::reject_draft(&db, draft).await.expect("reject");
+    let rejected = SlicesService::reject_draft(&db, draft)
+        .await
+        .expect("reject");
     assert_eq!(rejected.status, "closed");
     assert!(rejected.closed_at.is_some(), "closed_at doit être set");
 
@@ -214,8 +216,16 @@ async fn is_steward_permission_check() {
     .await
     .expect("nominate steward");
 
-    assert!(StewardsService::is_steward(&db, project, steward_user).await.expect("s"));
-    assert!(!StewardsService::is_steward(&db, project, random_user).await.expect("r"));
+    assert!(
+        StewardsService::is_steward(&db, project, steward_user)
+            .await
+            .expect("s")
+    );
+    assert!(
+        !StewardsService::is_steward(&db, project, random_user)
+            .await
+            .expect("r")
+    );
 
     db.close().await;
     cleanup_test_db(&name).await;

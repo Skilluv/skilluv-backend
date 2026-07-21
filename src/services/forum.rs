@@ -7,6 +7,26 @@ use uuid::Uuid;
 
 use crate::errors::AppError;
 
+// Type aliases pour clippy::type_complexity (rangées sqlx::query_as).
+type ForumRow241 = (
+    Uuid,
+    String,
+    Uuid,
+    String,
+    String,
+    String,
+    i32,
+    bool,
+    bool,
+    bool,
+    i64,
+    i64,
+    i64,
+    i64,
+    DateTime<Utc>,
+);
+type ForumRow505 = (Uuid, String, String, String, String, f32, DateTime<Utc>);
+
 pub const VALID_POST_KINDS: &[&str] = &["discussion", "question", "announcement"];
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -68,10 +88,7 @@ pub async fn list_categories(db: &PgPool) -> Result<Vec<ForumCategory>, AppError
     Ok(rows)
 }
 
-pub async fn get_category_by_slug(
-    db: &PgPool,
-    slug: &str,
-) -> Result<ForumCategory, AppError> {
+pub async fn get_category_by_slug(db: &PgPool, slug: &str) -> Result<ForumCategory, AppError> {
     let row: Option<ForumCategory> =
         sqlx::query_as("SELECT * FROM forum_categories WHERE slug = $1")
             .bind(slug)
@@ -105,10 +122,14 @@ pub async fn create_post(
     let title = input.title.trim();
     let body = input.body.trim();
     if title.len() < 3 || title.len() > 200 {
-        return Err(AppError::Validation("Title must be 3-200 characters".into()));
+        return Err(AppError::Validation(
+            "Title must be 3-200 characters".into(),
+        ));
     }
     if body.is_empty() || body.len() > 20_000 {
-        return Err(AppError::Validation("Body must be 1-20000 characters".into()));
+        return Err(AppError::Validation(
+            "Body must be 1-20000 characters".into(),
+        ));
     }
     if input.kind == "announcement" && author_role != "admin" {
         return Err(AppError::Forbidden);
@@ -120,13 +141,11 @@ pub async fn create_post(
         return Err(AppError::Validation("bounty only on questions".into()));
     }
     // Reject posting in a locked category unless mod/admin
-    let category: ForumCategory = sqlx::query_as(
-        "SELECT * FROM forum_categories WHERE id = $1",
-    )
-    .bind(input.category_id)
-    .fetch_optional(db)
-    .await?
-    .ok_or(AppError::NotFound("category not found".into()))?;
+    let category: ForumCategory = sqlx::query_as("SELECT * FROM forum_categories WHERE id = $1")
+        .bind(input.category_id)
+        .fetch_optional(db)
+        .await?
+        .ok_or(AppError::NotFound("category not found".into()))?;
     let is_mod = author_role == "admin" || author_role == "mentor";
     if category.locked && !is_mod {
         return Err(AppError::Forbidden);
@@ -239,35 +258,52 @@ pub async fn list_posts(
         "#
     );
 
-    let rows: Vec<(Uuid, String, Uuid, String, String, String, i32, bool, bool, bool, i64, i64, i64, i64, DateTime<Utc>)> =
-        sqlx::query_as(&sql)
-            .bind(filters.category_slug)
-            .bind(filters.kind)
-            .bind(filters.limit.max(1).min(100))
-            .bind(filters.offset.max(0))
-            .fetch_all(db)
-            .await?;
+    let rows: Vec<ForumRow241> = sqlx::query_as(&sql)
+        .bind(filters.category_slug)
+        .bind(filters.kind)
+        .bind(filters.limit.clamp(1, 100))
+        .bind(filters.offset.max(0))
+        .fetch_all(db)
+        .await?;
 
     Ok(rows
         .into_iter()
-        .map(|(id, slug, author_id, author_username, kind, title, bounty, has_ans, pinned, locked, view_count, reply_count, upvotes, _downvotes, created_at)| {
-            PostListItem {
+        .map(
+            |(
                 id,
-                category_slug: slug,
+                slug,
                 author_id,
                 author_username,
                 kind,
                 title,
-                bounty_fragments: bounty,
-                has_accepted_answer: has_ans,
+                bounty,
+                has_ans,
                 pinned,
                 locked,
                 view_count,
                 reply_count,
                 upvotes,
+                _downvotes,
                 created_at,
-            }
-        })
+            )| {
+                PostListItem {
+                    id,
+                    category_slug: slug,
+                    author_id,
+                    author_username,
+                    kind,
+                    title,
+                    bounty_fragments: bounty,
+                    has_accepted_answer: has_ans,
+                    pinned,
+                    locked,
+                    view_count,
+                    reply_count,
+                    upvotes,
+                    created_at,
+                }
+            },
+        )
         .collect())
 }
 
@@ -287,10 +323,14 @@ pub async fn edit_post(
     let title = new_title.trim();
     let body = new_body.trim();
     if title.len() < 3 || title.len() > 200 {
-        return Err(AppError::Validation("Title must be 3-200 characters".into()));
+        return Err(AppError::Validation(
+            "Title must be 3-200 characters".into(),
+        ));
     }
     if body.is_empty() || body.len() > 20_000 {
-        return Err(AppError::Validation("Body must be 1-20000 characters".into()));
+        return Err(AppError::Validation(
+            "Body must be 1-20000 characters".into(),
+        ));
     }
     let updated: Post = sqlx::query_as(
         r#"
@@ -402,9 +442,7 @@ pub async fn accept_answer(
         ));
     }
     if answer_author_id == requester_id {
-        return Err(AppError::Validation(
-            "Cannot accept your own answer".into(),
-        ));
+        return Err(AppError::Validation("Cannot accept your own answer".into()));
     }
 
     let mut tx = db.begin().await?;
@@ -468,7 +506,7 @@ pub async fn search_posts(
         return Ok(Vec::new());
     }
 
-    let rows: Vec<(Uuid, String, String, String, String, f32, DateTime<Utc>)> = sqlx::query_as(
+    let rows: Vec<ForumRow505> = sqlx::query_as(
         r#"
         WITH q AS (SELECT to_tsquery('simple', $1) AS tq)
         SELECT
@@ -494,15 +532,17 @@ pub async fn search_posts(
 
     Ok(rows
         .into_iter()
-        .map(|(id, kind, title, snippet, category_slug, rank, created_at)| SearchHit {
-            id,
-            kind,
-            title,
-            snippet,
-            category_slug,
-            rank,
-            created_at,
-        })
+        .map(
+            |(id, kind, title, snippet, category_slug, rank, created_at)| SearchHit {
+                id,
+                kind,
+                title,
+                snippet,
+                category_slug,
+                rank,
+                created_at,
+            },
+        )
         .collect())
 }
 

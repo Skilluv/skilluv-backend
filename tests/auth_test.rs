@@ -198,7 +198,10 @@ async fn test_refresh_reuse_detection_revokes_all_sessions() {
     let app = TestApp::spawn().await;
 
     // Fresh client, so we control exactly which Set-Cookie we see.
-    let legit = reqwest::Client::builder().cookie_store(true).build().unwrap();
+    let legit = reqwest::Client::builder()
+        .cookie_store(true)
+        .build()
+        .unwrap();
     let resp = legit
         .post(format!("{}/api/auth/register", app.addr))
         .json(&json!({
@@ -231,7 +234,10 @@ async fn test_refresh_reuse_detection_revokes_all_sessions() {
     let attacker = reqwest::Client::new();
     let resp = attacker
         .post(format!("{}/api/auth/refresh", app.addr))
-        .header(reqwest::header::COOKIE, format!("refresh_token={old_refresh}"))
+        .header(
+            reqwest::header::COOKIE,
+            format!("refresh_token={old_refresh}"),
+        )
         .send()
         .await
         .unwrap();

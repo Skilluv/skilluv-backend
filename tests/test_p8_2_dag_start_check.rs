@@ -94,11 +94,7 @@ async fn insert_training_challenge(db: &PgPool, title: &str) -> Uuid {
     .expect("challenge")
 }
 
-async fn add_verified_deliverable_for_challenge(
-    db: &PgPool,
-    user_id: Uuid,
-    challenge_id: Uuid,
-) {
+async fn add_verified_deliverable_for_challenge(db: &PgPool, user_id: Uuid, challenge_id: Uuid) {
     sqlx::query(
         "INSERT INTO deliverables
             (challenge_id, user_id, artifact_type, artifact_url, verifiable_by,
@@ -126,11 +122,13 @@ async fn no_dag_entries_uses_legacy_fragments_check() {
 
     // Sans DAG, check_eligibility retourne toujours true (aucun prereq à vérifier).
     // C'est le fallback legacy fragments qui bloque l'user côté route handler.
-    let eligibility =
-        TracksService::check_eligibility(&db, user_id, challenge_id)
-            .await
-            .expect("elig");
-    assert!(eligibility.eligible, "no DAG entries → service says eligible");
+    let eligibility = TracksService::check_eligibility(&db, user_id, challenge_id)
+        .await
+        .expect("elig");
+    assert!(
+        eligibility.eligible,
+        "no DAG entries → service says eligible"
+    );
     assert!(eligibility.missing_required_prerequisites.is_empty());
 
     // Détection de la présence de DAG côté SQL (miroir du has_dag_prereqs du route)
@@ -167,10 +165,9 @@ async fn dag_check_blocks_when_required_prereq_not_completed() {
     insert_test_user(&db, user_id, 0).await;
 
     // User n'a pas complété le prereq → check_eligibility retourne false
-    let eligibility =
-        TracksService::check_eligibility(&db, user_id, target_id)
-            .await
-            .expect("elig");
+    let eligibility = TracksService::check_eligibility(&db, user_id, target_id)
+        .await
+        .expect("elig");
     assert!(!eligibility.eligible);
     assert_eq!(eligibility.missing_required_prerequisites, vec![prereq_id]);
 
@@ -208,10 +205,9 @@ async fn dag_check_allows_when_required_prereq_completed_via_deliverable() {
     // User complète le prereq via un deliverable verified
     add_verified_deliverable_for_challenge(&db, user_id, prereq_id).await;
 
-    let eligibility =
-        TracksService::check_eligibility(&db, user_id, target_id)
-            .await
-            .expect("elig");
+    let eligibility = TracksService::check_eligibility(&db, user_id, target_id)
+        .await
+        .expect("elig");
     assert!(eligibility.eligible);
     assert!(eligibility.missing_required_prerequisites.is_empty());
 
@@ -237,10 +233,9 @@ async fn dag_optional_prereq_does_not_block() {
     let user_id = Uuid::new_v4();
     insert_test_user(&db, user_id, 0).await;
 
-    let eligibility =
-        TracksService::check_eligibility(&db, user_id, target_id)
-            .await
-            .expect("elig");
+    let eligibility = TracksService::check_eligibility(&db, user_id, target_id)
+        .await
+        .expect("elig");
     assert!(eligibility.eligible);
     assert!(eligibility.missing_required_prerequisites.is_empty());
     assert_eq!(
@@ -272,10 +267,9 @@ async fn dag_only_gating_allows_zero_fragments_when_dag_satisfied() {
     insert_test_user(&db, user_id, 0).await;
     add_verified_deliverable_for_challenge(&db, user_id, prereq_id).await;
 
-    let eligibility =
-        TracksService::check_eligibility(&db, user_id, target_id)
-            .await
-            .expect("elig");
+    let eligibility = TracksService::check_eligibility(&db, user_id, target_id)
+        .await
+        .expect("elig");
     assert!(eligibility.eligible);
 
     db.close().await;

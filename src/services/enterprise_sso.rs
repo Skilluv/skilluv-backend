@@ -9,8 +9,8 @@
 //! stay local. This module handles storage and provisioning only.
 
 use aes_gcm::{
-    aead::{Aead, KeyInit, OsRng, AeadCore},
     Aes256Gcm, Key, Nonce,
+    aead::{Aead, AeadCore, KeyInit, OsRng},
 };
 use chrono::{DateTime, Utc};
 use redis::AsyncCommands;
@@ -228,11 +228,7 @@ pub async fn store_login_state(
     redis: &mut ConnectionManager,
     state: &SsoLoginState,
 ) -> Result<String, AppError> {
-    let token = format!(
-        "{}{}",
-        Uuid::new_v4().simple(),
-        Uuid::new_v4().simple()
-    );
+    let token = format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple());
     let key = format!("sso_state:{token}");
     let payload = serde_json::to_string(state)
         .map_err(|e| AppError::Internal(format!("sso state serialize: {e}")))?;
@@ -269,28 +265,20 @@ pub async fn provision_from_sso(
 ) -> Result<Uuid, AppError> {
     let email_lower = email.trim().to_lowercase();
 
-    let existing: Option<(Uuid,)> =
-        sqlx::query_as("SELECT id FROM users WHERE LOWER(email) = $1")
-            .bind(&email_lower)
-            .fetch_optional(db)
-            .await?;
+    let existing: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM users WHERE LOWER(email) = $1")
+        .bind(&email_lower)
+        .fetch_optional(db)
+        .await?;
 
     let user_id = if let Some((uid,)) = existing {
         uid
     } else {
         // Placeholder password (unusable). Users authenticate via SSO ; they can set
         // a password later via /auth/change-password if they want a fallback.
-        let placeholder_hash =
-            "$argon2id$v=19$m=19456,t=2,p=1$sso-placeholder$sso-placeholder";
+        let placeholder_hash = "$argon2id$v=19$m=19456,t=2,p=1$sso-placeholder$sso-placeholder";
         let base_username = display_name
             .and_then(|d| d.split_whitespace().next().map(|s| s.to_string()))
-            .unwrap_or_else(|| {
-                email_lower
-                    .split('@')
-                    .next()
-                    .unwrap_or("user")
-                    .to_string()
-            });
+            .unwrap_or_else(|| email_lower.split('@').next().unwrap_or("user").to_string());
         let cleaned: String = base_username
             .chars()
             .filter(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-')
@@ -313,7 +301,11 @@ pub async fn provision_from_sso(
         let display = display_name.unwrap_or(&candidate).to_string();
         let parts: Vec<&str> = display.split_whitespace().collect();
         let first = parts.first().copied().unwrap_or(&display).to_string();
-        let last = if parts.len() >= 2 { parts[1..].join(" ") } else { String::new() };
+        let last = if parts.len() >= 2 {
+            parts[1..].join(" ")
+        } else {
+            String::new()
+        };
 
         let inserted: (Uuid,) = sqlx::query_as(
             r#"

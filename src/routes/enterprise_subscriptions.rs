@@ -25,7 +25,10 @@ pub fn enterprise_subscription_routes() -> Router<AppState> {
             "/enterprise/subscriptions/current",
             get(current_subscription),
         )
-        .route("/enterprise/subscriptions/cancel", post(cancel_subscription))
+        .route(
+            "/enterprise/subscriptions/cancel",
+            post(cancel_subscription),
+        )
 }
 
 fn build_response(data: Value) -> Value {
@@ -38,10 +41,7 @@ fn build_response(data: Value) -> Value {
     })
 }
 
-async fn current_enterprise_for(
-    db: &sqlx::PgPool,
-    user_id: Uuid,
-) -> Result<Uuid, AppError> {
+async fn current_enterprise_for(db: &sqlx::PgPool, user_id: Uuid) -> Result<Uuid, AppError> {
     let row: Option<(Uuid,)> = sqlx::query_as(
         "SELECT enterprise_id FROM enterprise_members WHERE user_id = $1 AND status = 'active' LIMIT 1",
     )

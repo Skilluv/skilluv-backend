@@ -380,7 +380,10 @@ async fn recommendations_empty_when_no_skill_near_levelup() {
     let recs = SkillsService::recommend_slices_for_user(&db, user_id, 10)
         .await
         .expect("recs after level 5");
-    assert!(recs.is_empty(), "level 5 skill has no next threshold → no recos");
+    assert!(
+        recs.is_empty(),
+        "level 5 skill has no next threshold → no recos"
+    );
 
     db.close().await;
     cleanup_test_db(&db_name).await;

@@ -128,13 +128,12 @@ async fn challenge_submission_inherits_tenant_from_challenge() {
     .await
     .expect("sub");
 
-    let sub_tenant: Option<Uuid> = sqlx::query_scalar(
-        "SELECT tenant_id FROM challenge_submissions WHERE id = $1",
-    )
-    .bind(sub_id)
-    .fetch_one(&db)
-    .await
-    .expect("t");
+    let sub_tenant: Option<Uuid> =
+        sqlx::query_scalar("SELECT tenant_id FROM challenge_submissions WHERE id = $1")
+            .bind(sub_id)
+            .fetch_one(&db)
+            .await
+            .expect("t");
     assert_eq!(sub_tenant, Some(tenant));
 
     db.close().await;
@@ -165,13 +164,11 @@ async fn deliverable_inherits_tenant_from_challenge() {
     .await
     .expect("del");
 
-    let t: Option<Uuid> = sqlx::query_scalar(
-        "SELECT tenant_id FROM deliverables WHERE id = $1",
-    )
-    .bind(del_id)
-    .fetch_one(&db)
-    .await
-    .expect("t");
+    let t: Option<Uuid> = sqlx::query_scalar("SELECT tenant_id FROM deliverables WHERE id = $1")
+        .bind(del_id)
+        .fetch_one(&db)
+        .await
+        .expect("t");
     assert_eq!(t, Some(tenant));
 
     db.close().await;
@@ -209,12 +206,11 @@ async fn attestation_inherits_tenant_from_user() {
     .await
     .expect("att");
 
-    let t: Option<Uuid> =
-        sqlx::query_scalar("SELECT tenant_id FROM attestations WHERE id = $1")
-            .bind(att_id)
-            .fetch_one(&db)
-            .await
-            .expect("t");
+    let t: Option<Uuid> = sqlx::query_scalar("SELECT tenant_id FROM attestations WHERE id = $1")
+        .bind(att_id)
+        .fetch_one(&db)
+        .await
+        .expect("t");
     assert_eq!(t, Some(tenant));
 
     db.close().await;
@@ -293,12 +289,11 @@ async fn project_slice_inherits_tenant_from_creator() {
     .await
     .expect("s");
 
-    let t: Option<Uuid> =
-        sqlx::query_scalar("SELECT tenant_id FROM project_slices WHERE id = $1")
-            .bind(slice)
-            .fetch_one(&db)
-            .await
-            .expect("t");
+    let t: Option<Uuid> = sqlx::query_scalar("SELECT tenant_id FROM project_slices WHERE id = $1")
+        .bind(slice)
+        .fetch_one(&db)
+        .await
+        .expect("t");
     assert_eq!(t, Some(tenant));
 
     db.close().await;
@@ -331,13 +326,12 @@ async fn trigger_respects_explicit_tenant_id() {
     .await
     .expect("sub");
 
-    let t: Option<Uuid> = sqlx::query_scalar(
-        "SELECT tenant_id FROM challenge_submissions WHERE id = $1",
-    )
-    .bind(sub_id)
-    .fetch_one(&db)
-    .await
-    .expect("t");
+    let t: Option<Uuid> =
+        sqlx::query_scalar("SELECT tenant_id FROM challenge_submissions WHERE id = $1")
+            .bind(sub_id)
+            .fetch_one(&db)
+            .await
+            .expect("t");
     assert_eq!(t, Some(tenant_b), "trigger respecte l'explicite");
 
     db.close().await;

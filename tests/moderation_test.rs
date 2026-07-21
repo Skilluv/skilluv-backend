@@ -117,6 +117,6 @@ async fn test_audit_log_entry() {
     assert_eq!(resp.status(), StatusCode::OK);
 
     let body: serde_json::Value = resp.json().await.unwrap();
-    assert!(body["data"].as_array().unwrap().len() >= 1);
+    assert!(!body["data"].as_array().unwrap().is_empty());
     assert_eq!(body["data"][0]["action"], "user.ban");
 }

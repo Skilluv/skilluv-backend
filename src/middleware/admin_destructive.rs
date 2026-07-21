@@ -34,24 +34,12 @@ pub async fn enforce_admin_destructive(
     let id = admin_user_id.to_string();
 
     // Burst : 10 en 60s
-    crate::middleware::RateLimiter::check(
-        &mut redis,
-        "admin_destructive_burst",
-        &id,
-        10,
-        60,
-    )
-    .await?;
+    crate::middleware::RateLimiter::check(&mut redis, "admin_destructive_burst", &id, 10, 60)
+        .await?;
 
     // Long horizon : 100 en 3600s
-    crate::middleware::RateLimiter::check(
-        &mut redis,
-        "admin_destructive_hourly",
-        &id,
-        100,
-        3600,
-    )
-    .await?;
+    crate::middleware::RateLimiter::check(&mut redis, "admin_destructive_hourly", &id, 100, 3600)
+        .await?;
 
     Ok(())
 }

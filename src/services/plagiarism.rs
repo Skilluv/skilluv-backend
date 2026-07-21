@@ -96,9 +96,8 @@ pub async fn scan_deliverable(
     .bind(deliverable_id)
     .fetch_optional(db)
     .await?;
-    let (target_emb, target_tenant) = target.ok_or_else(|| {
-        AppError::NotFound("No embedding stored for this deliverable".into())
-    })?;
+    let (target_emb, target_tenant) = target
+        .ok_or_else(|| AppError::NotFound("No embedding stored for this deliverable".into()))?;
 
     // 2. Charger les candidats du même tenant.
     let candidates: Vec<(Uuid, Vec<f32>)> = sqlx::query_as(

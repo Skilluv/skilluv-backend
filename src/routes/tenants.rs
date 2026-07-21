@@ -19,9 +19,8 @@ use crate::AppState;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
 
-pub const ROOT_TENANT_ID: Uuid = Uuid::from_bytes([
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01,
-]);
+pub const ROOT_TENANT_ID: Uuid =
+    Uuid::from_bytes([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
 
 /// True si le tenant courant est le tenant racine (`skilluv`).
 pub fn is_root_tenant(id: Uuid) -> bool {
@@ -32,10 +31,7 @@ pub fn tenant_routes() -> Router<AppState> {
     Router::new()
         .route("/tenants/current", get(get_current_tenant))
         .route("/admin/tenants", get(list_tenants).post(create_tenant))
-        .route(
-            "/admin/tenants/{id}",
-            get(get_tenant).put(update_tenant),
-        )
+        .route("/admin/tenants/{id}", get(get_tenant).put(update_tenant))
         .route(
             "/admin/tenants/{id}/members",
             get(list_members).post(add_member),
@@ -70,10 +66,9 @@ pub async fn resolve_tenant_from_headers(
     if let Some(slug) = headers
         .get("x-skilluv-tenant")
         .and_then(|v| v.to_str().ok())
+        && let Some(id) = tenant_id_by_slug(db, slug).await?
     {
-        if let Some(id) = tenant_id_by_slug(db, slug).await? {
-            return Ok(id);
-        }
+        return Ok(id);
     }
     // 2. Sous-domaine du Host
     if let Some(host) = headers.get("host").and_then(|v| v.to_str().ok()) {
@@ -81,10 +76,11 @@ pub async fn resolve_tenant_from_headers(
         let parts: Vec<&str> = base.split('.').collect();
         if parts.len() >= 3 {
             let sub = parts[0];
-            if sub != "www" && sub != "app" {
-                if let Some(id) = tenant_id_by_subdomain(db, sub).await? {
-                    return Ok(id);
-                }
+            if sub != "www"
+                && sub != "app"
+                && let Some(id) = tenant_id_by_subdomain(db, sub).await?
+            {
+                return Ok(id);
             }
         }
     }
@@ -104,12 +100,11 @@ async fn tenant_id_by_subdomain(
     db: &sqlx::PgPool,
     subdomain: &str,
 ) -> Result<Option<Uuid>, AppError> {
-    let row: Option<(Uuid,)> = sqlx::query_as(
-        "SELECT id FROM tenants WHERE subdomain = $1 AND active = TRUE",
-    )
-    .bind(subdomain)
-    .fetch_optional(db)
-    .await?;
+    let row: Option<(Uuid,)> =
+        sqlx::query_as("SELECT id FROM tenants WHERE subdomain = $1 AND active = TRUE")
+            .bind(subdomain)
+            .fetch_optional(db)
+            .await?;
     Ok(row.map(|(id,)| id))
 }
 

@@ -59,16 +59,24 @@ impl SkillDomain {
         }
     }
 
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
+        <Self as std::str::FromStr>::from_str(s).ok()
+    }
+}
+
+impl std::str::FromStr for SkillDomain {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, ()> {
         match s {
-            "code" => Some(Self::Code),
-            "design" => Some(Self::Design),
-            "game" => Some(Self::Game),
-            "security" => Some(Self::Security),
-            "soft_skills" => Some(Self::SoftSkills),
-            "ai" => Some(Self::Ai),
-            "ops" => Some(Self::Ops),
-            _ => None,
+            "code" => Ok(Self::Code),
+            "design" => Ok(Self::Design),
+            "game" => Ok(Self::Game),
+            "security" => Ok(Self::Security),
+            "soft_skills" => Ok(Self::SoftSkills),
+            "ai" => Ok(Self::Ai),
+            "ops" => Ok(Self::Ops),
+            _ => Err(()),
         }
     }
 }

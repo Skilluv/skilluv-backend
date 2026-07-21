@@ -10,8 +10,7 @@
 use std::time::Duration;
 
 async fn connect_or_skip() -> Option<skilluv_backend::grpc::AiClient> {
-    let url = std::env::var("GRPC_AI_URL")
-        .unwrap_or_else(|_| "http://localhost:50051".to_string());
+    let url = std::env::var("GRPC_AI_URL").unwrap_or_else(|_| "http://localhost:50051".to_string());
     skilluv_backend::grpc::AiClient::connect(&url).await
 }
 
@@ -62,11 +61,7 @@ async fn e2e_suggest_career_path_returns_response_from_real_ia() {
         target_market: "africa".into(),
         max_suggestions: 3,
     };
-    let call = tokio::time::timeout(
-        Duration::from_secs(15),
-        ai.suggest_career_path(req),
-    )
-    .await;
+    let call = tokio::time::timeout(Duration::from_secs(15), ai.suggest_career_path(req)).await;
 
     let response = call
         .expect("gRPC call timed out")

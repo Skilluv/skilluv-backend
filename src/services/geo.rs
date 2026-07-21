@@ -40,9 +40,7 @@ impl GeoService {
         })
     }
 
-    fn load_countries(
-        data_dir: &Path,
-    ) -> std::io::Result<(Vec<Country>, HashMap<String, String>)> {
+    fn load_countries(data_dir: &Path) -> std::io::Result<(Vec<Country>, HashMap<String, String>)> {
         let file = File::open(data_dir.join("countryInfo.txt"))?;
         let mut countries = Vec::new();
         let mut iso3_to_iso2 = HashMap::new();
@@ -98,7 +96,7 @@ impl GeoService {
                 });
         }
         for cities in cities_by_country.values_mut() {
-            cities.sort_by(|a, b| b.population.cmp(&a.population));
+            cities.sort_by_key(|c| std::cmp::Reverse(c.population));
         }
         Ok(cities_by_country)
     }
@@ -134,8 +132,7 @@ impl GeoService {
                 let needle = q.to_lowercase();
                 list.iter()
                     .filter(|c| {
-                        c.asciiname_lower.starts_with(&needle)
-                            || c.name_lower.starts_with(&needle)
+                        c.asciiname_lower.starts_with(&needle) || c.name_lower.starts_with(&needle)
                     })
                     .take(limit)
                     .collect()

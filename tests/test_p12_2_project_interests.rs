@@ -101,9 +101,13 @@ async fn mark_interested_upserts_score() {
     let owner = insert_user(&db).await;
     let project = insert_project(&db, owner, "My Project").await;
 
-    let a = projects::mark_interested(&db, user, project, 50).await.expect("a");
+    let a = projects::mark_interested(&db, user, project, 50)
+        .await
+        .expect("a");
     assert_eq!(a.interest_score, 50);
-    let b = projects::mark_interested(&db, user, project, 80).await.expect("b");
+    let b = projects::mark_interested(&db, user, project, 80)
+        .await
+        .expect("b");
     assert_eq!(b.interest_score, 80);
 
     let count: i64 = sqlx::query_scalar(
@@ -163,8 +167,12 @@ async fn unmark_sets_score_to_zero() {
     let owner = insert_user(&db).await;
     let project = insert_project(&db, owner, "Foo Project").await;
 
-    projects::mark_interested(&db, user, project, 70).await.expect("m");
-    let affected = projects::unmark_interested(&db, user, project).await.expect("u");
+    projects::mark_interested(&db, user, project, 70)
+        .await
+        .expect("m");
+    let affected = projects::unmark_interested(&db, user, project)
+        .await
+        .expect("u");
     assert_eq!(affected, 1);
 
     let score: i16 = sqlx::query_scalar(
@@ -195,11 +203,21 @@ async fn list_interests_filters_and_sorts() {
     let p_unmarked = insert_project(&db, owner, "Unmarked").await;
     let p_archived = insert_project(&db, owner, "Archived Interesting").await;
 
-    projects::mark_interested(&db, user, p_high, 90).await.expect("h");
-    projects::mark_interested(&db, user, p_low, 30).await.expect("l");
-    projects::mark_interested(&db, user, p_unmarked, 40).await.expect("u");
-    projects::unmark_interested(&db, user, p_unmarked).await.expect("un");
-    projects::mark_interested(&db, user, p_archived, 60).await.expect("a");
+    projects::mark_interested(&db, user, p_high, 90)
+        .await
+        .expect("h");
+    projects::mark_interested(&db, user, p_low, 30)
+        .await
+        .expect("l");
+    projects::mark_interested(&db, user, p_unmarked, 40)
+        .await
+        .expect("u");
+    projects::unmark_interested(&db, user, p_unmarked)
+        .await
+        .expect("un");
+    projects::mark_interested(&db, user, p_archived, 60)
+        .await
+        .expect("a");
     sqlx::query("UPDATE projects SET archived_at = NOW() WHERE id = $1")
         .bind(p_archived)
         .execute(&db)

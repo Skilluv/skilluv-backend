@@ -11,9 +11,7 @@ use bigdecimal::BigDecimal;
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use uuid::Uuid;
 
-use skilluv_backend::services::talent_wallet::{
-    self, Currency, LedgerEntry,
-};
+use skilluv_backend::services::talent_wallet::{self, Currency, LedgerEntry};
 
 async fn setup_test_db() -> (PgPool, String) {
     let db_name = format!(
@@ -88,8 +86,12 @@ async fn wallet_init_is_idempotent() {
     let (db, name) = setup_test_db().await;
     let user = insert_user(&db).await;
 
-    let a = talent_wallet::get_or_init_wallet(&db, user).await.expect("a");
-    let b = talent_wallet::get_or_init_wallet(&db, user).await.expect("b");
+    let a = talent_wallet::get_or_init_wallet(&db, user)
+        .await
+        .expect("a");
+    let b = talent_wallet::get_or_init_wallet(&db, user)
+        .await
+        .expect("b");
     assert_eq!(a.user_id, b.user_id);
     assert_eq!(a.balance_eur, BigDecimal::from(0));
     assert_eq!(a.balance_xof, BigDecimal::from(0));
@@ -130,7 +132,9 @@ async fn credit_increases_balance_and_logs_transaction() {
     assert_eq!(txn.currency, "EUR");
     assert_eq!(txn.reason, "bounty_payout");
 
-    let w = talent_wallet::get_or_init_wallet(&db, user).await.expect("w");
+    let w = talent_wallet::get_or_init_wallet(&db, user)
+        .await
+        .expect("w");
     assert_eq!(w.balance_eur, BigDecimal::from(50));
     assert_eq!(w.balance_xof, BigDecimal::from(0));
 
@@ -148,7 +152,9 @@ async fn debit_refuses_if_insufficient_balance() {
     let user = insert_user(&db).await;
 
     // Init wallet à 0 puis débit 10 → refuse
-    talent_wallet::get_or_init_wallet(&db, user).await.expect("init");
+    talent_wallet::get_or_init_wallet(&db, user)
+        .await
+        .expect("init");
     let ten = BigDecimal::from(10);
     let entry = LedgerEntry {
         user_id: user,
@@ -207,14 +213,18 @@ async fn debit_decreases_balance_after_credit() {
     .await
     .expect("debit");
 
-    let w = talent_wallet::get_or_init_wallet(&db, user).await.expect("w");
+    let w = talent_wallet::get_or_init_wallet(&db, user)
+        .await
+        .expect("w");
     assert_eq!(w.balance_xof, BigDecimal::from(70));
 
     // 2 transactions dans le ledger, la 2e a un signe négatif
-    let txs = talent_wallet::list_transactions(&db, user, 10).await.expect("l");
+    let txs = talent_wallet::list_transactions(&db, user, 10)
+        .await
+        .expect("l");
     assert_eq!(txs.len(), 2);
     let debit = txs.iter().find(|t| t.reason == "withdraw_momo").unwrap();
-    assert!(debit.delta < BigDecimal::from(0), "debit stocke un delta négatif");
+    assert!(debit.delta < 0, "debit stocke un delta négatif");
 
     db.close().await;
     cleanup_test_db(&name).await;
@@ -248,7 +258,9 @@ async fn ledger_chain_verifies_before_and_after_tamper() {
     }
 
     assert!(
-        talent_wallet::verify_ledger_chain(&db, user).await.expect("v"),
+        talent_wallet::verify_ledger_chain(&db, user)
+            .await
+            .expect("v"),
         "ledger doit être cohérent apres 4 credits"
     );
 
@@ -267,7 +279,9 @@ async fn ledger_chain_verifies_before_and_after_tamper() {
     .expect("tamper");
 
     assert!(
-        !talent_wallet::verify_ledger_chain(&db, user).await.expect("v"),
+        !talent_wallet::verify_ledger_chain(&db, user)
+            .await
+            .expect("v"),
         "ledger doit être invalide apres tamper"
     );
 
@@ -284,7 +298,9 @@ async fn set_residency_normalizes_to_upper() {
     let (db, name) = setup_test_db().await;
     let user = insert_user(&db).await;
 
-    let w = talent_wallet::set_residency_country(&db, user, "ci").await.expect("s");
+    let w = talent_wallet::set_residency_country(&db, user, "ci")
+        .await
+        .expect("s");
     assert_eq!(w.residency_country.as_deref(), Some("CI"));
 
     // Invalid → error

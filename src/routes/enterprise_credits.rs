@@ -15,6 +15,17 @@ use crate::errors::AppError;
 use crate::middleware::AuthUser;
 use crate::services::{credits, invoices, stripe};
 
+// Type aliases pour clippy::type_complexity (rangées sqlx::query_as).
+type EnterpriseCreditsRow586 = (
+    Uuid,
+    String,
+    bigdecimal::BigDecimal,
+    Option<i32>,
+    i32,
+    Option<chrono::DateTime<chrono::Utc>>,
+    chrono::DateTime<chrono::Utc>,
+);
+
 pub fn enterprise_credits_routes() -> Router<AppState> {
     Router::new()
         .route("/enterprise/credits", get(get_credits))
@@ -42,10 +53,7 @@ fn build_response(data: Value) -> Value {
 
 // ─── Credits read ─────────────────────────────────────────────────
 
-async fn current_enterprise_for(
-    db: &sqlx::PgPool,
-    user_id: Uuid,
-) -> Result<Uuid, AppError> {
+async fn current_enterprise_for(db: &sqlx::PgPool, user_id: Uuid) -> Result<Uuid, AppError> {
     let row: Option<(Uuid,)> = sqlx::query_as(
         "SELECT enterprise_id FROM enterprise_members WHERE user_id = $1 AND status = 'active' LIMIT 1",
     )
@@ -126,8 +134,8 @@ async fn create_checkout(
     let enterprise = crate::routes::enterprise::require_enterprise_owner_pub(&state, &auth).await?;
     let cfg = stripe::StripeConfig::from_env()
         .ok_or(AppError::Internal("Stripe not configured".into()))?;
-    let pack = stripe::pack_by_slug(&body.pack_slug)
-        .ok_or(AppError::Validation("unknown pack".into()))?;
+    let pack =
+        stripe::pack_by_slug(&body.pack_slug).ok_or(AppError::Validation("unknown pack".into()))?;
     let enterprise_id = enterprise.id;
 
     // Resolve buyer email (the requesting recruiter)
@@ -171,7 +179,8 @@ async fn billing_portal(
     .fetch_optional(&state.db)
     .await?;
     let customer_id = row.and_then(|(s,)| s).ok_or(AppError::Validation(
-        "No Stripe customer recorded for this enterprise yet. Make at least one purchase first.".into(),
+        "No Stripe customer recorded for this enterprise yet. Make at least one purchase first."
+            .into(),
     ))?;
     let return_url = std::env::var("STRIPE_PORTAL_RETURN_URL")
         .unwrap_or_else(|_| "https://skilluv.com/enterprise/credits".into());
@@ -198,8 +207,7 @@ async fn stripe_webhook(
         .map_err(|e| AppError::Internal(format!("webhook decode failed: {e}")))?;
 
     // Idempotency
-    let first_time =
-        credits::mark_webhook_event(&state.db, &event.id, &event.event_type).await?;
+    let first_time = credits::mark_webhook_event(&state.db, &event.id, &event.event_type).await?;
     if !first_time {
         return Ok(axum::http::StatusCode::OK);
     }
@@ -266,15 +274,27 @@ async fn stripe_webhook(
             .and_then(Value::as_str)
             .unwrap_or("")
             .to_string();
-        let session_id = obj.get("id").and_then(Value::as_str).unwrap_or("").to_string();
+        let session_id = obj
+            .get("id")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
         // Stripe's automatic_tax populates these on the session
-        let amount_subtotal = obj.get("amount_subtotal").and_then(Value::as_i64).unwrap_or(0);
+        let amount_subtotal = obj
+            .get("amount_subtotal")
+            .and_then(Value::as_i64)
+            .unwrap_or(0);
         let amount_total = obj.get("amount_total").and_then(Value::as_i64).unwrap_or(0);
-        let total_tax = obj.get("total_details")
+        let total_tax = obj
+            .get("total_details")
             .and_then(|d| d.get("amount_tax"))
             .and_then(Value::as_i64)
             .unwrap_or(amount_total - amount_subtotal);
-        let currency_code = obj.get("currency").and_then(Value::as_str).unwrap_or("eur").to_uppercase();
+        let currency_code = obj
+            .get("currency")
+            .and_then(Value::as_str)
+            .unwrap_or("eur")
+            .to_uppercase();
         // Customer's billing details (collected by Stripe)
         let billing_details = obj.get("customer_details");
         let billing_email = billing_details
@@ -296,8 +316,9 @@ async fn stripe_webhook(
 
         let enterprise_id = Uuid::parse_str(enterprise_id_str)
             .map_err(|_| AppError::Internal("missing enterprise_id metadata".into()))?;
-        let pack = stripe::pack_by_slug(pack_slug)
-            .ok_or(AppError::Internal(format!("unknown pack_slug in webhook: {pack_slug}")))?;
+        let pack = stripe::pack_by_slug(pack_slug).ok_or(AppError::Internal(format!(
+            "unknown pack_slug in webhook: {pack_slug}"
+        )))?;
 
         let amount = credits::dec(&pack.credits.to_string());
         let notes = if !customer_id.is_empty() {
@@ -340,7 +361,11 @@ async fn stripe_webhook(
                 billing_address: billing_address_formatted.as_deref(),
                 billing_vat_number: None,
                 description: Some(&format!("Pack de {} crédit(s) Skilluv", pack.credits)),
-                stripe_payment_intent_id: if payment_intent_id.is_empty() { None } else { Some(&payment_intent_id) },
+                stripe_payment_intent_id: if payment_intent_id.is_empty() {
+                    None
+                } else {
+                    Some(&payment_intent_id)
+                },
                 stripe_session_id: Some(&session_id),
                 related_transaction_id: Some(txn.id),
             },
@@ -370,10 +395,7 @@ async fn stripe_webhook(
 
 // ─── Webhook dispatch helpers (Phase 5 finalization) ─────────────
 
-async fn handle_certification_paid(
-    state: &AppState,
-    obj: &Value,
-) -> Result<(), AppError> {
+async fn handle_certification_paid(state: &AppState, obj: &Value) -> Result<(), AppError> {
     let attempt_id = obj
         .get("metadata")
         .and_then(|m| m.get("attempt_id"))
@@ -429,10 +451,7 @@ async fn handle_mentorship_paid(state: &AppState, obj: &Value) -> Result<(), App
     Ok(())
 }
 
-async fn handle_subscription_started(
-    state: &AppState,
-    obj: &Value,
-) -> Result<(), AppError> {
+async fn handle_subscription_started(state: &AppState, obj: &Value) -> Result<(), AppError> {
     let enterprise_id = obj
         .get("metadata")
         .and_then(|m| m.get("enterprise_id"))
@@ -456,22 +475,27 @@ async fn handle_subscription_started(
         .and_then(Value::as_str)
         .unwrap_or("")
         .to_string();
-    let customer_id = obj.get("customer").and_then(Value::as_str).map(String::from);
+    let customer_id = obj
+        .get("customer")
+        .and_then(Value::as_str)
+        .map(String::from);
     if stripe_sub_id.is_empty() {
         return Ok(());
     }
     let now = chrono::Utc::now();
     let sub = crate::services::subscriptions::upsert_from_stripe(
         &state.db,
-        enterprise_id,
-        &plan_slug,
-        customer_id.as_deref(),
-        &stripe_sub_id,
-        "active",
-        Some(now),
-        Some(now + chrono::Duration::days(30)),
-        false,
-        monthly_credit_grant,
+        crate::services::subscriptions::StripeSubscriptionUpsert {
+            enterprise_id,
+            plan_slug: &plan_slug,
+            stripe_customer_id: customer_id.as_deref(),
+            stripe_subscription_id: &stripe_sub_id,
+            status: "active",
+            current_period_start: Some(now),
+            current_period_end: Some(now + chrono::Duration::days(30)),
+            cancel_at_period_end: false,
+            monthly_credit_grant,
+        },
     )
     .await?;
     let _ = crate::services::subscriptions::grant_monthly_credits_if_due(&state.db, &sub).await;
@@ -492,7 +516,10 @@ async fn handle_subscription_lifecycle(
     if stripe_sub_id.is_empty() {
         return Ok(());
     }
-    let status = obj.get("status").and_then(Value::as_str).unwrap_or("active");
+    let status = obj
+        .get("status")
+        .and_then(Value::as_str)
+        .unwrap_or("active");
     let cancel_at_period_end = obj
         .get("cancel_at_period_end")
         .and_then(Value::as_bool)
@@ -533,21 +560,20 @@ async fn handle_subscription_lifecycle(
     Ok(())
 }
 
-async fn handle_invoice_paid_subscription(
-    state: &AppState,
-    obj: &Value,
-) -> Result<(), AppError> {
-    let stripe_sub_id = obj.get("subscription").and_then(Value::as_str).unwrap_or("");
+async fn handle_invoice_paid_subscription(state: &AppState, obj: &Value) -> Result<(), AppError> {
+    let stripe_sub_id = obj
+        .get("subscription")
+        .and_then(Value::as_str)
+        .unwrap_or("");
     if stripe_sub_id.is_empty() {
         return Ok(());
     }
     // Renewal → nouvelle période, on doit re-grant les crédits mensuels inclus.
-    let sub: Option<crate::services::subscriptions::EnterpriseSubscription> = sqlx::query_as(
-        "SELECT * FROM enterprise_subscriptions WHERE stripe_subscription_id = $1",
-    )
-    .bind(stripe_sub_id)
-    .fetch_optional(&state.db)
-    .await?;
+    let sub: Option<crate::services::subscriptions::EnterpriseSubscription> =
+        sqlx::query_as("SELECT * FROM enterprise_subscriptions WHERE stripe_subscription_id = $1")
+            .bind(stripe_sub_id)
+            .fetch_optional(&state.db)
+            .await?;
     if let Some(sub) = sub {
         let _ = crate::services::subscriptions::grant_monthly_credits_if_due(&state.db, &sub).await;
     }
@@ -568,7 +594,7 @@ async fn redeem_promo(
 ) -> Result<Json<Value>, AppError> {
     let enterprise_id = current_enterprise_for(&state.db, auth.user_id).await?;
     let code_normalised = body.code.trim().to_uppercase();
-    let row: Option<(Uuid, String, bigdecimal::BigDecimal, Option<i32>, i32, Option<chrono::DateTime<chrono::Utc>>, chrono::DateTime<chrono::Utc>)> = sqlx::query_as(
+    let row: Option<EnterpriseCreditsRow586> = sqlx::query_as(
         "SELECT id, kind, value, max_uses, uses_count, valid_until, valid_from FROM promo_codes WHERE UPPER(code) = $1",
     )
     .bind(&code_normalised)
@@ -580,15 +606,17 @@ async fn redeem_promo(
     if valid_from > now {
         return Err(AppError::Validation("Promo code not yet active".into()));
     }
-    if let Some(vu) = valid_until {
-        if vu < now {
-            return Err(AppError::Validation("Promo code expired".into()));
-        }
+    if let Some(vu) = valid_until
+        && vu < now
+    {
+        return Err(AppError::Validation("Promo code expired".into()));
     }
-    if let Some(max) = max_uses {
-        if uses_count >= max {
-            return Err(AppError::Validation("Promo code has reached max uses".into()));
-        }
+    if let Some(max) = max_uses
+        && uses_count >= max
+    {
+        return Err(AppError::Validation(
+            "Promo code has reached max uses".into(),
+        ));
     }
     // One redemption per enterprise
     let already: Option<(i32,)> = sqlx::query_as(
@@ -599,7 +627,9 @@ async fn redeem_promo(
     .fetch_optional(&state.db)
     .await?;
     if already.is_some() {
-        return Err(AppError::Validation("Already redeemed by this enterprise".into()));
+        return Err(AppError::Validation(
+            "Already redeemed by this enterprise".into(),
+        ));
     }
 
     match kind.as_str() {
@@ -654,7 +684,9 @@ async fn list_invoices(
     let enterprise_id = current_enterprise_for(&state.db, auth.user_id).await?;
     let per_page = q.per_page.unwrap_or(50).clamp(1, 200);
     let offset = (q.page.unwrap_or(1).max(1) - 1) * per_page;
-    let rows = crate::services::invoices::list_for_enterprise(&state.db, enterprise_id, per_page, offset).await?;
+    let rows =
+        crate::services::invoices::list_for_enterprise(&state.db, enterprise_id, per_page, offset)
+            .await?;
     Ok(Json(build_response(json!({ "invoices": rows }))))
 }
 
@@ -675,12 +707,13 @@ async fn get_invoice_html(
 ) -> Result<axum::response::Html<String>, AppError> {
     let enterprise_id = current_enterprise_for(&state.db, auth.user_id).await?;
     let inv = crate::services::invoices::by_id_for_enterprise(&state.db, id, enterprise_id).await?;
-    let row: (String,) =
-        sqlx::query_as("SELECT company_name FROM enterprises WHERE id = $1")
-            .bind(enterprise_id)
-            .fetch_one(&state.db)
-            .await?;
-    Ok(axum::response::Html(crate::services::invoices::render_html(&inv, &row.0)))
+    let row: (String,) = sqlx::query_as("SELECT company_name FROM enterprises WHERE id = $1")
+        .bind(enterprise_id)
+        .fetch_one(&state.db)
+        .await?;
+    Ok(axum::response::Html(
+        crate::services::invoices::render_html(&inv, &row.0),
+    ))
 }
 
 // ─── Public pricing (3.14 + 4.4 dynamic multi-currency) ──────────
@@ -713,7 +746,10 @@ async fn public_pricing(
         )
         .await
         .ok();
-        let quote_amount_cents = conv.as_ref().map(|c| c.amount_cents).unwrap_or(p.price_eur_cents);
+        let quote_amount_cents = conv
+            .as_ref()
+            .map(|c| c.amount_cents)
+            .unwrap_or(p.price_eur_cents);
         let price = (quote_amount_cents as f64) / 100.0;
         let per_credit = if p.credit_count > 0 {
             price / (p.credit_count as f64)
@@ -743,7 +779,10 @@ async fn public_pricing(
         )
         .await
         .ok();
-        let quote_amount_cents = conv.as_ref().map(|c| c.amount_cents).unwrap_or(p.price_eur_cents);
+        let quote_amount_cents = conv
+            .as_ref()
+            .map(|c| c.amount_cents)
+            .unwrap_or(p.price_eur_cents);
         subs_out.push(json!({
             "slug": p.slug,
             "credits_included": p.credit_count,
@@ -766,7 +805,10 @@ async fn public_pricing(
     }))))
 }
 
-fn resolve_currency_and_provider(country: Option<&str>, currency: Option<&str>) -> (String, &'static str) {
+fn resolve_currency_and_provider(
+    country: Option<&str>,
+    currency: Option<&str>,
+) -> (String, &'static str) {
     if let Some(c) = currency {
         let cc = c.to_uppercase();
         return (cc, "auto");

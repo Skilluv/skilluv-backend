@@ -156,10 +156,16 @@ async fn create_and_list_slots_on_a_team() {
     .await
     .expect("create coder slot");
 
-    let slots = TeamRolesService::list_slots(&db, team_id).await.expect("list");
+    let slots = TeamRolesService::list_slots(&db, team_id)
+        .await
+        .expect("list");
     assert_eq!(slots.len(), 2);
     assert!(slots.iter().any(|s| s.role_slug == "musician"));
-    assert!(slots.iter().any(|s| s.role_slug == "coder" && s.required_skill_id.is_some()));
+    assert!(
+        slots
+            .iter()
+            .any(|s| s.role_slug == "coder" && s.required_skill_id.is_some())
+    );
 
     db.close().await;
     cleanup_test_db(&name).await;
@@ -256,7 +262,10 @@ async fn fill_slot_rejects_user_below_required_level() {
     .expect("slot");
 
     let res = TeamRolesService::fill_slot(&db, slot.id, joiner).await;
-    assert!(res.is_err(), "user niveau 1 doit être refusé sur slot niveau 3");
+    assert!(
+        res.is_err(),
+        "user niveau 1 doit être refusé sur slot niveau 3"
+    );
 
     db.close().await;
     cleanup_test_db(&name).await;
@@ -315,9 +324,14 @@ async fn fill_slot_rejects_when_already_filled() {
     .await
     .expect("slot");
 
-    TeamRolesService::fill_slot(&db, slot.id, a).await.expect("a fills");
+    TeamRolesService::fill_slot(&db, slot.id, a)
+        .await
+        .expect("a fills");
     let res = TeamRolesService::fill_slot(&db, slot.id, b).await;
-    assert!(res.is_err(), "b ne peut pas prendre un slot déjà rempli par a");
+    assert!(
+        res.is_err(),
+        "b ne peut pas prendre un slot déjà rempli par a"
+    );
 
     db.close().await;
     cleanup_test_db(&name).await;
@@ -355,9 +369,14 @@ async fn user_cannot_hold_two_slots_in_same_team() {
     .await
     .expect("b");
 
-    TeamRolesService::fill_slot(&db, slot_a.id, joiner).await.expect("first");
+    TeamRolesService::fill_slot(&db, slot_a.id, joiner)
+        .await
+        .expect("first");
     let res = TeamRolesService::fill_slot(&db, slot_b.id, joiner).await;
-    assert!(res.is_err(), "UNIQUE partial doit empêcher double-slot par user dans la même team");
+    assert!(
+        res.is_err(),
+        "UNIQUE partial doit empêcher double-slot par user dans la même team"
+    );
 
     db.close().await;
     cleanup_test_db(&name).await;
@@ -386,7 +405,9 @@ async fn leave_slot_releases_but_keeps_team_membership() {
     )
     .await
     .expect("slot");
-    TeamRolesService::fill_slot(&db, slot.id, joiner).await.expect("fill");
+    TeamRolesService::fill_slot(&db, slot.id, joiner)
+        .await
+        .expect("fill");
     let after = TeamRolesService::leave_slot(&db, slot.id, joiner)
         .await
         .expect("leave");
@@ -426,7 +447,9 @@ async fn delete_slot_refuses_when_filled() {
     )
     .await
     .expect("slot");
-    TeamRolesService::fill_slot(&db, slot.id, joiner).await.expect("fill");
+    TeamRolesService::fill_slot(&db, slot.id, joiner)
+        .await
+        .expect("fill");
     let res = TeamRolesService::delete_slot(&db, slot.id).await;
     assert!(res.is_err(), "delete refusé si slot rempli");
 
@@ -447,18 +470,57 @@ async fn marketplace_finds_open_slots_by_role() {
     let team_b = insert_persistent_team(&db, founder_b).await;
 
     // Team A cherche musicien + coder (rempli)
-    TeamRolesService::create_slot(&db, CreateSlotParams { team_id: team_a, role_slug: "musician", role_display_name: None, required_skill_slug: None, min_proficiency_level: 1 }).await.expect("a1");
-    let a_coder = TeamRolesService::create_slot(&db, CreateSlotParams { team_id: team_a, role_slug: "coder", role_display_name: None, required_skill_slug: None, min_proficiency_level: 1 }).await.expect("a2");
-    TeamRolesService::fill_slot(&db, a_coder.id, founder_a).await.expect("fill a_coder");
+    TeamRolesService::create_slot(
+        &db,
+        CreateSlotParams {
+            team_id: team_a,
+            role_slug: "musician",
+            role_display_name: None,
+            required_skill_slug: None,
+            min_proficiency_level: 1,
+        },
+    )
+    .await
+    .expect("a1");
+    let a_coder = TeamRolesService::create_slot(
+        &db,
+        CreateSlotParams {
+            team_id: team_a,
+            role_slug: "coder",
+            role_display_name: None,
+            required_skill_slug: None,
+            min_proficiency_level: 1,
+        },
+    )
+    .await
+    .expect("a2");
+    TeamRolesService::fill_slot(&db, a_coder.id, founder_a)
+        .await
+        .expect("fill a_coder");
 
     // Team B cherche musicien
-    TeamRolesService::create_slot(&db, CreateSlotParams { team_id: team_b, role_slug: "musician", role_display_name: None, required_skill_slug: None, min_proficiency_level: 1 }).await.expect("b1");
+    TeamRolesService::create_slot(
+        &db,
+        CreateSlotParams {
+            team_id: team_b,
+            role_slug: "musician",
+            role_display_name: None,
+            required_skill_slug: None,
+            min_proficiency_level: 1,
+        },
+    )
+    .await
+    .expect("b1");
 
-    let musicians = TeamRolesService::find_open_slots_by_role(&db, "musician", 10).await.expect("musicians");
+    let musicians = TeamRolesService::find_open_slots_by_role(&db, "musician", 10)
+        .await
+        .expect("musicians");
     assert_eq!(musicians.len(), 2, "les 2 teams cherchent musicien");
     assert!(musicians.iter().all(|s| s.filled_by_user_id.is_none()));
 
-    let coders = TeamRolesService::find_open_slots_by_role(&db, "coder", 10).await.expect("coders");
+    let coders = TeamRolesService::find_open_slots_by_role(&db, "coder", 10)
+        .await
+        .expect("coders");
     assert_eq!(coders.len(), 0, "team A a rempli son coder");
 
     db.close().await;

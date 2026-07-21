@@ -140,13 +140,12 @@ async fn test_full_oidc_roundtrip_jit_provisions_recruiter() {
     assert_eq!(user.1, "jane@sso-e2e.example");
     assert_eq!(user.2, "recruiter");
 
-    let member: (String,) = sqlx::query_as(
-        "SELECT em.status FROM enterprise_members em WHERE em.user_id = $1",
-    )
-    .bind(user.0)
-    .fetch_one(&app.db)
-    .await
-    .expect("membership missing");
+    let member: (String,) =
+        sqlx::query_as("SELECT em.status FROM enterprise_members em WHERE em.user_id = $1")
+            .bind(user.0)
+            .fetch_one(&app.db)
+            .await
+            .expect("membership missing");
     assert_eq!(member.0, "active");
 
     // Session was created with login_method='sso'.
@@ -178,16 +177,8 @@ async fn test_sso_bypasses_totp_gate() {
         .send()
         .await
         .unwrap();
-    let r2 = client
-        .get(extract_location(&r1))
-        .send()
-        .await
-        .unwrap();
-    let r3 = client
-        .get(extract_location(&r2))
-        .send()
-        .await
-        .unwrap();
+    let r2 = client.get(extract_location(&r1)).send().await.unwrap();
+    let r3 = client.get(extract_location(&r2)).send().await.unwrap();
     assert!(r3.status().is_redirection());
 
     // Bob's totp_enabled is false (fresh JIT), yet /enterprise/profile must
@@ -238,16 +229,8 @@ async fn test_sso_wrong_client_secret_fails() {
         .send()
         .await
         .unwrap();
-    let r2 = client
-        .get(extract_location(&r1))
-        .send()
-        .await
-        .unwrap();
-    let callback = client
-        .get(extract_location(&r2))
-        .send()
-        .await
-        .unwrap();
+    let r2 = client.get(extract_location(&r1)).send().await.unwrap();
+    let callback = client.get(extract_location(&r2)).send().await.unwrap();
 
     // Callback must reject: token exchange fails with the mock IdP.
     assert!(
@@ -257,11 +240,10 @@ async fn test_sso_wrong_client_secret_fails() {
     );
 
     // No user was provisioned.
-    let count: (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM users WHERE LOWER(email) = 'mallory@wrong.example'",
-    )
-    .fetch_one(&app.db)
-    .await
-    .unwrap();
+    let count: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM users WHERE LOWER(email) = 'mallory@wrong.example'")
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
     assert_eq!(count.0, 0);
 }

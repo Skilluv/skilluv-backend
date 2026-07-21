@@ -37,16 +37,12 @@ pub struct QueueFilter {
 /// Niveau de séniorité éligible du reviewer (utilisé pour filtrer les tasks).
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum SeniorityLevel {
+    #[default]
     Any,
     Contribs,
     Impact,
-}
-
-impl Default for SeniorityLevel {
-    fn default() -> Self {
-        Self::Any
-    }
 }
 
 impl SeniorityLevel {
@@ -164,10 +160,7 @@ impl ReviewQueueService {
     /// Liste les tasks `status='open'` éligibles pour ce niveau de séniorité.
     ///
     /// Trié par priority DESC puis created_at ASC (FIFO parmi égaux).
-    pub async fn list_open(
-        db: &PgPool,
-        filter: &QueueFilter,
-    ) -> Result<Vec<ReviewTask>, AppError> {
+    pub async fn list_open(db: &PgPool, filter: &QueueFilter) -> Result<Vec<ReviewTask>, AppError> {
         let per_page = filter.per_page.clamp(1, 50);
         let page = filter.page.max(1);
         let offset = (page - 1) * per_page;
@@ -196,13 +189,11 @@ impl ReviewQueueService {
 
     /// Récupère une task par id.
     pub async fn get(db: &PgPool, task_id: Uuid) -> Result<ReviewTask, AppError> {
-        sqlx::query_as::<_, ReviewTask>(
-            "SELECT * FROM review_tasks WHERE id = $1",
-        )
-        .bind(task_id)
-        .fetch_optional(db)
-        .await?
-        .ok_or_else(|| AppError::NotFound("Review task not found".to_string()))
+        sqlx::query_as::<_, ReviewTask>("SELECT * FROM review_tasks WHERE id = $1")
+            .bind(task_id)
+            .fetch_optional(db)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Review task not found".to_string()))
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -327,36 +318,33 @@ impl ReviewQueueService {
         tx: &mut Transaction<'_, Postgres>,
         deliverable_id: Uuid,
     ) -> Result<String, AppError> {
-        let row: Option<(Option<Uuid>, Option<Uuid>)> = sqlx::query_as(
-            "SELECT slice_id, challenge_id FROM deliverables WHERE id = $1",
-        )
-        .bind(deliverable_id)
-        .fetch_optional(&mut **tx)
-        .await?;
+        let row: Option<(Option<Uuid>, Option<Uuid>)> =
+            sqlx::query_as("SELECT slice_id, challenge_id FROM deliverables WHERE id = $1")
+                .bind(deliverable_id)
+                .fetch_optional(&mut **tx)
+                .await?;
 
         let Some((slice_id, challenge_id)) = row else {
             return Err(AppError::NotFound("Deliverable not found".to_string()));
         };
 
         if let Some(sid) = slice_id {
-            let domain: Option<String> = sqlx::query_scalar(
-                "SELECT primary_domain FROM project_slices WHERE id = $1",
-            )
-            .bind(sid)
-            .fetch_optional(&mut **tx)
-            .await?;
+            let domain: Option<String> =
+                sqlx::query_scalar("SELECT primary_domain FROM project_slices WHERE id = $1")
+                    .bind(sid)
+                    .fetch_optional(&mut **tx)
+                    .await?;
             if let Some(d) = domain {
                 return Ok(d);
             }
         }
 
         if let Some(cid) = challenge_id {
-            let domain: Option<String> = sqlx::query_scalar(
-                "SELECT skill_domain FROM challenge_templates WHERE id = $1",
-            )
-            .bind(cid)
-            .fetch_optional(&mut **tx)
-            .await?;
+            let domain: Option<String> =
+                sqlx::query_scalar("SELECT skill_domain FROM challenge_templates WHERE id = $1")
+                    .bind(cid)
+                    .fetch_optional(&mut **tx)
+                    .await?;
             if let Some(d) = domain {
                 return Ok(d);
             }

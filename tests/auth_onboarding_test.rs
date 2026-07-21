@@ -15,7 +15,10 @@ async fn signup_via_magic_link(email: &str) -> (TestApp, reqwest::Client) {
     mp.wipe().await;
 
     let app = TestApp::spawn().await;
-    let client = reqwest::Client::builder().cookie_store(true).build().unwrap();
+    let client = reqwest::Client::builder()
+        .cookie_store(true)
+        .build()
+        .unwrap();
 
     let resp = client
         .post(format!("{}/api/auth/magic-link/request", app.addr))

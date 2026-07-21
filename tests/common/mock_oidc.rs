@@ -164,7 +164,10 @@ async fn authorize(
     Query(q): Query<AuthorizeQuery>,
 ) -> Result<Redirect, (axum::http::StatusCode, String)> {
     if q.response_type != "code" {
-        return Err((axum::http::StatusCode::BAD_REQUEST, "unsupported response_type".into()));
+        return Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            "unsupported response_type".into(),
+        ));
     }
     if q.code_challenge_method != "S256" {
         return Err((axum::http::StatusCode::BAD_REQUEST, "S256 required".into()));
@@ -183,7 +186,11 @@ async fn authorize(
         },
     );
 
-    let sep = if q.redirect_uri.contains('?') { '&' } else { '?' };
+    let sep = if q.redirect_uri.contains('?') {
+        '&'
+    } else {
+        '?'
+    };
     let target = format!("{}{sep}code={code}&state={}", q.redirect_uri, q.state);
     Ok(Redirect::to(&target))
 }
@@ -234,8 +241,12 @@ async fn token(
         let decoded = base64::engine::general_purpose::STANDARD
             .decode(auth)
             .map_err(|_| (axum::http::StatusCode::UNAUTHORIZED, "bad basic".into()))?;
-        let s = String::from_utf8(decoded)
-            .map_err(|_| (axum::http::StatusCode::UNAUTHORIZED, "bad basic utf8".into()))?;
+        let s = String::from_utf8(decoded).map_err(|_| {
+            (
+                axum::http::StatusCode::UNAUTHORIZED,
+                "bad basic utf8".into(),
+            )
+        })?;
         let (id, sec) = s
             .split_once(':')
             .ok_or((axum::http::StatusCode::UNAUTHORIZED, "no colon".into()))?;
@@ -251,7 +262,10 @@ async fn token(
     };
 
     if cid != inner.client_id || csec != inner.client_secret {
-        return Err((axum::http::StatusCode::UNAUTHORIZED, "bad client creds".into()));
+        return Err((
+            axum::http::StatusCode::UNAUTHORIZED,
+            "bad client creds".into(),
+        ));
     }
 
     let pending = {
@@ -287,8 +301,7 @@ async fn token(
     let id_token = jwt_encode(
         &header,
         &claims,
-        &EncodingKey::from_rsa_pem(inner.private_pem.as_bytes())
-            .expect("rsa pem for signing"),
+        &EncodingKey::from_rsa_pem(inner.private_pem.as_bytes()).expect("rsa pem for signing"),
     )
     .expect("sign id_token");
 

@@ -91,13 +91,11 @@ impl SlicesService {
 
     /// Récupère une slice par son id (peu importe le status — utile pour affichage).
     pub async fn get(db: &PgPool, slice_id: Uuid) -> Result<ProjectSlice, AppError> {
-        sqlx::query_as::<_, ProjectSlice>(
-            "SELECT * FROM project_slices WHERE id = $1",
-        )
-        .bind(slice_id)
-        .fetch_optional(db)
-        .await?
-        .ok_or_else(|| AppError::NotFound("Slice not found".to_string()))
+        sqlx::query_as::<_, ProjectSlice>("SELECT * FROM project_slices WHERE id = $1")
+            .bind(slice_id)
+            .fetch_optional(db)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Slice not found".to_string()))
     }
 
     /// Liste les slices claimed par un user (`in_progress` côté user).
@@ -195,9 +193,7 @@ impl SlicesService {
         .fetch_optional(db)
         .await?
         .ok_or_else(|| {
-            AppError::Validation(
-                "You can only unclaim your own claimed slices".to_string(),
-            )
+            AppError::Validation("You can only unclaim your own claimed slices".to_string())
         })?;
 
         Ok(slice)
@@ -230,10 +226,7 @@ impl SlicesService {
 
     /// Publie une slice draft (draft → open). Autorisation à faire côté
     /// route via `StewardsService::is_steward` OU admin.
-    pub async fn publish_draft(
-        db: &PgPool,
-        slice_id: Uuid,
-    ) -> Result<ProjectSlice, AppError> {
+    pub async fn publish_draft(db: &PgPool, slice_id: Uuid) -> Result<ProjectSlice, AppError> {
         let slice = sqlx::query_as::<_, ProjectSlice>(
             r#"
             UPDATE project_slices
@@ -245,18 +238,13 @@ impl SlicesService {
         .bind(slice_id)
         .fetch_optional(db)
         .await?
-        .ok_or_else(|| {
-            AppError::Validation("Slice not found or not in draft".into())
-        })?;
+        .ok_or_else(|| AppError::Validation("Slice not found or not in draft".into()))?;
         Ok(slice)
     }
 
     /// Ferme une slice draft rejetée (draft → closed avec raison).
     /// Le steward peut refuser une slice ingérée non pertinente sans la publier.
-    pub async fn reject_draft(
-        db: &PgPool,
-        slice_id: Uuid,
-    ) -> Result<ProjectSlice, AppError> {
+    pub async fn reject_draft(db: &PgPool, slice_id: Uuid) -> Result<ProjectSlice, AppError> {
         let slice = sqlx::query_as::<_, ProjectSlice>(
             r#"
             UPDATE project_slices
@@ -268,9 +256,7 @@ impl SlicesService {
         .bind(slice_id)
         .fetch_optional(db)
         .await?
-        .ok_or_else(|| {
-            AppError::Validation("Slice not found or not in draft".into())
-        })?;
+        .ok_or_else(|| AppError::Validation("Slice not found or not in draft".into()))?;
         Ok(slice)
     }
 
@@ -343,9 +329,7 @@ impl SlicesService {
         .fetch_optional(db)
         .await?
         .ok_or_else(|| {
-            AppError::Validation(
-                "This team does not currently claim this slice".to_string(),
-            )
+            AppError::Validation("This team does not currently claim this slice".to_string())
         })?;
 
         Ok(slice)

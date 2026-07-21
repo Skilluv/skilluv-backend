@@ -9,12 +9,18 @@ async fn setup_curator(app: &TestApp, username: &str, cap: &str) -> uuid::Uuid {
     let uid: uuid::Uuid = sqlx::query_scalar(&format!(
         "SELECT id FROM users WHERE username = '{username}'"
     ))
-    .fetch_one(&app.db).await.unwrap();
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
     sqlx::query(
         "INSERT INTO user_capabilities (user_id, capability, granted_reason)
          VALUES ($1, $2, 'test') ON CONFLICT DO NOTHING",
     )
-    .bind(uid).bind(cap).execute(&app.db).await.unwrap();
+    .bind(uid)
+    .bind(cap)
+    .execute(&app.db)
+    .await
+    .unwrap();
     app.login(username).await;
     uid
 }
@@ -25,7 +31,9 @@ async fn user_mutes_table_exists() {
     let exists: bool = sqlx::query_scalar(
         "SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='user_mutes')",
     )
-    .fetch_one(&app.db).await.unwrap();
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
     assert!(exists);
 }
 
@@ -71,22 +79,36 @@ async fn forum_moderate_post_hides() {
          VALUES ('author_moda@t.com', 'author_moda', 'x', 'A', 'B', 'AB', 'user', 'code')
          RETURNING id",
     ).fetch_one(&app.db).await.unwrap();
-    let cat_id: uuid::Uuid = sqlx::query_scalar(
-        "SELECT id FROM forum_categories LIMIT 1",
-    ).fetch_one(&app.db).await.unwrap();
+    let cat_id: uuid::Uuid = sqlx::query_scalar("SELECT id FROM forum_categories LIMIT 1")
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
     let post_id: uuid::Uuid = sqlx::query_scalar(
         "INSERT INTO posts (category_id, author_id, kind, title, body)
          VALUES ($1, $2, 'discussion', 'test post', 'body content') RETURNING id",
-    ).bind(cat_id).bind(author_id).fetch_one(&app.db).await.unwrap();
+    )
+    .bind(cat_id)
+    .bind(author_id)
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
 
-    let resp = app.post(&format!("/api/forum/posts/{post_id}/moderate"), &json!({
-        "action": "hide",
-        "reason": "test violation of rules",
-    })).await;
+    let resp = app
+        .post(
+            &format!("/api/forum/posts/{post_id}/moderate"),
+            &json!({
+                "action": "hide",
+                "reason": "test violation of rules",
+            }),
+        )
+        .await;
     assert_eq!(resp.status().as_u16(), 200);
-    let deleted: Option<chrono::DateTime<chrono::Utc>> = sqlx::query_scalar(
-        "SELECT deleted_at FROM posts WHERE id = $1",
-    ).bind(post_id).fetch_one(&app.db).await.unwrap();
+    let deleted: Option<chrono::DateTime<chrono::Utc>> =
+        sqlx::query_scalar("SELECT deleted_at FROM posts WHERE id = $1")
+            .bind(post_id)
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
     assert!(deleted.is_some());
 }
 
@@ -101,10 +123,15 @@ async fn forum_mute_user_creates_row_with_expiry() {
          RETURNING id",
     ).fetch_one(&app.db).await.unwrap();
 
-    let resp = app.post(&format!("/api/forum/users/{target_id}/mute"), &json!({
-        "reason": "spamming discussions",
-        "duration_hours": 2,
-    })).await;
+    let resp = app
+        .post(
+            &format!("/api/forum/users/{target_id}/mute"),
+            &json!({
+                "reason": "spamming discussions",
+                "duration_hours": 2,
+            }),
+        )
+        .await;
     assert_eq!(resp.status().as_u16(), 200);
     let (muted_by, expires): (uuid::Uuid, chrono::DateTime<chrono::Utc>) = sqlx::query_as(
         "SELECT muted_by, expires_at FROM user_mutes WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1",

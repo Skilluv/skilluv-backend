@@ -40,12 +40,18 @@ pub fn scim_routes() -> Router<AppState> {
         .route("/scim/v2/Users", get(list_users).post(create_user))
         .route(
             "/scim/v2/Users/{id}",
-            get(get_user).put(replace_user).patch(patch_user).delete(delete_user),
+            get(get_user)
+                .put(replace_user)
+                .patch(patch_user)
+                .delete(delete_user),
         )
         .route("/scim/v2/Groups", get(list_groups).post(create_group))
         .route(
             "/scim/v2/Groups/{id}",
-            get(get_group).put(replace_group).patch(patch_group).delete(delete_group),
+            get(get_group)
+                .put(replace_group)
+                .patch(patch_group)
+                .delete(delete_group),
         )
 }
 
@@ -111,8 +117,7 @@ async fn create_scim_token(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
-    let enterprise =
-        crate::routes::enterprise::require_enterprise_owner_pub(&state, &auth).await?;
+    let enterprise = crate::routes::enterprise::require_enterprise_owner_pub(&state, &auth).await?;
     let (cleartext, hash) = scim::generate_token();
     scim::set_token(&state.db, enterprise.id, &hash).await?;
     audit_scim(
@@ -141,8 +146,7 @@ async fn revoke_scim_token(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
-    let enterprise =
-        crate::routes::enterprise::require_enterprise_owner_pub(&state, &auth).await?;
+    let enterprise = crate::routes::enterprise::require_enterprise_owner_pub(&state, &auth).await?;
     scim::clear_token(&state.db, enterprise.id).await?;
     audit_scim(
         &state,
@@ -168,11 +172,14 @@ async fn set_group_role_mapping(
     Path(group_id): Path<Uuid>,
     Json(body): Json<MappedRoleRequest>,
 ) -> Result<Json<Value>, AppError> {
-    let enterprise =
-        crate::routes::enterprise::require_enterprise_owner_pub(&state, &auth).await?;
-    let affected =
-        scim::set_group_mapped_role(&state.db, enterprise.id, group_id, body.mapped_role.as_deref())
-            .await?;
+    let enterprise = crate::routes::enterprise::require_enterprise_owner_pub(&state, &auth).await?;
+    let affected = scim::set_group_mapped_role(
+        &state.db,
+        enterprise.id,
+        group_id,
+        body.mapped_role.as_deref(),
+    )
+    .await?;
     audit_scim(
         &state,
         "scim.group.role_mapping_changed",
@@ -313,9 +320,14 @@ async fn list_users(
         .filter
         .as_deref()
         .and_then(|f| parse_eq_filter(f, "userName"));
-    let (users, total) =
-        scim::list_users(&state.db, scim.enterprise_id, filter_username, start_index, count)
-            .await?;
+    let (users, total) = scim::list_users(
+        &state.db,
+        scim.enterprise_id,
+        filter_username,
+        start_index,
+        count,
+    )
+    .await?;
     Ok(Json(json!({
         "schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
         "totalResults": total,
@@ -342,7 +354,9 @@ struct ScimUserRequest {
     #[serde(default = "default_active")]
     active: bool,
 }
-fn default_active() -> bool { true }
+fn default_active() -> bool {
+    true
+}
 
 #[derive(Deserialize)]
 struct ScimName {
@@ -376,12 +390,11 @@ async fn create_user(
         .clone();
 
     // Default role for SCIM-provisioned users lives on the SSO config.
-    let default_role: (String,) = sqlx::query_as(
-        "SELECT default_role FROM enterprise_sso_configs WHERE enterprise_id = $1",
-    )
-    .bind(scim.enterprise_id)
-    .fetch_one(&state.db)
-    .await?;
+    let default_role: (String,) =
+        sqlx::query_as("SELECT default_role FROM enterprise_sso_configs WHERE enterprise_id = $1")
+            .bind(scim.enterprise_id)
+            .fetch_one(&state.db)
+            .await?;
 
     let user_id = scim::provision_user(
         &state.db,
@@ -494,7 +507,11 @@ async fn patch_user(
                 scim::set_user_active(&state.db, scim.enterprise_id, id, active).await?;
                 audit_scim(
                     &state,
-                    if active { "scim.user.reactivated" } else { "scim.user.deactivated" },
+                    if active {
+                        "scim.user.reactivated"
+                    } else {
+                        "scim.user.deactivated"
+                    },
                     scim.enterprise_id,
                     Some("user"),
                     Some(id),
@@ -658,7 +675,10 @@ async fn list_groups(
 ) -> Result<Json<Value>, AppError> {
     let start_index = q.start_index.unwrap_or(1).max(1);
     let count = q.count.unwrap_or(50).clamp(1, 200);
-    let filter = q.filter.as_deref().and_then(|f| parse_eq_filter(f, "displayName"));
+    let filter = q
+        .filter
+        .as_deref()
+        .and_then(|f| parse_eq_filter(f, "displayName"));
     let (groups, total) =
         scim::list_groups(&state.db, scim.enterprise_id, filter, start_index, count).await?;
     Ok(Json(json!({

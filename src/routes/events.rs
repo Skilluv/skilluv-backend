@@ -12,7 +12,7 @@ use axum::extract::{Path, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::Serialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 use crate::AppState;
@@ -65,12 +65,11 @@ async fn join_event(
     auth: AuthUser,
     Path(slug): Path<String>,
 ) -> Result<Json<Value>, AppError> {
-    let ev: Option<(Uuid, bool)> = sqlx::query_as(
-        "SELECT id, is_active FROM events WHERE slug = $1",
-    )
-    .bind(&slug)
-    .fetch_optional(&state.db)
-    .await?;
+    let ev: Option<(Uuid, bool)> =
+        sqlx::query_as("SELECT id, is_active FROM events WHERE slug = $1")
+            .bind(&slug)
+            .fetch_optional(&state.db)
+            .await?;
     let (event_id, active) = ev.ok_or_else(|| AppError::NotFound(format!("event '{slug}'")))?;
     if !active {
         return Err(AppError::Validation("event is not active".into()));
@@ -94,10 +93,7 @@ struct MyEventRow {
     contribution_ref: Option<String>,
 }
 
-async fn my_events(
-    State(state): State<AppState>,
-    auth: AuthUser,
-) -> Result<Json<Value>, AppError> {
+async fn my_events(State(state): State<AppState>, auth: AuthUser) -> Result<Json<Value>, AppError> {
     let rows: Vec<MyEventRow> = sqlx::query_as(
         "SELECT e.slug AS event_slug, e.name AS event_name,
                 uep.joined_at, uep.contribution_ref

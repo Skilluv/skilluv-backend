@@ -31,10 +31,7 @@ pub async fn set_json<T: serde::Serialize>(
     Ok(())
 }
 
-pub async fn invalidate(
-    redis: &mut ConnectionManager,
-    key: &str,
-) -> Result<(), AppError> {
+pub async fn invalidate(redis: &mut ConnectionManager, key: &str) -> Result<(), AppError> {
     let _: () = redis.del(key).await?;
     Ok(())
 }

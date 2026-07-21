@@ -14,11 +14,16 @@ use tonic::transport::Channel;
 
 use super::proto::{
     // Message types
-    AnalyzePerformanceRequest, AnalyzePerformanceResponse,
-    CareerPathRequest, CareerPathResponse,
-    CheckPlagiarismRequest, CheckPlagiarismResponse,
-    CodeReviewRequest, CodeReviewResponse,
-    GenerateChallengeRequest, GenerateChallengeResponse,
+    AnalyzePerformanceRequest,
+    AnalyzePerformanceResponse,
+    CareerPathRequest,
+    CareerPathResponse,
+    CheckPlagiarismRequest,
+    CheckPlagiarismResponse,
+    CodeReviewRequest,
+    CodeReviewResponse,
+    GenerateChallengeRequest,
+    GenerateChallengeResponse,
     GenerateVariantRequest,
     // Service clients
     challenge_generation_service_client::ChallengeGenerationServiceClient,

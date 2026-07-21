@@ -31,7 +31,8 @@ impl AnalyticsService {
         let api_key = std::env::var("POSTHOG_API_KEY")
             .ok()
             .filter(|s| !s.is_empty());
-        let host = std::env::var("POSTHOG_HOST").unwrap_or_else(|_| "https://eu.posthog.com".into());
+        let host =
+            std::env::var("POSTHOG_HOST").unwrap_or_else(|_| "https://eu.posthog.com".into());
         let client = Client::builder()
             .timeout(Duration::from_secs(3))
             .build()
@@ -151,8 +152,10 @@ pub mod events {
 
 /// Helper to build a JSON properties object more ergonomically.
 pub fn props(pairs: &[(&str, Value)]) -> Value {
-    let map: serde_json::Map<String, Value> =
-        pairs.iter().map(|(k, v)| (k.to_string(), v.clone())).collect();
+    let map: serde_json::Map<String, Value> = pairs
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.clone()))
+        .collect();
     Value::Object(map)
 }
 

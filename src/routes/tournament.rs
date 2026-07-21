@@ -30,7 +30,10 @@ pub fn tournament_routes() -> Router<AppState> {
         .route("/tournaments/{slug}/leaderboard", get(get_leaderboard))
         .route("/tournaments/{slug}/register", post(register))
         .route("/admin/tournaments", post(admin_create_tournament))
-        .route("/admin/tournaments/{id}/status", post(admin_set_tournament_status))
+        .route(
+            "/admin/tournaments/{id}/status",
+            post(admin_set_tournament_status),
+        )
         .route("/admin/tournaments/{id}/score", post(admin_set_score))
         .route("/admin/tournaments/{id}/conclude", post(admin_conclude))
         // Public events feed
@@ -148,9 +151,9 @@ async fn register(
 ) -> Result<Json<Value>, AppError> {
     let t = tournament::by_slug(&state.db, &slug).await?;
     let participant = if t.kind == "guild_war" {
-        let guild_id = body
-            .guild_id
-            .ok_or(AppError::Validation("guild_id is required for guild_war".into()))?;
+        let guild_id = body.guild_id.ok_or(AppError::Validation(
+            "guild_id is required for guild_war".into(),
+        ))?;
         tournament::register_guild(&state.db, t.id, auth.user_id, guild_id).await?
     } else {
         tournament::register_individual(&state.db, t.id, auth.user_id).await?
@@ -159,13 +162,11 @@ async fn register(
         state.analytics.track(
             auth.user_id,
             "tournament_registered",
-            props(&[
-                ("tournament_id", json!(t.id)),
-                ("kind", json!(t.kind)),
-            ]),
+            props(&[("tournament_id", json!(t.id)), ("kind", json!(t.kind))]),
         );
     }
-    metrics::counter!("skilluv_tournament_registrations_total", "kind" => t.kind.clone()).increment(1);
+    metrics::counter!("skilluv_tournament_registrations_total", "kind" => t.kind.clone())
+        .increment(1);
     Ok(Json(build_response(json!({ "participant": participant }))))
 }
 
@@ -243,11 +244,10 @@ async fn admin_conclude(
     .bind(id)
     .fetch_all(&state.db)
     .await?;
-    let tname_row: Option<(String,)> =
-        sqlx::query_as("SELECT name FROM tournaments WHERE id = $1")
-            .bind(id)
-            .fetch_optional(&state.db)
-            .await?;
+    let tname_row: Option<(String,)> = sqlx::query_as("SELECT name FROM tournaments WHERE id = $1")
+        .bind(id)
+        .fetch_optional(&state.db)
+        .await?;
     let tname = tname_row.map(|(n,)| n).unwrap_or_else(|| "Tournoi".into());
     for (ptype, pid, rank, frags, gp) in &top {
         if ptype == "user" {
@@ -255,16 +255,18 @@ async fn admin_conclude(
                 &state.db,
                 &mut state.redis.clone(),
                 &state.ws,
-                *pid,
-                "tournament.podium",
-                "Podium d'un tournoi !",
-                Some(&format!("{tname} — rang #{rank} (+{frags} fragments)")),
-                Some(json!({
-                    "tournament_id": id,
-                    "rank": rank,
-                    "fragments": frags,
-                    "gp": gp,
-                })),
+                crate::services::notification::NotificationPayload {
+                    user_id: *pid,
+                    notification_type: "tournament.podium",
+                    title: "Podium d'un tournoi !",
+                    body: Some(&format!("{tname} — rang #{rank} (+{frags} fragments)")),
+                    data: Some(json!({
+                        "tournament_id": id,
+                        "rank": rank,
+                        "fragments": frags,
+                        "gp": gp,
+                    })),
+                },
             )
             .await;
         }

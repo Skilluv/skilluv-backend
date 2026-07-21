@@ -6,8 +6,8 @@ use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use redis::AsyncCommands;
 use serde::Deserialize;
-use sqlx::PgPool;
 use serde_json::json;
+use sqlx::PgPool;
 use totp_rs::{Algorithm, Secret, TOTP};
 use uuid::Uuid;
 
@@ -44,7 +44,10 @@ pub fn auth_routes() -> Router<AppState> {
         .route("/auth/totp/setup", post(totp_setup))
         .route("/auth/totp/enable", post(totp_enable))
         .route("/auth/totp/disable", post(totp_disable))
-        .route("/auth/totp/backup-codes/regenerate", post(regenerate_backup_codes))
+        .route(
+            "/auth/totp/backup-codes/regenerate",
+            post(regenerate_backup_codes),
+        )
         // Email 2FA
         .route("/auth/email-2fa/enable", post(email_2fa_enable))
         .route("/auth/email-2fa/disable", post(email_2fa_disable))
@@ -69,7 +72,8 @@ async fn request_data_export(
     let exists: bool = redis::cmd("EXISTS")
         .arg(&key)
         .query_async::<i64>(&mut redis)
-        .await? == 1;
+        .await?
+        == 1;
     if exists {
         return Err(AppError::Validation(
             "Data export already requested in the last 24h. Check your email.".into(),
@@ -132,7 +136,6 @@ struct LoginRequest {
     /// One-time TOTP backup code (used when the user lost their authenticator).
     backup_code: Option<String>,
 }
-
 
 #[derive(Debug, Deserialize)]
 struct VerifyEmailQuery {
@@ -323,7 +326,11 @@ pub fn is_admin_origin(headers: &axum::http::HeaderMap) -> bool {
 /// `"admin_"` for the admin app. Kept as a helper so every login handler
 /// converges on the same rule without duplicating origin parsing.
 pub fn cookie_prefix(headers: &axum::http::HeaderMap) -> &'static str {
-    if is_admin_origin(headers) { "admin_" } else { "" }
+    if is_admin_origin(headers) {
+        "admin_"
+    } else {
+        ""
+    }
 }
 
 /// Refresh cookie encodes `{session_id}:{opaque_token}`. The server verifies the token against
@@ -586,16 +593,16 @@ async fn login(
 
     // Enforced SSO: if the user's email domain matches an active SSO config with
     // enforce_sso=true, refuse the password login and hand back the SSO start URL.
-    if let Some(domain) = user.email.split('@').nth(1).map(str::to_lowercase) {
-        if let Some((cfg, slug)) =
+    if let Some(domain) = user.email.split('@').nth(1).map(str::to_lowercase)
+        && let Some((cfg, slug)) =
             crate::services::enterprise_sso::find_by_email_domain(&state.db, &domain).await?
-        {
-            if cfg.enforce_sso {
-                let start_url =
-                    format!("{}/api/enterprise/sso/{}/start", state.config.base_url, slug);
-                return Err(AppError::SsoRequired { start_url });
-            }
-        }
+        && cfg.enforce_sso
+    {
+        let start_url = format!(
+            "{}/api/enterprise/sso/{}/start",
+            state.config.base_url, slug
+        );
+        return Err(AppError::SsoRequired { start_url });
     }
 
     // Per-account lockout: if the account is currently locked, refuse.
@@ -763,12 +770,11 @@ async fn login(
     // Enterprise/recruiter accounts need SOME strong 2FA method — TOTP or a
     // passkey. If neither is present, the frontend routes them into the
     // /enterprise/onboarding wizard where they pick and complete one.
-    let has_passkey: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM webauthn_credentials WHERE user_id = $1)",
-    )
-    .bind(user.id)
-    .fetch_one(&state.db)
-    .await?;
+    let has_passkey: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM webauthn_credentials WHERE user_id = $1)")
+            .bind(user.id)
+            .fetch_one(&state.db)
+            .await?;
     // BE-A : admin doit aussi configurer un second facteur (TOTP ou passkey).
     // Le login réussit pour permettre l'accès à /auth/setup-2fa ; les routes
     // /api/admin/* sont bloquées par le middleware `require_admin_2fa` tant
@@ -861,12 +867,11 @@ async fn email_2fa_verify(
 
     // Same 2FA-satisfaction check as the password login handler above:
     // enterprise/recruiter needs TOTP OR a passkey — either counts.
-    let has_passkey: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM webauthn_credentials WHERE user_id = $1)",
-    )
-    .bind(user.id)
-    .fetch_one(&state.db)
-    .await?;
+    let has_passkey: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM webauthn_credentials WHERE user_id = $1)")
+            .bind(user.id)
+            .fetch_one(&state.db)
+            .await?;
     // BE-A : admin doit aussi configurer un second facteur (TOTP ou passkey).
     // Le login réussit pour permettre l'accès à /auth/setup-2fa ; les routes
     // /api/admin/* sont bloquées par le middleware `require_admin_2fa` tant
@@ -903,7 +908,8 @@ async fn refresh(
 ) -> Result<impl IntoResponse, AppError> {
     let (session_id, token) = parse_refresh_cookie(&headers).ok_or(AppError::Unauthorized)?;
 
-    let (user_id, new_refresh_token) = SessionService::rotate(&state.db, session_id, &token).await?;
+    let (user_id, new_refresh_token) =
+        SessionService::rotate(&state.db, session_id, &token).await?;
 
     let user: User = sqlx::query_as("SELECT * FROM users WHERE id = $1")
         .bind(user_id)
@@ -1028,12 +1034,11 @@ async fn me(
 
     // Any strong-factor enrolment satisfies the enterprise 2FA gate, so the
     // frontend needs to know whether a passkey exists alongside TOTP.
-    let has_passkey: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM webauthn_credentials WHERE user_id = $1)",
-    )
-    .bind(auth.user_id)
-    .fetch_one(&state.db)
-    .await?;
+    let has_passkey: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM webauthn_credentials WHERE user_id = $1)")
+            .bind(auth.user_id)
+            .fetch_one(&state.db)
+            .await?;
 
     // Fetch ranks from Redis. Users still onboarding (no skill_domain) get null domain rank.
     let mut redis = state.redis.clone();
@@ -1197,12 +1202,11 @@ async fn reset_password(
     // Revoke all sessions (all devices signed out)
     SessionService::revoke_all(&state.db, user_id).await?;
 
-    if let Ok(Some(u)) = sqlx::query_as::<_, (String, String)>(
-        "SELECT email, display_name FROM users WHERE id = $1",
-    )
-    .bind(user_id)
-    .fetch_optional(&state.db)
-    .await
+    if let Ok(Some(u)) =
+        sqlx::query_as::<_, (String, String)>("SELECT email, display_name FROM users WHERE id = $1")
+            .bind(user_id)
+            .fetch_optional(&state.db)
+            .await
     {
         let _ = state
             .email
@@ -1614,9 +1618,7 @@ async fn complete_profile(
     // Refuse if the profile is already complete — avoids retroactively rewriting the
     // skill_domain once the user has started earning fragments.
     if user.skill_domain.is_some() && user.terms_accepted_at.is_some() {
-        return Err(AppError::Validation(
-            "Profile is already complete".into(),
-        ));
+        return Err(AppError::Validation("Profile is already complete".into()));
     }
 
     sqlx::query(
@@ -1630,7 +1632,12 @@ async fn complete_profile(
     )
     .bind(&body.skill_domain)
     .bind(&body.country)
-    .bind(body.city.as_deref().map(str::trim).filter(|s| !s.is_empty()))
+    .bind(
+        body.city
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty()),
+    )
     .bind(auth.user_id)
     .execute(&state.db)
     .await?;
@@ -1736,10 +1743,18 @@ async fn request_email_change(
     // Also store the raw token → user_id map in Redis for GET lookup by token
     let mut redis = state.redis.clone();
     let () = redis
-        .set_ex(email_change_token_lookup(&token), auth.user_id.to_string(), 60 * 60)
+        .set_ex(
+            email_change_token_lookup(&token),
+            auth.user_id.to_string(),
+            60 * 60,
+        )
         .await?;
     let () = redis
-        .set_ex(email_change_key(auth.user_id), hex::encode(&token_hash), 60 * 60)
+        .set_ex(
+            email_change_key(auth.user_id),
+            hex::encode(&token_hash),
+            60 * 60,
+        )
         .await?;
 
     let link = format!(
@@ -1879,11 +1894,7 @@ async fn issue_backup_codes(db: &PgPool, user_id: Uuid) -> Result<Vec<String>, A
     Ok(plaintext)
 }
 
-async fn consume_backup_code(
-    db: &PgPool,
-    user_id: Uuid,
-    presented: &str,
-) -> Result<(), AppError> {
+async fn consume_backup_code(db: &PgPool, user_id: Uuid, presented: &str) -> Result<(), AppError> {
     let rows: Vec<(Uuid, String)> = sqlx::query_as(
         "SELECT id, code_hash FROM totp_backup_codes WHERE user_id = $1 AND used_at IS NULL",
     )
@@ -1960,7 +1971,9 @@ async fn revoke_session(
     axum::extract::Path(session_id): axum::extract::Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     SessionService::revoke_one(&state.db, auth.user_id, session_id).await?;
-    Ok(Json(build_response(json!({ "message": "Session revoked" }))))
+    Ok(Json(build_response(
+        json!({ "message": "Session revoked" }),
+    )))
 }
 
 // POST /api/auth/sessions/revoke-all — revoke every session except the current one

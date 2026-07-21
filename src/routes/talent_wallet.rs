@@ -7,11 +7,13 @@
 //!
 //! Les withdraw endpoints (Stripe / Momo) sont dans P13.2 et P13.3.
 
+use std::str::FromStr;
+
 use axum::extract::{Query, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::AppState;
 use crate::errors::AppError;
@@ -49,10 +51,7 @@ struct TxQuery {
     limit: Option<i64>,
 }
 
-async fn my_wallet(
-    State(state): State<AppState>,
-    auth: AuthUser,
-) -> Result<Json<Value>, AppError> {
+async fn my_wallet(State(state): State<AppState>, auth: AuthUser) -> Result<Json<Value>, AppError> {
     let wallet = talent_wallet::get_or_init_wallet(&state.db, auth.user_id).await?;
     Ok(Json(build_response(json!({ "wallet": wallet }))))
 }
@@ -62,12 +61,8 @@ async fn my_wallet_transactions(
     auth: AuthUser,
     Query(q): Query<TxQuery>,
 ) -> Result<Json<Value>, AppError> {
-    let txs = talent_wallet::list_transactions(
-        &state.db,
-        auth.user_id,
-        q.limit.unwrap_or(20),
-    )
-    .await?;
+    let txs =
+        talent_wallet::list_transactions(&state.db, auth.user_id, q.limit.unwrap_or(20)).await?;
     Ok(Json(build_response(json!({ "transactions": txs }))))
 }
 
@@ -107,9 +102,8 @@ async fn stripe_onboard(
     auth: AuthUser,
     Json(body): Json<StripeOnboardBody>,
 ) -> Result<Json<Value>, AppError> {
-    let cfg = crate::services::stripe::StripeConfig::from_env().ok_or_else(|| {
-        AppError::Internal("Stripe is not configured on this deployment".into())
-    })?;
+    let cfg = crate::services::stripe::StripeConfig::from_env()
+        .ok_or_else(|| AppError::Internal("Stripe is not configured on this deployment".into()))?;
 
     // Récupère l'email du user (Stripe requires it).
     let email: String = sqlx::query_scalar("SELECT email FROM users WHERE id = $1")
@@ -195,9 +189,8 @@ async fn stripe_withdraw(
     auth: AuthUser,
     Json(body): Json<StripeWithdrawBody>,
 ) -> Result<Json<Value>, AppError> {
-    let cfg = crate::services::stripe::StripeConfig::from_env().ok_or_else(|| {
-        AppError::Internal("Stripe is not configured on this deployment".into())
-    })?;
+    let cfg = crate::services::stripe::StripeConfig::from_env()
+        .ok_or_else(|| AppError::Internal("Stripe is not configured on this deployment".into()))?;
     if body.currency.to_uppercase() != "EUR" {
         return Err(AppError::Validation(
             "Stripe withdraw only supports EUR currently".into(),
@@ -327,20 +320,14 @@ async fn stripe_connect_webhook(
     headers: axum::http::HeaderMap,
     body: axum::body::Bytes,
 ) -> Result<Json<Value>, AppError> {
-    let cfg = crate::services::stripe::StripeConfig::from_env().ok_or_else(|| {
-        AppError::Internal("Stripe is not configured".into())
-    })?;
+    let cfg = crate::services::stripe::StripeConfig::from_env()
+        .ok_or_else(|| AppError::Internal("Stripe is not configured".into()))?;
     let signature = headers
         .get("stripe-signature")
         .and_then(|v| v.to_str().ok())
         .ok_or(AppError::Unauthorized)?;
 
-    crate::services::stripe::verify_webhook_signature(
-        &cfg.webhook_secret,
-        &body,
-        signature,
-        300,
-    )?;
+    crate::services::stripe::verify_webhook_signature(&cfg.webhook_secret, &body, signature, 300)?;
 
     let event: serde_json::Value = serde_json::from_slice(&body)
         .map_err(|e| AppError::Validation(format!("stripe payload decode: {e}")))?;
@@ -354,7 +341,11 @@ async fn stripe_connect_webhook(
         .and_then(|d| d.get("object"))
         .cloned()
         .unwrap_or(Value::Null);
-    let account_id = obj.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let account_id = obj
+        .get("id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
     let details_submitted = obj
         .get("details_submitted")
         .and_then(|v| v.as_bool())
@@ -398,8 +389,6 @@ async fn stripe_connect_webhook(
         "new_status": new_status,
     }))))
 }
-
-use std::str::FromStr;
 
 // ═══════════════════════════════════════════════════════════════════
 // P13.5 — Compliance : limites journalière / mensuelle + statement CSV
@@ -483,7 +472,11 @@ async fn register_momo_phone(
 ) -> Result<Json<Value>, AppError> {
     // Validation E.164 minimale
     if !body.phone.starts_with('+')
-        || body.phone[1..].chars().filter(|c| c.is_ascii_digit()).count() < 8
+        || body.phone[1..]
+            .chars()
+            .filter(|c| c.is_ascii_digit())
+            .count()
+            < 8
     {
         return Err(AppError::Validation(
             "phone must be E.164 format (starts with '+' and 8-15 digits)".into(),
@@ -548,9 +541,8 @@ async fn momo_withdraw(
     .fetch_optional(&state.db)
     .await?
     .ok_or_else(|| AppError::Validation("Wallet not initialized".into()))?;
-    let phone = phone.ok_or_else(|| {
-        AppError::Validation("Register your mobile money phone first".into())
-    })?;
+    let phone = phone
+        .ok_or_else(|| AppError::Validation("Register your mobile money phone first".into()))?;
     if !phone_verified {
         return Err(AppError::Validation(
             "Phone not verified — complete the SMS OTP first".into(),
@@ -599,7 +591,10 @@ async fn momo_withdraw(
         reason: "withdraw_momo",
         related_slice_id: None,
         related_provider_txn_id: None,
-        notes: Some(&format!("{provider_name} withdraw", provider_name = provider_name.as_str())),
+        notes: Some(&format!(
+            "{provider_name} withdraw",
+            provider_name = provider_name.as_str()
+        )),
     };
     let debit_row = talent_wallet::debit(&state.db, debit_entry).await?;
 

@@ -26,15 +26,30 @@ pub fn challenge_team_routes() -> Router<AppState> {
         .route("/teams/{team_id}/disband", post(disband_team))
         .route("/users/me/teams", get(my_teams))
         // P10.2 — role slots multidisciplinaires
-        .route("/teams/{team_id}/slots", get(list_team_slots).post(create_team_slot))
-        .route("/teams/{team_id}/slots/{slot_id}/fill", post(fill_team_slot))
-        .route("/teams/{team_id}/slots/{slot_id}/leave", post(leave_team_slot))
-        .route("/teams/{team_id}/slots/{slot_id}", axum::routing::delete(delete_team_slot))
+        .route(
+            "/teams/{team_id}/slots",
+            get(list_team_slots).post(create_team_slot),
+        )
+        .route(
+            "/teams/{team_id}/slots/{slot_id}/fill",
+            post(fill_team_slot),
+        )
+        .route(
+            "/teams/{team_id}/slots/{slot_id}/leave",
+            post(leave_team_slot),
+        )
+        .route(
+            "/teams/{team_id}/slots/{slot_id}",
+            axum::routing::delete(delete_team_slot),
+        )
         .route("/team-slots/open", get(list_open_slots_by_role))
         // P15.3 — marketplace public : slots ouverts enrichis + notif skill-match
         .route("/teams/marketplace", get(marketplace_slots))
         // P10.5 — bridge Guild ↔ Team
-        .route("/teams/{team_id}/guild", post(attach_team_to_guild).delete(detach_team_from_guild))
+        .route(
+            "/teams/{team_id}/guild",
+            post(attach_team_to_guild).delete(detach_team_from_guild),
+        )
 }
 
 fn build_response(data: serde_json::Value) -> serde_json::Value {
@@ -324,10 +339,11 @@ async fn submit_team(
         ));
     }
 
-    let challenge: ChallengeTemplate = sqlx::query_as("SELECT * FROM challenge_templates WHERE id = $1")
-        .bind(challenge_id)
-        .fetch_one(&state.db)
-        .await?;
+    let challenge: ChallengeTemplate =
+        sqlx::query_as("SELECT * FROM challenge_templates WHERE id = $1")
+            .bind(challenge_id)
+            .fetch_one(&state.db)
+            .await?;
 
     let submission: crate::models::ChallengeSubmission = sqlx::query_as(
         r#"
@@ -657,11 +673,10 @@ async fn join_persistent_team(
         ));
     }
 
-    let count: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM team_members WHERE team_id = $1")
-            .bind(team_id)
-            .fetch_one(&state.db)
-            .await?;
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM team_members WHERE team_id = $1")
+        .bind(team_id)
+        .fetch_one(&state.db)
+        .await?;
     if count >= team.max_members as i64 {
         return Err(AppError::Validation("Team is full".to_string()));
     }
@@ -916,13 +931,11 @@ async fn attach_team_to_guild(
         return Err(AppError::Forbidden);
     }
 
-    sqlx::query(
-        "UPDATE challenge_teams SET guild_id = $1 WHERE id = $2",
-    )
-    .bind(body.guild_id)
-    .bind(team_id)
-    .execute(&state.db)
-    .await?;
+    sqlx::query("UPDATE challenge_teams SET guild_id = $1 WHERE id = $2")
+        .bind(body.guild_id)
+        .bind(team_id)
+        .execute(&state.db)
+        .await?;
 
     Ok(Json(build_response(json!({
         "team_id": team_id,

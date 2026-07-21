@@ -11,6 +11,17 @@ use uuid::Uuid;
 
 use crate::errors::AppError;
 
+// Type aliases pour clippy::type_complexity (rangées sqlx::query_as).
+type DmRow235 = (
+    Uuid,
+    Uuid,
+    Uuid,
+    DateTime<Utc>,
+    DateTime<Utc>,
+    Option<String>,
+    i64,
+);
+
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 pub struct DmConversation {
     pub id: Uuid,
@@ -51,14 +62,14 @@ pub fn canonical_pair(a: Uuid, b: Uuid) -> (Uuid, Uuid) {
 }
 
 pub fn peer_of(conv: &DmConversation, me: Uuid) -> Uuid {
-    if conv.user_a_id == me { conv.user_b_id } else { conv.user_a_id }
+    if conv.user_a_id == me {
+        conv.user_b_id
+    } else {
+        conv.user_a_id
+    }
 }
 
-pub async fn is_blocked_either_way(
-    db: &PgPool,
-    a: Uuid,
-    b: Uuid,
-) -> Result<bool, AppError> {
+pub async fn is_blocked_either_way(db: &PgPool, a: Uuid, b: Uuid) -> Result<bool, AppError> {
     let exists: Option<(i32,)> = sqlx::query_as(
         r#"
         SELECT 1 FROM user_blocks
@@ -88,11 +99,10 @@ pub async fn open_or_get_conversation(
         return Err(AppError::Forbidden);
     }
     // Validate peer exists and is not banned
-    let peer_ok: Option<(bool,)> =
-        sqlx::query_as("SELECT is_banned FROM users WHERE id = $1")
-            .bind(peer)
-            .fetch_optional(db)
-            .await?;
+    let peer_ok: Option<(bool,)> = sqlx::query_as("SELECT is_banned FROM users WHERE id = $1")
+        .bind(peer)
+        .fetch_optional(db)
+        .await?;
     match peer_ok {
         Some((true,)) => return Err(AppError::Forbidden),
         None => return Err(AppError::NotFound("peer user not found".into())),
@@ -233,7 +243,7 @@ pub async fn list_conversations(
     offset: i64,
 ) -> Result<Vec<ConversationSummary>, AppError> {
     let limit = limit.clamp(1, 100);
-    let rows: Vec<(Uuid, Uuid, Uuid, DateTime<Utc>, DateTime<Utc>, Option<String>, i64)> =
+    let rows: Vec<DmRow235> =
         sqlx::query_as(
             r#"
             SELECT c.id, c.user_a_id, c.user_b_id, c.last_message_at, c.created_at,
@@ -253,22 +263,24 @@ pub async fn list_conversations(
 
     let out = rows
         .into_iter()
-        .map(|(id, a, b, last_message_at, created_at, last_body, unread)| {
-            let conv = DmConversation {
-                id,
-                user_a_id: a,
-                user_b_id: b,
-                last_message_at,
-                created_at,
-            };
-            let peer_id = peer_of(&conv, me);
-            ConversationSummary {
-                conversation: conv,
-                peer_id,
-                unread_count: unread,
-                last_message_body: last_body,
-            }
-        })
+        .map(
+            |(id, a, b, last_message_at, created_at, last_body, unread)| {
+                let conv = DmConversation {
+                    id,
+                    user_a_id: a,
+                    user_b_id: b,
+                    last_message_at,
+                    created_at,
+                };
+                let peer_id = peer_of(&conv, me);
+                ConversationSummary {
+                    conversation: conv,
+                    peer_id,
+                    unread_count: unread,
+                    last_message_body: last_body,
+                }
+            },
+        )
         .collect();
     Ok(out)
 }
@@ -297,11 +309,7 @@ pub async fn block_user(
     Ok(())
 }
 
-pub async fn unblock_user(
-    db: &PgPool,
-    blocker_id: Uuid,
-    blocked_id: Uuid,
-) -> Result<(), AppError> {
+pub async fn unblock_user(db: &PgPool, blocker_id: Uuid, blocked_id: Uuid) -> Result<(), AppError> {
     sqlx::query("DELETE FROM user_blocks WHERE blocker_id = $1 AND blocked_id = $2")
         .bind(blocker_id)
         .bind(blocked_id)
@@ -311,26 +319,20 @@ pub async fn unblock_user(
 }
 
 pub async fn list_blocks(db: &PgPool, blocker_id: Uuid) -> Result<Vec<UserBlock>, AppError> {
-    let rows = sqlx::query_as(
-        "SELECT * FROM user_blocks WHERE blocker_id = $1 ORDER BY created_at DESC",
-    )
-    .bind(blocker_id)
-    .fetch_all(db)
-    .await?;
+    let rows =
+        sqlx::query_as("SELECT * FROM user_blocks WHERE blocker_id = $1 ORDER BY created_at DESC")
+            .bind(blocker_id)
+            .fetch_all(db)
+            .await?;
     Ok(rows)
 }
 
-async fn ensure_participant(
-    db: &PgPool,
-    me: Uuid,
-    conversation_id: Uuid,
-) -> Result<(), AppError> {
-    let row: Option<(Uuid, Uuid)> = sqlx::query_as(
-        "SELECT user_a_id, user_b_id FROM dm_conversations WHERE id = $1",
-    )
-    .bind(conversation_id)
-    .fetch_optional(db)
-    .await?;
+async fn ensure_participant(db: &PgPool, me: Uuid, conversation_id: Uuid) -> Result<(), AppError> {
+    let row: Option<(Uuid, Uuid)> =
+        sqlx::query_as("SELECT user_a_id, user_b_id FROM dm_conversations WHERE id = $1")
+            .bind(conversation_id)
+            .fetch_optional(db)
+            .await?;
     match row {
         Some((a, b)) if a == me || b == me => Ok(()),
         Some(_) => Err(AppError::Forbidden),

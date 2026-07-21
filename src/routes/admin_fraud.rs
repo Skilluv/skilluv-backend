@@ -13,7 +13,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use bigdecimal::BigDecimal;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 use crate::AppState;
@@ -28,7 +28,10 @@ pub fn admin_fraud_routes() -> Router<AppState> {
             "/admin/fraud/deliverables/{id}/mark-valid",
             post(mark_deliverable_valid),
         )
-        .route("/admin/fraud/deliverables/{id}/revoke", post(revoke_deliverable))
+        .route(
+            "/admin/fraud/deliverables/{id}/revoke",
+            post(revoke_deliverable),
+        )
         .route("/admin/fraud/users/{id}/mark-valid", post(mark_user_valid))
         .route(
             "/admin/fraud/scan-deliverable/{id}",
@@ -276,12 +279,9 @@ async fn llm_evaluate_endpoint(
     Path(id): Path<Uuid>,
 ) -> Result<Json<Value>, AppError> {
     require_admin(&state, &auth).await?;
-    let outcome = crate::services::llm_verifier::evaluate_deliverable(
-        &state.db,
-        state.ai.as_deref(),
-        id,
-    )
-    .await?;
+    let outcome =
+        crate::services::llm_verifier::evaluate_deliverable(&state.db, state.ai.as_deref(), id)
+            .await?;
     Ok(Json(build_response(json!(outcome))))
 }
 
@@ -337,8 +337,8 @@ async fn deep_plagiarism_scan_endpoint(
     .bind(id)
     .fetch_optional(&state.db)
     .await?;
-    let (deliverable_id, challenge_id, metadata) = target
-        .ok_or_else(|| AppError::NotFound("deliverable not found".into()))?;
+    let (deliverable_id, challenge_id, metadata) =
+        target.ok_or_else(|| AppError::NotFound("deliverable not found".into()))?;
 
     let code = metadata
         .as_ref()
@@ -366,9 +366,10 @@ async fn deep_plagiarism_scan_endpoint(
     // 2. Construit le comparison_pool (challenges similaires, cap 200).
     let pool_cap = q.pool_cap.unwrap_or(200).clamp(1, 500);
     let window = q.window_days.unwrap_or(30);
-    let pool_rows: Vec<(Uuid, String, chrono::DateTime<chrono::Utc>)> = if let Some(cid) = challenge_id {
-        sqlx::query_as(
-            r#"
+    let pool_rows: Vec<(Uuid, String, chrono::DateTime<chrono::Utc>)> =
+        if let Some(cid) = challenge_id {
+            sqlx::query_as(
+                r#"
             SELECT d.id,
                    COALESCE(d.artifact_metadata->>'code_content', ''),
                    d.verified_at
@@ -381,16 +382,16 @@ async fn deep_plagiarism_scan_endpoint(
             ORDER BY d.verified_at DESC
             LIMIT $4
             "#,
-        )
-        .bind(cid)
-        .bind(deliverable_id)
-        .bind(window)
-        .bind(pool_cap)
-        .fetch_all(&state.db)
-        .await?
-    } else {
-        Vec::new()
-    };
+            )
+            .bind(cid)
+            .bind(deliverable_id)
+            .bind(window)
+            .bind(pool_cap)
+            .fetch_all(&state.db)
+            .await?
+        } else {
+            Vec::new()
+        };
 
     // Note : `PreviousSubmission` v2 n'inclut PAS user_id (le contrat proto
     // délègue le lookup au backend via `similar_submission_id` retourné).
@@ -429,7 +430,8 @@ async fn deep_plagiarism_scan_endpoint(
         mv.as_deref(),
     )
     .await;
-    let resp = result.map_err(|s| AppError::Internal(format!("gRPC check_plagiarism failed: {s}")))?;
+    let resp =
+        result.map_err(|s| AppError::Internal(format!("gRPC check_plagiarism failed: {s}")))?;
 
     // 4. Merge le résultat dans verification_signal.deep_plagiarism.
     let signal = serde_json::json!({

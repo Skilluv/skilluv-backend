@@ -32,9 +32,7 @@ async fn setup_scim(app: &common::TestApp, slug_input: &str) -> String {
         .await;
     assert_eq!(resp.status(), StatusCode::OK, "SSO setup failed");
 
-    let token_resp = app
-        .post("/api/enterprise/sso/scim/token", &json!({}))
-        .await;
+    let token_resp = app.post("/api/enterprise/sso/scim/token", &json!({})).await;
     assert_eq!(token_resp.status(), StatusCode::OK, "token gen failed");
     let body: Value = token_resp.json().await.unwrap();
     let token = body["data"]["token"].as_str().unwrap().to_string();
@@ -56,7 +54,12 @@ async fn scim_get(app: &common::TestApp, token: &str, path: &str) -> reqwest::Re
         .unwrap()
 }
 
-async fn scim_post(app: &common::TestApp, token: &str, path: &str, body: &Value) -> reqwest::Response {
+async fn scim_post(
+    app: &common::TestApp,
+    token: &str,
+    path: &str,
+    body: &Value,
+) -> reqwest::Response {
     scim_client()
         .post(format!("{}{}", app.addr, path))
         .header(AUTHORIZATION, format!("Bearer {token}"))
@@ -66,7 +69,12 @@ async fn scim_post(app: &common::TestApp, token: &str, path: &str, body: &Value)
         .unwrap()
 }
 
-async fn scim_patch(app: &common::TestApp, token: &str, path: &str, body: &Value) -> reqwest::Response {
+async fn scim_patch(
+    app: &common::TestApp,
+    token: &str,
+    path: &str,
+    body: &Value,
+) -> reqwest::Response {
     scim_client()
         .patch(format!("{}{}", app.addr, path))
         .header(AUTHORIZATION, format!("Bearer {token}"))
@@ -199,23 +207,21 @@ async fn test_scim_user_lifecycle() {
     assert_eq!(patched["active"], false);
 
     // Membership status flipped
-    let member_status: (String,) = sqlx::query_as(
-        "SELECT status FROM enterprise_members WHERE user_id = $1",
-    )
-    .bind(user_id.parse::<uuid::Uuid>().unwrap())
-    .fetch_one(&app.db)
-    .await
-    .unwrap();
+    let member_status: (String,) =
+        sqlx::query_as("SELECT status FROM enterprise_members WHERE user_id = $1")
+            .bind(user_id.parse::<uuid::Uuid>().unwrap())
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
     assert_eq!(member_status.0, "revoked");
 
     // Session revoked
-    let revoked: (Option<chrono::DateTime<chrono::Utc>>,) = sqlx::query_as(
-        "SELECT revoked_at FROM user_sessions WHERE id = $1",
-    )
-    .bind(session_before.0)
-    .fetch_one(&app.db)
-    .await
-    .unwrap();
+    let revoked: (Option<chrono::DateTime<chrono::Utc>>,) =
+        sqlx::query_as("SELECT revoked_at FROM user_sessions WHERE id = $1")
+            .bind(session_before.0)
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
     assert!(revoked.0.is_some());
 
     // DELETE /Users/{id} — idempotent soft delete
@@ -239,7 +245,10 @@ async fn test_scim_group_crud_and_membership() {
         }),
     )
     .await;
-    let u1_id = u1.json::<Value>().await.unwrap()["id"].as_str().unwrap().to_string();
+    let u1_id = u1.json::<Value>().await.unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
     let u2 = scim_post(
         &app,
         &token,
@@ -250,7 +259,10 @@ async fn test_scim_group_crud_and_membership() {
         }),
     )
     .await;
-    let u2_id = u2.json::<Value>().await.unwrap()["id"].as_str().unwrap().to_string();
+    let u2_id = u2.json::<Value>().await.unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
 
     // POST /Groups with initial member.
     let create = scim_post(
@@ -351,7 +363,10 @@ async fn test_group_role_mapping_promotes_and_demotes_members() {
         }),
     )
     .await;
-    let user_id = u.json::<Value>().await.unwrap()["id"].as_str().unwrap().to_string();
+    let user_id = u.json::<Value>().await.unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
     let user_uuid: uuid::Uuid = user_id.parse().unwrap();
 
     // Create a group and put the user in it.
@@ -365,7 +380,10 @@ async fn test_group_role_mapping_promotes_and_demotes_members() {
         }),
     )
     .await;
-    let group_id = g.json::<Value>().await.unwrap()["id"].as_str().unwrap().to_string();
+    let group_id = g.json::<Value>().await.unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
 
     // Owner marks the group as conferring the "enterprise" role.
     let map = app
@@ -385,12 +403,11 @@ async fn test_group_role_mapping_promotes_and_demotes_members() {
     assert_eq!(body["data"]["affected_users"], 1);
 
     // User's enterprise_members.role is now "enterprise".
-    let role: (String,) =
-        sqlx::query_as("SELECT role FROM enterprise_members WHERE user_id = $1")
-            .bind(user_uuid)
-            .fetch_one(&app.db)
-            .await
-            .unwrap();
+    let role: (String,) = sqlx::query_as("SELECT role FROM enterprise_members WHERE user_id = $1")
+        .bind(user_uuid)
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
     assert_eq!(role.0, "enterprise");
 
     // Clear the mapping — user falls back to config default (recruiter).
@@ -430,7 +447,10 @@ async fn test_group_removal_demotes_user() {
         }),
     )
     .await;
-    let user_id = u.json::<Value>().await.unwrap()["id"].as_str().unwrap().to_string();
+    let user_id = u.json::<Value>().await.unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
 
     let g = scim_post(
         &app,
@@ -442,7 +462,10 @@ async fn test_group_removal_demotes_user() {
         }),
     )
     .await;
-    let group_id = g.json::<Value>().await.unwrap()["id"].as_str().unwrap().to_string();
+    let group_id = g.json::<Value>().await.unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
 
     // Mark group as enterprise-role.
     app.client
@@ -496,7 +519,9 @@ async fn test_token_rotation_grace_period() {
 
     // Sanity: old token works.
     assert_eq!(
-        scim_get(&app, &old_token, "/api/scim/v2/Users").await.status(),
+        scim_get(&app, &old_token, "/api/scim/v2/Users")
+            .await
+            .status(),
         StatusCode::OK
     );
 
@@ -512,11 +537,15 @@ async fn test_token_rotation_grace_period() {
 
     // Both tokens accepted during the grace window.
     assert_eq!(
-        scim_get(&app, &new_token, "/api/scim/v2/Users").await.status(),
+        scim_get(&app, &new_token, "/api/scim/v2/Users")
+            .await
+            .status(),
         StatusCode::OK
     );
     assert_eq!(
-        scim_get(&app, &old_token, "/api/scim/v2/Users").await.status(),
+        scim_get(&app, &old_token, "/api/scim/v2/Users")
+            .await
+            .status(),
         StatusCode::OK
     );
 
@@ -531,11 +560,15 @@ async fn test_token_rotation_grace_period() {
     .unwrap();
 
     assert_eq!(
-        scim_get(&app, &old_token, "/api/scim/v2/Users").await.status(),
+        scim_get(&app, &old_token, "/api/scim/v2/Users")
+            .await
+            .status(),
         StatusCode::UNAUTHORIZED
     );
     assert_eq!(
-        scim_get(&app, &new_token, "/api/scim/v2/Users").await.status(),
+        scim_get(&app, &new_token, "/api/scim/v2/Users")
+            .await
+            .status(),
         StatusCode::OK
     );
 }
@@ -556,7 +589,10 @@ async fn test_scim_audit_trail() {
         }),
     )
     .await;
-    let user_id = u.json::<Value>().await.unwrap()["id"].as_str().unwrap().to_string();
+    let user_id = u.json::<Value>().await.unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
 
     let provisioned: (String,) = sqlx::query_as(
         "SELECT action FROM audit_log WHERE action = 'scim.user.provisioned' AND target_id = $1::UUID",
@@ -568,8 +604,7 @@ async fn test_scim_audit_trail() {
     assert_eq!(provisioned.0, "scim.user.provisioned");
 
     // DELETE writes another row.
-    scim_delete(&app, &token, &format!("/api/scim/v2/Users/{user_id}"))
-        .await;
+    scim_delete(&app, &token, &format!("/api/scim/v2/Users/{user_id}")).await;
 
     let deleted: (String,) = sqlx::query_as(
         "SELECT action FROM audit_log WHERE action = 'scim.user.deleted' AND target_id = $1::UUID",

@@ -46,8 +46,12 @@ pub struct VapidConfig {
 impl VapidConfig {
     pub fn from_env() -> Option<Self> {
         Some(Self {
-            public_key_b64: std::env::var("VAPID_PUBLIC_KEY").ok().filter(|s| !s.is_empty())?,
-            private_key_b64: std::env::var("VAPID_PRIVATE_KEY").ok().filter(|s| !s.is_empty())?,
+            public_key_b64: std::env::var("VAPID_PUBLIC_KEY")
+                .ok()
+                .filter(|s| !s.is_empty())?,
+            private_key_b64: std::env::var("VAPID_PRIVATE_KEY")
+                .ok()
+                .filter(|s| !s.is_empty())?,
             subject: std::env::var("VAPID_SUBJECT")
                 .unwrap_or_else(|_| "mailto:ops@skilluv.com".into()),
         })

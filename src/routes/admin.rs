@@ -13,6 +13,21 @@ use crate::middleware::AuthUser;
 use crate::models::ChallengeTemplate;
 use crate::services::LeaderboardService;
 
+// Type aliases pour clippy::type_complexity (rangées sqlx::query_as).
+type AdminRow636 = (
+    Uuid,
+    Uuid,
+    Option<String>,
+    Option<String>,
+    chrono::DateTime<chrono::Utc>,
+    chrono::DateTime<chrono::Utc>,
+    String,
+    String,
+    Option<Uuid>,
+    Option<String>,
+    Option<String>,
+);
+
 pub fn admin_routes() -> Router<AppState> {
     Router::new()
         .route("/admin/challenges", post(create_challenge))
@@ -32,7 +47,10 @@ pub fn admin_routes() -> Router<AppState> {
         // Réservé à admin, log audit obligatoire.
         .route("/admin/users/{id}/reset-2fa", post(admin_reset_2fa))
         // IA-C.1 — Générer une variante d'un challenge (harder/easier au MVP).
-        .route("/admin/challenges/{id}/variant", post(admin_generate_variant))
+        .route(
+            "/admin/challenges/{id}/variant",
+            post(admin_generate_variant),
+        )
         // ADM-M3.1 — CRUD orientations + orientation_skill_map.
         .merge(crate::routes::admin_orientation_routes())
         // ADM-M3.2 — CRUD badge_rules (proof engine editor).
@@ -95,14 +113,15 @@ async fn admin_reset_2fa(
     let mut tx = state.db.begin().await?;
 
     // 1. Vérifier que le user cible existe.
-    let target_exists: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)",
-    )
-    .bind(target_user_id)
-    .fetch_one(&mut *tx)
-    .await?;
+    let target_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)")
+            .bind(target_user_id)
+            .fetch_one(&mut *tx)
+            .await?;
     if !target_exists {
-        return Err(AppError::NotFound(format!("user {target_user_id} not found")));
+        return Err(AppError::NotFound(format!(
+            "user {target_user_id} not found"
+        )));
     }
 
     // 2. Reset TOTP secret + backup codes.
@@ -436,11 +455,12 @@ async fn update_challenge(
 ) -> Result<Json<serde_json::Value>, AppError> {
     require_admin(&state, &auth).await?;
 
-    let existing: ChallengeTemplate = sqlx::query_as("SELECT * FROM challenge_templates WHERE id = $1")
-        .bind(id)
-        .fetch_optional(&state.db)
-        .await?
-        .ok_or(AppError::NotFound("Challenge not found".to_string()))?;
+    let existing: ChallengeTemplate =
+        sqlx::query_as("SELECT * FROM challenge_templates WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&state.db)
+            .await?
+            .ok_or(AppError::NotFound("Challenge not found".to_string()))?;
 
     let ai_policy = match body.ai_policy.as_deref() {
         Some(_) => resolve_ai_policy(body.ai_policy.as_deref())?,
@@ -512,13 +532,12 @@ async fn publish_challenge(
     // ou avoir un project_id. La contrainte challenges_project_or_training (mig
     // 0061) le refuserait autrement avec un DB error opaque ; on renvoie une
     // erreur explicite côté API.
-    let (is_training, project_id): (bool, Option<Uuid>) = sqlx::query_as(
-        "SELECT is_training, project_id FROM challenge_templates WHERE id = $1",
-    )
-    .bind(id)
-    .fetch_optional(&state.db)
-    .await?
-    .ok_or(AppError::NotFound("Challenge not found".to_string()))?;
+    let (is_training, project_id): (bool, Option<Uuid>) =
+        sqlx::query_as("SELECT is_training, project_id FROM challenge_templates WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&state.db)
+            .await?
+            .ok_or(AppError::NotFound("Challenge not found".to_string()))?;
 
     if !is_training && project_id.is_none() {
         return Err(AppError::Validation(
@@ -629,19 +648,7 @@ async fn list_sso_sessions(
     let per_page = q.per_page.unwrap_or(50).clamp(1, 200);
     let offset = (page - 1) * per_page;
 
-    let rows: Vec<(
-        Uuid,
-        Uuid,
-        Option<String>,
-        Option<String>,
-        chrono::DateTime<chrono::Utc>,
-        chrono::DateTime<chrono::Utc>,
-        String,
-        String,
-        Option<Uuid>,
-        Option<String>,
-        Option<String>,
-    )> = sqlx::query_as(
+    let rows: Vec<AdminRow636> = sqlx::query_as(
         r#"
         SELECT
             us.id, us.user_id, us.ip, us.user_agent,
@@ -683,21 +690,35 @@ async fn list_sso_sessions(
 
     let sessions: Vec<serde_json::Value> = rows
         .into_iter()
-        .map(|(id, user_id, ip, ua, created_at, last_used, email, username, ent_id, ent_slug, company)| {
-            json!({
-                "session_id": id,
-                "user_id": user_id,
-                "user_email": email,
-                "user_username": username,
-                "enterprise_id": ent_id,
-                "enterprise_slug": ent_slug,
-                "company_name": company,
-                "ip": ip,
-                "user_agent": ua,
-                "created_at": created_at.to_rfc3339(),
-                "last_used_at": last_used.to_rfc3339(),
-            })
-        })
+        .map(
+            |(
+                id,
+                user_id,
+                ip,
+                ua,
+                created_at,
+                last_used,
+                email,
+                username,
+                ent_id,
+                ent_slug,
+                company,
+            )| {
+                json!({
+                    "session_id": id,
+                    "user_id": user_id,
+                    "user_email": email,
+                    "user_username": username,
+                    "enterprise_id": ent_id,
+                    "enterprise_slug": ent_slug,
+                    "company_name": company,
+                    "ip": ip,
+                    "user_agent": ua,
+                    "created_at": created_at.to_rfc3339(),
+                    "last_used_at": last_used.to_rfc3339(),
+                })
+            },
+        )
         .collect();
 
     Ok(Json(json!({
@@ -790,18 +811,20 @@ async fn admin_generate_variant(
         ));
     }
 
-    let ai = state.ai.as_deref().ok_or_else(|| {
-        AppError::Internal("AI client not connected (grpc_ai_url absent)".into())
-    })?;
+    let ai = state
+        .ai
+        .as_deref()
+        .ok_or_else(|| AppError::Internal("AI client not connected (grpc_ai_url absent)".into()))?;
 
     // 1. Fetch le challenge original + convert en GeneratedChallenge proto.
-    let orig: crate::models::ChallengeTemplate = sqlx::query_as(
-        "SELECT * FROM challenge_templates WHERE id = $1",
-    )
-    .bind(original_id)
-    .fetch_optional(&state.db)
-    .await?
-    .ok_or(AppError::NotFound(format!("challenge {original_id} not found")))?;
+    let orig: crate::models::ChallengeTemplate =
+        sqlx::query_as("SELECT * FROM challenge_templates WHERE id = $1")
+            .bind(original_id)
+            .fetch_optional(&state.db)
+            .await?
+            .ok_or(AppError::NotFound(format!(
+                "challenge {original_id} not found"
+            )))?;
 
     let original_proto = crate::grpc::proto::GeneratedChallenge {
         title: orig.title.clone(),
@@ -840,7 +863,8 @@ async fn admin_generate_variant(
         None,
     )
     .await;
-    let resp = result.map_err(|s| AppError::Internal(format!("gRPC generate_variant failed: {s}")))?;
+    let resp =
+        result.map_err(|s| AppError::Internal(format!("gRPC generate_variant failed: {s}")))?;
 
     if !resp.success {
         return Err(AppError::Internal(format!(
@@ -869,9 +893,17 @@ async fn admin_generate_variant(
     .bind(&generated.skill_domain)
     .bind(generated.difficulty as i16)
     .bind(generated.duration_minutes)
-    .bind(if generated.ai_allowed { "unrestricted" } else { "no_ai_declared" })
+    .bind(if generated.ai_allowed {
+        "unrestricted"
+    } else {
+        "no_ai_declared"
+    })
     .bind(&generated.tone)
-    .bind(if generated.language.is_empty() { None } else { Some(&generated.language) })
+    .bind(if generated.language.is_empty() {
+        None
+    } else {
+        Some(&generated.language)
+    })
     .bind(generated.fragment_reward)
     .bind(orig.is_training)
     .bind(auth.user_id)

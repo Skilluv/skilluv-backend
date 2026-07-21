@@ -67,11 +67,12 @@ async fn request_code_review(
     let source_code: String = sub.get("source_code");
     let test_output: Option<String> = sub.get("test_output");
 
-    let ch = sqlx::query("SELECT title, description, difficulty FROM challenge_templates WHERE id = $1")
-        .bind(body.challenge_id)
-        .fetch_optional(&state.db)
-        .await?
-        .ok_or(AppError::NotFound("challenge not found".into()))?;
+    let ch =
+        sqlx::query("SELECT title, description, difficulty FROM challenge_templates WHERE id = $1")
+            .bind(body.challenge_id)
+            .fetch_optional(&state.db)
+            .await?
+            .ok_or(AppError::NotFound("challenge not found".into()))?;
     let title: String = ch.get("title");
     let description: String = ch.get("description");
     let difficulty: i32 = ch.get("difficulty");
@@ -107,10 +108,10 @@ async fn request_recommendations(
     // pré-filtrer la liste des candidats. On force cependant l'user_id à celui
     // de l'authentifié pour éviter le spoofing.
     let mut merged = body;
-    if let Some(user) = merged.get_mut("user") {
-        if let Some(obj) = user.as_object_mut() {
-            obj.insert("user_id".into(), json!(auth.user_id.to_string()));
-        }
+    if let Some(user) = merged.get_mut("user")
+        && let Some(obj) = user.as_object_mut()
+    {
+        obj.insert("user_id".into(), json!(auth.user_id.to_string()));
     }
     let mut redis = state.redis.clone();
     let job_id = crate::services::ai_queue::enqueue_recommendations(&mut redis, &merged).await?;

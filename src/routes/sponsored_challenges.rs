@@ -19,10 +19,7 @@ pub fn sponsored_routes() -> Router<AppState> {
             get(list_my_requests).post(request_sponsorship),
         )
         // Admin side
-        .route(
-            "/admin/sponsored-challenges",
-            get(admin_list_requests),
-        )
+        .route("/admin/sponsored-challenges", get(admin_list_requests))
         .route(
             "/admin/sponsored-challenges/{id}/decide",
             post(admin_decide_request),
@@ -50,10 +47,7 @@ fn build_response(data: Value) -> Value {
     })
 }
 
-async fn current_enterprise_for(
-    db: &sqlx::PgPool,
-    user_id: Uuid,
-) -> Result<Uuid, AppError> {
+async fn current_enterprise_for(db: &sqlx::PgPool, user_id: Uuid) -> Result<Uuid, AppError> {
     let row: Option<(Uuid,)> = sqlx::query_as(
         "SELECT enterprise_id FROM enterprise_members WHERE user_id = $1 AND status = 'active' LIMIT 1",
     )
@@ -79,11 +73,16 @@ async fn request_sponsorship(
     Json(body): Json<RequestBody>,
 ) -> Result<Json<Value>, AppError> {
     let enterprise_id = current_enterprise_for(&state.db, auth.user_id).await?;
-    if !matches!(body.skill_domain.as_str(), "code" | "design" | "game" | "security") {
+    if !matches!(
+        body.skill_domain.as_str(),
+        "code" | "design" | "game" | "security"
+    ) {
         return Err(AppError::Validation("invalid skill_domain".into()));
     }
     if body.brief.trim().len() < 30 {
-        return Err(AppError::Validation("brief must be at least 30 characters".into()));
+        return Err(AppError::Validation(
+            "brief must be at least 30 characters".into(),
+        ));
     }
     let row: (Uuid,) = sqlx::query_as(
         r#"
@@ -104,7 +103,9 @@ async fn request_sponsorship(
     .fetch_one(&state.db)
     .await?;
     metrics::counter!("skilluv_sponsorship_requests_total").increment(1);
-    Ok(Json(build_response(json!({ "request_id": row.0, "status": "pending" }))))
+    Ok(Json(build_response(
+        json!({ "request_id": row.0, "status": "pending" }),
+    )))
 }
 
 async fn list_my_requests(
@@ -119,18 +120,23 @@ async fn list_my_requests(
     .fetch_all(&state.db)
     .await?;
     use sqlx::Row;
-    let items: Vec<Value> = rows.iter().map(|r| json!({
-        "id": r.get::<Uuid, _>("id"),
-        "proposed_title": r.get::<String, _>("proposed_title"),
-        "status": r.get::<String, _>("status"),
-        "skill_domain": r.get::<String, _>("skill_domain"),
-        "difficulty": r.get::<i16, _>("difficulty"),
-        "duration_days": r.get::<i32, _>("duration_days"),
-        "budget_eur_cents": r.get::<i64, _>("budget_eur_cents"),
-        "challenge_id": r.get::<Option<Uuid>, _>("challenge_id"),
-        "decided_at": r.get::<Option<chrono::DateTime<chrono::Utc>>, _>("decided_at"),
-        "created_at": r.get::<chrono::DateTime<chrono::Utc>, _>("created_at"),
-    })).collect();
+    let items: Vec<Value> = rows
+        .iter()
+        .map(|r| {
+            json!({
+                "id": r.get::<Uuid, _>("id"),
+                "proposed_title": r.get::<String, _>("proposed_title"),
+                "status": r.get::<String, _>("status"),
+                "skill_domain": r.get::<String, _>("skill_domain"),
+                "difficulty": r.get::<i16, _>("difficulty"),
+                "duration_days": r.get::<i32, _>("duration_days"),
+                "budget_eur_cents": r.get::<i64, _>("budget_eur_cents"),
+                "challenge_id": r.get::<Option<Uuid>, _>("challenge_id"),
+                "decided_at": r.get::<Option<chrono::DateTime<chrono::Utc>>, _>("decided_at"),
+                "created_at": r.get::<chrono::DateTime<chrono::Utc>, _>("created_at"),
+            })
+        })
+        .collect();
     Ok(Json(build_response(json!({ "requests": items }))))
 }
 
@@ -147,25 +153,30 @@ async fn admin_list_requests(
     .fetch_all(&state.db)
     .await?;
     use sqlx::Row;
-    let items: Vec<Value> = rows.iter().map(|r| json!({
-        "id": r.get::<Uuid, _>("id"),
-        "enterprise_id": r.get::<Uuid, _>("enterprise_id"),
-        "proposed_title": r.get::<String, _>("proposed_title"),
-        "status": r.get::<String, _>("status"),
-        "brief": r.get::<String, _>("brief"),
-        "skill_domain": r.get::<String, _>("skill_domain"),
-        "difficulty": r.get::<i16, _>("difficulty"),
-        "duration_days": r.get::<i32, _>("duration_days"),
-        "budget_eur_cents": r.get::<i64, _>("budget_eur_cents"),
-        "challenge_id": r.get::<Option<Uuid>, _>("challenge_id"),
-        "created_at": r.get::<chrono::DateTime<chrono::Utc>, _>("created_at"),
-    })).collect();
+    let items: Vec<Value> = rows
+        .iter()
+        .map(|r| {
+            json!({
+                "id": r.get::<Uuid, _>("id"),
+                "enterprise_id": r.get::<Uuid, _>("enterprise_id"),
+                "proposed_title": r.get::<String, _>("proposed_title"),
+                "status": r.get::<String, _>("status"),
+                "brief": r.get::<String, _>("brief"),
+                "skill_domain": r.get::<String, _>("skill_domain"),
+                "difficulty": r.get::<i16, _>("difficulty"),
+                "duration_days": r.get::<i32, _>("duration_days"),
+                "budget_eur_cents": r.get::<i64, _>("budget_eur_cents"),
+                "challenge_id": r.get::<Option<Uuid>, _>("challenge_id"),
+                "created_at": r.get::<chrono::DateTime<chrono::Utc>, _>("created_at"),
+            })
+        })
+        .collect();
     Ok(Json(build_response(json!({ "requests": items }))))
 }
 
 #[derive(Deserialize)]
 struct DecideBody {
-    action: String,            // "approve" | "reject" | "negotiate"
+    action: String, // "approve" | "reject" | "negotiate"
     admin_notes: Option<String>,
 }
 
@@ -193,7 +204,9 @@ async fn admin_decide_request(
     .bind(id)
     .execute(&state.db)
     .await?;
-    Ok(Json(build_response(json!({ "id": id, "status": new_status }))))
+    Ok(Json(build_response(
+        json!({ "id": id, "status": new_status }),
+    )))
 }
 
 #[derive(Deserialize)]
@@ -268,7 +281,9 @@ async fn admin_link_challenge(
     .await?;
     tx.commit().await?;
     metrics::counter!("skilluv_sponsored_challenges_live_total").increment(1);
-    Ok(Json(build_response(json!({ "linked": true, "challenge_id": body.challenge_id }))))
+    Ok(Json(build_response(
+        json!({ "linked": true, "challenge_id": body.challenge_id }),
+    )))
 }
 
 async fn public_active(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
@@ -333,17 +348,22 @@ async fn sponsor_view_submissions(
     .fetch_all(&state.db)
     .await?;
     use sqlx::Row;
-    let items: Vec<Value> = rows.iter().map(|r| json!({
-        "submission_id": r.get::<Uuid, _>("submission_id"),
-        "user_id": r.get::<Uuid, _>("user_id"),
-        "username": r.get::<String, _>("username"),
-        "display_name": r.get::<String, _>("display_name"),
-        "skill_domain": r.get::<String, _>("skill_domain"),
-        "total_fragments": r.get::<i32, _>("total_fragments"),
-        "title": r.get::<String, _>("title"),
-        "fragments_earned": r.get::<i32, _>("fragments_earned"),
-        "evaluated_at": r.get::<Option<chrono::DateTime<chrono::Utc>>, _>("evaluated_at"),
-    })).collect();
+    let items: Vec<Value> = rows
+        .iter()
+        .map(|r| {
+            json!({
+                "submission_id": r.get::<Uuid, _>("submission_id"),
+                "user_id": r.get::<Uuid, _>("user_id"),
+                "username": r.get::<String, _>("username"),
+                "display_name": r.get::<String, _>("display_name"),
+                "skill_domain": r.get::<String, _>("skill_domain"),
+                "total_fragments": r.get::<i32, _>("total_fragments"),
+                "title": r.get::<String, _>("title"),
+                "fragments_earned": r.get::<i32, _>("fragments_earned"),
+                "evaluated_at": r.get::<Option<chrono::DateTime<chrono::Utc>>, _>("evaluated_at"),
+            })
+        })
+        .collect();
     Ok(Json(build_response(json!({
         "submissions": items,
         "free_contact_active": free_contact_active,

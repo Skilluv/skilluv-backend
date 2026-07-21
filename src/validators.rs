@@ -57,10 +57,7 @@ pub fn validate_github_username(value: &str) -> Result<(), AppError> {
     if value.len() > 39 {
         return Err(AppError::Validation("GitHub username too long".into()));
     }
-    if !value
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || c == '-')
-    {
+    if !value.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
         return Err(AppError::Validation(
             "GitHub username can only contain letters, digits, and dashes".into(),
         ));

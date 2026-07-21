@@ -106,8 +106,7 @@ impl AppConfig {
     fn audit_secrets(&self) -> Vec<String> {
         let mut issues = Vec::new();
 
-        if self.jwt_secret == "change-this-to-a-secure-random-string"
-            || self.jwt_secret.len() < 32
+        if self.jwt_secret == "change-this-to-a-secure-random-string" || self.jwt_secret.len() < 32
         {
             issues.push("JWT_SECRET is the default or under 32 chars".into());
         }

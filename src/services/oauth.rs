@@ -23,7 +23,7 @@ pub struct OAuthProfile {
     pub email_verified: bool,
     pub display_name: Option<String>,
     pub avatar_url: Option<String>,
-    pub username: Option<String>,   // only GitHub really has a username
+    pub username: Option<String>, // only GitHub really has a username
 }
 
 // ─── State token (Redis) ──────────────────────────────────────────
@@ -37,7 +37,7 @@ pub struct OAuthState {
     /// Optional: the Skilluv user this flow should attach to. If None, this is a
     /// signup/login flow ; the callback will find-or-create the user.
     pub user_id: Option<Uuid>,
-    pub intent: String,             // "signup_login" | "link"
+    pub intent: String, // "signup_login" | "link"
     pub redirect_after: Option<String>,
     /// When set, the OAuth flow completes an enterprise recruiter invite.
     /// The provider-returned email MUST match the invited email (case-insensitive).
@@ -49,11 +49,7 @@ pub async fn store_state(
     redis: &mut ConnectionManager,
     state: &OAuthState,
 ) -> Result<String, AppError> {
-    let token = format!(
-        "{}{}",
-        Uuid::new_v4().simple(),
-        Uuid::new_v4().simple()
-    );
+    let token = format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple());
     let key = format!("oauth_state:{token}");
     let payload = serde_json::to_string(state)
         .map_err(|e| AppError::Internal(format!("state serialize: {e}")))?;
@@ -69,8 +65,7 @@ pub async fn consume_state(
     let raw: Option<String> = redis.get(&key).await?;
     let raw = raw.ok_or(AppError::Unauthorized)?;
     let _: () = redis.del(&key).await?;
-    serde_json::from_str(&raw)
-        .map_err(|_| AppError::Unauthorized)
+    serde_json::from_str(&raw).map_err(|_| AppError::Unauthorized)
 }
 
 // ─── Storage ─────────────────────────────────────────────────────
@@ -87,16 +82,12 @@ pub struct LinkedProvider {
     pub linked_at: DateTime<Utc>,
 }
 
-pub async fn list_for_user(
-    db: &PgPool,
-    user_id: Uuid,
-) -> Result<Vec<LinkedProvider>, AppError> {
-    let rows = sqlx::query_as(
-        "SELECT * FROM user_oauth_providers WHERE user_id = $1 ORDER BY linked_at",
-    )
-    .bind(user_id)
-    .fetch_all(db)
-    .await?;
+pub async fn list_for_user(db: &PgPool, user_id: Uuid) -> Result<Vec<LinkedProvider>, AppError> {
+    let rows =
+        sqlx::query_as("SELECT * FROM user_oauth_providers WHERE user_id = $1 ORDER BY linked_at")
+            .bind(user_id)
+            .fetch_all(db)
+            .await?;
     Ok(rows)
 }
 
@@ -130,11 +121,7 @@ pub async fn upsert_link(
     Ok(row)
 }
 
-pub async fn unlink(
-    db: &PgPool,
-    user_id: Uuid,
-    provider: &str,
-) -> Result<(), AppError> {
+pub async fn unlink(db: &PgPool, user_id: Uuid, provider: &str) -> Result<(), AppError> {
     // Refuse to unlink if it's the user's only sign-in method (no password_hash + last provider).
     let (count, has_password): (i64, bool) = sqlx::query_as(
         r#"
@@ -181,15 +168,15 @@ pub async fn find_user_for_profile(
     if let Some((uid,)) = by_link {
         return Ok(Some(uid));
     }
-    if profile.email_verified {
-        if let Some(email) = &profile.email {
-            let by_email: Option<(Uuid,)> =
-                sqlx::query_as("SELECT id FROM users WHERE LOWER(email) = LOWER($1)")
-                    .bind(email)
-                    .fetch_optional(db)
-                    .await?;
-            return Ok(by_email.map(|(id,)| id));
-        }
+    if profile.email_verified
+        && let Some(email) = &profile.email
+    {
+        let by_email: Option<(Uuid,)> =
+            sqlx::query_as("SELECT id FROM users WHERE LOWER(email) = LOWER($1)")
+                .bind(email)
+                .fetch_optional(db)
+                .await?;
+        return Ok(by_email.map(|(id,)| id));
     }
     Ok(None)
 }
@@ -208,9 +195,15 @@ pub mod google {
     impl Config {
         pub fn from_env() -> Option<Self> {
             Some(Self {
-                client_id: std::env::var("GOOGLE_CLIENT_ID").ok().filter(|s| !s.is_empty())?,
-                client_secret: std::env::var("GOOGLE_CLIENT_SECRET").ok().filter(|s| !s.is_empty())?,
-                redirect_uri: std::env::var("GOOGLE_REDIRECT_URI").ok().filter(|s| !s.is_empty())?,
+                client_id: std::env::var("GOOGLE_CLIENT_ID")
+                    .ok()
+                    .filter(|s| !s.is_empty())?,
+                client_secret: std::env::var("GOOGLE_CLIENT_SECRET")
+                    .ok()
+                    .filter(|s| !s.is_empty())?,
+                redirect_uri: std::env::var("GOOGLE_REDIRECT_URI")
+                    .ok()
+                    .filter(|s| !s.is_empty())?,
             })
         }
     }
@@ -303,9 +296,15 @@ pub mod linkedin {
     impl Config {
         pub fn from_env() -> Option<Self> {
             Some(Self {
-                client_id: std::env::var("LINKEDIN_CLIENT_ID").ok().filter(|s| !s.is_empty())?,
-                client_secret: std::env::var("LINKEDIN_CLIENT_SECRET").ok().filter(|s| !s.is_empty())?,
-                redirect_uri: std::env::var("LINKEDIN_REDIRECT_URI").ok().filter(|s| !s.is_empty())?,
+                client_id: std::env::var("LINKEDIN_CLIENT_ID")
+                    .ok()
+                    .filter(|s| !s.is_empty())?,
+                client_secret: std::env::var("LINKEDIN_CLIENT_SECRET")
+                    .ok()
+                    .filter(|s| !s.is_empty())?,
+                redirect_uri: std::env::var("LINKEDIN_REDIRECT_URI")
+                    .ok()
+                    .filter(|s| !s.is_empty())?,
             })
         }
     }
@@ -390,7 +389,9 @@ fn urlencode(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for b in s.bytes() {
         match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => out.push(b as char),
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                out.push(b as char)
+            }
             _ => out.push_str(&format!("%{:02X}", b)),
         }
     }

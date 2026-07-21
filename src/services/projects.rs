@@ -60,13 +60,18 @@ pub async fn create(
     input: CreateProjectInput,
 ) -> Result<Project, AppError> {
     if !VALID_OWNER_TYPES.contains(&input.owner_type.as_str()) {
-        return Err(AppError::Validation("owner_type must be user or guild".into()));
+        return Err(AppError::Validation(
+            "owner_type must be user or guild".into(),
+        ));
     }
     if input.name.trim().len() < 2 {
         return Err(AppError::Validation("name too short".into()));
     }
     let slug = input.slug.trim().to_lowercase();
-    if slug.len() < 2 || slug.len() > 80 || !slug.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+    if slug.len() < 2
+        || slug.len() > 80
+        || !slug.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+    {
         return Err(AppError::Validation(
             "slug must be 2-80 lowercase alphanumeric/dash".into(),
         ));
@@ -236,8 +241,7 @@ pub async fn recommend_for_user(
         return Ok(Vec::new());
     }
     let domain_names: Vec<String> = user_domains.iter().map(|(d, _)| d.clone()).collect();
-    let domain_wpc: std::collections::HashMap<String, i64> =
-        user_domains.iter().cloned().collect();
+    let domain_wpc: std::collections::HashMap<String, i64> = user_domains.iter().cloned().collect();
 
     // 2 + 3 : projets candidats, sans ceux où le user a déjà un deliverable verified.
     let projects: Vec<Project> = sqlx::query_as(
@@ -281,7 +285,11 @@ pub async fn recommend_for_user(
                     b.to_f64()
                 })
                 .unwrap_or(0.5);
-            let contributor_boost = if project.looking_for_contributors { 1.5 } else { 1.0 };
+            let contributor_boost = if project.looking_for_contributors {
+                1.5
+            } else {
+                1.0
+            };
             let match_score = (user_wpc_on_matched as f64) * health_f * contributor_boost;
             ProjectRecommendation {
                 project,
@@ -293,7 +301,11 @@ pub async fn recommend_for_user(
         .collect();
 
     // 5. Tri + truncate.
-    recos.sort_by(|a, b| b.match_score.partial_cmp(&a.match_score).unwrap_or(std::cmp::Ordering::Equal));
+    recos.sort_by(|a, b| {
+        b.match_score
+            .partial_cmp(&a.match_score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     recos.truncate(limit as usize);
     Ok(recos)
 }
@@ -514,13 +526,11 @@ pub async fn admin_set_curated(
     project_id: Uuid,
     curated: bool,
 ) -> Result<(), AppError> {
-    sqlx::query(
-        "UPDATE projects SET curated_by_admin = $1, updated_at = NOW() WHERE id = $2",
-    )
-    .bind(curated)
-    .bind(project_id)
-    .execute(db)
-    .await?;
+    sqlx::query("UPDATE projects SET curated_by_admin = $1, updated_at = NOW() WHERE id = $2")
+        .bind(curated)
+        .bind(project_id)
+        .execute(db)
+        .await?;
     Ok(())
 }
 
@@ -568,7 +578,10 @@ async fn check_maintainer(
             .bind(requester_id)
             .fetch_optional(db)
             .await?;
-            if matches!(role.map(|(r,)| r).as_deref(), Some("founder") | Some("officer")) {
+            if matches!(
+                role.map(|(r,)| r).as_deref(),
+                Some("founder") | Some("officer")
+            ) {
                 return Ok(());
             }
         }

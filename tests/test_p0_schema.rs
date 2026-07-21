@@ -8,8 +8,8 @@
 //!
 //! Voir docs/challenges-target-model-and-roadmap.md pour le rationale.
 
-use sqlx::postgres::{PgPool, PgPoolOptions};
 use sqlx::Row;
+use sqlx::postgres::{PgPool, PgPoolOptions};
 use uuid::Uuid;
 
 /// Setup a fresh test database with all migrations applied.
@@ -138,14 +138,8 @@ async fn skill_nodes_seed_has_expected_counts() {
             .await
             .expect("count atomic skills failed");
 
-    assert_eq!(
-        total, 337,
-        "Expected 337 total skill_nodes, got {total}"
-    );
-    assert_eq!(
-        categories, 47,
-        "Expected 47 categories, got {categories}"
-    );
+    assert_eq!(total, 337, "Expected 337 total skill_nodes, got {total}");
+    assert_eq!(categories, 47, "Expected 47 categories, got {categories}");
     assert_eq!(atomic, 290, "Expected 290 atomic skills, got {atomic}");
 
     db.close().await;
@@ -156,12 +150,11 @@ async fn skill_nodes_seed_has_expected_counts() {
 async fn skill_nodes_cover_all_seven_domains() {
     let (db, db_name) = setup_test_db().await;
 
-    let domains: Vec<(String, i64)> = sqlx::query_as(
-        "SELECT domain, COUNT(*) FROM skill_nodes GROUP BY domain ORDER BY domain",
-    )
-    .fetch_all(&db)
-    .await
-    .expect("Group by domain failed");
+    let domains: Vec<(String, i64)> =
+        sqlx::query_as("SELECT domain, COUNT(*) FROM skill_nodes GROUP BY domain ORDER BY domain")
+            .fetch_all(&db)
+            .await
+            .expect("Group by domain failed");
 
     let domain_names: Vec<String> = domains.iter().map(|(d, _)| d.clone()).collect();
 
@@ -233,7 +226,10 @@ async fn slice_ingestion_mode_check_constraint_rejects_bad_values() {
     .bind(user_id)
     .execute(&db)
     .await;
-    assert!(ok.is_ok(), "Valid slice_ingestion_mode='auto' should insert");
+    assert!(
+        ok.is_ok(),
+        "Valid slice_ingestion_mode='auto' should insert"
+    );
 
     // Invalid slice_ingestion_mode should be rejected
     let bad = sqlx::query(
@@ -323,12 +319,11 @@ async fn slice_skills_unique_primary_per_slice() {
     let (db, db_name) = setup_test_db().await;
 
     // Fetch two skill_nodes to associate
-    let skill_ids: Vec<Uuid> = sqlx::query_scalar(
-        "SELECT id FROM skill_nodes WHERE parent_id IS NOT NULL LIMIT 2",
-    )
-    .fetch_all(&db)
-    .await
-    .expect("Failed to fetch skill_nodes");
+    let skill_ids: Vec<Uuid> =
+        sqlx::query_scalar("SELECT id FROM skill_nodes WHERE parent_id IS NOT NULL LIMIT 2")
+            .fetch_all(&db)
+            .await
+            .expect("Failed to fetch skill_nodes");
     assert_eq!(skill_ids.len(), 2, "Need at least 2 seeded atomic skills");
 
     // Set up project + slice
@@ -401,21 +396,18 @@ async fn user_skills_proficiency_default_is_one() {
     let user_id = Uuid::new_v4();
     insert_test_user(&db, user_id).await;
 
-    let skill_id: Uuid = sqlx::query_scalar(
-        "SELECT id FROM skill_nodes WHERE parent_id IS NOT NULL LIMIT 1",
-    )
-    .fetch_one(&db)
-    .await
-    .expect("Failed to fetch a skill_node");
+    let skill_id: Uuid =
+        sqlx::query_scalar("SELECT id FROM skill_nodes WHERE parent_id IS NOT NULL LIMIT 1")
+            .fetch_one(&db)
+            .await
+            .expect("Failed to fetch a skill_node");
 
-    sqlx::query(
-        "INSERT INTO user_skills (user_id, skill_id) VALUES ($1, $2)",
-    )
-    .bind(user_id)
-    .bind(skill_id)
-    .execute(&db)
-    .await
-    .expect("Failed to insert user_skill");
+    sqlx::query("INSERT INTO user_skills (user_id, skill_id) VALUES ($1, $2)")
+        .bind(user_id)
+        .bind(skill_id)
+        .execute(&db)
+        .await
+        .expect("Failed to insert user_skill");
 
     let row = sqlx::query(
         "SELECT proven_count, weighted_proven_count, proficiency_level

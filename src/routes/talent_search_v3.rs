@@ -34,10 +34,10 @@ pub fn talent_search_v3_routes() -> Router<AppState> {
 
 #[derive(Debug, Deserialize)]
 struct QueryV3 {
-    orientation: Option<String>,   // slug — obligatoire pour un vrai match
-    skills: Option<String>,        // CSV : "react,typescript"
+    orientation: Option<String>, // slug — obligatoire pour un vrai match
+    skills: Option<String>,      // CSV : "react,typescript"
     #[serde(default = "default_mode")]
-    mode: String,                  // active | learning | both
+    mode: String, // active | learning | both
     #[serde(default)]
     only_primary: bool,
     #[serde(default = "default_min_proficiency")]
@@ -49,10 +49,18 @@ struct QueryV3 {
     #[serde(default = "default_page")]
     page: i64,
 }
-fn default_mode() -> String { "active".into() }
-fn default_min_proficiency() -> i16 { 1 }
-fn default_per_page() -> i64 { 20 }
-fn default_page() -> i64 { 1 }
+fn default_mode() -> String {
+    "active".into()
+}
+fn default_min_proficiency() -> i16 {
+    1
+}
+fn default_per_page() -> i64 {
+    20
+}
+fn default_page() -> i64 {
+    1
+}
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
 struct TalentRow {
@@ -92,7 +100,11 @@ async fn search_v3(
         .unwrap_or_default();
 
     // Le mode filter : 'both' = pas de filtre, sinon exact match.
-    let mode_filter: Option<&str> = if q.mode == "both" { None } else { Some(&q.mode) };
+    let mode_filter: Option<&str> = if q.mode == "both" {
+        None
+    } else {
+        Some(&q.mode)
+    };
 
     // WPC est calculé même si aucun skill demandé (fallback : SUM sur tous
     // les skills de l'user).
@@ -136,7 +148,11 @@ async fn search_v3(
         "#,
     )
     .bind(q.orientation.as_deref())
-    .bind(if skills.is_empty() { None } else { Some(&skills) })
+    .bind(if skills.is_empty() {
+        None
+    } else {
+        Some(&skills)
+    })
     .bind(mode_filter)
     .bind(q.only_primary)
     .bind(q.min_proficiency)

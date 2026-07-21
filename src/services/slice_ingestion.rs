@@ -196,10 +196,7 @@ async fn insert_slice_from_issue(
     issue: &GithubIssue,
 ) -> Result<bool, AppError> {
     let title = truncate(&issue.title, 300);
-    let description = truncate(
-        issue.body.as_deref().unwrap_or("(no description)"),
-        4000,
-    );
+    let description = truncate(issue.body.as_deref().unwrap_or("(no description)"), 4000);
     let labels: Vec<String> = issue.labels.iter().map(|l| l.name.clone()).collect();
     let metadata = serde_json::json!({
         "source": "github_polling",
@@ -309,9 +306,7 @@ pub async fn dispatch_ingestors(
 
 /// Poll tous les projets en mode `auto` ou `curator_review` qui ont un repo
 /// GitHub configuré et au moins un curated_label. Retourne le rapport agrégé.
-pub async fn poll_all_github_projects(
-    db: &PgPool,
-) -> Result<Vec<IngestReport>, AppError> {
+pub async fn poll_all_github_projects(db: &PgPool) -> Result<Vec<IngestReport>, AppError> {
     let projects: Vec<(Uuid,)> = sqlx::query_as(
         r#"
         SELECT id FROM projects

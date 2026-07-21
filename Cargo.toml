@@ -67,9 +67,10 @@ rust-s3 = { version = "0.35", features = ["tokio-rustls-tls"], default-features 
 metrics = "0.24"
 metrics-exporter-prometheus = "0.16"
 
-# gRPC
-tonic = "0.12"
-prost = "0.13"
+# gRPC (tonic 0.14 split: runtime split into tonic + tonic-prost) (tonic 0.14 split: runtime split into tonic + tonic-prost)
+tonic = "0.14"
+tonic-prost = "0.14"
+prost = "0.14"
 
 # WebSocket
 futures-util = "0.3"
@@ -122,8 +123,9 @@ name = "skilluv-github-ingest"
 path = "src/bin/github_ingest.rs"
 
 [build-dependencies]
-tonic-build = { version = "0.12", features = ["prost"] }
-protox = "0.7"
+tonic-build = "0.14"
+tonic-prost-build = "0.14"
+protox = "0.9"
 
 [dev-dependencies]
 reqwest = { version = "0.12", features = ["json", "cookies"] }

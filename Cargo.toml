@@ -122,7 +122,7 @@ name = "skilluv-github-ingest"
 path = "src/bin/github_ingest.rs"
 
 [build-dependencies]
-tonic-build = { version = "0.12", features = ["prost"] }
+tonic-build = { version = "0.13", features = ["prost"] }
 protox = "0.7"
 
 [dev-dependencies]

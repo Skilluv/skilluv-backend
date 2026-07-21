@@ -10,7 +10,7 @@
 mod common;
 
 use common::TestApp;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use serde_json::json;
 use sha2::Sha256;
 use tokio::sync::Mutex;
@@ -27,7 +27,7 @@ static ENV_MUTEX: Mutex<()> = Mutex::const_new(());
 fn sign_stripe_webhook(secret: &str, payload: &[u8]) -> String {
     let ts = chrono::Utc::now().timestamp();
     let signed = format!("{ts}.{}", String::from_utf8_lossy(payload));
-    let mut mac = <HmacSha256 as Mac>::new_from_slice(secret.as_bytes()).unwrap();
+    let mut mac = <HmacSha256 as KeyInit>::new_from_slice(secret.as_bytes()).unwrap();
     mac.update(signed.as_bytes());
     let hex_sig = hex::encode(mac.finalize().into_bytes());
     format!("t={ts},v1={hex_sig}")

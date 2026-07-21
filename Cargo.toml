@@ -53,8 +53,8 @@ url = "2"
 
 
 # HMAC for webhook signatures
-hmac = "0.12"
-sha2 = "0.10"
+hmac = "0.13"
+sha2 = "0.11"
 hex = "0.4"
 base64 = "0.22"
 getrandom = "0.2"
@@ -95,7 +95,7 @@ chacha20poly1305 = "0.10"
 # Web push VAPID natif (pure Rust, sans OpenSSL) — RFC 8291 + 8292
 p256 = { version = "0.13", features = ["ecdh", "ecdsa", "pkcs8"] }
 aes-gcm = "0.10"
-hkdf = "0.12"
+hkdf = "0.13"
 
 # OIDC B2B SSO (enterprise) — discovery, PKCE, JWKS rotation, ID token verify.
 openidconnect = "3"

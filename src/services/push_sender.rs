@@ -19,7 +19,7 @@ use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD as B64_URL;
 use elliptic_curve::sec1::ToEncodedPoint;
 use hkdf::Hkdf;
-use hmac::Mac;
+use hmac::{KeyInit as HmacKeyInit, Mac};
 use p256::PublicKey;
 use p256::ecdh::EphemeralSecret;
 use p256::ecdsa::signature::Signer;
@@ -292,7 +292,7 @@ fn build_vapid_jwt(vapid: &VapidConfig, audience: &str) -> Result<String, AppErr
 // Silence unused import warning
 #[allow(dead_code)]
 fn _hmac_hint() -> impl Mac {
-    <hmac::Hmac<Sha256> as hmac::Mac>::new_from_slice(&[0u8; 32]).unwrap()
+    <hmac::Hmac<Sha256> as HmacKeyInit>::new_from_slice(&[0u8; 32]).unwrap()
 }
 
 #[cfg(test)]

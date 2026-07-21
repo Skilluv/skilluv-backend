@@ -1,7 +1,7 @@
 //! Paystack + Flutterwave adapters — Phase 4.2 + 4.3.
 
 use async_trait::async_trait;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use serde::Deserialize;
 use sha2::{Sha256, Sha512};
 
@@ -144,7 +144,7 @@ impl PaymentProvider for PaystackProvider {
     fn verify_webhook(&self, payload: &[u8], signature: &str) -> Result<WebhookEvent, AppError> {
         // Paystack signs the raw body with HMAC-SHA512 using the secret key, in the
         // `x-paystack-signature` header.
-        let mut mac = <HmacSha512 as Mac>::new_from_slice(self.cfg.secret_key.as_bytes())
+        let mut mac = <HmacSha512 as KeyInit>::new_from_slice(self.cfg.secret_key.as_bytes())
             .map_err(|_| AppError::Internal("paystack hmac init".into()))?;
         mac.update(payload);
         let expected = hex::encode(mac.finalize().into_bytes());
@@ -422,7 +422,7 @@ mod tests {
 
     #[test]
     fn hmac_sha512_paystack_expected_hex_length() {
-        let mut mac = <HmacSha512 as Mac>::new_from_slice(b"secret").unwrap();
+        let mut mac = <HmacSha512 as KeyInit>::new_from_slice(b"secret").unwrap();
         mac.update(b"body");
         let hex = hex::encode(mac.finalize().into_bytes());
         assert_eq!(hex.len(), 128); // sha512 → 64 bytes → 128 hex chars

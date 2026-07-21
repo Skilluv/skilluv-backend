@@ -10,7 +10,7 @@ use chacha20poly1305::{
     aead::{Aead, AeadCore, KeyInit, OsRng},
 };
 use chrono::{DateTime, Utc};
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit as HmacKeyInit, Mac};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use sqlx::PgPool;
@@ -29,7 +29,7 @@ pub const USER_AGENT: &str = "skilluv-backend";
 /// Derive a 32-byte symmetric key from the JWT secret. Domain-separated so that the same
 /// JWT_SECRET cannot be misused as both signing key and encryption key.
 fn derive_token_key(jwt_secret: &str) -> [u8; 32] {
-    let mut mac = <HmacSha256 as Mac>::new_from_slice(jwt_secret.as_bytes())
+    let mut mac = <HmacSha256 as HmacKeyInit>::new_from_slice(jwt_secret.as_bytes())
         .expect("HMAC accepts any key length");
     mac.update(b"skilluv-github-token-v1");
     let bytes = mac.finalize().into_bytes();

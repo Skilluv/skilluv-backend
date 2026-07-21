@@ -5,7 +5,7 @@
 //! limited; it iterates over opted-in users and dispatches digest emails.
 
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use serde::Serialize;
 use sha2::Sha256;
 use sqlx::PgPool;

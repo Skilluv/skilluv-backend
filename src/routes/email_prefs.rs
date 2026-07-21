@@ -130,7 +130,10 @@ async fn unsubscribe(
         "#,
         col = column
     );
-    sqlx::query(&sql).bind(user_id).execute(&state.db).await?;
+    sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
+        .bind(user_id)
+        .execute(&state.db)
+        .await?;
 
     tracing::info!(user_id = %user_id, kind = %query.kind, "user unsubscribed");
 
@@ -266,7 +269,7 @@ async fn admin_run_weekly_digest(
 
 /// Derive the unsubscribe-token HMAC key from JWT_SECRET. Avoids a separate secret in env.
 fn unsub_secret(jwt_secret: &str) -> Vec<u8> {
-    use hmac::{Hmac, Mac};
+    use hmac::{Hmac, KeyInit, Mac};
     type HmacSha256 = Hmac<sha2::Sha256>;
     let mut mac =
         HmacSha256::new_from_slice(jwt_secret.as_bytes()).expect("HMAC accepts any key size");

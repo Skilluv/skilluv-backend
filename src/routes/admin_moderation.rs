@@ -184,8 +184,8 @@ async fn list_users(
         created_at: chrono::DateTime<chrono::Utc>,
     }
 
-    let mut db_query = sqlx::query_as::<_, UserSummary>(&sql);
-    let mut cnt_query = sqlx::query_scalar::<_, i64>(&count_sql);
+    let mut db_query = sqlx::query_as::<_, UserSummary>(sqlx::AssertSqlSafe(sql.as_str()));
+    let mut cnt_query = sqlx::query_scalar::<_, i64>(sqlx::AssertSqlSafe(count_sql.as_str()));
 
     if let Some(ref role) = query.role {
         db_query = db_query.bind(role);
@@ -469,8 +469,8 @@ async fn list_reports(
     );
     let count_sql = format!("SELECT COUNT(*) FROM reports r {where_str}");
 
-    let mut db_query = sqlx::query_as::<_, Report>(&sql);
-    let mut cnt_query = sqlx::query_scalar::<_, i64>(&count_sql);
+    let mut db_query = sqlx::query_as::<_, Report>(sqlx::AssertSqlSafe(sql.as_str()));
+    let mut cnt_query = sqlx::query_scalar::<_, i64>(sqlx::AssertSqlSafe(count_sql.as_str()));
 
     if let Some(ref status) = query.status {
         db_query = db_query.bind(status);

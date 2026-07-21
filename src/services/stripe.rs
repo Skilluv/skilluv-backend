@@ -5,7 +5,7 @@
 //! create Billing Portal session.
 
 use chrono::Utc;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 
@@ -201,7 +201,7 @@ pub fn verify_webhook_signature(
         return Err(AppError::Unauthorized);
     }
     let signed_payload = format!("{ts}.{}", String::from_utf8_lossy(payload));
-    let mut mac = <HmacSha256 as Mac>::new_from_slice(webhook_secret.as_bytes())
+    let mut mac = <HmacSha256 as KeyInit>::new_from_slice(webhook_secret.as_bytes())
         .map_err(|_| AppError::Internal("hmac init failed".into()))?;
     mac.update(signed_payload.as_bytes());
     let expected = mac.finalize().into_bytes();
@@ -550,7 +550,7 @@ mod tests {
         let payload = br#"{"id":"evt_test","type":"checkout.session.completed"}"#;
         let ts = Utc::now().timestamp();
         let signed = format!("{ts}.{}", String::from_utf8_lossy(payload));
-        let mut mac = <HmacSha256 as Mac>::new_from_slice(secret.as_bytes()).unwrap();
+        let mut mac = <HmacSha256 as KeyInit>::new_from_slice(secret.as_bytes()).unwrap();
         mac.update(signed.as_bytes());
         let sig_hex = hex::encode(mac.finalize().into_bytes());
         let header = format!("t={ts},v1={sig_hex}");
@@ -568,7 +568,7 @@ mod tests {
     fn webhook_sig_expired_rejected() {
         let secret = "s";
         let ts = Utc::now().timestamp() - 999_999;
-        let mut mac = <HmacSha256 as Mac>::new_from_slice(secret.as_bytes()).unwrap();
+        let mut mac = <HmacSha256 as KeyInit>::new_from_slice(secret.as_bytes()).unwrap();
         let signed = format!("{ts}.{{}}");
         mac.update(signed.as_bytes());
         let sig_hex = hex::encode(mac.finalize().into_bytes());

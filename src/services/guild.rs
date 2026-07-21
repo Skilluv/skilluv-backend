@@ -683,7 +683,7 @@ pub async fn leaderboard(
         LIMIT $2
         "#
     );
-    let rows = sqlx::query_as(&sql)
+    let rows = sqlx::query_as(sqlx::AssertSqlSafe(sql.as_str()))
         .bind(division_filter)
         .bind(limit.clamp(1, 200))
         .fetch_all(db)

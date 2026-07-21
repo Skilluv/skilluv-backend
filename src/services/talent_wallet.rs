@@ -244,7 +244,7 @@ async fn apply_ledger_entry(
         )
     };
 
-    let updated: Option<(BigDecimal,)> = sqlx::query_as(&sql)
+    let updated: Option<(BigDecimal,)> = sqlx::query_as(sqlx::AssertSqlSafe(sql.as_str()))
         .bind(entry.delta)
         .bind(entry.user_id)
         .fetch_optional(&mut *tx)

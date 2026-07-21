@@ -14,10 +14,10 @@ use axum::response::{AppendHeaders, IntoResponse, Redirect};
 use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use openidconnect::core::{CoreClient, CoreProviderMetadata, CoreResponseType};
-use openidconnect::reqwest::async_http_client;
 use openidconnect::{
-    AuthenticationFlow, AuthorizationCode, ClientId, ClientSecret, CsrfToken, IssuerUrl, Nonce,
-    PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope, TokenResponse,
+    AuthenticationFlow, AuthorizationCode, ClientId, ClientSecret, CsrfToken, EndpointMaybeSet,
+    EndpointNotSet, EndpointSet, IssuerUrl, Nonce, PkceCodeChallenge, PkceCodeVerifier,
+    RedirectUrl, Scope, TokenResponse,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -243,18 +243,40 @@ fn start_url(state: &AppState, slug: &str) -> String {
     )
 }
 
+/// Concrete typestate of the client after `set_redirect_uri`.
+/// openidconnect 4 uses phantom types to prove endpoints are set before use.
+/// Token + UserInfo come from discovery, so they're `EndpointMaybeSet`.
+type SsoClient = CoreClient<
+    EndpointSet,      // AuthUrl (set by us via set_redirect_uri path)
+    EndpointNotSet,   // DeviceAuthorizationUrl
+    EndpointNotSet,   // IntrospectionUrl
+    EndpointNotSet,   // RevocationUrl
+    EndpointMaybeSet, // TokenUrl (discovered)
+    EndpointMaybeSet, // UserInfoUrl (discovered)
+>;
+
+/// Shared reqwest client for OIDC discovery + token exchange (openidconnect 4).
+fn oidc_http_client() -> Result<openidconnect::reqwest::Client, AppError> {
+    openidconnect::reqwest::ClientBuilder::new()
+        // Follow redirects only when explicit — protects against SSRF via 3xx.
+        .redirect(openidconnect::reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|e| AppError::Internal(format!("oidc http client init: {e}")))
+}
+
 async fn build_client(
     row: &sso::SsoConfigRow,
     key: &[u8; 32],
     redirect_uri: String,
-) -> Result<CoreClient, AppError> {
+) -> Result<SsoClient, AppError> {
     let secret_plain =
         sso::decrypt_secret(key, &row.client_secret_encrypted, &row.client_secret_nonce)?;
 
     let issuer_url = IssuerUrl::new(row.issuer.clone())
         .map_err(|e| AppError::Internal(format!("invalid issuer URL: {e}")))?;
 
-    let provider_metadata = CoreProviderMetadata::discover_async(issuer_url, async_http_client)
+    let http_client = oidc_http_client()?;
+    let provider_metadata = CoreProviderMetadata::discover_async(issuer_url, &http_client)
         .await
         .map_err(|e| AppError::Internal(format!("OIDC discovery failed: {e}")))?;
 
@@ -342,10 +364,12 @@ async fn callback(
 
     let client = build_client(&cfg, &key, callback_url(&state, &slug)).await?;
 
+    let http_client = oidc_http_client()?;
     let token_response = client
         .exchange_code(AuthorizationCode::new(q.code))
+        .map_err(|e| AppError::Internal(format!("OIDC token exchange config: {e}")))?
         .set_pkce_verifier(PkceCodeVerifier::new(login_state.pkce_verifier))
-        .request_async(async_http_client)
+        .request_async(&http_client)
         .await
         .map_err(|e| AppError::Internal(format!("OIDC token exchange failed: {e}")))?;
 

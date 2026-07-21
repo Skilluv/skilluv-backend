@@ -51,10 +51,12 @@ impl TestApp {
             .await
             .expect("Failed to connect to admin DB");
 
-        sqlx::query(&format!("CREATE DATABASE \"{db_name}\""))
-            .execute(&admin_pool)
-            .await
-            .expect("Failed to create test DB");
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "CREATE DATABASE \"{db_name}\""
+        )))
+        .execute(&admin_pool)
+        .await
+        .expect("Failed to create test DB");
 
         admin_pool.close().await;
 
@@ -527,13 +529,13 @@ impl Drop for TestApp {
 
                 if let Some(pool) = pool {
                     // Terminate connections to test DB
-                    let _ = sqlx::query(&format!(
+                    let _ = sqlx::query(sqlx::AssertSqlSafe(format!(
                         "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{db_name}'"
-                    ))
+                    )))
                     .execute(&pool)
                     .await;
 
-                    let _ = sqlx::query(&format!("DROP DATABASE IF EXISTS \"{db_name}\""))
+                    let _ = sqlx::query(sqlx::AssertSqlSafe(format!("DROP DATABASE IF EXISTS \"{db_name}\"")))
                         .execute(&pool)
                         .await;
                 }

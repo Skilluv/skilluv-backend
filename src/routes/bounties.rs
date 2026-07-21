@@ -18,7 +18,7 @@ use axum::http::HeaderMap;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use bigdecimal::BigDecimal;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use sha2::Sha256;
@@ -530,7 +530,7 @@ async fn github_webhook(
         .and_then(|v| v.to_str().ok())
         .ok_or(AppError::Unauthorized)?;
     let expected = format!("sha256={}", {
-        let mut mac = <HmacSha256 as Mac>::new_from_slice(secret.as_bytes())
+        let mut mac = <HmacSha256 as KeyInit>::new_from_slice(secret.as_bytes())
             .map_err(|_| AppError::Internal("hmac init".into()))?;
         mac.update(&body);
         hex::encode(mac.finalize().into_bytes())

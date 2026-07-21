@@ -258,7 +258,7 @@ pub async fn list_posts(
         "#
     );
 
-    let rows: Vec<ForumRow241> = sqlx::query_as(&sql)
+    let rows: Vec<ForumRow241> = sqlx::query_as(sqlx::AssertSqlSafe(sql.as_str()))
         .bind(filters.category_slug)
         .bind(filters.kind)
         .bind(filters.limit.clamp(1, 100))

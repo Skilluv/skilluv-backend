@@ -54,10 +54,7 @@ async fn cleanup_test_db(db_name: &str) {
     admin_pool.close().await;
 }
 
-async fn insert_team_challenge(
-    db: &PgPool,
-    composition: Option<serde_json::Value>,
-) -> Uuid {
+async fn insert_team_challenge(db: &PgPool, composition: Option<serde_json::Value>) -> Uuid {
     sqlx::query_scalar(
         "INSERT INTO challenge_templates
             (title, description, instructions, skill_domain, difficulty,
@@ -91,13 +88,12 @@ async fn team_composition_is_persisted_and_readable() {
 
     let challenge_id = insert_team_challenge(&db, Some(composition.clone())).await;
 
-    let stored: serde_json::Value = sqlx::query_scalar(
-        "SELECT team_composition FROM challenge_templates WHERE id = $1",
-    )
-    .bind(challenge_id)
-    .fetch_one(&db)
-    .await
-    .expect("fetch");
+    let stored: serde_json::Value =
+        sqlx::query_scalar("SELECT team_composition FROM challenge_templates WHERE id = $1")
+            .bind(challenge_id)
+            .fetch_one(&db)
+            .await
+            .expect("fetch");
 
     assert_eq!(stored, composition);
 
@@ -114,13 +110,12 @@ async fn challenge_without_composition_stays_legacy() {
     let (db, name) = setup_test_db().await;
     let challenge_id = insert_team_challenge(&db, None).await;
 
-    let stored: Option<serde_json::Value> = sqlx::query_scalar(
-        "SELECT team_composition FROM challenge_templates WHERE id = $1",
-    )
-    .bind(challenge_id)
-    .fetch_one(&db)
-    .await
-    .expect("fetch");
+    let stored: Option<serde_json::Value> =
+        sqlx::query_scalar("SELECT team_composition FROM challenge_templates WHERE id = $1")
+            .bind(challenge_id)
+            .fetch_one(&db)
+            .await
+            .expect("fetch");
 
     assert!(stored.is_none());
 
@@ -149,7 +144,9 @@ async fn composition_parses_expected_shape() {
         #[serde(default = "one")]
         count: i32,
     }
-    fn one() -> i32 { 1 }
+    fn one() -> i32 {
+        1
+    }
 
     let value = json!([
         { "role_slug": "musician", "count": 1 },

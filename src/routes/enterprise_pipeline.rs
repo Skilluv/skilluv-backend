@@ -25,10 +25,7 @@ pub const VALID_STAGES: &[&str] = &[
 
 pub fn enterprise_pipeline_routes() -> Router<AppState> {
     Router::new()
-        .route(
-            "/enterprise/pipeline",
-            get(list_entries).post(add_entry),
-        )
+        .route("/enterprise/pipeline", get(list_entries).post(add_entry))
         .route(
             "/enterprise/pipeline/{id}",
             put(update_entry).delete(remove_entry),
@@ -46,10 +43,7 @@ fn build_response(data: Value) -> Value {
     })
 }
 
-async fn current_enterprise_for(
-    db: &sqlx::PgPool,
-    user_id: Uuid,
-) -> Result<Uuid, AppError> {
+async fn current_enterprise_for(db: &sqlx::PgPool, user_id: Uuid) -> Result<Uuid, AppError> {
     let row: Option<(Uuid,)> = sqlx::query_as(
         "SELECT enterprise_id FROM enterprise_members WHERE user_id = $1 AND status = 'active' LIMIT 1",
     )
@@ -240,13 +234,11 @@ async fn remove_entry(
     Path(id): Path<Uuid>,
 ) -> Result<Json<Value>, AppError> {
     let enterprise_id = current_enterprise_for(&state.db, auth.user_id).await?;
-    sqlx::query(
-        "DELETE FROM enterprise_pipeline_entries WHERE id = $1 AND enterprise_id = $2",
-    )
-    .bind(id)
-    .bind(enterprise_id)
-    .execute(&state.db)
-    .await?;
+    sqlx::query("DELETE FROM enterprise_pipeline_entries WHERE id = $1 AND enterprise_id = $2")
+        .bind(id)
+        .bind(enterprise_id)
+        .execute(&state.db)
+        .await?;
     Ok(Json(build_response(json!({ "deleted": true }))))
 }
 
@@ -269,7 +261,9 @@ async fn export_csv(
     .fetch_all(&state.db)
     .await?;
     use sqlx::Row;
-    let mut csv = String::from("stage;username;display_name;skill_domain;title;total_fragments;salary_proposed_eur;notes;last_action_at;created_at\n");
+    let mut csv = String::from(
+        "stage;username;display_name;skill_domain;title;total_fragments;salary_proposed_eur;notes;last_action_at;created_at\n",
+    );
     for r in &rows {
         let line = format!(
             "{};{};{};{};{};{};{};{};{};{}\n",
@@ -279,10 +273,17 @@ async fn export_csv(
             r.get::<String, _>("skill_domain"),
             r.get::<String, _>("title"),
             r.get::<i32, _>("total_fragments"),
-            r.get::<Option<i32>, _>("salary_proposed_eur").map(|v| v.to_string()).unwrap_or_default(),
-            r.get::<Option<String>, _>("notes").unwrap_or_default().replace(';', ",").replace('\n', " "),
-            r.get::<chrono::DateTime<chrono::Utc>, _>("last_action_at").format("%Y-%m-%dT%H:%M:%S"),
-            r.get::<chrono::DateTime<chrono::Utc>, _>("created_at").format("%Y-%m-%dT%H:%M:%S"),
+            r.get::<Option<i32>, _>("salary_proposed_eur")
+                .map(|v| v.to_string())
+                .unwrap_or_default(),
+            r.get::<Option<String>, _>("notes")
+                .unwrap_or_default()
+                .replace(';', ",")
+                .replace('\n', " "),
+            r.get::<chrono::DateTime<chrono::Utc>, _>("last_action_at")
+                .format("%Y-%m-%dT%H:%M:%S"),
+            r.get::<chrono::DateTime<chrono::Utc>, _>("created_at")
+                .format("%Y-%m-%dT%H:%M:%S"),
         );
         csv.push_str(&line);
     }

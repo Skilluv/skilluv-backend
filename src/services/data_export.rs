@@ -234,11 +234,10 @@ fn zip_err(e: zip::result::ZipError) -> AppError {
 }
 
 async fn fetch_user(db: &PgPool, user_id: Uuid) -> Result<Value, AppError> {
-    let row: Option<sqlx::postgres::PgRow> =
-        sqlx::query("SELECT * FROM users WHERE id = $1")
-            .bind(user_id)
-            .fetch_optional(db)
-            .await?;
+    let row: Option<sqlx::postgres::PgRow> = sqlx::query("SELECT * FROM users WHERE id = $1")
+        .bind(user_id)
+        .fetch_optional(db)
+        .await?;
     match row {
         Some(r) => Ok(pg_row_to_json(&r, &["password_hash", "totp_secret"])),
         None => Err(AppError::NotFound("user not found".into())),

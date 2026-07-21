@@ -154,18 +154,17 @@ async fn list_reviews(
     _auth: AuthUser,
     Path(deliverable_id): Path<Uuid>,
 ) -> Result<Json<Value>, AppError> {
-    let reviews: Vec<(Uuid, Uuid, String, String, chrono::DateTime<chrono::Utc>)> =
-        sqlx::query_as(
-            r#"
+    let reviews: Vec<(Uuid, Uuid, String, String, chrono::DateTime<chrono::Utc>)> = sqlx::query_as(
+        r#"
             SELECT id, reviewer_user_id, verdict, body, created_at
             FROM reviews
             WHERE deliverable_id = $1
             ORDER BY created_at ASC
             "#,
-        )
-        .bind(deliverable_id)
-        .fetch_all(&state.db)
-        .await?;
+    )
+    .bind(deliverable_id)
+    .fetch_all(&state.db)
+    .await?;
 
     let items: Vec<Value> = reviews
         .into_iter()

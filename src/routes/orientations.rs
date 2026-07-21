@@ -16,7 +16,7 @@ use axum::response::IntoResponse;
 use axum::routing::{get, patch};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 use crate::AppState;
@@ -29,7 +29,10 @@ pub fn orientation_routes() -> Router<AppState> {
     Router::new()
         .route("/orientations", get(list_orientations))
         .route("/orientations/{slug}", get(get_orientation))
-        .route("/users/me/orientations", get(my_orientations).post(register_orientation))
+        .route(
+            "/users/me/orientations",
+            get(my_orientations).post(register_orientation),
+        )
         .route(
             "/users/me/orientations/{slug}",
             patch(update_orientation).delete(end_orientation),
@@ -68,7 +71,9 @@ struct CatalogQuery {
     include_archived: bool,
 }
 
-fn default_limit() -> i64 { 50 }
+fn default_limit() -> i64 {
+    50
+}
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
 struct OrientationRow {
@@ -148,13 +153,15 @@ async fn get_orientation(
 
     let skills_json: Vec<Value> = skills
         .into_iter()
-        .map(|(slug, name, core, rec, w)| json!({
-            "slug": slug,
-            "display_name": name,
-            "is_core": core,
-            "is_recommended": rec,
-            "weight": w,
-        }))
+        .map(|(slug, name, core, rec, w)| {
+            json!({
+                "slug": slug,
+                "display_name": name,
+                "is_core": core,
+                "is_recommended": rec,
+                "weight": w,
+            })
+        })
         .collect();
 
     Ok(Json(wrap(json!({
@@ -209,7 +216,7 @@ async fn my_orientations(
 struct RegisterBody {
     slug: String,
     #[serde(default = "default_mode")]
-    mode: String,          // 'learning' | 'active'
+    mode: String, // 'learning' | 'active'
     #[serde(default)]
     is_primary: bool,
     #[serde(default)]
@@ -219,7 +226,9 @@ struct RegisterBody {
     #[serde(default)]
     notes: Option<String>,
 }
-fn default_mode() -> String { "learning".into() }
+fn default_mode() -> String {
+    "learning".into()
+}
 
 async fn register_orientation(
     State(state): State<AppState>,
@@ -227,7 +236,9 @@ async fn register_orientation(
     Json(body): Json<RegisterBody>,
 ) -> Result<impl IntoResponse, AppError> {
     if !matches!(body.mode.as_str(), "learning" | "active") {
-        return Err(AppError::Validation("mode must be 'learning' or 'active'".into()));
+        return Err(AppError::Validation(
+            "mode must be 'learning' or 'active'".into(),
+        ));
     }
 
     let orientation: Option<(Uuid, bool)> = sqlx::query_as(
@@ -237,7 +248,10 @@ async fn register_orientation(
     .fetch_optional(&state.db)
     .await?;
     let (orientation_id, archived) = orientation.ok_or_else(|| {
-        AppError::NotFound(format!("orientation '{}' not found or not curated", body.slug))
+        AppError::NotFound(format!(
+            "orientation '{}' not found or not curated",
+            body.slug
+        ))
     })?;
     if archived {
         return Err(AppError::Validation(
@@ -331,7 +345,9 @@ async fn update_orientation(
 ) -> Result<Json<Value>, AppError> {
     if let Some(m) = &body.mode {
         if !matches!(m.as_str(), "learning" | "active") {
-            return Err(AppError::Validation("mode must be 'learning' or 'active'".into()));
+            return Err(AppError::Validation(
+                "mode must be 'learning' or 'active'".into(),
+            ));
         }
     }
 
@@ -368,7 +384,9 @@ async fn update_orientation(
     .execute(&mut *tx)
     .await?;
     if updated.rows_affected() == 0 {
-        return Err(AppError::NotFound(format!("active orientation '{slug}' not found for this user")));
+        return Err(AppError::NotFound(format!(
+            "active orientation '{slug}' not found for this user"
+        )));
     }
     tx.commit().await?;
     Ok(Json(wrap(json!({ "updated": true, "slug": slug }))))
@@ -387,12 +405,9 @@ async fn orientation_playlist(
     auth: AuthUser,
     Path(slug): Path<String>,
 ) -> Result<Json<Value>, AppError> {
-    let playlist = crate::services::orientations_playlist::playlist_for(
-        &state.db,
-        auth.user_id,
-        &slug,
-    )
-    .await?;
+    let playlist =
+        crate::services::orientations_playlist::playlist_for(&state.db, auth.user_id, &slug)
+            .await?;
     Ok(Json(wrap(json!(playlist))))
 }
 
@@ -415,7 +430,9 @@ async fn end_orientation(
     .execute(&state.db)
     .await?;
     if res.rows_affected() == 0 {
-        return Err(AppError::NotFound(format!("active orientation '{slug}' not found")));
+        return Err(AppError::NotFound(format!(
+            "active orientation '{slug}' not found"
+        )));
     }
     Ok(Json(wrap(json!({ "ended": true, "slug": slug }))))
 }
@@ -435,12 +452,11 @@ async fn public_user_orientations(
 ) -> Result<Json<Value>, AppError> {
     // Si le user a désactivé son profil public, renvoie un tableau vide (pas
     // une 403 : évite l'énumération).
-    let public: Option<bool> = sqlx::query_scalar(
-        "SELECT profile_active FROM users WHERE id = $1 AND is_banned = FALSE",
-    )
-    .bind(user_id)
-    .fetch_optional(&state.db)
-    .await?;
+    let public: Option<bool> =
+        sqlx::query_scalar("SELECT profile_active FROM users WHERE id = $1 AND is_banned = FALSE")
+            .bind(user_id)
+            .fetch_optional(&state.db)
+            .await?;
     let Some(active) = public else {
         return Err(AppError::NotFound("user not found".into()));
     };

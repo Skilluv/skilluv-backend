@@ -345,8 +345,7 @@ async fn create_bounty(
     // Résout (ou crée) le project miroir du repo GitHub — évite d'exiger que
     // l'admin ait pré-créé le project côté enterprise.
     let project_id =
-        resolve_or_create_project(&mut tx, &body.repo_owner, &body.repo_name, auth.user_id)
-            .await?;
+        resolve_or_create_project(&mut tx, &body.repo_owner, &body.repo_name, auth.user_id).await?;
 
     let metadata = json!({
         "source": "bounty_create",
@@ -410,8 +409,7 @@ async fn claim_bounty(
     .bind(id)
     .fetch_optional(&mut *tx)
     .await?;
-    let (status, current_claimant) =
-        row.ok_or(AppError::NotFound("bounty not found".into()))?;
+    let (status, current_claimant) = row.ok_or(AppError::NotFound("bounty not found".into()))?;
     if status != "open" && (status != "claimed" || current_claimant != Some(auth.user_id)) {
         return Err(AppError::Validation(format!(
             "bounty status '{status}' does not accept new claims"
@@ -509,12 +507,10 @@ async fn cancel_bounty(
         },
     )
     .await?;
-    sqlx::query(
-        "UPDATE project_slices SET status = 'closed', closed_at = NOW() WHERE id = $1",
-    )
-    .bind(id)
-    .execute(&state.db)
-    .await?;
+    sqlx::query("UPDATE project_slices SET status = 'closed', closed_at = NOW() WHERE id = $1")
+        .bind(id)
+        .execute(&state.db)
+        .await?;
     Ok(Json(build_response(json!({ "cancelled": true }))))
 }
 
@@ -554,12 +550,11 @@ async fn github_webhook(
         .unwrap_or("")
         .to_string();
 
-    let already: Option<(String,)> = sqlx::query_as(
-        "SELECT delivery_id FROM github_webhook_events WHERE delivery_id = $1",
-    )
-    .bind(&delivery_id)
-    .fetch_optional(&state.db)
-    .await?;
+    let already: Option<(String,)> =
+        sqlx::query_as("SELECT delivery_id FROM github_webhook_events WHERE delivery_id = $1")
+            .bind(&delivery_id)
+            .fetch_optional(&state.db)
+            .await?;
     if already.is_some() {
         return Ok(Json(build_response(json!({ "duplicate": true }))));
     }
@@ -669,9 +664,7 @@ async fn handle_issues_event(state: &AppState, payload: &Value) -> Result<(), Ap
         .and_then(|l| l.as_array())
         .map(|arr| {
             arr.iter()
-                .filter_map(|v| {
-                    v.get("name").and_then(|n| n.as_str()).map(String::from)
-                })
+                .filter_map(|v| v.get("name").and_then(|n| n.as_str()).map(String::from))
                 .collect()
         })
         .unwrap_or_default();
@@ -842,7 +835,9 @@ async fn handle_pull_request_event(state: &AppState, payload: &Value) -> Result<
         .bind(enterprise_id)
         .bind(&platform_share_bd)
         .bind(fee_bps as i32)
-        .bind(format!("bounty payout fee {fee_bps}bps on {reward} credits"))
+        .bind(format!(
+            "bounty payout fee {fee_bps}bps on {reward} credits"
+        ))
         .execute(&state.db)
         .await?;
 
@@ -858,21 +853,26 @@ async fn handle_pull_request_event(state: &AppState, payload: &Value) -> Result<
     // P13.4 : dual payout — en plus des fragments, crédite le talent_wallet
     // en devise réelle (EUR ou XOF selon residency_country). Best-effort :
     // si le wallet n'existe pas ou le taux est 0, on skip silencieusement.
-    let residency: Option<String> = sqlx::query_scalar(
-        "SELECT residency_country FROM talent_wallets WHERE user_id = $1",
-    )
-    .bind(talent_user_id)
-    .fetch_optional(&state.db)
-    .await?
-    .flatten();
+    let residency: Option<String> =
+        sqlx::query_scalar("SELECT residency_country FROM talent_wallets WHERE user_id = $1")
+            .bind(talent_user_id)
+            .fetch_optional(&state.db)
+            .await?
+            .flatten();
     let is_xof_country = matches!(
         residency.as_deref(),
         Some("CI" | "SN" | "BJ" | "TG" | "ML" | "BF" | "NE" | "GW")
     );
     let (wallet_currency, rate_env) = if is_xof_country {
-        (crate::services::talent_wallet::Currency::Xof, "BOUNTY_CREDIT_TO_XOF")
+        (
+            crate::services::talent_wallet::Currency::Xof,
+            "BOUNTY_CREDIT_TO_XOF",
+        )
     } else {
-        (crate::services::talent_wallet::Currency::Eur, "BOUNTY_CREDIT_TO_EUR")
+        (
+            crate::services::talent_wallet::Currency::Eur,
+            "BOUNTY_CREDIT_TO_EUR",
+        )
     };
     let rate: f64 = std::env::var(rate_env)
         .ok()

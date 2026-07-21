@@ -13,7 +13,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use redis::AsyncCommands;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 use crate::AppState;
@@ -66,9 +66,10 @@ async fn my_performance(
     }
 
     // Cache miss : agrège snapshots + appel IA.
-    let ai = state.ai.as_deref().ok_or_else(|| {
-        AppError::Internal("AI client not connected".into())
-    })?;
+    let ai = state
+        .ai
+        .as_deref()
+        .ok_or_else(|| AppError::Internal("AI client not connected".into()))?;
 
     let request = build_analyze_request(&state.db, auth.user_id).await?;
     let started = std::time::Instant::now();
@@ -132,7 +133,14 @@ async fn build_analyze_request(
     user_id: Uuid,
 ) -> Result<crate::grpc::proto::AnalyzePerformanceRequest, AppError> {
     // 1. Deliverables récents (top 50, verified).
-    let deliverables: Vec<(Uuid, String, i32, chrono::DateTime<chrono::Utc>, String, i16)> = sqlx::query_as(
+    let deliverables: Vec<(
+        Uuid,
+        String,
+        i32,
+        chrono::DateTime<chrono::Utc>,
+        String,
+        i16,
+    )> = sqlx::query_as(
         r#"
         SELECT d.id,
                COALESCE(sn.slug, ''),
@@ -156,18 +164,26 @@ async fn build_analyze_request(
 
     let deliverable_snapshots = deliverables
         .into_iter()
-        .map(|(id, slug, wpc, va, vb, diff)| crate::grpc::proto::DeliverableSnapshot {
-            deliverable_id: id.to_string(),
-            skill_slug: slug,
-            wpc,
-            verified_at: va.to_rfc3339(),
-            verifiable_by: vb,
-            difficulty: diff as i32,
-        })
+        .map(
+            |(id, slug, wpc, va, vb, diff)| crate::grpc::proto::DeliverableSnapshot {
+                deliverable_id: id.to_string(),
+                skill_slug: slug,
+                wpc,
+                verified_at: va.to_rfc3339(),
+                verifiable_by: vb,
+                difficulty: diff as i32,
+            },
+        )
         .collect();
 
     // 2. Skills agrégés.
-    let skills: Vec<(String, i32, i32, chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>)> = sqlx::query_as(
+    let skills: Vec<(
+        String,
+        i32,
+        i32,
+        chrono::DateTime<chrono::Utc>,
+        chrono::DateTime<chrono::Utc>,
+    )> = sqlx::query_as(
         r#"
         SELECT sn.slug,
                us.weighted_proven_count,
@@ -185,13 +201,15 @@ async fn build_analyze_request(
 
     let skill_snapshots = skills
         .into_iter()
-        .map(|(slug, wpc, cnt, first, last)| crate::grpc::proto::SkillSnapshot {
-            skill_slug: slug,
-            wpc_total: wpc,
-            evidence_count: cnt,
-            first_evidence_at: first.to_rfc3339(),
-            last_evidence_at: last.to_rfc3339(),
-        })
+        .map(
+            |(slug, wpc, cnt, first, last)| crate::grpc::proto::SkillSnapshot {
+                skill_slug: slug,
+                wpc_total: wpc,
+                evidence_count: cnt,
+                first_evidence_at: first.to_rfc3339(),
+                last_evidence_at: last.to_rfc3339(),
+            },
+        )
         .collect();
 
     // 3. Orientations actives.
@@ -219,13 +237,11 @@ async fn build_analyze_request(
         .collect();
 
     // 4. Rank courant.
-    let current_rank: String = sqlx::query_scalar(
-        "SELECT rank FROM user_ranks WHERE user_id = $1",
-    )
-    .bind(user_id)
-    .fetch_optional(db)
-    .await?
-    .unwrap_or_else(|| "apprenti".to_string());
+    let current_rank: String = sqlx::query_scalar("SELECT rank FROM user_ranks WHERE user_id = $1")
+        .bind(user_id)
+        .fetch_optional(db)
+        .await?
+        .unwrap_or_else(|| "apprenti".to_string());
 
     Ok(crate::grpc::proto::AnalyzePerformanceRequest {
         user_id: user_id.to_string(),
@@ -279,12 +295,19 @@ async fn suggest_orientations(
         }
     }
 
-    let ai = state.ai.as_deref().ok_or_else(|| {
-        AppError::Internal("AI client not connected".into())
-    })?;
+    let ai = state
+        .ai
+        .as_deref()
+        .ok_or_else(|| AppError::Internal("AI client not connected".into()))?;
 
     // Agrège skills user + langues.
-    let skills: Vec<(String, i32, i32, chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>)> = sqlx::query_as(
+    let skills: Vec<(
+        String,
+        i32,
+        i32,
+        chrono::DateTime<chrono::Utc>,
+        chrono::DateTime<chrono::Utc>,
+    )> = sqlx::query_as(
         r#"
         SELECT sn.slug,
                us.weighted_proven_count,
@@ -302,13 +325,15 @@ async fn suggest_orientations(
 
     let skill_snapshots: Vec<_> = skills
         .into_iter()
-        .map(|(slug, wpc, cnt, first, last)| crate::grpc::proto::SkillSnapshot {
-            skill_slug: slug,
-            wpc_total: wpc,
-            evidence_count: cnt,
-            first_evidence_at: first.to_rfc3339(),
-            last_evidence_at: last.to_rfc3339(),
-        })
+        .map(
+            |(slug, wpc, cnt, first, last)| crate::grpc::proto::SkillSnapshot {
+                skill_slug: slug,
+                wpc_total: wpc,
+                evidence_count: cnt,
+                first_evidence_at: first.to_rfc3339(),
+                last_evidence_at: last.to_rfc3339(),
+            },
+        )
         .collect();
 
     // Langues du user (via user_orientations.working_languages ou default).
@@ -368,14 +393,16 @@ async fn suggest_orientations(
         .suggestions
         .iter()
         .filter(|s| known.contains(&s.orientation_slug))
-        .map(|s| json!({
-            "orientation_slug": s.orientation_slug,
-            "confidence": s.confidence,
-            "match_reason": s.match_reason,
-            "required_skills_missing": s.required_skills_missing,
-            "transition_effort": s.transition_effort,
-            "timeline_estimate_months": s.timeline_estimate_months,
-        }))
+        .map(|s| {
+            json!({
+                "orientation_slug": s.orientation_slug,
+                "confidence": s.confidence,
+                "match_reason": s.match_reason,
+                "required_skills_missing": s.required_skills_missing,
+                "transition_effort": s.transition_effort,
+                "timeline_estimate_months": s.timeline_estimate_months,
+            })
+        })
         .collect();
     let primary = if known.contains(&resp.primary_recommendation) {
         Some(resp.primary_recommendation.clone())

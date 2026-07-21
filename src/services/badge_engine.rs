@@ -41,7 +41,9 @@ struct RuleConditions {
     #[serde(default)]
     display_category: Option<String>,
 }
-fn one() -> i64 { 1 }
+fn one() -> i64 {
+    1
+}
 
 #[derive(Debug, Clone, sqlx::FromRow)]
 struct RuleRow {
@@ -54,7 +56,7 @@ struct RuleRow {
 
 #[derive(Debug, Clone)]
 pub struct RecomputeReport {
-    pub awarded: Vec<String>,   // slugs
+    pub awarded: Vec<String>, // slugs
     pub revoked: Vec<String>,
     pub unchanged: usize,
 }
@@ -67,8 +69,14 @@ async fn count_matching_proofs(
     conds: &RuleConditions,
 ) -> Result<(i64, Vec<Uuid>), AppError> {
     let want_deliverable = conds.proof_types.is_empty()
-        || conds.proof_types.iter().any(|t| t == "deliverable_verified");
-    let want_attestation = conds.proof_types.iter().any(|t| t == "attestation_received");
+        || conds
+            .proof_types
+            .iter()
+            .any(|t| t == "deliverable_verified");
+    let want_attestation = conds
+        .proof_types
+        .iter()
+        .any(|t| t == "attestation_received");
 
     let mut total: i64 = 0;
     let mut sources: Vec<Uuid> = Vec::new();
@@ -159,8 +167,8 @@ pub async fn recompute_badges_for_user(
     let mut unchanged = 0usize;
 
     for rule in rules {
-        let conds: RuleConditions = serde_json::from_value(rule.conditions.clone())
-            .unwrap_or_default();
+        let conds: RuleConditions =
+            serde_json::from_value(rule.conditions.clone()).unwrap_or_default();
         let (count, sources) = count_matching_proofs(db, user_id, &conds).await?;
         let meets = count >= conds.min_count;
         let has: Option<(bool,)> = sqlx::query_as(
@@ -181,8 +189,11 @@ pub async fn recompute_badges_for_user(
                          source_proofs = $3
                      WHERE user_id = $1 AND rule_id = $2",
                 )
-                .bind(user_id).bind(rule.id).bind(&sources)
-                .execute(db).await?;
+                .bind(user_id)
+                .bind(rule.id)
+                .bind(&sources)
+                .execute(db)
+                .await?;
                 awarded.push(rule.slug.clone());
             }
             (true, None) => {
@@ -192,9 +203,13 @@ pub async fn recompute_badges_for_user(
                          (user_id, badge_id, rule_id, source_proofs, rarity)
                      VALUES ($1, $2, $3, $4, $5)",
                 )
-                .bind(user_id).bind(sentinel_badge_id).bind(rule.id)
-                .bind(&sources).bind(&rarity)
-                .execute(db).await?;
+                .bind(user_id)
+                .bind(sentinel_badge_id)
+                .bind(rule.id)
+                .bind(&sources)
+                .bind(&rarity)
+                .execute(db)
+                .await?;
                 awarded.push(rule.slug.clone());
             }
             (false, Some((true,))) => {
@@ -204,13 +219,19 @@ pub async fn recompute_badges_for_user(
                          revoked_reason = 'conditions_no_longer_met'
                      WHERE user_id = $1 AND rule_id = $2 AND revoked_at IS NULL",
                 )
-                .bind(user_id).bind(rule.id)
-                .execute(db).await?;
+                .bind(user_id)
+                .bind(rule.id)
+                .execute(db)
+                .await?;
                 revoked.push(rule.slug.clone());
             }
             (false, _) => {}
         }
     }
 
-    Ok(RecomputeReport { awarded, revoked, unchanged })
+    Ok(RecomputeReport {
+        awarded,
+        revoked,
+        unchanged,
+    })
 }

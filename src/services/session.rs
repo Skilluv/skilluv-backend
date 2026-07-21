@@ -53,11 +53,7 @@ impl SessionService {
     /// Best-effort: failures are swallowed on purpose. A stale cookie
     /// pointing to a non-existent or already-revoked session is expected on
     /// the happy path (fresh browser, prior logout, expired session).
-    pub async fn revoke_prior_from_cookie(
-        db: &PgPool,
-        user_id: Uuid,
-        cookie_header: Option<&str>,
-    ) {
+    pub async fn revoke_prior_from_cookie(db: &PgPool, user_id: Uuid, cookie_header: Option<&str>) {
         let Some(header) = cookie_header else { return };
         let Some(sid) = header
             .split(';')
@@ -167,18 +163,16 @@ impl SessionService {
     }
 
     pub async fn revoke_all(db: &PgPool, user_id: Uuid) -> Result<(), AppError> {
-        sqlx::query("UPDATE user_sessions SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL")
-            .bind(user_id)
-            .execute(db)
-            .await?;
+        sqlx::query(
+            "UPDATE user_sessions SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL",
+        )
+        .bind(user_id)
+        .execute(db)
+        .await?;
         Ok(())
     }
 
-    pub async fn revoke_all_except(
-        db: &PgPool,
-        user_id: Uuid,
-        keep: Uuid,
-    ) -> Result<(), AppError> {
+    pub async fn revoke_all_except(db: &PgPool, user_id: Uuid, keep: Uuid) -> Result<(), AppError> {
         sqlx::query(
             "UPDATE user_sessions SET revoked_at = NOW()
              WHERE user_id = $1 AND id <> $2 AND revoked_at IS NULL",

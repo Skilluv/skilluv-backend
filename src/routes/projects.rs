@@ -34,7 +34,10 @@ pub fn project_routes() -> Router<AppState> {
         .route("/guilds/{slug}/projects", get(by_guild_slug))
         .route("/admin/projects/{slug}/curated", post(admin_set_curated))
         // P12.1 — recommandations projets pour le user courant
-        .route("/users/me/recommendations/projects", get(my_project_recommendations))
+        .route(
+            "/users/me/recommendations/projects",
+            get(my_project_recommendations),
+        )
         // P12.2 — marque d'intérêt (onboarding + feed)
         .route(
             "/users/me/interests/projects",
@@ -257,17 +260,14 @@ async fn mark_projects_interested(
     Json(body): Json<MarkInterestedBody>,
 ) -> Result<Json<Value>, AppError> {
     if body.project_ids.is_empty() {
-        return Err(AppError::Validation(
-            "project_ids must not be empty".into(),
-        ));
+        return Err(AppError::Validation("project_ids must not be empty".into()));
     }
     if body.project_ids.len() > 50 {
         return Err(AppError::Validation(
             "cannot mark more than 50 projects at once".into(),
         ));
     }
-    let count =
-        projects::mark_interested_batch(&state.db, auth.user_id, &body.project_ids).await?;
+    let count = projects::mark_interested_batch(&state.db, auth.user_id, &body.project_ids).await?;
     metrics::counter!("skilluv_project_interests_marked_total").increment(count as u64);
     Ok(Json(build_response(json!({ "marked": count }))))
 }
@@ -293,7 +293,6 @@ async fn unmark_project_interested(
     auth: AuthUser,
     Path(project_id): Path<Uuid>,
 ) -> Result<Json<Value>, AppError> {
-    let affected =
-        projects::unmark_interested(&state.db, auth.user_id, project_id).await?;
+    let affected = projects::unmark_interested(&state.db, auth.user_id, project_id).await?;
     Ok(Json(build_response(json!({ "removed": affected > 0 }))))
 }

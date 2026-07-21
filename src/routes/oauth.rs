@@ -17,10 +17,8 @@ use crate::AppState;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
 use crate::routes::enterprise::attach_recruiter_to_enterprise;
+use crate::services::oauth::{self, OAuthProfile, OAuthState, google as gp, linkedin as lp};
 use crate::services::{AuthService, SessionService};
-use crate::services::oauth::{
-    self, OAuthProfile, OAuthState, google as gp, linkedin as lp,
-};
 
 #[derive(Deserialize, Default)]
 struct StartQuery {
@@ -34,7 +32,10 @@ pub fn oauth_routes() -> Router<AppState> {
     Router::new()
         // Provider agnostic
         .route("/auth/me/oauth-providers", get(list_my_providers))
-        .route("/auth/me/oauth-providers/{provider}", axum::routing::delete(unlink_provider))
+        .route(
+            "/auth/me/oauth-providers/{provider}",
+            axum::routing::delete(unlink_provider),
+        )
         // Google
         .route("/auth/google/start", get(google_start))
         .route("/auth/google/link", get(google_link_start))
@@ -82,7 +83,9 @@ async fn unlink_provider(
         return Err(AppError::Validation("unknown provider".into()));
     }
     oauth::unlink(&state.db, auth.user_id, &provider).await?;
-    Ok(Json(build_response(json!({ "unlinked": true, "provider": provider }))))
+    Ok(Json(build_response(
+        json!({ "unlinked": true, "provider": provider }),
+    )))
 }
 
 // ─── Google ──────────────────────────────────────────────────────
@@ -111,11 +114,16 @@ async fn google_callback(
     State(state): State<AppState>,
     Query(q): Query<CallbackQuery>,
 ) -> Result<impl IntoResponse, AppError> {
-    let cfg = gp::Config::from_env()
-        .ok_or(AppError::Internal("Google OAuth not configured".into()))?;
-    handle_callback(&state, "google", &q.state, |code| async move {
-        gp::fetch_profile(&cfg, &code).await
-    }, q.code).await
+    let cfg =
+        gp::Config::from_env().ok_or(AppError::Internal("Google OAuth not configured".into()))?;
+    handle_callback(
+        &state,
+        "google",
+        &q.state,
+        |code| async move { gp::fetch_profile(&cfg, &code).await },
+        q.code,
+    )
+    .await
 }
 
 // ─── LinkedIn ────────────────────────────────────────────────────
@@ -138,11 +146,16 @@ async fn linkedin_callback(
     State(state): State<AppState>,
     Query(q): Query<CallbackQuery>,
 ) -> Result<impl IntoResponse, AppError> {
-    let cfg = lp::Config::from_env()
-        .ok_or(AppError::Internal("LinkedIn OAuth not configured".into()))?;
-    handle_callback(&state, "linkedin", &q.state, |code| async move {
-        lp::fetch_profile(&cfg, &code).await
-    }, q.code).await
+    let cfg =
+        lp::Config::from_env().ok_or(AppError::Internal("LinkedIn OAuth not configured".into()))?;
+    handle_callback(
+        &state,
+        "linkedin",
+        &q.state,
+        |code| async move { lp::fetch_profile(&cfg, &code).await },
+        q.code,
+    )
+    .await
 }
 
 // ─── GitHub login (distinct from Sprint 5 repo-sync flow) ────────
@@ -187,15 +200,14 @@ async fn github_login_callback(
     let mut redis = state.redis.clone();
     let oauth_state = oauth::consume_state(&mut redis, &q.state).await?;
 
-    let (token, _scopes) = crate::services::github::exchange_code(
-        &client_id, &client_secret, &redirect_uri, &q.code,
-    )
-    .await?;
+    let (token, _scopes) =
+        crate::services::github::exchange_code(&client_id, &client_secret, &redirect_uri, &q.code)
+            .await?;
     let gh_user = crate::services::github::fetch_user(&token).await?;
     let profile = OAuthProfile {
         provider: "github",
         provider_user_id: gh_user.id.to_string(),
-        email: None,          // GitHub /user endpoint may hide it ; consider a second call to /user/emails
+        email: None, // GitHub /user endpoint may hide it ; consider a second call to /user/emails
         email_verified: false,
         display_name: gh_user.name.clone(),
         avatar_url: gh_user.avatar_url,
@@ -218,7 +230,11 @@ async fn start_flow(
         &OAuthState {
             provider: provider.into(),
             user_id: linking_user,
-            intent: if linking_user.is_some() { "link".into() } else { "signup_login".into() },
+            intent: if linking_user.is_some() {
+                "link".into()
+            } else {
+                "signup_login".into()
+            },
             redirect_after: None,
             invite_token,
         },
@@ -287,10 +303,8 @@ async fn finalise_login_or_link(
             // email matches the invited email BEFORE creating any account.
             let invite = if let Some(token) = oauth_state.invite_token.as_deref() {
                 let mut redis = state.redis.clone();
-                let payload = crate::routes::enterprise::peek_enterprise_invite(
-                    &mut redis, token,
-                )
-                .await?;
+                let payload =
+                    crate::routes::enterprise::peek_enterprise_invite(&mut redis, token).await?;
                 let provider_email = profile
                     .email
                     .as_deref()
@@ -368,10 +382,7 @@ async fn finalise_login_or_link(
             .increment(1);
 
             Ok((
-                AppendHeaders([
-                    (SET_COOKIE, cookie),
-                    (SET_COOKIE, refresh_cookie),
-                ]),
+                AppendHeaders([(SET_COOKIE, cookie), (SET_COOKIE, refresh_cookie)]),
                 Json(build_response(json!({
                     "user_id": user_id,
                     "provider": profile.provider,

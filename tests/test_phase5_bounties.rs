@@ -34,8 +34,14 @@ async fn seed_bounty(
         "#,
     )
     .bind(user_id.0)
-    .bind(format!("Test Corp {}", &uuid::Uuid::new_v4().to_string()[..6]))
-    .bind(format!("test-corp-{}", &uuid::Uuid::new_v4().to_string()[..8]))
+    .bind(format!(
+        "Test Corp {}",
+        &uuid::Uuid::new_v4().to_string()[..6]
+    ))
+    .bind(format!(
+        "test-corp-{}",
+        &uuid::Uuid::new_v4().to_string()[..8]
+    ))
     .fetch_one(&app.db)
     .await
     .expect("insert ent");
@@ -94,8 +100,14 @@ async fn seed_bounty(
 async fn list_bounties_returns_open_ones() {
     let app = TestApp::spawn().await;
 
-    let _ = seed_bounty(&app, "skilluv", "core", "Fix async race condition", vec!["rust", "tokio"])
-        .await;
+    let _ = seed_bounty(
+        &app,
+        "skilluv",
+        "core",
+        "Fix async race condition",
+        vec!["rust", "tokio"],
+    )
+    .await;
 
     let resp = app
         .client
@@ -106,7 +118,11 @@ async fn list_bounties_returns_open_ones() {
     assert_eq!(resp.status(), 200);
     let body: Value = resp.json().await.unwrap();
     let items = body["data"]["bounties"].as_array().unwrap();
-    assert!(items.iter().any(|b| b["title"] == "Fix async race condition"));
+    assert!(
+        items
+            .iter()
+            .any(|b| b["title"] == "Fix async race condition")
+    );
     drop(app);
 }
 
@@ -228,7 +244,9 @@ async fn cancel_bounty_refunds_credits() {
     .expect("balance");
     assert_eq!(balance_before, bigdecimal::BigDecimal::from(80));
 
-    let resp = app.post(&format!("/api/bounties/{bounty_id}/cancel"), &json!({})).await;
+    let resp = app
+        .post(&format!("/api/bounties/{bounty_id}/cancel"), &json!({}))
+        .await;
     assert_eq!(resp.status(), 200);
 
     let balance_after: bigdecimal::BigDecimal = sqlx::query_scalar(

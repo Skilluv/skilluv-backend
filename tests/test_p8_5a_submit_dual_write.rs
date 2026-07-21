@@ -125,21 +125,33 @@ async fn create_from_submission_produces_verified_deliverable() {
         fragments_awarded,
         stored_challenge_id,
         slice_id,
-    ): (String, String, Option<String>, String, String, i32, Option<Uuid>, Option<Uuid>) =
-        sqlx::query_as(
-            "SELECT artifact_type, artifact_url, artifact_hash, verifiable_by,
+    ): (
+        String,
+        String,
+        Option<String>,
+        String,
+        String,
+        i32,
+        Option<Uuid>,
+        Option<Uuid>,
+    ) = sqlx::query_as(
+        "SELECT artifact_type, artifact_url, artifact_hash, verifiable_by,
                     verification_status, fragments_awarded, challenge_id, slice_id
              FROM deliverables WHERE id = $1",
-        )
-        .bind(deliverable_id)
-        .fetch_one(&db)
-        .await
-        .expect("fetch");
+    )
+    .bind(deliverable_id)
+    .fetch_one(&db)
+    .await
+    .expect("fetch");
 
     assert_eq!(artifact_type, "other");
     assert_eq!(artifact_url, format!("skilluv:submission:{submission_id}"));
     assert!(artifact_hash.is_some());
-    assert_eq!(artifact_hash.as_deref().unwrap().len(), 64, "SHA-256 hex = 64 chars");
+    assert_eq!(
+        artifact_hash.as_deref().unwrap().len(),
+        64,
+        "SHA-256 hex = 64 chars"
+    );
     assert_eq!(verifiable_by, "automated_diff");
     assert_eq!(verification_status, "verified");
     assert_eq!(fragments_awarded, 50);
@@ -194,13 +206,11 @@ async fn same_submission_code_is_idempotent() {
 
     assert_eq!(first, second, "same code → same deliverable_id");
 
-    let count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM deliverables WHERE user_id = $1",
-    )
-    .bind(user_id)
-    .fetch_one(&db)
-    .await
-    .expect("count");
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM deliverables WHERE user_id = $1")
+        .bind(user_id)
+        .fetch_one(&db)
+        .await
+        .expect("count");
     assert_eq!(count, 1);
 
     db.close().await;
@@ -249,13 +259,11 @@ async fn different_code_creates_distinct_deliverables() {
 
     assert_ne!(d1, d2);
 
-    let count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM deliverables WHERE user_id = $1",
-    )
-    .bind(user_id)
-    .fetch_one(&db)
-    .await
-    .expect("count");
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM deliverables WHERE user_id = $1")
+        .bind(user_id)
+        .fetch_one(&db)
+        .await
+        .expect("count");
     assert_eq!(count, 2);
 
     db.close().await;
@@ -349,13 +357,12 @@ async fn artifact_metadata_captures_code_stdout_stderr() {
     .await
     .expect("create");
 
-    let meta: serde_json::Value = sqlx::query_scalar(
-        "SELECT artifact_metadata FROM deliverables WHERE id = $1",
-    )
-    .bind(deliverable_id)
-    .fetch_one(&db)
-    .await
-    .expect("meta");
+    let meta: serde_json::Value =
+        sqlx::query_scalar("SELECT artifact_metadata FROM deliverables WHERE id = $1")
+            .bind(deliverable_id)
+            .fetch_one(&db)
+            .await
+            .expect("meta");
 
     assert_eq!(meta["code_content"], "print(42)");
     assert_eq!(meta["language"], "python");
@@ -390,13 +397,12 @@ async fn artifact_metadata_omits_optional_when_none() {
     .await
     .expect("create");
 
-    let meta: serde_json::Value = sqlx::query_scalar(
-        "SELECT artifact_metadata FROM deliverables WHERE id = $1",
-    )
-    .bind(deliverable_id)
-    .fetch_one(&db)
-    .await
-    .expect("meta");
+    let meta: serde_json::Value =
+        sqlx::query_scalar("SELECT artifact_metadata FROM deliverables WHERE id = $1")
+            .bind(deliverable_id)
+            .fetch_one(&db)
+            .await
+            .expect("meta");
 
     assert_eq!(meta["code_content"], "code");
     assert!(meta.get("language").is_none());

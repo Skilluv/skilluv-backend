@@ -9,7 +9,7 @@ use axum::extract::{Path, Query, State};
 use axum::routing::{get, patch};
 use axum::{Json, Router};
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 use crate::AppState;
@@ -75,9 +75,17 @@ async fn list_enterprises(
         }
     }
 
-    let rows: Vec<(Uuid, String, String, Option<String>, bool, String, Value, chrono::DateTime<chrono::Utc>)> =
-        sqlx::query_as(
-            r#"
+    let rows: Vec<(
+        Uuid,
+        String,
+        String,
+        Option<String>,
+        bool,
+        String,
+        Value,
+        chrono::DateTime<chrono::Utc>,
+    )> = sqlx::query_as(
+        r#"
             SELECT id, company_name, slug, industry, verified, enterprise_type,
                    type_config, created_at
             FROM enterprises
@@ -86,13 +94,13 @@ async fn list_enterprises(
             ORDER BY created_at DESC
             LIMIT $3 OFFSET $4
             "#,
-        )
-        .bind(q.r#type.as_ref())
-        .bind(q.verified)
-        .bind(per_page)
-        .bind(offset)
-        .fetch_all(&state.db)
-        .await?;
+    )
+    .bind(q.r#type.as_ref())
+    .bind(q.verified)
+    .bind(per_page)
+    .bind(offset)
+    .fetch_all(&state.db)
+    .await?;
 
     let total: i64 = sqlx::query_scalar(
         r#"
@@ -108,13 +116,15 @@ async fn list_enterprises(
 
     let items: Vec<Value> = rows
         .into_iter()
-        .map(|(id, name, slug, industry, verified, etype, tconf, created)| {
-            json!({
-                "id": id, "company_name": name, "slug": slug, "industry": industry,
-                "verified": verified, "enterprise_type": etype, "type_config": tconf,
-                "created_at": created.to_rfc3339(),
-            })
-        })
+        .map(
+            |(id, name, slug, industry, verified, etype, tconf, created)| {
+                json!({
+                    "id": id, "company_name": name, "slug": slug, "industry": industry,
+                    "verified": verified, "enterprise_type": etype, "type_config": tconf,
+                    "created_at": created.to_rfc3339(),
+                })
+            },
+        )
         .collect();
 
     let total_pages = if per_page > 0 {
@@ -146,15 +156,23 @@ async fn get_enterprise(
 ) -> Result<Json<Value>, AppError> {
     crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
 
-    let row: Option<(Uuid, String, String, Option<String>, bool, String, Value, chrono::DateTime<chrono::Utc>)> =
-        sqlx::query_as(
-            r#"SELECT id, company_name, slug, industry, verified, enterprise_type,
+    let row: Option<(
+        Uuid,
+        String,
+        String,
+        Option<String>,
+        bool,
+        String,
+        Value,
+        chrono::DateTime<chrono::Utc>,
+    )> = sqlx::query_as(
+        r#"SELECT id, company_name, slug, industry, verified, enterprise_type,
                       type_config, created_at
                FROM enterprises WHERE id = $1"#,
-        )
-        .bind(id)
-        .fetch_optional(&state.db)
-        .await?;
+    )
+    .bind(id)
+    .fetch_optional(&state.db)
+    .await?;
 
     let (eid, name, slug, industry, verified, etype, tconf, created) =
         row.ok_or_else(|| AppError::NotFound(format!("enterprise {id} not found")))?;
@@ -200,7 +218,9 @@ async fn patch_type(
         )));
     }
     if body.reason.trim().len() < 8 {
-        return Err(AppError::Validation("reason must be at least 8 chars".into()));
+        return Err(AppError::Validation(
+            "reason must be at least 8 chars".into(),
+        ));
     }
 
     let ent: Option<(Uuid, String, Value, Option<String>)> = sqlx::query_as(
@@ -256,7 +276,11 @@ async fn patch_type(
 
     // Transaction atomique. Le trigger P24 (agency_clients) valide.
     let mut tx = state.db.begin().await?;
-    let new_config = if will_reset { json!({}) } else { current_config.clone() };
+    let new_config = if will_reset {
+        json!({})
+    } else {
+        current_config.clone()
+    };
     let (etype, tconf): (String, Value) = sqlx::query_as(
         "UPDATE enterprises
          SET enterprise_type = $2, type_config = $3, updated_at = NOW()
@@ -345,15 +369,21 @@ async fn list_agency_clients(
         return Err(AppError::NotFound(format!("enterprise {id} not found")));
     }
 
-    let rows: Vec<(Uuid, String, Option<String>, Option<String>, bool, chrono::DateTime<chrono::Utc>)> =
-        sqlx::query_as(
-            r#"SELECT id, client_name, client_contact_email, notes, active, created_at
+    let rows: Vec<(
+        Uuid,
+        String,
+        Option<String>,
+        Option<String>,
+        bool,
+        chrono::DateTime<chrono::Utc>,
+    )> = sqlx::query_as(
+        r#"SELECT id, client_name, client_contact_email, notes, active, created_at
                FROM agency_clients WHERE enterprise_id = $1
                ORDER BY created_at DESC"#,
-        )
-        .bind(id)
-        .fetch_all(&state.db)
-        .await?;
+    )
+    .bind(id)
+    .fetch_all(&state.db)
+    .await?;
 
     let clients: Vec<Value> = rows
         .into_iter()

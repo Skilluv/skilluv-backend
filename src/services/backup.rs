@@ -104,8 +104,8 @@ impl BackupConfig {
             let secret_key = std::env::var("BACKUP_MINIO_SOURCE_SECRET_KEY")
                 .ok()
                 .or_else(|| std::env::var("MINIO_SECRET_KEY").ok());
-            let region = std::env::var("BACKUP_MINIO_SOURCE_REGION")
-                .unwrap_or_else(|_| "us-east-1".into());
+            let region =
+                std::env::var("BACKUP_MINIO_SOURCE_REGION").unwrap_or_else(|_| "us-east-1".into());
             match (endpoint, bucket, access_key, secret_key) {
                 (Some(endpoint), Some(bucket), Some(access_key), Some(secret_key)) => {
                     Some(MinioSourceConfig {
@@ -305,11 +305,7 @@ async fn upload_bytes(
         .await
         .with_context(|| format!("upload to {} failed", key))?;
     if response.status_code() / 100 != 2 {
-        bail!(
-            "upload to {} returned HTTP {}",
-            key,
-            response.status_code()
-        );
+        bail!("upload to {} returned HTTP {}", key, response.status_code());
     }
     debug!(%key, status = response.status_code(), "uploaded");
     Ok(())
@@ -356,10 +352,7 @@ fn parse_key_timestamp(key: &str) -> Option<DateTime<Utc>> {
 /// - Keep the most recent backup of each ISO week for the last 4 weeks beyond that (weekly)
 /// - Keep the most recent backup of each calendar month for the last 12 months beyond that (monthly)
 /// - Everything else is candidate for deletion
-pub fn classify_for_retention(
-    entries: &[BackupEntry],
-    now: DateTime<Utc>,
-) -> RetentionDecision {
+pub fn classify_for_retention(entries: &[BackupEntry], now: DateTime<Utc>) -> RetentionDecision {
     let mut keep: HashSet<String> = HashSet::new();
     let mut delete: Vec<String> = Vec::new();
 
@@ -484,11 +477,7 @@ pub async fn restore_test(cfg: &BackupConfig) -> Result<RestoreReport> {
     let sha_expected_key = format!("{}.sha256", latest.key);
     if let Ok(bytes) = download_bytes(cfg, &sha_expected_key).await {
         let sha_line = String::from_utf8_lossy(&bytes);
-        let expected = sha_line
-            .split_whitespace()
-            .next()
-            .unwrap_or("")
-            .to_string();
+        let expected = sha_line.split_whitespace().next().unwrap_or("").to_string();
         let actual = compute_sha256(&local_path).await?;
         if expected != actual {
             bail!(
@@ -501,10 +490,7 @@ pub async fn restore_test(cfg: &BackupConfig) -> Result<RestoreReport> {
         warn!(key = %sha_expected_key, "no sidecar checksum found");
     }
 
-    let ephemeral_db = format!(
-        "skilluv_restore_test_{}",
-        Utc::now().format("%Y%m%d%H%M%S")
-    );
+    let ephemeral_db = format!("skilluv_restore_test_{}", Utc::now().format("%Y%m%d%H%M%S"));
     create_database(cfg, &ephemeral_db).await?;
     let restore_result = pg_restore_into(cfg, &local_path, &ephemeral_db).await;
     let count_result = match &restore_result {
@@ -552,11 +538,7 @@ async fn download_to_file(cfg: &BackupConfig, key: &str, path: &Path) -> Result<
         .await
         .with_context(|| format!("download {} failed", key))?;
     if response.status_code() / 100 != 2 {
-        bail!(
-            "download {} returned HTTP {}",
-            key,
-            response.status_code()
-        );
+        bail!("download {} returned HTTP {}", key, response.status_code());
     }
     fs::write(path, response.bytes()).await?;
     Ok(())
@@ -588,7 +570,12 @@ async fn drop_database(cfg: &BackupConfig, db_name: &str) -> Result<()> {
         ),
     )
     .await;
-    psql_exec(cfg, &admin_url, &format!("DROP DATABASE IF EXISTS \"{db_name}\"")).await
+    psql_exec(
+        cfg,
+        &admin_url,
+        &format!("DROP DATABASE IF EXISTS \"{db_name}\""),
+    )
+    .await
 }
 
 async fn pg_restore_into(cfg: &BackupConfig, dump_path: &Path, db_name: &str) -> Result<()> {
@@ -635,8 +622,7 @@ async fn count_critical_tables(cfg: &BackupConfig, db_name: &str) -> Result<Tabl
     let url = replace_database_in_url(&cfg.database_url, db_name);
     let users = scalar_count(cfg, &url, "SELECT COUNT(*) FROM users").await?;
     let challenges = scalar_count(cfg, &url, "SELECT COUNT(*) FROM challenge_templates").await?;
-    let submissions =
-        scalar_count(cfg, &url, "SELECT COUNT(*) FROM challenge_submissions").await?;
+    let submissions = scalar_count(cfg, &url, "SELECT COUNT(*) FROM challenge_submissions").await?;
     Ok(TableCounts {
         users,
         challenges,
@@ -696,7 +682,10 @@ pub fn replace_database_in_url(url: &str, new_db: &str) -> String {
         if let Some(slash) = after_scheme.find('/') {
             let prefix = &url[..scheme_end + 3 + slash + 1];
             let after_slash = &after_scheme[slash + 1..];
-            let after_db = after_slash.find('?').map(|q| &after_slash[q..]).unwrap_or("");
+            let after_db = after_slash
+                .find('?')
+                .map(|q| &after_slash[q..])
+                .unwrap_or("");
             return format!("{prefix}{new_db}{after_db}");
         } else {
             return format!("{url}/{new_db}");
@@ -837,11 +826,7 @@ async fn copy_object(
         .await
         .with_context(|| format!("upload {} to target failed", target_key))?;
     if put.status_code() / 100 != 2 {
-        bail!(
-            "upload {} returned HTTP {}",
-            target_key,
-            put.status_code()
-        );
+        bail!("upload {} returned HTTP {}", target_key, put.status_code());
     }
     Ok(bytes_len)
 }
@@ -914,7 +899,10 @@ mod tests {
     #[test]
     fn parse_key_timestamp_roundtrip() {
         let ts = parse_key_timestamp("skilluv/postgres/skilluv-2026-06-26T03-00-00.dump").unwrap();
-        assert_eq!(ts.format("%Y-%m-%d %H:%M:%S").to_string(), "2026-06-26 03:00:00");
+        assert_eq!(
+            ts.format("%Y-%m-%d %H:%M:%S").to_string(),
+            "2026-06-26 03:00:00"
+        );
     }
 
     #[test]
@@ -958,10 +946,22 @@ mod tests {
             .unwrap()
             .and_utc();
         let entries = vec![
-            mk_entry("2026-06-25", "skilluv/postgres/skilluv-2026-06-25T03-00-00.dump"),
-            mk_entry("2026-06-20", "skilluv/postgres/skilluv-2026-06-20T03-00-00.dump"),
-            mk_entry("2026-05-01", "skilluv/postgres/skilluv-2026-05-01T03-00-00.dump"),
-            mk_entry("2025-01-15", "skilluv/postgres/skilluv-2025-01-15T03-00-00.dump"),
+            mk_entry(
+                "2026-06-25",
+                "skilluv/postgres/skilluv-2026-06-25T03-00-00.dump",
+            ),
+            mk_entry(
+                "2026-06-20",
+                "skilluv/postgres/skilluv-2026-06-20T03-00-00.dump",
+            ),
+            mk_entry(
+                "2026-05-01",
+                "skilluv/postgres/skilluv-2026-05-01T03-00-00.dump",
+            ),
+            mk_entry(
+                "2025-01-15",
+                "skilluv/postgres/skilluv-2025-01-15T03-00-00.dump",
+            ),
         ];
         let decision = classify_for_retention(&entries, now);
         assert!(decision.keep.contains(&entries[0].key)); // last 7d
@@ -987,7 +987,10 @@ mod tests {
 
     #[test]
     fn webhook_kind_from_env() {
-        assert_eq!(WebhookKind::from_env(Some("slack".into())), WebhookKind::Slack);
+        assert_eq!(
+            WebhookKind::from_env(Some("slack".into())),
+            WebhookKind::Slack
+        );
         assert_eq!(
             WebhookKind::from_env(Some("DISCORD".into())),
             WebhookKind::Discord

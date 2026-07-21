@@ -56,7 +56,9 @@ pub async fn stash_registration(
     let handle = Uuid::new_v4().simple().to_string();
     let json = serde_json::to_string(state)
         .map_err(|e| AppError::Internal(format!("serialize reg state: {e}")))?;
-    let () = redis.set_ex(reg_key(&handle), json, CEREMONY_TTL_SECS).await?;
+    let () = redis
+        .set_ex(reg_key(&handle), json, CEREMONY_TTL_SECS)
+        .await?;
     Ok(handle)
 }
 
@@ -78,7 +80,9 @@ pub async fn stash_authentication(
     let handle = Uuid::new_v4().simple().to_string();
     let json = serde_json::to_string(state)
         .map_err(|e| AppError::Internal(format!("serialize auth state: {e}")))?;
-    let () = redis.set_ex(auth_key(&handle), json, CEREMONY_TTL_SECS).await?;
+    let () = redis
+        .set_ex(auth_key(&handle), json, CEREMONY_TTL_SECS)
+        .await?;
     Ok(handle)
 }
 

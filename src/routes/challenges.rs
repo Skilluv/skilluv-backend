@@ -10,7 +10,7 @@ use uuid::Uuid;
 use crate::AppState;
 use crate::errors::AppError;
 use crate::middleware::{AuthUser, AuthUserComplete, OptionalAuth};
-use crate::models::{Badge, ChallengeTemplate, ChallengeSubmission};
+use crate::models::{Badge, ChallengeSubmission, ChallengeTemplate};
 use crate::services::LeaderboardService;
 use crate::websocket::WsMessage;
 
@@ -98,11 +98,10 @@ async fn list_challenges(
 
     // Get user's total fragments for prerequisite check (if authenticated)
     let user_fragments = if let Some(ref auth) = auth {
-        let user: Option<crate::models::User> =
-            sqlx::query_as("SELECT * FROM users WHERE id = $1")
-                .bind(auth.user_id)
-                .fetch_optional(&state.db)
-                .await?;
+        let user: Option<crate::models::User> = sqlx::query_as("SELECT * FROM users WHERE id = $1")
+            .bind(auth.user_id)
+            .fetch_optional(&state.db)
+            .await?;
         user.map(|u| u.total_fragments).unwrap_or(0)
     } else {
         0
@@ -241,12 +240,9 @@ async fn start_challenge(
     // n'a aucun prérequis à vérifier — il est démarrable par tout user
     // profile_active.
     let _ = &user; // conservé pour compat future (rate limiting, etc.)
-    let eligibility = crate::services::TracksService::check_eligibility(
-        &state.db,
-        auth.user_id,
-        challenge_id,
-    )
-    .await?;
+    let eligibility =
+        crate::services::TracksService::check_eligibility(&state.db, auth.user_id, challenge_id)
+            .await?;
     if !eligibility.eligible {
         return Err(AppError::ChallengePrerequisiteNotMet);
     }
@@ -355,10 +351,11 @@ async fn submit_challenge(
         "No in-progress submission found. Start the challenge first.".to_string(),
     ))?;
 
-    let challenge: ChallengeTemplate = sqlx::query_as("SELECT * FROM challenge_templates WHERE id = $1")
-        .bind(challenge_id)
-        .fetch_one(&state.db)
-        .await?;
+    let challenge: ChallengeTemplate =
+        sqlx::query_as("SELECT * FROM challenge_templates WHERE id = $1")
+            .bind(challenge_id)
+            .fetch_one(&state.db)
+            .await?;
 
     // Check timer expiration
     if let Some(expires_at) = submission.expires_at {
@@ -473,7 +470,8 @@ async fn submit_challenge(
     // Guild GP (Phase 2 Sprint 4) — 10% of awarded fragments goes to the user's guild.
     if total_fragments > 0 {
         if let Ok(gp_added) =
-            crate::services::guild::award_gp_for_fragments(&state.db, auth.user_id, total_fragments).await
+            crate::services::guild::award_gp_for_fragments(&state.db, auth.user_id, total_fragments)
+                .await
         {
             if gp_added > 0 {
                 metrics::counter!("skilluv_gp_awarded_total").increment(gp_added as u64);
@@ -695,10 +693,7 @@ async fn submit_challenge(
             .await;
     }
 
-    Ok((
-        submit_deprecation_headers(),
-        Json(build_response(response)),
-    ))
+    Ok((submit_deprecation_headers(), Json(build_response(response))))
 }
 
 // GET /api/challenges/:id/submissions

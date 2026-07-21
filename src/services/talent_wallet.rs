@@ -88,10 +88,7 @@ pub struct LedgerEntry<'a> {
 }
 
 /// Récupère ou initialise le wallet d'un user. Idempotent.
-pub async fn get_or_init_wallet(
-    db: &PgPool,
-    user_id: Uuid,
-) -> Result<TalentWallet, AppError> {
+pub async fn get_or_init_wallet(db: &PgPool, user_id: Uuid) -> Result<TalentWallet, AppError> {
     let wallet = sqlx::query_as::<_, TalentWallet>(
         r#"
         INSERT INTO talent_wallets (user_id)
@@ -181,10 +178,7 @@ fn compute_ledger_hash(
 /// Crédit atomique : delta doit être > 0. Met à jour balance + insert tx.
 ///
 /// Retourne la ligne de transaction créée (avec ledger_hash).
-pub async fn credit(
-    db: &PgPool,
-    entry: LedgerEntry<'_>,
-) -> Result<TalentTransaction, AppError> {
+pub async fn credit(db: &PgPool, entry: LedgerEntry<'_>) -> Result<TalentTransaction, AppError> {
     if entry.delta <= &BigDecimal::from(0) {
         return Err(AppError::Validation("credit delta must be > 0".into()));
     }
@@ -192,10 +186,7 @@ pub async fn credit(
 }
 
 /// Débit atomique : delta positif (montant à retirer). Refuse si balance < amount.
-pub async fn debit(
-    db: &PgPool,
-    entry: LedgerEntry<'_>,
-) -> Result<TalentTransaction, AppError> {
+pub async fn debit(db: &PgPool, entry: LedgerEntry<'_>) -> Result<TalentTransaction, AppError> {
     if entry.delta <= &BigDecimal::from(0) {
         return Err(AppError::Validation("debit amount must be > 0".into()));
     }
@@ -216,12 +207,10 @@ async fn apply_ledger_entry(
     let mut tx = db.begin().await?;
 
     // Init wallet si nécessaire (evite les erreurs FK sur l'INSERT).
-    sqlx::query(
-        "INSERT INTO talent_wallets (user_id) VALUES ($1) ON CONFLICT DO NOTHING",
-    )
-    .bind(entry.user_id)
-    .execute(&mut *tx)
-    .await?;
+    sqlx::query("INSERT INTO talent_wallets (user_id) VALUES ($1) ON CONFLICT DO NOTHING")
+        .bind(entry.user_id)
+        .execute(&mut *tx)
+        .await?;
 
     // Update balance, guardé par CHECK constraint.
     let sql = if is_credit {
@@ -388,10 +377,7 @@ pub async fn statement_csv(db: &PgPool, user_id: Uuid) -> Result<String, AppErro
 ///
 /// Retourne `Ok(true)` si la chaîne est cohérente, `Ok(false)` si une
 /// transaction a été modifiée (chaîne rompue). Usage : audit périodique + test.
-pub async fn verify_ledger_chain(
-    db: &PgPool,
-    user_id: Uuid,
-) -> Result<bool, AppError> {
+pub async fn verify_ledger_chain(db: &PgPool, user_id: Uuid) -> Result<bool, AppError> {
     let rows: Vec<TalentTransaction> = sqlx::query_as::<_, TalentTransaction>(
         "SELECT * FROM talent_transactions
          WHERE user_id = $1

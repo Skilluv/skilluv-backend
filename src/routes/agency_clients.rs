@@ -12,7 +12,7 @@ use axum::response::IntoResponse;
 use axum::routing::{get, patch, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 use crate::AppState;
@@ -52,10 +52,7 @@ fn allowed_keys_for(ent_type: &str) -> &'static [&'static str] {
 }
 
 /// Résout l'enterprise active du user (tous types).
-async fn resolve_enterprise(
-    state: &AppState,
-    auth: &AuthUser,
-) -> Result<(Uuid, String), AppError> {
+async fn resolve_enterprise(state: &AppState, auth: &AuthUser) -> Result<(Uuid, String), AppError> {
     let ent: Option<(Uuid, String)> = sqlx::query_as(
         r#"
         SELECT e.id, e.enterprise_type
@@ -77,12 +74,11 @@ async fn get_type_config(
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
     let (ent_id, ent_type) = resolve_enterprise(&state, &auth).await?;
-    let cfg: serde_json::Value = sqlx::query_scalar(
-        "SELECT type_config FROM enterprises WHERE id = $1",
-    )
-    .bind(ent_id)
-    .fetch_one(&state.db)
-    .await?;
+    let cfg: serde_json::Value =
+        sqlx::query_scalar("SELECT type_config FROM enterprises WHERE id = $1")
+            .bind(ent_id)
+            .fetch_one(&state.db)
+            .await?;
     Ok(Json(wrap(json!({
         "enterprise_type": ent_type,
         "type_config": cfg,
@@ -102,9 +98,9 @@ async fn patch_type_config(
             "enterprise_type '{ent_type}' has no configurable type_config keys"
         )));
     }
-    let patch_obj = patch.as_object().ok_or_else(|| {
-        AppError::Validation("body must be a JSON object".into())
-    })?;
+    let patch_obj = patch
+        .as_object()
+        .ok_or_else(|| AppError::Validation("body must be a JSON object".into()))?;
     for key in patch_obj.keys() {
         if !allowed.contains(&key.as_str()) {
             return Err(AppError::Validation(format!(
@@ -122,7 +118,9 @@ async fn patch_type_config(
     .bind(&patch)
     .execute(&state.db)
     .await?;
-    Ok(Json(wrap(json!({ "updated": true, "keys_set": patch_obj.keys().collect::<Vec<_>>() }))))
+    Ok(Json(wrap(
+        json!({ "updated": true, "keys_set": patch_obj.keys().collect::<Vec<_>>() }),
+    )))
 }
 
 fn wrap(data: Value) -> Value {
@@ -137,10 +135,7 @@ fn wrap(data: Value) -> Value {
 
 /// Résout l'enterprise active du user et vérifie qu'elle est staffing_agency.
 /// Retourne l'enterprise_id.
-async fn resolve_staffing_agency(
-    state: &AppState,
-    auth: &AuthUser,
-) -> Result<Uuid, AppError> {
+async fn resolve_staffing_agency(state: &AppState, auth: &AuthUser) -> Result<Uuid, AppError> {
     let ent: Option<(Uuid, String)> = sqlx::query_as(
         r#"
         SELECT e.id, e.enterprise_type
@@ -155,9 +150,7 @@ async fn resolve_staffing_agency(
     .fetch_optional(&state.db)
     .await?;
 
-    let (enterprise_id, ent_type) = ent.ok_or_else(|| {
-        AppError::Forbidden
-    })?;
+    let (enterprise_id, ent_type) = ent.ok_or_else(|| AppError::Forbidden)?;
 
     if ent_type != "staffing_agency" {
         return Err(AppError::Validation(format!(
@@ -178,10 +171,7 @@ struct AgencyClientRow {
     created_at: chrono::DateTime<chrono::Utc>,
 }
 
-async fn list(
-    State(state): State<AppState>,
-    auth: AuthUser,
-) -> Result<Json<Value>, AppError> {
+async fn list(State(state): State<AppState>, auth: AuthUser) -> Result<Json<Value>, AppError> {
     let ent_id = resolve_staffing_agency(&state, &auth).await?;
     let rows: Vec<AgencyClientRow> = sqlx::query_as(
         "SELECT id, client_name, client_contact_email, notes, active, created_at
@@ -219,7 +209,10 @@ async fn create(
     .bind(body.notes.as_deref())
     .fetch_one(&state.db)
     .await?;
-    Ok((StatusCode::CREATED, Json(wrap(json!({ "id": id, "client_name": body.client_name })))))
+    Ok((
+        StatusCode::CREATED,
+        Json(wrap(json!({ "id": id, "client_name": body.client_name }))),
+    ))
 }
 
 #[derive(Debug, Deserialize)]

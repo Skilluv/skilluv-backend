@@ -187,13 +187,12 @@ async fn require_team_member(
     team_id: Uuid,
     user_id: Uuid,
 ) -> Result<(), AppError> {
-    let is_member: Option<(Uuid,)> = sqlx::query_as(
-        "SELECT user_id FROM team_members WHERE team_id = $1 AND user_id = $2",
-    )
-    .bind(team_id)
-    .bind(user_id)
-    .fetch_optional(db)
-    .await?;
+    let is_member: Option<(Uuid,)> =
+        sqlx::query_as("SELECT user_id FROM team_members WHERE team_id = $1 AND user_id = $2")
+            .bind(team_id)
+            .bind(user_id)
+            .fetch_optional(db)
+            .await?;
     if is_member.is_none() {
         return Err(AppError::Forbidden);
     }

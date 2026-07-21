@@ -94,11 +94,10 @@ async fn set_tenant_context_sets_the_guc() {
         .execute(&mut *conn)
         .await
         .expect("set");
-    let current: String =
-        sqlx::query_scalar("SELECT current_setting('app.tenant_id', true)")
-            .fetch_one(&mut *conn)
-            .await
-            .expect("get");
+    let current: String = sqlx::query_scalar("SELECT current_setting('app.tenant_id', true)")
+        .fetch_one(&mut *conn)
+        .await
+        .expect("get");
     assert_eq!(current, tenant.to_string());
 
     db.close().await;
@@ -121,7 +120,10 @@ async fn policies_are_installed_and_rls_can_be_enabled() {
     .fetch_one(&db)
     .await
     .expect("count");
-    assert_eq!(policy_count, 2, "2 policies POC attendues (deliverables + attestations)");
+    assert_eq!(
+        policy_count, 2,
+        "2 policies POC attendues (deliverables + attestations)"
+    );
 
     // ALTER + FORCE ne raise pas — même si RLS ne s'applique pas au superuser,
     // les commandes doivent réussir en préparation du déploiement prod.
@@ -182,7 +184,10 @@ async fn policy_filter_isolates_correctly() {
     .fetch_one(&mut *conn)
     .await
     .expect("visible");
-    assert_eq!(public_visible, 1, "sans context, seule la row publique passe");
+    assert_eq!(
+        public_visible, 1,
+        "sans context, seule la row publique passe"
+    );
 
     // Avec set_tenant_context(tenant_a) : voit tenant_a + public.
     sqlx::query("SELECT set_tenant_context($1)")

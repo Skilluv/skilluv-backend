@@ -38,33 +38,63 @@ pub async fn recompute_capabilities_for_user(
     let mut already = Vec::new();
 
     // Défaut universel : challenger.
-    grant_if_missing(db, user_id, "challenger", "auto:default", &mut granted, &mut already).await?;
+    grant_if_missing(
+        db,
+        user_id,
+        "challenger",
+        "auto:default",
+        &mut granted,
+        &mut already,
+    )
+    .await?;
 
     // Mentor : 5 attestations reçues OU 3 sessions mentor (best-effort si
     // les tables existent).
     let attests: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM attestations WHERE user_id = $1 AND revoked_at IS NULL",
     )
-    .bind(user_id).fetch_one(db).await.unwrap_or(0);
-    let sessions: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM mentorship_sessions WHERE mentor_user_id = $1",
-    )
-    .bind(user_id).fetch_optional(db).await.unwrap_or(None).unwrap_or(0);
+    .bind(user_id)
+    .fetch_one(db)
+    .await
+    .unwrap_or(0);
+    let sessions: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM mentorship_sessions WHERE mentor_user_id = $1")
+            .bind(user_id)
+            .fetch_optional(db)
+            .await
+            .unwrap_or(None)
+            .unwrap_or(0);
     if attests >= 5 || sessions >= 3 {
-        grant_if_missing(db, user_id, "mentor",
+        grant_if_missing(
+            db,
+            user_id,
+            "mentor",
             &format!("auto:threshold(attests={attests}, sessions={sessions})"),
-            &mut granted, &mut already).await?;
+            &mut granted,
+            &mut already,
+        )
+        .await?;
     }
 
     // pr_reviewer : 10 reviews approuvées (via reviews table verdict='approved').
     let reviews: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM reviews WHERE reviewer_user_id = $1 AND verdict = 'approve'",
     )
-    .bind(user_id).fetch_optional(db).await.unwrap_or(None).unwrap_or(0);
+    .bind(user_id)
+    .fetch_optional(db)
+    .await
+    .unwrap_or(None)
+    .unwrap_or(0);
     if reviews >= 10 {
-        grant_if_missing(db, user_id, "pr_reviewer",
+        grant_if_missing(
+            db,
+            user_id,
+            "pr_reviewer",
             &format!("auto:threshold(approved_reviews={reviews})"),
-            &mut granted, &mut already).await?;
+            &mut granted,
+            &mut already,
+        )
+        .await?;
     }
 
     // issue_proposer : 3 templates créés par ce user, is_community, published.
@@ -72,11 +102,21 @@ pub async fn recompute_capabilities_for_user(
         "SELECT COUNT(*) FROM challenge_templates
          WHERE created_by = $1 AND is_community = TRUE AND status = 'published'",
     )
-    .bind(user_id).fetch_optional(db).await.unwrap_or(None).unwrap_or(0);
+    .bind(user_id)
+    .fetch_optional(db)
+    .await
+    .unwrap_or(None)
+    .unwrap_or(0);
     if props >= 3 {
-        grant_if_missing(db, user_id, "issue_proposer",
+        grant_if_missing(
+            db,
+            user_id,
+            "issue_proposer",
             &format!("auto:threshold(published_proposals={props})"),
-            &mut granted, &mut already).await?;
+            &mut granted,
+            &mut already,
+        )
+        .await?;
     }
 
     // bounty_funder est manual-only : le funding réel des bounties dans le
@@ -91,9 +131,15 @@ pub async fn recompute_capabilities_for_user(
     // issue_proposer. En pratique co-granted. On garde la 2ᵉ cap distincte
     // pour permettre à un admin de révoquer curator sans toucher proposer.
     if props >= 3 {
-        grant_if_missing(db, user_id, "community_curator",
+        grant_if_missing(
+            db,
+            user_id,
+            "community_curator",
             &format!("auto:threshold(published_proposals={props})"),
-            &mut granted, &mut already).await?;
+            &mut granted,
+            &mut already,
+        )
+        .await?;
     }
 
     // forum_moderator : 20+ posts qui n'ont PAS de reports pending contre eux.
@@ -110,11 +156,21 @@ pub async fn recompute_capabilities_for_user(
           )
         "#,
     )
-    .bind(user_id).fetch_optional(db).await.unwrap_or(None).unwrap_or(0);
+    .bind(user_id)
+    .fetch_optional(db)
+    .await
+    .unwrap_or(None)
+    .unwrap_or(0);
     if clean_posts >= 20 {
-        grant_if_missing(db, user_id, "forum_moderator",
+        grant_if_missing(
+            db,
+            user_id,
+            "forum_moderator",
             &format!("auto:threshold(clean_posts={clean_posts})"),
-            &mut granted, &mut already).await?;
+            &mut granted,
+            &mut already,
+        )
+        .await?;
     }
 
     // plagiarism_reviewer + kyc_reviewer : manual-only (staff Skilluv nomme
@@ -135,11 +191,19 @@ pub async fn recompute_capabilities_for_user(
         )
         "#,
     )
-    .bind(user_id).fetch_one(db).await?;
+    .bind(user_id)
+    .fetch_one(db)
+    .await?;
     if has_any_sub {
-        grant_if_missing(db, user_id, "community_moderator",
+        grant_if_missing(
+            db,
+            user_id,
+            "community_moderator",
             "auto:umbrella_has_sub_moderator_cap",
-            &mut granted, &mut already).await?;
+            &mut granted,
+            &mut already,
+        )
+        .await?;
     }
 
     // project_steward : owner (owner_type='user') d'au moins 1 project non archivé.
@@ -147,14 +211,27 @@ pub async fn recompute_capabilities_for_user(
         "SELECT COUNT(*) FROM projects
          WHERE owner_type = 'user' AND owner_id = $1 AND archived_at IS NULL",
     )
-    .bind(user_id).fetch_optional(db).await.unwrap_or(None).unwrap_or(0);
+    .bind(user_id)
+    .fetch_optional(db)
+    .await
+    .unwrap_or(None)
+    .unwrap_or(0);
     if owned_projects >= 1 {
-        grant_if_missing(db, user_id, "project_steward",
+        grant_if_missing(
+            db,
+            user_id,
+            "project_steward",
             &format!("auto:threshold(owned_projects={owned_projects})"),
-            &mut granted, &mut already).await?;
+            &mut granted,
+            &mut already,
+        )
+        .await?;
     }
 
-    Ok(RecomputeCapReport { granted, already_active: already })
+    Ok(RecomputeCapReport {
+        granted,
+        already_active: already,
+    })
 }
 
 async fn grant_if_missing(
@@ -171,8 +248,10 @@ async fn grant_if_missing(
             WHERE user_id = $1 AND capability = $2 AND revoked_at IS NULL
         )",
     )
-    .bind(user_id).bind(capability)
-    .fetch_one(db).await?;
+    .bind(user_id)
+    .bind(capability)
+    .fetch_one(db)
+    .await?;
     if exists {
         already.push(capability.to_string());
         return Ok(());
@@ -182,8 +261,11 @@ async fn grant_if_missing(
          VALUES ($1, $2, $3)
          ON CONFLICT DO NOTHING",
     )
-    .bind(user_id).bind(capability).bind(reason)
-    .execute(db).await?;
+    .bind(user_id)
+    .bind(capability)
+    .bind(reason)
+    .execute(db)
+    .await?;
     granted.push(capability.to_string());
     Ok(())
 }

@@ -16,9 +16,8 @@ use axum::{Json, Router};
 use openidconnect::core::{CoreClient, CoreProviderMetadata, CoreResponseType};
 use openidconnect::reqwest::async_http_client;
 use openidconnect::{
-    AuthenticationFlow, AuthorizationCode, ClientId, ClientSecret, CsrfToken,
-    IssuerUrl, Nonce, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope,
-    TokenResponse,
+    AuthenticationFlow, AuthorizationCode, ClientId, ClientSecret, CsrfToken, IssuerUrl, Nonce,
+    PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope, TokenResponse,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -82,8 +81,12 @@ struct UpsertConfigBody {
     default_role: String,
 }
 
-fn default_true() -> bool { true }
-fn default_role() -> String { "recruiter".to_string() }
+fn default_true() -> bool {
+    true
+}
+fn default_role() -> String {
+    "recruiter".to_string()
+}
 
 async fn require_enterprise_owner_direct(
     state: &AppState,
@@ -105,8 +108,8 @@ async fn upsert_config(
     // (or Keycloak in Docker) can be exercised end-to-end.
     let issuer = body.issuer.trim();
     let is_https = issuer.starts_with("https://");
-    let is_local_http = issuer.starts_with("http://127.0.0.1")
-        || issuer.starts_with("http://localhost");
+    let is_local_http =
+        issuer.starts_with("http://127.0.0.1") || issuer.starts_with("http://localhost");
     if issuer.is_empty() || !(is_https || is_local_http) {
         return Err(AppError::Validation(
             "issuer must be an https URL (or http://localhost / http://127.0.0.1 for local testing)".into(),
@@ -227,11 +230,17 @@ async fn discover(
 // ─── OIDC login flow (public) ────────────────────────────────────
 
 fn callback_url(state: &AppState, slug: &str) -> String {
-    format!("{}/api/enterprise/sso/{}/callback", state.config.base_url, slug)
+    format!(
+        "{}/api/enterprise/sso/{}/callback",
+        state.config.base_url, slug
+    )
 }
 
 fn start_url(state: &AppState, slug: &str) -> String {
-    format!("{}/api/enterprise/sso/{}/start", state.config.base_url, slug)
+    format!(
+        "{}/api/enterprise/sso/{}/start",
+        state.config.base_url, slug
+    )
 }
 
 async fn build_client(
@@ -345,10 +354,7 @@ async fn callback(
         .ok_or_else(|| AppError::Unauthorized)?;
 
     let claims = id_token
-        .claims(
-            &client.id_token_verifier(),
-            &Nonce::new(login_state.nonce),
-        )
+        .claims(&client.id_token_verifier(), &Nonce::new(login_state.nonce))
         .map_err(|_| AppError::Unauthorized)?;
 
     let email = claims

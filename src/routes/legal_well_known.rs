@@ -18,7 +18,10 @@ pub fn well_known_routes() -> Router<AppState> {
         .route("/.well-known/security.txt", get(security_txt))
         .route("/security.txt", get(security_txt))
         .route("/api/admin/accounting/export", get(admin_accounting_export))
-        .route("/api/enterprise/dashboard/overview", get(dashboard_overview))
+        .route(
+            "/api/enterprise/dashboard/overview",
+            get(dashboard_overview),
+        )
         .route("/api/enterprise/dashboard/funnel", get(dashboard_funnel))
 }
 
@@ -35,10 +38,7 @@ async fn security_txt() -> impl IntoResponse {
          Canonical: https://skilluv.com/.well-known/security.txt\n",
         one_year_ahead.to_rfc3339()
     );
-    (
-        [(header::CONTENT_TYPE, "text/plain; charset=utf-8")],
-        body,
-    )
+    ([(header::CONTENT_TYPE, "text/plain; charset=utf-8")], body)
 }
 
 // ─── Accounting export (3.18) ────────────────────────────────────
@@ -77,7 +77,8 @@ async fn admin_accounting_export(
         let line = format!(
             "{};{};{};{};{};{};{};{};{};{}\n",
             r.get::<String, _>("invoice_number"),
-            r.get::<chrono::DateTime<chrono::Utc>, _>("issued_at").format("%Y-%m-%d"),
+            r.get::<chrono::DateTime<chrono::Utc>, _>("issued_at")
+                .format("%Y-%m-%d"),
             r.get::<String, _>("company_name").replace(';', ","),
             r.get::<Option<String>, _>("country").unwrap_or_default(),
             r.get::<i64, _>("amount_ht_cents") as f64 / 100.0,
@@ -85,7 +86,8 @@ async fn admin_accounting_export(
             r.get::<i64, _>("amount_ttc_cents") as f64 / 100.0,
             r.get::<bigdecimal::BigDecimal, _>("tva_rate"),
             r.get::<String, _>("currency"),
-            r.get::<Option<String>, _>("stripe_payment_intent_id").unwrap_or_default(),
+            r.get::<Option<String>, _>("stripe_payment_intent_id")
+                .unwrap_or_default(),
         );
         csv.push_str(&line);
     }
@@ -110,10 +112,7 @@ struct AccountingQuery {
 
 // ─── Enterprise dashboard (3.13) ─────────────────────────────────
 
-async fn current_enterprise_for(
-    db: &sqlx::PgPool,
-    user_id: Uuid,
-) -> Result<Uuid, AppError> {
+async fn current_enterprise_for(db: &sqlx::PgPool, user_id: Uuid) -> Result<Uuid, AppError> {
     let row: Option<(Uuid,)> = sqlx::query_as(
         "SELECT enterprise_id FROM enterprise_members WHERE user_id = $1 AND status = 'active' LIMIT 1",
     )

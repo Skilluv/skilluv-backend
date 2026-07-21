@@ -119,10 +119,11 @@ async fn test_badge_earned_after_first_challenge() {
     .await;
 
     // Check badges via profile
-    let user_id: String = sqlx::query_scalar("SELECT id::TEXT FROM users WHERE username = 'badgeuser'")
-        .fetch_one(&app.db)
-        .await
-        .unwrap();
+    let user_id: String =
+        sqlx::query_scalar("SELECT id::TEXT FROM users WHERE username = 'badgeuser'")
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
 
     let badge_count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM user_badges WHERE user_id = $1::UUID")
@@ -175,9 +176,7 @@ async fn test_submissions_history() {
     .await;
 
     // Check submissions
-    let resp = app
-        .get(&format!("/api/challenges/{cid}/submissions"))
-        .await;
+    let resp = app.get(&format!("/api/challenges/{cid}/submissions")).await;
     assert_eq!(resp.status(), StatusCode::OK);
 
     let body: serde_json::Value = resp.json().await.unwrap();

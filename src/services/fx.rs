@@ -204,11 +204,10 @@ pub async fn active_packs(db: &PgPool, kind: Option<&str>) -> Result<Vec<Pricing
 }
 
 pub async fn pack_by_slug(db: &PgPool, slug: &str) -> Result<PricingPack, AppError> {
-    let row: Option<PricingPack> =
-        sqlx::query_as("SELECT * FROM pricing_packs WHERE slug = $1")
-            .bind(slug)
-            .fetch_optional(db)
-            .await?;
+    let row: Option<PricingPack> = sqlx::query_as("SELECT * FROM pricing_packs WHERE slug = $1")
+        .bind(slug)
+        .fetch_optional(db)
+        .await?;
     row.ok_or(AppError::NotFound("pack not found".into()))
 }
 

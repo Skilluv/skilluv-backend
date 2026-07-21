@@ -40,10 +40,7 @@ struct EmailPrefs {
     updated_at: chrono::DateTime<chrono::Utc>,
 }
 
-async fn get_prefs(
-    State(state): State<AppState>,
-    auth: AuthUser,
-) -> Result<Json<Value>, AppError> {
+async fn get_prefs(State(state): State<AppState>, auth: AuthUser) -> Result<Json<Value>, AppError> {
     // Upsert defaults on first read.
     let prefs: EmailPrefs = sqlx::query_as(
         r#"
@@ -108,12 +105,10 @@ async fn unsubscribe(
     Query(query): Query<UnsubscribeQuery>,
 ) -> Result<Html<String>, AppError> {
     let secret = unsub_secret(&state.config.jwt_secret);
-    let (user_id, token_kind) = digest::verify_unsubscribe_token(&query.token, &secret)
-        .ok_or(AppError::Unauthorized)?;
+    let (user_id, token_kind) =
+        digest::verify_unsubscribe_token(&query.token, &secret).ok_or(AppError::Unauthorized)?;
     if token_kind != query.kind {
-        return Err(AppError::Validation(
-            "Token kind mismatch".into(),
-        ));
+        return Err(AppError::Validation("Token kind mismatch".into()));
     }
 
     let column = match query.kind.as_str() {
@@ -183,11 +178,10 @@ async fn brevo_webhook(
     }
 
     // Find the user by email
-    let user_id: Option<(uuid::Uuid,)> =
-        sqlx::query_as("SELECT id FROM users WHERE email = $1")
-            .bind(email)
-            .fetch_optional(&state.db)
-            .await?;
+    let user_id: Option<(uuid::Uuid,)> = sqlx::query_as("SELECT id FROM users WHERE email = $1")
+        .bind(email)
+        .fetch_optional(&state.db)
+        .await?;
     let Some((user_id,)) = user_id else {
         // Not our user — Brevo can send events for other senders; ignore.
         return Ok(StatusCode::OK);
@@ -236,10 +230,12 @@ async fn brevo_webhook(
         }
         "opened" => {
             if let Some(ref msg) = provider_msg_id {
-                sqlx::query("UPDATE email_log SET opened_at = NOW() WHERE provider_message_id = $1")
-                    .bind(msg)
-                    .execute(&state.db)
-                    .await?;
+                sqlx::query(
+                    "UPDATE email_log SET opened_at = NOW() WHERE provider_message_id = $1",
+                )
+                .bind(msg)
+                .execute(&state.db)
+                .await?;
             }
         }
         _ => {
@@ -272,8 +268,8 @@ async fn admin_run_weekly_digest(
 fn unsub_secret(jwt_secret: &str) -> Vec<u8> {
     use hmac::{Hmac, Mac};
     type HmacSha256 = Hmac<sha2::Sha256>;
-    let mut mac = HmacSha256::new_from_slice(jwt_secret.as_bytes())
-        .expect("HMAC accepts any key size");
+    let mut mac =
+        HmacSha256::new_from_slice(jwt_secret.as_bytes()).expect("HMAC accepts any key size");
     mac.update(b"skilluv-unsubscribe-v1");
     mac.finalize().into_bytes().to_vec()
 }

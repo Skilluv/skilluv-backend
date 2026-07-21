@@ -37,7 +37,9 @@ pub struct CreateSeasonInput {
 
 pub async fn create_season(db: &PgPool, input: CreateSeasonInput) -> Result<Season, AppError> {
     if input.ends_at <= input.starts_at {
-        return Err(AppError::Validation("ends_at must be after starts_at".into()));
+        return Err(AppError::Validation(
+            "ends_at must be after starts_at".into(),
+        ));
     }
     let row: Season = sqlx::query_as(
         r#"
@@ -94,12 +96,11 @@ pub async fn set_season_status(
 /// Top 20% bumped one rank, bottom 20% dropped one rank.
 pub async fn close_season(db: &PgPool, season_id: Uuid) -> Result<SeasonCloseReport, AppError> {
     let mut tx = db.begin().await?;
-    let season: Season =
-        sqlx::query_as("SELECT * FROM seasons WHERE id = $1 FOR UPDATE")
-            .bind(season_id)
-            .fetch_optional(&mut *tx)
-            .await?
-            .ok_or(AppError::NotFound("season not found".into()))?;
+    let season: Season = sqlx::query_as("SELECT * FROM seasons WHERE id = $1 FOR UPDATE")
+        .bind(season_id)
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or(AppError::NotFound("season not found".into()))?;
     if season.status == "ended" {
         return Err(AppError::Validation("season already ended".into()));
     }
@@ -253,10 +254,15 @@ pub async fn create_tournament(
         )));
     }
     if input.ends_at <= input.starts_at {
-        return Err(AppError::Validation("ends_at must be after starts_at".into()));
+        return Err(AppError::Validation(
+            "ends_at must be after starts_at".into(),
+        ));
     }
     let slug = input.slug.trim().to_lowercase();
-    if slug.len() < 2 || slug.len() > 60 || !slug.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+    if slug.len() < 2
+        || slug.len() > 60
+        || !slug.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+    {
         return Err(AppError::Validation(
             "slug must be 2-60 lowercase alphanumeric/dash".into(),
         ));
@@ -319,13 +325,25 @@ pub async fn list_tournaments(
     };
 
     let rows = match (upcoming_or_active_only, status_filter) {
-        (true, _) => sqlx::query_as(sql).bind(limit.clamp(1, 100)).fetch_all(db).await?,
-        (false, Some(s)) => sqlx::query_as(sql)
-            .bind(s)
-            .bind(limit.clamp(1, 100))
-            .fetch_all(db)
-            .await?,
-        (false, None) => sqlx::query_as(sql).bind(limit.clamp(1, 100)).fetch_all(db).await?,
+        (true, _) => {
+            sqlx::query_as(sql)
+                .bind(limit.clamp(1, 100))
+                .fetch_all(db)
+                .await?
+        }
+        (false, Some(s)) => {
+            sqlx::query_as(sql)
+                .bind(s)
+                .bind(limit.clamp(1, 100))
+                .fetch_all(db)
+                .await?
+        }
+        (false, None) => {
+            sqlx::query_as(sql)
+                .bind(limit.clamp(1, 100))
+                .fetch_all(db)
+                .await?
+        }
     };
     Ok(rows)
 }
@@ -378,13 +396,11 @@ pub async fn register_individual(
     tournament_id: Uuid,
     user_id: Uuid,
 ) -> Result<TournamentParticipant, AppError> {
-    let t = sqlx::query_as::<_, Tournament>(
-        "SELECT * FROM tournaments WHERE id = $1",
-    )
-    .bind(tournament_id)
-    .fetch_optional(db)
-    .await?
-    .ok_or(AppError::NotFound("tournament not found".into()))?;
+    let t = sqlx::query_as::<_, Tournament>("SELECT * FROM tournaments WHERE id = $1")
+        .bind(tournament_id)
+        .fetch_optional(db)
+        .await?
+        .ok_or(AppError::NotFound("tournament not found".into()))?;
     if t.kind != "individual" && t.kind != "hackathon" {
         return Err(AppError::Validation(
             "this tournament is not open to individual registration".into(),
@@ -416,13 +432,11 @@ pub async fn register_guild(
     requester_id: Uuid,
     guild_id: Uuid,
 ) -> Result<TournamentParticipant, AppError> {
-    let t = sqlx::query_as::<_, Tournament>(
-        "SELECT * FROM tournaments WHERE id = $1",
-    )
-    .bind(tournament_id)
-    .fetch_optional(db)
-    .await?
-    .ok_or(AppError::NotFound("tournament not found".into()))?;
+    let t = sqlx::query_as::<_, Tournament>("SELECT * FROM tournaments WHERE id = $1")
+        .bind(tournament_id)
+        .fetch_optional(db)
+        .await?
+        .ok_or(AppError::NotFound("tournament not found".into()))?;
     if t.kind != "guild_war" {
         return Err(AppError::Validation(
             "this tournament is not a guild_war".into(),
@@ -434,13 +448,12 @@ pub async fn register_guild(
         ));
     }
     // Requester must be an officer of the guild
-    let role: Option<(String,)> = sqlx::query_as(
-        "SELECT role FROM guild_members WHERE guild_id = $1 AND user_id = $2",
-    )
-    .bind(guild_id)
-    .bind(requester_id)
-    .fetch_optional(db)
-    .await?;
+    let role: Option<(String,)> =
+        sqlx::query_as("SELECT role FROM guild_members WHERE guild_id = $1 AND user_id = $2")
+            .bind(guild_id)
+            .bind(requester_id)
+            .fetch_optional(db)
+            .await?;
     let is_officer = matches!(
         role.map(|(r,)| r).as_deref(),
         Some("founder") | Some("officer")

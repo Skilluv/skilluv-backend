@@ -261,7 +261,10 @@ async fn pr_merged_auto_issues_gesture_attestations_on_level_2() {
         .fetch_one(&db)
         .await
         .expect("count");
-        assert_eq!(count, 1, "Expected 1 gesture attestation for skill {skill_id}");
+        assert_eq!(
+            count, 1,
+            "Expected 1 gesture attestation for skill {skill_id}"
+        );
     }
 
     // Portfolio public : 2 attestations
@@ -287,13 +290,11 @@ async fn gesture_attestation_is_not_duplicated_on_re_run() {
         .expect("first");
 
     // Reset slice pour permettre 2e claim (simulé)
-    sqlx::query(
-        "UPDATE project_slices SET status = 'claimed' WHERE claimed_by_user_id = $1",
-    )
-    .bind(user_id)
-    .execute(&db)
-    .await
-    .expect("reset");
+    sqlx::query("UPDATE project_slices SET status = 'claimed' WHERE claimed_by_user_id = $1")
+        .bind(user_id)
+        .execute(&db)
+        .await
+        .expect("reset");
 
     let params2 = make_pr(project_id, &gh_login, "sha-second");
     DeliverablesService::create_from_pr_merged(&db, params2)

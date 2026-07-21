@@ -4,9 +4,7 @@ use chrono::{Duration, Utc};
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use uuid::Uuid;
 
-use skilluv_backend::services::{
-    CreateSeasonParams, SeasonsService, StewardsService,
-};
+use skilluv_backend::services::{CreateSeasonParams, SeasonsService, StewardsService};
 
 async fn setup_test_db() -> (PgPool, String) {
     let db_name = format!(
@@ -157,26 +155,26 @@ async fn activate_season_deactivates_previous_active() {
     .await
     .expect("s2");
 
-    SeasonsService::activate(&db, "s1-2027").await.expect("act1");
+    SeasonsService::activate(&db, "s1-2027")
+        .await
+        .expect("act1");
     let current1 = SeasonsService::get_current(&db).await.expect("current1");
     assert_eq!(current1.map(|s| s.slug), Some("s1-2027".to_string()));
 
     // Activate s2 → s1 should become completed
-    SeasonsService::activate(&db, "s2-2027").await.expect("act2");
-    let s1_status: String = sqlx::query_scalar(
-        "SELECT status FROM seasons WHERE slug = 's1-2027'",
-    )
-    .fetch_one(&db)
-    .await
-    .expect("fetch");
+    SeasonsService::activate(&db, "s2-2027")
+        .await
+        .expect("act2");
+    let s1_status: String = sqlx::query_scalar("SELECT status FROM seasons WHERE slug = 's1-2027'")
+        .fetch_one(&db)
+        .await
+        .expect("fetch");
     assert_eq!(s1_status, "completed");
 
-    let s2_status: String = sqlx::query_scalar(
-        "SELECT status FROM seasons WHERE slug = 's2-2027'",
-    )
-    .fetch_one(&db)
-    .await
-    .expect("fetch");
+    let s2_status: String = sqlx::query_scalar("SELECT status FROM seasons WHERE slug = 's2-2027'")
+        .fetch_one(&db)
+        .await
+        .expect("fetch");
     assert_eq!(s2_status, "active");
 
     db.close().await;

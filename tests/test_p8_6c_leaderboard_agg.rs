@@ -154,9 +154,15 @@ async fn seed_from_db_query_aggregates_by_domain() {
     .await
     .expect("agg");
 
-    let code = rows.iter().find(|(u, d, _)| *u == uid && d == "code").unwrap();
+    let code = rows
+        .iter()
+        .find(|(u, d, _)| *u == uid && d == "code")
+        .unwrap();
     assert_eq!(code.2, 35);
-    let design = rows.iter().find(|(u, d, _)| *u == uid && d == "design").unwrap();
+    let design = rows
+        .iter()
+        .find(|(u, d, _)| *u == uid && d == "design")
+        .unwrap();
     assert_eq!(design.2, 100);
     let count = rows.iter().filter(|(u, _, _)| *u == uid).count();
     assert_eq!(count, 2, "un row par (user, domain)");

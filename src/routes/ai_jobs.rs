@@ -67,11 +67,12 @@ async fn request_code_review(
     let source_code: String = sub.get("source_code");
     let test_output: Option<String> = sub.get("test_output");
 
-    let ch = sqlx::query("SELECT title, description, difficulty FROM challenge_templates WHERE id = $1")
-        .bind(body.challenge_id)
-        .fetch_optional(&state.db)
-        .await?
-        .ok_or(AppError::NotFound("challenge not found".into()))?;
+    let ch =
+        sqlx::query("SELECT title, description, difficulty FROM challenge_templates WHERE id = $1")
+            .bind(body.challenge_id)
+            .fetch_optional(&state.db)
+            .await?
+            .ok_or(AppError::NotFound("challenge not found".into()))?;
     let title: String = ch.get("title");
     let description: String = ch.get("description");
     let difficulty: i32 = ch.get("difficulty");

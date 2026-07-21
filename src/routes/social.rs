@@ -92,14 +92,8 @@ async fn create_comment(
 
     // Extract @mentions and notify mentioned users
     let usernames = social::parse_mentions(&body.body);
-    let mentioned_ids = social::record_mentions(
-        &state.db,
-        auth.user_id,
-        "comment",
-        comment.id,
-        &usernames,
-    )
-    .await?;
+    let mentioned_ids =
+        social::record_mentions(&state.db, auth.user_id, "comment", comment.id, &usernames).await?;
     for uid in &mentioned_ids {
         // Persistent notif (DB) + ws push + redis counter, via the centralised service.
         let _ = NotificationService::send(
@@ -172,12 +166,11 @@ async fn create_comment(
 
     // If this comment is a reply, notify the parent comment's author (unless it's the same user).
     if let Some(parent_id) = comment.parent_id {
-        if let Ok(Some((parent_author,))) = sqlx::query_as::<_, (Uuid,)>(
-            "SELECT author_id FROM comments WHERE id = $1",
-        )
-        .bind(parent_id)
-        .fetch_optional(&state.db)
-        .await
+        if let Ok(Some((parent_author,))) =
+            sqlx::query_as::<_, (Uuid,)>("SELECT author_id FROM comments WHERE id = $1")
+                .bind(parent_id)
+                .fetch_optional(&state.db)
+                .await
         {
             if parent_author != auth.user_id && !mentioned_ids.contains(&parent_author) {
                 let _ = NotificationService::send(
@@ -248,8 +241,7 @@ async fn edit_comment(
     Path(id): Path<Uuid>,
     Json(body): Json<EditCommentBody>,
 ) -> Result<Json<Value>, AppError> {
-    let updated =
-        social::edit_comment(&state.db, id, auth.user_id, &auth.role, &body.body).await?;
+    let updated = social::edit_comment(&state.db, id, auth.user_id, &auth.role, &body.body).await?;
     Ok(Json(build_response(json!({ "comment": updated }))))
 }
 

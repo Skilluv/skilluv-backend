@@ -89,10 +89,7 @@ pub struct PayoutParams<'a> {
 pub trait MobileMoneyProvider: Send + Sync {
     fn name(&self) -> ProviderName;
 
-    async fn initiate_payout(
-        &self,
-        params: &PayoutParams<'_>,
-    ) -> Result<PayoutResult, AppError>;
+    async fn initiate_payout(&self, params: &PayoutParams<'_>) -> Result<PayoutResult, AppError>;
 }
 
 /// Sanity-check du numéro de téléphone E.164 : commence par '+' + 8 à 15 digits.
@@ -123,10 +120,7 @@ impl MobileMoneyProvider for OrangeMoneyProvider {
         ProviderName::Orange
     }
 
-    async fn initiate_payout(
-        &self,
-        params: &PayoutParams<'_>,
-    ) -> Result<PayoutResult, AppError> {
+    async fn initiate_payout(&self, params: &PayoutParams<'_>) -> Result<PayoutResult, AppError> {
         validate_e164(params.phone)?;
         if params.currency.to_uppercase() != "XOF" {
             return Err(AppError::Validation(
@@ -188,10 +182,7 @@ impl MobileMoneyProvider for MtnMobileMoneyProvider {
         ProviderName::Mtn
     }
 
-    async fn initiate_payout(
-        &self,
-        params: &PayoutParams<'_>,
-    ) -> Result<PayoutResult, AppError> {
+    async fn initiate_payout(&self, params: &PayoutParams<'_>) -> Result<PayoutResult, AppError> {
         validate_e164(params.phone)?;
         let txn_id = format!("mtn:dev:{}", Uuid::new_v4());
         tracing::info!(
@@ -224,10 +215,7 @@ impl MobileMoneyProvider for WaveProvider {
         ProviderName::Wave
     }
 
-    async fn initiate_payout(
-        &self,
-        params: &PayoutParams<'_>,
-    ) -> Result<PayoutResult, AppError> {
+    async fn initiate_payout(&self, params: &PayoutParams<'_>) -> Result<PayoutResult, AppError> {
         validate_e164(params.phone)?;
         let txn_id = format!("wave:dev:{}", Uuid::new_v4());
         tracing::info!(

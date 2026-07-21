@@ -371,13 +371,11 @@ async fn expire_stale_claims_returns_expired_to_pool() {
     assert_eq!(expired_count, 1);
 
     // The slice should now be open again
-    let status: String = sqlx::query_scalar(
-        "SELECT status FROM project_slices WHERE id = $1",
-    )
-    .bind(expired_slice_id)
-    .fetch_one(&db)
-    .await
-    .expect("query");
+    let status: String = sqlx::query_scalar("SELECT status FROM project_slices WHERE id = $1")
+        .bind(expired_slice_id)
+        .fetch_one(&db)
+        .await
+        .expect("query");
     assert_eq!(status, "open");
 
     db.close().await;

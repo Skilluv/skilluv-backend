@@ -17,8 +17,8 @@
 //! Le helper est **best-effort** — si l'insert échoue (DB down), on log via
 //! `tracing::warn!` mais on ne propage jamais l'erreur au caller.
 
-use std::time::Duration;
 use sqlx::PgPool;
+use std::time::Duration;
 use uuid::Uuid;
 
 /// Record un appel gRPC dans `ai_call_log`. Best-effort.

@@ -136,14 +136,19 @@ async fn consume_link(
     Json(body): Json<ConsumeBody>,
 ) -> Result<impl IntoResponse, AppError> {
     let token_hash = hash_token(&body.token);
-    let row: Option<(Uuid, String, String, chrono::DateTime<chrono::Utc>, Option<chrono::DateTime<chrono::Utc>>)> = sqlx::query_as(
+    let row: Option<(
+        Uuid,
+        String,
+        String,
+        chrono::DateTime<chrono::Utc>,
+        Option<chrono::DateTime<chrono::Utc>>,
+    )> = sqlx::query_as(
         "SELECT id, email, intent, expires_at, consumed_at FROM magic_links WHERE token_hash = $1",
     )
     .bind(&token_hash)
     .fetch_optional(&state.db)
     .await?;
-    let (link_id, email, intent, expires_at, consumed_at) =
-        row.ok_or(AppError::Unauthorized)?;
+    let (link_id, email, intent, expires_at, consumed_at) = row.ok_or(AppError::Unauthorized)?;
     if consumed_at.is_some() {
         return Err(AppError::Unauthorized);
     }
@@ -175,7 +180,8 @@ async fn consume_link(
         && (*totp_enabled || *email_2fa_enabled)
     {
         return Err(AppError::Validation(
-            "This account uses two-factor authentication. Please sign in with your password.".to_string(),
+            "This account uses two-factor authentication. Please sign in with your password."
+                .to_string(),
         ));
     }
     let (user_id, role) = match user {
@@ -220,12 +226,10 @@ async fn consume_link(
     // to true if it wasn't already. Without this, a candidate/enterprise who
     // signed up but never verified stays locked out of the write endpoints
     // and /enterprise/* even though they've now proven they own the address.
-    sqlx::query(
-        "UPDATE users SET email_verified = TRUE WHERE id = $1 AND email_verified = FALSE",
-    )
-    .bind(user_id)
-    .execute(&state.db)
-    .await?;
+    sqlx::query("UPDATE users SET email_verified = TRUE WHERE id = $1 AND email_verified = FALSE")
+        .bind(user_id)
+        .execute(&state.db)
+        .await?;
 
     // Label the session as magic_link so audit + downstream gates can tell it
     // apart from a password login.
@@ -252,10 +256,7 @@ async fn consume_link(
     );
     metrics::counter!("skilluv_magic_link_consumed_total").increment(1);
     Ok((
-        AppendHeaders([
-            (SET_COOKIE, cookie),
-            (SET_COOKIE, refresh_cookie),
-        ]),
+        AppendHeaders([(SET_COOKIE, cookie), (SET_COOKIE, refresh_cookie)]),
         Json(build_response(json!({
             "user_id": user_id,
             "login_method": "magic_link",

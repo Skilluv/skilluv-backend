@@ -144,8 +144,14 @@ async fn marketplace_lists_only_open_slots_enriched() {
     .await
     .expect("coder slot");
     // Fill it
-    sqlx::query("UPDATE user_skills SET proficiency_level = 3 WHERE user_id = $1 AND skill_id = $2")
-        .bind(u).bind(skill).execute(&db).await.ok();
+    sqlx::query(
+        "UPDATE user_skills SET proficiency_level = 3 WHERE user_id = $1 AND skill_id = $2",
+    )
+    .bind(u)
+    .bind(skill)
+    .execute(&db)
+    .await
+    .ok();
     // Ensure user_skills row exists so fill_slot passes
     sqlx::query(
         "INSERT INTO user_skills (user_id, skill_id, proficiency_level) VALUES ($1, $2, 3)
@@ -156,7 +162,9 @@ async fn marketplace_lists_only_open_slots_enriched() {
     .execute(&db)
     .await
     .expect("us");
-    TeamRolesService::fill_slot(&db, filled.id, u).await.expect("fill");
+    TeamRolesService::fill_slot(&db, filled.id, u)
+        .await
+        .expect("fill");
 
     let slots = TeamRolesService::marketplace_open_slots(&db, None, None, 50)
         .await
@@ -270,13 +278,11 @@ async fn notify_eligible_users_inserts_notifications_for_skill_matched_only() {
     assert_eq!(count, 2);
 
     // too_low doit ne pas être notifié
-    let n_low: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM notifications WHERE user_id = $1",
-    )
-    .bind(too_low)
-    .fetch_one(&db)
-    .await
-    .expect("n_low");
+    let n_low: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM notifications WHERE user_id = $1")
+        .bind(too_low)
+        .fetch_one(&db)
+        .await
+        .expect("n_low");
     assert_eq!(n_low, 0);
 
     db.close().await;

@@ -16,9 +16,9 @@ pub mod websocket;
 use std::sync::Arc;
 
 use axum::Router;
+use axum::http::{HeaderValue, Method, header};
 use redis::aio::ConnectionManager;
 use sqlx::PgPool;
-use axum::http::{HeaderValue, Method, header};
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::trace::TraceLayer;
 
@@ -169,9 +169,8 @@ pub fn build_router(state: AppState) -> Router {
 /// wildcards which browsers refuse to combine with credentials, meaning we
 /// were quietly relying on same-origin requests.
 fn build_cors_layer() -> CorsLayer {
-    let raw = std::env::var("ALLOWED_ORIGINS").unwrap_or_else(|_| {
-        "http://localhost:5173,http://localhost:5174".to_string()
-    });
+    let raw = std::env::var("ALLOWED_ORIGINS")
+        .unwrap_or_else(|_| "http://localhost:5173,http://localhost:5174".to_string());
     let origins: Vec<HeaderValue> = raw
         .split(',')
         .map(str::trim)
@@ -200,7 +199,5 @@ fn build_cors_layer() -> CorsLayer {
             header::HeaderName::from_static("x-csrf-token"),
             header::HeaderName::from_static("x-skilluv-tenant"),
         ])
-        .expose_headers([
-            header::HeaderName::from_static("x-request-id"),
-        ])
+        .expose_headers([header::HeaderName::from_static("x-request-id")])
 }

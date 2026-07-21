@@ -16,13 +16,21 @@ async fn seed_user(app: &TestApp, username: &str, active: bool) -> uuid::Uuid {
 }
 
 async fn attach_orientation(app: &TestApp, user_id: uuid::Uuid, slug: &str, primary: bool) {
-    let oid: uuid::Uuid = sqlx::query_scalar(
-        "SELECT id FROM orientations WHERE slug = $1",
-    ).bind(slug).fetch_one(&app.db).await.unwrap();
+    let oid: uuid::Uuid = sqlx::query_scalar("SELECT id FROM orientations WHERE slug = $1")
+        .bind(slug)
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
     sqlx::query(
         "INSERT INTO user_orientations (user_id, orientation_id, mode, is_primary)
          VALUES ($1, $2, 'active', $3)",
-    ).bind(user_id).bind(oid).bind(primary).execute(&app.db).await.unwrap();
+    )
+    .bind(user_id)
+    .bind(oid)
+    .bind(primary)
+    .execute(&app.db)
+    .await
+    .unwrap();
 }
 
 #[tokio::test]
@@ -50,7 +58,11 @@ async fn public_orientations_returns_empty_when_profile_inactive() {
     assert_eq!(resp.status().as_u16(), 200);
     let body: serde_json::Value = resp.json().await.unwrap();
     let list = body["data"]["orientations"].as_array().unwrap();
-    assert_eq!(list.len(), 0, "profile inactive → empty (pas 403 pour éviter énumération)");
+    assert_eq!(
+        list.len(),
+        0,
+        "profile inactive → empty (pas 403 pour éviter énumération)"
+    );
 }
 
 #[tokio::test]

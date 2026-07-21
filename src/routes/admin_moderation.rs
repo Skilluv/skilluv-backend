@@ -397,9 +397,9 @@ async fn unban_user(
              updated_at = NOW()
          WHERE id = $1",
     )
-        .bind(id)
-        .execute(&state.db)
-        .await?;
+    .bind(id)
+    .execute(&state.db)
+    .await?;
 
     let ip = extract_ip(&headers);
     write_audit_log(

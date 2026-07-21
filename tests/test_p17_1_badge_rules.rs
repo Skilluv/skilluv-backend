@@ -68,12 +68,11 @@ async fn create_user(db: &PgPool) -> Uuid {
 #[tokio::test]
 async fn seed_migrates_nine_legacy_badges_all_deprecated() {
     let (db, name) = setup_test_db().await;
-    let count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM badge_rules WHERE slug LIKE 'legacy_%'",
-    )
-    .fetch_one(&db)
-    .await
-    .unwrap();
+    let count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM badge_rules WHERE slug LIKE 'legacy_%'")
+            .fetch_one(&db)
+            .await
+            .unwrap();
     assert_eq!(count, 9, "9 legacy badges migrated to rules");
 
     let non_deprecated: i64 = sqlx::query_scalar(
@@ -137,20 +136,17 @@ async fn user_badge_stores_source_proofs_and_rarity() {
     let u = create_user(&db).await;
 
     // Prends une rule existante (une legacy)
-    let rule_id: Uuid = sqlx::query_scalar(
-        "SELECT id FROM badge_rules WHERE slug = 'legacy_first_challenge'",
-    )
-    .fetch_one(&db)
-    .await
-    .unwrap();
+    let rule_id: Uuid =
+        sqlx::query_scalar("SELECT id FROM badge_rules WHERE slug = 'legacy_first_challenge'")
+            .fetch_one(&db)
+            .await
+            .unwrap();
 
     // Fait référence à un badge legacy (via badge_id, table historique).
-    let badge_id: Uuid = sqlx::query_scalar(
-        "SELECT id FROM badges WHERE slug = 'first_challenge'",
-    )
-    .fetch_one(&db)
-    .await
-    .unwrap();
+    let badge_id: Uuid = sqlx::query_scalar("SELECT id FROM badges WHERE slug = 'first_challenge'")
+        .fetch_one(&db)
+        .await
+        .unwrap();
 
     let proof_a = Uuid::new_v4();
     let proof_b = Uuid::new_v4();
@@ -186,16 +182,17 @@ async fn user_badge_stores_source_proofs_and_rarity() {
 async fn user_badge_rarity_check_rejects_invalid() {
     let (db, name) = setup_test_db().await;
     let u = create_user(&db).await;
-    let badge_id: Uuid = sqlx::query_scalar(
-        "SELECT id FROM badges WHERE slug = 'first_challenge'",
-    )
-    .fetch_one(&db)
-    .await
-    .unwrap();
+    let badge_id: Uuid = sqlx::query_scalar("SELECT id FROM badges WHERE slug = 'first_challenge'")
+        .fetch_one(&db)
+        .await
+        .unwrap();
     let bad = sqlx::query(
         "INSERT INTO user_badges (user_id, badge_id, rarity) VALUES ($1, $2, 'mythical')",
     )
-    .bind(u).bind(badge_id).execute(&db).await;
+    .bind(u)
+    .bind(badge_id)
+    .execute(&db)
+    .await;
     assert!(bad.is_err(), "invalid rarity rejected");
     db.close().await;
     cleanup_test_db(&name).await;
@@ -205,32 +202,42 @@ async fn user_badge_rarity_check_rejects_invalid() {
 async fn revoked_at_cascades_soft_delete() {
     let (db, name) = setup_test_db().await;
     let u = create_user(&db).await;
-    let badge_id: Uuid = sqlx::query_scalar(
-        "SELECT id FROM badges WHERE slug = 'first_challenge'",
-    )
-    .fetch_one(&db).await.unwrap();
+    let badge_id: Uuid = sqlx::query_scalar("SELECT id FROM badges WHERE slug = 'first_challenge'")
+        .fetch_one(&db)
+        .await
+        .unwrap();
 
     sqlx::query(
         "INSERT INTO user_badges (user_id, badge_id, rarity)
          VALUES ($1, $2, 'common')",
     )
-    .bind(u).bind(badge_id).execute(&db).await.unwrap();
+    .bind(u)
+    .bind(badge_id)
+    .execute(&db)
+    .await
+    .unwrap();
 
     sqlx::query(
         "UPDATE user_badges SET revoked_at = NOW(), revoked_reason = 'source_proof_removed'
          WHERE user_id = $1 AND badge_id = $2",
     )
-    .bind(u).bind(badge_id).execute(&db).await.unwrap();
+    .bind(u)
+    .bind(badge_id)
+    .execute(&db)
+    .await
+    .unwrap();
 
-    let active: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM user_badges WHERE revoked_at IS NULL",
-    )
-    .fetch_one(&db).await.unwrap();
+    let active: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM user_badges WHERE revoked_at IS NULL")
+            .fetch_one(&db)
+            .await
+            .unwrap();
     assert_eq!(active, 0);
-    let historic: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM user_badges WHERE revoked_at IS NOT NULL",
-    )
-    .fetch_one(&db).await.unwrap();
+    let historic: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM user_badges WHERE revoked_at IS NOT NULL")
+            .fetch_one(&db)
+            .await
+            .unwrap();
     assert_eq!(historic, 1, "row stays for audit trail");
 
     db.close().await;

@@ -81,15 +81,18 @@ fn talent_sequences() -> Vec<TalentSeq> {
             delay_max_days: 2,
             require_inactive: true,
             subject: "Skilluv — tu n'as pas encore essayé un challenge",
-            render: |name, base| format!(
-                r#"<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#1a1a2e;">
+            render: |name, base| {
+                format!(
+                    r#"<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#1a1a2e;">
 <h2>Salut {name},</h2>
 <p>Tu as créé ton compte hier, mais tu n'as pas encore lancé ton premier challenge. Voici 3 pour démarrer :</p>
 <p style="text-align:center;margin:30px 0;">
   <a href="{base}/challenges?domain=code" style="background:#6c5ce7;color:white;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:bold;">Choisir mon challenge</a>
 </p>
 <p style="color:#666;font-size:12px;">5 minutes suffisent. Tu gagnes des fragments dès le premier réussi.</p>
-</div>"#),
+</div>"#
+                )
+            },
         },
         TalentSeq {
             kind: "drip_talent_d3_join_guild",
@@ -97,14 +100,17 @@ fn talent_sequences() -> Vec<TalentSeq> {
             delay_max_days: 4,
             require_inactive: false,
             subject: "Skilluv — rejoins une guilde",
-            render: |name, base| format!(
-                r#"<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#1a1a2e;">
+            render: |name, base| {
+                format!(
+                    r#"<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#1a1a2e;">
 <h2>Salut {name},</h2>
 <p>Tu progresses bien. Pour aller plus loin : rejoins une guilde. Tu y gagnes plus de fragments, des coéquipiers, et tu peux participer aux Guild Wars.</p>
 <p style="text-align:center;margin:30px 0;">
   <a href="{base}/guilds" style="background:#6c5ce7;color:white;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:bold;">Explorer les guildes</a>
 </p>
-</div>"#),
+</div>"#
+                )
+            },
         },
         TalentSeq {
             kind: "drip_talent_d14_silent",
@@ -112,14 +118,17 @@ fn talent_sequences() -> Vec<TalentSeq> {
             delay_max_days: 15,
             require_inactive: true,
             subject: "Skilluv — on t'attend",
-            render: |name, base| format!(
-                r#"<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#1a1a2e;">
+            render: |name, base| {
+                format!(
+                    r#"<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#1a1a2e;">
 <h2>{name}, ça fait 2 semaines.</h2>
 <p>Plusieurs nouveaux challenges et features sociales depuis ta dernière visite. Tu reprends quand tu veux :</p>
 <p style="text-align:center;margin:30px 0;">
   <a href="{base}/dashboard" style="background:#6c5ce7;color:white;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:bold;">Mon tableau de bord</a>
 </p>
-</div>"#),
+</div>"#
+                )
+            },
         },
         TalentSeq {
             kind: "drip_talent_d30_last_chance",
@@ -127,15 +136,18 @@ fn talent_sequences() -> Vec<TalentSeq> {
             delay_max_days: 31,
             require_inactive: true,
             subject: "Skilluv — avant qu'on te perde",
-            render: |name, base| format!(
-                r#"<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#1a1a2e;">
+            render: |name, base| {
+                format!(
+                    r#"<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#1a1a2e;">
 <h2>{name}, dernière chance.</h2>
 <p>Tu ne t'es pas reconnecté·e depuis 30 jours. On va arrêter de t'envoyer des emails sauf le digest hebdo, jusqu'à ton retour.</p>
 <p>Si tu veux nous dire pourquoi tu n'es pas revenu·e, réponds à ce mail — on lit tout.</p>
 <p style="text-align:center;margin:30px 0;">
   <a href="{base}/dashboard" style="background:#6c5ce7;color:white;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:bold;">Revenir maintenant</a>
 </p>
-</div>"#),
+</div>"#
+                )
+            },
         },
     ]
 }
@@ -182,7 +194,15 @@ async fn run_sequence(
         }
         let html = (seq.render)(&display_name, "https://skilluv.com");
         match email
-            .send_with_log(db, user_id, &user_email, &display_name, seq.subject, &html, seq.kind)
+            .send_with_log(
+                db,
+                user_id,
+                &user_email,
+                &display_name,
+                seq.subject,
+                &html,
+                seq.kind,
+            )
             .await
         {
             Ok(true) => report.emails_sent += 1,
@@ -210,8 +230,9 @@ fn enterprise_sequences() -> Vec<EntSeq> {
             delay_max_days: 2,
             require_no_credit_use: true,
             subject: "Skilluv — Comment trouver le talent parfait",
-            render: |name, base| format!(
-                r#"<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#1a1a2e;">
+            render: |name, base| {
+                format!(
+                    r#"<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#1a1a2e;">
 <h2>Salut {name},</h2>
 <p>Tu as 1 crédit gratuit qui t'attend. Voici comment l'utiliser efficacement :</p>
 <ol>
@@ -222,7 +243,9 @@ fn enterprise_sequences() -> Vec<EntSeq> {
 <p style="text-align:center;margin:30px 0;">
   <a href="{base}/enterprise/talents" style="background:#6c5ce7;color:white;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:bold;">Rechercher des talents</a>
 </p>
-</div>"#),
+</div>"#
+                )
+            },
         },
         EntSeq {
             kind: "drip_ent_d3_demo",
@@ -230,13 +253,16 @@ fn enterprise_sequences() -> Vec<EntSeq> {
             delay_max_days: 4,
             require_no_credit_use: true,
             subject: "Skilluv — On peut t'aider à matcher ?",
-            render: |name, _base| format!(
-                r#"<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#1a1a2e;">
+            render: |name, _base| {
+                format!(
+                    r#"<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#1a1a2e;">
 <h2>Bonjour {name},</h2>
 <p>Tu n'as pas encore contacté de talent. Si tu veux qu'on te propose 3 profils sélectionnés à la main pour ton besoin, réponds à ce mail avec :</p>
 <ul><li>Stack tech / domaine recherché</li><li>Niveau (junior/mid/senior)</li><li>Type de contrat (CDI/freelance/etc.)</li></ul>
 <p>On revient sous 24h avec une short-list.</p>
-</div>"#),
+</div>"#
+                )
+            },
         },
         EntSeq {
             kind: "drip_ent_d7_value_education",
@@ -244,8 +270,9 @@ fn enterprise_sequences() -> Vec<EntSeq> {
             delay_max_days: 8,
             require_no_credit_use: false,
             subject: "Skilluv — Comment maximiser ton ROI",
-            render: |name, base| format!(
-                r#"<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#1a1a2e;">
+            render: |name, base| {
+                format!(
+                    r#"<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#1a1a2e;">
 <h2>{name},</h2>
 <p>Trois leviers pour multiplier tes embauches sur Skilluv :</p>
 <ol>
@@ -256,7 +283,9 @@ fn enterprise_sequences() -> Vec<EntSeq> {
 <p style="text-align:center;margin:30px 0;">
   <a href="{base}/enterprise/pricing" style="background:#6c5ce7;color:white;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:bold;">Voir les packs</a>
 </p>
-</div>"#),
+</div>"#
+                )
+            },
         },
     ]
 }
@@ -300,7 +329,15 @@ async fn run_enterprise_sequence(
         }
         let html = (seq.render)(&display_name, "https://skilluv.com");
         match email
-            .send_with_log(db, user_id, &user_email, &display_name, seq.subject, &html, seq.kind)
+            .send_with_log(
+                db,
+                user_id,
+                &user_email,
+                &display_name,
+                seq.subject,
+                &html,
+                seq.kind,
+            )
             .await
         {
             Ok(true) => report.emails_sent += 1,

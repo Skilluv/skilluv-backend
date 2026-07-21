@@ -82,10 +82,12 @@ async fn stripe_onboard_fails_without_config() {
     }
 
     assert_eq!(status, 500, "Stripe non configuré → 500");
-    assert!(body["error"]["message"]
-        .as_str()
-        .unwrap()
-        .contains("Stripe is not configured"));
+    assert!(
+        body["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("Stripe is not configured")
+    );
 
     drop(app);
 }
@@ -125,10 +127,12 @@ async fn stripe_withdraw_refuses_when_kyc_not_verified() {
         .await;
     assert_eq!(resp.status(), 400);
     let body: serde_json::Value = resp.json().await.unwrap();
-    assert!(body["error"]["message"]
-        .as_str()
-        .unwrap()
-        .contains("KYC status is 'pending'"));
+    assert!(
+        body["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("KYC status is 'pending'")
+    );
 
     drop(app);
 }
@@ -205,13 +209,12 @@ async fn webhook_account_updated_marks_kyc_verified() {
         .expect("webhook post");
     assert_eq!(resp.status(), 200);
 
-    let status: String = sqlx::query_scalar(
-        "SELECT stripe_kyc_status FROM talent_wallets WHERE user_id = $1",
-    )
-    .bind(user_id)
-    .fetch_one(&app.db)
-    .await
-    .expect("s");
+    let status: String =
+        sqlx::query_scalar("SELECT stripe_kyc_status FROM talent_wallets WHERE user_id = $1")
+            .bind(user_id)
+            .fetch_one(&app.db)
+            .await
+            .expect("s");
     assert_eq!(status, "verified");
 
     drop(app);

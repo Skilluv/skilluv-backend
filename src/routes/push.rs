@@ -19,12 +19,18 @@ use crate::middleware::AuthUser;
 
 pub fn push_routes() -> Router<AppState> {
     Router::new()
-        .route("/notifications/push/vapid-public-key", get(vapid_public_key))
+        .route(
+            "/notifications/push/vapid-public-key",
+            get(vapid_public_key),
+        )
         .route("/notifications/push/subscribe", post(subscribe))
         .route("/notifications/push/{id}", delete(unsubscribe))
         .route("/manifest.webmanifest", get(pwa_manifest))
         // P15.1 — mobile push tokens (FCM + APNS)
-        .route("/users/me/push-tokens/register", post(register_mobile_token))
+        .route(
+            "/users/me/push-tokens/register",
+            post(register_mobile_token),
+        )
         .route(
             "/users/me/push-tokens/{device_id}",
             delete(revoke_mobile_token),
@@ -64,7 +70,9 @@ async fn subscribe(
     Json(body): Json<SubscribeBody>,
 ) -> Result<Json<Value>, AppError> {
     if body.endpoint.is_empty() || body.p256dh.is_empty() || body.auth.is_empty() {
-        return Err(AppError::Validation("missing endpoint / p256dh / auth".into()));
+        return Err(AppError::Validation(
+            "missing endpoint / p256dh / auth".into(),
+        ));
     }
     let ua = headers
         .get("user-agent")
@@ -150,8 +158,7 @@ async fn revoke_mobile_token(
     auth: AuthUser,
     Path(device_id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
-    let n = crate::services::mobile_push::revoke_token(&state.db, auth.user_id, &device_id)
-        .await?;
+    let n = crate::services::mobile_push::revoke_token(&state.db, auth.user_id, &device_id).await?;
     Ok(Json(build_response(json!({ "removed": n > 0 }))))
 }
 
@@ -159,8 +166,8 @@ async fn list_mobile_tokens(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
-    let tokens = crate::services::mobile_push::list_tokens_for_user(&state.db, auth.user_id)
-        .await?;
+    let tokens =
+        crate::services::mobile_push::list_tokens_for_user(&state.db, auth.user_id).await?;
     // Ne pas exposer les tokens en clair — juste les metadata.
     let items: Vec<Value> = tokens
         .iter()
@@ -193,7 +200,10 @@ async fn pwa_manifest() -> impl IntoResponse {
         ]
     });
     (
-        [(axum::http::header::CONTENT_TYPE, "application/manifest+json")],
+        [(
+            axum::http::header::CONTENT_TYPE,
+            "application/manifest+json",
+        )],
         body.to_string(),
     )
 }

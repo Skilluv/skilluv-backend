@@ -19,22 +19,20 @@ use crate::AppState;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
 
-pub const KYC_BASIC_THRESHOLD_CENTS: i64 = 100_00;    // 100 €/mo
-pub const KYC_FULL_THRESHOLD_CENTS: i64 = 2_000_00;   // 2 000 €/mo
+pub const KYC_BASIC_THRESHOLD_CENTS: i64 = 100_00; // 100 €/mo
+pub const KYC_FULL_THRESHOLD_CENTS: i64 = 2_000_00; // 2 000 €/mo
 pub const KYC_DOC_MAX_SIZE: usize = 10 * 1024 * 1024; // 10 MB per file
-pub const KYC_ALLOWED_MIME: &[&str] = &[
-    "application/pdf",
-    "image/jpeg",
-    "image/png",
-    "image/webp",
-];
+pub const KYC_ALLOWED_MIME: &[&str] = &["application/pdf", "image/jpeg", "image/png", "image/webp"];
 
 pub fn enterprise_kyc_routes() -> Router<AppState> {
     Router::new()
         .route("/enterprise/kyc", get(get_status))
         .route("/enterprise/kyc/documents", post(upload_document))
         .route("/admin/enterprise-kyc", get(admin_list))
-        .route("/admin/enterprise-kyc/{enterprise_id}/decide", post(admin_decide))
+        .route(
+            "/admin/enterprise-kyc/{enterprise_id}/decide",
+            post(admin_decide),
+        )
 }
 
 fn build_response(data: Value) -> Value {
@@ -57,19 +55,27 @@ async fn current_enterprise_for(db: &sqlx::PgPool, user_id: Uuid) -> Result<Uuid
     row.map(|(id,)| id).ok_or(AppError::Forbidden)
 }
 
-async fn get_status(State(state): State<AppState>, auth: AuthUser) -> Result<Json<Value>, AppError> {
+async fn get_status(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Json<Value>, AppError> {
     let enterprise_id = current_enterprise_for(&state.db, auth.user_id).await?;
-    let row: (String, String, i64, Option<chrono::DateTime<chrono::Utc>>, Option<String>) =
-        sqlx::query_as(
-            r#"
+    let row: (
+        String,
+        String,
+        i64,
+        Option<chrono::DateTime<chrono::Utc>>,
+        Option<String>,
+    ) = sqlx::query_as(
+        r#"
             INSERT INTO enterprise_kyc (enterprise_id) VALUES ($1)
             ON CONFLICT (enterprise_id) DO UPDATE SET enterprise_id = enterprise_kyc.enterprise_id
             RETURNING level, status, monthly_spend_eur_cents, reviewed_at, rejection_reason
             "#,
-        )
-        .bind(enterprise_id)
-        .fetch_one(&state.db)
-        .await?;
+    )
+    .bind(enterprise_id)
+    .fetch_one(&state.db)
+    .await?;
     let docs: Vec<(Uuid, String, String, i64, chrono::DateTime<chrono::Utc>)> = sqlx::query_as(
         r#"
         SELECT id, kind, content_type, size_bytes, uploaded_at
@@ -231,9 +237,9 @@ async fn admin_list(
 
 #[derive(Deserialize)]
 struct DecideBody {
-    action: String,           // "approve" | "reject"
-    level: Option<String>,    // "basic" | "full" when approving
-    reason: Option<String>,   // rejection reason
+    action: String,         // "approve" | "reject"
+    level: Option<String>,  // "basic" | "full" when approving
+    reason: Option<String>, // rejection reason
 }
 
 async fn admin_decide(
@@ -287,7 +293,11 @@ async fn admin_decide(
             .await?;
             metrics::counter!("skilluv_kyc_rejected_total").increment(1);
         }
-        _ => return Err(AppError::Validation("action must be approve or reject".into())),
+        _ => {
+            return Err(AppError::Validation(
+                "action must be approve or reject".into(),
+            ));
+        }
     }
 
     // BE-F — audit log unifié.
@@ -309,5 +319,7 @@ async fn admin_decide(
     )
     .await;
 
-    Ok(Json(build_response(json!({ "decided": true, "action": body.action }))))
+    Ok(Json(build_response(
+        json!({ "decided": true, "action": body.action }),
+    )))
 }

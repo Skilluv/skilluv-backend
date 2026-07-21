@@ -12,7 +12,7 @@ use axum::extract::{Query, State};
 use axum::routing::get;
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 use crate::AppState;
@@ -109,7 +109,8 @@ async fn explore(
         .fetch_all(&state.db)
         .await?;
 
-        for (id, title, domain, difficulty, project_id, slice_type, frags, credits, created_at) in rows
+        for (id, title, domain, difficulty, project_id, slice_type, frags, credits, created_at) in
+            rows
         {
             items.push(ExploreItem {
                 kind: "slice",

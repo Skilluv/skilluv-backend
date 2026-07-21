@@ -108,10 +108,9 @@ impl FromRequestParts<AppState> for TenantContext {
         parts: &mut Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
-        let tenant_id =
-            crate::routes::resolve_tenant_from_headers(&state.db, &parts.headers)
-                .await
-                .unwrap_or(crate::routes::ROOT_TENANT_ID);
+        let tenant_id = crate::routes::resolve_tenant_from_headers(&state.db, &parts.headers)
+            .await
+            .unwrap_or(crate::routes::ROOT_TENANT_ID);
         Ok(TenantContext { tenant_id })
     }
 }

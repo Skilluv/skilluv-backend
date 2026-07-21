@@ -31,8 +31,7 @@ async fn main() -> Result<()> {
         )
         .init();
 
-    let db_url = std::env::var("DATABASE_URL")
-        .context("DATABASE_URL is required")?;
+    let db_url = std::env::var("DATABASE_URL").context("DATABASE_URL is required")?;
     let db = PgPoolOptions::new()
         .max_connections(5)
         .connect(&db_url)

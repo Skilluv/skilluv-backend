@@ -67,7 +67,10 @@ pub enum PrMergedOutcome {
     /// Idempotence : ce commit hash a déjà produit un deliverable pour ce user.
     AlreadyProcessed { deliverable_id: Uuid },
     /// La slice matchée n'est pas dans un statut compatible avec merge (déjà fermée, etc.).
-    SliceNotActionable { slice_id: Uuid, slice_status: String },
+    SliceNotActionable {
+        slice_id: Uuid,
+        slice_status: String,
+    },
 }
 
 impl DeliverablesService {
@@ -106,14 +109,19 @@ impl DeliverablesService {
         }
 
         // 2. Résolution de l'auteur Skilluv depuis son github_login
-        let Some(author_user_id) = Self::resolve_github_login(&mut tx, &params.github_login).await? else {
+        let Some(author_user_id) =
+            Self::resolve_github_login(&mut tx, &params.github_login).await?
+        else {
             // L'auteur PR n'est pas un user Skilluv connecté.
             // Best-effort : si la slice a un claimed_by, on suppose que la PR est
             // pour ce user et on marque pending_manual_review.
             let Some(claimed_by) = slice.claimed_by_user_id else {
                 return Ok(PrMergedOutcome::NoMatchingSlice);
             };
-            return Self::insert_deliverable_pending_manual_review(&mut tx, &slice, &params, claimed_by).await;
+            return Self::insert_deliverable_pending_manual_review(
+                &mut tx, &slice, &params, claimed_by,
+            )
+            .await;
         };
 
         // 3. Vérification legitimité
@@ -139,11 +147,9 @@ impl DeliverablesService {
         if matches!(outcome, PrMergedOutcome::Verified { .. }) {
             let db_clone = db.clone();
             tokio::spawn(async move {
-                let _ = crate::services::proof_hooks::recompute_all_for_user(
-                    &db_clone,
-                    author_user_id,
-                )
-                .await;
+                let _ =
+                    crate::services::proof_hooks::recompute_all_for_user(&db_clone, author_user_id)
+                        .await;
             });
         }
 
@@ -445,12 +451,11 @@ impl DeliverablesService {
         user_id: Uuid,
         _deliverable_id: Uuid,
     ) -> Result<(), AppError> {
-        let slice_skills: Vec<(Uuid, i16)> = sqlx::query_as(
-            "SELECT skill_id, weight FROM slice_skills WHERE slice_id = $1",
-        )
-        .bind(slice_id)
-        .fetch_all(&mut **tx)
-        .await?;
+        let slice_skills: Vec<(Uuid, i16)> =
+            sqlx::query_as("SELECT skill_id, weight FROM slice_skills WHERE slice_id = $1")
+                .bind(slice_id)
+                .fetch_all(&mut **tx)
+                .await?;
 
         for (skill_id, weight) in slice_skills {
             // Upsert user_skills row
@@ -579,7 +584,10 @@ impl DeliverablesService {
             "code_content": submission_code,
         });
         if let (Some(obj), Some(lang)) = (metadata.as_object_mut(), language) {
-            obj.insert("language".into(), serde_json::Value::String(lang.to_string()));
+            obj.insert(
+                "language".into(),
+                serde_json::Value::String(lang.to_string()),
+            );
         }
         if let (Some(obj), Some(s)) = (metadata.as_object_mut(), stdout) {
             obj.insert("stdout".into(), serde_json::Value::String(s.to_string()));
@@ -623,7 +631,8 @@ impl DeliverablesService {
             // P19.2 — Best-effort recompute proof engines pour ce user.
             let db_clone = db.clone();
             tokio::spawn(async move {
-                let _ = crate::services::proof_hooks::recompute_all_for_user(&db_clone, user_id).await;
+                let _ =
+                    crate::services::proof_hooks::recompute_all_for_user(&db_clone, user_id).await;
             });
             return Ok(id);
         }
@@ -687,7 +696,10 @@ impl DeliverablesService {
             "contributors": contributors,
         });
         if let (Some(obj), Some(lang)) = (metadata.as_object_mut(), language) {
-            obj.insert("language".into(), serde_json::Value::String(lang.to_string()));
+            obj.insert(
+                "language".into(),
+                serde_json::Value::String(lang.to_string()),
+            );
         }
         if let (Some(obj), Some(s)) = (metadata.as_object_mut(), stdout) {
             obj.insert("stdout".into(), serde_json::Value::String(s.to_string()));
@@ -750,13 +762,11 @@ impl DeliverablesService {
 
     /// Récupère un deliverable par id.
     pub async fn get(db: &PgPool, id: Uuid) -> Result<Deliverable, AppError> {
-        sqlx::query_as::<_, Deliverable>(
-            "SELECT * FROM deliverables WHERE id = $1",
-        )
-        .bind(id)
-        .fetch_optional(db)
-        .await?
-        .ok_or_else(|| AppError::NotFound("Deliverable not found".to_string()))
+        sqlx::query_as::<_, Deliverable>("SELECT * FROM deliverables WHERE id = $1")
+            .bind(id)
+            .fetch_optional(db)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Deliverable not found".to_string()))
     }
 
     /// Liste les deliverables publics vérifiés d'un user (profil public).

@@ -51,9 +51,8 @@ pub async fn peek_enterprise_invite(
     let raw = raw.ok_or(AppError::Validation(
         "Invalid or expired invite token".to_string(),
     ))?;
-    serde_json::from_str(&raw).map_err(|e| {
-        AppError::Internal(format!("Corrupted invite payload: {e}"))
-    })
+    serde_json::from_str(&raw)
+        .map_err(|e| AppError::Internal(format!("Corrupted invite payload: {e}")))
 }
 
 pub async fn delete_enterprise_invite(
@@ -109,11 +108,17 @@ pub fn enterprise_routes() -> Router<AppState> {
         .route("/enterprise/invite", post(invite_recruiter))
         .route("/enterprise/invite/accept", post(accept_invite))
         .route("/enterprise/invite/preview", get(invite_preview))
-        .route("/enterprise/invite/register-and-accept", post(invite_register_and_accept))
+        .route(
+            "/enterprise/invite/register-and-accept",
+            post(invite_register_and_accept),
+        )
         .route("/enterprise/members", get(list_members))
         .route("/enterprise/members/{user_id}", delete(revoke_member))
         .route("/enterprise/memberships", get(list_memberships))
-        .route("/enterprise/switch/{enterprise_id}", post(switch_enterprise))
+        .route(
+            "/enterprise/switch/{enterprise_id}",
+            post(switch_enterprise),
+        )
 }
 
 const MAX_ENTERPRISE_LOGO_SIZE: usize = 2 * 1024 * 1024; // 2MB
@@ -316,7 +321,14 @@ async fn register_enterprise(
     Json(body): Json<RegisterEnterpriseRequest>,
 ) -> Result<impl IntoResponse, AppError> {
     let ip = extract_ip(&headers);
-    RateLimiter::check(&mut state.redis.clone(), "enterprise:register", &ip, 5, 3600).await?;
+    RateLimiter::check(
+        &mut state.redis.clone(),
+        "enterprise:register",
+        &ip,
+        5,
+        3600,
+    )
+    .await?;
 
     if !body.terms_accepted {
         return Err(AppError::Validation(
@@ -442,8 +454,13 @@ async fn register_enterprise(
         headers.get("cookie").and_then(|v| v.to_str().ok()),
     )
     .await;
-    let (session_id, refresh_token) =
-        SessionService::create(&state.db, user.id, Some(&ip), headers.get("user-agent").and_then(|v| v.to_str().ok())).await?;
+    let (session_id, refresh_token) = SessionService::create(
+        &state.db,
+        user.id,
+        Some(&ip),
+        headers.get("user-agent").and_then(|v| v.to_str().ok()),
+    )
+    .await?;
 
     let access_cookie = format!(
         "access_token={access_token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=900"
@@ -617,9 +634,7 @@ async fn upload_logo(
             .map_err(|e| AppError::Validation(format!("Failed to read file: {e}")))?;
 
         if data.len() > MAX_ENTERPRISE_LOGO_SIZE {
-            return Err(AppError::Validation(
-                "Logo must be at most 2MB".to_string(),
-            ));
+            return Err(AppError::Validation("Logo must be at most 2MB".to_string()));
         }
 
         file_data = Some((data.to_vec(), content_type));
@@ -719,7 +734,9 @@ async fn invite_recruiter(
     let key = enterprise_invite_key(&invite_token);
     let serialized = serde_json::to_string(&payload)
         .map_err(|e| AppError::Internal(format!("invite serialize: {e}")))?;
-    let () = redis.set_ex(&key, &serialized, ENTERPRISE_INVITE_TTL_SECS).await?;
+    let () = redis
+        .set_ex(&key, &serialized, ENTERPRISE_INVITE_TTL_SECS)
+        .await?;
 
     state
         .email
@@ -799,12 +816,11 @@ async fn invite_preview(
     // Flag whether the invited email already has an account — the frontend uses
     // it to swap "Rejoindre" (create + accept) for "Se connecter" (log in +
     // accept) so we don't waste a user's time on the register form.
-    let account_exists: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)",
-    )
-    .bind(payload.email.to_lowercase())
-    .fetch_one(&state.db)
-    .await?;
+    let account_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)")
+            .bind(payload.email.to_lowercase())
+            .fetch_one(&state.db)
+            .await?;
 
     Ok(Json(build_response(json!({
         "email": payload.email,

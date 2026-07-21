@@ -92,7 +92,10 @@ async fn diploma_verification_public_returns_holder_info() {
     let body: Value = resp.json().await.unwrap();
     assert_eq!(body["data"]["status"], "valid");
     assert_eq!(body["data"]["holder"]["username"], "holder1");
-    assert_eq!(body["data"]["certification"]["title"], "DevOps Intermediate");
+    assert_eq!(
+        body["data"]["certification"]["title"],
+        "DevOps Intermediate"
+    );
     drop(app);
 }
 
@@ -126,7 +129,10 @@ async fn purchase_returns_checkout_or_stripe_missing_error() {
     let _ = app.register_user("buyer1").await;
     let resp = app
         .client
-        .post(format!("{}/api/certifications/js-basics/purchase", app.addr))
+        .post(format!(
+            "{}/api/certifications/js-basics/purchase",
+            app.addr
+        ))
         .json(&json!({}))
         .send()
         .await

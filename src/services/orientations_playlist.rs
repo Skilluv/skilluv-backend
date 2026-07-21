@@ -57,9 +57,8 @@ pub async fn playlist_for(
     .fetch_optional(db)
     .await?;
 
-    let (ori_id, primary_domain, secondary_domains) = ori.ok_or_else(|| {
-        AppError::NotFound(format!("orientation '{orientation_slug}' not found"))
-    })?;
+    let (ori_id, primary_domain, secondary_domains) = ori
+        .ok_or_else(|| AppError::NotFound(format!("orientation '{orientation_slug}' not found")))?;
 
     let mut all_domains = vec![primary_domain];
     all_domains.extend(secondary_domains);

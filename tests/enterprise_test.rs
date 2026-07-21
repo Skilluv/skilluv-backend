@@ -160,7 +160,10 @@ async fn test_bookmark_talent() {
     app.enable_totp_for("bookmarkcorp").await;
 
     let resp = app
-        .post(&format!("/api/enterprise/bookmarks/{talent_id}"), &json!({}))
+        .post(
+            &format!("/api/enterprise/bookmarks/{talent_id}"),
+            &json!({}),
+        )
         .await;
     assert_eq!(resp.status(), StatusCode::CREATED);
 
@@ -182,13 +185,19 @@ async fn test_invite_accept_email_match() {
     app.enable_totp_for("invitematchcorp").await;
 
     let candidate = app.register_user("candidate_ok").await;
-    let candidate_email = candidate["data"]["user"]["email"].as_str().unwrap().to_string();
+    let candidate_email = candidate["data"]["user"]["email"]
+        .as_str()
+        .unwrap()
+        .to_string();
 
     // Owner sends an invite to the candidate's email. `register_user` above
     // rewrote the cookie jar to the candidate's session — re-login as owner.
     app.relogin_with_totp("invitematchcorp").await;
     let resp = app
-        .post("/api/enterprise/invite", &json!({ "email": candidate_email }))
+        .post(
+            "/api/enterprise/invite",
+            &json!({ "email": candidate_email }),
+        )
         .await;
     assert_eq!(resp.status(), StatusCode::OK);
     let body: serde_json::Value = resp.json().await.unwrap();
@@ -210,11 +219,10 @@ async fn test_invite_accept_email_match() {
         .await;
     assert_eq!(ok.status(), StatusCode::OK);
 
-    let role: (String,) =
-        sqlx::query_as("SELECT role FROM users WHERE username = 'candidate_ok'")
-            .fetch_one(&app.db)
-            .await
-            .unwrap();
+    let role: (String,) = sqlx::query_as("SELECT role FROM users WHERE username = 'candidate_ok'")
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
     assert_eq!(role.0, "recruiter");
 
     let member: (String,) = sqlx::query_as(

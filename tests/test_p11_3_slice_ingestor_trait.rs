@@ -11,9 +11,7 @@ use sqlx::postgres::{PgPool, PgPoolOptions};
 use uuid::Uuid;
 
 use skilluv_backend::errors::AppError;
-use skilluv_backend::services::{
-    dispatch_ingestors, FigmaIngestor, IngestReport, SliceIngestor,
-};
+use skilluv_backend::services::{FigmaIngestor, IngestReport, SliceIngestor, dispatch_ingestors};
 
 async fn setup_test_db() -> (PgPool, String) {
     let db_name = format!(

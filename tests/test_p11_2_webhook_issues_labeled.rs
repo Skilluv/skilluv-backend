@@ -69,7 +69,11 @@ async fn create_user_and_project(
     .expect("project")
 }
 
-async fn post_webhook(app: &TestApp, event: &str, payload: &serde_json::Value) -> reqwest::Response {
+async fn post_webhook(
+    app: &TestApp,
+    event: &str,
+    payload: &serde_json::Value,
+) -> reqwest::Response {
     // SAFETY: setenv is called single-threaded before each test's HTTP call.
     unsafe {
         std::env::set_var("GITHUB_WEBHOOK_SECRET", WEBHOOK_SECRET);
@@ -123,12 +127,21 @@ fn make_issue_labeled_payload(
 async fn labeled_curated_issue_creates_draft_slice() {
     let app = TestApp::spawn().await;
     let project_id = create_user_and_project(
-        &app, "acme", "widgets", "curator_review", &["good-first-issue"],
+        &app,
+        "acme",
+        "widgets",
+        "curator_review",
+        &["good-first-issue"],
     )
     .await;
 
     let payload = make_issue_labeled_payload(
-        "acme", "widgets", 42, "Fix async race", "good-first-issue", false,
+        "acme",
+        "widgets",
+        42,
+        "Fix async race",
+        "good-first-issue",
+        false,
     );
     let resp = post_webhook(&app, "issues", &payload).await;
     assert_eq!(resp.status(), 200);
@@ -157,12 +170,15 @@ async fn labeled_curated_issue_creates_draft_slice() {
 #[tokio::test]
 async fn auto_mode_publishes_slice_directly() {
     let app = TestApp::spawn().await;
-    let project_id = create_user_and_project(
-        &app, "acme", "auto-repo", "auto", &["good-first-issue"],
-    )
-    .await;
+    let project_id =
+        create_user_and_project(&app, "acme", "auto-repo", "auto", &["good-first-issue"]).await;
     let payload = make_issue_labeled_payload(
-        "acme", "auto-repo", 7, "Auto issue", "good-first-issue", false,
+        "acme",
+        "auto-repo",
+        7,
+        "Auto issue",
+        "good-first-issue",
+        false,
     );
     let resp = post_webhook(&app, "issues", &payload).await;
     assert_eq!(resp.status(), 200);
@@ -185,23 +201,18 @@ async fn auto_mode_publishes_slice_directly() {
 #[tokio::test]
 async fn non_curated_label_ignored() {
     let app = TestApp::spawn().await;
-    let project_id = create_user_and_project(
-        &app, "acme", "curated", "auto", &["good-first-issue"],
-    )
-    .await;
-    let payload = make_issue_labeled_payload(
-        "acme", "curated", 1, "Random", "wontfix", false,
-    );
+    let project_id =
+        create_user_and_project(&app, "acme", "curated", "auto", &["good-first-issue"]).await;
+    let payload = make_issue_labeled_payload("acme", "curated", 1, "Random", "wontfix", false);
     let resp = post_webhook(&app, "issues", &payload).await;
     assert_eq!(resp.status(), 200);
 
-    let count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM project_slices WHERE project_id = $1",
-    )
-    .bind(project_id)
-    .fetch_one(&app.db)
-    .await
-    .expect("c");
+    let count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM project_slices WHERE project_id = $1")
+            .bind(project_id)
+            .fetch_one(&app.db)
+            .await
+            .expect("c");
     assert_eq!(count, 0, "label 'wontfix' non curé → aucune slice");
     drop(app);
 }
@@ -215,9 +226,8 @@ async fn untracked_repo_is_ignored() {
     let app = TestApp::spawn().await;
     // Aucun projet créé → aucun match
 
-    let payload = make_issue_labeled_payload(
-        "unknown", "repo", 1, "Ghost", "good-first-issue", false,
-    );
+    let payload =
+        make_issue_labeled_payload("unknown", "repo", 1, "Ghost", "good-first-issue", false);
     let resp = post_webhook(&app, "issues", &payload).await;
     assert_eq!(resp.status(), 200);
 
@@ -236,13 +246,15 @@ async fn untracked_repo_is_ignored() {
 #[tokio::test]
 async fn pull_requests_are_skipped() {
     let app = TestApp::spawn().await;
-    let _p = create_user_and_project(
-        &app, "acme", "prrepo", "auto", &["good-first-issue"],
-    )
-    .await;
+    let _p = create_user_and_project(&app, "acme", "prrepo", "auto", &["good-first-issue"]).await;
 
     let payload = make_issue_labeled_payload(
-        "acme", "prrepo", 100, "A PR labeled", "good-first-issue", true,
+        "acme",
+        "prrepo",
+        100,
+        "A PR labeled",
+        "good-first-issue",
+        true,
     );
     let resp = post_webhook(&app, "issues", &payload).await;
     assert_eq!(resp.status(), 200);

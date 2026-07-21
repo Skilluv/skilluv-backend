@@ -103,9 +103,21 @@ async fn team_submission_produces_deliverable_with_contributors() {
     let submission_id = Uuid::new_v4();
 
     let contributors = vec![
-        TeamContributor { user_id: leader, role_slug: Some("designer".into()), fragments_awarded: 40 },
-        TeamContributor { user_id: musician, role_slug: Some("musician".into()), fragments_awarded: 30 },
-        TeamContributor { user_id: coder, role_slug: Some("coder".into()), fragments_awarded: 30 },
+        TeamContributor {
+            user_id: leader,
+            role_slug: Some("designer".into()),
+            fragments_awarded: 40,
+        },
+        TeamContributor {
+            user_id: musician,
+            role_slug: Some("musician".into()),
+            fragments_awarded: 30,
+        },
+        TeamContributor {
+            user_id: coder,
+            role_slug: Some("coder".into()),
+            fragments_awarded: 30,
+        },
     ];
 
     let deliverable_id = DeliverablesService::create_from_team_submission(
@@ -133,7 +145,10 @@ async fn team_submission_produces_deliverable_with_contributors() {
     .expect("fetch");
 
     assert_eq!(fragments, 100, "total = 40+30+30");
-    assert_eq!(stored_user_id, leader, "deliverable rattaché au team leader");
+    assert_eq!(
+        stored_user_id, leader,
+        "deliverable rattaché au team leader"
+    );
     assert_eq!(meta["contributors"].as_array().unwrap().len(), 3);
     assert_eq!(meta["team_id"], team_id.to_string());
     assert_eq!(meta["code_content"], "print('team code')");
@@ -173,43 +188,24 @@ async fn same_team_same_code_is_idempotent() {
     }];
 
     let d1 = DeliverablesService::create_from_team_submission(
-        &db,
-        team_id,
-        leader,
-        challenge,
-        sub_id,
-        code,
-        &contribs,
-        None,
-        None,
-        None,
+        &db, team_id, leader, challenge, sub_id, code, &contribs, None, None, None,
     )
     .await
     .expect("d1");
 
     let d2 = DeliverablesService::create_from_team_submission(
-        &db,
-        team_id,
-        leader,
-        challenge,
-        sub_id,
-        code,
-        &contribs,
-        None,
-        None,
-        None,
+        &db, team_id, leader, challenge, sub_id, code, &contribs, None, None, None,
     )
     .await
     .expect("d2");
 
     assert_eq!(d1, d2, "même team + code → même deliverable_id");
 
-    let count: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM deliverables WHERE user_id = $1")
-            .bind(leader)
-            .fetch_one(&db)
-            .await
-            .expect("count");
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM deliverables WHERE user_id = $1")
+        .bind(leader)
+        .fetch_one(&db)
+        .await
+        .expect("count");
     assert_eq!(count, 1);
 
     db.close().await;

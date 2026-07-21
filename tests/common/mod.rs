@@ -80,8 +80,7 @@ impl TestApp {
         // néanmoins la DB — c'est OK, ils utilisent des user_ids uniques.
         let redis_db = (std::process::id() as usize) % 16;
         let redis_url = format!("redis://localhost:6379/{redis_db}");
-        let redis_client =
-            redis::Client::open(redis_url.clone()).expect("Invalid Redis URL");
+        let redis_client = redis::Client::open(redis_url.clone()).expect("Invalid Redis URL");
         let redis = redis::aio::ConnectionManager::new(redis_client.clone())
             .await
             .expect("Failed to connect to Redis");
@@ -430,8 +429,7 @@ impl Mailpit {
     /// Poll until at least one message addressed to `to` appears, then return the newest.
     /// Returns the raw JSON of the message.
     pub async fn wait_for(&self, to: &str, timeout_ms: u64) -> Value {
-        let deadline =
-            std::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
         loop {
             let resp = self
                 .client
@@ -508,8 +506,8 @@ pub fn totp_now(secret_base32: &str) -> String {
     let bytes = Secret::Encoded(secret_base32.to_string())
         .to_bytes()
         .expect("decode base32 TOTP secret");
-    let totp = TOTP::new(Algorithm::SHA1, 6, 1, 30, bytes, None, "test".to_string())
-        .expect("build TOTP");
+    let totp =
+        TOTP::new(Algorithm::SHA1, 6, 1, 30, bytes, None, "test".to_string()).expect("build TOTP");
     totp.generate_current().expect("compute TOTP")
 }
 

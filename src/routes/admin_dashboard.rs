@@ -39,10 +39,7 @@ fn ensure_admin(auth: &AuthUser) -> Result<(), AppError> {
     }
 }
 
-async fn overview(
-    State(state): State<AppState>,
-    auth: AuthUser,
-) -> Result<Json<Value>, AppError> {
+async fn overview(State(state): State<AppState>, auth: AuthUser) -> Result<Json<Value>, AppError> {
     ensure_admin(&auth)?;
     let signups_today: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM users WHERE created_at >= date_trunc('day', NOW())",
@@ -101,10 +98,7 @@ async fn overview(
     }))))
 }
 
-async fn financial(
-    State(state): State<AppState>,
-    auth: AuthUser,
-) -> Result<Json<Value>, AppError> {
+async fn financial(State(state): State<AppState>, auth: AuthUser) -> Result<Json<Value>, AppError> {
     ensure_admin(&auth)?;
     // Revenue this month (from invoices)
     let month_revenue: (i64, i64, String) = sqlx::query_as(
@@ -161,12 +155,11 @@ async fn moderation_queue(
         sqlx::query_scalar("SELECT COUNT(*) FROM reports WHERE status = 'pending'")
             .fetch_one(&state.db)
             .await?;
-    let kyc_pending: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM enterprise_kyc WHERE status = 'pending'",
-    )
-    .fetch_one(&state.db)
-    .await
-    .unwrap_or(0);
+    let kyc_pending: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM enterprise_kyc WHERE status = 'pending'")
+            .fetch_one(&state.db)
+            .await
+            .unwrap_or(0);
     let sponsored_pending: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM sponsored_challenge_requests WHERE status IN ('pending', 'negotiating')",
     )

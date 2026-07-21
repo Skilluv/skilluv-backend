@@ -26,14 +26,8 @@ pub fn certification_routes() -> Router<AppState> {
             "/certifications/{slug}/purchase",
             post(purchase_certification),
         )
-        .route(
-            "/certifications/attempts/{id}/start",
-            post(start_attempt),
-        )
-        .route(
-            "/certifications/attempts/{id}/submit",
-            post(submit_attempt),
-        )
+        .route("/certifications/attempts/{id}/start", post(start_attempt))
+        .route("/certifications/attempts/{id}/submit", post(submit_attempt))
         .route("/diplomas/verify/{code}", get(verify_diploma))
         .route("/diplomas/my", get(my_diplomas))
 }
@@ -152,11 +146,10 @@ async fn purchase_certification(
         price_eur_cents: price_cents,
         stripe_price_lookup_key: Box::leak(format!("skilluv_cert_{slug}").into_boxed_str()),
     };
-    let user_email: Option<(String,)> =
-        sqlx::query_as("SELECT email FROM users WHERE id = $1")
-            .bind(auth.user_id)
-            .fetch_optional(&state.db)
-            .await?;
+    let user_email: Option<(String,)> = sqlx::query_as("SELECT email FROM users WHERE id = $1")
+        .bind(auth.user_id)
+        .fetch_optional(&state.db)
+        .await?;
     let email = user_email
         .map(|(e,)| e)
         .ok_or(AppError::NotFound("user not found".into()))?;
@@ -290,12 +283,13 @@ async fn submit_attempt(
         .bind(started_at)
         .fetch_all(&state.db)
         .await?;
-        let total: i32 = per_challenge
-            .iter()
-            .filter_map(|(_, s)| *s)
-            .sum();
+        let total: i32 = per_challenge.iter().filter_map(|(_, s)| *s).sum();
         let denom = challenge_ids.len() as i32;
-        if denom > 0 { (total / denom).clamp(0, 100) } else { 0 }
+        if denom > 0 {
+            (total / denom).clamp(0, 100)
+        } else {
+            0
+        }
     };
 
     let passed = !overtime && score >= passing;
@@ -321,8 +315,7 @@ async fn submit_attempt(
     let mut verification_code: Option<String> = None;
     if passed {
         let code = generate_verification_code(&mut tx).await?;
-        let expires_at =
-            chrono::Utc::now() + chrono::Duration::days(validity_months as i64 * 30);
+        let expires_at = chrono::Utc::now() + chrono::Duration::days(validity_months as i64 * 30);
         let inserted: (Uuid,) = sqlx::query_as(
             r#"
             INSERT INTO certification_diplomas
@@ -384,12 +377,11 @@ async fn generate_verification_code(
             .iter()
             .map(|b| ALPHABET[(*b as usize) % ALPHABET.len()] as char)
             .collect();
-        let exists: Option<(Uuid,)> = sqlx::query_as(
-            "SELECT id FROM certification_diplomas WHERE verification_code = $1",
-        )
-        .bind(&code)
-        .fetch_optional(&mut **tx)
-        .await?;
+        let exists: Option<(Uuid,)> =
+            sqlx::query_as("SELECT id FROM certification_diplomas WHERE verification_code = $1")
+                .bind(&code)
+                .fetch_optional(&mut **tx)
+                .await?;
         if exists.is_none() {
             return Ok(code);
         }

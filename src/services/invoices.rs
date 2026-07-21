@@ -204,7 +204,10 @@ pub fn render_html(inv: &Invoice, enterprise_name: &str) -> String {
 </html>"#,
         number = esc(&inv.invoice_number),
         date = inv.issued_at.format("%d/%m/%Y").to_string(),
-        billing_name = esc(inv.billing_company_name.as_deref().unwrap_or(enterprise_name)),
+        billing_name = esc(inv
+            .billing_company_name
+            .as_deref()
+            .unwrap_or(enterprise_name)),
         billing_addr = esc(inv.billing_address.as_deref().unwrap_or("")),
         vat_line = inv
             .billing_vat_number
@@ -212,8 +215,8 @@ pub fn render_html(inv: &Invoice, enterprise_name: &str) -> String {
             .filter(|s| !s.is_empty())
             .map(|v| format!("<p style=\"margin:4px 0 0;\">TVA : {}</p>", esc(v)))
             .unwrap_or_default(),
-        seller_address = std::env::var("SKILLUV_BILLING_ADDRESS")
-            .unwrap_or_else(|_| "Adresse Skilluv".into()),
+        seller_address =
+            std::env::var("SKILLUV_BILLING_ADDRESS").unwrap_or_else(|_| "Adresse Skilluv".into()),
         siret = std::env::var("SKILLUV_SIRET").unwrap_or_else(|_| "TODO".into()),
         seller_vat = std::env::var("SKILLUV_VAT_NUMBER").unwrap_or_else(|_| "TODO".into()),
         desc = esc(inv.description.as_deref().unwrap_or("Crédits Skilluv")),

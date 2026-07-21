@@ -147,13 +147,11 @@ async fn skips_when_no_slug_match() {
     .expect("propagate");
     assert!(unknown.is_none());
 
-    let count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM user_skills WHERE user_id = $1",
-    )
-    .bind(user_id)
-    .fetch_one(&db)
-    .await
-    .expect("count");
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM user_skills WHERE user_id = $1")
+        .bind(user_id)
+        .fetch_one(&db)
+        .await
+        .expect("count");
     assert_eq!(count, 0, "aucune ligne créée quand pas de match");
 
     db.close().await;
@@ -222,13 +220,11 @@ async fn skips_when_weight_is_non_positive() {
     .expect("propagate");
     assert!(out.is_none());
 
-    let count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM user_skills WHERE user_id = $1",
-    )
-    .bind(user_id)
-    .fetch_one(&db)
-    .await
-    .expect("count");
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM user_skills WHERE user_id = $1")
+        .bind(user_id)
+        .fetch_one(&db)
+        .await
+        .expect("count");
     assert_eq!(count, 0);
 
     db.close().await;

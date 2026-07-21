@@ -12,14 +12,20 @@ async fn get_badge_rules_lists_only_non_deprecated() {
         "INSERT INTO badge_rules (slug, output_type, display_name, conditions)
          VALUES ('p175-active-rule', 'skill_patch', 'Active', '{}')",
     )
-    .execute(&app.db).await.unwrap();
+    .execute(&app.db)
+    .await
+    .unwrap();
 
     let resp = app.get("/api/badge-rules").await;
     let body: serde_json::Value = resp.json().await.unwrap();
     let rules = body["data"]["rules"].as_array().unwrap();
     assert!(rules.iter().any(|r| r["slug"] == "p175-active-rule"));
     // 9 legacy_* sont deprecated depuis P17.1 → doivent être ABSENTS.
-    assert!(!rules.iter().any(|r| r["slug"].as_str().unwrap_or("").starts_with("legacy_")));
+    assert!(
+        !rules
+            .iter()
+            .any(|r| r["slug"].as_str().unwrap_or("").starts_with("legacy_"))
+    );
 }
 
 #[tokio::test]
@@ -27,25 +33,35 @@ async fn get_user_badges_returns_polymorphic_payload_with_rank() {
     let app = TestApp::spawn().await;
     app.register_user("kim175").await;
     let uid: uuid::Uuid = sqlx::query_scalar("SELECT id FROM users WHERE username = 'kim175'")
-        .fetch_one(&app.db).await.unwrap();
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
 
     // Setup: 1 rule skill_patch + 1 user_badge lié.
     let rule_id: uuid::Uuid = sqlx::query_scalar(
         "INSERT INTO badge_rules (slug, output_type, display_name, conditions, rarity)
          VALUES ('p175-react-patch', 'skill_patch', 'React', '{}', 'rare') RETURNING id",
     )
-    .fetch_one(&app.db).await.unwrap();
-    let badge_id: uuid::Uuid = sqlx::query_scalar(
-        "SELECT id FROM badges WHERE slug = 'first_challenge'",
-    )
-    .fetch_one(&app.db).await.unwrap();
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    let badge_id: uuid::Uuid =
+        sqlx::query_scalar("SELECT id FROM badges WHERE slug = 'first_challenge'")
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
     let proof = uuid::Uuid::new_v4();
     sqlx::query(
         "INSERT INTO user_badges (user_id, badge_id, rule_id, source_proofs, rarity)
          VALUES ($1, $2, $3, $4, 'rare')",
     )
-    .bind(uid).bind(badge_id).bind(rule_id).bind(&vec![proof])
-    .execute(&app.db).await.unwrap();
+    .bind(uid)
+    .bind(badge_id)
+    .bind(rule_id)
+    .bind(&vec![proof])
+    .execute(&app.db)
+    .await
+    .unwrap();
 
     let resp = app.get(&format!("/api/users/{uid}/badges")).await;
     assert!(resp.status().is_success());
@@ -66,20 +82,30 @@ async fn get_user_badges_excludes_revoked() {
     let app = TestApp::spawn().await;
     app.register_user("kim175b").await;
     let uid: uuid::Uuid = sqlx::query_scalar("SELECT id FROM users WHERE username = 'kim175b'")
-        .fetch_one(&app.db).await.unwrap();
-    let badge_id: uuid::Uuid = sqlx::query_scalar(
-        "SELECT id FROM badges WHERE slug = 'first_challenge'",
-    )
-    .fetch_one(&app.db).await.unwrap();
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
+    let badge_id: uuid::Uuid =
+        sqlx::query_scalar("SELECT id FROM badges WHERE slug = 'first_challenge'")
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
     sqlx::query(
         "INSERT INTO user_badges (user_id, badge_id, rarity, revoked_at)
          VALUES ($1, $2, 'common', NOW())",
     )
-    .bind(uid).bind(badge_id).execute(&app.db).await.unwrap();
+    .bind(uid)
+    .bind(badge_id)
+    .execute(&app.db)
+    .await
+    .unwrap();
 
     let resp = app.get(&format!("/api/users/{uid}/badges")).await;
     let body: serde_json::Value = resp.json().await.unwrap();
-    assert_eq!(body["data"]["total_badges"], 0, "revoked excluded from feed");
+    assert_eq!(
+        body["data"]["total_badges"], 0,
+        "revoked excluded from feed"
+    );
 }
 
 #[tokio::test]
@@ -87,7 +113,9 @@ async fn get_user_badges_polymorphic_buckets_split_by_family() {
     let app = TestApp::spawn().await;
     app.register_user("kim175c").await;
     let uid: uuid::Uuid = sqlx::query_scalar("SELECT id FROM users WHERE username = 'kim175c'")
-        .fetch_one(&app.db).await.unwrap();
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
 
     for (slug, family) in [
         ("p175-medal-a", "medal"),
@@ -98,7 +126,11 @@ async fn get_user_badges_polymorphic_buckets_split_by_family() {
             "INSERT INTO badge_rules (slug, output_type, display_name, conditions)
              VALUES ($1, $2, 'X', '{}') RETURNING id",
         )
-        .bind(slug).bind(family).fetch_one(&app.db).await.unwrap();
+        .bind(slug)
+        .bind(family)
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
         // Chaque row user_badges doit avoir un badge_id distinct (PK = user_id, badge_id).
         let bid: uuid::Uuid = sqlx::query_scalar(
             "INSERT INTO badges (slug, name, description, icon, category, condition_type, condition_value)
@@ -109,7 +141,12 @@ async fn get_user_badges_polymorphic_buckets_split_by_family() {
             "INSERT INTO user_badges (user_id, badge_id, rule_id, rarity)
              VALUES ($1, $2, $3, 'common')",
         )
-        .bind(uid).bind(bid).bind(rid).execute(&app.db).await.unwrap();
+        .bind(uid)
+        .bind(bid)
+        .bind(rid)
+        .execute(&app.db)
+        .await
+        .unwrap();
     }
 
     let resp = app.get(&format!("/api/users/{uid}/badges")).await;

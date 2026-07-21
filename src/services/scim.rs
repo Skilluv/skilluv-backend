@@ -205,21 +205,17 @@ pub struct NewScimUser<'a> {
 ///
 /// Idempotency: if `external_id` is set and already exists in the DB, returns
 /// AppError::Validation("already exists") so the caller can map it to 409.
-pub async fn provision_user(
-    db: &PgPool,
-    new: NewScimUser<'_>,
-) -> Result<Uuid, AppError> {
+pub async fn provision_user(db: &PgPool, new: NewScimUser<'_>) -> Result<Uuid, AppError> {
     let email_lower = new.email.trim().to_lowercase();
     let user_name_lower = new.user_name.trim().to_lowercase();
 
     // Enforce SCIM idempotency on externalId.
     if let Some(ext) = new.external_id {
-        let existing: Option<(Uuid,)> = sqlx::query_as(
-            "SELECT id FROM users WHERE scim_external_id = $1",
-        )
-        .bind(ext)
-        .fetch_optional(db)
-        .await?;
+        let existing: Option<(Uuid,)> =
+            sqlx::query_as("SELECT id FROM users WHERE scim_external_id = $1")
+                .bind(ext)
+                .fetch_optional(db)
+                .await?;
         if existing.is_some() {
             return Err(AppError::Validation(
                 "User with this externalId already exists".into(),
@@ -253,8 +249,7 @@ pub async fn provision_user(
         .await?;
         uid
     } else {
-        let placeholder_hash =
-            "$argon2id$v=19$m=19456,t=2,p=1$scim-placeholder$scim-placeholder";
+        let placeholder_hash = "$argon2id$v=19$m=19456,t=2,p=1$scim-placeholder$scim-placeholder";
         let display = new
             .display_name
             .map(String::from)
@@ -545,12 +540,11 @@ pub async fn get_group(
     let Some((id, external_id, display_name, mapped_role, created_at, updated_at)) = row else {
         return Ok(None);
     };
-    let members: Vec<(Uuid,)> = sqlx::query_as(
-        "SELECT user_id FROM scim_group_members WHERE group_id = $1",
-    )
-    .bind(id)
-    .fetch_all(db)
-    .await?;
+    let members: Vec<(Uuid,)> =
+        sqlx::query_as("SELECT user_id FROM scim_group_members WHERE group_id = $1")
+            .bind(id)
+            .fetch_all(db)
+            .await?;
     Ok(Some(ScimGroupView {
         id,
         external_id,
@@ -569,7 +563,14 @@ pub async fn list_groups(
     start_index: i64,
     count: i64,
 ) -> Result<(Vec<ScimGroupView>, i64), AppError> {
-    let rows: Vec<(Uuid, Option<String>, String, Option<String>, DateTime<Utc>, DateTime<Utc>)> = sqlx::query_as(
+    let rows: Vec<(
+        Uuid,
+        Option<String>,
+        String,
+        Option<String>,
+        DateTime<Utc>,
+        DateTime<Utc>,
+    )> = sqlx::query_as(
         r#"
         SELECT id, external_id, display_name, mapped_role, created_at, updated_at
         FROM scim_groups
@@ -696,12 +697,11 @@ pub async fn recompute_user_role(
     .fetch_all(db)
     .await?;
 
-    let default_role: Option<(String,)> = sqlx::query_as(
-        "SELECT default_role FROM enterprise_sso_configs WHERE enterprise_id = $1",
-    )
-    .bind(enterprise_id)
-    .fetch_optional(db)
-    .await?;
+    let default_role: Option<(String,)> =
+        sqlx::query_as("SELECT default_role FROM enterprise_sso_configs WHERE enterprise_id = $1")
+            .bind(enterprise_id)
+            .fetch_optional(db)
+            .await?;
     let fallback = default_role
         .map(|(r,)| r)
         .unwrap_or_else(|| "recruiter".to_string());
@@ -769,13 +769,11 @@ pub async fn remove_group_members(
     user_ids: &[Uuid],
 ) -> Result<(), AppError> {
     for uid in user_ids {
-        sqlx::query(
-            "DELETE FROM scim_group_members WHERE group_id = $1 AND user_id = $2",
-        )
-        .bind(group_id)
-        .bind(uid)
-        .execute(db)
-        .await?;
+        sqlx::query("DELETE FROM scim_group_members WHERE group_id = $1 AND user_id = $2")
+            .bind(group_id)
+            .bind(uid)
+            .execute(db)
+            .await?;
     }
     sqlx::query("UPDATE scim_groups SET updated_at = NOW() WHERE id = $1")
         .bind(group_id)
@@ -820,14 +818,12 @@ pub async fn delete_group(
     enterprise_id: Uuid,
     group_id: Uuid,
 ) -> Result<bool, AppError> {
-    let deleted = sqlx::query(
-        "DELETE FROM scim_groups WHERE id = $1 AND enterprise_id = $2",
-    )
-    .bind(group_id)
-    .bind(enterprise_id)
-    .execute(db)
-    .await?
-    .rows_affected();
+    let deleted = sqlx::query("DELETE FROM scim_groups WHERE id = $1 AND enterprise_id = $2")
+        .bind(group_id)
+        .bind(enterprise_id)
+        .execute(db)
+        .await?
+        .rows_affected();
     Ok(deleted > 0)
 }
 

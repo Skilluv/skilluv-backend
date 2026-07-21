@@ -49,10 +49,7 @@ fn github_oauth_env() -> Result<(String, String, String), AppError> {
     Ok((client_id, client_secret, redirect))
 }
 
-async fn start(
-    State(state): State<AppState>,
-    auth: AuthUser,
-) -> Result<Redirect, AppError> {
+async fn start(State(state): State<AppState>, auth: AuthUser) -> Result<Redirect, AppError> {
     let (client_id, _, redirect_uri) = github_oauth_env()?;
     // State token bound to the user, 15-min TTL in Redis.
     let state_token = format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple());
@@ -89,8 +86,7 @@ async fn callback(
         github::exchange_code(&client_id, &client_secret, &redirect_uri, &q.code).await?;
     let gh_user = github::fetch_user(&token).await?;
 
-    let (encrypted, nonce) =
-        github::encrypt_token(&state.config.jwt_secret, &token)?;
+    let (encrypted, nonce) = github::encrypt_token(&state.config.jwt_secret, &token)?;
     github::upsert_connection(
         &state.db,
         user_id,
@@ -103,13 +99,11 @@ async fn callback(
     .await?;
 
     // Mirror GitHub username onto the user's profile.github field if empty
-    let _ = sqlx::query(
-        "UPDATE users SET github = COALESCE(NULLIF(github, ''), $1) WHERE id = $2",
-    )
-    .bind(&gh_user.login)
-    .bind(user_id)
-    .execute(&state.db)
-    .await;
+    let _ = sqlx::query("UPDATE users SET github = COALESCE(NULLIF(github, ''), $1) WHERE id = $2")
+        .bind(&gh_user.login)
+        .bind(user_id)
+        .execute(&state.db)
+        .await;
 
     // Kick off an initial repo sync (best-effort)
     let db = state.db.clone();
@@ -146,12 +140,8 @@ async fn disconnect(
     Ok(Json(build_response(json!({ "disconnected": true }))))
 }
 
-async fn sync_now(
-    State(state): State<AppState>,
-    auth: AuthUser,
-) -> Result<Json<Value>, AppError> {
-    let report =
-        github::sync_repos_for(&state.db, &state.config.jwt_secret, auth.user_id).await?;
+async fn sync_now(State(state): State<AppState>, auth: AuthUser) -> Result<Json<Value>, AppError> {
+    let report = github::sync_repos_for(&state.db, &state.config.jwt_secret, auth.user_id).await?;
     Ok(Json(build_response(json!({ "sync": report }))))
 }
 
@@ -177,11 +167,12 @@ async fn public_repos(
     Path(username): Path<String>,
     Query(q): Query<ReposQuery>,
 ) -> Result<Json<Value>, AppError> {
-    let row: Option<(Uuid,)> =
-        sqlx::query_as("SELECT id FROM users WHERE username = $1 AND profile_active = TRUE AND is_banned = FALSE")
-            .bind(&username)
-            .fetch_optional(&state.db)
-            .await?;
+    let row: Option<(Uuid,)> = sqlx::query_as(
+        "SELECT id FROM users WHERE username = $1 AND profile_active = TRUE AND is_banned = FALSE",
+    )
+    .bind(&username)
+    .fetch_optional(&state.db)
+    .await?;
     let (user_id,) = row.ok_or(AppError::NotFound("user not found".into()))?;
     let repos = github::top_repos_for_user(&state.db, user_id, q.limit.unwrap_or(12)).await?;
     Ok(Json(build_response(json!({ "repos": repos }))))
@@ -252,11 +243,14 @@ async fn cv_html(
     .await?;
 
     // Projects (owned by this user)
-    let user_projects =
-        projects::list_for_owner(&state.db, "user", user_id).await.unwrap_or_default();
+    let user_projects = projects::list_for_owner(&state.db, "user", user_id)
+        .await
+        .unwrap_or_default();
 
     // Top 5 GitHub repos (if connected)
-    let repos = github::top_repos_for_user(&state.db, user_id, 5).await.unwrap_or_default();
+    let repos = github::top_repos_for_user(&state.db, user_id, 5)
+        .await
+        .unwrap_or_default();
 
     // Track analytics view
     if analytics_consent(&headers) {
@@ -332,12 +326,23 @@ fn render_cv_html(c: CvContext) -> String {
     let subs: String = c
         .top_subs
         .iter()
-        .map(|(t, f, _)| format!("<li><strong>{}</strong> <span class=\"frags\">+{f} frag.</span></li>", esc(t)))
+        .map(|(t, f, _)| {
+            format!(
+                "<li><strong>{}</strong> <span class=\"frags\">+{f} frag.</span></li>",
+                esc(t)
+            )
+        })
         .collect();
     let skills: String = c
         .top_skills
         .iter()
-        .map(|(d, s, f)| format!("<li>{} · {} <span class=\"frags\">{f} frag.</span></li>", esc(d), esc(s)))
+        .map(|(d, s, f)| {
+            format!(
+                "<li>{} · {} <span class=\"frags\">{f} frag.</span></li>",
+                esc(d),
+                esc(s)
+            )
+        })
         .collect();
     let badges: String = c
         .badges

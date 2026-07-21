@@ -30,10 +30,7 @@ pub fn guild_routes() -> Router<AppState> {
         .route("/guilds/join-by-token", post(join_by_token))
         // Applications
         .route("/guilds/{id}/applications", post(apply))
-        .route(
-            "/guild-applications/{id}/decide",
-            post(decide_application),
-        )
+        .route("/guild-applications/{id}/decide", post(decide_application))
         // Wars
         .route("/guild-wars", post(propose_war).get(list_wars))
         .route("/guild-wars/{id}/respond", post(respond_war))
@@ -82,9 +79,7 @@ async fn create_guild(
             name: body.name,
             description: body.description,
             motto: body.motto,
-            membership_mode: body
-                .membership_mode
-                .unwrap_or_else(|| "application".into()),
+            membership_mode: body.membership_mode.unwrap_or_else(|| "application".into()),
             cofounder_ids: body.cofounder_ids,
         },
     )
@@ -268,10 +263,7 @@ async fn invite_direct(
         state.analytics.track(
             auth.user_id,
             events::GUILD_INVITE_SENT,
-            props(&[
-                ("guild_id", json!(guild_id)),
-                ("kind", json!("direct")),
-            ]),
+            props(&[("guild_id", json!(guild_id)), ("kind", json!("direct"))]),
         );
     }
     Ok(Json(build_response(json!({ "invitation": invite }))))
@@ -288,10 +280,7 @@ async fn create_token_link(
         state.analytics.track(
             auth.user_id,
             events::GUILD_INVITE_SENT,
-            props(&[
-                ("guild_id", json!(guild_id)),
-                ("kind", json!("token")),
-            ]),
+            props(&[("guild_id", json!(guild_id)), ("kind", json!("token"))]),
         );
     }
     Ok(Json(build_response(json!({ "invitation": invite }))))
@@ -334,10 +323,7 @@ async fn join_by_token(
         state.analytics.track(
             auth.user_id,
             events::GUILD_JOINED,
-            props(&[
-                ("guild_id", json!(guild_id)),
-                ("via", json!("token")),
-            ]),
+            props(&[("guild_id", json!(guild_id)), ("via", json!("token"))]),
         );
     }
     metrics::counter!("skilluv_guild_joins_total", "via" => "token").increment(1);
@@ -381,7 +367,8 @@ async fn decide_application(
     headers: HeaderMap,
     Json(body): Json<DecideBody>,
 ) -> Result<Json<Value>, AppError> {
-    let app = guild::decide_application(&state.db, application_id, auth.user_id, body.accept).await?;
+    let app =
+        guild::decide_application(&state.db, application_id, auth.user_id, body.accept).await?;
     let _ = NotificationService::send(
         &state.db,
         &mut state.redis.clone(),
@@ -513,10 +500,7 @@ async fn respond_war(
         state.analytics.track(
             auth.user_id,
             events::GUILD_WAR_ACCEPTED,
-            props(&[
-                ("war_id", json!(war.id)),
-                ("accepted", json!(body.accept)),
-            ]),
+            props(&[("war_id", json!(war.id)), ("accepted", json!(body.accept))]),
         );
     }
     Ok(Json(build_response(json!({ "war": war }))))

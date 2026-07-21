@@ -8,7 +8,7 @@ use axum::extract::{Path, Query, State};
 use axum::routing::{patch, post};
 use axum::{Json, Router};
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 use crate::AppState;
@@ -23,7 +23,12 @@ pub fn admin_badge_rule_routes() -> Router<AppState> {
 }
 
 const ALLOWED_OUTPUT_TYPES: &[&str] = &[
-    "skill_patch", "rank", "guild_crest", "challenge_seal", "event_stamp", "medal",
+    "skill_patch",
+    "rank",
+    "guild_crest",
+    "challenge_seal",
+    "event_stamp",
+    "medal",
 ];
 const ALLOWED_RARITIES: &[&str] = &["auto", "common", "rare", "epic", "legendary"];
 
@@ -43,7 +48,9 @@ fn build_response_with(data: Value, extra: Value) -> Value {
         "timestamp": chrono::Utc::now().to_rfc3339(),
     });
     if let (Some(m), Some(e)) = (meta.as_object_mut(), extra.as_object()) {
-        for (k, v) in e { m.insert(k.clone(), v.clone()); }
+        for (k, v) in e {
+            m.insert(k.clone(), v.clone());
+        }
     }
     json!({ "data": data, "meta": meta })
 }
@@ -59,40 +66,53 @@ fn validate_slug(s: &str) -> Result<(), AppError> {
     if !(3..=80).contains(&len) {
         return Err(AppError::Validation("slug length must be 3..=80".into()));
     }
-    if !s.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_') {
+    if !s
+        .chars()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_')
+    {
         return Err(AppError::Validation("slug must match ^[a-z0-9_-]+$".into()));
     }
     Ok(())
 }
 
 fn validate_conditions(v: &Value) -> Result<(), AppError> {
-    let obj = v.as_object().ok_or_else(|| {
-        AppError::Validation("conditions must be a JSON object".into())
-    })?;
+    let obj = v
+        .as_object()
+        .ok_or_else(|| AppError::Validation("conditions must be a JSON object".into()))?;
     // Best-effort type validation on known keys.
     if let Some(pt) = obj.get("proof_types") {
         if !pt.is_array() {
-            return Err(AppError::Validation("conditions.proof_types must be array".into()));
+            return Err(AppError::Validation(
+                "conditions.proof_types must be array".into(),
+            ));
         }
     }
     if let Some(mc) = obj.get("min_count") {
         if !mc.is_number() {
-            return Err(AppError::Validation("conditions.min_count must be number".into()));
+            return Err(AppError::Validation(
+                "conditions.min_count must be number".into(),
+            ));
         }
     }
     if let Some(st) = obj.get("skill_tag") {
         if !st.is_string() {
-            return Err(AppError::Validation("conditions.skill_tag must be string".into()));
+            return Err(AppError::Validation(
+                "conditions.skill_tag must be string".into(),
+            ));
         }
     }
     if let Some(vb) = obj.get("verified_by") {
         if !vb.is_array() {
-            return Err(AppError::Validation("conditions.verified_by must be array".into()));
+            return Err(AppError::Validation(
+                "conditions.verified_by must be array".into(),
+            ));
         }
     }
     if let Some(wd) = obj.get("within_days") {
         if !wd.is_number() {
-            return Err(AppError::Validation("conditions.within_days must be number".into()));
+            return Err(AppError::Validation(
+                "conditions.within_days must be number".into(),
+            ));
         }
     }
     Ok(())
@@ -132,7 +152,9 @@ async fn create_rule(
 
     validate_slug(&body.slug)?;
     if body.display_name.trim().is_empty() || body.display_name.len() > 120 {
-        return Err(AppError::Validation("display_name must be 1..=120 chars".into()));
+        return Err(AppError::Validation(
+            "display_name must be 1..=120 chars".into(),
+        ));
     }
     if !ALLOWED_OUTPUT_TYPES.contains(&body.output_type.as_str()) {
         return Err(AppError::Validation(format!(
@@ -180,7 +202,9 @@ async fn create_rule(
     .fetch_one(&state.db)
     .await
     .map_err(|e| match e {
-        sqlx::Error::Database(ref db_err) if db_err.constraint() == Some("badge_rules_slug_key") => {
+        sqlx::Error::Database(ref db_err)
+            if db_err.constraint() == Some("badge_rules_slug_key") =>
+        {
             AppError::Validation(format!("slug '{}' already exists", body.slug))
         }
         _ => AppError::Database(e),
@@ -248,8 +272,9 @@ async fn patch_rule(
     crate::middleware::admin_destructive::enforce_admin_destructive(&state, auth.user_id).await?;
 
     // Fetch before pour vérifs invariants (admin_editable, deprecated_at).
-    let before: Option<(Uuid, bool, Option<chrono::DateTime<chrono::Utc>>, Value)> = sqlx::query_as(
-        "SELECT id, admin_editable, deprecated_at,
+    let before: Option<(Uuid, bool, Option<chrono::DateTime<chrono::Utc>>, Value)> =
+        sqlx::query_as(
+            "SELECT id, admin_editable, deprecated_at,
                 jsonb_build_object(
                     'id', id, 'slug', slug, 'output_type', output_type,
                     'output_variant', output_variant, 'display_name', display_name,
@@ -259,10 +284,10 @@ async fn patch_rule(
                     'deprecated_at', deprecated_at
                 ) AS row_json
          FROM badge_rules WHERE slug = $1",
-    )
-    .bind(&slug)
-    .fetch_optional(&state.db)
-    .await?;
+        )
+        .bind(&slug)
+        .fetch_optional(&state.db)
+        .await?;
     let (id, admin_editable, deprecated_at, before_json) =
         before.ok_or_else(|| AppError::NotFound(format!("badge_rule '{slug}' not found")))?;
 
@@ -403,15 +428,16 @@ async fn deprecate_rule(
     crate::middleware::admin_destructive::enforce_admin_destructive(&state, auth.user_id).await?;
 
     if body.reason.trim().len() < 8 {
-        return Err(AppError::Validation("reason must be at least 8 chars".into()));
+        return Err(AppError::Validation(
+            "reason must be at least 8 chars".into(),
+        ));
     }
 
-    let row: Option<(Uuid, Option<chrono::DateTime<chrono::Utc>>)> = sqlx::query_as(
-        "SELECT id, deprecated_at FROM badge_rules WHERE slug = $1",
-    )
-    .bind(&slug)
-    .fetch_optional(&state.db)
-    .await?;
+    let row: Option<(Uuid, Option<chrono::DateTime<chrono::Utc>>)> =
+        sqlx::query_as("SELECT id, deprecated_at FROM badge_rules WHERE slug = $1")
+            .bind(&slug)
+            .fetch_optional(&state.db)
+            .await?;
     let (id, existing) =
         row.ok_or_else(|| AppError::NotFound(format!("badge_rule '{slug}' not found")))?;
 

@@ -61,10 +61,7 @@ fn generate_password() -> String {
     // dev/bootstrap password the user is meant to rotate.
     let a = Uuid::new_v4().simple().to_string();
     let b = Uuid::new_v4().simple().to_string();
-    format!("!Sk{a}{b}")
-        .chars()
-        .take(24)
-        .collect()
+    format!("!Sk{a}{b}").chars().take(24).collect()
 }
 
 fn resolve(cli: Option<String>, env_name: &str, fallback: &str) -> String {
@@ -77,8 +74,7 @@ async fn main() -> Result<()> {
     dotenvy::dotenv().ok();
     tracing_subscriber::fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info".into()),
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
         )
         .compact()
         .init();
@@ -93,7 +89,10 @@ async fn main() -> Result<()> {
     // Password: CLI > env > freshly-generated. When we generate, we surface
     // the plaintext once at the end — the caller MUST capture it, we never
     // print it a second time.
-    let (password, generated) = match cli.password.or_else(|| std::env::var("SEED_ADMIN_PASSWORD").ok()) {
+    let (password, generated) = match cli
+        .password
+        .or_else(|| std::env::var("SEED_ADMIN_PASSWORD").ok())
+    {
         Some(p) => (p, false),
         None => (generate_password(), true),
     };
@@ -102,8 +101,7 @@ async fn main() -> Result<()> {
     let password_hash = AuthService::hash_password(&password)
         .map_err(|e| anyhow::anyhow!("hash_password failed: {e}"))?;
 
-    let database_url =
-        std::env::var("DATABASE_URL").context("DATABASE_URL is required")?;
+    let database_url = std::env::var("DATABASE_URL").context("DATABASE_URL is required")?;
     let db = PgPool::connect(&database_url)
         .await
         .context("failed to connect to Postgres")?;
@@ -148,7 +146,10 @@ async fn main() -> Result<()> {
 
     println!();
     println!("═══════════════════════════════════════════════════════════");
-    println!("  Admin account {} successfully", if inserted { "CREATED" } else { "UPDATED" });
+    println!(
+        "  Admin account {} successfully",
+        if inserted { "CREATED" } else { "UPDATED" }
+    );
     println!("═══════════════════════════════════════════════════════════");
     println!("  Email:    {email}");
     println!("  Username: {username}");

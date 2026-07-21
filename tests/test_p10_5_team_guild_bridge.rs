@@ -204,8 +204,14 @@ async fn bonus_gp_noop_when_fragments_non_positive() {
     let founder = insert_user(&db).await;
     let guild_id = insert_guild(&db, founder, "DDD").await;
 
-    assert_eq!(award_bonus_gp_for_team(&db, guild_id, 0).await.expect("z"), 0);
-    assert_eq!(award_bonus_gp_for_team(&db, guild_id, -5).await.expect("n"), 0);
+    assert_eq!(
+        award_bonus_gp_for_team(&db, guild_id, 0).await.expect("z"),
+        0
+    );
+    assert_eq!(
+        award_bonus_gp_for_team(&db, guild_id, -5).await.expect("n"),
+        0
+    );
 
     let gp: i64 = sqlx::query_scalar("SELECT gp_total FROM guilds WHERE id = $1")
         .bind(guild_id)

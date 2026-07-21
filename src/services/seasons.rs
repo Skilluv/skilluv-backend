@@ -36,11 +36,9 @@ pub struct CreateSeasonParams {
 
 impl SeasonsService {
     pub async fn list_all(db: &PgPool) -> Result<Vec<Season>, AppError> {
-        let seasons = sqlx::query_as::<_, Season>(
-            "SELECT * FROM seasons ORDER BY starts_at DESC",
-        )
-        .fetch_all(db)
-        .await?;
+        let seasons = sqlx::query_as::<_, Season>("SELECT * FROM seasons ORDER BY starts_at DESC")
+            .fetch_all(db)
+            .await?;
         Ok(seasons)
     }
 

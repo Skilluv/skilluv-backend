@@ -93,16 +93,28 @@ impl<'a> DigestService<'a> {
             return Ok(DigestOutcome::NoActivity);
         }
 
-        let unsub_token = build_unsubscribe_token(target.id, "digest_weekly", self.unsubscribe_secret);
+        let unsub_token =
+            build_unsubscribe_token(target.id, "digest_weekly", self.unsubscribe_secret);
         let unsub_url = format!(
             "{}/api/email/unsubscribe?token={}&kind=digest_weekly",
             self.base_url, unsub_token
         );
         let html = render_digest_html(target, &stats, &unsub_url);
-        let subject = format!("Ta semaine Skilluv — {}/{}", stats.challenges_completed, stats.fragments_earned);
+        let subject = format!(
+            "Ta semaine Skilluv — {}/{}",
+            stats.challenges_completed, stats.fragments_earned
+        );
 
         self.email
-            .send_with_log(self.db, target.id, &target.email, &target.display_name, &subject, &html, "digest_weekly")
+            .send_with_log(
+                self.db,
+                target.id,
+                &target.email,
+                &target.display_name,
+                &subject,
+                &html,
+                "digest_weekly",
+            )
             .await?;
         Ok(DigestOutcome::Sent)
     }

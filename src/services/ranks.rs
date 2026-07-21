@@ -25,7 +25,11 @@ pub const RANK_MAITRE: &str = "maitre";
 pub const RANK_DOYEN: &str = "doyen";
 
 const ORDER: &[&str] = &[
-    RANK_APPRENTI, RANK_RANGER, RANK_ARTISAN, RANK_MAITRE, RANK_DOYEN,
+    RANK_APPRENTI,
+    RANK_RANGER,
+    RANK_ARTISAN,
+    RANK_MAITRE,
+    RANK_DOYEN,
 ];
 
 /// Retourne (rank_courant, rank_calculé, promoted?).
@@ -73,13 +77,11 @@ pub async fn recompute_rank_for_user(
 
     let computed = compute_rank(deliverables, attestations, is_mentor);
 
-    let current: String = sqlx::query_scalar(
-        "SELECT rank FROM user_ranks WHERE user_id = $1",
-    )
-    .bind(user_id)
-    .fetch_optional(db)
-    .await?
-    .unwrap_or_else(|| RANK_APPRENTI.to_string());
+    let current: String = sqlx::query_scalar("SELECT rank FROM user_ranks WHERE user_id = $1")
+        .bind(user_id)
+        .fetch_optional(db)
+        .await?
+        .unwrap_or_else(|| RANK_APPRENTI.to_string());
 
     // Unidirectionnel : on ne descend jamais.
     if rank_index(&computed) > rank_index(&current) {
@@ -140,7 +142,11 @@ mod unit {
         assert_eq!(compute_rank(0, 0, false), RANK_APPRENTI);
         assert_eq!(compute_rank(3, 0, false), RANK_APPRENTI);
         assert_eq!(compute_rank(4, 0, false), RANK_RANGER);
-        assert_eq!(compute_rank(11, 0, false), RANK_RANGER, "attestation manquante");
+        assert_eq!(
+            compute_rank(11, 0, false),
+            RANK_RANGER,
+            "attestation manquante"
+        );
         assert_eq!(compute_rank(11, 1, false), RANK_ARTISAN);
         assert_eq!(compute_rank(26, 3, false), RANK_MAITRE);
         assert_eq!(compute_rank(50, 5, false), RANK_MAITRE, "mentor manquant");

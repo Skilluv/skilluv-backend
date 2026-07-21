@@ -118,10 +118,7 @@ pub struct GuildCreated {
     pub cofounders_added: Vec<Uuid>,
 }
 
-pub async fn create_guild(
-    db: &PgPool,
-    input: CreateGuildInput,
-) -> Result<GuildCreated, AppError> {
+pub async fn create_guild(db: &PgPool, input: CreateGuildInput) -> Result<GuildCreated, AppError> {
     // ─── Pre-flight validation ───────────────────────────────────
     if input.cofounder_ids.len() != REQUIRED_COFOUNDER_COUNT {
         return Err(AppError::Validation(format!(
@@ -133,8 +130,7 @@ pub async fn create_guild(
             "The founder cannot be listed as their own co-founder".into(),
         ));
     }
-    let unique_cofounders: std::collections::HashSet<&Uuid> =
-        input.cofounder_ids.iter().collect();
+    let unique_cofounders: std::collections::HashSet<&Uuid> = input.cofounder_ids.iter().collect();
     if unique_cofounders.len() != REQUIRED_COFOUNDER_COUNT {
         return Err(AppError::Validation("Co-founders must be distinct".into()));
     }
@@ -176,8 +172,8 @@ pub async fn create_guild(
     .bind(input.founder_id)
     .fetch_optional(&mut *tx)
     .await?;
-    let (founder_fragments, _founder_title) = founder_check
-        .ok_or(AppError::NotFound("founder not found".into()))?;
+    let (founder_fragments, _founder_title) =
+        founder_check.ok_or(AppError::NotFound("founder not found".into()))?;
     if founder_fragments < MIN_FOUNDER_FRAGMENTS {
         return Err(AppError::Validation(format!(
             "Guild creation requires {MIN_FOUNDER_FRAGMENTS}+ fragments (artisan tier or above)"
@@ -193,11 +189,10 @@ pub async fn create_guild(
     ensure_can_join(&mut tx, input.founder_id).await?;
     for cof in &input.cofounder_ids {
         ensure_can_join(&mut tx, *cof).await?;
-        let cof_ok: Option<(bool,)> =
-            sqlx::query_as("SELECT is_banned FROM users WHERE id = $1")
-                .bind(cof)
-                .fetch_optional(&mut *tx)
-                .await?;
+        let cof_ok: Option<(bool,)> = sqlx::query_as("SELECT is_banned FROM users WHERE id = $1")
+            .bind(cof)
+            .fetch_optional(&mut *tx)
+            .await?;
         match cof_ok {
             Some((true,)) => {
                 return Err(AppError::Validation(
@@ -356,22 +351,19 @@ pub async fn join_guild(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> Result<()
     if guild.disbanded_at.is_some() {
         return Err(AppError::Validation("Guild has been disbanded".into()));
     }
-    let count: (i64,) =
-        sqlx::query_as("SELECT COUNT(*) FROM guild_members WHERE guild_id = $1")
-            .bind(guild_id)
-            .fetch_one(&mut *tx)
-            .await?;
+    let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM guild_members WHERE guild_id = $1")
+        .bind(guild_id)
+        .fetch_one(&mut *tx)
+        .await?;
     if count.0 >= guild.max_members as i64 {
         return Err(AppError::Validation("Guild is full".into()));
     }
 
-    sqlx::query(
-        "INSERT INTO guild_members (guild_id, user_id, role) VALUES ($1, $2, 'recruit')",
-    )
-    .bind(guild_id)
-    .bind(user_id)
-    .execute(&mut *tx)
-    .await?;
+    sqlx::query("INSERT INTO guild_members (guild_id, user_id, role) VALUES ($1, $2, 'recruit')")
+        .bind(guild_id)
+        .bind(user_id)
+        .execute(&mut *tx)
+        .await?;
 
     tx.commit().await?;
     Ok(())
@@ -379,12 +371,11 @@ pub async fn join_guild(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> Result<()
 
 pub async fn leave_guild(db: &PgPool, user_id: Uuid) -> Result<Uuid, AppError> {
     let mut tx = db.begin().await?;
-    let row: Option<(Uuid, String)> = sqlx::query_as(
-        "SELECT guild_id, role FROM guild_members WHERE user_id = $1",
-    )
-    .bind(user_id)
-    .fetch_optional(&mut *tx)
-    .await?;
+    let row: Option<(Uuid, String)> =
+        sqlx::query_as("SELECT guild_id, role FROM guild_members WHERE user_id = $1")
+            .bind(user_id)
+            .fetch_optional(&mut *tx)
+            .await?;
     let (guild_id, role) = row.ok_or(AppError::NotFound("user is not in a guild".into()))?;
 
     // Founder cannot just leave : must transfer ownership first
@@ -430,16 +421,12 @@ pub async fn leave_guild(db: &PgPool, user_id: Uuid) -> Result<Uuid, AppError> {
     Ok(guild_id)
 }
 
-pub async fn list_members(
-    db: &PgPool,
-    guild_id: Uuid,
-) -> Result<Vec<GuildMember>, AppError> {
-    let rows = sqlx::query_as(
-        "SELECT * FROM guild_members WHERE guild_id = $1 ORDER BY role, joined_at",
-    )
-    .bind(guild_id)
-    .fetch_all(db)
-    .await?;
+pub async fn list_members(db: &PgPool, guild_id: Uuid) -> Result<Vec<GuildMember>, AppError> {
+    let rows =
+        sqlx::query_as("SELECT * FROM guild_members WHERE guild_id = $1 ORDER BY role, joined_at")
+            .bind(guild_id)
+            .fetch_all(db)
+            .await?;
     Ok(rows)
 }
 
@@ -448,13 +435,12 @@ pub async fn role_of(
     guild_id: Uuid,
     user_id: Uuid,
 ) -> Result<Option<String>, AppError> {
-    let row: Option<(String,)> = sqlx::query_as(
-        "SELECT role FROM guild_members WHERE guild_id = $1 AND user_id = $2",
-    )
-    .bind(guild_id)
-    .bind(user_id)
-    .fetch_optional(db)
-    .await?;
+    let row: Option<(String,)> =
+        sqlx::query_as("SELECT role FROM guild_members WHERE guild_id = $1 AND user_id = $2")
+            .bind(guild_id)
+            .bind(user_id)
+            .fetch_optional(db)
+            .await?;
     Ok(row.map(|(r,)| r))
 }
 
@@ -720,9 +706,7 @@ pub async fn invite_direct(
         return Err(AppError::Forbidden);
     }
     if invited_user_id == inviter_id {
-        return Err(AppError::Validation(
-            "Cannot invite yourself".into(),
-        ));
+        return Err(AppError::Validation("Cannot invite yourself".into()));
     }
     let expires_at = Utc::now() + ChronoDuration::days(INVITE_DIRECT_TTL_DAYS);
     let invite: GuildInvitation = sqlx::query_as(
@@ -753,11 +737,7 @@ pub async fn create_shareable_token(
         return Err(AppError::Forbidden);
     }
     // Strong-enough token: two UUIDv4 hex-encoded back-to-back (256 bits of entropy).
-    let token = format!(
-        "{}{}",
-        Uuid::new_v4().simple(),
-        Uuid::new_v4().simple()
-    );
+    let token = format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple());
     let expires_at = Utc::now() + ChronoDuration::days(INVITE_TOKEN_TTL_DAYS);
     let invite: GuildInvitation = sqlx::query_as(
         r#"
@@ -787,7 +767,9 @@ pub async fn accept_direct_invitation(
     .bind(invitation_id)
     .fetch_optional(&mut *tx)
     .await?;
-    let invite = row.ok_or(AppError::NotFound("invitation not found or already used".into()))?;
+    let invite = row.ok_or(AppError::NotFound(
+        "invitation not found or already used".into(),
+    ))?;
     if invite.expires_at < Utc::now() {
         return Err(AppError::Validation("Invitation expired".into()));
     }
@@ -829,13 +811,16 @@ pub async fn apply_to_guild(
     applicant_id: Uuid,
     message: &str,
 ) -> Result<GuildApplication, AppError> {
-    let guild: Guild = sqlx::query_as("SELECT * FROM guilds WHERE id = $1 AND disbanded_at IS NULL")
-        .bind(guild_id)
-        .fetch_optional(db)
-        .await?
-        .ok_or(AppError::NotFound("guild not found".into()))?;
+    let guild: Guild =
+        sqlx::query_as("SELECT * FROM guilds WHERE id = $1 AND disbanded_at IS NULL")
+            .bind(guild_id)
+            .fetch_optional(db)
+            .await?
+            .ok_or(AppError::NotFound("guild not found".into()))?;
     if guild.membership_mode == "invite_only" {
-        return Err(AppError::Validation("Guild does not accept applications".into()));
+        return Err(AppError::Validation(
+            "Guild does not accept applications".into(),
+        ));
     }
     if guild.membership_mode == "open" {
         // For 'open' guilds, fold "apply" into immediate join
@@ -958,18 +943,25 @@ pub async fn propose_war(
         return Err(AppError::Forbidden);
     }
 
-    let challenger: Guild = sqlx::query_as("SELECT * FROM guilds WHERE id = $1 AND disbanded_at IS NULL")
-        .bind(challenger_guild_id)
-        .fetch_optional(db)
-        .await?
-        .ok_or(AppError::NotFound("challenger guild not found".into()))?;
-    let defender: Guild = sqlx::query_as("SELECT * FROM guilds WHERE id = $1 AND disbanded_at IS NULL")
-        .bind(defender_guild_id)
-        .fetch_optional(db)
-        .await?
-        .ok_or(AppError::NotFound("defender guild not found".into()))?;
+    let challenger: Guild =
+        sqlx::query_as("SELECT * FROM guilds WHERE id = $1 AND disbanded_at IS NULL")
+            .bind(challenger_guild_id)
+            .fetch_optional(db)
+            .await?
+            .ok_or(AppError::NotFound("challenger guild not found".into()))?;
+    let defender: Guild =
+        sqlx::query_as("SELECT * FROM guilds WHERE id = $1 AND disbanded_at IS NULL")
+            .bind(defender_guild_id)
+            .fetch_optional(db)
+            .await?
+            .ok_or(AppError::NotFound("defender guild not found".into()))?;
 
-    validate_stake_amount(&challenger.division, challenger.gp_total, defender.gp_total, stake_gp)?;
+    validate_stake_amount(
+        &challenger.division,
+        challenger.gp_total,
+        defender.gp_total,
+        stake_gp,
+    )?;
 
     // Refuse if an active war already exists between these two
     let existing: Option<(Uuid,)> = sqlx::query_as(
@@ -1011,13 +1003,14 @@ pub async fn respond_to_war(
     decider_id: Uuid,
     accept: bool,
 ) -> Result<GuildWar, AppError> {
-    let war: Option<GuildWar> = sqlx::query_as(
-        "SELECT * FROM guild_wars WHERE id = $1 AND status = 'proposed'",
-    )
-    .bind(war_id)
-    .fetch_optional(db)
-    .await?;
-    let war = war.ok_or(AppError::NotFound("war not found or already decided".into()))?;
+    let war: Option<GuildWar> =
+        sqlx::query_as("SELECT * FROM guild_wars WHERE id = $1 AND status = 'proposed'")
+            .bind(war_id)
+            .fetch_optional(db)
+            .await?;
+    let war = war.ok_or(AppError::NotFound(
+        "war not found or already decided".into(),
+    ))?;
     let role = role_of(db, war.defender_guild_id, decider_id)
         .await?
         .ok_or(AppError::Forbidden)?;
@@ -1026,10 +1019,12 @@ pub async fn respond_to_war(
     }
     if war.proposed_at + ChronoDuration::hours(WAR_DECISION_WINDOW_HOURS) < Utc::now() {
         // The 48h window has lapsed → auto-reject
-        let _ = sqlx::query("UPDATE guild_wars SET status = 'rejected', decided_at = NOW() WHERE id = $1")
-            .bind(war_id)
-            .execute(db)
-            .await;
+        let _ = sqlx::query(
+            "UPDATE guild_wars SET status = 'rejected', decided_at = NOW() WHERE id = $1",
+        )
+        .bind(war_id)
+        .execute(db)
+        .await;
         return Err(AppError::Validation("Decision window expired".into()));
     }
 
@@ -1087,11 +1082,13 @@ pub async fn conclude_war(
     let mut tx = db.begin().await?;
     // Winner gets both stakes ; loser is already debited from accept.
     let pot = war.stake_gp * 2;
-    sqlx::query("UPDATE guilds SET gp_total = gp_total + $1, gp_season = gp_season + $1 WHERE id = $2")
-        .bind(pot)
-        .bind(winner_guild_id)
-        .execute(&mut *tx)
-        .await?;
+    sqlx::query(
+        "UPDATE guilds SET gp_total = gp_total + $1, gp_season = gp_season + $1 WHERE id = $2",
+    )
+    .bind(pot)
+    .bind(winner_guild_id)
+    .execute(&mut *tx)
+    .await?;
     let updated: GuildWar = sqlx::query_as(
         r#"
         UPDATE guild_wars
@@ -1137,10 +1134,11 @@ pub async fn admin_dissolve(db: &PgPool, guild_id: Uuid) -> Result<(), AppError>
     // Remove all members ; this triggers cooldown via the leave path is too heavy here.
     // Just clear membership and set a short global cooldown for everyone.
     let cooldown_until = Utc::now() + ChronoDuration::days(LEAVE_COOLDOWN_DAYS);
-    let members: Vec<(Uuid,)> = sqlx::query_as("SELECT user_id FROM guild_members WHERE guild_id = $1")
-        .bind(guild_id)
-        .fetch_all(&mut *tx)
-        .await?;
+    let members: Vec<(Uuid,)> =
+        sqlx::query_as("SELECT user_id FROM guild_members WHERE guild_id = $1")
+            .bind(guild_id)
+            .fetch_all(&mut *tx)
+            .await?;
     sqlx::query("DELETE FROM guild_members WHERE guild_id = $1")
         .bind(guild_id)
         .execute(&mut *tx)

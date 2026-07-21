@@ -9,7 +9,7 @@ use axum::extract::{Path, Query, State};
 use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 use crate::AppState;
@@ -23,7 +23,13 @@ pub fn admin_skill_routes() -> Router<AppState> {
 }
 
 const ALLOWED_DOMAINS: &[&str] = &[
-    "code", "design", "game", "security", "soft_skills", "ai", "ops",
+    "code",
+    "design",
+    "game",
+    "security",
+    "soft_skills",
+    "ai",
+    "ops",
 ];
 
 fn wrap(data: Value) -> Value {
@@ -41,10 +47,11 @@ fn validate_slug(s: &str) -> Result<(), AppError> {
     if !(2..=80).contains(&len) {
         return Err(AppError::Validation("slug length must be 2..=80".into()));
     }
-    if !s.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_') {
-        return Err(AppError::Validation(
-            "slug must match ^[a-z0-9_-]+$".into(),
-        ));
+    if !s
+        .chars()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_')
+    {
+        return Err(AppError::Validation("slug must match ^[a-z0-9_-]+$".into()));
     }
     Ok(())
 }
@@ -90,9 +97,16 @@ async fn list_skills(
 
     let search = q.q.as_ref().map(|s| format!("%{}%", s.to_lowercase()));
 
-    let rows: Vec<(Uuid, String, String, Option<String>, String, Option<Uuid>, bool)> =
-        sqlx::query_as(
-            r#"
+    let rows: Vec<(
+        Uuid,
+        String,
+        String,
+        Option<String>,
+        String,
+        Option<Uuid>,
+        bool,
+    )> = sqlx::query_as(
+        r#"
             SELECT id, slug, display_name, description, domain, parent_id, is_skilluv_specific
             FROM skill_nodes
             WHERE ($1::text IS NULL OR domain = $1)
@@ -104,15 +118,15 @@ async fn list_skills(
             ORDER BY domain, display_name
             LIMIT $5 OFFSET $6
             "#,
-        )
-        .bind(q.domain.as_ref())
-        .bind(q.parent_id)
-        .bind(q.is_skilluv_specific)
-        .bind(search.as_ref())
-        .bind(per_page)
-        .bind(offset)
-        .fetch_all(&state.db)
-        .await?;
+    )
+    .bind(q.domain.as_ref())
+    .bind(q.parent_id)
+    .bind(q.is_skilluv_specific)
+    .bind(search.as_ref())
+    .bind(per_page)
+    .bind(offset)
+    .fetch_all(&state.db)
+    .await?;
 
     let total: i64 = sqlx::query_scalar(
         r#"

@@ -9,7 +9,7 @@ use axum::extract::{Path, Query, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 use crate::AppState;
@@ -137,7 +137,9 @@ async fn admin_trigger_gdpr_export(
     crate::middleware::admin_destructive::enforce_admin_destructive(&state, auth.user_id).await?;
 
     if body.reason.trim().len() < 8 {
-        return Err(AppError::Validation("reason must be at least 8 chars".into()));
+        return Err(AppError::Validation(
+            "reason must be at least 8 chars".into(),
+        ));
     }
 
     let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)")
@@ -320,15 +322,17 @@ async fn admin_list_badge_events(
 
     let items: Vec<Value> = rows
         .into_iter()
-        .map(|(id, slug, name, desc, starts, ends, theme, partner, active, created)| {
-            json!({
-                "id": id, "slug": slug, "name": name, "description": desc,
-                "starts_at": starts.to_rfc3339(),
-                "ends_at": ends.map(|t| t.to_rfc3339()),
-                "visual_theme": theme, "is_partner": partner, "is_active": active,
-                "created_at": created.to_rfc3339(),
-            })
-        })
+        .map(
+            |(id, slug, name, desc, starts, ends, theme, partner, active, created)| {
+                json!({
+                    "id": id, "slug": slug, "name": name, "description": desc,
+                    "starts_at": starts.to_rfc3339(),
+                    "ends_at": ends.map(|t| t.to_rfc3339()),
+                    "visual_theme": theme, "is_partner": partner, "is_active": active,
+                    "created_at": created.to_rfc3339(),
+                })
+            },
+        )
         .collect();
 
     let total_pages = if per_page > 0 {
@@ -378,7 +382,10 @@ async fn admin_create_badge_event(
 
     let slug_len = body.slug.len();
     if !(3..=60).contains(&slug_len)
-        || !body.slug.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+        || !body
+            .slug
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
     {
         return Err(AppError::Validation(
             "slug must be 3..=60 chars matching ^[a-z0-9-]+$".into(),

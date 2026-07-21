@@ -158,7 +158,8 @@ async fn send_interest(
     .await?;
     // Spend 1 credit guarded by atomic balance check. On failure, rolling back the
     // tx undoes the insert. Done before commit so we never leak free contacts.
-    let spend_amount = crate::services::credits::dec(crate::services::credits::SPEND_INTEREST_REQUEST_AMOUNT);
+    let spend_amount =
+        crate::services::credits::dec(crate::services::credits::SPEND_INTEREST_REQUEST_AMOUNT);
     let spend_result = sqlx::query(
         r#"
         UPDATE enterprise_credits
@@ -173,7 +174,8 @@ async fn send_interest(
     .await?;
     if spend_result.is_none() {
         return Err(AppError::Validation(
-            "Insufficient credits — recharge the enterprise account before contacting talents.".into(),
+            "Insufficient credits — recharge the enterprise account before contacting talents."
+                .into(),
         ));
     }
     sqlx::query(

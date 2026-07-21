@@ -274,23 +274,21 @@ async fn pr_merged_with_closes_marker_creates_verified_deliverable() {
     assert_eq!(fragments_awarded, 50);
 
     // Slice is now merged
-    let slice_status: String = sqlx::query_scalar(
-        "SELECT status FROM project_slices WHERE id = $1",
-    )
-    .bind(slice_id)
-    .fetch_one(&db)
-    .await
-    .expect("fetch slice");
+    let slice_status: String =
+        sqlx::query_scalar("SELECT status FROM project_slices WHERE id = $1")
+            .bind(slice_id)
+            .fetch_one(&db)
+            .await
+            .expect("fetch slice");
     assert_eq!(slice_status, "merged");
 
     // User fragments incremented
-    let total_fragments: i32 = sqlx::query_scalar(
-        "SELECT total_fragments FROM users WHERE id = $1",
-    )
-    .bind(user_id)
-    .fetch_one(&db)
-    .await
-    .expect("fetch user");
+    let total_fragments: i32 =
+        sqlx::query_scalar("SELECT total_fragments FROM users WHERE id = $1")
+            .bind(user_id)
+            .fetch_one(&db)
+            .await
+            .expect("fetch user");
     assert_eq!(total_fragments, 50);
 
     // Skills propagated. Formule proficiency = min(5, ceil(log2(WPC + 1))) :
@@ -378,23 +376,21 @@ async fn pr_merged_with_author_mismatch_creates_pending_manual_review() {
         other => panic!("Expected PendingManualReview, got {other:?}"),
     };
 
-    let verification_status: String = sqlx::query_scalar(
-        "SELECT verification_status FROM deliverables WHERE id = $1",
-    )
-    .bind(deliverable_id)
-    .fetch_one(&db)
-    .await
-    .expect("fetch");
+    let verification_status: String =
+        sqlx::query_scalar("SELECT verification_status FROM deliverables WHERE id = $1")
+            .bind(deliverable_id)
+            .fetch_one(&db)
+            .await
+            .expect("fetch");
     assert_eq!(verification_status, "pending_manual_review");
 
     // Slice moved to in_review (not merged)
-    let slice_status: String = sqlx::query_scalar(
-        "SELECT status FROM project_slices WHERE id = $1",
-    )
-    .bind(slice_id)
-    .fetch_one(&db)
-    .await
-    .expect("fetch slice");
+    let slice_status: String =
+        sqlx::query_scalar("SELECT status FROM project_slices WHERE id = $1")
+            .bind(slice_id)
+            .fetch_one(&db)
+            .await
+            .expect("fetch slice");
     assert_eq!(slice_status, "in_review");
 
     db.close().await;
@@ -464,13 +460,7 @@ async fn pr_merged_same_sha_is_idempotent() {
     let (_user, github_login, project_id, _slice, _skills) =
         setup_claimed_slice_with_skills(&db, "github_issue", Some("7")).await;
 
-    let params = make_params(
-        project_id,
-        &github_login,
-        1,
-        "Closes #7",
-        "same-sha-please",
-    );
+    let params = make_params(project_id, &github_login, 1, "Closes #7", "same-sha-please");
 
     let first = DeliverablesService::create_from_pr_merged(&db, params.clone())
         .await
@@ -500,7 +490,10 @@ async fn pr_merged_same_sha_is_idempotent() {
 
     match second {
         PrMergedOutcome::AlreadyProcessed { deliverable_id } => {
-            assert_eq!(deliverable_id, first_id, "Should return same deliverable_id");
+            assert_eq!(
+                deliverable_id, first_id,
+                "Should return same deliverable_id"
+            );
         }
         other => panic!("Expected AlreadyProcessed, got {other:?}"),
     }
@@ -526,13 +519,7 @@ async fn list_public_by_user_returns_only_verified_public_non_revoked() {
     let (user_id, github_login, project_id, _slice, _skills) =
         setup_claimed_slice_with_skills(&db, "github_issue", Some("55")).await;
 
-    let params = make_params(
-        project_id,
-        &github_login,
-        1,
-        "Fixes #55",
-        "verified-sha",
-    );
+    let params = make_params(project_id, &github_login, 1, "Fixes #55", "verified-sha");
     let outcome = DeliverablesService::create_from_pr_merged(&db, params)
         .await
         .expect("workflow");

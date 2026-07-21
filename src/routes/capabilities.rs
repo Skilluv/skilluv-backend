@@ -12,7 +12,7 @@ use axum::response::IntoResponse;
 use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 use crate::AppState;
@@ -73,7 +73,9 @@ async fn user_capabilities_public(
     Path(user_id): Path<Uuid>,
 ) -> Result<Json<Value>, AppError> {
     let rows = fetch_active(&state.db, user_id).await?;
-    Ok(Json(wrap(json!({ "user_id": user_id, "capabilities": rows }))))
+    Ok(Json(wrap(
+        json!({ "user_id": user_id, "capabilities": rows }),
+    )))
 }
 
 async fn my_capabilities(
@@ -81,7 +83,9 @@ async fn my_capabilities(
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
     let rows = fetch_active(&state.db, auth.user_id).await?;
-    Ok(Json(wrap(json!({ "user_id": auth.user_id, "capabilities": rows }))))
+    Ok(Json(wrap(
+        json!({ "user_id": auth.user_id, "capabilities": rows }),
+    )))
 }
 
 #[derive(Debug, Deserialize)]
@@ -101,9 +105,9 @@ async fn admin_grant_capability(
 ) -> Result<impl IntoResponse, AppError> {
     require_capability(&state.db, auth.user_id, "admin").await?;
 
-    let reason = body.granted_reason.unwrap_or_else(|| {
-        format!("admin_grant:by_{}", auth.user_id)
-    });
+    let reason = body
+        .granted_reason
+        .unwrap_or_else(|| format!("admin_grant:by_{}", auth.user_id));
 
     sqlx::query(
         r#"

@@ -119,10 +119,12 @@ async fn daily_limit_blocks_withdraw_above_threshold() {
         .await;
     assert_eq!(ko.status(), 400);
     let body: serde_json::Value = ko.json().await.unwrap();
-    assert!(body["error"]["message"]
-        .as_str()
-        .unwrap()
-        .contains("daily withdraw limit exceeded"));
+    assert!(
+        body["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("daily withdraw limit exceeded")
+    );
 
     // Clean up env
     unsafe {

@@ -120,8 +120,12 @@ impl ReviewsService {
         let mut tx = db.begin().await?;
 
         // 1. Vérifier que le deliverable est bien en attente de review
-        let (verification_status, slice_id, deliverable_user_id, fragments_reward):
-            (String, Option<Uuid>, Uuid, i32) = sqlx::query_as(
+        let (verification_status, slice_id, deliverable_user_id, fragments_reward): (
+            String,
+            Option<Uuid>,
+            Uuid,
+            i32,
+        ) = sqlx::query_as(
             r#"
             SELECT d.verification_status,
                    d.slice_id,
@@ -264,13 +268,11 @@ impl ReviewsService {
         fragments_reward: i32,
     ) -> Result<(), AppError> {
         // Set fragments_awarded on the deliverable itself
-        sqlx::query(
-            "UPDATE deliverables SET fragments_awarded = $1 WHERE id = $2",
-        )
-        .bind(fragments_reward)
-        .bind(deliverable_id)
-        .execute(&mut **tx)
-        .await?;
+        sqlx::query("UPDATE deliverables SET fragments_awarded = $1 WHERE id = $2")
+            .bind(fragments_reward)
+            .bind(deliverable_id)
+            .execute(&mut **tx)
+            .await?;
 
         // Fragments à l'auteur
         if fragments_reward > 0 {
@@ -312,12 +314,11 @@ impl ReviewsService {
         slice_id: Uuid,
         user_id: Uuid,
     ) -> Result<(), AppError> {
-        let slice_skills: Vec<(Uuid, i16)> = sqlx::query_as(
-            "SELECT skill_id, weight FROM slice_skills WHERE slice_id = $1",
-        )
-        .bind(slice_id)
-        .fetch_all(&mut **tx)
-        .await?;
+        let slice_skills: Vec<(Uuid, i16)> =
+            sqlx::query_as("SELECT skill_id, weight FROM slice_skills WHERE slice_id = $1")
+                .bind(slice_id)
+                .fetch_all(&mut **tx)
+                .await?;
 
         for (skill_id, weight) in slice_skills {
             sqlx::query(

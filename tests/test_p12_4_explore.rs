@@ -97,7 +97,12 @@ async fn explore_returns_slices_and_challenges_by_default() {
     add_open_slice(&app, project, "Slice Alpha", "code", 2).await;
     add_published_challenge(&app, "Challenge Beta", "code", 3, Some("rust")).await;
 
-    let resp = app.client.get(format!("{}/api/explore", app.addr)).send().await.unwrap();
+    let resp = app
+        .client
+        .get(format!("{}/api/explore", app.addr))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status(), 200);
     let body: Value = resp.json().await.unwrap();
     let items = body["data"]["items"].as_array().unwrap();
@@ -120,7 +125,12 @@ async fn explore_kind_slice_excludes_challenges() {
     add_open_slice(&app, project, "Alpha Slice", "code", 2).await;
     add_published_challenge(&app, "Beta Challenge", "code", 3, Some("rust")).await;
 
-    let resp = app.client.get(format!("{}/api/explore?kind=slice", app.addr)).send().await.unwrap();
+    let resp = app
+        .client
+        .get(format!("{}/api/explore?kind=slice", app.addr))
+        .send()
+        .await
+        .unwrap();
     let body: Value = resp.json().await.unwrap();
     let items = body["data"]["items"].as_array().unwrap();
     assert!(items.iter().all(|i| i["kind"] == "slice"));
@@ -140,7 +150,12 @@ async fn explore_domain_filter() {
     add_open_slice(&app, project, "Code Task", "code", 2).await;
     add_open_slice(&app, project, "Design Task", "design", 2).await;
 
-    let resp = app.client.get(format!("{}/api/explore?domain=design", app.addr)).send().await.unwrap();
+    let resp = app
+        .client
+        .get(format!("{}/api/explore?domain=design", app.addr))
+        .send()
+        .await
+        .unwrap();
     let body: Value = resp.json().await.unwrap();
     let items = body["data"]["items"].as_array().unwrap();
     assert!(items.iter().all(|i| i["domain"] == "design"));
@@ -161,14 +176,22 @@ async fn explore_language_filter_targets_challenges() {
     add_published_challenge(&app, "Rust Challenge", "code", 3, Some("rust")).await;
     add_published_challenge(&app, "Python Challenge", "code", 3, Some("python")).await;
 
-    let resp = app.client.get(format!("{}/api/explore?language=rust", app.addr)).send().await.unwrap();
+    let resp = app
+        .client
+        .get(format!("{}/api/explore?language=rust", app.addr))
+        .send()
+        .await
+        .unwrap();
     let body: Value = resp.json().await.unwrap();
     let items = body["data"]["items"].as_array().unwrap();
     let titles: Vec<&str> = items.iter().map(|i| i["title"].as_str().unwrap()).collect();
     assert!(titles.contains(&"Rust Challenge"), "rust challenge attendu");
     // Le filtre language ne s'applique qu'aux challenges — les slices sans language
     // ne sont pas filtrées. Ici on n'a pas de slices, donc :
-    assert!(!titles.contains(&"Python Challenge"), "python challenge filtre out");
+    assert!(
+        !titles.contains(&"Python Challenge"),
+        "python challenge filtre out"
+    );
 
     drop(app);
 }
@@ -184,7 +207,12 @@ async fn explore_text_search_case_insensitive() {
     add_open_slice(&app, project, "Fix async race condition", "code", 3).await;
     add_open_slice(&app, project, "Add UI polish", "code", 2).await;
 
-    let resp = app.client.get(format!("{}/api/explore?q=RACE", app.addr)).send().await.unwrap();
+    let resp = app
+        .client
+        .get(format!("{}/api/explore?q=RACE", app.addr))
+        .send()
+        .await
+        .unwrap();
     let body: Value = resp.json().await.unwrap();
     let items = body["data"]["items"].as_array().unwrap();
     let titles: Vec<&str> = items.iter().map(|i| i["title"].as_str().unwrap()).collect();
@@ -208,7 +236,10 @@ async fn explore_pagination_slices_page_correctly() {
 
     let page1: Value = app
         .client
-        .get(format!("{}/api/explore?kind=slice&per_page=2&page=1", app.addr))
+        .get(format!(
+            "{}/api/explore?kind=slice&per_page=2&page=1",
+            app.addr
+        ))
         .send()
         .await
         .unwrap()
@@ -220,7 +251,10 @@ async fn explore_pagination_slices_page_correctly() {
 
     let page2: Value = app
         .client
-        .get(format!("{}/api/explore?kind=slice&per_page=2&page=2", app.addr))
+        .get(format!(
+            "{}/api/explore?kind=slice&per_page=2&page=2",
+            app.addr
+        ))
         .send()
         .await
         .unwrap()

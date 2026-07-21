@@ -17,11 +17,11 @@
 //! Les deux fonctions sont exposées sous forme de `middleware::from_fn_with_state`
 //! pour être composées facilement dans `lib.rs::build_router`.
 
+use axum::body::Body;
 use axum::extract::State;
 use axum::http::{HeaderMap, Request, StatusCode};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
-use axum::body::Body;
 
 use crate::AppState;
 use crate::errors::AppError;
@@ -88,15 +88,13 @@ pub async fn ensure_admin_2fa(
 /// un contexte handler). Ici on veut juste un lookup rapide dans un middleware.
 fn extract_user_id_from_headers(headers: &HeaderMap, state: &AppState) -> Option<uuid::Uuid> {
     let cookie_header = headers.get("cookie")?.to_str().ok()?;
-    let token = cookie_header
-        .split(';')
-        .map(|s| s.trim())
-        .find_map(|c| {
-            c.strip_prefix("admin_access_token=")
-                .or_else(|| c.strip_prefix("access_token="))
-        })?;
+    let token = cookie_header.split(';').map(|s| s.trim()).find_map(|c| {
+        c.strip_prefix("admin_access_token=")
+            .or_else(|| c.strip_prefix("access_token="))
+    })?;
     // Decode JWT et parse le sub claim en Uuid.
-    let claims = crate::services::AuthService::verify_access_token(token, &state.config.jwt_secret).ok()?;
+    let claims =
+        crate::services::AuthService::verify_access_token(token, &state.config.jwt_secret).ok()?;
     uuid::Uuid::parse_str(&claims.sub).ok()
 }
 

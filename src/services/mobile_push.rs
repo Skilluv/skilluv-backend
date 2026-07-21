@@ -85,18 +85,12 @@ pub async fn register_token(
     Ok(row)
 }
 
-pub async fn revoke_token(
-    db: &PgPool,
-    user_id: Uuid,
-    device_id: &str,
-) -> Result<u64, AppError> {
-    let res = sqlx::query(
-        "DELETE FROM user_push_tokens WHERE user_id = $1 AND device_id = $2",
-    )
-    .bind(user_id)
-    .bind(device_id)
-    .execute(db)
-    .await?;
+pub async fn revoke_token(db: &PgPool, user_id: Uuid, device_id: &str) -> Result<u64, AppError> {
+    let res = sqlx::query("DELETE FROM user_push_tokens WHERE user_id = $1 AND device_id = $2")
+        .bind(user_id)
+        .bind(device_id)
+        .execute(db)
+        .await?;
     Ok(res.rows_affected())
 }
 
@@ -158,7 +152,10 @@ impl MobilePushProvider for FcmProvider {
         Platform::Fcm
     }
     async fn send(&self, token: &str, msg: &MobilePushMessage<'_>) -> Result<(), AppError> {
-        let has_creds = std::env::var("FCM_SERVER_KEY").ok().filter(|s| !s.is_empty()).is_some();
+        let has_creds = std::env::var("FCM_SERVER_KEY")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .is_some();
         tracing::info!(
             platform = "fcm",
             token_prefix = &token.chars().take(10).collect::<String>(),
@@ -179,7 +176,10 @@ impl MobilePushProvider for ApnsProvider {
         Platform::Apns
     }
     async fn send(&self, token: &str, msg: &MobilePushMessage<'_>) -> Result<(), AppError> {
-        let has_creds = std::env::var("APNS_KEY_ID").ok().filter(|s| !s.is_empty()).is_some();
+        let has_creds = std::env::var("APNS_KEY_ID")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .is_some();
         tracing::info!(
             platform = "apns",
             token_prefix = &token.chars().take(10).collect::<String>(),
@@ -215,12 +215,11 @@ pub async fn push_to_user_mobile(
         match provider.send(&tok.token, &msg).await {
             Ok(()) => {
                 // Refresh last_seen_at
-                let _ = sqlx::query(
-                    "UPDATE user_push_tokens SET last_seen_at = NOW() WHERE id = $1",
-                )
-                .bind(tok.id)
-                .execute(db)
-                .await;
+                let _ =
+                    sqlx::query("UPDATE user_push_tokens SET last_seen_at = NOW() WHERE id = $1")
+                        .bind(tok.id)
+                        .execute(db)
+                        .await;
                 outcomes.push(PushOutcome {
                     platform,
                     device_id: tok.device_id.clone(),

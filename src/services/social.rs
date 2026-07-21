@@ -23,14 +23,14 @@ pub const COMMENT_EDIT_WINDOW_SECONDS: i64 = 3600; // 1 hour
 pub const VALID_TARGET_TYPES: &[&str] = &[
     "challenge",
     "submission",
-    "post",       // forum / Q&A post (Sprint 3)
-    "question",   // Q&A (Sprint 3)
-    "answer",     // Q&A answer (Sprint 3)
-    "project",    // OSS project (Sprint 5)
-    "profile",    // user profile comment
-    "guild",      // guild discussion (Sprint 4)
-    "comment",    // nested reply via parent_id, but also reactions on comments
-    "repo",       // GitHub repo card (Sprint 5)
+    "post",     // forum / Q&A post (Sprint 3)
+    "question", // Q&A (Sprint 3)
+    "answer",   // Q&A answer (Sprint 3)
+    "project",  // OSS project (Sprint 5)
+    "profile",  // user profile comment
+    "guild",    // guild discussion (Sprint 4)
+    "comment",  // nested reply via parent_id, but also reactions on comments
+    "repo",     // GitHub repo card (Sprint 5)
 ];
 
 pub const VALID_REACTION_KINDS: &[&str] = &["upvote", "downvote", "heart", "fire", "wow"];
@@ -84,13 +84,16 @@ pub async fn create_comment(
 
     // If parent_id is set, ensure it's on the same target (replies stay in their thread).
     if let Some(parent_id) = parent_id {
-        let parent: Option<(String, Uuid)> =
-            sqlx::query_as("SELECT target_type, target_id FROM comments WHERE id = $1 AND deleted_at IS NULL")
-                .bind(parent_id)
-                .fetch_optional(db)
-                .await?;
+        let parent: Option<(String, Uuid)> = sqlx::query_as(
+            "SELECT target_type, target_id FROM comments WHERE id = $1 AND deleted_at IS NULL",
+        )
+        .bind(parent_id)
+        .fetch_optional(db)
+        .await?;
         let Some((ptype, ptarget)) = parent else {
-            return Err(AppError::Validation("parent_id refers to a missing or deleted comment".into()));
+            return Err(AppError::Validation(
+                "parent_id refers to a missing or deleted comment".into(),
+            ));
         };
         if ptype != target_type || ptarget != target_id {
             return Err(AppError::Validation(
@@ -162,9 +165,7 @@ pub async fn edit_comment(
         if existing.author_id != requester_id {
             return Err(AppError::Forbidden);
         }
-        if Utc::now() - existing.created_at
-            > ChronoDuration::seconds(COMMENT_EDIT_WINDOW_SECONDS)
-        {
+        if Utc::now() - existing.created_at > ChronoDuration::seconds(COMMENT_EDIT_WINDOW_SECONDS) {
             return Err(AppError::Validation(
                 "Edit window expired (1 hour after creation)".into(),
             ));
@@ -367,7 +368,11 @@ pub async fn record_mentions(
     .bind(usernames)
     .fetch_all(db)
     .await?;
-    let user_ids: Vec<Uuid> = rows.into_iter().map(|(id,)| id).filter(|id| id != &author_id).collect();
+    let user_ids: Vec<Uuid> = rows
+        .into_iter()
+        .map(|(id,)| id)
+        .filter(|id| id != &author_id)
+        .collect();
     if user_ids.is_empty() {
         return Ok(Vec::new());
     }
@@ -443,10 +448,7 @@ pub struct CreateTagInput {
 pub const VALID_TAG_CATEGORIES: &[&str] =
     &["language", "topic", "level", "framework", "tool", "other"];
 
-pub async fn list_tags(
-    db: &PgPool,
-    category_filter: Option<&str>,
-) -> Result<Vec<Tag>, AppError> {
+pub async fn list_tags(db: &PgPool, category_filter: Option<&str>) -> Result<Vec<Tag>, AppError> {
     let rows = if let Some(category) = category_filter {
         sqlx::query_as("SELECT * FROM tags WHERE category = $1 ORDER BY name")
             .bind(category)
@@ -524,14 +526,12 @@ pub async fn detach_tag(
     target_id: Uuid,
 ) -> Result<(), AppError> {
     validate_target_type(target_type)?;
-    sqlx::query(
-        "DELETE FROM tag_map WHERE tag_id = $1 AND target_type = $2 AND target_id = $3",
-    )
-    .bind(tag_id)
-    .bind(target_type)
-    .bind(target_id)
-    .execute(db)
-    .await?;
+    sqlx::query("DELETE FROM tag_map WHERE tag_id = $1 AND target_type = $2 AND target_id = $3")
+        .bind(tag_id)
+        .bind(target_type)
+        .bind(target_id)
+        .execute(db)
+        .await?;
     Ok(())
 }
 

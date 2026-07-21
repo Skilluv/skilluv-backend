@@ -164,7 +164,7 @@ impl AttestationsService {
         .await?;
 
         let code = Self::generate_verification_code();
-        let title = format!("Sait {}", &skill_display_name);
+        let title = format!("Sait {skill_display_name}");
         let description = format!(
             "A démontré compétence sur \"{}\" ({}) via ses contributions vérifiées.",
             skill_display_name, skill_slug
@@ -270,7 +270,7 @@ impl AttestationsService {
         .await?;
 
         let code = Self::generate_verification_code();
-        let title = format!("Maîtrise de {}", &skill_display_name);
+        let title = format!("Maîtrise de {skill_display_name}");
         let description = format!(
             "A démontré maîtrise avancée (niveau 4+) sur \"{}\", validée par {} reviewer(s) sénior(s).",
             skill_display_name,

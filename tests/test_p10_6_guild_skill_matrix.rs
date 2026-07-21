@@ -85,7 +85,7 @@ async fn insert_guild_with_members(db: &PgPool, members: &[Uuid]) -> Uuid {
     .bind(format!("g-{}", &Uuid::new_v4().to_string()[..8]))
     .bind(format!(
         "T{}",
-        &Uuid::new_v4().to_string()[..3].to_uppercase()
+        Uuid::new_v4().to_string()[..3].to_uppercase()
     ))
     .bind("Composition Guild")
     .bind(founder)

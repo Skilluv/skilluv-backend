@@ -130,7 +130,10 @@ async fn unsubscribe(
         "#,
         col = column
     );
-    sqlx::query(&sql).bind(user_id).execute(&state.db).await?;
+    sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
+        .bind(user_id)
+        .execute(&state.db)
+        .await?;
 
     tracing::info!(user_id = %user_id, kind = %query.kind, "user unsubscribed");
 

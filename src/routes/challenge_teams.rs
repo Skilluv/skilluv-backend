@@ -547,12 +547,10 @@ async fn extend_timer(
     }
 
     // Extend all active submissions for this challenge
-    let updated = sqlx::query(
-        &format!(
-            "UPDATE challenge_submissions SET expires_at = expires_at + INTERVAL '{} minutes' WHERE challenge_id = $1 AND status = 'in_progress' AND expires_at IS NOT NULL",
-            body.minutes
-        ),
-    )
+    let updated = sqlx::query(sqlx::AssertSqlSafe(format!(
+        "UPDATE challenge_submissions SET expires_at = expires_at + INTERVAL '{} minutes' WHERE challenge_id = $1 AND status = 'in_progress' AND expires_at IS NOT NULL",
+        body.minutes
+    )))
     .bind(challenge_id)
     .execute(&state.db)
     .await?;

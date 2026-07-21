@@ -1,5 +1,7 @@
 # Stage 1: Build
-FROM rust:latest AS builder
+# Pin to a specific Rust minor + Debian trixie so builds are reproducible
+# (rust:latest = anti-pattern for prod images).
+FROM rust:1.97-slim-trixie AS builder
 
 RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
 
@@ -21,7 +23,7 @@ COPY migrations/ migrations/
 RUN touch src/main.rs src/lib.rs && cargo build --release
 
 # Stage 2: Runtime
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 
 RUN apt-get update && apt-get install -y ca-certificates libssl3 curl && rm -rf /var/lib/apt/lists/*
 

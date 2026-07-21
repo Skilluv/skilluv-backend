@@ -25,7 +25,7 @@ num-traits = "0.2"
 async-trait = "0.1"
 
 # Redis
-redis = { version = "0.27", features = ["tokio-comp", "connection-manager"] }
+redis = { version = "1.2", features = ["tokio-comp", "connection-manager"] }
 
 # Auth
 argon2 = "0.5"

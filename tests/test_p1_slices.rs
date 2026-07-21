@@ -27,10 +27,12 @@ async fn setup_test_db() -> (PgPool, String) {
         .await
         .expect("Failed to connect to admin DB");
 
-    sqlx::query(&format!("CREATE DATABASE \"{db_name}\""))
-        .execute(&admin_pool)
-        .await
-        .expect("Failed to create test DB");
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        "CREATE DATABASE \"{db_name}\""
+    )))
+    .execute(&admin_pool)
+    .await
+    .expect("Failed to create test DB");
 
     admin_pool.close().await;
 
@@ -56,15 +58,17 @@ async fn cleanup_test_db(db_name: &str) {
         .await
         .expect("Failed to connect to admin DB");
 
-    let _ = sqlx::query(&format!(
+    let _ = sqlx::query(sqlx::AssertSqlSafe(format!(
         "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{db_name}'"
-    ))
+    )))
     .execute(&admin_pool)
     .await;
 
-    let _ = sqlx::query(&format!("DROP DATABASE IF EXISTS \"{db_name}\""))
-        .execute(&admin_pool)
-        .await;
+    let _ = sqlx::query(sqlx::AssertSqlSafe(format!(
+        "DROP DATABASE IF EXISTS \"{db_name}\""
+    )))
+    .execute(&admin_pool)
+    .await;
 
     admin_pool.close().await;
 }

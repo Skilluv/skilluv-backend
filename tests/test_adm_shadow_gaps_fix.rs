@@ -8,9 +8,9 @@ use serde_json::json;
 
 async fn setup_admin(app: &TestApp, username: &str) -> uuid::Uuid {
     app.register_admin(username).await;
-    let uid: uuid::Uuid = sqlx::query_scalar(&format!(
+    let uid: uuid::Uuid = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
         "SELECT id FROM users WHERE username = '{username}'"
-    ))
+    )))
     .fetch_one(&app.db)
     .await
     .unwrap();

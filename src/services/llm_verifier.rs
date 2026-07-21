@@ -191,7 +191,7 @@ pub async fn evaluate_deliverable(
                      verification_signal = COALESCE(verification_signal, '{{}}'::jsonb) || $2::jsonb
                  WHERE id = $3"
             );
-            sqlx::query(&sql)
+            sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
                 .bind(new_status)
                 .bind(&signal)
                 .bind(deliverable_id)

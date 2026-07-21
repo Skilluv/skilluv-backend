@@ -141,8 +141,8 @@ async fn search_talents(
     let count_sql = format!("SELECT COUNT(*) FROM users u WHERE {base_where}{extra_where}");
 
     // Build queries with dynamic bindings
-    let mut db_query = sqlx::query_as::<_, TalentResult>(&sql);
-    let mut count_query = sqlx::query_scalar::<_, i64>(&count_sql);
+    let mut db_query = sqlx::query_as::<_, TalentResult>(sqlx::AssertSqlSafe(sql.as_str()));
+    let mut count_query = sqlx::query_scalar::<_, i64>(sqlx::AssertSqlSafe(count_sql.as_str()));
 
     if let Some(ref domain) = query.skill_domain {
         db_query = db_query.bind(domain);

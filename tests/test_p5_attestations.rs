@@ -26,10 +26,12 @@ async fn setup_test_db() -> (PgPool, String) {
         .connect("postgres://skilluv:skilluv_secret@localhost:5433/skilluv")
         .await
         .expect("admin");
-    sqlx::query(&format!("CREATE DATABASE \"{db_name}\""))
-        .execute(&admin_pool)
-        .await
-        .expect("create");
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        "CREATE DATABASE \"{db_name}\""
+    )))
+    .execute(&admin_pool)
+    .await
+    .expect("create");
     admin_pool.close().await;
 
     let db_url = format!("postgres://skilluv:skilluv_secret@localhost:5433/{db_name}");
@@ -51,14 +53,16 @@ async fn cleanup_test_db(db_name: &str) {
         .connect("postgres://skilluv:skilluv_secret@localhost:5433/skilluv")
         .await
         .expect("admin");
-    let _ = sqlx::query(&format!(
+    let _ = sqlx::query(sqlx::AssertSqlSafe(format!(
         "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{db_name}'"
-    ))
+    )))
     .execute(&admin_pool)
     .await;
-    let _ = sqlx::query(&format!("DROP DATABASE IF EXISTS \"{db_name}\""))
-        .execute(&admin_pool)
-        .await;
+    let _ = sqlx::query(sqlx::AssertSqlSafe(format!(
+        "DROP DATABASE IF EXISTS \"{db_name}\""
+    )))
+    .execute(&admin_pool)
+    .await;
     admin_pool.close().await;
 }
 

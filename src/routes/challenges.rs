@@ -155,8 +155,9 @@ async fn list_challenges(
     ));
 
     // Build queries dynamically
-    let mut challenges_query = sqlx::query_as::<_, ChallengeTemplate>(&sql);
-    let mut count_query = sqlx::query_scalar::<_, i64>(&count_sql);
+    let mut challenges_query =
+        sqlx::query_as::<_, ChallengeTemplate>(sqlx::AssertSqlSafe(sql.as_str()));
+    let mut count_query = sqlx::query_scalar::<_, i64>(sqlx::AssertSqlSafe(count_sql.as_str()));
 
     if has_tenant_bind {
         challenges_query = challenges_query.bind(tenant.tenant_id);

@@ -2,6 +2,9 @@
 /target
 *.pdb
 
+# Local cargo config (Windows contributors copy .cargo/config.toml.windows.example)
+.cargo/config.toml
+
 # GeoNames data (downloaded at setup, ~31MB)
 /data/cities*.txt
 /data/countryInfo.txt

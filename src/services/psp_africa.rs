@@ -6,7 +6,9 @@ use serde::Deserialize;
 use sha2::{Sha256, Sha512};
 
 use crate::errors::AppError;
-use crate::services::psp::{CheckoutParams, CheckoutSession, PaymentProvider, RefundResult, WebhookEvent};
+use crate::services::psp::{
+    CheckoutParams, CheckoutSession, PaymentProvider, RefundResult, WebhookEvent,
+};
 
 #[allow(dead_code)] // kept for Paystack HMAC-SHA256 verification wiring
 type HmacSha256 = Hmac<Sha256>;
@@ -74,8 +76,14 @@ impl PaymentProvider for PaystackProvider {
         let mut body = serde_json::Map::new();
         body.insert("email".into(), serde_json::json!(params.customer_email));
         body.insert("amount".into(), serde_json::json!(params.amount_cents));
-        body.insert("currency".into(), serde_json::json!(params.currency.to_uppercase()));
-        body.insert("callback_url".into(), serde_json::json!(self.cfg.callback_url));
+        body.insert(
+            "currency".into(),
+            serde_json::json!(params.currency.to_uppercase()),
+        );
+        body.insert(
+            "callback_url".into(),
+            serde_json::json!(self.cfg.callback_url),
+        );
         body.insert(
             "reference".into(),
             serde_json::json!(format!(
@@ -86,7 +94,10 @@ impl PaymentProvider for PaystackProvider {
         );
         let mut metadata = serde_json::Map::new();
         metadata.insert("pack_slug".into(), serde_json::json!(params.pack_slug));
-        metadata.insert("credit_count".into(), serde_json::json!(params.pack_credits));
+        metadata.insert(
+            "credit_count".into(),
+            serde_json::json!(params.pack_credits),
+        );
         metadata.insert(
             "client_reference_id".into(),
             serde_json::json!(params.client_reference_id),
@@ -147,10 +158,7 @@ impl PaymentProvider for PaystackProvider {
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
-        let data = raw
-            .get("data")
-            .cloned()
-            .unwrap_or(serde_json::Value::Null);
+        let data = raw.get("data").cloned().unwrap_or(serde_json::Value::Null);
         // Paystack uses `data.reference` as the transaction id — use that as the event id.
         let id = data
             .get("reference")
@@ -164,7 +172,11 @@ impl PaymentProvider for PaystackProvider {
         })
     }
 
-    async fn refund(&self, payment_id: &str, amount_cents: Option<i64>) -> Result<RefundResult, AppError> {
+    async fn refund(
+        &self,
+        payment_id: &str,
+        amount_cents: Option<i64>,
+    ) -> Result<RefundResult, AppError> {
         let client = reqwest::Client::new();
         let mut body = serde_json::Map::new();
         body.insert("transaction".into(), serde_json::json!(payment_id));
@@ -242,16 +254,18 @@ impl PaymentProvider for FlutterwaveProvider {
     }
 
     fn supported_currencies(&self) -> &'static [&'static str] {
-        &["USD", "EUR", "NGN", "GHS", "KES", "UGX", "TZS", "XOF", "XAF", "MAD", "EGP", "ZAR"]
+        &[
+            "USD", "EUR", "NGN", "GHS", "KES", "UGX", "TZS", "XOF", "XAF", "MAD", "EGP", "ZAR",
+        ]
     }
 
     fn supported_country_codes(&self) -> &'static [&'static str] {
         &[
             "SN", "CI", "BJ", "BF", "TG", "ML", "NE", "GW", // XOF
-            "CM", "GA", "CG", "TD", "CF", "GQ",             // XAF
-            "MA", "TN", "DZ",                                // Maghreb
-            "KE", "UG", "TZ", "RW", "ET",                    // East Africa
-            "NG", "GH",                                       // WA anglophone
+            "CM", "GA", "CG", "TD", "CF", "GQ", // XAF
+            "MA", "TN", "DZ", // Maghreb
+            "KE", "UG", "TZ", "RW", "ET", // East Africa
+            "NG", "GH", // WA anglophone
         ]
     }
 
@@ -266,14 +280,23 @@ impl PaymentProvider for FlutterwaveProvider {
         // Flutterwave expects amount as a decimal number of currency units, not smallest unit.
         let amount = (params.amount_cents as f64) / 100.0;
         body.insert("amount".into(), serde_json::json!(amount));
-        body.insert("currency".into(), serde_json::json!(params.currency.to_uppercase()));
-        body.insert("redirect_url".into(), serde_json::json!(self.cfg.redirect_url));
+        body.insert(
+            "currency".into(),
+            serde_json::json!(params.currency.to_uppercase()),
+        );
+        body.insert(
+            "redirect_url".into(),
+            serde_json::json!(self.cfg.redirect_url),
+        );
         let mut customer = serde_json::Map::new();
         customer.insert("email".into(), serde_json::json!(params.customer_email));
         body.insert("customer".into(), serde_json::Value::Object(customer));
         let mut meta = serde_json::Map::new();
         meta.insert("pack_slug".into(), serde_json::json!(params.pack_slug));
-        meta.insert("credit_count".into(), serde_json::json!(params.pack_credits));
+        meta.insert(
+            "credit_count".into(),
+            serde_json::json!(params.pack_credits),
+        );
         meta.insert(
             "client_reference_id".into(),
             serde_json::json!(params.client_reference_id),
@@ -307,9 +330,9 @@ impl PaymentProvider for FlutterwaveProvider {
                 parsed.message
             )));
         }
-        let data = parsed
-            .data
-            .ok_or(AppError::Internal("flutterwave response missing data".into()))?;
+        let data = parsed.data.ok_or(AppError::Internal(
+            "flutterwave response missing data".into(),
+        ))?;
         Ok(CheckoutSession {
             provider: "flutterwave",
             session_id: tx_ref,
@@ -334,7 +357,11 @@ impl PaymentProvider for FlutterwaveProvider {
         let id = data
             .get("tx_ref")
             .or_else(|| data.get("id"))
-            .and_then(|v| v.as_str().map(String::from).or_else(|| v.as_i64().map(|n| n.to_string())))
+            .and_then(|v| {
+                v.as_str()
+                    .map(String::from)
+                    .or_else(|| v.as_i64().map(|n| n.to_string()))
+            })
             .unwrap_or_default();
         Ok(WebhookEvent {
             id,
@@ -343,14 +370,20 @@ impl PaymentProvider for FlutterwaveProvider {
         })
     }
 
-    async fn refund(&self, payment_id: &str, amount_cents: Option<i64>) -> Result<RefundResult, AppError> {
+    async fn refund(
+        &self,
+        payment_id: &str,
+        amount_cents: Option<i64>,
+    ) -> Result<RefundResult, AppError> {
         let client = reqwest::Client::new();
         let mut body = serde_json::Map::new();
         if let Some(a) = amount_cents {
             body.insert("amount".into(), serde_json::json!((a as f64) / 100.0));
         }
         let resp = client
-            .post(format!("{FLUTTERWAVE_API}/transactions/{payment_id}/refund"))
+            .post(format!(
+                "{FLUTTERWAVE_API}/transactions/{payment_id}/refund"
+            ))
             .bearer_auth(&self.cfg.secret_key)
             .json(&body)
             .send()

@@ -17,12 +17,29 @@ use axum::extract::{Path, Query, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 use crate::AppState;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
+
+// Type aliases pour clippy::type_complexity (rangées sqlx::query_as).
+type ModerationRow89 = (
+    Uuid,
+    String,
+    String,
+    Option<String>,
+    Option<Uuid>,
+    chrono::DateTime<chrono::Utc>,
+);
+type ModerationRow255 = (
+    Uuid,
+    Uuid,
+    String,
+    Option<serde_json::Value>,
+    chrono::DateTime<chrono::Utc>,
+);
 
 pub fn moderation_routes() -> Router<AppState> {
     Router::new()
@@ -86,18 +103,17 @@ async fn community_review_queue(
     let per_page = q.per_page.unwrap_or(20).clamp(1, 100);
     let offset = (page - 1) * per_page;
 
-    let rows: Vec<(Uuid, String, String, Option<String>, Option<Uuid>, chrono::DateTime<chrono::Utc>)> =
-        sqlx::query_as(
-            r#"SELECT id, title, description, review_feedback, created_by, created_at
+    let rows: Vec<ModerationRow89> = sqlx::query_as(
+        r#"SELECT id, title, description, review_feedback, created_by, created_at
                FROM challenge_templates
                WHERE is_community = TRUE AND community_status = 'review'
                ORDER BY created_at ASC
                LIMIT $1 OFFSET $2"#,
-        )
-        .bind(per_page)
-        .bind(offset)
-        .fetch_all(&state.db)
-        .await?;
+    )
+    .bind(per_page)
+    .bind(offset)
+    .fetch_all(&state.db)
+    .await?;
     let total: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM challenge_templates
          WHERE is_community = TRUE AND community_status = 'review'",
@@ -166,7 +182,9 @@ async fn community_challenge_approve(
     )
     .await;
 
-    Ok(Json(wrap(json!({ "approved": true, "id": id, "title": title }))))
+    Ok(Json(wrap(
+        json!({ "approved": true, "id": id, "title": title }),
+    )))
 }
 
 #[derive(Debug, Deserialize)]
@@ -219,7 +237,9 @@ async fn community_challenge_reject(
     )
     .await;
 
-    Ok(Json(wrap(json!({ "rejected": true, "id": id, "title": title }))))
+    Ok(Json(wrap(
+        json!({ "rejected": true, "id": id, "title": title }),
+    )))
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -242,19 +262,18 @@ async fn fraud_flagged_list(
     let per_page = q.per_page.unwrap_or(20).clamp(1, 100);
     let offset = (page - 1) * per_page;
 
-    let rows: Vec<(Uuid, Uuid, String, Option<serde_json::Value>, chrono::DateTime<chrono::Utc>)> =
-        sqlx::query_as(
-            r#"SELECT id, user_id, verification_status, verification_signal, submitted_at
+    let rows: Vec<ModerationRow255> = sqlx::query_as(
+        r#"SELECT id, user_id, verification_status, verification_signal, submitted_at
                FROM deliverables
                WHERE (verification_status = 'flagged'
                       OR verification_signal ? 'plagiarism_flag')
                ORDER BY submitted_at DESC
                LIMIT $1 OFFSET $2"#,
-        )
-        .bind(per_page)
-        .bind(offset)
-        .fetch_all(&state.db)
-        .await?;
+    )
+    .bind(per_page)
+    .bind(offset)
+    .fetch_all(&state.db)
+    .await?;
 
     let items: Vec<Value> = rows
         .into_iter()
@@ -347,7 +366,9 @@ async fn fraud_revoke(
 
     let reason = body.reason.clone().unwrap_or_default();
     if reason.trim().len() < 8 {
-        return Err(AppError::Validation("reason must be at least 8 chars".into()));
+        return Err(AppError::Validation(
+            "reason must be at least 8 chars".into(),
+        ));
     }
 
     let affected = sqlx::query(
@@ -409,7 +430,9 @@ async fn forum_moderate_post(
     .await?;
 
     if body.reason.trim().len() < 8 {
-        return Err(AppError::Validation("reason must be at least 8 chars".into()));
+        return Err(AppError::Validation(
+            "reason must be at least 8 chars".into(),
+        ));
     }
 
     let sql = match body.action.as_str() {
@@ -446,7 +469,9 @@ async fn forum_moderate_post(
     )
     .await;
 
-    Ok(Json(wrap(json!({ "moderated": true, "id": id, "action": body.action }))))
+    Ok(Json(wrap(
+        json!({ "moderated": true, "id": id, "action": body.action }),
+    )))
 }
 
 #[derive(Debug, Deserialize)]
@@ -474,7 +499,9 @@ async fn forum_mute_user(
     .await?;
 
     if body.reason.trim().len() < 8 {
-        return Err(AppError::Validation("reason must be at least 8 chars".into()));
+        return Err(AppError::Validation(
+            "reason must be at least 8 chars".into(),
+        ));
     }
     let hours = body.duration_hours.unwrap_or(24).clamp(1, 168);
     let scope = body.scope.clone().unwrap_or_else(|| "forum".into());

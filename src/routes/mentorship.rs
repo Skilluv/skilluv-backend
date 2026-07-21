@@ -25,24 +25,18 @@ pub fn mentorship_routes() -> Router<AppState> {
             put(upsert_my_mentor_profile).get(get_my_mentor_profile),
         )
         .route("/mentors/me/availability", post(add_availability))
-        .route("/mentors/me/connect/onboard", post(start_connect_onboarding))
+        .route(
+            "/mentors/me/connect/onboard",
+            post(start_connect_onboarding),
+        )
         .route("/mentors/me/connect/status", get(connect_status))
         .route(
             "/mentorship/sessions",
             post(book_session).get(list_my_sessions),
         )
-        .route(
-            "/mentorship/sessions/{id}/cancel",
-            post(cancel_session),
-        )
-        .route(
-            "/mentorship/sessions/{id}/complete",
-            post(mark_completed),
-        )
-        .route(
-            "/mentorship/sessions/{id}/review",
-            post(submit_review),
-        )
+        .route("/mentorship/sessions/{id}/cancel", post(cancel_session))
+        .route("/mentorship/sessions/{id}/complete", post(mark_completed))
+        .route("/mentorship/sessions/{id}/review", post(submit_review))
 }
 
 fn build_response(data: Value) -> Value {
@@ -165,7 +159,7 @@ async fn upsert_my_mentor_profile(
     auth: AuthUser,
     Json(body): Json<UpsertMentorBody>,
 ) -> Result<Json<Value>, AppError> {
-    if body.hourly_rate_eur_cents < 0 || body.hourly_rate_eur_cents > 100_000_00 {
+    if body.hourly_rate_eur_cents < 0 || body.hourly_rate_eur_cents > 10_000_000 {
         return Err(AppError::Validation("hourly_rate out of range".into()));
     }
     sqlx::query(
@@ -260,7 +254,9 @@ async fn add_availability(
     .bind(body.timezone.unwrap_or_else(|| "UTC".into()))
     .fetch_one(&state.db)
     .await?;
-    Ok(Json(build_response(json!({ "availability_id": inserted.0 }))))
+    Ok(Json(build_response(
+        json!({ "availability_id": inserted.0 }),
+    )))
 }
 
 // ─── Réservation ─────────────────────────────────────────────────
@@ -473,9 +469,7 @@ async fn cancel_session(
     //   - session pas encore payée → pas de refund à émettre
     let hours_before = (scheduled - chrono::Utc::now()).num_hours();
     let mentee_cancels = auth.user_id == mentee_id;
-    let refund_ratio: f64 = if !mentee_cancels {
-        1.0
-    } else if hours_before >= 24 {
+    let refund_ratio: f64 = if !mentee_cancels || hours_before >= 24 {
         1.0
     } else {
         0.5
@@ -484,33 +478,33 @@ async fn cancel_session(
     let refund_amount_cents: i64 = ((price_total_cents as f64) * refund_ratio).round() as i64;
 
     let mut refund_id: Option<String> = None;
-    if is_paid && refund_amount_cents > 0 {
-        if let Some(pi) = payment_intent.as_deref() {
-            if let Some(cfg) = crate::services::stripe::StripeConfig::from_env() {
-                match crate::services::stripe::create_refund(
-                    &cfg,
-                    pi,
-                    Some(refund_amount_cents),
-                    Some("requested_by_customer"),
+    if is_paid
+        && refund_amount_cents > 0
+        && let Some(pi) = payment_intent.as_deref()
+        && let Some(cfg) = crate::services::stripe::StripeConfig::from_env()
+    {
+        match crate::services::stripe::create_refund(
+            &cfg,
+            pi,
+            Some(refund_amount_cents),
+            Some("requested_by_customer"),
+        )
+        .await
+        {
+            Ok(r) => {
+                refund_id = Some(r.id);
+                metrics::counter!(
+                    "skilluv_stripe_refunds_total",
+                    "kind" => "mentorship"
                 )
-                .await
-                {
-                    Ok(r) => {
-                        refund_id = Some(r.id);
-                        metrics::counter!(
-                            "skilluv_stripe_refunds_total",
-                            "kind" => "mentorship"
-                        )
-                        .increment(1);
-                    }
-                    Err(e) => {
-                        tracing::warn!(
-                            session_id = %id,
-                            error = %e,
-                            "stripe refund failed — marking session cancelled anyway"
-                        );
-                    }
-                }
+                .increment(1);
+            }
+            Err(e) => {
+                tracing::warn!(
+                    session_id = %id,
+                    error = %e,
+                    "stripe refund failed — marking session cancelled anyway"
+                );
             }
         }
     }
@@ -545,13 +539,14 @@ async fn start_connect_onboarding(
 ) -> Result<Json<Value>, AppError> {
     let cfg = crate::services::stripe::StripeConfig::from_env()
         .ok_or(AppError::Internal("Stripe not configured".into()))?;
-    let profile = sqlx::query(
-        "SELECT stripe_connect_account_id FROM mentor_profiles WHERE user_id = $1",
-    )
-    .bind(auth.user_id)
-    .fetch_optional(&state.db)
-    .await?
-    .ok_or(AppError::NotFound("mentor profile not found — create one first".into()))?;
+    let profile =
+        sqlx::query("SELECT stripe_connect_account_id FROM mentor_profiles WHERE user_id = $1")
+            .bind(auth.user_id)
+            .fetch_optional(&state.db)
+            .await?
+            .ok_or(AppError::NotFound(
+                "mentor profile not found — create one first".into(),
+            ))?;
     let existing_account: Option<String> = profile.get("stripe_connect_account_id");
 
     let user_row = sqlx::query("SELECT email, country_iso2 FROM users WHERE id = $1")
@@ -566,20 +561,17 @@ async fn start_connect_onboarding(
     let account_id = if let Some(id) = existing_account {
         id
     } else {
-        let account = crate::services::stripe::create_connect_account(&cfg, &email, &country)
+        let account =
+            crate::services::stripe::create_connect_account(&cfg, &email, &country).await?;
+        sqlx::query("UPDATE mentor_profiles SET stripe_connect_account_id = $1 WHERE user_id = $2")
+            .bind(&account.id)
+            .bind(auth.user_id)
+            .execute(&state.db)
             .await?;
-        sqlx::query(
-            "UPDATE mentor_profiles SET stripe_connect_account_id = $1 WHERE user_id = $2",
-        )
-        .bind(&account.id)
-        .bind(auth.user_id)
-        .execute(&state.db)
-        .await?;
         account.id
     };
 
-    let base_url = std::env::var("APP_BASE_URL")
-        .unwrap_or_else(|_| "https://skilluv.com".into());
+    let base_url = std::env::var("APP_BASE_URL").unwrap_or_else(|_| "https://skilluv.com".into());
     let link = crate::services::stripe::create_account_link(
         &cfg,
         &account_id,
@@ -600,13 +592,12 @@ async fn connect_status(
 ) -> Result<Json<Value>, AppError> {
     let cfg = crate::services::stripe::StripeConfig::from_env()
         .ok_or(AppError::Internal("Stripe not configured".into()))?;
-    let profile = sqlx::query(
-        "SELECT stripe_connect_account_id FROM mentor_profiles WHERE user_id = $1",
-    )
-    .bind(auth.user_id)
-    .fetch_optional(&state.db)
-    .await?
-    .ok_or(AppError::NotFound("no mentor profile".into()))?;
+    let profile =
+        sqlx::query("SELECT stripe_connect_account_id FROM mentor_profiles WHERE user_id = $1")
+            .bind(auth.user_id)
+            .fetch_optional(&state.db)
+            .await?
+            .ok_or(AppError::NotFound("no mentor profile".into()))?;
     let account_id: Option<String> = profile.get("stripe_connect_account_id");
     let Some(account_id) = account_id else {
         return Ok(Json(build_response(json!({
@@ -628,13 +619,11 @@ async fn mark_completed(
     auth: AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Value>, AppError> {
-    let row = sqlx::query(
-        "SELECT mentor_user_id, status FROM mentorship_sessions WHERE id = $1",
-    )
-    .bind(id)
-    .fetch_optional(&state.db)
-    .await?
-    .ok_or(AppError::NotFound("session not found".into()))?;
+    let row = sqlx::query("SELECT mentor_user_id, status FROM mentorship_sessions WHERE id = $1")
+        .bind(id)
+        .fetch_optional(&state.db)
+        .await?
+        .ok_or(AppError::NotFound("session not found".into()))?;
     let mentor_id: Uuid = row.get("mentor_user_id");
     let status: String = row.get("status");
     if auth.user_id != mentor_id {
@@ -664,33 +653,28 @@ async fn mark_completed(
         let mentor_cents: i64 = row.get("price_mentor_cents");
         let currency: String = row.get("currency");
         let connect_id: Option<String> = row.get("stripe_connect_account_id");
-        if let Some(connect_id) = connect_id {
-            if mentor_cents > 0 {
-                if let Some(cfg) = crate::services::stripe::StripeConfig::from_env() {
-                    match crate::services::stripe::create_transfer(
-                        &cfg,
-                        &connect_id,
-                        mentor_cents,
-                        &currency,
-                        &format!("mentorship_session:{id}"),
-                    )
-                    .await
-                    {
-                        Ok(v) => {
-                            transfer_id = v
-                                .get("id")
-                                .and_then(|x| x.as_str())
-                                .map(String::from);
-                            metrics::counter!("skilluv_stripe_connect_transfers_total")
-                                .increment(1);
-                        }
-                        Err(e) => tracing::warn!(
-                            session_id = %id,
-                            error = %e,
-                            "stripe connect transfer failed"
-                        ),
-                    }
+        if let Some(connect_id) = connect_id
+            && mentor_cents > 0
+            && let Some(cfg) = crate::services::stripe::StripeConfig::from_env()
+        {
+            match crate::services::stripe::create_transfer(
+                &cfg,
+                &connect_id,
+                mentor_cents,
+                &currency,
+                &format!("mentorship_session:{id}"),
+            )
+            .await
+            {
+                Ok(v) => {
+                    transfer_id = v.get("id").and_then(|x| x.as_str()).map(String::from);
+                    metrics::counter!("skilluv_stripe_connect_transfers_total").increment(1);
                 }
+                Err(e) => tracing::warn!(
+                    session_id = %id,
+                    error = %e,
+                    "stripe connect transfer failed"
+                ),
             }
         }
     }

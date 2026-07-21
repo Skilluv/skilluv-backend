@@ -80,7 +80,9 @@ async fn insert_user(db: &PgPool) -> Uuid {
 async fn xof_credit_bounty_payout_lands_on_wallet() {
     let (db, name) = setup_test_db().await;
     let user = insert_user(&db).await;
-    talent_wallet::set_residency_country(&db, user, "CI").await.expect("resi");
+    talent_wallet::set_residency_country(&db, user, "CI")
+        .await
+        .expect("resi");
 
     // Simule 5 crédits × 3000 XOF/crédit = 15000 XOF
     let amount = BigDecimal::from(15000);
@@ -174,7 +176,11 @@ async fn bounty_payout_writes_ledger_row_with_slice_link() {
     assert_eq!(related, Some(slice));
 
     // Ledger integrity toujours OK.
-    assert!(talent_wallet::verify_ledger_chain(&db, user).await.expect("v"));
+    assert!(
+        talent_wallet::verify_ledger_chain(&db, user)
+            .await
+            .expect("v")
+    );
 
     db.close().await;
     cleanup_test_db(&name).await;
@@ -188,7 +194,9 @@ async fn bounty_payout_writes_ledger_row_with_slice_link() {
 async fn eur_residency_gets_eur_credit() {
     let (db, name) = setup_test_db().await;
     let user = insert_user(&db).await;
-    talent_wallet::set_residency_country(&db, user, "FR").await.expect("r");
+    talent_wallet::set_residency_country(&db, user, "FR")
+        .await
+        .expect("r");
 
     let amount = BigDecimal::from(80);
     talent_wallet::credit(

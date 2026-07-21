@@ -10,7 +10,7 @@
 use axum::extract::{Path, State};
 use axum::http::header::SET_COOKIE;
 use axum::response::{AppendHeaders, IntoResponse};
-use axum::routing::{delete, get, post, patch};
+use axum::routing::{delete, get, patch, post};
 use axum::{Json, Router};
 use serde::Deserialize;
 use serde_json::json;
@@ -23,6 +23,14 @@ use crate::middleware::{AuthUser, build_csrf_cookie, extract_ip, generate_csrf_t
 use crate::models::{User, UserPrivate};
 use crate::services::webauthn as wa_state;
 use crate::services::{AuthService, SessionService};
+
+// Type aliases pour clippy::type_complexity (rangées sqlx::query_as).
+type WebauthnRow209 = (
+    Uuid,
+    Option<String>,
+    Option<chrono::DateTime<chrono::Utc>>,
+    chrono::DateTime<chrono::Utc>,
+);
 
 pub fn webauthn_routes() -> Router<AppState> {
     Router::new()
@@ -51,9 +59,7 @@ fn envelope(data: serde_json::Value) -> serde_json::Value {
 }
 
 fn build_access_cookie(access_token: &str) -> String {
-    format!(
-        "access_token={access_token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=900"
-    )
+    format!("access_token={access_token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=900")
 }
 
 fn build_refresh_cookie(session_id: Uuid, token: &str) -> String {
@@ -82,16 +88,12 @@ async fn register_start(
         .await?;
 
     // Exclude existing credentials so the authenticator refuses to re-register itself.
-    let existing_ids: Vec<Vec<u8>> = sqlx::query_scalar(
-        "SELECT credential_id FROM webauthn_credentials WHERE user_id = $1",
-    )
-    .bind(auth.user_id)
-    .fetch_all(&state.db)
-    .await?;
-    let exclude: Vec<CredentialID> = existing_ids
-        .into_iter()
-        .map(|bytes| bytes.into())
-        .collect();
+    let existing_ids: Vec<Vec<u8>> =
+        sqlx::query_scalar("SELECT credential_id FROM webauthn_credentials WHERE user_id = $1")
+            .bind(auth.user_id)
+            .fetch_all(&state.db)
+            .await?;
+    let exclude: Vec<CredentialID> = existing_ids.into_iter().map(|bytes| bytes.into()).collect();
 
     let (ccr, reg_state) = state
         .webauthn
@@ -100,7 +102,11 @@ async fn register_start(
             user.id,
             &user.username,
             &user.display_name,
-            if exclude.is_empty() { None } else { Some(exclude) },
+            if exclude.is_empty() {
+                None
+            } else {
+                Some(exclude)
+            },
         )
         .map_err(|e| AppError::Internal(format!("start_passkey_registration: {e}")))?;
 
@@ -149,12 +155,11 @@ async fn register_finish(
 
     // Reject if this credential_id is already registered anywhere (spec requirement).
     let cred_id_bytes: Vec<u8> = passkey.cred_id().as_ref().to_vec();
-    let clash: Option<(Uuid,)> = sqlx::query_as(
-        "SELECT id FROM webauthn_credentials WHERE credential_id = $1",
-    )
-    .bind(&cred_id_bytes)
-    .fetch_optional(&state.db)
-    .await?;
+    let clash: Option<(Uuid,)> =
+        sqlx::query_as("SELECT id FROM webauthn_credentials WHERE credential_id = $1")
+            .bind(&cred_id_bytes)
+            .fetch_optional(&state.db)
+            .await?;
     if clash.is_some() {
         return Err(AppError::Validation(
             "This authenticator is already registered".into(),
@@ -209,16 +214,15 @@ async fn list_credentials(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let rows: Vec<(Uuid, Option<String>, Option<chrono::DateTime<chrono::Utc>>, chrono::DateTime<chrono::Utc>)> =
-        sqlx::query_as(
-            "SELECT id, label, last_used_at, created_at
+    let rows: Vec<WebauthnRow209> = sqlx::query_as(
+        "SELECT id, label, last_used_at, created_at
              FROM webauthn_credentials
              WHERE user_id = $1
              ORDER BY created_at DESC",
-        )
-        .bind(auth.user_id)
-        .fetch_all(&state.db)
-        .await?;
+    )
+    .bind(auth.user_id)
+    .fetch_all(&state.db)
+    .await?;
     let items: Vec<_> = rows
         .into_iter()
         .map(|(id, label, last_used_at, created_at)| {
@@ -250,14 +254,13 @@ async fn rename_credential(
             "Label must be between 1 and 60 characters".into(),
         ));
     }
-    let updated = sqlx::query(
-        "UPDATE webauthn_credentials SET label = $1 WHERE id = $2 AND user_id = $3",
-    )
-    .bind(label)
-    .bind(id)
-    .bind(auth.user_id)
-    .execute(&state.db)
-    .await?;
+    let updated =
+        sqlx::query("UPDATE webauthn_credentials SET label = $1 WHERE id = $2 AND user_id = $3")
+            .bind(label)
+            .bind(id)
+            .bind(auth.user_id)
+            .execute(&state.db)
+            .await?;
     if updated.rows_affected() == 0 {
         return Err(AppError::NotFound("Credential not found".into()));
     }
@@ -269,12 +272,11 @@ async fn delete_credential(
     auth: AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let deleted =
-        sqlx::query("DELETE FROM webauthn_credentials WHERE id = $1 AND user_id = $2")
-            .bind(id)
-            .bind(auth.user_id)
-            .execute(&state.db)
-            .await?;
+    let deleted = sqlx::query("DELETE FROM webauthn_credentials WHERE id = $1 AND user_id = $2")
+        .bind(id)
+        .bind(auth.user_id)
+        .execute(&state.db)
+        .await?;
     if deleted.rows_affected() == 0 {
         return Err(AppError::NotFound("Credential not found".into()));
     }
@@ -297,21 +299,19 @@ async fn login_start(
     // Return the same shape regardless of whether the user exists / has passkeys, so no email
     // enumeration is possible: the browser only fails at the end if it can't produce a matching
     // credential. We still need to know the user_id server-side though.
-    let user_id: Option<Uuid> = sqlx::query_scalar(
-        "SELECT id FROM users WHERE email = $1 OR username = $1",
-    )
-    .bind(&identifier)
-    .fetch_optional(&state.db)
-    .await?;
+    let user_id: Option<Uuid> =
+        sqlx::query_scalar("SELECT id FROM users WHERE email = $1 OR username = $1")
+            .bind(&identifier)
+            .fetch_optional(&state.db)
+            .await?;
 
     let user_id = user_id.ok_or_else(|| AppError::Validation("No passkey registered".into()))?;
 
-    let cred_rows: Vec<(serde_json::Value,)> = sqlx::query_as(
-        "SELECT credential FROM webauthn_credentials WHERE user_id = $1",
-    )
-    .bind(user_id)
-    .fetch_all(&state.db)
-    .await?;
+    let cred_rows: Vec<(serde_json::Value,)> =
+        sqlx::query_as("SELECT credential FROM webauthn_credentials WHERE user_id = $1")
+            .bind(user_id)
+            .fetch_all(&state.db)
+            .await?;
 
     if cred_rows.is_empty() {
         return Err(AppError::Validation("No passkey registered".into()));

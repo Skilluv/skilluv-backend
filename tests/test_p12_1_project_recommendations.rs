@@ -106,8 +106,7 @@ async fn insert_project(
     health: Option<f64>,
     looking: bool,
 ) -> Uuid {
-    let health_bd: Option<BigDecimal> = health
-        .and_then(|h| BigDecimal::try_from(h).ok());
+    let health_bd: Option<BigDecimal> = health.and_then(|h| BigDecimal::try_from(h).ok());
     sqlx::query_scalar(
         r#"
         INSERT INTO projects
@@ -137,7 +136,9 @@ async fn user_without_skills_gets_empty_recommendations() {
     let (db, name) = setup_test_db().await;
     let user = insert_user(&db).await;
 
-    let recos = projects::recommend_for_user(&db, user, 10).await.expect("r");
+    let recos = projects::recommend_for_user(&db, user, 10)
+        .await
+        .expect("r");
     assert!(recos.is_empty());
 
     db.close().await;
@@ -158,10 +159,19 @@ async fn recommends_projects_matching_user_domains() {
     let code_project = insert_project(&db, owner, "Code Proj", &["code"], Some(0.8), false).await;
     let _design_project = insert_project(&db, owner, "Design", &["design"], Some(0.9), true).await;
 
-    let recos = projects::recommend_for_user(&db, user, 10).await.expect("r");
+    let recos = projects::recommend_for_user(&db, user, 10)
+        .await
+        .expect("r");
     let ids: Vec<Uuid> = recos.iter().map(|r| r.project.id).collect();
-    assert!(ids.contains(&code_project), "code project doit être recommandé");
-    assert_eq!(ids.len(), 1, "seul le code project match les domaines du user");
+    assert!(
+        ids.contains(&code_project),
+        "code project doit être recommandé"
+    );
+    assert_eq!(
+        ids.len(),
+        1,
+        "seul le code project match les domaines du user"
+    );
 
     db.close().await;
     cleanup_test_db(&name).await;
@@ -205,9 +215,14 @@ async fn excludes_projects_with_existing_verified_deliverable() {
     .await
     .expect("deliverable");
 
-    let recos = projects::recommend_for_user(&db, user, 10).await.expect("r");
+    let recos = projects::recommend_for_user(&db, user, 10)
+        .await
+        .expect("r");
     let ids: Vec<Uuid> = recos.iter().map(|r| r.project.id).collect();
-    assert!(!ids.contains(&project_a), "project A exclu (deliverable verified)");
+    assert!(
+        !ids.contains(&project_a),
+        "project A exclu (deliverable verified)"
+    );
     assert!(ids.contains(&project_b), "project B recommandé");
 
     db.close().await;
@@ -232,9 +247,13 @@ async fn score_reflects_health_and_contributor_boost() {
     // C : health 1.0, pas de boost → même score que B ?
     let c = insert_project(&db, owner, "Project Charlie", &["code"], Some(1.0), false).await;
 
-    let recos = projects::recommend_for_user(&db, user, 10).await.expect("r");
-    let map: std::collections::HashMap<Uuid, f64> =
-        recos.iter().map(|r| (r.project.id, r.match_score)).collect();
+    let recos = projects::recommend_for_user(&db, user, 10)
+        .await
+        .expect("r");
+    let map: std::collections::HashMap<Uuid, f64> = recos
+        .iter()
+        .map(|r| (r.project.id, r.match_score))
+        .collect();
 
     // A : 100 × 0.5 × 1.0 = 50
     // B : 100 × 0.5 × 1.5 = 75
@@ -271,7 +290,9 @@ async fn archived_projects_excluded() {
         .await
         .expect("archive");
 
-    let recos = projects::recommend_for_user(&db, user, 10).await.expect("r");
+    let recos = projects::recommend_for_user(&db, user, 10)
+        .await
+        .expect("r");
     assert!(recos.is_empty(), "projets archivés ne remontent pas");
 
     db.close().await;

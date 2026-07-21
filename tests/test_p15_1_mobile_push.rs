@@ -1,5 +1,7 @@
 //! Tests d'intégration P15.1 : mobile push (FCM + APNS).
 
+use std::str::FromStr;
+
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use uuid::Uuid;
 
@@ -101,13 +103,11 @@ async fn register_token_upserts_by_device_id() {
         .expect("b");
     assert_eq!(b.token, "tok-v2", "token remplacé sur même device_id");
 
-    let count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM user_push_tokens WHERE user_id = $1",
-    )
-    .bind(user)
-    .fetch_one(&db)
-    .await
-    .expect("c");
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM user_push_tokens WHERE user_id = $1")
+        .bind(user)
+        .fetch_one(&db)
+        .await
+        .expect("c");
     assert_eq!(count, 1);
 
     db.close().await;
@@ -143,9 +143,13 @@ async fn revoke_token_removes_row() {
     mobile_push::register_token(&db, user, Platform::Apns, "tokA", "dev-ios")
         .await
         .expect("r");
-    let n = mobile_push::revoke_token(&db, user, "dev-ios").await.expect("d");
+    let n = mobile_push::revoke_token(&db, user, "dev-ios")
+        .await
+        .expect("d");
     assert_eq!(n, 1);
-    let n2 = mobile_push::revoke_token(&db, user, "dev-ios").await.expect("d2");
+    let n2 = mobile_push::revoke_token(&db, user, "dev-ios")
+        .await
+        .expect("d2");
     assert_eq!(n2, 0);
 
     db.close().await;
@@ -232,13 +236,12 @@ async fn purge_stale_removes_old_tokens() {
 
     let deleted = mobile_push::purge_stale(&db, 90).await.expect("p");
     assert_eq!(deleted, 1);
-    let remaining: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM user_push_tokens WHERE user_id = $1",
-    )
-    .bind(user)
-    .fetch_one(&db)
-    .await
-    .expect("c");
+    let remaining: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM user_push_tokens WHERE user_id = $1")
+            .bind(user)
+            .fetch_one(&db)
+            .await
+            .expect("c");
     assert_eq!(remaining, 1);
 
     db.close().await;

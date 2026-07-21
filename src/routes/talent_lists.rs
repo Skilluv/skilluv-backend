@@ -12,6 +12,29 @@ use crate::errors::AppError;
 use crate::middleware::AuthUser;
 use crate::models::{Enterprise, TalentList};
 
+// Type aliases pour clippy::type_complexity (rangées sqlx::query_as).
+type TalentListsRow142 = (
+    Uuid,
+    String,
+    String,
+    String,
+    String,
+    i32,
+    i32,
+    Option<String>,
+    chrono::DateTime<chrono::Utc>,
+);
+type TalentListsRow286 = (
+    Uuid,
+    String,
+    String,
+    String,
+    String,
+    i32,
+    i32,
+    Option<String>,
+);
+
 pub fn talent_list_routes() -> Router<AppState> {
     Router::new()
         // Bookmarks
@@ -139,7 +162,7 @@ async fn list_bookmarks(
     let per_page = query.per_page.unwrap_or(20).clamp(1, 50);
     let offset = (page - 1) * per_page;
 
-    let bookmarks: Vec<(Uuid, String, String, String, String, i32, i32, Option<String>, chrono::DateTime<chrono::Utc>)> = sqlx::query_as(
+    let bookmarks: Vec<TalentListsRow142> = sqlx::query_as(
         r#"
         SELECT u.id, u.username, u.display_name, u.skill_domain, u.title, u.golden_stars, u.total_fragments, u.country, eb.created_at
         FROM enterprise_bookmarks eb
@@ -283,7 +306,7 @@ async fn get_list(
             .await?
             .ok_or(AppError::NotFound("List not found".to_string()))?;
 
-    let talents: Vec<(Uuid, String, String, String, String, i32, i32, Option<String>)> = sqlx::query_as(
+    let talents: Vec<TalentListsRow286> = sqlx::query_as(
         r#"
         SELECT u.id, u.username, u.display_name, u.skill_domain, u.title, u.golden_stars, u.total_fragments, u.country
         FROM talent_list_members tlm

@@ -14,14 +14,19 @@ async fn setup_user_with_passkey(app: &TestApp, username: &str) -> uuid::Uuid {
     let uid: uuid::Uuid = sqlx::query_scalar(&format!(
         "SELECT id FROM users WHERE username = '{username}'"
     ))
-    .fetch_one(&app.db).await.unwrap();
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
     sqlx::query(
         "INSERT INTO webauthn_credentials
             (user_id, credential_id, credential, label)
          VALUES ($1, $2, '{}'::jsonb, 'test')",
     )
-    .bind(uid).bind(format!("cred-{uid}").into_bytes())
-    .execute(&app.db).await.unwrap();
+    .bind(uid)
+    .bind(format!("cred-{uid}").into_bytes())
+    .execute(&app.db)
+    .await
+    .unwrap();
     uid
 }
 
@@ -46,7 +51,9 @@ async fn performance_route_returns_500_without_ai_client() {
 #[tokio::test]
 async fn suggest_orientations_route_requires_auth() {
     let app = TestApp::spawn().await;
-    let resp = app.post("/api/users/me/orientations/suggest", &json!({})).await;
+    let resp = app
+        .post("/api/users/me/orientations/suggest", &json!({}))
+        .await;
     assert_eq!(resp.status().as_u16(), 401);
 }
 
@@ -55,7 +62,9 @@ async fn suggest_orientations_returns_500_without_ai_client() {
     let app = TestApp::spawn().await;
     setup_user_with_passkey(&app, "sug_user").await;
     app.login("sug_user").await;
-    let resp = app.post("/api/users/me/orientations/suggest", &json!({})).await;
+    let resp = app
+        .post("/api/users/me/orientations/suggest", &json!({}))
+        .await;
     assert_eq!(resp.status().as_u16(), 500);
 }
 
@@ -67,6 +76,11 @@ async fn suggest_orientations_refresh_rate_limited() {
     // Note : SKILLUV_DISABLE_RATELIMIT=1 en tests (voir common/mod.rs) désactive
     // le rate-limit, donc pas testable ici. On vérifie juste que refresh=true
     // est accepté et déclenche l'appel IA (500 car ai_client absent).
-    let r1 = app.post("/api/users/me/orientations/suggest", &json!({"refresh": true})).await;
+    let r1 = app
+        .post(
+            "/api/users/me/orientations/suggest",
+            &json!({"refresh": true}),
+        )
+        .await;
     assert_eq!(r1.status().as_u16(), 500);
 }

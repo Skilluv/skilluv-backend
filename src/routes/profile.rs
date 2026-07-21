@@ -9,6 +9,14 @@ use crate::errors::AppError;
 use crate::models::BadgeWithEarnedAt;
 use crate::services::LeaderboardService;
 
+// Type aliases pour clippy::type_complexity (rangées sqlx::query_as).
+type ProfileRow37 = (
+    Option<String>,
+    String,
+    chrono::DateTime<chrono::Utc>,
+    Option<String>,
+);
+
 pub fn profile_routes() -> Router<AppState> {
     Router::new()
         .route("/profile/{username}", get(public_profile))
@@ -22,12 +30,11 @@ async fn user_rank_history(
     Path(user_id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     // Vérifie que le profil est public + non banni (évite énumération).
-    let ok: Option<bool> = sqlx::query_scalar(
-        "SELECT profile_active FROM users WHERE id = $1 AND is_banned = FALSE",
-    )
-    .bind(user_id)
-    .fetch_optional(&state.db)
-    .await?;
+    let ok: Option<bool> =
+        sqlx::query_scalar("SELECT profile_active FROM users WHERE id = $1 AND is_banned = FALSE")
+            .bind(user_id)
+            .fetch_optional(&state.db)
+            .await?;
     let Some(active) = ok else {
         return Err(AppError::NotFound("user not found".into()));
     };
@@ -35,17 +42,16 @@ async fn user_rank_history(
         return Ok(Json(build_response(json!({ "history": [] }))));
     }
 
-    let rows: Vec<(Option<String>, String, chrono::DateTime<chrono::Utc>, Option<String>)> =
-        sqlx::query_as(
-            r#"SELECT from_rank, to_rank, achieved_at, reason
+    let rows: Vec<ProfileRow37> = sqlx::query_as(
+        r#"SELECT from_rank, to_rank, achieved_at, reason
                FROM user_rank_history
                WHERE user_id = $1
                ORDER BY achieved_at DESC
                LIMIT 100"#,
-        )
-        .bind(user_id)
-        .fetch_all(&state.db)
-        .await?;
+    )
+    .bind(user_id)
+    .fetch_all(&state.db)
+    .await?;
 
     let history: Vec<serde_json::Value> = rows
         .into_iter()

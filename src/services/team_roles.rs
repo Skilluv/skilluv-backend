@@ -44,10 +44,7 @@ pub struct CreateSlotParams<'a> {
 
 impl TeamRolesService {
     /// Liste tous les slots d'une team (ouverts + remplis).
-    pub async fn list_slots(
-        db: &PgPool,
-        team_id: Uuid,
-    ) -> Result<Vec<TeamRoleSlot>, AppError> {
+    pub async fn list_slots(db: &PgPool, team_id: Uuid) -> Result<Vec<TeamRoleSlot>, AppError> {
         let rows = sqlx::query_as::<_, TeamRoleSlot>(
             "SELECT * FROM team_role_slots
              WHERE team_id = $1
@@ -90,11 +87,10 @@ impl TeamRolesService {
         }
 
         let required_skill_id: Option<Uuid> = if let Some(slug) = params.required_skill_slug {
-            let id: Option<Uuid> =
-                sqlx::query_scalar("SELECT id FROM skill_nodes WHERE slug = $1")
-                    .bind(slug)
-                    .fetch_optional(db)
-                    .await?;
+            let id: Option<Uuid> = sqlx::query_scalar("SELECT id FROM skill_nodes WHERE slug = $1")
+                .bind(slug)
+                .fetch_optional(db)
+                .await?;
             if id.is_none() {
                 return Err(AppError::Validation(format!(
                     "required_skill_slug '{slug}' not found in skill_nodes"
@@ -273,12 +269,11 @@ impl TeamRolesService {
         db: &PgPool,
         slot_id: Uuid,
     ) -> Result<usize, AppError> {
-        let slot: Option<TeamRoleSlot> = sqlx::query_as::<_, TeamRoleSlot>(
-            "SELECT * FROM team_role_slots WHERE id = $1",
-        )
-        .bind(slot_id)
-        .fetch_optional(db)
-        .await?;
+        let slot: Option<TeamRoleSlot> =
+            sqlx::query_as::<_, TeamRoleSlot>("SELECT * FROM team_role_slots WHERE id = $1")
+                .bind(slot_id)
+                .fetch_optional(db)
+                .await?;
         let Some(slot) = slot else {
             return Ok(0);
         };
@@ -294,15 +289,13 @@ impl TeamRolesService {
         .bind(slot.team_id)
         .fetch_optional(db)
         .await?;
-        let (team_name, challenge_id) =
-            team_row.unwrap_or_else(|| ("(team)".into(), Uuid::nil()));
-        let challenge_title: String = sqlx::query_scalar(
-            "SELECT title FROM challenge_templates WHERE id = $1",
-        )
-        .bind(challenge_id)
-        .fetch_optional(db)
-        .await?
-        .unwrap_or_else(|| "(challenge)".into());
+        let (team_name, challenge_id) = team_row.unwrap_or_else(|| ("(team)".into(), Uuid::nil()));
+        let challenge_title: String =
+            sqlx::query_scalar("SELECT title FROM challenge_templates WHERE id = $1")
+                .bind(challenge_id)
+                .fetch_optional(db)
+                .await?
+                .unwrap_or_else(|| "(challenge)".into());
 
         let user_ids: Vec<Uuid> = sqlx::query_scalar(
             "SELECT user_id FROM user_skills
@@ -317,7 +310,9 @@ impl TeamRolesService {
         let title = format!("New team slot: {}", slot.role_slug);
         let body = format!(
             "\"{team_name}\" is looking for a {} on challenge {challenge_title}",
-            slot.role_display_name.clone().unwrap_or_else(|| slot.role_slug.clone())
+            slot.role_display_name
+                .clone()
+                .unwrap_or_else(|| slot.role_slug.clone())
         );
         let data = serde_json::json!({
             "kind": "team_slot_open",
@@ -349,20 +344,18 @@ impl TeamRolesService {
             }
         }
 
-        metrics::counter!("skilluv_team_slot_notifications_total")
-            .increment(notified as u64);
+        metrics::counter!("skilluv_team_slot_notifications_total").increment(notified as u64);
         Ok(notified)
     }
 
     /// Delete un slot vide (nettoyage par le créateur de la team).
     /// Refuse si le slot est déjà rempli — utiliser leave_slot d'abord.
     pub async fn delete_slot(db: &PgPool, slot_id: Uuid) -> Result<(), AppError> {
-        let res = sqlx::query(
-            "DELETE FROM team_role_slots WHERE id = $1 AND filled_by_user_id IS NULL",
-        )
-        .bind(slot_id)
-        .execute(db)
-        .await?;
+        let res =
+            sqlx::query("DELETE FROM team_role_slots WHERE id = $1 AND filled_by_user_id IS NULL")
+                .bind(slot_id)
+                .execute(db)
+                .await?;
         if res.rows_affected() == 0 {
             return Err(AppError::Validation(
                 "Slot not found or currently filled".into(),

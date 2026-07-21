@@ -6,7 +6,7 @@
 mod common;
 
 use common::TestApp;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 async fn make_authenticated_user(app: &TestApp, username: &str) -> Uuid {
@@ -141,11 +141,10 @@ async fn recent_community_attestation_from_others_appears() {
     .await
     .expect("other");
 
-    let skill_id: Uuid =
-        sqlx::query_scalar("SELECT id FROM skill_nodes LIMIT 1")
-            .fetch_one(&app.db)
-            .await
-            .expect("skill");
+    let skill_id: Uuid = sqlx::query_scalar("SELECT id FROM skill_nodes LIMIT 1")
+        .fetch_one(&app.db)
+        .await
+        .expect("skill");
     sqlx::query(
         r#"
         INSERT INTO attestations
@@ -163,10 +162,11 @@ async fn recent_community_attestation_from_others_appears() {
 
     let feed: Value = app.get("/api/feed/for-you").await.json().await.unwrap();
     let items = feed["data"]["items"].as_array().unwrap();
-    let has_attestation = items
-        .iter()
-        .any(|it| it["kind"] == "community_attestation");
-    assert!(has_attestation, "attestation récente d'un autre user attendue");
+    let has_attestation = items.iter().any(|it| it["kind"] == "community_attestation");
+    assert!(
+        has_attestation,
+        "attestation récente d'un autre user attendue"
+    );
 
     drop(app);
 }
@@ -180,11 +180,10 @@ async fn my_own_attestation_is_not_in_the_feed() {
     let app = TestApp::spawn().await;
     let user_id = make_authenticated_user(&app, "u_self").await;
 
-    let skill_id: Uuid =
-        sqlx::query_scalar("SELECT id FROM skill_nodes LIMIT 1")
-            .fetch_one(&app.db)
-            .await
-            .expect("skill");
+    let skill_id: Uuid = sqlx::query_scalar("SELECT id FROM skill_nodes LIMIT 1")
+        .fetch_one(&app.db)
+        .await
+        .expect("skill");
     sqlx::query(
         r#"
         INSERT INTO attestations

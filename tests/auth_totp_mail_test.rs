@@ -30,10 +30,12 @@ async fn test_totp_setup_enable_login_and_disable() {
         .as_str()
         .expect("secret_base32 missing")
         .to_string();
-    assert!(setup["data"]["otpauth_url"]
-        .as_str()
-        .unwrap()
-        .starts_with("otpauth://totp/"));
+    assert!(
+        setup["data"]["otpauth_url"]
+            .as_str()
+            .unwrap()
+            .starts_with("otpauth://totp/")
+    );
 
     // Enable with the current code.
     let code = totp_now(&secret);
@@ -50,7 +52,10 @@ async fn test_totp_setup_enable_login_and_disable() {
     assert_eq!(backup_codes.len(), 10, "10 backup codes expected");
 
     // Login without TOTP code → TotpRequired.
-    let fresh = reqwest::Client::builder().cookie_store(true).build().unwrap();
+    let fresh = reqwest::Client::builder()
+        .cookie_store(true)
+        .build()
+        .unwrap();
     let resp = fresh
         .post(format!("{}/api/auth/login", app.addr))
         .json(&json!({
@@ -81,10 +86,7 @@ async fn test_totp_setup_enable_login_and_disable() {
     // Small delay so we don't hit the same 30-sec window twice in a row (harmless but cleaner).
     let disable_code = totp_now(&secret);
     let resp = app
-        .post(
-            "/api/auth/totp/disable",
-            &json!({ "code": disable_code }),
-        )
+        .post("/api/auth/totp/disable", &json!({ "code": disable_code }))
         .await;
     assert_eq!(resp.status(), StatusCode::OK);
 }
@@ -111,14 +113,14 @@ async fn test_totp_backup_code_consumes_and_cannot_be_reused() {
         .json()
         .await
         .unwrap();
-    let backup_codes = enable["data"]["backup_codes"]
-        .as_array()
-        .cloned()
-        .unwrap();
+    let backup_codes = enable["data"]["backup_codes"].as_array().cloned().unwrap();
     let first_code = backup_codes[0].as_str().unwrap().to_string();
 
     // Login with the backup code (fresh client, needs 2FA).
-    let fresh = reqwest::Client::builder().cookie_store(true).build().unwrap();
+    let fresh = reqwest::Client::builder()
+        .cookie_store(true)
+        .build()
+        .unwrap();
     let resp = fresh
         .post(format!("{}/api/auth/login", app.addr))
         .json(&json!({
@@ -132,7 +134,10 @@ async fn test_totp_backup_code_consumes_and_cannot_be_reused() {
     assert_eq!(resp.status(), StatusCode::OK);
 
     // Reuse the SAME code → rejected.
-    let fresh2 = reqwest::Client::builder().cookie_store(true).build().unwrap();
+    let fresh2 = reqwest::Client::builder()
+        .cookie_store(true)
+        .build()
+        .unwrap();
     let resp = fresh2
         .post(format!("{}/api/auth/login", app.addr))
         .json(&json!({
@@ -194,7 +199,10 @@ async fn test_magic_link_login_flow() {
     let token = Mailpit::extract_token(&msg, "token").expect("no token in magic link email");
 
     // 3. Consume via a fresh client (no jar contamination).
-    let fresh = reqwest::Client::builder().cookie_store(true).build().unwrap();
+    let fresh = reqwest::Client::builder()
+        .cookie_store(true)
+        .build()
+        .unwrap();
     let resp = fresh
         .post(format!("{}/api/auth/magic-link/consume", app.addr))
         .json(&json!({ "token": token }))
@@ -261,7 +269,10 @@ async fn test_forgot_and_reset_password_full_flow() {
     assert_eq!(resp.status(), StatusCode::OK);
 
     // Login with the new password from a fresh client (old sessions revoked).
-    let fresh = reqwest::Client::builder().cookie_store(true).build().unwrap();
+    let fresh = reqwest::Client::builder()
+        .cookie_store(true)
+        .build()
+        .unwrap();
     let resp = fresh
         .post(format!("{}/api/auth/login", app.addr))
         .json(&json!({
@@ -286,8 +297,7 @@ async fn test_email_2fa_login_flow() {
 
     // Verify email first (email_2fa/enable requires email_verified).
     let verify_msg = mp.wait_for("email2fa@test.com", 5_000).await;
-    let vtoken =
-        Mailpit::extract_token(&verify_msg, "token").expect("verify token missing");
+    let vtoken = Mailpit::extract_token(&verify_msg, "token").expect("verify token missing");
     let resp = app
         .get(&format!("/api/auth/verify-email?token={vtoken}"))
         .await;
@@ -300,7 +310,10 @@ async fn test_email_2fa_login_flow() {
     mp.wipe().await;
 
     // Fresh client logs in → should receive `requires_email_2fa` + a code by email.
-    let fresh = reqwest::Client::builder().cookie_store(true).build().unwrap();
+    let fresh = reqwest::Client::builder()
+        .cookie_store(true)
+        .build()
+        .unwrap();
     let resp = fresh
         .post(format!("{}/api/auth/login", app.addr))
         .json(&json!({
@@ -371,7 +384,10 @@ async fn test_change_email_end_to_end() {
     assert_eq!(resp.status(), StatusCode::OK);
 
     // Login with the new email works.
-    let fresh = reqwest::Client::builder().cookie_store(true).build().unwrap();
+    let fresh = reqwest::Client::builder()
+        .cookie_store(true)
+        .build()
+        .unwrap();
     let resp = fresh
         .post(format!("{}/api/auth/login", app.addr))
         .json(&json!({

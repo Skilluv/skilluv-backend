@@ -2,6 +2,8 @@
 
 mod common;
 
+use std::str::FromStr;
+
 use bigdecimal::BigDecimal;
 use common::TestApp;
 use serde_json::json;
@@ -17,9 +19,18 @@ use skilluv_backend::services::mobile_money::{
 
 #[tokio::test]
 async fn provider_name_from_str_accepts_variants() {
-    assert_eq!(ProviderName::from_str("orange").unwrap(), ProviderName::Orange);
-    assert_eq!(ProviderName::from_str("ORANGE").unwrap(), ProviderName::Orange);
-    assert_eq!(ProviderName::from_str("orange_money").unwrap(), ProviderName::Orange);
+    assert_eq!(
+        ProviderName::from_str("orange").unwrap(),
+        ProviderName::Orange
+    );
+    assert_eq!(
+        ProviderName::from_str("ORANGE").unwrap(),
+        ProviderName::Orange
+    );
+    assert_eq!(
+        ProviderName::from_str("orange_money").unwrap(),
+        ProviderName::Orange
+    );
     assert_eq!(ProviderName::from_str("Mtn").unwrap(), ProviderName::Mtn);
     assert_eq!(ProviderName::from_str("wave").unwrap(), ProviderName::Wave);
     assert!(ProviderName::from_str("paypal").is_err());
@@ -148,10 +159,12 @@ async fn momo_withdraw_full_flow_from_wallet() {
     assert_eq!(resp.status(), 200);
     let jv: serde_json::Value = resp.json().await.unwrap();
     assert_eq!(jv["data"]["provider"], "orange");
-    assert!(jv["data"]["provider_txn_id"]
-        .as_str()
-        .unwrap()
-        .starts_with("orange:dev:"));
+    assert!(
+        jv["data"]["provider_txn_id"]
+            .as_str()
+            .unwrap()
+            .starts_with("orange:dev:")
+    );
 
     // Balance décrémentée
     let bal: BigDecimal =
@@ -219,10 +232,12 @@ async fn momo_withdraw_refuses_above_kyc_lite_limit() {
         .await;
     assert_eq!(resp.status(), 400);
     let jv: serde_json::Value = resp.json().await.unwrap();
-    assert!(jv["error"]["message"]
-        .as_str()
-        .unwrap()
-        .contains("KYC-lite limit"));
+    assert!(
+        jv["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("KYC-lite limit")
+    );
 
     drop(app);
 }

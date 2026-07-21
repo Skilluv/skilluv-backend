@@ -10,7 +10,7 @@ use uuid::Uuid;
 use crate::AppState;
 use crate::errors::AppError;
 use crate::middleware::{AuthUser, AuthUserComplete, OptionalAuth};
-use crate::models::{Badge, ChallengeTemplate, ChallengeSubmission};
+use crate::models::{Badge, ChallengeSubmission, ChallengeTemplate};
 use crate::services::LeaderboardService;
 use crate::websocket::WsMessage;
 
@@ -98,11 +98,10 @@ async fn list_challenges(
 
     // Get user's total fragments for prerequisite check (if authenticated)
     let user_fragments = if let Some(ref auth) = auth {
-        let user: Option<crate::models::User> =
-            sqlx::query_as("SELECT * FROM users WHERE id = $1")
-                .bind(auth.user_id)
-                .fetch_optional(&state.db)
-                .await?;
+        let user: Option<crate::models::User> = sqlx::query_as("SELECT * FROM users WHERE id = $1")
+            .bind(auth.user_id)
+            .fetch_optional(&state.db)
+            .await?;
         user.map(|u| u.total_fragments).unwrap_or(0)
     } else {
         0
@@ -241,12 +240,9 @@ async fn start_challenge(
     // n'a aucun prérequis à vérifier — il est démarrable par tout user
     // profile_active.
     let _ = &user; // conservé pour compat future (rate limiting, etc.)
-    let eligibility = crate::services::TracksService::check_eligibility(
-        &state.db,
-        auth.user_id,
-        challenge_id,
-    )
-    .await?;
+    let eligibility =
+        crate::services::TracksService::check_eligibility(&state.db, auth.user_id, challenge_id)
+            .await?;
     if !eligibility.eligible {
         return Err(AppError::ChallengePrerequisiteNotMet);
     }
@@ -355,31 +351,32 @@ async fn submit_challenge(
         "No in-progress submission found. Start the challenge first.".to_string(),
     ))?;
 
-    let challenge: ChallengeTemplate = sqlx::query_as("SELECT * FROM challenge_templates WHERE id = $1")
-        .bind(challenge_id)
-        .fetch_one(&state.db)
-        .await?;
+    let challenge: ChallengeTemplate =
+        sqlx::query_as("SELECT * FROM challenge_templates WHERE id = $1")
+            .bind(challenge_id)
+            .fetch_one(&state.db)
+            .await?;
 
     // Check timer expiration
-    if let Some(expires_at) = submission.expires_at {
-        if chrono::Utc::now() > expires_at {
-            // Mark as expired
-            sqlx::query(
+    if let Some(expires_at) = submission.expires_at
+        && chrono::Utc::now() > expires_at
+    {
+        // Mark as expired
+        sqlx::query(
                 "UPDATE challenge_submissions SET status = 'failure', submitted_at = NOW(), evaluated_at = NOW() WHERE id = $1",
             )
             .bind(submission.id)
             .execute(&state.db)
             .await?;
 
-            return Ok((
-                submit_deprecation_headers(),
-                Json(build_response(json!({
-                    "submission": { "id": submission.id, "status": "failure" },
-                    "fragments_earned": 0,
-                    "message": "Time expired. Submission rejected."
-                }))),
-            ));
-        }
+        return Ok((
+            submit_deprecation_headers(),
+            Json(build_response(json!({
+                "submission": { "id": submission.id, "status": "failure" },
+                "fragments_earned": 0,
+                "message": "Time expired. Submission rejected."
+            }))),
+        ));
     }
 
     // Evaluate submission
@@ -435,14 +432,16 @@ async fn submit_challenge(
         // le legacy sera droppé et deliverables deviendra unique source.
         match crate::services::DeliverablesService::create_from_challenge_submission(
             &state.db,
-            auth.user_id,
-            challenge.id,
-            updated_submission.id,
-            &body.code,
-            total_fragments,
-            body.language.as_deref(),
-            exec_stdout.as_deref(),
-            exec_stderr.as_deref(),
+            crate::services::deliverables::ChallengeSubmissionInput {
+                user_id: auth.user_id,
+                challenge_id: challenge.id,
+                submission_id: updated_submission.id,
+                submission_code: &body.code,
+                fragments_awarded: total_fragments,
+                language: body.language.as_deref(),
+                stdout: exec_stdout.as_deref(),
+                stderr: exec_stderr.as_deref(),
+            },
         )
         .await
         {
@@ -471,14 +470,13 @@ async fn submit_challenge(
     .increment(total_fragments as u64);
 
     // Guild GP (Phase 2 Sprint 4) — 10% of awarded fragments goes to the user's guild.
-    if total_fragments > 0 {
-        if let Ok(gp_added) =
-            crate::services::guild::award_gp_for_fragments(&state.db, auth.user_id, total_fragments).await
-        {
-            if gp_added > 0 {
-                metrics::counter!("skilluv_gp_awarded_total").increment(gp_added as u64);
-            }
-        }
+    if total_fragments > 0
+        && let Ok(gp_added) =
+            crate::services::guild::award_gp_for_fragments(&state.db, auth.user_id, total_fragments)
+                .await
+        && gp_added > 0
+    {
+        metrics::counter!("skilluv_gp_awarded_total").increment(gp_added as u64);
     }
 
     // Award fragments to user
@@ -695,10 +693,7 @@ async fn submit_challenge(
             .await;
     }
 
-    Ok((
-        submit_deprecation_headers(),
-        Json(build_response(response)),
-    ))
+    Ok((submit_deprecation_headers(), Json(build_response(response))))
 }
 
 // GET /api/challenges/:id/submissions
@@ -768,17 +763,16 @@ async fn evaluate_submission(
                 }
 
                 // For onboarding: also check stdout content
-                if challenge.is_onboarding {
-                    if let Some(ref out) = stdout {
-                        if out.trim().contains("Hello, Skilluv!") {
-                            return Ok((
-                                "success".to_string(),
-                                challenge.reward_fragments,
-                                stdout,
-                                stderr,
-                            ));
-                        }
-                    }
+                if challenge.is_onboarding
+                    && let Some(ref out) = stdout
+                    && out.trim().contains("Hello, Skilluv!")
+                {
+                    return Ok((
+                        "success".to_string(),
+                        challenge.reward_fragments,
+                        stdout,
+                        stderr,
+                    ));
                 }
 
                 Ok((
@@ -988,6 +982,28 @@ async fn check_and_award_badges(state: &AppState, user_id: Uuid) -> Result<Vec<B
     Ok(newly_earned)
 }
 
+async fn log_activity(state: &AppState, user_id: Uuid, fragments: i32) -> Result<(), AppError> {
+    let today = chrono::Utc::now().date_naive();
+
+    sqlx::query(
+        r#"
+        INSERT INTO user_activity (user_id, activity_date, challenges_completed, fragments_earned)
+        VALUES ($1, $2, 1, $3)
+        ON CONFLICT (user_id, activity_date)
+        DO UPDATE SET
+            challenges_completed = user_activity.challenges_completed + 1,
+            fragments_earned = user_activity.fragments_earned + $3
+        "#,
+    )
+    .bind(user_id)
+    .bind(today)
+    .bind(fragments)
+    .execute(&state.db)
+    .await?;
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod submit_deprecation_tests {
     use super::*;
@@ -1025,26 +1041,4 @@ mod submit_deprecation_tests {
         assert!(headers.contains_key("Sunset"));
         assert!(headers.contains_key("Link"));
     }
-}
-
-async fn log_activity(state: &AppState, user_id: Uuid, fragments: i32) -> Result<(), AppError> {
-    let today = chrono::Utc::now().date_naive();
-
-    sqlx::query(
-        r#"
-        INSERT INTO user_activity (user_id, activity_date, challenges_completed, fragments_earned)
-        VALUES ($1, $2, 1, $3)
-        ON CONFLICT (user_id, activity_date)
-        DO UPDATE SET
-            challenges_completed = user_activity.challenges_completed + 1,
-            fragments_earned = user_activity.fragments_earned + $3
-        "#,
-    )
-    .bind(user_id)
-    .bind(today)
-    .bind(fragments)
-    .execute(&state.db)
-    .await?;
-
-    Ok(())
 }

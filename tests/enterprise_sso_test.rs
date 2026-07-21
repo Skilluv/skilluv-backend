@@ -59,7 +59,10 @@ async fn test_sso_config_upsert_and_get() {
         .await;
     assert_eq!(resp.status(), StatusCode::OK);
     let body: serde_json::Value = resp.json().await.unwrap();
-    assert_eq!(body["data"]["config"]["issuer"], "https://accounts.google.com");
+    assert_eq!(
+        body["data"]["config"]["issuer"],
+        "https://accounts.google.com"
+    );
     assert_eq!(body["data"]["config"]["client_secret"], "***REDACTED***");
     // Domains normalised to lowercase.
     let domains = body["data"]["config"]["email_domains"].as_array().unwrap();
@@ -70,7 +73,10 @@ async fn test_sso_config_upsert_and_get() {
     assert_eq!(get_resp.status(), StatusCode::OK);
     let get_body: serde_json::Value = get_resp.json().await.unwrap();
     assert_eq!(get_body["data"]["config"]["client_id"], "test-client-id");
-    assert_eq!(get_body["data"]["config"]["client_secret"], "***REDACTED***");
+    assert_eq!(
+        get_body["data"]["config"]["client_secret"],
+        "***REDACTED***"
+    );
 }
 
 #[tokio::test]
@@ -134,7 +140,8 @@ async fn test_enforce_sso_blocks_password_login() {
     // Register a user whose email domain matches — done via direct DB insert since
     // the standard register helper uses @skilluv.test.
     let user_id = uuid::Uuid::new_v4();
-    let password_hash = "$argon2id$v=19$m=19456,t=2,p=1$c29tZXNhbHQ$hV5eBz2Utw24oJ48kmUZ9lJf3jV+VMuiMONHrGYA/S8";
+    let password_hash =
+        "$argon2id$v=19$m=19456,t=2,p=1$c29tZXNhbHQ$hV5eBz2Utw24oJ48kmUZ9lJf3jV+VMuiMONHrGYA/S8";
     sqlx::query(
         "INSERT INTO users (id, email, username, password_hash, first_name, last_name, display_name, role, email_verified) VALUES ($1, $2, $3, $4, 'A', 'B', 'A B', 'user', TRUE)",
     )

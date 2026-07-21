@@ -83,7 +83,10 @@ async fn insert_guild_with_members(db: &PgPool, members: &[Uuid]) -> Uuid {
          RETURNING id",
     )
     .bind(format!("g-{}", &Uuid::new_v4().to_string()[..8]))
-    .bind(format!("T{}", &Uuid::new_v4().to_string()[..3].to_uppercase()))
+    .bind(format!(
+        "T{}",
+        &Uuid::new_v4().to_string()[..3].to_uppercase()
+    ))
     .bind("Composition Guild")
     .bind(founder)
     .fetch_one(db)
@@ -166,13 +169,19 @@ async fn matrix_aggregates_members_by_domain() {
 
     let matrix = guild_skill_matrix(&db, guild_id).await.expect("matrix");
 
-    let code = matrix.iter().find(|r| r.domain == "code").expect("code row");
+    let code = matrix
+        .iter()
+        .find(|r| r.domain == "code")
+        .expect("code row");
     assert_eq!(code.member_count, 2, "a + b sur code");
     // avg_level(code) = moyenne(3, 2, 4) = 3.0
     assert!((code.avg_level.unwrap() - 3.0).abs() < 0.01);
     assert!(code.top_skills.contains(&"rust".to_string()));
 
-    let design = matrix.iter().find(|r| r.domain == "design").expect("design row");
+    let design = matrix
+        .iter()
+        .find(|r| r.domain == "design")
+        .expect("design row");
     assert_eq!(design.member_count, 2, "b + c sur design");
     // top_skills capé à 3
     assert!(design.top_skills.len() <= 3);

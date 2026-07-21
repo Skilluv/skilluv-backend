@@ -9,6 +9,8 @@
 //! Le canal payout (Stripe vs Mobile Money) est déterminé par
 //! `talent_wallets.residency_country` — logique en P13.2/P13.3.
 
+use std::str::FromStr;
+
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Timelike, Utc};
 use serde::Serialize;
@@ -32,8 +34,12 @@ impl Currency {
             Currency::Xof => "XOF",
         }
     }
+}
 
-    pub fn from_str(s: &str) -> Result<Currency, AppError> {
+impl std::str::FromStr for Currency {
+    type Err = AppError;
+
+    fn from_str(s: &str) -> Result<Currency, AppError> {
         match s {
             "EUR" | "eur" => Ok(Currency::Eur),
             "XOF" | "xof" => Ok(Currency::Xof),
@@ -88,10 +94,7 @@ pub struct LedgerEntry<'a> {
 }
 
 /// Récupère ou initialise le wallet d'un user. Idempotent.
-pub async fn get_or_init_wallet(
-    db: &PgPool,
-    user_id: Uuid,
-) -> Result<TalentWallet, AppError> {
+pub async fn get_or_init_wallet(db: &PgPool, user_id: Uuid) -> Result<TalentWallet, AppError> {
     let wallet = sqlx::query_as::<_, TalentWallet>(
         r#"
         INSERT INTO talent_wallets (user_id)
@@ -151,17 +154,30 @@ async fn latest_ledger_hash(
     Ok(row.map(|(h,)| h))
 }
 
+/// Entrée d'entrée du calcul de hash ledger.
+pub(crate) struct LedgerHashInput<'a> {
+    pub tx_id: Uuid,
+    pub prev_hash: Option<&'a [u8]>,
+    pub user_id: Uuid,
+    pub delta: &'a BigDecimal,
+    pub currency: Currency,
+    pub reason: &'a str,
+    pub related_slice_id: Option<Uuid>,
+    pub created_at: DateTime<Utc>,
+}
+
 /// Compute le hash SHA-256 d'une transaction pour chaînage.
-fn compute_ledger_hash(
-    tx_id: Uuid,
-    prev_hash: Option<&[u8]>,
-    user_id: Uuid,
-    delta: &BigDecimal,
-    currency: Currency,
-    reason: &str,
-    related_slice_id: Option<Uuid>,
-    created_at: DateTime<Utc>,
-) -> Vec<u8> {
+fn compute_ledger_hash(input: LedgerHashInput<'_>) -> Vec<u8> {
+    let LedgerHashInput {
+        tx_id,
+        prev_hash,
+        user_id,
+        delta,
+        currency,
+        reason,
+        related_slice_id,
+        created_at,
+    } = input;
     let mut hasher = Sha256::new();
     if let Some(h) = prev_hash {
         hasher.update(h);
@@ -181,10 +197,7 @@ fn compute_ledger_hash(
 /// Crédit atomique : delta doit être > 0. Met à jour balance + insert tx.
 ///
 /// Retourne la ligne de transaction créée (avec ledger_hash).
-pub async fn credit(
-    db: &PgPool,
-    entry: LedgerEntry<'_>,
-) -> Result<TalentTransaction, AppError> {
+pub async fn credit(db: &PgPool, entry: LedgerEntry<'_>) -> Result<TalentTransaction, AppError> {
     if entry.delta <= &BigDecimal::from(0) {
         return Err(AppError::Validation("credit delta must be > 0".into()));
     }
@@ -192,10 +205,7 @@ pub async fn credit(
 }
 
 /// Débit atomique : delta positif (montant à retirer). Refuse si balance < amount.
-pub async fn debit(
-    db: &PgPool,
-    entry: LedgerEntry<'_>,
-) -> Result<TalentTransaction, AppError> {
+pub async fn debit(db: &PgPool, entry: LedgerEntry<'_>) -> Result<TalentTransaction, AppError> {
     if entry.delta <= &BigDecimal::from(0) {
         return Err(AppError::Validation("debit amount must be > 0".into()));
     }
@@ -216,12 +226,10 @@ async fn apply_ledger_entry(
     let mut tx = db.begin().await?;
 
     // Init wallet si nécessaire (evite les erreurs FK sur l'INSERT).
-    sqlx::query(
-        "INSERT INTO talent_wallets (user_id) VALUES ($1) ON CONFLICT DO NOTHING",
-    )
-    .bind(entry.user_id)
-    .execute(&mut *tx)
-    .await?;
+    sqlx::query("INSERT INTO talent_wallets (user_id) VALUES ($1) ON CONFLICT DO NOTHING")
+        .bind(entry.user_id)
+        .execute(&mut *tx)
+        .await?;
 
     // Update balance, guardé par CHECK constraint.
     let sql = if is_credit {
@@ -268,16 +276,16 @@ async fn apply_ledger_entry(
     } else {
         -entry.delta.clone()
     };
-    let ledger_hash = compute_ledger_hash(
+    let ledger_hash = compute_ledger_hash(LedgerHashInput {
         tx_id,
-        prev_hash.as_deref(),
-        entry.user_id,
-        &signed_delta,
-        entry.currency,
-        entry.reason,
-        entry.related_slice_id,
-        now,
-    );
+        prev_hash: prev_hash.as_deref(),
+        user_id: entry.user_id,
+        delta: &signed_delta,
+        currency: entry.currency,
+        reason: entry.reason,
+        related_slice_id: entry.related_slice_id,
+        created_at: now,
+    });
 
     let row: TalentTransaction = sqlx::query_as::<_, TalentTransaction>(
         r#"
@@ -388,10 +396,7 @@ pub async fn statement_csv(db: &PgPool, user_id: Uuid) -> Result<String, AppErro
 ///
 /// Retourne `Ok(true)` si la chaîne est cohérente, `Ok(false)` si une
 /// transaction a été modifiée (chaîne rompue). Usage : audit périodique + test.
-pub async fn verify_ledger_chain(
-    db: &PgPool,
-    user_id: Uuid,
-) -> Result<bool, AppError> {
+pub async fn verify_ledger_chain(db: &PgPool, user_id: Uuid) -> Result<bool, AppError> {
     let rows: Vec<TalentTransaction> = sqlx::query_as::<_, TalentTransaction>(
         "SELECT * FROM talent_transactions
          WHERE user_id = $1
@@ -404,16 +409,16 @@ pub async fn verify_ledger_chain(
     let mut expected_prev: Option<Vec<u8>> = None;
     for row in &rows {
         let currency = Currency::from_str(&row.currency)?;
-        let computed = compute_ledger_hash(
-            row.id,
-            expected_prev.as_deref(),
-            row.user_id,
-            &row.delta,
+        let computed = compute_ledger_hash(LedgerHashInput {
+            tx_id: row.id,
+            prev_hash: expected_prev.as_deref(),
+            user_id: row.user_id,
+            delta: &row.delta,
             currency,
-            &row.reason,
-            row.related_slice_id,
-            row.created_at,
-        );
+            reason: &row.reason,
+            related_slice_id: row.related_slice_id,
+            created_at: row.created_at,
+        });
         if computed != row.ledger_hash {
             return Ok(false);
         }

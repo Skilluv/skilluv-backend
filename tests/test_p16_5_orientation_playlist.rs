@@ -112,8 +112,11 @@ async fn playlist_returns_up_to_three_training_challenges_in_domain() {
         .expect("playlist");
     assert_eq!(pl.training_challenges.len(), 3, "cap 3");
     for c in &pl.training_challenges {
-        assert!(matches!(c.skill_domain.as_str(), "code" | "design"),
-            "domain hors orientation: {}", c.skill_domain);
+        assert!(
+            matches!(c.skill_domain.as_str(), "code" | "design"),
+            "domain hors orientation: {}",
+            c.skill_domain
+        );
     }
 
     db.close().await;
@@ -138,7 +141,9 @@ async fn playlist_excludes_challenges_already_verified() {
     .await
     .expect("d");
 
-    let pl = orientations_playlist::playlist_for(&db, u, "dev-frontend").await.expect("pl");
+    let pl = orientations_playlist::playlist_for(&db, u, "dev-frontend")
+        .await
+        .expect("pl");
     let ids: Vec<Uuid> = pl.training_challenges.iter().map(|c| c.id).collect();
     assert!(!ids.contains(&done), "verified challenge excluded");
     assert!(ids.contains(&a), "unverified challenge included");
@@ -153,17 +158,26 @@ async fn playlist_returns_open_slots_matching_core_skill() {
     let seeker = create_user(&db).await;
 
     // Setup : dev-frontend + skill core react-hooks (existant dans le seed).
-    let ori_id: Uuid = sqlx::query_scalar("SELECT id FROM orientations WHERE slug = 'dev-frontend'")
-        .fetch_one(&db).await.unwrap();
+    let ori_id: Uuid =
+        sqlx::query_scalar("SELECT id FROM orientations WHERE slug = 'dev-frontend'")
+            .fetch_one(&db)
+            .await
+            .unwrap();
     let skill_id: Uuid = sqlx::query_scalar(
         "SELECT id FROM skill_nodes WHERE slug = 'component-composition' LIMIT 1",
     )
-    .fetch_one(&db).await.unwrap();
+    .fetch_one(&db)
+    .await
+    .unwrap();
     sqlx::query(
         "INSERT INTO orientation_skill_map (orientation_id, skill_id, is_core)
          VALUES ($1, $2, TRUE) ON CONFLICT DO NOTHING",
     )
-    .bind(ori_id).bind(skill_id).execute(&db).await.unwrap();
+    .bind(ori_id)
+    .bind(skill_id)
+    .execute(&db)
+    .await
+    .unwrap();
 
     // Team d'un autre user + slot exigeant ce skill.
     let cid: Uuid = sqlx::query_scalar(
@@ -171,18 +185,28 @@ async fn playlist_returns_open_slots_matching_core_skill() {
              difficulty, is_training, status)
          VALUES ('T', 'D', 'I', 'code', 3, TRUE, 'published') RETURNING id",
     )
-    .fetch_one(&db).await.unwrap();
+    .fetch_one(&db)
+    .await
+    .unwrap();
     let tid: Uuid = sqlx::query_scalar(
         "INSERT INTO challenge_teams (challenge_id, name, created_by, max_members)
          VALUES ($1, 'Alpha', $2, 4) RETURNING id",
     )
-    .bind(cid).bind(creator).fetch_one(&db).await.unwrap();
+    .bind(cid)
+    .bind(creator)
+    .fetch_one(&db)
+    .await
+    .unwrap();
     sqlx::query(
         "INSERT INTO team_role_slots (team_id, role_slug, role_display_name,
                                        required_skill_id, min_proficiency_level)
          VALUES ($1, 'coder', 'Frontend Coder', $2, 2)",
     )
-    .bind(tid).bind(skill_id).execute(&db).await.unwrap();
+    .bind(tid)
+    .bind(skill_id)
+    .execute(&db)
+    .await
+    .unwrap();
 
     let pl = orientations_playlist::playlist_for(&db, seeker, "dev-frontend")
         .await
@@ -201,36 +225,57 @@ async fn playlist_excludes_slots_from_own_team() {
     let (db, name) = setup_test_db().await;
     let me = create_user(&db).await;
 
-    let ori_id: Uuid = sqlx::query_scalar("SELECT id FROM orientations WHERE slug = 'dev-frontend'")
-        .fetch_one(&db).await.unwrap();
+    let ori_id: Uuid =
+        sqlx::query_scalar("SELECT id FROM orientations WHERE slug = 'dev-frontend'")
+            .fetch_one(&db)
+            .await
+            .unwrap();
     let skill_id: Uuid = sqlx::query_scalar(
         "SELECT id FROM skill_nodes WHERE slug = 'component-composition' LIMIT 1",
     )
-    .fetch_one(&db).await.unwrap();
+    .fetch_one(&db)
+    .await
+    .unwrap();
     sqlx::query(
         "INSERT INTO orientation_skill_map (orientation_id, skill_id, is_core)
          VALUES ($1, $2, TRUE)",
     )
-    .bind(ori_id).bind(skill_id).execute(&db).await.unwrap();
+    .bind(ori_id)
+    .bind(skill_id)
+    .execute(&db)
+    .await
+    .unwrap();
 
     let cid: Uuid = sqlx::query_scalar(
         "INSERT INTO challenge_templates (title, description, instructions, skill_domain,
              difficulty, is_training, status)
          VALUES ('T', 'D', 'I', 'code', 3, TRUE, 'published') RETURNING id",
     )
-    .fetch_one(&db).await.unwrap();
+    .fetch_one(&db)
+    .await
+    .unwrap();
     let tid: Uuid = sqlx::query_scalar(
         "INSERT INTO challenge_teams (challenge_id, name, created_by, max_members)
          VALUES ($1, 'Mine', $2, 4) RETURNING id",
     )
-    .bind(cid).bind(me).fetch_one(&db).await.unwrap();
+    .bind(cid)
+    .bind(me)
+    .fetch_one(&db)
+    .await
+    .unwrap();
     sqlx::query(
         "INSERT INTO team_role_slots (team_id, role_slug, required_skill_id, min_proficiency_level)
          VALUES ($1, 'coder', $2, 1)",
     )
-    .bind(tid).bind(skill_id).execute(&db).await.unwrap();
+    .bind(tid)
+    .bind(skill_id)
+    .execute(&db)
+    .await
+    .unwrap();
 
-    let pl = orientations_playlist::playlist_for(&db, me, "dev-frontend").await.expect("pl");
+    let pl = orientations_playlist::playlist_for(&db, me, "dev-frontend")
+        .await
+        .expect("pl");
     assert_eq!(pl.open_team_slots.len(), 0, "own team slot excluded");
     db.close().await;
     cleanup_test_db(&name).await;

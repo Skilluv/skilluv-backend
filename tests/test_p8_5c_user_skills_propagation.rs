@@ -112,7 +112,7 @@ async fn propagates_when_language_matches_slug() {
 
     assert_eq!(proven_count, 1);
     assert_eq!(wpc, 5);
-    assert!(level >= 1 && level <= 5);
+    assert!((1..=5).contains(&level));
 
     db.close().await;
     cleanup_test_db(&db_name).await;
@@ -147,13 +147,11 @@ async fn skips_when_no_slug_match() {
     .expect("propagate");
     assert!(unknown.is_none());
 
-    let count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM user_skills WHERE user_id = $1",
-    )
-    .bind(user_id)
-    .fetch_one(&db)
-    .await
-    .expect("count");
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM user_skills WHERE user_id = $1")
+        .bind(user_id)
+        .fetch_one(&db)
+        .await
+        .expect("count");
     assert_eq!(count, 0, "aucune ligne créée quand pas de match");
 
     db.close().await;
@@ -222,13 +220,11 @@ async fn skips_when_weight_is_non_positive() {
     .expect("propagate");
     assert!(out.is_none());
 
-    let count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM user_skills WHERE user_id = $1",
-    )
-    .bind(user_id)
-    .fetch_one(&db)
-    .await
-    .expect("count");
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM user_skills WHERE user_id = $1")
+        .bind(user_id)
+        .fetch_one(&db)
+        .await
+        .expect("count");
     assert_eq!(count, 0);
 
     db.close().await;

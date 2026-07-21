@@ -55,10 +55,7 @@ pub fn dec_from_f64(v: f64) -> BigDecimal {
 
 // ─── Read ─────────────────────────────────────────────────────────
 
-pub async fn get_or_init_credits(
-    db: &PgPool,
-    enterprise_id: Uuid,
-) -> Result<CreditsRow, AppError> {
+pub async fn get_or_init_credits(db: &PgPool, enterprise_id: Uuid) -> Result<CreditsRow, AppError> {
     let row: CreditsRow = sqlx::query_as(
         r#"
         INSERT INTO enterprise_credits (enterprise_id) VALUES ($1)
@@ -227,7 +224,8 @@ pub async fn spend(db: &PgPool, input: SpendInput<'_>) -> Result<CreditTransacti
         Some((b,)) => b,
         None => {
             return Err(AppError::Validation(
-                "Insufficient credits — recharge the enterprise account before contacting talents.".into(),
+                "Insufficient credits — recharge the enterprise account before contacting talents."
+                    .into(),
             ));
         }
     };
@@ -275,7 +273,9 @@ pub async fn refund_spend(
         return Ok(None);
     };
     if !matches!(original.reason.as_str(), "spend_interest_request") {
-        return Err(AppError::Validation("Can only refund spend transactions".into()));
+        return Err(AppError::Validation(
+            "Can only refund spend transactions".into(),
+        ));
     }
     // Did we already refund this transaction? (1 refund max per spend)
     let already_refunded: Option<(i32,)> = sqlx::query_as(
@@ -293,11 +293,11 @@ pub async fn refund_spend(
         return Ok(None);
     }
 
-    let ratio = BigDecimal::from_str(ratio_str)
-        .map_err(|_| AppError::Internal("invalid ratio".into()))?;
+    let ratio =
+        BigDecimal::from_str(ratio_str).map_err(|_| AppError::Internal("invalid ratio".into()))?;
     let original_amount = original.delta.abs();
     let refund_amount = (&original_amount * &ratio).round(2);
-    if refund_amount <= BigDecimal::from(0) {
+    if refund_amount <= 0 {
         return Ok(None);
     }
     let txn = grant(

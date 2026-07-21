@@ -6,8 +6,8 @@
 //! - Sync pulls public repos only (scope `read:user`, `public_repo`).
 
 use chacha20poly1305::{
-    aead::{Aead, AeadCore, KeyInit, OsRng},
     ChaCha20Poly1305, Key, Nonce,
+    aead::{Aead, AeadCore, KeyInit, OsRng},
 };
 use chrono::{DateTime, Utc};
 use hmac::{Hmac, Mac};
@@ -29,9 +29,8 @@ pub const USER_AGENT: &str = "skilluv-backend";
 /// Derive a 32-byte symmetric key from the JWT secret. Domain-separated so that the same
 /// JWT_SECRET cannot be misused as both signing key and encryption key.
 fn derive_token_key(jwt_secret: &str) -> [u8; 32] {
-    let mut mac =
-        <HmacSha256 as Mac>::new_from_slice(jwt_secret.as_bytes())
-            .expect("HMAC accepts any key length");
+    let mut mac = <HmacSha256 as Mac>::new_from_slice(jwt_secret.as_bytes())
+        .expect("HMAC accepts any key length");
     mac.update(b"skilluv-github-token-v1");
     let bytes = mac.finalize().into_bytes();
     let mut out = [0u8; 32];
@@ -63,8 +62,7 @@ pub fn decrypt_token(
     let plain = cipher
         .decrypt(nonce, ciphertext)
         .map_err(|_| AppError::Internal("github token decryption failed".into()))?;
-    String::from_utf8(plain)
-        .map_err(|_| AppError::Internal("github token utf8 invalid".into()))
+    String::from_utf8(plain).map_err(|_| AppError::Internal("github token utf8 invalid".into()))
 }
 
 // ─── OAuth state ─────────────────────────────────────────────────
@@ -324,9 +322,7 @@ pub async fn sync_repos_for(
             .bind(user_id)
             .fetch_optional(db)
             .await?;
-    let (github_login,) = conn.ok_or(AppError::NotFound(
-        "user has not connected GitHub".into(),
-    ))?;
+    let (github_login,) = conn.ok_or(AppError::NotFound("user has not connected GitHub".into()))?;
     let token = load_token(db, jwt_secret, user_id)
         .await?
         .ok_or(AppError::Internal("token missing".into()))?;

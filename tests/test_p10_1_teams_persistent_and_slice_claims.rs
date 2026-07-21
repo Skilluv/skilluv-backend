@@ -134,13 +134,12 @@ async fn persistent_team_can_be_created_without_challenge() {
     let user = insert_user(&db).await;
     let team_id = insert_persistent_team(&db, user, "The Legends").await;
 
-    let (challenge_id_opt, is_persistent): (Option<Uuid>, bool) = sqlx::query_as(
-        "SELECT challenge_id, is_persistent FROM challenge_teams WHERE id = $1",
-    )
-    .bind(team_id)
-    .fetch_one(&db)
-    .await
-    .expect("fetch");
+    let (challenge_id_opt, is_persistent): (Option<Uuid>, bool) =
+        sqlx::query_as("SELECT challenge_id, is_persistent FROM challenge_teams WHERE id = $1")
+            .bind(team_id)
+            .fetch_one(&db)
+            .await
+            .expect("fetch");
     assert!(challenge_id_opt.is_none());
     assert!(is_persistent);
 
@@ -161,7 +160,10 @@ async fn non_persistent_team_requires_challenge_id() {
     .bind(user)
     .execute(&db)
     .await;
-    assert!(res.is_err(), "CHECK constraint should reject non-persistent team without challenge");
+    assert!(
+        res.is_err(),
+        "CHECK constraint should reject non-persistent team without challenge"
+    );
 
     db.close().await;
     cleanup_test_db(&name).await;
@@ -185,7 +187,10 @@ async fn slice_can_be_claimed_by_a_team() {
 
     assert_eq!(slice.status, "claimed");
     assert_eq!(slice.claimed_by_team_id, Some(team_id));
-    assert!(slice.claimed_by_user_id.is_none(), "user claim doit être NULL");
+    assert!(
+        slice.claimed_by_user_id.is_none(),
+        "user claim doit être NULL"
+    );
     assert!(slice.claim_expires_at.is_some());
 
     db.close().await;
@@ -211,7 +216,10 @@ async fn slice_xor_constraint_rejects_dual_claim() {
     .bind(team_id)
     .execute(&db)
     .await;
-    assert!(res.is_err(), "XOR constraint doit refuser user + team simultanés");
+    assert!(
+        res.is_err(),
+        "XOR constraint doit refuser user + team simultanés"
+    );
 
     db.close().await;
     cleanup_test_db(&name).await;
@@ -252,8 +260,12 @@ async fn list_claimed_by_team_returns_only_active_claims() {
 
     let slice_a = insert_open_slice(&db, project_id).await;
     let slice_b = insert_open_slice(&db, project_id).await;
-    SlicesService::claim_as_team(&db, slice_a, team_id).await.expect("a");
-    SlicesService::claim_as_team(&db, slice_b, team_id).await.expect("b");
+    SlicesService::claim_as_team(&db, slice_a, team_id)
+        .await
+        .expect("a");
+    SlicesService::claim_as_team(&db, slice_b, team_id)
+        .await
+        .expect("b");
 
     let mine = SlicesService::list_claimed_by_team(&db, team_id)
         .await
@@ -298,14 +310,13 @@ async fn expire_stale_claims_resets_team_claims_too() {
         .expect("expire");
     assert!(cleaned >= 1);
 
-    let (status, team, at): (String, Option<Uuid>, Option<chrono::DateTime<Utc>>) =
-        sqlx::query_as(
-            "SELECT status, claimed_by_team_id, claimed_at FROM project_slices WHERE id = $1",
-        )
-        .bind(slice_id)
-        .fetch_one(&db)
-        .await
-        .expect("fetch");
+    let (status, team, at): (String, Option<Uuid>, Option<chrono::DateTime<Utc>>) = sqlx::query_as(
+        "SELECT status, claimed_by_team_id, claimed_at FROM project_slices WHERE id = $1",
+    )
+    .bind(slice_id)
+    .fetch_one(&db)
+    .await
+    .expect("fetch");
     assert_eq!(status, "open");
     assert!(team.is_none());
     assert!(at.is_none());

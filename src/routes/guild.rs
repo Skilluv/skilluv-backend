@@ -30,10 +30,7 @@ pub fn guild_routes() -> Router<AppState> {
         .route("/guilds/join-by-token", post(join_by_token))
         // Applications
         .route("/guilds/{id}/applications", post(apply))
-        .route(
-            "/guild-applications/{id}/decide",
-            post(decide_application),
-        )
+        .route("/guild-applications/{id}/decide", post(decide_application))
         // Wars
         .route("/guild-wars", post(propose_war).get(list_wars))
         .route("/guild-wars/{id}/respond", post(respond_war))
@@ -82,9 +79,7 @@ async fn create_guild(
             name: body.name,
             description: body.description,
             motto: body.motto,
-            membership_mode: body
-                .membership_mode
-                .unwrap_or_else(|| "application".into()),
+            membership_mode: body.membership_mode.unwrap_or_else(|| "application".into()),
             cofounder_ids: body.cofounder_ids,
         },
     )
@@ -96,11 +91,15 @@ async fn create_guild(
             &state.db,
             &mut state.redis.clone(),
             &state.ws,
-            *uid,
-            "guild.cofounder_added",
-            "Tu as co-fondé une guilde",
-            Some(&format!("[{}] {}", created.guild.tag, created.guild.name)),
-            Some(json!({ "guild_id": created.guild.id, "guild_slug": created.guild.slug })),
+            crate::services::notification::NotificationPayload {
+                user_id: *uid,
+                notification_type: "guild.cofounder_added",
+                title: "Tu as co-fondé une guilde",
+                body: Some(&format!("[{}] {}", created.guild.tag, created.guild.name)),
+                data: Some(
+                    json!({ "guild_id": created.guild.id, "guild_slug": created.guild.slug }),
+                ),
+            },
         )
         .await;
     }
@@ -178,11 +177,13 @@ async fn promote_member(
         &state.db,
         &mut state.redis.clone(),
         &state.ws,
-        target_id,
-        "guild.role_changed",
-        "Ton rôle dans la guilde a changé",
-        Some(&format!("nouveau rôle : {}", body.role)),
-        Some(json!({ "guild_id": guild_id, "new_role": body.role })),
+        crate::services::notification::NotificationPayload {
+            user_id: target_id,
+            notification_type: "guild.role_changed",
+            title: "Ton rôle dans la guilde a changé",
+            body: Some(&format!("nouveau rôle : {}", body.role)),
+            data: Some(json!({ "guild_id": guild_id, "new_role": body.role })),
+        },
     )
     .await;
     if analytics_consent(&headers) {
@@ -209,11 +210,13 @@ async fn kick_member(
         &state.db,
         &mut state.redis.clone(),
         &state.ws,
-        target_id,
-        "guild.kicked",
-        "Tu as été retiré·e de la guilde",
-        None,
-        Some(json!({ "guild_id": guild_id })),
+        crate::services::notification::NotificationPayload {
+            user_id: target_id,
+            notification_type: "guild.kicked",
+            title: "Tu as été retiré·e de la guilde",
+            body: None,
+            data: Some(json!({ "guild_id": guild_id })),
+        },
     )
     .await;
     Ok(Json(build_response(json!({ "kicked": true }))))
@@ -257,21 +260,20 @@ async fn invite_direct(
         &state.db,
         &mut state.redis.clone(),
         &state.ws,
-        body.invited_user_id,
-        "guild.invitation",
-        "Tu as reçu une invitation de guilde",
-        Some(&format!("[{}] {}", g.tag, g.name)),
-        Some(json!({ "guild_id": guild_id, "invitation_id": invite.id })),
+        crate::services::notification::NotificationPayload {
+            user_id: body.invited_user_id,
+            notification_type: "guild.invitation",
+            title: "Tu as reçu une invitation de guilde",
+            body: Some(&format!("[{}] {}", g.tag, g.name)),
+            data: Some(json!({ "guild_id": guild_id, "invitation_id": invite.id })),
+        },
     )
     .await;
     if analytics_consent(&headers) {
         state.analytics.track(
             auth.user_id,
             events::GUILD_INVITE_SENT,
-            props(&[
-                ("guild_id", json!(guild_id)),
-                ("kind", json!("direct")),
-            ]),
+            props(&[("guild_id", json!(guild_id)), ("kind", json!("direct"))]),
         );
     }
     Ok(Json(build_response(json!({ "invitation": invite }))))
@@ -288,10 +290,7 @@ async fn create_token_link(
         state.analytics.track(
             auth.user_id,
             events::GUILD_INVITE_SENT,
-            props(&[
-                ("guild_id", json!(guild_id)),
-                ("kind", json!("token")),
-            ]),
+            props(&[("guild_id", json!(guild_id)), ("kind", json!("token"))]),
         );
     }
     Ok(Json(build_response(json!({ "invitation": invite }))))
@@ -334,10 +333,7 @@ async fn join_by_token(
         state.analytics.track(
             auth.user_id,
             events::GUILD_JOINED,
-            props(&[
-                ("guild_id", json!(guild_id)),
-                ("via", json!("token")),
-            ]),
+            props(&[("guild_id", json!(guild_id)), ("via", json!("token"))]),
         );
     }
     metrics::counter!("skilluv_guild_joins_total", "via" => "token").increment(1);
@@ -381,20 +377,23 @@ async fn decide_application(
     headers: HeaderMap,
     Json(body): Json<DecideBody>,
 ) -> Result<Json<Value>, AppError> {
-    let app = guild::decide_application(&state.db, application_id, auth.user_id, body.accept).await?;
+    let app =
+        guild::decide_application(&state.db, application_id, auth.user_id, body.accept).await?;
     let _ = NotificationService::send(
         &state.db,
         &mut state.redis.clone(),
         &state.ws,
-        app.applicant_id,
-        "guild.application_decision",
-        if body.accept {
-            "Ta candidature a été acceptée"
-        } else {
-            "Ta candidature a été refusée"
+        crate::services::notification::NotificationPayload {
+            user_id: app.applicant_id,
+            notification_type: "guild.application_decision",
+            title: if body.accept {
+                "Ta candidature a été acceptée"
+            } else {
+                "Ta candidature a été refusée"
+            },
+            body: None,
+            data: Some(json!({ "guild_id": app.guild_id, "accepted": body.accept })),
         },
-        None,
-        Some(json!({ "guild_id": app.guild_id, "accepted": body.accept })),
     )
     .await;
     if analytics_consent(&headers) {
@@ -445,15 +444,17 @@ async fn propose_war(
             &state.db,
             &mut state.redis.clone(),
             &state.ws,
-            *uid,
-            "guild_war.proposed",
-            "Une guilde te défie",
-            None,
-            Some(json!({
-                "war_id": war.id,
-                "challenger_guild_id": body.challenger_guild_id,
-                "stake_gp": body.stake_gp,
-            })),
+            crate::services::notification::NotificationPayload {
+                user_id: *uid,
+                notification_type: "guild_war.proposed",
+                title: "Une guilde te défie",
+                body: None,
+                data: Some(json!({
+                    "war_id": war.id,
+                    "challenger_guild_id": body.challenger_guild_id,
+                    "stake_gp": body.stake_gp,
+                })),
+            },
         )
         .await;
     }
@@ -513,10 +514,7 @@ async fn respond_war(
         state.analytics.track(
             auth.user_id,
             events::GUILD_WAR_ACCEPTED,
-            props(&[
-                ("war_id", json!(war.id)),
-                ("accepted", json!(body.accept)),
-            ]),
+            props(&[("war_id", json!(war.id)), ("accepted", json!(body.accept))]),
         );
     }
     Ok(Json(build_response(json!({ "war": war }))))

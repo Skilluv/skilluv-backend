@@ -116,8 +116,8 @@ async fn portfolio_rejects_inactive_profile() {
     let user_id = Uuid::new_v4();
     insert_test_user(&db, user_id, "inactive-user", false, Some("apprenti"), 0, 0).await;
 
-    let res = PortfolioService::build_portfolio_json(&db, "inactive-user", "https://skilluv.com")
-        .await;
+    let res =
+        PortfolioService::build_portfolio_json(&db, "inactive-user", "https://skilluv.com").await;
     assert!(res.is_err());
 
     db.close().await;
@@ -194,10 +194,9 @@ async fn portfolio_includes_skills_attestations_deliverables() {
     .await
     .expect("deliverable");
 
-    let portfolio =
-        PortfolioService::build_portfolio_json(&db, "champion", "https://skilluv.com")
-            .await
-            .expect("build");
+    let portfolio = PortfolioService::build_portfolio_json(&db, "champion", "https://skilluv.com")
+        .await
+        .expect("build");
 
     let skills = portfolio["knowsAbout"].as_array().unwrap();
     let attestations = portfolio["hasCredential"].as_array().unwrap();

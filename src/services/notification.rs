@@ -8,18 +8,34 @@ use crate::websocket::{WsManager, WsMessage};
 
 pub struct NotificationService;
 
+/// Payload d'une notification à envoyer via [`NotificationService::send`].
+///
+/// Regroupe le destinataire + contenu pour rester sous le seuil clippy
+/// `too_many_arguments` (les 3 canaux infra db/redis/ws sont passés à côté).
+#[derive(Debug, Clone)]
+pub struct NotificationPayload<'a> {
+    pub user_id: Uuid,
+    pub notification_type: &'a str,
+    pub title: &'a str,
+    pub body: Option<&'a str>,
+    pub data: Option<serde_json::Value>,
+}
+
 impl NotificationService {
     /// Persist notification to DB, push via WebSocket, increment Redis counter.
     pub async fn send(
         db: &PgPool,
         redis: &mut ConnectionManager,
         ws: &WsManager,
-        user_id: Uuid,
-        notification_type: &str,
-        title: &str,
-        body: Option<&str>,
-        data: Option<serde_json::Value>,
+        payload: NotificationPayload<'_>,
     ) -> Result<Uuid, AppError> {
+        let NotificationPayload {
+            user_id,
+            notification_type,
+            title,
+            body,
+            data,
+        } = payload;
         let notification_id: Uuid = sqlx::query_scalar(
             r#"
             INSERT INTO notifications (user_id, notification_type, title, body, data)

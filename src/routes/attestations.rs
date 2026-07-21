@@ -47,7 +47,9 @@ async fn list_user_attestations(
     Path(user_id): Path<Uuid>,
 ) -> Result<Json<Value>, AppError> {
     let attestations = AttestationsService::list_public_by_user(&state.db, user_id).await?;
-    Ok(Json(build_response(json!({ "attestations": attestations }))))
+    Ok(Json(build_response(
+        json!({ "attestations": attestations }),
+    )))
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -133,11 +135,7 @@ async fn issue_compagnonnage(
     // les rangs artisan/maitre/doyen (seuils attestations reçues).
     let db_clone = state.db.clone();
     tokio::spawn(async move {
-        let _ = crate::services::proof_hooks::recompute_all_for_user(
-            &db_clone,
-            recipient_id,
-        )
-        .await;
+        let _ = crate::services::proof_hooks::recompute_all_for_user(&db_clone, recipient_id).await;
     });
 
     Ok(Json(build_response(json!({

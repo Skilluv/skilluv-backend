@@ -39,7 +39,12 @@ pub fn resolve_from_accept_language(header: Option<&str>) -> String {
     };
     let supported = ["fr", "en", "ar"];
     for tag in header.split(',') {
-        let lang = tag.split([';', '-']).next().unwrap_or("").trim().to_lowercase();
+        let lang = tag
+            .split([';', '-'])
+            .next()
+            .unwrap_or("")
+            .trim()
+            .to_lowercase();
         if supported.contains(&lang.as_str()) {
             return lang;
         }
@@ -53,7 +58,10 @@ pub fn resolve_from_accept_language(header: Option<&str>) -> String {
 pub fn default_locale_for_country(iso2: Option<&str>) -> &'static str {
     match iso2.map(str::to_uppercase).as_deref() {
         Some("MA" | "TN" | "DZ" | "EG") => "ar",
-        Some("FR" | "BE" | "CH" | "LU" | "SN" | "CI" | "BJ" | "TG" | "ML" | "BF" | "NE" | "CM" | "GA" | "CG" | "TD" | "CF") => "fr",
+        Some(
+            "FR" | "BE" | "CH" | "LU" | "SN" | "CI" | "BJ" | "TG" | "ML" | "BF" | "NE" | "CM"
+            | "GA" | "CG" | "TD" | "CF",
+        ) => "fr",
         _ => "en",
     }
 }
@@ -69,7 +77,10 @@ mod tests {
 
     #[test]
     fn picks_fr_from_fr_fr() {
-        assert_eq!(resolve_from_accept_language(Some("fr-FR,fr;q=0.9,en;q=0.8")), "fr");
+        assert_eq!(
+            resolve_from_accept_language(Some("fr-FR,fr;q=0.9,en;q=0.8")),
+            "fr"
+        );
     }
 
     #[test]

@@ -9,6 +9,7 @@ use sqlx::postgres::{PgPool, PgPoolOptions};
 use uuid::Uuid;
 
 use skilluv_backend::services::DeliverablesService;
+use skilluv_backend::services::deliverables::ChallengeSubmissionInput;
 
 async fn setup_test_db() -> (PgPool, String) {
     let db_name = format!(
@@ -104,18 +105,30 @@ async fn create_from_submission_produces_verified_deliverable() {
 
     let deliverable_id = DeliverablesService::create_from_challenge_submission(
         &db,
-        user_id,
-        challenge_id,
-        submission_id,
-        "print('Hello, Skilluv!')",
-        50,
-        Some("python"),
-        Some("Hello, Skilluv!\n"),
-        None,
+        ChallengeSubmissionInput {
+            user_id,
+            challenge_id,
+            submission_id,
+            submission_code: "print('Hello, Skilluv!')",
+            fragments_awarded: 50,
+            language: Some("python"),
+            stdout: Some("Hello, Skilluv!\n"),
+            stderr: None,
+        },
     )
     .await
     .expect("create");
 
+    type DeliverableRow = (
+        String,
+        String,
+        Option<String>,
+        String,
+        String,
+        i32,
+        Option<Uuid>,
+        Option<Uuid>,
+    );
     let (
         artifact_type,
         artifact_url,
@@ -125,21 +138,24 @@ async fn create_from_submission_produces_verified_deliverable() {
         fragments_awarded,
         stored_challenge_id,
         slice_id,
-    ): (String, String, Option<String>, String, String, i32, Option<Uuid>, Option<Uuid>) =
-        sqlx::query_as(
-            "SELECT artifact_type, artifact_url, artifact_hash, verifiable_by,
+    ): DeliverableRow = sqlx::query_as(
+        "SELECT artifact_type, artifact_url, artifact_hash, verifiable_by,
                     verification_status, fragments_awarded, challenge_id, slice_id
              FROM deliverables WHERE id = $1",
-        )
-        .bind(deliverable_id)
-        .fetch_one(&db)
-        .await
-        .expect("fetch");
+    )
+    .bind(deliverable_id)
+    .fetch_one(&db)
+    .await
+    .expect("fetch");
 
     assert_eq!(artifact_type, "other");
     assert_eq!(artifact_url, format!("skilluv:submission:{submission_id}"));
     assert!(artifact_hash.is_some());
-    assert_eq!(artifact_hash.as_deref().unwrap().len(), 64, "SHA-256 hex = 64 chars");
+    assert_eq!(
+        artifact_hash.as_deref().unwrap().len(),
+        64,
+        "SHA-256 hex = 64 chars"
+    );
     assert_eq!(verifiable_by, "automated_diff");
     assert_eq!(verification_status, "verified");
     assert_eq!(fragments_awarded, 50);
@@ -166,41 +182,43 @@ async fn same_submission_code_is_idempotent() {
 
     let first = DeliverablesService::create_from_challenge_submission(
         &db,
-        user_id,
-        challenge_id,
-        submission_id,
-        code,
-        10,
-        None,
-        None,
-        None,
+        ChallengeSubmissionInput {
+            user_id,
+            challenge_id,
+            submission_id,
+            submission_code: code,
+            fragments_awarded: 10,
+            language: None,
+            stdout: None,
+            stderr: None,
+        },
     )
     .await
     .expect("first");
 
     let second = DeliverablesService::create_from_challenge_submission(
         &db,
-        user_id,
-        challenge_id,
-        submission_id,
-        code, // même code → même hash → même deliverable
-        10,
-        None,
-        None,
-        None,
+        ChallengeSubmissionInput {
+            user_id,
+            challenge_id,
+            submission_id,
+            submission_code: code, // même code → même hash → même deliverable
+            fragments_awarded: 10,
+            language: None,
+            stdout: None,
+            stderr: None,
+        },
     )
     .await
     .expect("second");
 
     assert_eq!(first, second, "same code → same deliverable_id");
 
-    let count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM deliverables WHERE user_id = $1",
-    )
-    .bind(user_id)
-    .fetch_one(&db)
-    .await
-    .expect("count");
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM deliverables WHERE user_id = $1")
+        .bind(user_id)
+        .fetch_one(&db)
+        .await
+        .expect("count");
     assert_eq!(count, 1);
 
     db.close().await;
@@ -221,41 +239,43 @@ async fn different_code_creates_distinct_deliverables() {
 
     let d1 = DeliverablesService::create_from_challenge_submission(
         &db,
-        user_id,
-        challenge_id,
-        Uuid::new_v4(),
-        "first attempt",
-        5,
-        None,
-        None,
-        None,
+        ChallengeSubmissionInput {
+            user_id,
+            challenge_id,
+            submission_id: Uuid::new_v4(),
+            submission_code: "first attempt",
+            fragments_awarded: 5,
+            language: None,
+            stdout: None,
+            stderr: None,
+        },
     )
     .await
     .expect("d1");
 
     let d2 = DeliverablesService::create_from_challenge_submission(
         &db,
-        user_id,
-        challenge_id,
-        Uuid::new_v4(),
-        "second attempt",
-        10,
-        None,
-        None,
-        None,
+        ChallengeSubmissionInput {
+            user_id,
+            challenge_id,
+            submission_id: Uuid::new_v4(),
+            submission_code: "second attempt",
+            fragments_awarded: 10,
+            language: None,
+            stdout: None,
+            stderr: None,
+        },
     )
     .await
     .expect("d2");
 
     assert_ne!(d1, d2);
 
-    let count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM deliverables WHERE user_id = $1",
-    )
-    .bind(user_id)
-    .fetch_one(&db)
-    .await
-    .expect("count");
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM deliverables WHERE user_id = $1")
+        .bind(user_id)
+        .fetch_one(&db)
+        .await
+        .expect("count");
     assert_eq!(count, 2);
 
     db.close().await;
@@ -279,28 +299,32 @@ async fn artifact_hash_is_deterministic() {
 
     let d_a = DeliverablesService::create_from_challenge_submission(
         &db,
-        user_a,
-        challenge_id,
-        Uuid::new_v4(),
-        code,
-        1,
-        None,
-        None,
-        None,
+        ChallengeSubmissionInput {
+            user_id: user_a,
+            challenge_id,
+            submission_id: Uuid::new_v4(),
+            submission_code: code,
+            fragments_awarded: 1,
+            language: None,
+            stdout: None,
+            stderr: None,
+        },
     )
     .await
     .expect("a");
 
     let d_b = DeliverablesService::create_from_challenge_submission(
         &db,
-        user_b,
-        challenge_id,
-        Uuid::new_v4(),
-        code,
-        1,
-        None,
-        None,
-        None,
+        ChallengeSubmissionInput {
+            user_id: user_b,
+            challenge_id,
+            submission_id: Uuid::new_v4(),
+            submission_code: code,
+            fragments_awarded: 1,
+            language: None,
+            stdout: None,
+            stderr: None,
+        },
     )
     .await
     .expect("b");
@@ -337,25 +361,26 @@ async fn artifact_metadata_captures_code_stdout_stderr() {
 
     let deliverable_id = DeliverablesService::create_from_challenge_submission(
         &db,
-        user_id,
-        challenge_id,
-        submission_id,
-        "print(42)",
-        10,
-        Some("python"),
-        Some("42\n"),
-        Some(""),
+        ChallengeSubmissionInput {
+            user_id,
+            challenge_id,
+            submission_id,
+            submission_code: "print(42)",
+            fragments_awarded: 10,
+            language: Some("python"),
+            stdout: Some("42\n"),
+            stderr: Some(""),
+        },
     )
     .await
     .expect("create");
 
-    let meta: serde_json::Value = sqlx::query_scalar(
-        "SELECT artifact_metadata FROM deliverables WHERE id = $1",
-    )
-    .bind(deliverable_id)
-    .fetch_one(&db)
-    .await
-    .expect("meta");
+    let meta: serde_json::Value =
+        sqlx::query_scalar("SELECT artifact_metadata FROM deliverables WHERE id = $1")
+            .bind(deliverable_id)
+            .fetch_one(&db)
+            .await
+            .expect("meta");
 
     assert_eq!(meta["code_content"], "print(42)");
     assert_eq!(meta["language"], "python");
@@ -378,25 +403,26 @@ async fn artifact_metadata_omits_optional_when_none() {
 
     let deliverable_id = DeliverablesService::create_from_challenge_submission(
         &db,
-        user_id,
-        challenge_id,
-        Uuid::new_v4(),
-        "code",
-        1,
-        None,
-        None,
-        None,
+        ChallengeSubmissionInput {
+            user_id,
+            challenge_id,
+            submission_id: Uuid::new_v4(),
+            submission_code: "code",
+            fragments_awarded: 1,
+            language: None,
+            stdout: None,
+            stderr: None,
+        },
     )
     .await
     .expect("create");
 
-    let meta: serde_json::Value = sqlx::query_scalar(
-        "SELECT artifact_metadata FROM deliverables WHERE id = $1",
-    )
-    .bind(deliverable_id)
-    .fetch_one(&db)
-    .await
-    .expect("meta");
+    let meta: serde_json::Value =
+        sqlx::query_scalar("SELECT artifact_metadata FROM deliverables WHERE id = $1")
+            .bind(deliverable_id)
+            .fetch_one(&db)
+            .await
+            .expect("meta");
 
     assert_eq!(meta["code_content"], "code");
     assert!(meta.get("language").is_none());

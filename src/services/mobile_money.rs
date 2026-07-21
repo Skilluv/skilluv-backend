@@ -15,6 +15,8 @@
 //! - Chaque payout est logué dans `talent_transactions` avec
 //!   `related_provider_txn_id` pour rapprochement.
 
+use std::str::FromStr;
+
 use async_trait::async_trait;
 use bigdecimal::BigDecimal;
 use serde::Serialize;
@@ -31,7 +33,19 @@ pub enum ProviderName {
 }
 
 impl ProviderName {
-    pub fn from_str(s: &str) -> Result<Self, AppError> {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Orange => "orange",
+            Self::Mtn => "mtn",
+            Self::Wave => "wave",
+        }
+    }
+}
+
+impl FromStr for ProviderName {
+    type Err = AppError;
+
+    fn from_str(s: &str) -> Result<Self, AppError> {
         match s.to_lowercase().as_str() {
             "orange" | "orange_money" => Ok(Self::Orange),
             "mtn" | "mtn_momo" => Ok(Self::Mtn),
@@ -39,14 +53,6 @@ impl ProviderName {
             _ => Err(AppError::Validation(format!(
                 "unsupported provider '{s}' (expected orange, mtn, wave)"
             ))),
-        }
-    }
-
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Orange => "orange",
-            Self::Mtn => "mtn",
-            Self::Wave => "wave",
         }
     }
 }
@@ -89,10 +95,7 @@ pub struct PayoutParams<'a> {
 pub trait MobileMoneyProvider: Send + Sync {
     fn name(&self) -> ProviderName;
 
-    async fn initiate_payout(
-        &self,
-        params: &PayoutParams<'_>,
-    ) -> Result<PayoutResult, AppError>;
+    async fn initiate_payout(&self, params: &PayoutParams<'_>) -> Result<PayoutResult, AppError>;
 }
 
 /// Sanity-check du numéro de téléphone E.164 : commence par '+' + 8 à 15 digits.
@@ -123,10 +126,7 @@ impl MobileMoneyProvider for OrangeMoneyProvider {
         ProviderName::Orange
     }
 
-    async fn initiate_payout(
-        &self,
-        params: &PayoutParams<'_>,
-    ) -> Result<PayoutResult, AppError> {
+    async fn initiate_payout(&self, params: &PayoutParams<'_>) -> Result<PayoutResult, AppError> {
         validate_e164(params.phone)?;
         if params.currency.to_uppercase() != "XOF" {
             return Err(AppError::Validation(
@@ -188,10 +188,7 @@ impl MobileMoneyProvider for MtnMobileMoneyProvider {
         ProviderName::Mtn
     }
 
-    async fn initiate_payout(
-        &self,
-        params: &PayoutParams<'_>,
-    ) -> Result<PayoutResult, AppError> {
+    async fn initiate_payout(&self, params: &PayoutParams<'_>) -> Result<PayoutResult, AppError> {
         validate_e164(params.phone)?;
         let txn_id = format!("mtn:dev:{}", Uuid::new_v4());
         tracing::info!(
@@ -224,10 +221,7 @@ impl MobileMoneyProvider for WaveProvider {
         ProviderName::Wave
     }
 
-    async fn initiate_payout(
-        &self,
-        params: &PayoutParams<'_>,
-    ) -> Result<PayoutResult, AppError> {
+    async fn initiate_payout(&self, params: &PayoutParams<'_>) -> Result<PayoutResult, AppError> {
         validate_e164(params.phone)?;
         let txn_id = format!("wave:dev:{}", Uuid::new_v4());
         tracing::info!(

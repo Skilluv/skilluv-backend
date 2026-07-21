@@ -5,7 +5,7 @@
 //! - Auto-création review_task quand deliverable en pending_manual_review
 //! - Workflow reviewer : list_open → claim → submit_verdict
 //! - Verdict propagation : approve → verified + fragments + skills,
-//!                        reject → rejected, request_changes → reste pending
+//!   reject → rejected, request_changes → reste pending
 //! - Filtres queue par domaine et séniorité
 //! - Anti double-review (UNIQUE deliverable_id + reviewer_user_id)
 //! - Cron expire_stale_claims + escalate_stale_sla
@@ -241,8 +241,14 @@ async fn pending_manual_review_auto_creates_review_task() {
     };
 
     // Une review_task doit avoir été créée
-    let (task_id, task_type, task_status, task_priority, task_domain, task_slice_id):
-        (Uuid, String, String, i16, String, Option<Uuid>) = sqlx::query_as(
+    let (task_id, task_type, task_status, task_priority, task_domain, task_slice_id): (
+        Uuid,
+        String,
+        String,
+        i16,
+        String,
+        Option<Uuid>,
+    ) = sqlx::query_as(
         "SELECT id, task_type, status, priority, primary_domain, slice_id
          FROM review_tasks WHERE deliverable_id = $1",
     )
@@ -264,7 +270,9 @@ async fn pending_manual_review_auto_creates_review_task() {
         per_page: 20,
         ..Default::default()
     };
-    let tasks = ReviewQueueService::list_open(&db, &filter).await.expect("list");
+    let tasks = ReviewQueueService::list_open(&db, &filter)
+        .await
+        .expect("list");
     assert_eq!(tasks.len(), 1);
     assert_eq!(tasks[0].id, task_id);
 
@@ -275,7 +283,9 @@ async fn pending_manual_review_auto_creates_review_task() {
         per_page: 20,
         ..Default::default()
     };
-    let tasks_any = ReviewQueueService::list_open(&db, &filter_any).await.expect("list");
+    let tasks_any = ReviewQueueService::list_open(&db, &filter_any)
+        .await
+        .expect("list");
     assert_eq!(
         tasks_any.len(),
         0,
@@ -325,13 +335,11 @@ async fn claim_task_sets_expiration_two_hours_out() {
         _ => panic!("expected pending_manual_review"),
     };
 
-    let task_id: Uuid = sqlx::query_scalar(
-        "SELECT id FROM review_tasks WHERE deliverable_id = $1",
-    )
-    .bind(deliverable_id)
-    .fetch_one(&db)
-    .await
-    .expect("fetch");
+    let task_id: Uuid = sqlx::query_scalar("SELECT id FROM review_tasks WHERE deliverable_id = $1")
+        .bind(deliverable_id)
+        .fetch_one(&db)
+        .await
+        .expect("fetch");
 
     // A third user claims it (the initial claimed_by works too here)
     let reviewer = claimed_by;
@@ -420,13 +428,11 @@ async fn approve_verdict_finalizes_deliverable_with_full_side_effects() {
     assert_eq!(verified_by, Some(reviewer));
 
     // Fragments distribués à l'auteur
-    let total: i32 = sqlx::query_scalar(
-        "SELECT total_fragments FROM users WHERE id = $1",
-    )
-    .bind(deliverable_user)
-    .fetch_one(&db)
-    .await
-    .expect("fetch total");
+    let total: i32 = sqlx::query_scalar("SELECT total_fragments FROM users WHERE id = $1")
+        .bind(deliverable_user)
+        .fetch_one(&db)
+        .await
+        .expect("fetch total");
     assert_eq!(
         total, 70,
         "60 (fragments slice) + 10 (bonus reviewer si claimed_by = deliverable_user)"
@@ -443,39 +449,39 @@ async fn approve_verdict_finalizes_deliverable_with_full_side_effects() {
         .fetch_one(&db)
         .await
         .expect("fetch level");
-        assert!(level >= 2, "should have proficiency >= 2 with weight 3 or 4");
+        assert!(
+            level >= 2,
+            "should have proficiency >= 2 with weight 3 or 4"
+        );
     }
 
     // Slice → merged
-    let slice_status: String = sqlx::query_scalar(
-        "SELECT status FROM project_slices WHERE id = $1",
-    )
-    .bind(slice_id)
-    .fetch_one(&db)
-    .await
-    .expect("fetch slice");
+    let slice_status: String =
+        sqlx::query_scalar("SELECT status FROM project_slices WHERE id = $1")
+            .bind(slice_id)
+            .fetch_one(&db)
+            .await
+            .expect("fetch slice");
     assert_eq!(slice_status, "merged");
 
     // review_task → completed
-    let task_status: String = sqlx::query_scalar(
-        "SELECT status FROM review_tasks WHERE deliverable_id = $1",
-    )
-    .bind(deliverable_id)
-    .fetch_one(&db)
-    .await
-    .expect("fetch task");
+    let task_status: String =
+        sqlx::query_scalar("SELECT status FROM review_tasks WHERE deliverable_id = $1")
+            .bind(deliverable_id)
+            .fetch_one(&db)
+            .await
+            .expect("fetch task");
     assert_eq!(task_status, "completed");
 
     // review_metrics initialisé
-    let (approved, total_reviews, reputation): (i32, i32, bigdecimal::BigDecimal) =
-        sqlx::query_as(
-            "SELECT approved_count, total_reviews, reputation_score
+    let (approved, total_reviews, reputation): (i32, i32, bigdecimal::BigDecimal) = sqlx::query_as(
+        "SELECT approved_count, total_reviews, reputation_score
              FROM review_metrics WHERE reviewer_user_id = $1",
-        )
-        .bind(reviewer)
-        .fetch_one(&db)
-        .await
-        .expect("metrics");
+    )
+    .bind(reviewer)
+    .fetch_one(&db)
+    .await
+    .expect("metrics");
     assert_eq!(approved, 1);
     assert_eq!(total_reviews, 1);
     // bootstrap 0.5 tant qu'on n'a pas atteint 5 reviews
@@ -801,13 +807,12 @@ async fn escalate_stale_sla_marks_task_escalated() {
         .expect("escalate");
     assert_eq!(escalated_count, 1);
 
-    let status: String = sqlx::query_scalar(
-        "SELECT status FROM review_tasks WHERE deliverable_id = $1",
-    )
-    .bind(deliverable_id)
-    .fetch_one(&db)
-    .await
-    .expect("fetch");
+    let status: String =
+        sqlx::query_scalar("SELECT status FROM review_tasks WHERE deliverable_id = $1")
+            .bind(deliverable_id)
+            .fetch_one(&db)
+            .await
+            .expect("fetch");
     assert_eq!(status, "escalated");
 
     db.close().await;

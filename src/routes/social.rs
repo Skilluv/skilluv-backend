@@ -92,30 +92,26 @@ async fn create_comment(
 
     // Extract @mentions and notify mentioned users
     let usernames = social::parse_mentions(&body.body);
-    let mentioned_ids = social::record_mentions(
-        &state.db,
-        auth.user_id,
-        "comment",
-        comment.id,
-        &usernames,
-    )
-    .await?;
+    let mentioned_ids =
+        social::record_mentions(&state.db, auth.user_id, "comment", comment.id, &usernames).await?;
     for uid in &mentioned_ids {
         // Persistent notif (DB) + ws push + redis counter, via the centralised service.
         let _ = NotificationService::send(
             &state.db,
             &mut state.redis.clone(),
             &state.ws,
-            *uid,
-            "mention.received",
-            "Tu as été mentionné·e",
-            Some(body.body.chars().take(140).collect::<String>().as_str()),
-            Some(json!({
-                "comment_id": comment.id,
-                "target_type": comment.target_type,
-                "target_id": comment.target_id,
-                "author_id": auth.user_id,
-            })),
+            crate::services::notification::NotificationPayload {
+                user_id: *uid,
+                notification_type: "mention.received",
+                title: "Tu as été mentionné·e",
+                body: Some(body.body.chars().take(140).collect::<String>().as_str()),
+                data: Some(json!({
+                    "comment_id": comment.id,
+                    "target_type": comment.target_type,
+                    "target_id": comment.target_id,
+                    "author_id": auth.user_id,
+                })),
+            },
         )
         .await;
         if analytics_consent(&headers) {
@@ -131,74 +127,76 @@ async fn create_comment(
     }
 
     // If commenting on a forum post (top-level, i.e. not a reply), notify the post author.
-    if comment.parent_id.is_none() && comment.target_type == "post" {
-        if let Ok(Some((post_author, post_kind, post_title))) =
+    if comment.parent_id.is_none()
+        && comment.target_type == "post"
+        && let Ok(Some((post_author, post_kind, post_title))) =
             sqlx::query_as::<_, (Uuid, String, String)>(
                 "SELECT author_id, kind, title FROM posts WHERE id = $1 AND deleted_at IS NULL",
             )
             .bind(comment.target_id)
             .fetch_optional(&state.db)
             .await
-        {
-            if post_author != auth.user_id && !mentioned_ids.contains(&post_author) {
-                let event_kind = if post_kind == "question" {
-                    "question.answered"
-                } else {
-                    "post.replied"
-                };
-                let title = if post_kind == "question" {
-                    "Nouvelle réponse à ta question"
-                } else {
-                    "Nouvelle réponse à ton post"
-                };
-                let _ = NotificationService::send(
-                    &state.db,
-                    &mut state.redis.clone(),
-                    &state.ws,
-                    post_author,
-                    event_kind,
-                    title,
-                    Some(post_title.chars().take(140).collect::<String>().as_str()),
-                    Some(json!({
-                        "post_id": comment.target_id,
-                        "comment_id": comment.id,
-                        "author_id": auth.user_id,
-                    })),
-                )
-                .await;
-            }
-        }
+        && post_author != auth.user_id
+        && !mentioned_ids.contains(&post_author)
+    {
+        let event_kind = if post_kind == "question" {
+            "question.answered"
+        } else {
+            "post.replied"
+        };
+        let title = if post_kind == "question" {
+            "Nouvelle réponse à ta question"
+        } else {
+            "Nouvelle réponse à ton post"
+        };
+        let _ = NotificationService::send(
+            &state.db,
+            &mut state.redis.clone(),
+            &state.ws,
+            crate::services::notification::NotificationPayload {
+                user_id: post_author,
+                notification_type: event_kind,
+                title,
+                body: Some(post_title.chars().take(140).collect::<String>().as_str()),
+                data: Some(json!({
+                    "post_id": comment.target_id,
+                    "comment_id": comment.id,
+                    "author_id": auth.user_id,
+                })),
+            },
+        )
+        .await;
     }
 
     // If this comment is a reply, notify the parent comment's author (unless it's the same user).
-    if let Some(parent_id) = comment.parent_id {
-        if let Ok(Some((parent_author,))) = sqlx::query_as::<_, (Uuid,)>(
-            "SELECT author_id FROM comments WHERE id = $1",
+    if let Some(parent_id) = comment.parent_id
+        && let Ok(Some((parent_author,))) =
+            sqlx::query_as::<_, (Uuid,)>("SELECT author_id FROM comments WHERE id = $1")
+                .bind(parent_id)
+                .fetch_optional(&state.db)
+                .await
+        && parent_author != auth.user_id
+        && !mentioned_ids.contains(&parent_author)
+    {
+        let _ = NotificationService::send(
+            &state.db,
+            &mut state.redis.clone(),
+            &state.ws,
+            crate::services::notification::NotificationPayload {
+                user_id: parent_author,
+                notification_type: "reply.received",
+                title: "Réponse à ton commentaire",
+                body: Some(body.body.chars().take(140).collect::<String>().as_str()),
+                data: Some(json!({
+                    "comment_id": comment.id,
+                    "parent_id": parent_id,
+                    "target_type": comment.target_type,
+                    "target_id": comment.target_id,
+                    "author_id": auth.user_id,
+                })),
+            },
         )
-        .bind(parent_id)
-        .fetch_optional(&state.db)
-        .await
-        {
-            if parent_author != auth.user_id && !mentioned_ids.contains(&parent_author) {
-                let _ = NotificationService::send(
-                    &state.db,
-                    &mut state.redis.clone(),
-                    &state.ws,
-                    parent_author,
-                    "reply.received",
-                    "Réponse à ton commentaire",
-                    Some(body.body.chars().take(140).collect::<String>().as_str()),
-                    Some(json!({
-                        "comment_id": comment.id,
-                        "parent_id": parent_id,
-                        "target_type": comment.target_type,
-                        "target_id": comment.target_id,
-                        "author_id": auth.user_id,
-                    })),
-                )
-                .await;
-            }
-        }
+        .await;
     }
 
     if analytics_consent(&headers) {
@@ -248,8 +246,7 @@ async fn edit_comment(
     Path(id): Path<Uuid>,
     Json(body): Json<EditCommentBody>,
 ) -> Result<Json<Value>, AppError> {
-    let updated =
-        social::edit_comment(&state.db, id, auth.user_id, &auth.role, &body.body).await?;
+    let updated = social::edit_comment(&state.db, id, auth.user_id, &auth.role, &body.body).await?;
     Ok(Json(build_response(json!({ "comment": updated }))))
 }
 

@@ -24,9 +24,7 @@ fn main() {
     // The returned guard must outlive the program — held by `_sentry_guard`.
     let _sentry_guard = observability::init_sentry(&config);
 
-    let fmt_layer = tracing_subscriber::fmt::layer()
-        .json()
-        .with_target(true);
+    let fmt_layer = tracing_subscriber::fmt::layer().json().with_target(true);
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
     tracing_subscriber::registry()

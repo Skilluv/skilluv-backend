@@ -29,14 +29,14 @@ struct SearchQuery {
     country_iso2: Option<String>,
     min_fragments: Option<i32>,
     min_streak: Option<i32>,
-    tag: Option<String>,               // tag slug — multiple joins if repeated
-    badge: Option<String>,             // badge slug
-    looking_for: Option<String>,       // cdi | cdd | freelance | internship | contract
+    tag: Option<String>,         // tag slug — multiple joins if repeated
+    badge: Option<String>,       // badge slug
+    looking_for: Option<String>, // cdi | cdd | freelance | internship | contract
     available_only: Option<bool>,
-    language_spoken: Option<String>,   // 2-letter ISO code (min B2)
+    language_spoken: Option<String>, // 2-letter ISO code (min B2)
     has_projects: Option<bool>,
     min_github_repos: Option<i32>,
-    sort_by: Option<String>,           // fragments | recent | most_active_recently | top_in_domain
+    sort_by: Option<String>, // fragments | recent | most_active_recently | top_in_domain
     page: Option<i64>,
     per_page: Option<i64>,
 }
@@ -140,8 +140,9 @@ async fn search_v2(
     };
     let order_sql = match q.sort_by.as_deref() {
         Some("recent") => "u.updated_at DESC",
-        Some("most_active_recently") =>
-            "(SELECT MAX(evaluated_at) FROM challenge_submissions cs WHERE cs.user_id = u.id) DESC NULLS LAST",
+        Some("most_active_recently") => {
+            "(SELECT MAX(evaluated_at) FROM challenge_submissions cs WHERE cs.user_id = u.id) DESC NULLS LAST"
+        }
         Some("top_in_domain") => "u.total_fragments DESC, u.golden_stars DESC",
         _ => "u.total_fragments DESC",
     };
@@ -180,10 +181,9 @@ async fn search_v2(
         let uid: Uuid = r.get("id");
         // Top 3 skills (small extra query — fine at 20 rows/page).
         // Source user_skills (skill_fragments droppée en P8.7).
-        let top_skills =
-            crate::services::SkillsService::list_user_top_skills(&state.db, uid, 3)
-                .await
-                .unwrap_or_default();
+        let top_skills = crate::services::SkillsService::list_user_top_skills(&state.db, uid, 3)
+            .await
+            .unwrap_or_default();
         talents.push(json!({
             "id": uid,
             "username": r.get::<String, _>("username"),
@@ -205,8 +205,8 @@ async fn search_v2(
     }
 
     // Enterprise bookmarks lookup (identical to v1)
-    if let Some(ref a) = auth {
-        if let Ok(Some((eid,))) = sqlx::query_as::<_, (Uuid,)>(
+    if let Some(ref a) = auth
+        && let Ok(Some((eid,))) = sqlx::query_as::<_, (Uuid,)>(
             "SELECT enterprise_id FROM enterprise_members WHERE user_id = $1 AND status = 'active' LIMIT 1",
         )
         .bind(a.user_id)
@@ -228,15 +228,13 @@ async fn search_v2(
                 .unwrap_or_default();
                 let set: std::collections::HashSet<Uuid> = bookmarks.into_iter().map(|(id,)| id).collect();
                 for t in talents.iter_mut() {
-                    if let Some(id_str) = t.get("id").and_then(|v| v.as_str()) {
-                        if let Ok(uid) = Uuid::parse_str(id_str) {
+                    if let Some(id_str) = t.get("id").and_then(|v| v.as_str())
+                        && let Ok(uid) = Uuid::parse_str(id_str) {
                             t["is_bookmarked"] = json!(set.contains(&uid));
                         }
-                    }
                 }
             }
         }
-    }
 
     Ok(Json(json!({
         "data": talents,

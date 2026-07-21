@@ -86,12 +86,19 @@ async fn only_one_primary_orientation_per_user_when_active() {
     sqlx::query(
         "INSERT INTO user_orientations (user_id, orientation_id, is_primary) VALUES ($1, $2, TRUE)",
     )
-    .bind(u).bind(a).execute(&db).await.expect("first");
+    .bind(u)
+    .bind(a)
+    .execute(&db)
+    .await
+    .expect("first");
 
     let dup = sqlx::query(
         "INSERT INTO user_orientations (user_id, orientation_id, is_primary) VALUES ($1, $2, TRUE)",
     )
-    .bind(u).bind(b).execute(&db).await;
+    .bind(u)
+    .bind(b)
+    .execute(&db)
+    .await;
     assert!(dup.is_err(), "two primary orientations rejected");
 
     db.close().await;
@@ -109,12 +116,19 @@ async fn ended_primary_frees_slot_for_new_primary() {
         "INSERT INTO user_orientations (user_id, orientation_id, is_primary, ended_at)
          VALUES ($1, $2, TRUE, NOW())",
     )
-    .bind(u).bind(a).execute(&db).await.expect("historical");
+    .bind(u)
+    .bind(a)
+    .execute(&db)
+    .await
+    .expect("historical");
 
     let ok = sqlx::query(
         "INSERT INTO user_orientations (user_id, orientation_id, is_primary) VALUES ($1, $2, TRUE)",
     )
-    .bind(u).bind(b).execute(&db).await;
+    .bind(u)
+    .bind(b)
+    .execute(&db)
+    .await;
     assert!(ok.is_ok(), "new primary allowed once previous is ended");
 
     db.close().await;
@@ -131,7 +145,10 @@ async fn ended_before_start_rejected() {
         "INSERT INTO user_orientations (user_id, orientation_id, started_at, ended_at)
          VALUES ($1, $2, NOW(), NOW() - INTERVAL '1 day')",
     )
-    .bind(u).bind(a).execute(&db).await;
+    .bind(u)
+    .bind(a)
+    .execute(&db)
+    .await;
     assert!(bad.is_err(), "ended_at < started_at must be rejected");
 
     db.close().await;
@@ -146,11 +163,11 @@ async fn backfill_assigns_mapped_orientation_from_skill_domain() {
     // où elle a tourné — ici on vérifie qu'un user pré-existant serait pris.
     // On simule ça en insérant user + skill_domain, puis en ré-appliquant
     // l'INSERT ON CONFLICT DO NOTHING (idempotent).
-    let u_code   = create_user_with_domain(&db, Some("code")).await;
+    let u_code = create_user_with_domain(&db, Some("code")).await;
     let u_design = create_user_with_domain(&db, Some("design")).await;
-    let u_game   = create_user_with_domain(&db, Some("game")).await;
-    let u_sec    = create_user_with_domain(&db, Some("security")).await;
-    let _u_none  = create_user_with_domain(&db, None).await;
+    let u_game = create_user_with_domain(&db, Some("game")).await;
+    let u_sec = create_user_with_domain(&db, Some("security")).await;
+    let _u_none = create_user_with_domain(&db, None).await;
 
     sqlx::query(
         "INSERT INTO user_orientations (user_id, orientation_id, mode, is_primary, started_at)
@@ -178,16 +195,16 @@ async fn backfill_assigns_mapped_orientation_from_skill_domain() {
          WHERE uo.user_id = ANY($1)
          ORDER BY o.slug",
     )
-    .bind(&vec![u_code, u_design, u_game, u_sec])
+    .bind(vec![u_code, u_design, u_game, u_sec])
     .fetch_all(&db)
     .await
     .expect("m");
     assert_eq!(mapping.len(), 4);
     let by_uid: std::collections::HashMap<_, _> = mapping.into_iter().collect();
-    assert_eq!(by_uid[&u_code],   "dev-fullstack");
+    assert_eq!(by_uid[&u_code], "dev-fullstack");
     assert_eq!(by_uid[&u_design], "web-designer");
-    assert_eq!(by_uid[&u_game],   "game-programmer");
-    assert_eq!(by_uid[&u_sec],    "pentester-web");
+    assert_eq!(by_uid[&u_game], "game-programmer");
+    assert_eq!(by_uid[&u_sec], "pentester-web");
 
     db.close().await;
     cleanup_test_db(&name).await;
@@ -205,20 +222,31 @@ async fn user_can_have_multiple_orientations_but_only_one_primary() {
         "INSERT INTO user_orientations (user_id, orientation_id, mode, is_primary)
          VALUES ($1, $2, 'active', TRUE), ($1, $3, 'active', FALSE), ($1, $4, 'learning', FALSE)",
     )
-    .bind(u).bind(a).bind(b).bind(c)
-    .execute(&db).await.expect("multi");
+    .bind(u)
+    .bind(a)
+    .bind(b)
+    .bind(c)
+    .execute(&db)
+    .await
+    .expect("multi");
 
     let count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM user_orientations WHERE user_id = $1 AND ended_at IS NULL",
     )
-    .bind(u).fetch_one(&db).await.expect("cnt");
+    .bind(u)
+    .fetch_one(&db)
+    .await
+    .expect("cnt");
     assert_eq!(count, 3);
 
     let primaries: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM user_orientations
          WHERE user_id = $1 AND is_primary = TRUE AND ended_at IS NULL",
     )
-    .bind(u).fetch_one(&db).await.expect("prim");
+    .bind(u)
+    .fetch_one(&db)
+    .await
+    .expect("prim");
     assert_eq!(primaries, 1);
 
     db.close().await;
@@ -234,7 +262,10 @@ async fn mode_check_rejects_invalid_value() {
     let bad = sqlx::query(
         "INSERT INTO user_orientations (user_id, orientation_id, mode) VALUES ($1, $2, 'expert')",
     )
-    .bind(u).bind(a).execute(&db).await;
+    .bind(u)
+    .bind(a)
+    .execute(&db)
+    .await;
     assert!(bad.is_err(), "mode='expert' rejected");
     db.close().await;
     cleanup_test_db(&name).await;

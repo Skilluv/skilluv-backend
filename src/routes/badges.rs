@@ -13,7 +13,7 @@ use axum::extract::{Path, State};
 use axum::routing::get;
 use axum::{Json, Router};
 use serde::Serialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 use crate::AppState;
@@ -133,9 +133,7 @@ struct RuleCatalogRow {
     conditions: serde_json::Value,
 }
 
-async fn list_rules(
-    State(state): State<AppState>,
-) -> Result<Json<Value>, AppError> {
+async fn list_rules(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
     let rows: Vec<RuleCatalogRow> = sqlx::query_as(
         "SELECT slug, output_type, output_variant, display_name, description,
                 icon_key, rarity, conditions

@@ -159,7 +159,10 @@ async fn duplicate_issue_ingestion_is_rejected_by_unique_index() {
 
     // Deuxième ingestion de la même issue → UNIQUE index refuse.
     let second = insert_github_slice_via_ingestion_convention(&db, project, 42, "open").await;
-    assert!(second.is_err(), "UNIQUE (project_id, external_ref) doit refuser le doublon");
+    assert!(
+        second.is_err(),
+        "UNIQUE (project_id, external_ref) doit refuser le doublon"
+    );
 
     db.close().await;
     cleanup_test_db(&name).await;
@@ -174,11 +177,21 @@ async fn same_issue_number_across_projects_is_allowed() {
     let (db, name) = setup_test_db().await;
     let owner = insert_user(&db).await;
     let project_a = insert_project(
-        &db, owner, Some("a"), Some("r"), "auto", &["good-first-issue"],
+        &db,
+        owner,
+        Some("a"),
+        Some("r"),
+        "auto",
+        &["good-first-issue"],
     )
     .await;
     let project_b = insert_project(
-        &db, owner, Some("b"), Some("r"), "auto", &["good-first-issue"],
+        &db,
+        owner,
+        Some("b"),
+        Some("r"),
+        "auto",
+        &["good-first-issue"],
     )
     .await;
 
@@ -189,20 +202,18 @@ async fn same_issue_number_across_projects_is_allowed() {
         .await
         .expect("b");
 
-    let count_a: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM project_slices WHERE project_id = $1",
-    )
-    .bind(project_a)
-    .fetch_one(&db)
-    .await
-    .expect("a count");
-    let count_b: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM project_slices WHERE project_id = $1",
-    )
-    .bind(project_b)
-    .fetch_one(&db)
-    .await
-    .expect("b count");
+    let count_a: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM project_slices WHERE project_id = $1")
+            .bind(project_a)
+            .fetch_one(&db)
+            .await
+            .expect("a count");
+    let count_b: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM project_slices WHERE project_id = $1")
+            .bind(project_b)
+            .fetch_one(&db)
+            .await
+            .expect("b count");
     assert_eq!(count_a, 1);
     assert_eq!(count_b, 1);
 
@@ -223,7 +234,12 @@ async fn poll_skips_projects_without_github_repo() {
     let _p_no_repo = insert_project(&db, owner, None, None, "auto", &["good-first-issue"]).await;
     // Projet manual_only avec repo
     let _p_manual = insert_project(
-        &db, owner, Some("acme"), Some("skip"), "manual_only", &["good-first-issue"],
+        &db,
+        owner,
+        Some("acme"),
+        Some("skip"),
+        "manual_only",
+        &["good-first-issue"],
     )
     .await;
     // Projet auto sans labels
@@ -232,10 +248,7 @@ async fn poll_skips_projects_without_github_repo() {
     let reports = skilluv_backend::services::slice_ingestion::poll_all_github_projects(&db)
         .await
         .expect("poll");
-    assert!(
-        reports.is_empty(),
-        "aucun projet éligible => aucun rapport"
-    );
+    assert!(reports.is_empty(), "aucun projet éligible => aucun rapport");
 
     db.close().await;
     cleanup_test_db(&name).await;
@@ -250,11 +263,21 @@ async fn ingested_status_reflects_project_mode() {
     let (db, name) = setup_test_db().await;
     let owner = insert_user(&db).await;
     let project_auto = insert_project(
-        &db, owner, Some("a"), Some("r"), "auto", &["good-first-issue"],
+        &db,
+        owner,
+        Some("a"),
+        Some("r"),
+        "auto",
+        &["good-first-issue"],
     )
     .await;
     let project_review = insert_project(
-        &db, owner, Some("b"), Some("r"), "curator_review", &["good-first-issue"],
+        &db,
+        owner,
+        Some("b"),
+        Some("r"),
+        "curator_review",
+        &["good-first-issue"],
     )
     .await;
 
@@ -265,20 +288,18 @@ async fn ingested_status_reflects_project_mode() {
         .await
         .expect("review");
 
-    let auto_status: String = sqlx::query_scalar(
-        "SELECT status FROM project_slices WHERE project_id = $1",
-    )
-    .bind(project_auto)
-    .fetch_one(&db)
-    .await
-    .expect("s a");
-    let review_status: String = sqlx::query_scalar(
-        "SELECT status FROM project_slices WHERE project_id = $1",
-    )
-    .bind(project_review)
-    .fetch_one(&db)
-    .await
-    .expect("s b");
+    let auto_status: String =
+        sqlx::query_scalar("SELECT status FROM project_slices WHERE project_id = $1")
+            .bind(project_auto)
+            .fetch_one(&db)
+            .await
+            .expect("s a");
+    let review_status: String =
+        sqlx::query_scalar("SELECT status FROM project_slices WHERE project_id = $1")
+            .bind(project_review)
+            .fetch_one(&db)
+            .await
+            .expect("s b");
 
     assert_eq!(auto_status, "open");
     assert_eq!(review_status, "draft");

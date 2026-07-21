@@ -64,7 +64,10 @@ async fn seed_produces_at_least_thirty_curated_orientations() {
             .fetch_one(&db)
             .await
             .expect("count");
-    assert!(count >= 30, "expected 30+ curated orientations, got {count}");
+    assert!(
+        count >= 30,
+        "expected 30+ curated orientations, got {count}"
+    );
     db.close().await;
     cleanup_test_db(&name).await;
 }
@@ -105,7 +108,10 @@ async fn slug_uniqueness_enforced() {
     )
     .execute(&db)
     .await;
-    assert!(dup.is_err(), "duplicate slug must be rejected (seed already has dev-frontend)");
+    assert!(
+        dup.is_err(),
+        "duplicate slug must be rejected (seed already has dev-frontend)"
+    );
     db.close().await;
     cleanup_test_db(&name).await;
 }
@@ -114,12 +120,11 @@ async fn slug_uniqueness_enforced() {
 async fn orientation_skill_map_upserts_and_joins() {
     let (db, name) = setup_test_db().await;
 
-    let orientation_id: Uuid = sqlx::query_scalar(
-        "SELECT id FROM orientations WHERE slug = 'dev-frontend'",
-    )
-    .fetch_one(&db)
-    .await
-    .expect("orientation");
+    let orientation_id: Uuid =
+        sqlx::query_scalar("SELECT id FROM orientations WHERE slug = 'dev-frontend'")
+            .fetch_one(&db)
+            .await
+            .expect("orientation");
 
     // Ajoute deux skills existants du seed
     let skill_ids: Vec<Uuid> = sqlx::query_scalar(
@@ -176,12 +181,11 @@ async fn archived_orientations_stay_visible_via_flag() {
     .fetch_one(&db)
     .await
     .expect("active");
-    let archived: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM orientations WHERE is_archived = TRUE",
-    )
-    .fetch_one(&db)
-    .await
-    .expect("arch");
+    let archived: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM orientations WHERE is_archived = TRUE")
+            .fetch_one(&db)
+            .await
+            .expect("arch");
 
     assert_eq!(archived, 1);
     assert!(active >= 29);

@@ -62,16 +62,12 @@ async fn require_admin(state: &AppState, auth: &AuthUser) -> Result<(), AppError
 // Seasons
 // ═══════════════════════════════════════════════════════════════════
 
-async fn list_seasons(
-    State(state): State<AppState>,
-) -> Result<Json<Value>, AppError> {
+async fn list_seasons(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
     let seasons = SeasonsService::list_all(&state.db).await?;
     Ok(Json(build_response(json!({ "seasons": seasons }))))
 }
 
-async fn current_season(
-    State(state): State<AppState>,
-) -> Result<Json<Value>, AppError> {
+async fn current_season(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
     let season = SeasonsService::get_current(&state.db).await?;
     Ok(Json(build_response(json!({ "season": season }))))
 }
@@ -145,12 +141,10 @@ async fn add_steward(
     Json(body): Json<AddStewardBody>,
 ) -> Result<Json<Value>, AppError> {
     // Autorisation : admin OU project owner
-    let is_admin: bool = sqlx::query_scalar(
-        "SELECT role = 'admin' FROM users WHERE id = $1",
-    )
-    .bind(auth.user_id)
-    .fetch_one(&state.db)
-    .await?;
+    let is_admin: bool = sqlx::query_scalar("SELECT role = 'admin' FROM users WHERE id = $1")
+        .bind(auth.user_id)
+        .fetch_one(&state.db)
+        .await?;
 
     if !is_admin {
         let is_owner: bool = sqlx::query_scalar(
@@ -184,12 +178,10 @@ async fn remove_steward(
     auth: AuthUser,
     Path((project_id, user_id, role)): Path<(Uuid, Uuid, String)>,
 ) -> Result<Json<Value>, AppError> {
-    let is_admin: bool = sqlx::query_scalar(
-        "SELECT role = 'admin' FROM users WHERE id = $1",
-    )
-    .bind(auth.user_id)
-    .fetch_one(&state.db)
-    .await?;
+    let is_admin: bool = sqlx::query_scalar("SELECT role = 'admin' FROM users WHERE id = $1")
+        .bind(auth.user_id)
+        .fetch_one(&state.db)
+        .await?;
 
     if !is_admin {
         let is_owner: bool = sqlx::query_scalar(
@@ -216,5 +208,7 @@ async fn my_stewardships(
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
     let stewardships = StewardsService::list_user_stewardships(&state.db, auth.user_id).await?;
-    Ok(Json(build_response(json!({ "stewardships": stewardships }))))
+    Ok(Json(build_response(
+        json!({ "stewardships": stewardships }),
+    )))
 }

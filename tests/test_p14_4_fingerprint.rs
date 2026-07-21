@@ -127,23 +127,21 @@ async fn detect_flags_groups_sharing_ip_and_ua() {
     let mut ids = Vec::new();
     for _ in 0..4 {
         let u = insert_user(&db).await;
-        fingerprint::record_fingerprint(
-            &db, u, "10.0.0.1", "SharedUA/1.0", Some("cv-same"),
-        )
-        .await
-        .expect("r");
+        fingerprint::record_fingerprint(&db, u, "10.0.0.1", "SharedUA/1.0", Some("cv-same"))
+            .await
+            .expect("r");
         ids.push(u);
     }
 
     // 1 user isolé (autre IP + UA).
     let lonely = insert_user(&db).await;
-    fingerprint::record_fingerprint(
-        &db, lonely, "192.168.1.1", "SoloUA", None,
-    )
-    .await
-    .expect("r");
+    fingerprint::record_fingerprint(&db, lonely, "192.168.1.1", "SoloUA", None)
+        .await
+        .expect("r");
 
-    let groups = fingerprint::detect_multi_accounts(&db, 24, 3).await.expect("d");
+    let groups = fingerprint::detect_multi_accounts(&db, 24, 3)
+        .await
+        .expect("d");
     assert_eq!(groups.len(), 1, "1 groupe detecte");
     assert_eq!(groups[0].user_ids.len(), 4);
 
@@ -158,13 +156,12 @@ async fn detect_flags_groups_sharing_ip_and_ua() {
     assert_eq!(flagged, 4);
 
     // Le solitaire n'est pas flaggé.
-    let solo_flagged: bool = sqlx::query_scalar(
-        "SELECT suspected_multi_account FROM users WHERE id = $1",
-    )
-    .bind(lonely)
-    .fetch_one(&db)
-    .await
-    .expect("s");
+    let solo_flagged: bool =
+        sqlx::query_scalar("SELECT suspected_multi_account FROM users WHERE id = $1")
+            .bind(lonely)
+            .fetch_one(&db)
+            .await
+            .expect("s");
     assert!(!solo_flagged);
 
     db.close().await;
@@ -182,18 +179,21 @@ async fn detect_does_not_flag_below_min_group_size() {
     // 2 users only sharing → sous le seuil 3.
     for _ in 0..2 {
         let u = insert_user(&db).await;
-        fingerprint::record_fingerprint(&db, u, "5.5.5.5", "PairUA", None).await.expect("r");
+        fingerprint::record_fingerprint(&db, u, "5.5.5.5", "PairUA", None)
+            .await
+            .expect("r");
     }
 
-    let groups = fingerprint::detect_multi_accounts(&db, 24, 3).await.expect("d");
+    let groups = fingerprint::detect_multi_accounts(&db, 24, 3)
+        .await
+        .expect("d");
     assert!(groups.is_empty(), "2 users < seuil 3");
 
-    let flagged: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM users WHERE suspected_multi_account = TRUE",
-    )
-    .fetch_one(&db)
-    .await
-    .expect("c");
+    let flagged: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE suspected_multi_account = TRUE")
+            .fetch_one(&db)
+            .await
+            .expect("c");
     assert_eq!(flagged, 0);
 
     db.close().await;
@@ -210,7 +210,9 @@ async fn purge_removes_old_rows_only() {
     let u = insert_user(&db).await;
 
     // Row récente : garder
-    fingerprint::record_fingerprint(&db, u, "1.1.1.1", "UA1", None).await.expect("r1");
+    fingerprint::record_fingerprint(&db, u, "1.1.1.1", "UA1", None)
+        .await
+        .expect("r1");
     // Row artificiellement vieille
     sqlx::query(
         "INSERT INTO user_fingerprints
@@ -224,16 +226,17 @@ async fn purge_removes_old_rows_only() {
     .await
     .expect("old");
 
-    let deleted = fingerprint::purge_old_fingerprints(&db, 90).await.expect("p");
+    let deleted = fingerprint::purge_old_fingerprints(&db, 90)
+        .await
+        .expect("p");
     assert_eq!(deleted, 1, "1 row supprimee");
 
-    let remaining: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM user_fingerprints WHERE user_id = $1",
-    )
-    .bind(u)
-    .fetch_one(&db)
-    .await
-    .expect("c");
+    let remaining: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM user_fingerprints WHERE user_id = $1")
+            .bind(u)
+            .fetch_one(&db)
+            .await
+            .expect("c");
     assert_eq!(remaining, 1);
 
     db.close().await;

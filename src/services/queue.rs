@@ -50,34 +50,22 @@ impl QueueService {
     // ── Push jobs ───────────────────────────────────────────────────
 
     /// Enqueue a plagiarism check job. Returns the job_id.
-    pub async fn push_plagiarism(
-        &self,
-        payload: PlagiarismPayload,
-    ) -> Result<String, QueueError> {
+    pub async fn push_plagiarism(&self, payload: PlagiarismPayload) -> Result<String, QueueError> {
         self.push_job(JobType::PlagiarismCheck, &payload).await
     }
 
     /// Enqueue a talent matching job. Returns the job_id.
-    pub async fn push_matching(
-        &self,
-        payload: TalentMatchPayload,
-    ) -> Result<String, QueueError> {
+    pub async fn push_matching(&self, payload: TalentMatchPayload) -> Result<String, QueueError> {
         self.push_job(JobType::TalentMatch, &payload).await
     }
 
     /// Enqueue a replay generation job. Returns the job_id.
-    pub async fn push_replay(
-        &self,
-        payload: ReplayPayload,
-    ) -> Result<String, QueueError> {
+    pub async fn push_replay(&self, payload: ReplayPayload) -> Result<String, QueueError> {
         self.push_job(JobType::ReplayGenerate, &payload).await
     }
 
     /// Enqueue a clip generation job. Returns the job_id.
-    pub async fn push_clip(
-        &self,
-        payload: ClipPayload,
-    ) -> Result<String, QueueError> {
+    pub async fn push_clip(&self, payload: ClipPayload) -> Result<String, QueueError> {
         self.push_job(JobType::ClipGenerate, &payload).await
     }
 

@@ -90,14 +90,8 @@ async fn list_messages(
     Path(id): Path<Uuid>,
     Query(q): Query<ListMessagesQuery>,
 ) -> Result<Json<Value>, AppError> {
-    let messages = dm::list_messages(
-        &state.db,
-        auth.user_id,
-        id,
-        q.limit.unwrap_or(50),
-        q.before,
-    )
-    .await?;
+    let messages =
+        dm::list_messages(&state.db, auth.user_id, id, q.limit.unwrap_or(50), q.before).await?;
     Ok(Json(build_response(json!({ "messages": messages }))))
 }
 
@@ -113,8 +107,7 @@ async fn send_message(
     Path(id): Path<Uuid>,
     Json(body): Json<SendMessageBody>,
 ) -> Result<Json<Value>, AppError> {
-    let (message, peer_id) =
-        dm::send_message(&state.db, auth.user_id, id, &body.body).await?;
+    let (message, peer_id) = dm::send_message(&state.db, auth.user_id, id, &body.body).await?;
 
     // Persistent notification to peer + WS push (NotificationService handles both)
     let preview: String = body.body.chars().take(140).collect();
@@ -122,15 +115,17 @@ async fn send_message(
         &state.db,
         &mut state.redis.clone(),
         &state.ws,
-        peer_id,
-        "dm.received",
-        "Nouveau message",
-        Some(&preview),
-        Some(json!({
-            "conversation_id": id,
-            "message_id": message.id,
-            "from_user_id": auth.user_id,
-        })),
+        crate::services::notification::NotificationPayload {
+            user_id: peer_id,
+            notification_type: "dm.received",
+            title: "Nouveau message",
+            body: Some(&preview),
+            data: Some(json!({
+                "conversation_id": id,
+                "message_id": message.id,
+                "from_user_id": auth.user_id,
+            })),
+        },
     )
     .await;
 
@@ -183,7 +178,13 @@ async fn block_user(
     headers: HeaderMap,
     Json(body): Json<BlockBody>,
 ) -> Result<Json<Value>, AppError> {
-    dm::block_user(&state.db, auth.user_id, body.user_id, body.reason.as_deref()).await?;
+    dm::block_user(
+        &state.db,
+        auth.user_id,
+        body.user_id,
+        body.reason.as_deref(),
+    )
+    .await?;
     if analytics_consent(&headers) {
         state.analytics.track(
             auth.user_id,

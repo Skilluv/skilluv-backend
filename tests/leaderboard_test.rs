@@ -32,9 +32,7 @@ async fn test_leaderboard_validation() {
     let resp = app.get("/api/leaderboards/invalid_domain").await;
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 
-    let resp2 = app
-        .get("/api/leaderboards/global?period=invalid")
-        .await;
+    let resp2 = app.get("/api/leaderboards/global?period=invalid").await;
     assert_eq!(resp2.status(), StatusCode::BAD_REQUEST);
 }
 

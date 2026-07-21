@@ -70,7 +70,9 @@ async fn code_domain_maps_to_craft() {
     let bad: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM skill_nodes WHERE domain = 'code' AND display_category <> 'craft'",
     )
-    .fetch_one(&db).await.unwrap();
+    .fetch_one(&db)
+    .await
+    .unwrap();
     assert_eq!(bad, 0);
     db.close().await;
     cleanup_test_db(&name).await;
@@ -83,7 +85,9 @@ async fn design_and_game_domains_map_to_create() {
         "SELECT COUNT(*) FROM skill_nodes
          WHERE domain IN ('design','game') AND display_category <> 'create'",
     )
-    .fetch_one(&db).await.unwrap();
+    .fetch_one(&db)
+    .await
+    .unwrap();
     assert_eq!(bad, 0);
     db.close().await;
     cleanup_test_db(&name).await;
@@ -96,7 +100,9 @@ async fn security_and_ops_domains_map_to_operate() {
         "SELECT COUNT(*) FROM skill_nodes
          WHERE domain IN ('security','ops') AND display_category <> 'operate'",
     )
-    .fetch_one(&db).await.unwrap();
+    .fetch_one(&db)
+    .await
+    .unwrap();
     assert_eq!(bad, 0);
     db.close().await;
     cleanup_test_db(&name).await;
@@ -107,7 +113,10 @@ async fn ai_maps_to_understand_soft_skills_to_share() {
     let (db, name) = setup_test_db().await;
     let bad_ai: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM skill_nodes WHERE domain = 'ai' AND display_category <> 'understand'",
-    ).fetch_one(&db).await.unwrap();
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
     assert_eq!(bad_ai, 0);
     let bad_soft: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM skill_nodes WHERE domain = 'soft_skills' AND display_category <> 'share'",
@@ -124,7 +133,8 @@ async fn display_category_check_rejects_invalid() {
         "INSERT INTO skill_nodes (slug, display_name, domain, display_category)
          VALUES ('p17-bad-cat', 'Bad', 'code', 'legendary')",
     )
-    .execute(&db).await;
+    .execute(&db)
+    .await;
     assert!(bad.is_err());
     db.close().await;
     cleanup_test_db(&name).await;
@@ -137,11 +147,14 @@ async fn admin_can_override_to_meta() {
         "INSERT INTO skill_nodes (slug, display_name, domain, display_category)
          VALUES ('p17-oss-gov', 'OSS Gov', 'code', 'meta') RETURNING id",
     )
-    .fetch_one(&db).await.unwrap();
-    let cat: String = sqlx::query_scalar(
-        "SELECT display_category FROM skill_nodes WHERE id = $1",
-    )
-    .bind(id).fetch_one(&db).await.unwrap();
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    let cat: String = sqlx::query_scalar("SELECT display_category FROM skill_nodes WHERE id = $1")
+        .bind(id)
+        .fetch_one(&db)
+        .await
+        .unwrap();
     assert_eq!(cat, "meta");
     db.close().await;
     cleanup_test_db(&name).await;

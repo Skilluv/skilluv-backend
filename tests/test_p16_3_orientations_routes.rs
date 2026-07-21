@@ -33,12 +33,11 @@ async fn get_orientation_detail_includes_skills() {
     let app = TestApp::spawn().await;
 
     // Attache 1 skill au track dev-frontend pour vérifier le join.
-    let track_id: uuid::Uuid = sqlx::query_scalar(
-        "SELECT id FROM orientations WHERE slug = 'dev-frontend'",
-    )
-    .fetch_one(&app.db)
-    .await
-    .unwrap();
+    let track_id: uuid::Uuid =
+        sqlx::query_scalar("SELECT id FROM orientations WHERE slug = 'dev-frontend'")
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
     let skill_id: uuid::Uuid = sqlx::query_scalar(
         "SELECT id FROM skill_nodes WHERE slug = 'component-composition' LIMIT 1",
     )
@@ -85,7 +84,10 @@ async fn register_orientation_auto_promotes_first_to_primary() {
         .await;
     assert_eq!(resp.status().as_u16(), 201);
     let body: serde_json::Value = resp.json().await.unwrap();
-    assert_eq!(body["data"]["is_primary"], true, "1st orientation auto-primary");
+    assert_eq!(
+        body["data"]["is_primary"], true,
+        "1st orientation auto-primary"
+    );
 }
 
 #[tokio::test]
@@ -95,10 +97,17 @@ async fn cannot_register_more_than_three_active_orientations() {
     app.login("kim16r4").await;
 
     for slug in ["dev-frontend", "dev-backend", "web-designer"] {
-        let r = app.post("/api/users/me/orientations", &json!({ "slug": slug })).await;
+        let r = app
+            .post("/api/users/me/orientations", &json!({ "slug": slug }))
+            .await;
         assert_eq!(r.status().as_u16(), 201, "slug {slug} should succeed");
     }
-    let over = app.post("/api/users/me/orientations", &json!({ "slug": "pentester-web" })).await;
+    let over = app
+        .post(
+            "/api/users/me/orientations",
+            &json!({ "slug": "pentester-web" }),
+        )
+        .await;
     assert_eq!(over.status().as_u16(), 400, "cap 3 enforced");
 }
 
@@ -108,8 +117,11 @@ async fn delete_orientation_historises_but_keeps_row() {
     app.register_user("kim16r5").await;
     app.login("kim16r5").await;
 
-    app.post("/api/users/me/orientations", &json!({ "slug": "dev-backend" }))
-        .await;
+    app.post(
+        "/api/users/me/orientations",
+        &json!({ "slug": "dev-backend" }),
+    )
+    .await;
     let del = app.delete("/api/users/me/orientations/dev-backend").await;
     assert_eq!(del.status().as_u16(), 200);
 
@@ -126,7 +138,12 @@ async fn delete_orientation_historises_but_keeps_row() {
     assert_eq!(cnt, 1);
 
     // Peut ré-inscrire après end
-    let re = app.post("/api/users/me/orientations", &json!({ "slug": "dev-backend" })).await;
+    let re = app
+        .post(
+            "/api/users/me/orientations",
+            &json!({ "slug": "dev-backend" }),
+        )
+        .await;
     assert_eq!(re.status().as_u16(), 201, "re-registering after end works");
 }
 
@@ -136,10 +153,16 @@ async fn patch_switches_primary_flag_atomically() {
     app.register_user("kim16r6").await;
     app.login("kim16r6").await;
 
-    app.post("/api/users/me/orientations", &json!({ "slug": "dev-frontend" }))
-        .await; // auto-primary
-    app.post("/api/users/me/orientations", &json!({ "slug": "web-designer" }))
-        .await;
+    app.post(
+        "/api/users/me/orientations",
+        &json!({ "slug": "dev-frontend" }),
+    )
+    .await; // auto-primary
+    app.post(
+        "/api/users/me/orientations",
+        &json!({ "slug": "web-designer" }),
+    )
+    .await;
 
     let patch = app
         .put(
@@ -152,7 +175,10 @@ async fn patch_switches_primary_flag_atomically() {
     let _ = patch;
     let resp = app
         .client
-        .patch(format!("{}/api/users/me/orientations/web-designer", app.addr))
+        .patch(format!(
+            "{}/api/users/me/orientations/web-designer",
+            app.addr
+        ))
         .json(&json!({ "is_primary": true }))
         .send()
         .await

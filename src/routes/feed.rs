@@ -47,8 +47,9 @@ async fn my_feed(
     let half = limit; // overfetch each source then merge
 
     // Recent successful submissions
-    let submissions: Vec<(Uuid, Uuid, String, i32, chrono::DateTime<chrono::Utc>)> = sqlx::query_as(
-        r#"
+    let submissions: Vec<(Uuid, Uuid, String, i32, chrono::DateTime<chrono::Utc>)> =
+        sqlx::query_as(
+            r#"
         SELECT cs.id, cs.challenge_id, c.title, cs.fragments_earned, cs.evaluated_at
         FROM challenge_submissions cs
         JOIN challenge_templates c ON c.id = cs.challenge_id
@@ -56,26 +57,27 @@ async fn my_feed(
         ORDER BY cs.evaluated_at DESC
         LIMIT $2
         "#,
-    )
-    .bind(auth.user_id)
-    .bind(half)
-    .fetch_all(&state.db)
-    .await?;
+        )
+        .bind(auth.user_id)
+        .bind(half)
+        .fetch_all(&state.db)
+        .await?;
 
     // Recent comments by the user
-    let comments: Vec<(Uuid, String, Uuid, String, chrono::DateTime<chrono::Utc>)> = sqlx::query_as(
-        r#"
+    let comments: Vec<(Uuid, String, Uuid, String, chrono::DateTime<chrono::Utc>)> =
+        sqlx::query_as(
+            r#"
         SELECT id, target_type, target_id, LEFT(body, 200), created_at
         FROM comments
         WHERE author_id = $1 AND deleted_at IS NULL
         ORDER BY created_at DESC
         LIMIT $2
         "#,
-    )
-    .bind(auth.user_id)
-    .bind(half)
-    .fetch_all(&state.db)
-    .await?;
+        )
+        .bind(auth.user_id)
+        .bind(half)
+        .fetch_all(&state.db)
+        .await?;
 
     // Recent mentions received
     let mentions: Vec<(Uuid, Uuid, String, Uuid, chrono::DateTime<chrono::Utc>)> = sqlx::query_as(
@@ -130,7 +132,7 @@ async fn my_feed(
         });
     }
 
-    items.sort_by(|a, b| b.happened_at.cmp(&a.happened_at));
+    items.sort_by_key(|i| std::cmp::Reverse(i.happened_at));
     items.truncate(limit as usize);
 
     if analytics_consent(&headers) {
@@ -207,13 +209,10 @@ async fn for_you_feed(
     }
 
     // 2. Recos slice level-up (P4).
-    let recos = crate::services::SkillsService::recommend_slices_for_user(
-        &state.db,
-        auth.user_id,
-        10,
-    )
-    .await
-    .unwrap_or_default();
+    let recos =
+        crate::services::SkillsService::recommend_slices_for_user(&state.db, auth.user_id, 10)
+            .await
+            .unwrap_or_default();
     let now = chrono::Utc::now();
     for reco in recos {
         items.push(FeedItem {
@@ -289,7 +288,7 @@ async fn for_you_feed(
         });
     }
 
-    items.sort_by(|a, b| b.happened_at.cmp(&a.happened_at));
+    items.sort_by_key(|i| std::cmp::Reverse(i.happened_at));
     items.truncate(limit as usize);
 
     Ok(Json(json!({

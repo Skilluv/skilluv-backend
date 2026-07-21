@@ -52,9 +52,8 @@ pub async fn evaluate_deliverable(
     .await?
     .map(|(vb, cid, meta): (String, Option<Uuid>, Option<serde_json::Value>)| (vb, cid, meta));
 
-    let (verifiable_by, challenge_id, metadata) = row.ok_or_else(|| {
-        AppError::NotFound("deliverable not found".into())
-    })?;
+    let (verifiable_by, challenge_id, metadata) =
+        row.ok_or_else(|| AppError::NotFound("deliverable not found".into()))?;
 
     if verifiable_by != "llm_evaluation" {
         return Err(AppError::Validation(format!(
@@ -82,7 +81,12 @@ pub async fn evaluate_deliverable(
     }
 
     // Charge le challenge_template pour title + instructions + rubric.
-    let (title, instructions, difficulty, rubric): (String, String, i16, Option<serde_json::Value>) = if let Some(cid) = challenge_id {
+    let (title, instructions, difficulty, rubric): (
+        String,
+        String,
+        i16,
+        Option<serde_json::Value>,
+    ) = if let Some(cid) = challenge_id {
         sqlx::query_as(
             "SELECT title, instructions, difficulty, evaluation_rubric
              FROM challenge_templates WHERE id = $1",
@@ -157,7 +161,10 @@ pub async fn evaluate_deliverable(
             let score: f64 = extract_score(&resp);
             let feedback = extract_feedback(&resp);
             let (new_status, notes) = if score >= AUTO_VERIFY_THRESHOLD {
-                ("verified", format!("LLM auto-approved with score {score:.2}"))
+                (
+                    "verified",
+                    format!("LLM auto-approved with score {score:.2}"),
+                )
             } else {
                 (
                     "pending_manual_review",

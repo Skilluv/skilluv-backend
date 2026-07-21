@@ -82,22 +82,29 @@ impl PortfolioService {
         .await?;
 
         // Attestations publiques
-        let attestations: Vec<(Uuid, String, String, String, String, chrono::DateTime<chrono::Utc>)> =
-            sqlx::query_as(
-                r#"
+        let attestations: Vec<(
+            Uuid,
+            String,
+            String,
+            String,
+            String,
+            chrono::DateTime<chrono::Utc>,
+        )> = sqlx::query_as(
+            r#"
                 SELECT id, attestation_type, title, description, verification_code, issued_at
                 FROM attestations
                 WHERE user_id = $1 AND public = TRUE AND revoked_at IS NULL
                 ORDER BY issued_at DESC
                 "#,
-            )
-            .bind(user.id)
-            .fetch_all(db)
-            .await?;
+        )
+        .bind(user.id)
+        .fetch_all(db)
+        .await?;
 
         // Deliverables publics vérifiés récents (top 20)
-        let deliverables: Vec<(Uuid, String, String, chrono::DateTime<chrono::Utc>)> = sqlx::query_as(
-            r#"
+        let deliverables: Vec<(Uuid, String, String, chrono::DateTime<chrono::Utc>)> =
+            sqlx::query_as(
+                r#"
             SELECT id, artifact_type, artifact_url, submitted_at
             FROM deliverables
             WHERE user_id = $1
@@ -107,25 +114,29 @@ impl PortfolioService {
             ORDER BY submitted_at DESC
             LIMIT 20
             "#,
-        )
-        .bind(user.id)
-        .fetch_all(db)
-        .await?;
+            )
+            .bind(user.id)
+            .fetch_all(db)
+            .await?;
 
         // Enrolled tracks
-        let tracks: Vec<(String, String, String, Option<chrono::DateTime<chrono::Utc>>)> =
-            sqlx::query_as(
-                r#"
+        let tracks: Vec<(
+            String,
+            String,
+            String,
+            Option<chrono::DateTime<chrono::Utc>>,
+        )> = sqlx::query_as(
+            r#"
                 SELECT t.slug, t.name, t.target_domain, ut.completed_at
                 FROM user_tracks ut
                 JOIN tracks t ON t.id = ut.track_id
                 WHERE ut.user_id = $1
                 ORDER BY ut.started_at DESC
                 "#,
-            )
-            .bind(user.id)
-            .fetch_all(db)
-            .await?;
+        )
+        .bind(user.id)
+        .fetch_all(db)
+        .await?;
 
         let profile_url = format!("{base_url}/@{}", user.username);
 
@@ -222,10 +233,7 @@ impl PortfolioService {
     /// Format shields.io minimaliste : 2 sections (label + value) avec couleur
     /// dépendant du titre. Intégrable dans un README GitHub via :
     ///   ![Skilluv Badge](https://skilluv.com/api/users/{username}/badge.svg)
-    pub async fn build_badge_svg(
-        db: &PgPool,
-        username: &str,
-    ) -> Result<String, AppError> {
+    pub async fn build_badge_svg(db: &PgPool, username: &str) -> Result<String, AppError> {
         let user = Self::get_user_by_username(db, username).await?;
 
         let title = user.title.as_deref().unwrap_or("apprenti");
@@ -238,10 +246,10 @@ impl PortfolioService {
         };
         // Couleurs shields.io par titre — gradient de rareté
         let color = match title {
-            "legende" => "#f39c12",  // gold
-            "maitre" => "#8e44ad",   // purple
-            "artisan" => "#3498db",  // blue
-            _ => "#95a5a6",           // grey (apprenti)
+            "legende" => "#f39c12", // gold
+            "maitre" => "#8e44ad",  // purple
+            "artisan" => "#3498db", // blue
+            _ => "#95a5a6",         // grey (apprenti)
         };
 
         let value = if user.golden_stars > 0 {

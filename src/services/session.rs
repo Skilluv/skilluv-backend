@@ -18,6 +18,9 @@ use uuid::Uuid;
 use crate::errors::AppError;
 use crate::services::AuthService;
 
+// Type aliases pour clippy::type_complexity (rangées sqlx::query_as).
+type SessionRow107 = (Uuid, Vec<u8>, Option<Vec<u8>>, Option<DateTime<Utc>>);
+
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 pub struct SessionRow {
     pub id: Uuid,
@@ -53,11 +56,7 @@ impl SessionService {
     /// Best-effort: failures are swallowed on purpose. A stale cookie
     /// pointing to a non-existent or already-revoked session is expected on
     /// the happy path (fresh browser, prior logout, expired session).
-    pub async fn revoke_prior_from_cookie(
-        db: &PgPool,
-        user_id: Uuid,
-        cookie_header: Option<&str>,
-    ) {
+    pub async fn revoke_prior_from_cookie(db: &PgPool, user_id: Uuid, cookie_header: Option<&str>) {
         let Some(header) = cookie_header else { return };
         let Some(sid) = header
             .split(';')
@@ -108,7 +107,7 @@ impl SessionService {
     ) -> Result<(Uuid, String), AppError> {
         let presented_hash = sha256(presented_token);
 
-        let row: Option<(Uuid, Vec<u8>, Option<Vec<u8>>, Option<DateTime<Utc>>)> = sqlx::query_as(
+        let row: Option<SessionRow107> = sqlx::query_as(
             "SELECT user_id, refresh_hash, previous_hash, revoked_at FROM user_sessions WHERE id = $1",
         )
         .bind(session_id)
@@ -167,18 +166,16 @@ impl SessionService {
     }
 
     pub async fn revoke_all(db: &PgPool, user_id: Uuid) -> Result<(), AppError> {
-        sqlx::query("UPDATE user_sessions SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL")
-            .bind(user_id)
-            .execute(db)
-            .await?;
+        sqlx::query(
+            "UPDATE user_sessions SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL",
+        )
+        .bind(user_id)
+        .execute(db)
+        .await?;
         Ok(())
     }
 
-    pub async fn revoke_all_except(
-        db: &PgPool,
-        user_id: Uuid,
-        keep: Uuid,
-    ) -> Result<(), AppError> {
+    pub async fn revoke_all_except(db: &PgPool, user_id: Uuid, keep: Uuid) -> Result<(), AppError> {
         sqlx::query(
             "UPDATE user_sessions SET revoked_at = NOW()
              WHERE user_id = $1 AND id <> $2 AND revoked_at IS NULL",

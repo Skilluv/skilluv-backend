@@ -7,8 +7,8 @@
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use uuid::Uuid;
 
-use skilluv_backend::services::skills::SkillFragmentOrder;
 use skilluv_backend::services::SkillsService;
+use skilluv_backend::services::skills::SkillFragmentOrder;
 
 async fn setup_test_db() -> (PgPool, String) {
     let db_name = format!(

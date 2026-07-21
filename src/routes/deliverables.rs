@@ -62,9 +62,7 @@ async fn get_deliverable(
     // On ne retourne pas les deliverables non-public sans auth
     // (Phase P2.1 : simple check, une future itération ajoutera un check owner)
     if !deliverable.public || deliverable.revoked_at.is_some() {
-        return Err(AppError::NotFound(
-            "Deliverable not found".to_string(),
-        ));
+        return Err(AppError::NotFound("Deliverable not found".to_string()));
     }
 
     Ok(Json(build_response(json!({ "deliverable": deliverable }))))
@@ -85,9 +83,10 @@ async fn list_user_deliverables(
     Query(q): Query<UserDeliverablesQuery>,
 ) -> Result<Json<Value>, AppError> {
     let limit = q.limit.unwrap_or(20);
-    let deliverables =
-        DeliverablesService::list_public_by_user(&state.db, user_id, limit).await?;
-    Ok(Json(build_response(json!({ "deliverables": deliverables }))))
+    let deliverables = DeliverablesService::list_public_by_user(&state.db, user_id, limit).await?;
+    Ok(Json(build_response(
+        json!({ "deliverables": deliverables }),
+    )))
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -104,9 +103,7 @@ async fn github_slices_webhook(
     let secret = std::env::var("GITHUB_WEBHOOK_SECRET")
         .ok()
         .filter(|s| !s.is_empty())
-        .ok_or_else(|| {
-            AppError::Internal("GITHUB_WEBHOOK_SECRET not set".to_string())
-        })?;
+        .ok_or_else(|| AppError::Internal("GITHUB_WEBHOOK_SECRET not set".to_string()))?;
 
     let signature = headers
         .get("x-hub-signature-256")
@@ -140,12 +137,11 @@ async fn github_slices_webhook(
     //    Note : on log le prefix `slices:` sur delivery_id pour distinguer les
     //    deux consommateurs, sinon un même delivery pourrait bloquer les deux flows.
     let scoped_delivery_id = format!("slices:{delivery_id}");
-    let already: Option<(String,)> = sqlx::query_as(
-        "SELECT delivery_id FROM github_webhook_events WHERE delivery_id = $1",
-    )
-    .bind(&scoped_delivery_id)
-    .fetch_optional(&state.db)
-    .await?;
+    let already: Option<(String,)> =
+        sqlx::query_as("SELECT delivery_id FROM github_webhook_events WHERE delivery_id = $1")
+            .bind(&scoped_delivery_id)
+            .fetch_optional(&state.db)
+            .await?;
 
     if already.is_some() {
         return Ok(Json(build_response(
@@ -255,8 +251,14 @@ fn extract_pr_merged_params(
         .to_string();
 
     let commits_count = pr.get("commits").and_then(|v| v.as_i64()).map(|n| n as i32);
-    let additions = pr.get("additions").and_then(|v| v.as_i64()).map(|n| n as i32);
-    let deletions = pr.get("deletions").and_then(|v| v.as_i64()).map(|n| n as i32);
+    let additions = pr
+        .get("additions")
+        .and_then(|v| v.as_i64())
+        .map(|n| n as i32);
+    let deletions = pr
+        .get("deletions")
+        .and_then(|v| v.as_i64())
+        .map(|n| n as i32);
     let files_changed = pr
         .get("changed_files")
         .and_then(|v| v.as_i64())
@@ -287,12 +289,11 @@ fn extract_pr_merged_params(
 
 async fn broadcast_verified(state: &AppState, deliverable_id: Uuid) {
     // Fetch minimal info for the broadcast (best-effort, ne bloque pas le webhook)
-    let row: Result<Option<(Uuid, i32)>, sqlx::Error> = sqlx::query_as(
-        "SELECT user_id, fragments_awarded FROM deliverables WHERE id = $1",
-    )
-    .bind(deliverable_id)
-    .fetch_optional(&state.db)
-    .await;
+    let row: Result<Option<(Uuid, i32)>, sqlx::Error> =
+        sqlx::query_as("SELECT user_id, fragments_awarded FROM deliverables WHERE id = $1")
+            .bind(deliverable_id)
+            .fetch_optional(&state.db)
+            .await;
 
     let Ok(Some((user_id, fragments))) = row else {
         return;

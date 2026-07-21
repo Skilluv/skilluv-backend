@@ -12,11 +12,34 @@ use axum::extract::{Query, State};
 use axum::routing::get;
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 use crate::AppState;
 use crate::errors::AppError;
+
+// Type aliases pour clippy::type_complexity (rangées sqlx::query_as).
+type ExploreRow76 = (
+    Uuid,
+    String,
+    String,
+    i16,
+    Uuid,
+    String,
+    i32,
+    i32,
+    chrono::DateTime<chrono::Utc>,
+);
+type ExploreRow133 = (
+    Uuid,
+    String,
+    String,
+    i16,
+    Option<String>,
+    i32,
+    bool,
+    chrono::DateTime<chrono::Utc>,
+);
 
 pub fn explore_routes() -> Router<AppState> {
     Router::new().route("/explore", get(explore))
@@ -64,8 +87,8 @@ async fn explore(
     // ne ferait pas remonter les items plus anciens en page 2+.
     let limit_each = (page * per_page).min(500);
 
-    let want_slices = q.kind.as_deref().map_or(true, |k| k == "slice");
-    let want_challenges = q.kind.as_deref().map_or(true, |k| k == "challenge");
+    let want_slices = q.kind.as_deref().is_none_or(|k| k == "slice");
+    let want_challenges = q.kind.as_deref().is_none_or(|k| k == "challenge");
 
     let text_pattern: Option<String> = q.q.as_deref().map(|s| format!("%{s}%"));
 
@@ -73,17 +96,7 @@ async fn explore(
 
     if want_slices {
         // On restreint aux slices open + non-archivées (via project.archived_at NULL).
-        let rows: Vec<(
-            Uuid,
-            String,
-            String,
-            i16,
-            Uuid,
-            String,
-            i32,
-            i32,
-            chrono::DateTime<chrono::Utc>,
-        )> = sqlx::query_as(
+        let rows: Vec<ExploreRow76> = sqlx::query_as(
             r#"
             SELECT ps.id, ps.title, ps.primary_domain, ps.difficulty,
                    ps.project_id, ps.slice_type, ps.fragments_reward,
@@ -109,7 +122,8 @@ async fn explore(
         .fetch_all(&state.db)
         .await?;
 
-        for (id, title, domain, difficulty, project_id, slice_type, frags, credits, created_at) in rows
+        for (id, title, domain, difficulty, project_id, slice_type, frags, credits, created_at) in
+            rows
         {
             items.push(ExploreItem {
                 kind: "slice",
@@ -129,16 +143,7 @@ async fn explore(
     }
 
     if want_challenges {
-        let rows: Vec<(
-            Uuid,
-            String,
-            String,
-            i16,
-            Option<String>,
-            i32,
-            bool,
-            chrono::DateTime<chrono::Utc>,
-        )> = sqlx::query_as(
+        let rows: Vec<ExploreRow133> = sqlx::query_as(
             r#"
             SELECT ct.id, ct.title, ct.skill_domain, ct.difficulty,
                    ct.language, ct.reward_fragments, ct.is_capstone,
@@ -179,7 +184,7 @@ async fn explore(
     }
 
     // Tri final unifié par created_at DESC + slice de page.
-    items.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    items.sort_by_key(|i| std::cmp::Reverse(i.created_at));
     let offset = ((page - 1) * per_page) as usize;
     let page_slice: Vec<&ExploreItem> = items.iter().skip(offset).take(per_page as usize).collect();
 

@@ -92,12 +92,11 @@ impl ApiKeyAuth {
 
 fn extract_api_key(parts: &Parts) -> Result<String, AppError> {
     // Try Authorization: Bearer sk_live_xxx
-    if let Some(auth_header) = parts.headers.get("authorization") {
-        if let Ok(value) = auth_header.to_str() {
-            if let Some(key) = value.strip_prefix("Bearer ") {
-                return Ok(key.trim().to_string());
-            }
-        }
+    if let Some(auth_header) = parts.headers.get("authorization")
+        && let Ok(value) = auth_header.to_str()
+        && let Some(key) = value.strip_prefix("Bearer ")
+    {
+        return Ok(key.trim().to_string());
     }
 
     // Try query param ?api_key=sk_live_xxx

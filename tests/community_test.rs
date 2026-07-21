@@ -101,10 +101,7 @@ async fn test_vote_challenge() {
     app.login("voter").await;
 
     let vote_resp = app
-        .post(
-            &format!("/api/community/challenges/{cid}/vote"),
-            &json!({}),
-        )
+        .post(&format!("/api/community/challenges/{cid}/vote"), &json!({}))
         .await;
     assert_eq!(vote_resp.status(), StatusCode::CREATED);
 

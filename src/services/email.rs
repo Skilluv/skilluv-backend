@@ -17,6 +17,17 @@ pub struct EmailService {
     from_name: String,
 }
 
+/// Paramètres pour [`EmailService::send_with_log`].
+#[derive(Debug, Clone, Copy)]
+pub struct SendWithLogParams<'a> {
+    pub user_id: Uuid,
+    pub to_email: &'a str,
+    pub to_name: &'a str,
+    pub subject: &'a str,
+    pub html: &'a str,
+    pub kind: &'a str,
+}
+
 impl EmailService {
     pub fn new(api_key: Option<String>, from_email: &str, from_name: &str) -> Self {
         let smtp = build_smtp_from_env();
@@ -178,13 +189,16 @@ impl EmailService {
     pub async fn send_with_log(
         &self,
         db: &PgPool,
-        user_id: Uuid,
-        to_email: &str,
-        to_name: &str,
-        subject: &str,
-        html: &str,
-        kind: &str,
+        params: SendWithLogParams<'_>,
     ) -> Result<bool, AppError> {
+        let SendWithLogParams {
+            user_id,
+            to_email,
+            to_name,
+            subject,
+            html,
+            kind,
+        } = params;
         // Bail if the user has hard-bounced or globally disabled emails
         let disabled: Option<(bool,)> =
             sqlx::query_as("SELECT email_disabled FROM users WHERE id = $1")
@@ -199,14 +213,13 @@ impl EmailService {
         self.send(to_email, to_name, subject, html).await?;
 
         // Best-effort logging — never fail the send because logging failed.
-        if let Err(err) = sqlx::query(
-            "INSERT INTO email_log (user_id, kind, subject) VALUES ($1, $2, $3)",
-        )
-        .bind(user_id)
-        .bind(kind)
-        .bind(subject)
-        .execute(db)
-        .await
+        if let Err(err) =
+            sqlx::query("INSERT INTO email_log (user_id, kind, subject) VALUES ($1, $2, $3)")
+                .bind(user_id)
+                .bind(kind)
+                .bind(subject)
+                .execute(db)
+                .await
         {
             tracing::warn!(error = %err, "failed to log email_log row");
         }
@@ -227,8 +240,7 @@ impl EmailService {
     /// load reliably in email.
     fn shell(&self, preheader: &str, body: &str) -> String {
         // Brand tokens mirror the frontend (`app.css` :root).
-        const FONT_STACK: &str =
-            "'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif";
+        const FONT_STACK: &str = "'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif";
         const ACCENT: &str = "#ea580c"; // forge accent
         const TEXT: &str = "#1c1917";
         const TEXT_MUTED: &str = "#78716c";
@@ -450,10 +462,7 @@ impl EmailService {
             </p>
             "#
         );
-        let html = self.shell(
-            &format!("Code de vérification Skilluv : {code}"),
-            &body,
-        );
+        let html = self.shell(&format!("Code de vérification Skilluv : {code}"), &body);
         self.send(email, display_name, "Ton code de vérification", &html)
             .await
     }

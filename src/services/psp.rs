@@ -24,7 +24,7 @@ pub struct CheckoutSession {
 pub struct CheckoutParams<'a> {
     pub pack_slug: &'a str,
     pub pack_credits: i32,
-    pub /* amount in the target currency's smallest unit (cents, kobo, …) */ amount_cents: i64,
+    pub amount_cents: i64,
     pub currency: &'a str,
     pub customer_email: &'a str,
     pub client_reference_id: &'a str,
@@ -61,10 +61,18 @@ pub trait PaymentProvider: Send + Sync {
     /// Verify signature and return the parsed event.
     fn verify_webhook(&self, payload: &[u8], signature: &str) -> Result<WebhookEvent, AppError>;
 
-    async fn refund(&self, payment_id: &str, amount_cents: Option<i64>) -> Result<RefundResult, AppError>;
+    async fn refund(
+        &self,
+        payment_id: &str,
+        amount_cents: Option<i64>,
+    ) -> Result<RefundResult, AppError>;
 
     /// Optional billing portal URL (Stripe supports it, PSP Africa usually don't).
-    async fn customer_portal_url(&self, _customer_id: &str, _return_url: &str) -> Result<Option<String>, AppError> {
+    async fn customer_portal_url(
+        &self,
+        _customer_id: &str,
+        _return_url: &str,
+    ) -> Result<Option<String>, AppError> {
         Ok(None)
     }
 }
@@ -78,7 +86,9 @@ pub struct PaymentRegistry {
 
 impl PaymentRegistry {
     pub fn new() -> Self {
-        Self { providers: Vec::new() }
+        Self {
+            providers: Vec::new(),
+        }
     }
 
     pub fn register(&mut self, provider: Arc<dyn PaymentProvider>) {
@@ -95,7 +105,10 @@ impl PaymentRegistry {
 
     /// Choose the best provider for a given country + preferred currency.
     /// Falls back to the first registered provider (typically Stripe).
-    pub fn resolve_for_country(&self, country_iso2: Option<&str>) -> Option<Arc<dyn PaymentProvider>> {
+    pub fn resolve_for_country(
+        &self,
+        country_iso2: Option<&str>,
+    ) -> Option<Arc<dyn PaymentProvider>> {
         if let Some(cc) = country_iso2 {
             let cc_upper = cc.to_uppercase();
             if let Some(p) = self
@@ -115,26 +128,54 @@ impl PaymentRegistry {
 /// The actual dispatch goes through `resolve_for_country` on the registry.
 pub const DEFAULT_PROVIDER_BY_COUNTRY: &[(&str, &str)] = &[
     // West Africa francophone (XOF)
-    ("SN", "flutterwave"), ("CI", "flutterwave"), ("BJ", "flutterwave"),
-    ("BF", "flutterwave"), ("TG", "flutterwave"), ("ML", "flutterwave"),
-    ("NE", "flutterwave"), ("GW", "flutterwave"),
+    ("SN", "flutterwave"),
+    ("CI", "flutterwave"),
+    ("BJ", "flutterwave"),
+    ("BF", "flutterwave"),
+    ("TG", "flutterwave"),
+    ("ML", "flutterwave"),
+    ("NE", "flutterwave"),
+    ("GW", "flutterwave"),
     // Central Africa (XAF)
-    ("CM", "flutterwave"), ("GA", "flutterwave"), ("CG", "flutterwave"),
-    ("TD", "flutterwave"), ("CF", "flutterwave"), ("GQ", "flutterwave"),
+    ("CM", "flutterwave"),
+    ("GA", "flutterwave"),
+    ("CG", "flutterwave"),
+    ("TD", "flutterwave"),
+    ("CF", "flutterwave"),
+    ("GQ", "flutterwave"),
     // Maghreb
-    ("MA", "flutterwave"), ("TN", "flutterwave"), ("DZ", "flutterwave"),
+    ("MA", "flutterwave"),
+    ("TN", "flutterwave"),
+    ("DZ", "flutterwave"),
     // Nigeria + Ghana + Egypt: Paystack
-    ("NG", "paystack"), ("GH", "paystack"), ("EG", "paystack"),
+    ("NG", "paystack"),
+    ("GH", "paystack"),
+    ("EG", "paystack"),
     // East Africa
-    ("KE", "flutterwave"), ("UG", "flutterwave"), ("TZ", "flutterwave"),
-    ("RW", "flutterwave"), ("ET", "flutterwave"),
+    ("KE", "flutterwave"),
+    ("UG", "flutterwave"),
+    ("TZ", "flutterwave"),
+    ("RW", "flutterwave"),
+    ("ET", "flutterwave"),
     // South Africa
     ("ZA", "stripe"),
     // EU/UK/CA/US → Stripe
-    ("FR", "stripe"), ("BE", "stripe"), ("CH", "stripe"), ("LU", "stripe"),
-    ("DE", "stripe"), ("NL", "stripe"), ("ES", "stripe"), ("IT", "stripe"),
-    ("PT", "stripe"), ("IE", "stripe"), ("AT", "stripe"), ("PL", "stripe"),
-    ("GB", "stripe"), ("US", "stripe"), ("CA", "stripe"), ("AU", "stripe"),
+    ("FR", "stripe"),
+    ("BE", "stripe"),
+    ("CH", "stripe"),
+    ("LU", "stripe"),
+    ("DE", "stripe"),
+    ("NL", "stripe"),
+    ("ES", "stripe"),
+    ("IT", "stripe"),
+    ("PT", "stripe"),
+    ("IE", "stripe"),
+    ("AT", "stripe"),
+    ("PL", "stripe"),
+    ("GB", "stripe"),
+    ("US", "stripe"),
+    ("CA", "stripe"),
+    ("AU", "stripe"),
 ];
 
 pub fn default_provider_name_for_country(country_iso2: &str) -> &'static str {
@@ -168,8 +209,8 @@ pub mod stripe_adapter {
 
         fn supported_country_codes(&self) -> &'static [&'static str] {
             &[
-                "FR", "BE", "CH", "LU", "DE", "NL", "ES", "IT", "PT", "IE", "AT", "PL",
-                "GB", "US", "CA", "AU", "ZA",
+                "FR", "BE", "CH", "LU", "DE", "NL", "ES", "IT", "PT", "IE", "AT", "PL", "GB", "US",
+                "CA", "AU", "ZA",
             ]
         }
 
@@ -190,7 +231,11 @@ pub mod stripe_adapter {
                 &pack,
                 params.customer_email,
                 params.client_reference_id,
-                &params.metadata.iter().map(|(k, v)| (*k, v.clone())).collect::<Vec<_>>(),
+                &params
+                    .metadata
+                    .iter()
+                    .map(|(k, v)| (*k, v.clone()))
+                    .collect::<Vec<_>>(),
             )
             .await?;
             Ok(CheckoutSession {
@@ -200,7 +245,11 @@ pub mod stripe_adapter {
             })
         }
 
-        fn verify_webhook(&self, payload: &[u8], signature: &str) -> Result<WebhookEvent, AppError> {
+        fn verify_webhook(
+            &self,
+            payload: &[u8],
+            signature: &str,
+        ) -> Result<WebhookEvent, AppError> {
             crate::services::stripe::verify_webhook_signature(
                 &self.cfg.webhook_secret,
                 payload,
@@ -216,7 +265,11 @@ pub mod stripe_adapter {
             })
         }
 
-        async fn refund(&self, _payment_id: &str, _amount_cents: Option<i64>) -> Result<RefundResult, AppError> {
+        async fn refund(
+            &self,
+            _payment_id: &str,
+            _amount_cents: Option<i64>,
+        ) -> Result<RefundResult, AppError> {
             // Stripe refunds are usually issued from the dashboard for MVP ; the API endpoint
             // is /v1/refunds. Left as TODO for the automated flow.
             Err(AppError::Validation(
@@ -224,7 +277,11 @@ pub mod stripe_adapter {
             ))
         }
 
-        async fn customer_portal_url(&self, customer_id: &str, return_url: &str) -> Result<Option<String>, AppError> {
+        async fn customer_portal_url(
+            &self,
+            customer_id: &str,
+            return_url: &str,
+        ) -> Result<Option<String>, AppError> {
             let url = crate::services::stripe::create_billing_portal_session(
                 &self.cfg,
                 customer_id,

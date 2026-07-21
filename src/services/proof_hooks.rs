@@ -74,14 +74,15 @@ pub async fn recompute_all_for_user(
     };
 
     // 3. Rank
-    let (rank_prev, rank_new, rank_promoted) = match ranks::recompute_rank_for_user(db, user_id).await {
-        Ok(t) => t,
-        Err(e) => {
-            tracing::warn!(user_id = %user_id, error = %e, "P19: rank recompute failed");
-            errors.push(format!("rank: {e}"));
-            (String::from("apprenti"), String::from("apprenti"), false)
-        }
-    };
+    let (rank_prev, rank_new, rank_promoted) =
+        match ranks::recompute_rank_for_user(db, user_id).await {
+            Ok(t) => t,
+            Err(e) => {
+                tracing::warn!(user_id = %user_id, error = %e, "P19: rank recompute failed");
+                errors.push(format!("rank: {e}"));
+                (String::from("apprenti"), String::from("apprenti"), false)
+            }
+        };
 
     // P19.4 — Metrics granulaires.
     metrics::counter!(
@@ -93,25 +94,29 @@ pub async fn recompute_all_for_user(
         metrics::counter!(
             "skilluv_capabilities_granted_total",
             "capability" => slug.clone(),
-        ).increment(1);
+        )
+        .increment(1);
     }
     for slug in &badges.awarded {
         metrics::counter!(
             "skilluv_badges_awarded_total",
             "rule" => slug.clone(),
-        ).increment(1);
+        )
+        .increment(1);
     }
     for slug in &badges.revoked {
         metrics::counter!(
             "skilluv_badges_revoked_total",
             "rule" => slug.clone(),
-        ).increment(1);
+        )
+        .increment(1);
     }
     if rank_promoted {
         metrics::counter!(
             "skilluv_ranks_promoted_total",
             "rank" => rank_new.clone(),
-        ).increment(1);
+        )
+        .increment(1);
     }
 
     Ok(ProofRecomputeReport {
@@ -131,10 +136,7 @@ pub async fn recompute_all_for_user(
 /// P19.3 — Sweep : recompute pour tous les users ayant eu de l'activité
 /// récente (deliverable verified OU attestation reçue dans la fenêtre).
 /// Retourne la liste des user_ids traités.
-pub async fn sweep_active_users(
-    db: &PgPool,
-    within_days: i32,
-) -> Result<Vec<Uuid>, AppError> {
+pub async fn sweep_active_users(db: &PgPool, within_days: i32) -> Result<Vec<Uuid>, AppError> {
     let user_ids: Vec<Uuid> = sqlx::query_scalar(
         r#"
         SELECT DISTINCT user_id FROM (
@@ -199,10 +201,8 @@ pub fn start_proof_sweep_task(db: PgPool) {
                         window_days,
                         "P19.3: proof sweep completed"
                     );
-                    metrics::counter!(
-                        "skilluv_proof_sweep_users_processed_total",
-                    )
-                    .increment(processed.len() as u64);
+                    metrics::counter!("skilluv_proof_sweep_users_processed_total",)
+                        .increment(processed.len() as u64);
                 }
                 Err(e) => {
                     tracing::warn!(error = %e, "P19.3: proof sweep failed");

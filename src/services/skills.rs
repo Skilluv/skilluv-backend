@@ -15,6 +15,22 @@ use uuid::Uuid;
 
 use crate::errors::AppError;
 
+// Type aliases pour clippy::type_complexity (rangées sqlx::query_as).
+type SkillsRow307 = (
+    Uuid,
+    String,
+    String,
+    String,
+    Option<Uuid>,
+    i32,
+    i32,
+    i16,
+    Option<DateTime<Utc>>,
+    Option<DateTime<Utc>>,
+    Vec<Uuid>,
+);
+type SkillsRow543 = (Uuid, String, String, i16, Uuid, String, Uuid, i16);
+
 pub struct SkillsService;
 
 /// Ordering options pour `list_user_skill_fragments_or_backfill`.
@@ -152,7 +168,7 @@ impl SkillsService {
                     .then_with(|| a.sub_skill.cmp(&b.sub_skill))
             }),
             SkillFragmentOrder::ByFragmentsDesc => {
-                fragments.sort_by(|a, b| b.fragments.cmp(&a.fragments))
+                fragments.sort_by_key(|f| std::cmp::Reverse(f.fragments))
             }
             SkillFragmentOrder::ByDomainThenFragmentsDesc => fragments.sort_by(|a, b| {
                 a.skill_domain
@@ -216,12 +232,10 @@ impl SkillsService {
         let mut skill_id: Option<Uuid> = None;
         if let Some(lang) = language {
             let lower = lang.to_lowercase();
-            skill_id = sqlx::query_scalar(
-                "SELECT id FROM skill_nodes WHERE slug = $1 LIMIT 1",
-            )
-            .bind(&lower)
-            .fetch_optional(db)
-            .await?;
+            skill_id = sqlx::query_scalar("SELECT id FROM skill_nodes WHERE slug = $1 LIMIT 1")
+                .bind(&lower)
+                .fetch_optional(db)
+                .await?;
         }
 
         let Some(skill_id) = skill_id else {
@@ -306,10 +320,7 @@ impl SkillsService {
         db: &PgPool,
         user_id: Uuid,
     ) -> Result<Vec<UserSkillEnriched>, AppError> {
-        let rows: Vec<(Uuid, String, String, String, Option<Uuid>,
-                       i32, i32, i16,
-                       Option<DateTime<Utc>>, Option<DateTime<Utc>>,
-                       Vec<Uuid>)> = sqlx::query_as(
+        let rows: Vec<SkillsRow307> = sqlx::query_as(
             r#"
             SELECT
                 us.skill_id,
@@ -337,8 +348,19 @@ impl SkillsService {
         Ok(rows
             .into_iter()
             .map(
-                |(skill_id, slug, display_name, domain, parent_id,
-                  proven_count, wpc, level, first, last, top)| {
+                |(
+                    skill_id,
+                    slug,
+                    display_name,
+                    domain,
+                    parent_id,
+                    proven_count,
+                    wpc,
+                    level,
+                    first,
+                    last,
+                    top,
+                )| {
                     UserSkillEnriched {
                         skill_id,
                         skill_slug: slug,
@@ -377,12 +399,11 @@ impl SkillsService {
         let offset = (page - 1) * per_page;
 
         // Resolve skill_id from slug
-        let skill_id: Option<Uuid> = sqlx::query_scalar(
-            "SELECT id FROM skill_nodes WHERE slug = $1",
-        )
-        .bind(skill_slug)
-        .fetch_optional(db)
-        .await?;
+        let skill_id: Option<Uuid> =
+            sqlx::query_scalar("SELECT id FROM skill_nodes WHERE slug = $1")
+                .bind(skill_slug)
+                .fetch_optional(db)
+                .await?;
 
         let Some(skill_id) = skill_id else {
             return Err(AppError::NotFound(format!(
@@ -390,8 +411,9 @@ impl SkillsService {
             )));
         };
 
-        let talents: Vec<SkillTalent> = sqlx::query_as::<_, (Uuid, String, String, i16, i32, i32, Option<DateTime<Utc>>)>(
-            r#"
+        let talents: Vec<SkillTalent> =
+            sqlx::query_as::<_, (Uuid, String, String, i16, i32, i32, Option<DateTime<Utc>>)>(
+                r#"
             SELECT
                 u.id,
                 u.username,
@@ -409,24 +431,26 @@ impl SkillsService {
                      us.last_proven_at DESC NULLS LAST
             LIMIT $3 OFFSET $4
             "#,
-        )
-        .bind(skill_id)
-        .bind(min_level)
-        .bind(per_page)
-        .bind(offset)
-        .fetch_all(db)
-        .await?
-        .into_iter()
-        .map(|(user_id, username, display_name, level, count, wpc, last)| SkillTalent {
-            user_id,
-            username,
-            display_name,
-            proficiency_level: level,
-            proven_count: count,
-            weighted_proven_count: wpc,
-            last_proven_at: last,
-        })
-        .collect();
+            )
+            .bind(skill_id)
+            .bind(min_level)
+            .bind(per_page)
+            .bind(offset)
+            .fetch_all(db)
+            .await?
+            .into_iter()
+            .map(
+                |(user_id, username, display_name, level, count, wpc, last)| SkillTalent {
+                    user_id,
+                    username,
+                    display_name,
+                    proficiency_level: level,
+                    proven_count: count,
+                    weighted_proven_count: wpc,
+                    last_proven_at: last,
+                },
+            )
+            .collect();
 
         let total: i64 = sqlx::query_scalar(
             r#"
@@ -520,9 +544,8 @@ impl SkillsService {
         let near_skill_ids: Vec<Uuid> = near_levelup.iter().map(|(id, ..)| *id).collect();
 
         // 2. Slices ouvertes touchant au moins un de ces skills
-        let candidate_slices: Vec<(Uuid, String, String, i16, Uuid, String, Uuid, i16)> =
-            sqlx::query_as(
-                r#"
+        let candidate_slices: Vec<SkillsRow543> = sqlx::query_as(
+            r#"
                 SELECT
                     ps.id,
                     ps.title,
@@ -538,10 +561,10 @@ impl SkillsService {
                 WHERE ps.status = 'open'
                   AND ss.skill_id = ANY($1)
                 "#,
-            )
-            .bind(&near_skill_ids)
-            .fetch_all(db)
-            .await?;
+        )
+        .bind(&near_skill_ids)
+        .fetch_all(db)
+        .await?;
 
         // 3. Aggréger par slice
         use std::collections::HashMap;
@@ -583,10 +606,9 @@ impl SkillsService {
 
         // 4. Trier par total_match_score DESC + limiter
         let mut recommendations: Vec<SliceRecommendation> = by_slice.into_values().collect();
-        recommendations.sort_by(|a, b| b.total_match_score.cmp(&a.total_match_score));
+        recommendations.sort_by_key(|r| std::cmp::Reverse(r.total_match_score));
         recommendations.truncate(limit as usize);
 
         Ok(recommendations)
     }
-
 }

@@ -9,27 +9,43 @@ async fn setup_test_db() -> (PgPool, String) {
         "skilluv_ia_d_test_{}",
         Uuid::new_v4().to_string().replace('-', "")
     );
-    let admin_pool = PgPoolOptions::new().max_connections(2)
+    let admin_pool = PgPoolOptions::new()
+        .max_connections(2)
         .connect("postgres://skilluv:skilluv_secret@localhost:5433/skilluv")
-        .await.expect("admin");
+        .await
+        .expect("admin");
     sqlx::query(&format!("CREATE DATABASE \"{db_name}\""))
-        .execute(&admin_pool).await.expect("create");
+        .execute(&admin_pool)
+        .await
+        .expect("create");
     admin_pool.close().await;
     let db_url = format!("postgres://skilluv:skilluv_secret@localhost:5433/{db_name}");
-    let db = PgPoolOptions::new().max_connections(5)
-        .connect(&db_url).await.expect("connect");
-    sqlx::migrate!("./migrations").run(&db).await.expect("migrations");
+    let db = PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&db_url)
+        .await
+        .expect("connect");
+    sqlx::migrate!("./migrations")
+        .run(&db)
+        .await
+        .expect("migrations");
     (db, db_name)
 }
 
 async fn cleanup_test_db(db_name: &str) {
-    let admin_pool = PgPoolOptions::new().max_connections(2)
+    let admin_pool = PgPoolOptions::new()
+        .max_connections(2)
         .connect("postgres://skilluv:skilluv_secret@localhost:5433/skilluv")
-        .await.expect("admin");
+        .await
+        .expect("admin");
     let _ = sqlx::query(&format!(
         "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{db_name}'"
-    )).execute(&admin_pool).await;
-    let _ = sqlx::query(&format!("DROP DATABASE IF EXISTS \"{db_name}\"")).execute(&admin_pool).await;
+    ))
+    .execute(&admin_pool)
+    .await;
+    let _ = sqlx::query(&format!("DROP DATABASE IF EXISTS \"{db_name}\""))
+        .execute(&admin_pool)
+        .await;
     admin_pool.close().await;
 }
 
@@ -39,7 +55,9 @@ async fn ai_call_log_table_exists_after_migration_0101() {
     let exists: bool = sqlx::query_scalar(
         "SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = 'ai_call_log')",
     )
-    .fetch_one(&db).await.unwrap();
+    .fetch_one(&db)
+    .await
+    .unwrap();
     assert!(exists);
     db.close().await;
     cleanup_test_db(&name).await;
@@ -48,12 +66,20 @@ async fn ai_call_log_table_exists_after_migration_0101() {
 #[tokio::test]
 async fn status_check_accepts_5_values() {
     let (db, name) = setup_test_db().await;
-    for status in ["ok", "unavailable", "internal", "business_failure", "timeout"] {
+    for status in [
+        "ok",
+        "unavailable",
+        "internal",
+        "business_failure",
+        "timeout",
+    ] {
         let res = sqlx::query(
             "INSERT INTO ai_call_log (method, latency_ms, status)
              VALUES ('TestMethod', 100, $1)",
         )
-        .bind(status).execute(&db).await;
+        .bind(status)
+        .execute(&db)
+        .await;
         assert!(res.is_ok(), "status {status} rejected: {res:?}");
     }
     db.close().await;
@@ -67,7 +93,8 @@ async fn status_check_rejects_invalid() {
         "INSERT INTO ai_call_log (method, latency_ms, status)
          VALUES ('X', 100, 'godmode')",
     )
-    .execute(&db).await;
+    .execute(&db)
+    .await;
     assert!(res.is_err());
     db.close().await;
     cleanup_test_db(&name).await;
@@ -121,13 +148,20 @@ async fn record_helper_maps_grpc_status_to_error_string() {
     .await;
 
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ai_call_log")
-        .fetch_one(&db).await.unwrap();
-    assert_eq!(count, 1, "record() should have inserted 1 row (best-effort)");
+        .fetch_one(&db)
+        .await
+        .unwrap();
+    assert_eq!(
+        count, 1,
+        "record() should have inserted 1 row (best-effort)"
+    );
 
     let (status, err_msg): (String, Option<String>) = sqlx::query_as(
         "SELECT status, error_message FROM ai_call_log ORDER BY called_at DESC LIMIT 1",
     )
-    .fetch_one(&db).await.unwrap();
+    .fetch_one(&db)
+    .await
+    .unwrap();
     assert_eq!(status, "timeout");
     assert!(err_msg.unwrap_or_default().contains("60s exceeded"));
 
@@ -140,15 +174,24 @@ async fn record_helper_maps_unavailable_grpc_status() {
     let (db, name) = setup_test_db().await;
     let unavail: Result<(), tonic::Status> = Err(tonic::Status::unavailable("Claude down"));
     skilluv_backend::services::ai_log::record(
-        &db, "ReviewCode", None, None, Duration::from_millis(50), &unavail, None,
-    ).await;
-    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ai_call_log")
-        .fetch_one(&db).await.unwrap();
-    assert_eq!(count, 1, "un seul row attendu");
-    let (s, m): (String, String) = sqlx::query_as(
-        "SELECT status, method FROM ai_call_log LIMIT 1",
+        &db,
+        "ReviewCode",
+        None,
+        None,
+        Duration::from_millis(50),
+        &unavail,
+        None,
     )
-    .fetch_one(&db).await.unwrap();
+    .await;
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ai_call_log")
+        .fetch_one(&db)
+        .await
+        .unwrap();
+    assert_eq!(count, 1, "un seul row attendu");
+    let (s, m): (String, String) = sqlx::query_as("SELECT status, method FROM ai_call_log LIMIT 1")
+        .fetch_one(&db)
+        .await
+        .unwrap();
     assert_eq!(s, "unavailable");
     assert_eq!(m, "ReviewCode");
     db.close().await;

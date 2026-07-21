@@ -18,7 +18,10 @@ const SEED_EMAIL_DOMAIN: &str = "@seed.skilluv.local";
 const DOMAINS: &[&str] = &["code", "design", "game", "security"];
 
 #[derive(Parser, Debug)]
-#[command(name = "skilluv-seed", about = "Populate staging/dev DB with fake data")]
+#[command(
+    name = "skilluv-seed",
+    about = "Populate staging/dev DB with fake data"
+)]
 struct Cli {
     /// Number of fake users to create
     #[arg(long, default_value_t = 20)]
@@ -41,8 +44,9 @@ struct Cli {
 async fn main() -> Result<()> {
     dotenvy::dotenv().ok();
     tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::try_from_default_env()
-            .unwrap_or_else(|_| "info".into()))
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
+        )
         .compact()
         .init();
 
@@ -99,23 +103,14 @@ async fn run_seed(db: &PgPool, cli: &Cli) -> Result<SeedReport> {
     let challenge_ids = seed_challenges(db, cli.challenges, &mut report).await?;
 
     if !user_ids.is_empty() && !challenge_ids.is_empty() {
-        report.submissions_created = seed_submissions(
-            db,
-            &user_ids,
-            &challenge_ids,
-            cli.submissions_per_user,
-        )
-        .await?;
+        report.submissions_created =
+            seed_submissions(db, &user_ids, &challenge_ids, cli.submissions_per_user).await?;
     }
 
     Ok(report)
 }
 
-async fn seed_users(
-    db: &PgPool,
-    count: usize,
-    report: &mut SeedReport,
-) -> Result<Vec<Uuid>> {
+async fn seed_users(db: &PgPool, count: usize, report: &mut SeedReport) -> Result<Vec<Uuid>> {
     let mut ids = Vec::with_capacity(count);
     for i in 0..count {
         let username = format!("seed_user_{i:04}");
@@ -173,11 +168,7 @@ async fn seed_users(
     Ok(ids)
 }
 
-async fn seed_challenges(
-    db: &PgPool,
-    count: usize,
-    report: &mut SeedReport,
-) -> Result<Vec<Uuid>> {
+async fn seed_challenges(db: &PgPool, count: usize, report: &mut SeedReport) -> Result<Vec<Uuid>> {
     let mut ids = Vec::with_capacity(count);
     for i in 0..count {
         let slug = format!("seed-challenge-{i:03}");
@@ -185,10 +176,11 @@ async fn seed_challenges(
         let difficulty: i16 = (i % 5) as i16 + 1;
         let reward_fragments = 50 + (i as i32) * 10;
 
-        let existing: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM challenge_templates WHERE slug = $1")
-            .bind(&slug)
-            .fetch_optional(db)
-            .await?;
+        let existing: Option<(Uuid,)> =
+            sqlx::query_as("SELECT id FROM challenge_templates WHERE slug = $1")
+                .bind(&slug)
+                .fetch_optional(db)
+                .await?;
         if let Some((id,)) = existing {
             ids.push(id);
             report.challenges_skipped += 1;
@@ -217,7 +209,11 @@ async fn seed_challenges(
         .bind(difficulty)
         .bind(reward_fragments)
         .bind("Hello, Skilluv!")
-        .bind(if domain == "code" { Some("python") } else { None })
+        .bind(if domain == "code" {
+            Some("python")
+        } else {
+            None
+        })
         .fetch_one(db)
         .await?;
         ids.push(inserted.0);

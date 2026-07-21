@@ -44,18 +44,35 @@ pub async fn active_for(
     Ok(row)
 }
 
+/// Paramètres pour [`upsert_from_stripe`].
+#[derive(Debug, Clone)]
+pub struct StripeSubscriptionUpsert<'a> {
+    pub enterprise_id: Uuid,
+    pub plan_slug: &'a str,
+    pub stripe_customer_id: Option<&'a str>,
+    pub stripe_subscription_id: &'a str,
+    pub status: &'a str,
+    pub current_period_start: Option<DateTime<Utc>>,
+    pub current_period_end: Option<DateTime<Utc>>,
+    pub cancel_at_period_end: bool,
+    pub monthly_credit_grant: i32,
+}
+
 pub async fn upsert_from_stripe(
     db: &PgPool,
-    enterprise_id: Uuid,
-    plan_slug: &str,
-    stripe_customer_id: Option<&str>,
-    stripe_subscription_id: &str,
-    status: &str,
-    current_period_start: Option<DateTime<Utc>>,
-    current_period_end: Option<DateTime<Utc>>,
-    cancel_at_period_end: bool,
-    monthly_credit_grant: i32,
+    params: StripeSubscriptionUpsert<'_>,
 ) -> Result<EnterpriseSubscription, AppError> {
+    let StripeSubscriptionUpsert {
+        enterprise_id,
+        plan_slug,
+        stripe_customer_id,
+        stripe_subscription_id,
+        status,
+        current_period_start,
+        current_period_end,
+        cancel_at_period_end,
+        monthly_credit_grant,
+    } = params;
     let sub: EnterpriseSubscription = sqlx::query_as(
         r#"
         INSERT INTO enterprise_subscriptions

@@ -61,7 +61,7 @@ getrandom = "0.2"
 rand_core = "0.6"
 
 # S3/MinIO storage
-rust-s3 = { version = "0.35", features = ["tokio-rustls-tls"], default-features = false }
+rust-s3 = { version = "0.37", features = ["tokio-rustls-tls"], default-features = false }
 
 # Monitoring
 metrics = "0.24"

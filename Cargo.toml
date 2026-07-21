@@ -98,7 +98,7 @@ aes-gcm = "0.10"
 hkdf = "0.13"
 
 # OIDC B2B SSO (enterprise) — discovery, PKCE, JWKS rotation, ID token verify.
-openidconnect = "3"
+openidconnect = "4"
 elliptic-curve = { version = "0.13", features = ["sec1"] }
 
 [[bin]]

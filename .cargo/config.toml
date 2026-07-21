@@ -1,9 +1,0 @@
-# Windows-local overrides. Committed intentionally so contributors on Windows share the same
-# OpenSSL discovery config for `webauthn-rs` (which pulls `openssl-sys`).
-# The `[env]` block only takes effect for cargo commands run from this workspace.
-
-[env]
-# FireDaemon OpenSSL 3.6 LTS — required because openssl-sys 0.9.x does not yet support OpenSSL 4.
-# Layout is standard (include/, lib/), so a single OPENSSL_DIR is enough.
-OPENSSL_DIR    = "C:\\Program Files\\FireDaemon OpenSSL 3"
-OPENSSL_STATIC = "0"

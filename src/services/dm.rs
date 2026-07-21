@@ -11,6 +11,17 @@ use uuid::Uuid;
 
 use crate::errors::AppError;
 
+// Type aliases pour clippy::type_complexity (rangées sqlx::query_as).
+type DmRow235 = (
+    Uuid,
+    Uuid,
+    Uuid,
+    DateTime<Utc>,
+    DateTime<Utc>,
+    Option<String>,
+    i64,
+);
+
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 pub struct DmConversation {
     pub id: Uuid,
@@ -232,7 +243,7 @@ pub async fn list_conversations(
     offset: i64,
 ) -> Result<Vec<ConversationSummary>, AppError> {
     let limit = limit.clamp(1, 100);
-    let rows: Vec<(Uuid, Uuid, Uuid, DateTime<Utc>, DateTime<Utc>, Option<String>, i64)> =
+    let rows: Vec<DmRow235> =
         sqlx::query_as(
             r#"
             SELECT c.id, c.user_a_id, c.user_b_id, c.last_message_at, c.created_at,

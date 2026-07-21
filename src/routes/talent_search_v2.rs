@@ -205,8 +205,8 @@ async fn search_v2(
     }
 
     // Enterprise bookmarks lookup (identical to v1)
-    if let Some(ref a) = auth {
-        if let Ok(Some((eid,))) = sqlx::query_as::<_, (Uuid,)>(
+    if let Some(ref a) = auth
+        && let Ok(Some((eid,))) = sqlx::query_as::<_, (Uuid,)>(
             "SELECT enterprise_id FROM enterprise_members WHERE user_id = $1 AND status = 'active' LIMIT 1",
         )
         .bind(a.user_id)
@@ -228,15 +228,13 @@ async fn search_v2(
                 .unwrap_or_default();
                 let set: std::collections::HashSet<Uuid> = bookmarks.into_iter().map(|(id,)| id).collect();
                 for t in talents.iter_mut() {
-                    if let Some(id_str) = t.get("id").and_then(|v| v.as_str()) {
-                        if let Ok(uid) = Uuid::parse_str(id_str) {
+                    if let Some(id_str) = t.get("id").and_then(|v| v.as_str())
+                        && let Ok(uid) = Uuid::parse_str(id_str) {
                             t["is_bookmarked"] = json!(set.contains(&uid));
                         }
-                    }
                 }
             }
         }
-    }
 
     Ok(Json(json!({
         "data": talents,

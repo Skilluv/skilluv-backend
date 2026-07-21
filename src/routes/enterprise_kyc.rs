@@ -19,8 +19,8 @@ use crate::AppState;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
 
-pub const KYC_BASIC_THRESHOLD_CENTS: i64 = 100_00; // 100 €/mo
-pub const KYC_FULL_THRESHOLD_CENTS: i64 = 2_000_00; // 2 000 €/mo
+pub const KYC_BASIC_THRESHOLD_CENTS: i64 = 10_000; // 100 €/mo
+pub const KYC_FULL_THRESHOLD_CENTS: i64 = 200_000; // 2 000 €/mo
 pub const KYC_DOC_MAX_SIZE: usize = 10 * 1024 * 1024; // 10 MB per file
 pub const KYC_ALLOWED_MIME: &[&str] = &["application/pdf", "image/jpeg", "image/png", "image/webp"];
 

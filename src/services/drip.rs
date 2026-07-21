@@ -196,12 +196,14 @@ async fn run_sequence(
         match email
             .send_with_log(
                 db,
-                user_id,
-                &user_email,
-                &display_name,
-                seq.subject,
-                &html,
-                seq.kind,
+                crate::services::email::SendWithLogParams {
+                    user_id,
+                    to_email: &user_email,
+                    to_name: &display_name,
+                    subject: seq.subject,
+                    html: &html,
+                    kind: seq.kind,
+                },
             )
             .await
         {
@@ -331,12 +333,14 @@ async fn run_enterprise_sequence(
         match email
             .send_with_log(
                 db,
-                user_id,
-                &user_email,
-                &display_name,
-                seq.subject,
-                &html,
-                seq.kind,
+                crate::services::email::SendWithLogParams {
+                    user_id,
+                    to_email: &user_email,
+                    to_name: &display_name,
+                    subject: seq.subject,
+                    html: &html,
+                    kind: seq.kind,
+                },
             )
             .await
         {

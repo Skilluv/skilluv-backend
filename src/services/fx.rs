@@ -89,10 +89,10 @@ fn parse_ecb_xml(xml: &str) -> Vec<(String, f64)> {
         }
         let currency = extract_attr(l, "currency=\"");
         let rate = extract_attr(l, "rate=\"");
-        if let (Some(c), Some(r)) = (currency, rate) {
-            if let Ok(f) = r.parse::<f64>() {
-                out.push((c, f));
-            }
+        if let (Some(c), Some(r)) = (currency, rate)
+            && let Ok(f) = r.parse::<f64>()
+        {
+            out.push((c, f));
         }
     }
     out
@@ -150,10 +150,10 @@ async fn load_rate(
 ) -> Result<f64, AppError> {
     let key = format!("{REDIS_KEY_PREFIX}EUR:{currency}");
     let cached: Option<String> = redis.get(&key).await.ok().flatten();
-    if let Some(v) = cached {
-        if let Ok(r) = v.parse::<f64>() {
-            return Ok(r);
-        }
+    if let Some(v) = cached
+        && let Ok(r) = v.parse::<f64>()
+    {
+        return Ok(r);
     }
     let row: Option<(BigDecimal,)> = sqlx::query_as(
         "SELECT rate FROM fx_rates WHERE base_currency = 'EUR' AND quote_currency = $1",

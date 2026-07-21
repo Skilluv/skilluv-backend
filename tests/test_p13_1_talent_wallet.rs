@@ -224,10 +224,7 @@ async fn debit_decreases_balance_after_credit() {
         .expect("l");
     assert_eq!(txs.len(), 2);
     let debit = txs.iter().find(|t| t.reason == "withdraw_momo").unwrap();
-    assert!(
-        debit.delta < BigDecimal::from(0),
-        "debit stocke un delta négatif"
-    );
+    assert!(debit.delta < 0, "debit stocke un delta négatif");
 
     db.close().await;
     cleanup_test_db(&name).await;

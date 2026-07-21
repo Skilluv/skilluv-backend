@@ -2,7 +2,7 @@
 //!
 //! Contexte : le rôle `skilluv` utilisé par les tests locaux a `rolsuper=true`
 //! + `rolbypassrls=true` — donc RLS ne s'applique jamais à lui, y compris avec
-//! FORCE. En prod, le compte applicatif doit être créé sans ces attributs.
+//!   FORCE. En prod, le compte applicatif doit être créé sans ces attributs.
 //!
 //! Ces tests documentent le POC via des queries qui reproduisent la logique
 //! de la policy USING sans dépendre de l'enforcement réel :

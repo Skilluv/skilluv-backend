@@ -53,22 +53,26 @@ impl Verdict {
         }
     }
 
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s {
-            "approve" => Some(Self::Approve),
-            "request_changes" => Some(Self::RequestChanges),
-            "reject" => Some(Self::Reject),
-            "abstain" => Some(Self::Abstain),
-            _ => None,
-        }
-    }
-
     pub fn reviewer_fragments(&self) -> i32 {
         match self {
             Self::Approve => REVIEWER_FRAGMENTS_APPROVE,
             Self::RequestChanges => REVIEWER_FRAGMENTS_REQUEST_CHANGES,
             Self::Reject => REVIEWER_FRAGMENTS_REJECT,
             Self::Abstain => REVIEWER_FRAGMENTS_ABSTAIN,
+        }
+    }
+}
+
+impl std::str::FromStr for Verdict {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, ()> {
+        match s {
+            "approve" => Ok(Self::Approve),
+            "request_changes" => Ok(Self::RequestChanges),
+            "reject" => Ok(Self::Reject),
+            "abstain" => Ok(Self::Abstain),
+            _ => Err(()),
         }
     }
 }
@@ -105,7 +109,7 @@ impl ReviewsService {
     ///    la double-review)
     /// 2. Selon verdict :
     ///    - approve → deliverable.verification_status = 'verified'
-    ///                + side-effects (fragments, skills, slice → merged si applicable)
+    ///      + side-effects (fragments, skills, slice → merged si applicable)
     ///    - request_changes → deliverable reste 'pending', body devient feedback
     ///    - reject → deliverable.verification_status = 'rejected'
     ///    - abstain → deliverable reste pending, task retourne à open

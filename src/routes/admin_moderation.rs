@@ -347,11 +347,13 @@ async fn ban_user(
         &state.db,
         &mut state.redis.clone(),
         &state.ws,
-        id,
-        "account_banned",
-        "Votre compte a été suspendu",
-        Some(&format!("Raison : {}", body.reason)),
-        None,
+        crate::services::notification::NotificationPayload {
+            user_id: id,
+            notification_type: "account_banned",
+            title: "Votre compte a été suspendu",
+            body: Some(&format!("Raison : {}", body.reason)),
+            data: None,
+        },
     )
     .await?;
 
@@ -417,11 +419,13 @@ async fn unban_user(
         &state.db,
         &mut state.redis.clone(),
         &state.ws,
-        id,
-        "account_unbanned",
-        "Votre compte a été réactivé",
-        Some("Vous pouvez à nouveau utiliser la plateforme."),
-        None,
+        crate::services::notification::NotificationPayload {
+            user_id: id,
+            notification_type: "account_unbanned",
+            title: "Votre compte a été réactivé",
+            body: Some("Vous pouvez à nouveau utiliser la plateforme."),
+            data: None,
+        },
     )
     .await?;
 

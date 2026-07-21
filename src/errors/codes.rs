@@ -152,13 +152,12 @@ impl IntoResponse for AppError {
             "code": self.error_code(),
             "message": self.to_string(),
         });
-        if let Some(ex) = extra {
-            if let Some(obj) = error_obj.as_object_mut() {
-                if let Some(m) = ex.as_object() {
-                    for (k, v) in m {
-                        obj.insert(k.clone(), v.clone());
-                    }
-                }
+        if let Some(ex) = extra
+            && let Some(obj) = error_obj.as_object_mut()
+            && let Some(m) = ex.as_object()
+        {
+            for (k, v) in m {
+                obj.insert(k.clone(), v.clone());
             }
         }
         let body = json!({

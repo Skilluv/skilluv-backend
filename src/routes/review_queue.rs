@@ -10,6 +10,8 @@
 //! les users authentifiés — restriction à ajouter en Phase P3 quand la
 //! réputation reviewer commence à se construire (voir H.2 cold start policy).
 
+use std::str::FromStr;
+
 use axum::extract::{Path, Query, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -120,7 +122,7 @@ async fn submit_review(
     Path(deliverable_id): Path<Uuid>,
     Json(payload): Json<SubmitReviewBody>,
 ) -> Result<Json<Value>, AppError> {
-    let verdict = Verdict::from_str(&payload.verdict).ok_or_else(|| {
+    let verdict = Verdict::from_str(&payload.verdict).map_err(|_| {
         AppError::Validation(format!(
             "invalid verdict '{}'; expected approve|request_changes|reject|abstain",
             payload.verdict

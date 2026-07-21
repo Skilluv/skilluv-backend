@@ -200,15 +200,17 @@ async fn send_interest(
         &state.db,
         &mut state.redis.clone(),
         &state.ws,
-        body.talent_id,
-        "interest_request_received",
-        &format!("{} souhaite te contacter", enterprise.company_name),
-        Some(&body.message[..body.message.len().min(100)]),
-        Some(json!({
-            "request_id": request.id,
-            "enterprise_id": enterprise.id,
-            "enterprise_name": enterprise.company_name,
-        })),
+        crate::services::notification::NotificationPayload {
+            user_id: body.talent_id,
+            notification_type: "interest_request_received",
+            title: &format!("{} souhaite te contacter", enterprise.company_name),
+            body: Some(&body.message[..body.message.len().min(100)]),
+            data: Some(json!({
+                "request_id": request.id,
+                "enterprise_id": enterprise.id,
+                "enterprise_name": enterprise.company_name,
+            })),
+        },
     )
     .await?;
 
@@ -405,14 +407,16 @@ async fn accept_interest(
         &state.db,
         &mut state.redis.clone(),
         &state.ws,
-        request.sender_id,
-        "interest_accepted",
-        "Demande d'intérêt acceptée",
-        Some("Le talent a accepté votre demande. La conversation est ouverte."),
-        Some(json!({
-            "conversation_id": conversation.id,
-            "request_id": id,
-        })),
+        crate::services::notification::NotificationPayload {
+            user_id: request.sender_id,
+            notification_type: "interest_accepted",
+            title: "Demande d'intérêt acceptée",
+            body: Some("Le talent a accepté votre demande. La conversation est ouverte."),
+            data: Some(json!({
+                "conversation_id": conversation.id,
+                "request_id": id,
+            })),
+        },
     )
     .await?;
 
@@ -469,11 +473,13 @@ async fn decline_interest(
         &state.db,
         &mut state.redis.clone(),
         &state.ws,
-        request.sender_id,
-        "interest_declined",
-        "Demande d'intérêt déclinée",
-        Some("50% du crédit a été remboursé sur ton solde."),
-        Some(json!({ "request_id": id })),
+        crate::services::notification::NotificationPayload {
+            user_id: request.sender_id,
+            notification_type: "interest_declined",
+            title: "Demande d'intérêt déclinée",
+            body: Some("50% du crédit a été remboursé sur ton solde."),
+            data: Some(json!({ "request_id": id })),
+        },
     )
     .await?;
 
@@ -709,14 +715,16 @@ async fn send_message(
         &state.db,
         &mut state.redis.clone(),
         &state.ws,
-        recipient_id,
-        "new_message",
-        &format!("Nouveau message de {sender_name}"),
-        Some(&body.content[..body.content.len().min(100)]),
-        Some(json!({
-            "conversation_id": id,
-            "message_id": message.id,
-        })),
+        crate::services::notification::NotificationPayload {
+            user_id: recipient_id,
+            notification_type: "new_message",
+            title: &format!("Nouveau message de {sender_name}"),
+            body: Some(&body.content[..body.content.len().min(100)]),
+            data: Some(json!({
+                "conversation_id": id,
+                "message_id": message.id,
+            })),
+        },
     )
     .await?;
 

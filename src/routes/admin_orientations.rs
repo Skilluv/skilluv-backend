@@ -202,12 +202,12 @@ async fn patch_orientation(
             "slug is immutable — create a new orientation instead".into(),
         ));
     }
-    if let Some(pd) = body.primary_domain.as_ref() {
-        if !ALLOWED_DOMAINS.contains(&pd.as_str()) {
-            return Err(AppError::Validation(format!(
-                "primary_domain invalid; allowed: {ALLOWED_DOMAINS:?}"
-            )));
-        }
+    if let Some(pd) = body.primary_domain.as_ref()
+        && !ALLOWED_DOMAINS.contains(&pd.as_str())
+    {
+        return Err(AppError::Validation(format!(
+            "primary_domain invalid; allowed: {ALLOWED_DOMAINS:?}"
+        )));
     }
 
     let before: (Uuid, String, String, String, String, Vec<String>, Vec<String>, bool, bool) = sqlx::query_as(
@@ -257,11 +257,11 @@ async fn patch_orientation(
         "#,
     )
     .bind(&slug)
-    .bind(&after_json["name"].as_str().unwrap_or(""))
-    .bind(&after_json["description"].as_str().unwrap_or(""))
-    .bind(&after_json["primary_domain"].as_str().unwrap_or(""))
-    .bind(&after_json["secondary_domains"].as_array().map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect::<Vec<_>>()).unwrap_or_default())
-    .bind(&after_json["tags"].as_array().map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect::<Vec<_>>()).unwrap_or_default())
+    .bind(after_json["name"].as_str().unwrap_or(""))
+    .bind(after_json["description"].as_str().unwrap_or(""))
+    .bind(after_json["primary_domain"].as_str().unwrap_or(""))
+    .bind(after_json["secondary_domains"].as_array().map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect::<Vec<_>>()).unwrap_or_default())
+    .bind(after_json["tags"].as_array().map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect::<Vec<_>>()).unwrap_or_default())
     .bind(after_json["is_curated"].as_bool().unwrap_or(false))
     .bind(after_json["is_archived"].as_bool().unwrap_or(false))
     .fetch_one(&state.db)
@@ -314,10 +314,10 @@ async fn attach_skill(
     crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     crate::middleware::admin_destructive::enforce_admin_destructive(&state, auth.user_id).await?;
 
-    if let Some(w) = body.weight {
-        if !w.is_finite() || w <= 0.0 {
-            return Err(AppError::Validation("weight must be > 0".into()));
-        }
+    if let Some(w) = body.weight
+        && (!w.is_finite() || w <= 0.0)
+    {
+        return Err(AppError::Validation("weight must be > 0".into()));
     }
 
     let orientation_id: Option<(Uuid,)> =

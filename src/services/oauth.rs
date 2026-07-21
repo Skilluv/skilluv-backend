@@ -168,15 +168,15 @@ pub async fn find_user_for_profile(
     if let Some((uid,)) = by_link {
         return Ok(Some(uid));
     }
-    if profile.email_verified {
-        if let Some(email) = &profile.email {
-            let by_email: Option<(Uuid,)> =
-                sqlx::query_as("SELECT id FROM users WHERE LOWER(email) = LOWER($1)")
-                    .bind(email)
-                    .fetch_optional(db)
-                    .await?;
-            return Ok(by_email.map(|(id,)| id));
-        }
+    if profile.email_verified
+        && let Some(email) = &profile.email
+    {
+        let by_email: Option<(Uuid,)> =
+            sqlx::query_as("SELECT id FROM users WHERE LOWER(email) = LOWER($1)")
+                .bind(email)
+                .fetch_optional(db)
+                .await?;
+        return Ok(by_email.map(|(id,)| id));
     }
     Ok(None)
 }

@@ -84,16 +84,16 @@ pub fn metrics_routes() -> Router<AppState> {
 /// If `METRICS_TOKEN` is set in env, requires `Authorization: Bearer <token>`.
 /// Otherwise public (dev convenience).
 async fn prometheus_metrics(headers: HeaderMap) -> impl IntoResponse {
-    if let Ok(expected) = std::env::var("METRICS_TOKEN") {
-        if !expected.is_empty() {
-            let provided = headers
-                .get("authorization")
-                .and_then(|v| v.to_str().ok())
-                .and_then(|s| s.strip_prefix("Bearer "))
-                .unwrap_or("");
-            if provided != expected {
-                return (StatusCode::UNAUTHORIZED, String::new()).into_response();
-            }
+    if let Ok(expected) = std::env::var("METRICS_TOKEN")
+        && !expected.is_empty()
+    {
+        let provided = headers
+            .get("authorization")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| s.strip_prefix("Bearer "))
+            .unwrap_or("");
+        if provided != expected {
+            return (StatusCode::UNAUTHORIZED, String::new()).into_response();
         }
     }
     let body = PROMETHEUS_HANDLE

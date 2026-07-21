@@ -37,16 +37,12 @@ pub struct QueueFilter {
 /// Niveau de séniorité éligible du reviewer (utilisé pour filtrer les tasks).
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum SeniorityLevel {
+    #[default]
     Any,
     Contribs,
     Impact,
-}
-
-impl Default for SeniorityLevel {
-    fn default() -> Self {
-        Self::Any
-    }
 }
 
 impl SeniorityLevel {

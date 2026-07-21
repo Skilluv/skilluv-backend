@@ -24,6 +24,23 @@ use crate::AppState;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
 
+// Type aliases pour clippy::type_complexity (rangées sqlx::query_as).
+type ModerationRow89 = (
+    Uuid,
+    String,
+    String,
+    Option<String>,
+    Option<Uuid>,
+    chrono::DateTime<chrono::Utc>,
+);
+type ModerationRow255 = (
+    Uuid,
+    Uuid,
+    String,
+    Option<serde_json::Value>,
+    chrono::DateTime<chrono::Utc>,
+);
+
 pub fn moderation_routes() -> Router<AppState> {
     Router::new()
         // Community curation.
@@ -86,14 +103,7 @@ async fn community_review_queue(
     let per_page = q.per_page.unwrap_or(20).clamp(1, 100);
     let offset = (page - 1) * per_page;
 
-    let rows: Vec<(
-        Uuid,
-        String,
-        String,
-        Option<String>,
-        Option<Uuid>,
-        chrono::DateTime<chrono::Utc>,
-    )> = sqlx::query_as(
+    let rows: Vec<ModerationRow89> = sqlx::query_as(
         r#"SELECT id, title, description, review_feedback, created_by, created_at
                FROM challenge_templates
                WHERE is_community = TRUE AND community_status = 'review'
@@ -252,13 +262,7 @@ async fn fraud_flagged_list(
     let per_page = q.per_page.unwrap_or(20).clamp(1, 100);
     let offset = (page - 1) * per_page;
 
-    let rows: Vec<(
-        Uuid,
-        Uuid,
-        String,
-        Option<serde_json::Value>,
-        chrono::DateTime<chrono::Utc>,
-    )> = sqlx::query_as(
+    let rows: Vec<ModerationRow255> = sqlx::query_as(
         r#"SELECT id, user_id, verification_status, verification_signal, submitted_at
                FROM deliverables
                WHERE (verification_status = 'flagged'

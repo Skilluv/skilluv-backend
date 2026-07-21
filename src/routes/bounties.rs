@@ -318,7 +318,7 @@ async fn create_bounty(
     let enterprise_id = current_enterprise_for(&state.db, auth.user_id).await?;
     let reward = BigDecimal::from_str(&body.reward_credits)
         .map_err(|_| AppError::Validation("invalid reward_credits amount".into()))?;
-    if reward <= BigDecimal::from(0) {
+    if reward <= 0 {
         return Err(AppError::Validation("reward_credits must be > 0".into()));
     }
 
@@ -883,7 +883,7 @@ async fn handle_pull_request_event(state: &AppState, payload: &Value) -> Result<
         // pas le reward brut. Ex bounty 500€ → wallet 460€ EUR.
         let rate_bd = BigDecimal::try_from(rate).unwrap_or(BigDecimal::from(0));
         let fiat_amount = &talent_share_bd * &rate_bd;
-        if fiat_amount > BigDecimal::from(0) {
+        if fiat_amount > 0 {
             let entry = crate::services::talent_wallet::LedgerEntry {
                 user_id: talent_user_id,
                 delta: &fiat_amount,

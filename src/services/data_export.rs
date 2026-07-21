@@ -190,21 +190,22 @@ pub async fn generate_export(
         mb = (size_bytes as f64) / 1024.0 / 1024.0,
         display_name = display_name,
     );
-    if !to_email.is_empty() {
-        if let Err(err) = email
+    if !to_email.is_empty()
+        && let Err(err) = email
             .send_with_log(
                 &db,
-                user_id,
-                &to_email,
-                &display_name,
-                "Skilluv — Ton export de données est prêt",
-                &html,
-                "data_export",
+                crate::services::email::SendWithLogParams {
+                    user_id,
+                    to_email: &to_email,
+                    to_name: &display_name,
+                    subject: "Skilluv — Ton export de données est prêt",
+                    html: &html,
+                    kind: "data_export",
+                },
             )
             .await
-        {
-            tracing::warn!(%user_id, error = %err, "data export email send failed");
-        }
+    {
+        tracing::warn!(%user_id, error = %err, "data export email send failed");
     }
 
     Ok(ExportArtifact {

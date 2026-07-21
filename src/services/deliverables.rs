@@ -73,6 +73,22 @@ pub enum PrMergedOutcome {
     },
 }
 
+/// Paramètres pour [`DeliverablesService::create_from_challenge_submission`].
+///
+/// Regroupe les 8 champs non-DB de l'ancienne signature pour rester sous le
+/// seuil clippy `too_many_arguments`.
+#[derive(Debug, Clone)]
+pub struct ChallengeSubmissionInput<'a> {
+    pub user_id: Uuid,
+    pub challenge_id: Uuid,
+    pub submission_id: Uuid,
+    pub submission_code: &'a str,
+    pub fragments_awarded: i32,
+    pub language: Option<&'a str>,
+    pub stdout: Option<&'a str>,
+    pub stderr: Option<&'a str>,
+}
+
 impl DeliverablesService {
     // ═══════════════════════════════════════════════════════════════════
     // Point d'entrée principal : workflow G.1
@@ -410,12 +426,11 @@ impl DeliverablesService {
                     .find(|c: char| !c.is_ascii_digit())
                     .map(|off| start + off)
                     .unwrap_or(lower.len());
-                if end > start {
-                    if let Ok(n) = lower[start..end].parse::<i32>() {
-                        if !result.contains(&n) {
-                            result.push(n);
-                        }
-                    }
+                if end > start
+                    && let Ok(n) = lower[start..end].parse::<i32>()
+                    && !result.contains(&n)
+                {
+                    result.push(n);
                 }
                 cursor = end;
             }
@@ -545,6 +560,8 @@ impl DeliverablesService {
     // P8.5a : dual-write challenge_submissions → deliverables
     // ═══════════════════════════════════════════════════════════════════
 
+    // (struct ChallengeSubmissionInput défini au niveau module — voir plus bas)
+
     /// Crée un deliverable "verified" à partir d'un `challenge_submissions.status='success'`.
     ///
     /// Appelé depuis `routes/challenges.rs::submit_challenge` en best-effort après
@@ -556,16 +573,20 @@ impl DeliverablesService {
     /// submission a déjà produit un deliverable, retourne l'existant.
     pub async fn create_from_challenge_submission(
         db: &PgPool,
-        user_id: Uuid,
-        challenge_id: Uuid,
-        submission_id: Uuid,
-        submission_code: &str,
-        fragments_awarded: i32,
-        language: Option<&str>,
-        stdout: Option<&str>,
-        stderr: Option<&str>,
+        params: ChallengeSubmissionInput<'_>,
     ) -> Result<Uuid, AppError> {
         use sha2::{Digest, Sha256};
+
+        let ChallengeSubmissionInput {
+            user_id,
+            challenge_id,
+            submission_id,
+            submission_code,
+            fragments_awarded,
+            language,
+            stdout,
+            stderr,
+        } = params;
 
         let mut hasher = Sha256::new();
         hasher.update(submission_code.as_bytes());

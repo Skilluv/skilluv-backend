@@ -24,6 +24,14 @@ use crate::models::{User, UserPrivate};
 use crate::services::webauthn as wa_state;
 use crate::services::{AuthService, SessionService};
 
+// Type aliases pour clippy::type_complexity (rangées sqlx::query_as).
+type WebauthnRow209 = (
+    Uuid,
+    Option<String>,
+    Option<chrono::DateTime<chrono::Utc>>,
+    chrono::DateTime<chrono::Utc>,
+);
+
 pub fn webauthn_routes() -> Router<AppState> {
     Router::new()
         // Enrolment (authed)
@@ -206,12 +214,7 @@ async fn list_credentials(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let rows: Vec<(
-        Uuid,
-        Option<String>,
-        Option<chrono::DateTime<chrono::Utc>>,
-        chrono::DateTime<chrono::Utc>,
-    )> = sqlx::query_as(
+    let rows: Vec<WebauthnRow209> = sqlx::query_as(
         "SELECT id, label, last_used_at, created_at
              FROM webauthn_credentials
              WHERE user_id = $1

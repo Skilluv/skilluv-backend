@@ -2,6 +2,8 @@
 
 mod common;
 
+use std::str::FromStr;
+
 use bigdecimal::BigDecimal;
 use common::TestApp;
 use serde_json::json;

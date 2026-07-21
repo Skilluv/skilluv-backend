@@ -58,7 +58,7 @@ async fn get_user_badges_returns_polymorphic_payload_with_rank() {
     .bind(uid)
     .bind(badge_id)
     .bind(rule_id)
-    .bind(&vec![proof])
+    .bind(vec![proof])
     .execute(&app.db)
     .await
     .unwrap();

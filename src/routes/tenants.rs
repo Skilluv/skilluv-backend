@@ -66,10 +66,9 @@ pub async fn resolve_tenant_from_headers(
     if let Some(slug) = headers
         .get("x-skilluv-tenant")
         .and_then(|v| v.to_str().ok())
+        && let Some(id) = tenant_id_by_slug(db, slug).await?
     {
-        if let Some(id) = tenant_id_by_slug(db, slug).await? {
-            return Ok(id);
-        }
+        return Ok(id);
     }
     // 2. Sous-domaine du Host
     if let Some(host) = headers.get("host").and_then(|v| v.to_str().ok()) {
@@ -77,10 +76,11 @@ pub async fn resolve_tenant_from_headers(
         let parts: Vec<&str> = base.split('.').collect();
         if parts.len() >= 3 {
             let sub = parts[0];
-            if sub != "www" && sub != "app" {
-                if let Some(id) = tenant_id_by_subdomain(db, sub).await? {
-                    return Ok(id);
-                }
+            if sub != "www"
+                && sub != "app"
+                && let Some(id) = tenant_id_by_subdomain(db, sub).await?
+            {
+                return Ok(id);
             }
         }
     }

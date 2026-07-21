@@ -96,7 +96,7 @@ impl GeoService {
                 });
         }
         for cities in cities_by_country.values_mut() {
-            cities.sort_by(|a, b| b.population.cmp(&a.population));
+            cities.sort_by_key(|c| std::cmp::Reverse(c.population));
         }
         Ok(cities_by_country)
     }

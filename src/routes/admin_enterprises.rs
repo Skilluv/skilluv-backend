@@ -16,6 +16,36 @@ use crate::AppState;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
 
+// Type aliases pour clippy::type_complexity (rangées sqlx::query_as).
+type AdminEnterprisesRow77 = (
+    Uuid,
+    String,
+    String,
+    Option<String>,
+    bool,
+    String,
+    Value,
+    chrono::DateTime<chrono::Utc>,
+);
+type AdminEnterprisesRow158 = (
+    Uuid,
+    String,
+    String,
+    Option<String>,
+    bool,
+    String,
+    Value,
+    chrono::DateTime<chrono::Utc>,
+);
+type AdminEnterprisesRow370 = (
+    Uuid,
+    String,
+    Option<String>,
+    Option<String>,
+    bool,
+    chrono::DateTime<chrono::Utc>,
+);
+
 pub fn admin_enterprise_routes() -> Router<AppState> {
     Router::new()
         .route("/admin/enterprises", get(list_enterprises))
@@ -67,24 +97,15 @@ async fn list_enterprises(
     let per_page = q.per_page.unwrap_or(20).clamp(1, 100);
     let offset = (page - 1) * per_page;
 
-    if let Some(t) = q.r#type.as_ref() {
-        if !ALLOWED_TYPES.contains(&t.as_str()) {
-            return Err(AppError::Validation(format!(
-                "type invalid; allowed: {ALLOWED_TYPES:?}"
-            )));
-        }
+    if let Some(t) = q.r#type.as_ref()
+        && !ALLOWED_TYPES.contains(&t.as_str())
+    {
+        return Err(AppError::Validation(format!(
+            "type invalid; allowed: {ALLOWED_TYPES:?}"
+        )));
     }
 
-    let rows: Vec<(
-        Uuid,
-        String,
-        String,
-        Option<String>,
-        bool,
-        String,
-        Value,
-        chrono::DateTime<chrono::Utc>,
-    )> = sqlx::query_as(
+    let rows: Vec<AdminEnterprisesRow77> = sqlx::query_as(
         r#"
             SELECT id, company_name, slug, industry, verified, enterprise_type,
                    type_config, created_at
@@ -156,16 +177,7 @@ async fn get_enterprise(
 ) -> Result<Json<Value>, AppError> {
     crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
 
-    let row: Option<(
-        Uuid,
-        String,
-        String,
-        Option<String>,
-        bool,
-        String,
-        Value,
-        chrono::DateTime<chrono::Utc>,
-    )> = sqlx::query_as(
+    let row: Option<AdminEnterprisesRow158> = sqlx::query_as(
         r#"SELECT id, company_name, slug, industry, verified, enterprise_type,
                       type_config, created_at
                FROM enterprises WHERE id = $1"#,
@@ -236,20 +248,20 @@ async fn patch_type(
         ent.ok_or_else(|| AppError::NotFound(format!("enterprise {enterprise_id} not found")))?;
 
     // remote_international : check pays éligibles si liste configurée.
-    if body.enterprise_type == "remote_international" {
-        if let Ok(allowed) = std::env::var("SKILLUV_REMOTE_INTL_ORIGINS") {
-            let list: Vec<&str> = allowed
-                .split(',')
-                .map(|s| s.trim())
-                .filter(|s| !s.is_empty())
-                .collect();
-            if !list.is_empty() {
-                let owner_c = owner_country.as_deref().unwrap_or("");
-                if !list.iter().any(|c| c.eq_ignore_ascii_case(owner_c)) {
-                    return Err(AppError::Validation(format!(
-                        "owner country '{owner_c}' not in SKILLUV_REMOTE_INTL_ORIGINS allowlist"
-                    )));
-                }
+    if body.enterprise_type == "remote_international"
+        && let Ok(allowed) = std::env::var("SKILLUV_REMOTE_INTL_ORIGINS")
+    {
+        let list: Vec<&str> = allowed
+            .split(',')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect();
+        if !list.is_empty() {
+            let owner_c = owner_country.as_deref().unwrap_or("");
+            if !list.iter().any(|c| c.eq_ignore_ascii_case(owner_c)) {
+                return Err(AppError::Validation(format!(
+                    "owner country '{owner_c}' not in SKILLUV_REMOTE_INTL_ORIGINS allowlist"
+                )));
             }
         }
     }
@@ -369,14 +381,7 @@ async fn list_agency_clients(
         return Err(AppError::NotFound(format!("enterprise {id} not found")));
     }
 
-    let rows: Vec<(
-        Uuid,
-        String,
-        Option<String>,
-        Option<String>,
-        bool,
-        chrono::DateTime<chrono::Utc>,
-    )> = sqlx::query_as(
+    let rows: Vec<AdminEnterprisesRow370> = sqlx::query_as(
         r#"SELECT id, client_name, client_contact_email, notes, active, created_at
                FROM agency_clients WHERE enterprise_id = $1
                ORDER BY created_at DESC"#,

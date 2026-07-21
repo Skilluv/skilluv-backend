@@ -127,7 +127,7 @@ pub async fn close_season(db: &PgPool, season_id: Uuid) -> Result<SeasonCloseRep
 
     for (div, mut entries) in by_div {
         // Already sorted desc thanks to the ORDER BY, but be defensive.
-        entries.sort_by(|a, b| b.1.cmp(&a.1));
+        entries.sort_by_key(|e| std::cmp::Reverse(e.1));
         let n = entries.len();
         if n < 5 {
             // Too small to ladder fairly — skip

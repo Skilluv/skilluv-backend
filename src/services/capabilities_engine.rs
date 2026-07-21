@@ -8,11 +8,11 @@
 //! Seuils par défaut (spec discussion produit, memory `project_p17_completion`) :
 //!   - challenger      : tout user inscrit
 //!   - mentor          : >= 5 attestations reçues OU >= 3 mentorship_sessions
-//!                       en tant que mentor
+//!     en tant que mentor
 //!   - pr_reviewer     : >= 10 PR reviewed approuvées (via reviews table)
 //!   - issue_proposer  : >= 3 propositions communauté acceptées
-//!                       (challenge_templates.is_community=TRUE, status='published',
-//!                        created_by=user)
+//!     (challenge_templates.is_community=TRUE, status='published',
+//!     created_by=user)
 //!   - bounty_funder   : manual-only (funding actuel via project_slices.funder_enterprise_id, côté enterprise)
 //!   - project_steward : owner d'au moins 1 project non-archived
 //!

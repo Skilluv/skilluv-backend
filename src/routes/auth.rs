@@ -593,18 +593,16 @@ async fn login(
 
     // Enforced SSO: if the user's email domain matches an active SSO config with
     // enforce_sso=true, refuse the password login and hand back the SSO start URL.
-    if let Some(domain) = user.email.split('@').nth(1).map(str::to_lowercase) {
-        if let Some((cfg, slug)) =
+    if let Some(domain) = user.email.split('@').nth(1).map(str::to_lowercase)
+        && let Some((cfg, slug)) =
             crate::services::enterprise_sso::find_by_email_domain(&state.db, &domain).await?
-        {
-            if cfg.enforce_sso {
-                let start_url = format!(
-                    "{}/api/enterprise/sso/{}/start",
-                    state.config.base_url, slug
-                );
-                return Err(AppError::SsoRequired { start_url });
-            }
-        }
+        && cfg.enforce_sso
+    {
+        let start_url = format!(
+            "{}/api/enterprise/sso/{}/start",
+            state.config.base_url, slug
+        );
+        return Err(AppError::SsoRequired { start_url });
     }
 
     // Per-account lockout: if the account is currently locked, refuse.

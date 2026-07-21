@@ -115,15 +115,17 @@ async fn send_message(
         &state.db,
         &mut state.redis.clone(),
         &state.ws,
-        peer_id,
-        "dm.received",
-        "Nouveau message",
-        Some(&preview),
-        Some(json!({
-            "conversation_id": id,
-            "message_id": message.id,
-            "from_user_id": auth.user_id,
-        })),
+        crate::services::notification::NotificationPayload {
+            user_id: peer_id,
+            notification_type: "dm.received",
+            title: "Nouveau message",
+            body: Some(&preview),
+            data: Some(json!({
+                "conversation_id": id,
+                "message_id": message.id,
+                "from_user_id": auth.user_id,
+            })),
+        },
     )
     .await;
 

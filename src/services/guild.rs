@@ -318,13 +318,13 @@ async fn ensure_can_join(
             .bind(user_id)
             .fetch_optional(&mut **tx)
             .await?;
-    if let Some((available_at,)) = cooldown {
-        if available_at > Utc::now() {
-            return Err(AppError::Validation(format!(
-                "User is in guild cooldown until {}",
-                available_at.to_rfc3339()
-            )));
-        }
+    if let Some((available_at,)) = cooldown
+        && available_at > Utc::now()
+    {
+        return Err(AppError::Validation(format!(
+            "User is in guild cooldown until {}",
+            available_at.to_rfc3339()
+        )));
     }
     Ok(())
 }

@@ -37,6 +37,12 @@ pub struct WsMessage {
     pub payload: serde_json::Value,
 }
 
+impl Default for WsManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WsManager {
     pub fn new() -> Self {
         Self {

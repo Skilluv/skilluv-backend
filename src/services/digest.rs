@@ -108,12 +108,14 @@ impl<'a> DigestService<'a> {
         self.email
             .send_with_log(
                 self.db,
-                target.id,
-                &target.email,
-                &target.display_name,
-                &subject,
-                &html,
-                "digest_weekly",
+                crate::services::email::SendWithLogParams {
+                    user_id: target.id,
+                    to_email: &target.email,
+                    to_name: &target.display_name,
+                    subject: &subject,
+                    html: &html,
+                    kind: "digest_weekly",
+                },
             )
             .await?;
         Ok(DigestOutcome::Sent)

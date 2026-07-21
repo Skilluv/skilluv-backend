@@ -15,6 +15,22 @@ use uuid::Uuid;
 
 use crate::errors::AppError;
 
+// Type aliases pour clippy::type_complexity (rangées sqlx::query_as).
+type SkillsRow307 = (
+    Uuid,
+    String,
+    String,
+    String,
+    Option<Uuid>,
+    i32,
+    i32,
+    i16,
+    Option<DateTime<Utc>>,
+    Option<DateTime<Utc>>,
+    Vec<Uuid>,
+);
+type SkillsRow543 = (Uuid, String, String, i16, Uuid, String, Uuid, i16);
+
 pub struct SkillsService;
 
 /// Ordering options pour `list_user_skill_fragments_or_backfill`.
@@ -152,7 +168,7 @@ impl SkillsService {
                     .then_with(|| a.sub_skill.cmp(&b.sub_skill))
             }),
             SkillFragmentOrder::ByFragmentsDesc => {
-                fragments.sort_by(|a, b| b.fragments.cmp(&a.fragments))
+                fragments.sort_by_key(|f| std::cmp::Reverse(f.fragments))
             }
             SkillFragmentOrder::ByDomainThenFragmentsDesc => fragments.sort_by(|a, b| {
                 a.skill_domain
@@ -304,19 +320,7 @@ impl SkillsService {
         db: &PgPool,
         user_id: Uuid,
     ) -> Result<Vec<UserSkillEnriched>, AppError> {
-        let rows: Vec<(
-            Uuid,
-            String,
-            String,
-            String,
-            Option<Uuid>,
-            i32,
-            i32,
-            i16,
-            Option<DateTime<Utc>>,
-            Option<DateTime<Utc>>,
-            Vec<Uuid>,
-        )> = sqlx::query_as(
+        let rows: Vec<SkillsRow307> = sqlx::query_as(
             r#"
             SELECT
                 us.skill_id,
@@ -540,9 +544,8 @@ impl SkillsService {
         let near_skill_ids: Vec<Uuid> = near_levelup.iter().map(|(id, ..)| *id).collect();
 
         // 2. Slices ouvertes touchant au moins un de ces skills
-        let candidate_slices: Vec<(Uuid, String, String, i16, Uuid, String, Uuid, i16)> =
-            sqlx::query_as(
-                r#"
+        let candidate_slices: Vec<SkillsRow543> = sqlx::query_as(
+            r#"
                 SELECT
                     ps.id,
                     ps.title,
@@ -558,10 +561,10 @@ impl SkillsService {
                 WHERE ps.status = 'open'
                   AND ss.skill_id = ANY($1)
                 "#,
-            )
-            .bind(&near_skill_ids)
-            .fetch_all(db)
-            .await?;
+        )
+        .bind(&near_skill_ids)
+        .fetch_all(db)
+        .await?;
 
         // 3. Aggréger par slice
         use std::collections::HashMap;
@@ -603,7 +606,7 @@ impl SkillsService {
 
         // 4. Trier par total_match_score DESC + limiter
         let mut recommendations: Vec<SliceRecommendation> = by_slice.into_values().collect();
-        recommendations.sort_by(|a, b| b.total_match_score.cmp(&a.total_match_score));
+        recommendations.sort_by_key(|r| std::cmp::Reverse(r.total_match_score));
         recommendations.truncate(limit as usize);
 
         Ok(recommendations)

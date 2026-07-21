@@ -7,6 +7,8 @@
 //! `NotificationService::send` en P15.1 appellera `push_to_user_mobile`
 //! best-effort en parallèle de son écriture DB + WebSocket.
 
+use std::str::FromStr;
+
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::Serialize;
@@ -28,7 +30,12 @@ impl Platform {
             Self::Apns => "apns",
         }
     }
-    pub fn from_str(s: &str) -> Result<Self, AppError> {
+}
+
+impl FromStr for Platform {
+    type Err = AppError;
+
+    fn from_str(s: &str) -> Result<Self, AppError> {
         match s.to_lowercase().as_str() {
             "fcm" | "android" => Ok(Self::Fcm),
             "apns" | "ios" => Ok(Self::Apns),

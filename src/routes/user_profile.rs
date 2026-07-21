@@ -94,54 +94,54 @@ async fn update_profile(
     .await?;
 
     // Validate lengths
-    if let Some(ref bio) = body.bio {
-        if bio.len() > 1000 {
-            return Err(AppError::Validation(
-                "Bio must be at most 1000 characters".to_string(),
-            ));
-        }
+    if let Some(ref bio) = body.bio
+        && bio.len() > 1000
+    {
+        return Err(AppError::Validation(
+            "Bio must be at most 1000 characters".to_string(),
+        ));
     }
-    if let Some(ref gh) = body.github {
-        if gh.len() > 100 {
-            return Err(AppError::Validation(
-                "GitHub username must be at most 100 characters".to_string(),
-            ));
-        }
+    if let Some(ref gh) = body.github
+        && gh.len() > 100
+    {
+        return Err(AppError::Validation(
+            "GitHub username must be at most 100 characters".to_string(),
+        ));
     }
-    if let Some(ref li) = body.linkedin {
-        if li.len() > 200 {
-            return Err(AppError::Validation(
-                "LinkedIn URL must be at most 200 characters".to_string(),
-            ));
-        }
+    if let Some(ref li) = body.linkedin
+        && li.len() > 200
+    {
+        return Err(AppError::Validation(
+            "LinkedIn URL must be at most 200 characters".to_string(),
+        ));
     }
-    if let Some(ref ws) = body.website {
-        if ws.len() > 500 {
-            return Err(AppError::Validation(
-                "Website URL must be at most 500 characters".to_string(),
-            ));
-        }
+    if let Some(ref ws) = body.website
+        && ws.len() > 500
+    {
+        return Err(AppError::Validation(
+            "Website URL must be at most 500 characters".to_string(),
+        ));
     }
-    if let Some(ref tw) = body.twitter {
-        if tw.len() > 100 {
-            return Err(AppError::Validation(
-                "Twitter handle must be at most 100 characters".to_string(),
-            ));
-        }
+    if let Some(ref tw) = body.twitter
+        && tw.len() > 100
+    {
+        return Err(AppError::Validation(
+            "Twitter handle must be at most 100 characters".to_string(),
+        ));
     }
-    if let Some(ref country) = body.country {
-        if country.len() > 3 {
-            return Err(AppError::Validation(
-                "Country must be an ISO-3 code (max 3 characters)".to_string(),
-            ));
-        }
+    if let Some(ref country) = body.country
+        && country.len() > 3
+    {
+        return Err(AppError::Validation(
+            "Country must be an ISO-3 code (max 3 characters)".to_string(),
+        ));
     }
-    if let Some(ref city) = body.city {
-        if city.len() > 100 {
-            return Err(AppError::Validation(
-                "City must be at most 100 characters".to_string(),
-            ));
-        }
+    if let Some(ref city) = body.city
+        && city.len() > 100
+    {
+        return Err(AppError::Validation(
+            "City must be at most 100 characters".to_string(),
+        ));
     }
 
     let user: crate::models::User = sqlx::query_as(

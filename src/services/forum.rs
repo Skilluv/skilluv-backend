@@ -7,6 +7,26 @@ use uuid::Uuid;
 
 use crate::errors::AppError;
 
+// Type aliases pour clippy::type_complexity (rangées sqlx::query_as).
+type ForumRow241 = (
+    Uuid,
+    String,
+    Uuid,
+    String,
+    String,
+    String,
+    i32,
+    bool,
+    bool,
+    bool,
+    i64,
+    i64,
+    i64,
+    i64,
+    DateTime<Utc>,
+);
+type ForumRow505 = (Uuid, String, String, String, String, f32, DateTime<Utc>);
+
 pub const VALID_POST_KINDS: &[&str] = &["discussion", "question", "announcement"];
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -238,26 +258,10 @@ pub async fn list_posts(
         "#
     );
 
-    let rows: Vec<(
-        Uuid,
-        String,
-        Uuid,
-        String,
-        String,
-        String,
-        i32,
-        bool,
-        bool,
-        bool,
-        i64,
-        i64,
-        i64,
-        i64,
-        DateTime<Utc>,
-    )> = sqlx::query_as(&sql)
+    let rows: Vec<ForumRow241> = sqlx::query_as(&sql)
         .bind(filters.category_slug)
         .bind(filters.kind)
-        .bind(filters.limit.max(1).min(100))
+        .bind(filters.limit.clamp(1, 100))
         .bind(filters.offset.max(0))
         .fetch_all(db)
         .await?;
@@ -502,7 +506,7 @@ pub async fn search_posts(
         return Ok(Vec::new());
     }
 
-    let rows: Vec<(Uuid, String, String, String, String, f32, DateTime<Utc>)> = sqlx::query_as(
+    let rows: Vec<ForumRow505> = sqlx::query_as(
         r#"
         WITH q AS (SELECT to_tsquery('simple', $1) AS tq)
         SELECT

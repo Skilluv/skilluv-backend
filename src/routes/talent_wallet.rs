@@ -7,6 +7,8 @@
 //!
 //! Les withdraw endpoints (Stripe / Momo) sont dans P13.2 et P13.3.
 
+use std::str::FromStr;
+
 use axum::extract::{Query, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -387,8 +389,6 @@ async fn stripe_connect_webhook(
         "new_status": new_status,
     }))))
 }
-
-use std::str::FromStr;
 
 // ═══════════════════════════════════════════════════════════════════
 // P13.5 — Compliance : limites journalière / mensuelle + statement CSV

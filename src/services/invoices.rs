@@ -203,7 +203,7 @@ pub fn render_html(inv: &Invoice, enterprise_name: &str) -> String {
 </body>
 </html>"#,
         number = esc(&inv.invoice_number),
-        date = inv.issued_at.format("%d/%m/%Y").to_string(),
+        date = inv.issued_at.format("%d/%m/%Y"),
         billing_name = esc(inv
             .billing_company_name
             .as_deref()

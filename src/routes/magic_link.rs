@@ -27,6 +27,15 @@ use crate::errors::AppError;
 use crate::middleware::{RateLimiter, extract_ip};
 use crate::services::{AuthService, SessionService};
 
+// Type aliases pour clippy::type_complexity (rangées sqlx::query_as).
+type MagicLinkRow139 = (
+    Uuid,
+    String,
+    String,
+    chrono::DateTime<chrono::Utc>,
+    Option<chrono::DateTime<chrono::Utc>>,
+);
+
 pub const MAGIC_LINK_TTL_MIN: i64 = 15;
 
 pub fn magic_link_routes() -> Router<AppState> {
@@ -136,13 +145,7 @@ async fn consume_link(
     Json(body): Json<ConsumeBody>,
 ) -> Result<impl IntoResponse, AppError> {
     let token_hash = hash_token(&body.token);
-    let row: Option<(
-        Uuid,
-        String,
-        String,
-        chrono::DateTime<chrono::Utc>,
-        Option<chrono::DateTime<chrono::Utc>>,
-    )> = sqlx::query_as(
+    let row: Option<MagicLinkRow139> = sqlx::query_as(
         "SELECT id, email, intent, expires_at, consumed_at FROM magic_links WHERE token_hash = $1",
     )
     .bind(&token_hash)

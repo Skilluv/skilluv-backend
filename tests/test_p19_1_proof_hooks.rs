@@ -156,7 +156,7 @@ async fn sweep_returns_active_users_only() {
     let processed = proof_hooks::sweep_active_users(&db, 30).await.unwrap();
     assert!(processed.contains(&u_active), "active user included");
     // Note : le user idle n'a aucune activité donc ne remonte pas.
-    assert!(!processed.contains(&_u_idle) || processed.len() >= 1);
+    assert!(!processed.contains(&_u_idle) || !processed.is_empty());
 
     db.close().await;
     cleanup_test_db(&name).await;

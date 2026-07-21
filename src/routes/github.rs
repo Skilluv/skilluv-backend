@@ -17,6 +17,23 @@ use crate::routes::analytics_consent;
 use crate::services::analytics::{events, props};
 use crate::services::{github, projects};
 
+// Type aliases pour clippy::type_complexity (rangées sqlx::query_as).
+type GithubRow187 = (
+    Uuid,
+    String,
+    String,
+    String,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    i32,
+    String,
+    i32,
+    i32,
+    chrono::DateTime<chrono::Utc>,
+);
+
 pub fn github_routes() -> Router<AppState> {
     Router::new()
         .route("/auth/github/start", get(start))
@@ -184,7 +201,7 @@ async fn cv_html(
     headers: HeaderMap,
 ) -> Result<(StatusCode, Html<String>), AppError> {
     // Resolve user
-    let user_row: Option<(Uuid, String, String, String, Option<String>, Option<String>, Option<String>, Option<String>, i32, String, i32, i32, chrono::DateTime<chrono::Utc>)> =
+    let user_row: Option<GithubRow187> =
         sqlx::query_as(
             r#"
             SELECT id, username, display_name, skill_domain, country, city, bio, avatar_url, total_fragments, title, golden_stars, streak_current, created_at

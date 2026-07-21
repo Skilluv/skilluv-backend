@@ -16,6 +16,20 @@ use crate::AppState;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
 
+// Type aliases pour clippy::type_complexity (rangées sqlx::query_as).
+type AdminOpsRow286 = (
+    Uuid,
+    String,
+    String,
+    String,
+    chrono::DateTime<chrono::Utc>,
+    Option<chrono::DateTime<chrono::Utc>>,
+    Value,
+    bool,
+    bool,
+    chrono::DateTime<chrono::Utc>,
+);
+
 pub fn admin_ops_routes() -> Router<AppState> {
     Router::new()
         .route("/admin/proof-hooks/sweep", post(admin_sweep_proof_hooks))
@@ -283,18 +297,7 @@ async fn admin_list_badge_events(
     let per_page = q.per_page.unwrap_or(30).clamp(1, 100);
     let offset = (page - 1) * per_page;
 
-    let rows: Vec<(
-        Uuid,
-        String,
-        String,
-        String,
-        chrono::DateTime<chrono::Utc>,
-        Option<chrono::DateTime<chrono::Utc>>,
-        Value,
-        bool,
-        bool,
-        chrono::DateTime<chrono::Utc>,
-    )> = sqlx::query_as(
+    let rows: Vec<AdminOpsRow286> = sqlx::query_as(
         r#"SELECT id, slug, name, description, starts_at, ends_at,
                   visual_theme, is_partner, is_active, created_at
            FROM events
@@ -394,10 +397,10 @@ async fn admin_create_badge_event(
     if body.name.trim().is_empty() || body.name.len() > 120 {
         return Err(AppError::Validation("name must be 1..=120 chars".into()));
     }
-    if let Some(end) = body.ends_at {
-        if end < body.starts_at {
-            return Err(AppError::Validation("ends_at must be >= starts_at".into()));
-        }
+    if let Some(end) = body.ends_at
+        && end < body.starts_at
+    {
+        return Err(AppError::Validation("ends_at must be >= starts_at".into()));
     }
 
     if crate::middleware::admin_destructive::is_admin_dry_run() {

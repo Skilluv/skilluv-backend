@@ -212,15 +212,17 @@ async fn accept_answer(
         &state.db,
         &mut state.redis.clone(),
         &state.ws,
-        res.answer_author_id,
-        "answer.accepted",
-        "Ta réponse a été acceptée",
-        bounty_msg.as_deref(),
-        Some(json!({
-            "post_id": id,
-            "comment_id": res.answer_id,
-            "bounty_fragments": res.bounty_transferred,
-        })),
+        crate::services::notification::NotificationPayload {
+            user_id: res.answer_author_id,
+            notification_type: "answer.accepted",
+            title: "Ta réponse a été acceptée",
+            body: bounty_msg.as_deref(),
+            data: Some(json!({
+                "post_id": id,
+                "comment_id": res.answer_id,
+                "bounty_fragments": res.bounty_transferred,
+            })),
+        },
     )
     .await;
     metrics::counter!("skilluv_answers_accepted_total").increment(1);

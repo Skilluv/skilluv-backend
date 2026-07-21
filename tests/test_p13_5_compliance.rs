@@ -5,13 +5,14 @@ mod common;
 use bigdecimal::BigDecimal;
 use common::TestApp;
 use serde_json::json;
-use std::sync::Mutex;
+use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use skilluv_backend::services::talent_wallet::{self, Currency, LedgerEntry};
 
 // Sérialise les tests qui mutent des env vars (WALLET_DAILY_LIMIT_*).
-static ENV_MUTEX: Mutex<()> = Mutex::new(());
+// `tokio::sync::Mutex` pour rester valide `Send` cross-`.await`.
+static ENV_MUTEX: Mutex<()> = Mutex::const_new(());
 
 // ═══════════════════════════════════════════════════════════════════
 // debits_within somme les debits sur la fenetre
@@ -77,7 +78,7 @@ async fn debits_within_sums_recent_debits_only() {
 
 #[tokio::test]
 async fn daily_limit_blocks_withdraw_above_threshold() {
-    let _env_guard = ENV_MUTEX.lock().unwrap();
+    let _env_guard = ENV_MUTEX.lock().await;
     // SAFETY: env muté sous garde du mutex.
     unsafe {
         std::env::set_var("WALLET_DAILY_LIMIT_XOF", "50000");

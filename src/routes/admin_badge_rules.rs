@@ -80,40 +80,40 @@ fn validate_conditions(v: &Value) -> Result<(), AppError> {
         .as_object()
         .ok_or_else(|| AppError::Validation("conditions must be a JSON object".into()))?;
     // Best-effort type validation on known keys.
-    if let Some(pt) = obj.get("proof_types") {
-        if !pt.is_array() {
-            return Err(AppError::Validation(
-                "conditions.proof_types must be array".into(),
-            ));
-        }
+    if let Some(pt) = obj.get("proof_types")
+        && !pt.is_array()
+    {
+        return Err(AppError::Validation(
+            "conditions.proof_types must be array".into(),
+        ));
     }
-    if let Some(mc) = obj.get("min_count") {
-        if !mc.is_number() {
-            return Err(AppError::Validation(
-                "conditions.min_count must be number".into(),
-            ));
-        }
+    if let Some(mc) = obj.get("min_count")
+        && !mc.is_number()
+    {
+        return Err(AppError::Validation(
+            "conditions.min_count must be number".into(),
+        ));
     }
-    if let Some(st) = obj.get("skill_tag") {
-        if !st.is_string() {
-            return Err(AppError::Validation(
-                "conditions.skill_tag must be string".into(),
-            ));
-        }
+    if let Some(st) = obj.get("skill_tag")
+        && !st.is_string()
+    {
+        return Err(AppError::Validation(
+            "conditions.skill_tag must be string".into(),
+        ));
     }
-    if let Some(vb) = obj.get("verified_by") {
-        if !vb.is_array() {
-            return Err(AppError::Validation(
-                "conditions.verified_by must be array".into(),
-            ));
-        }
+    if let Some(vb) = obj.get("verified_by")
+        && !vb.is_array()
+    {
+        return Err(AppError::Validation(
+            "conditions.verified_by must be array".into(),
+        ));
     }
-    if let Some(wd) = obj.get("within_days") {
-        if !wd.is_number() {
-            return Err(AppError::Validation(
-                "conditions.within_days must be number".into(),
-            ));
-        }
+    if let Some(wd) = obj.get("within_days")
+        && !wd.is_number()
+    {
+        return Err(AppError::Validation(
+            "conditions.within_days must be number".into(),
+        ));
     }
     Ok(())
 }
@@ -301,19 +301,19 @@ async fn patch_rule(
             "badge_rule is deprecated — create a new slug instead".into(),
         ));
     }
-    if let Some(ot) = body.output_type.as_ref() {
-        if !ALLOWED_OUTPUT_TYPES.contains(&ot.as_str()) {
-            return Err(AppError::Validation(format!(
-                "output_type invalid; allowed: {ALLOWED_OUTPUT_TYPES:?}"
-            )));
-        }
+    if let Some(ot) = body.output_type.as_ref()
+        && !ALLOWED_OUTPUT_TYPES.contains(&ot.as_str())
+    {
+        return Err(AppError::Validation(format!(
+            "output_type invalid; allowed: {ALLOWED_OUTPUT_TYPES:?}"
+        )));
     }
-    if let Some(r) = body.rarity.as_ref() {
-        if !ALLOWED_RARITIES.contains(&r.as_str()) {
-            return Err(AppError::Validation(format!(
-                "rarity invalid; allowed: {ALLOWED_RARITIES:?}"
-            )));
-        }
+    if let Some(r) = body.rarity.as_ref()
+        && !ALLOWED_RARITIES.contains(&r.as_str())
+    {
+        return Err(AppError::Validation(format!(
+            "rarity invalid; allowed: {ALLOWED_RARITIES:?}"
+        )));
     }
     if let Some(c) = body.conditions.as_ref() {
         validate_conditions(c)?;

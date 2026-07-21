@@ -91,23 +91,23 @@ async fn update_availability(
     auth: AuthUser,
     Json(body): Json<AvailabilityBody>,
 ) -> Result<Json<Value>, AppError> {
-    if let Some(ref lf) = body.looking_for {
-        if !matches!(
+    if let Some(ref lf) = body.looking_for
+        && !matches!(
             lf.as_str(),
             "cdi" | "cdd" | "freelance" | "internship" | "contract"
-        ) {
-            return Err(AppError::Validation("invalid looking_for".into()));
-        }
+        )
+    {
+        return Err(AppError::Validation("invalid looking_for".into()));
     }
-    if let Some(ref vis) = body.salary_visibility {
-        if !matches!(vis.as_str(), "private" | "enterprise_only" | "public") {
-            return Err(AppError::Validation("invalid salary_visibility".into()));
-        }
+    if let Some(ref vis) = body.salary_visibility
+        && !matches!(vis.as_str(), "private" | "enterprise_only" | "public")
+    {
+        return Err(AppError::Validation("invalid salary_visibility".into()));
     }
-    if let (Some(min), Some(max)) = (body.salary_range_min_eur, body.salary_range_max_eur) {
-        if min > max {
-            return Err(AppError::Validation("salary min cannot exceed max".into()));
-        }
+    if let (Some(min), Some(max)) = (body.salary_range_min_eur, body.salary_range_max_eur)
+        && min > max
+    {
+        return Err(AppError::Validation("salary min cannot exceed max".into()));
     }
     sqlx::query(
         r#"

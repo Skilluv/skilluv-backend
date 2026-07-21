@@ -9,6 +9,14 @@ use crate::errors::AppError;
 use crate::models::BadgeWithEarnedAt;
 use crate::services::LeaderboardService;
 
+// Type aliases pour clippy::type_complexity (rangées sqlx::query_as).
+type ProfileRow37 = (
+    Option<String>,
+    String,
+    chrono::DateTime<chrono::Utc>,
+    Option<String>,
+);
+
 pub fn profile_routes() -> Router<AppState> {
     Router::new()
         .route("/profile/{username}", get(public_profile))
@@ -34,12 +42,7 @@ async fn user_rank_history(
         return Ok(Json(build_response(json!({ "history": [] }))));
     }
 
-    let rows: Vec<(
-        Option<String>,
-        String,
-        chrono::DateTime<chrono::Utc>,
-        Option<String>,
-    )> = sqlx::query_as(
+    let rows: Vec<ProfileRow37> = sqlx::query_as(
         r#"SELECT from_rank, to_rank, achieved_at, reason
                FROM user_rank_history
                WHERE user_id = $1

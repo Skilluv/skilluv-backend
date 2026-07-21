@@ -15,6 +15,8 @@
 //! - Chaque payout est logué dans `talent_transactions` avec
 //!   `related_provider_txn_id` pour rapprochement.
 
+use std::str::FromStr;
+
 use async_trait::async_trait;
 use bigdecimal::BigDecimal;
 use serde::Serialize;
@@ -31,7 +33,19 @@ pub enum ProviderName {
 }
 
 impl ProviderName {
-    pub fn from_str(s: &str) -> Result<Self, AppError> {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Orange => "orange",
+            Self::Mtn => "mtn",
+            Self::Wave => "wave",
+        }
+    }
+}
+
+impl FromStr for ProviderName {
+    type Err = AppError;
+
+    fn from_str(s: &str) -> Result<Self, AppError> {
         match s.to_lowercase().as_str() {
             "orange" | "orange_money" => Ok(Self::Orange),
             "mtn" | "mtn_momo" => Ok(Self::Mtn),
@@ -39,14 +53,6 @@ impl ProviderName {
             _ => Err(AppError::Validation(format!(
                 "unsupported provider '{s}' (expected orange, mtn, wave)"
             ))),
-        }
-    }
-
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Orange => "orange",
-            Self::Mtn => "mtn",
-            Self::Wave => "wave",
         }
     }
 }

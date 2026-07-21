@@ -94,17 +94,17 @@ impl AttestationsService {
         let mut issued_ids = Vec::new();
 
         // 1. Gesture : proficiency ≥ 2, un par skill
-        if new_proficiency_level >= 2 {
-            if let Some(id) = Self::try_issue_gesture(tx, user_id, skill_id).await? {
-                issued_ids.push(id);
-            }
+        if new_proficiency_level >= 2
+            && let Some(id) = Self::try_issue_gesture(tx, user_id, skill_id).await?
+        {
+            issued_ids.push(id);
         }
 
         // 2. Skill : proficiency ≥ 4 + au moins une review par un sénior
-        if new_proficiency_level >= 4 {
-            if let Some(id) = Self::try_issue_skill(tx, user_id, skill_id).await? {
-                issued_ids.push(id);
-            }
+        if new_proficiency_level >= 4
+            && let Some(id) = Self::try_issue_skill(tx, user_id, skill_id).await?
+        {
+            issued_ids.push(id);
         }
 
         Ok(issued_ids)

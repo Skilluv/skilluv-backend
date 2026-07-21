@@ -209,9 +209,10 @@ async fn update_entry(
     .bind(enterprise_id)
     .execute(&state.db)
     .await?;
-    if let Some(new_stage) = body.stage {
-        if new_stage != from_stage {
-            let _ = sqlx::query(
+    if let Some(new_stage) = body.stage
+        && new_stage != from_stage
+    {
+        let _ = sqlx::query(
                 "INSERT INTO enterprise_pipeline_history (entry_id, from_stage, to_stage, actor_user_id) VALUES ($1, $2, $3, $4)",
             )
             .bind(id)
@@ -220,9 +221,8 @@ async fn update_entry(
             .bind(auth.user_id)
             .execute(&state.db)
             .await;
-            if new_stage == "hired" {
-                metrics::counter!("skilluv_pipeline_hires_total").increment(1);
-            }
+        if new_stage == "hired" {
+            metrics::counter!("skilluv_pipeline_hires_total").increment(1);
         }
     }
     Ok(Json(build_response(json!({ "updated": true }))))

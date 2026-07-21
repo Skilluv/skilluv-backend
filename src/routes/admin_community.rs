@@ -115,11 +115,13 @@ async fn approve_challenge(
             &state.db,
             &mut state.redis.clone(),
             &state.ws,
-            creator_id,
-            "challenge_approved",
-            &format!("Ton challenge '{}' a été approuvé !", challenge.title),
-            Some("Il est maintenant visible par tous les utilisateurs."),
-            Some(json!({ "challenge_id": id })),
+            crate::services::notification::NotificationPayload {
+                user_id: creator_id,
+                notification_type: "challenge_approved",
+                title: &format!("Ton challenge '{}' a été approuvé !", challenge.title),
+                body: Some("Il est maintenant visible par tous les utilisateurs."),
+                data: Some(json!({ "challenge_id": id })),
+            },
         )
         .await?;
     }
@@ -178,11 +180,13 @@ async fn reject_challenge(
             &state.db,
             &mut state.redis.clone(),
             &state.ws,
-            creator_id,
-            "challenge_rejected",
-            &format!("Ton challenge '{}' n'a pas été retenu", challenge.title),
-            Some(&body.feedback),
-            Some(json!({ "challenge_id": id })),
+            crate::services::notification::NotificationPayload {
+                user_id: creator_id,
+                notification_type: "challenge_rejected",
+                title: &format!("Ton challenge '{}' n'a pas été retenu", challenge.title),
+                body: Some(&body.feedback),
+                data: Some(json!({ "challenge_id": id })),
+            },
         )
         .await?;
     }

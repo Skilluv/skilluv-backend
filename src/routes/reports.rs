@@ -89,12 +89,12 @@ async fn create_report(
         ));
     }
 
-    if let Some(ref details) = body.details {
-        if details.len() > 2000 {
-            return Err(AppError::Validation(
-                "Details must be at most 2000 characters".to_string(),
-            ));
-        }
+    if let Some(ref details) = body.details
+        && details.len() > 2000
+    {
+        return Err(AppError::Validation(
+            "Details must be at most 2000 characters".to_string(),
+        ));
     }
 
     let report: Report = sqlx::query_as(
@@ -112,12 +112,12 @@ async fn create_report(
     .fetch_one(&state.db)
     .await
     .map_err(|e| {
-        if let sqlx::Error::Database(ref db_err) = e {
-            if db_err.constraint() == Some("idx_reports_unique_pending") {
-                return AppError::Validation(
-                    "You already have a pending report for this target".to_string(),
-                );
-            }
+        if let sqlx::Error::Database(ref db_err) = e
+            && db_err.constraint() == Some("idx_reports_unique_pending")
+        {
+            return AppError::Validation(
+                "You already have a pending report for this target".to_string(),
+            );
         }
         AppError::Database(e)
     })?;

@@ -195,7 +195,7 @@ async fn backfill_assigns_mapped_orientation_from_skill_domain() {
          WHERE uo.user_id = ANY($1)
          ORDER BY o.slug",
     )
-    .bind(&vec![u_code, u_design, u_game, u_sec])
+    .bind(vec![u_code, u_design, u_game, u_sec])
     .fetch_all(&db)
     .await
     .expect("m");

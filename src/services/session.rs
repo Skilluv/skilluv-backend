@@ -18,6 +18,9 @@ use uuid::Uuid;
 use crate::errors::AppError;
 use crate::services::AuthService;
 
+// Type aliases pour clippy::type_complexity (rangées sqlx::query_as).
+type SessionRow107 = (Uuid, Vec<u8>, Option<Vec<u8>>, Option<DateTime<Utc>>);
+
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 pub struct SessionRow {
     pub id: Uuid,
@@ -104,7 +107,7 @@ impl SessionService {
     ) -> Result<(Uuid, String), AppError> {
         let presented_hash = sha256(presented_token);
 
-        let row: Option<(Uuid, Vec<u8>, Option<Vec<u8>>, Option<DateTime<Utc>>)> = sqlx::query_as(
+        let row: Option<SessionRow107> = sqlx::query_as(
             "SELECT user_id, refresh_hash, previous_hash, revoked_at FROM user_sessions WHERE id = $1",
         )
         .bind(session_id)

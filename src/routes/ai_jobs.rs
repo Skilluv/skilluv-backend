@@ -108,10 +108,10 @@ async fn request_recommendations(
     // pré-filtrer la liste des candidats. On force cependant l'user_id à celui
     // de l'authentifié pour éviter le spoofing.
     let mut merged = body;
-    if let Some(user) = merged.get_mut("user") {
-        if let Some(obj) = user.as_object_mut() {
-            obj.insert("user_id".into(), json!(auth.user_id.to_string()));
-        }
+    if let Some(user) = merged.get_mut("user")
+        && let Some(obj) = user.as_object_mut()
+    {
+        obj.insert("user_id".into(), json!(auth.user_id.to_string()));
     }
     let mut redis = state.redis.clone();
     let job_id = crate::services::ai_queue::enqueue_recommendations(&mut redis, &merged).await?;

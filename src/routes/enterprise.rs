@@ -425,7 +425,7 @@ async fn register_enterprise(
     let mut redis = state.redis.clone();
     let () = redis
         .set_ex(
-            &format!("email_verify:{verify_token}"),
+            format!("email_verify:{verify_token}"),
             user.id.to_string(),
             24 * 60 * 60,
         )
@@ -712,12 +712,12 @@ async fn invite_recruiter(
         .bind(user.id)
         .fetch_optional(&state.db)
         .await?;
-        if let Some((status,)) = existing {
-            if status == "active" {
-                return Err(AppError::Validation(
-                    "This user is already an active member".to_string(),
-                ));
-            }
+        if let Some((status,)) = existing
+            && status == "active"
+        {
+            return Err(AppError::Validation(
+                "This user is already an active member".to_string(),
+            ));
         }
     }
 

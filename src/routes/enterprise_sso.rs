@@ -308,7 +308,7 @@ async fn start(
     use redis::AsyncCommands;
     let () = redis
         .set_ex(
-            &format!("sso_state:{key_token}"),
+            format!("sso_state:{key_token}"),
             payload,
             sso::SSO_STATE_TTL_SECS,
         )

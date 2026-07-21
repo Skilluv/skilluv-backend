@@ -20,6 +20,22 @@ use crate::AppState;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
 
+// Type aliases pour clippy::type_complexity (rangées sqlx::query_as).
+type AiCoachRow179 = (
+    String,
+    i32,
+    i32,
+    chrono::DateTime<chrono::Utc>,
+    chrono::DateTime<chrono::Utc>,
+);
+type AiCoachRow302 = (
+    String,
+    i32,
+    i32,
+    chrono::DateTime<chrono::Utc>,
+    chrono::DateTime<chrono::Utc>,
+);
+
 pub fn ai_coach_routes() -> Router<AppState> {
     Router::new()
         .route("/users/me/performance", get(my_performance))
@@ -59,10 +75,10 @@ async fn my_performance(
 
     // Cache hit (TTL 24h).
     let cached: Option<String> = redis.get(&cache_key).await.ok();
-    if let Some(json_str) = cached {
-        if let Ok(v) = serde_json::from_str::<Value>(&json_str) {
-            return Ok(Json(json!({ "data": v, "cached": true })));
-        }
+    if let Some(json_str) = cached
+        && let Ok(v) = serde_json::from_str::<Value>(&json_str)
+    {
+        return Ok(Json(json!({ "data": v, "cached": true })));
     }
 
     // Cache miss : agrège snapshots + appel IA.
@@ -177,13 +193,7 @@ async fn build_analyze_request(
         .collect();
 
     // 2. Skills agrégés.
-    let skills: Vec<(
-        String,
-        i32,
-        i32,
-        chrono::DateTime<chrono::Utc>,
-        chrono::DateTime<chrono::Utc>,
-    )> = sqlx::query_as(
+    let skills: Vec<AiCoachRow179> = sqlx::query_as(
         r#"
         SELECT sn.slug,
                us.weighted_proven_count,
@@ -289,10 +299,10 @@ async fn suggest_orientations(
 
     // Cache hit (TTL 7j).
     let cached: Option<String> = redis.get(&cache_key).await.ok();
-    if let Some(json_str) = cached {
-        if let Ok(v) = serde_json::from_str::<Value>(&json_str) {
-            return Ok(Json(json!({ "data": v, "cached": true })));
-        }
+    if let Some(json_str) = cached
+        && let Ok(v) = serde_json::from_str::<Value>(&json_str)
+    {
+        return Ok(Json(json!({ "data": v, "cached": true })));
     }
 
     let ai = state
@@ -301,13 +311,7 @@ async fn suggest_orientations(
         .ok_or_else(|| AppError::Internal("AI client not connected".into()))?;
 
     // Agrège skills user + langues.
-    let skills: Vec<(
-        String,
-        i32,
-        i32,
-        chrono::DateTime<chrono::Utc>,
-        chrono::DateTime<chrono::Utc>,
-    )> = sqlx::query_as(
+    let skills: Vec<AiCoachRow302> = sqlx::query_as(
         r#"
         SELECT sn.slug,
                us.weighted_proven_count,

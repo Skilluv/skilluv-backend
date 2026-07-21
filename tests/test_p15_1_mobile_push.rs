@@ -1,5 +1,7 @@
 //! Tests d'intégration P15.1 : mobile push (FCM + APNS).
 
+use std::str::FromStr;
+
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use uuid::Uuid;
 

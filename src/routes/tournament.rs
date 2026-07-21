@@ -255,16 +255,18 @@ async fn admin_conclude(
                 &state.db,
                 &mut state.redis.clone(),
                 &state.ws,
-                *pid,
-                "tournament.podium",
-                "Podium d'un tournoi !",
-                Some(&format!("{tname} — rang #{rank} (+{frags} fragments)")),
-                Some(json!({
-                    "tournament_id": id,
-                    "rank": rank,
-                    "fragments": frags,
-                    "gp": gp,
-                })),
+                crate::services::notification::NotificationPayload {
+                    user_id: *pid,
+                    notification_type: "tournament.podium",
+                    title: "Podium d'un tournoi !",
+                    body: Some(&format!("{tname} — rang #{rank} (+{frags} fragments)")),
+                    data: Some(json!({
+                        "tournament_id": id,
+                        "rank": rank,
+                        "fragments": frags,
+                        "gp": gp,
+                    })),
+                },
             )
             .await;
         }

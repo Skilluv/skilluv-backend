@@ -9,6 +9,7 @@ use sqlx::postgres::{PgPool, PgPoolOptions};
 use uuid::Uuid;
 
 use skilluv_backend::services::DeliverablesService;
+use skilluv_backend::services::deliverables::ChallengeSubmissionInput;
 
 async fn setup_test_db() -> (PgPool, String) {
     let db_name = format!(
@@ -104,18 +105,30 @@ async fn create_from_submission_produces_verified_deliverable() {
 
     let deliverable_id = DeliverablesService::create_from_challenge_submission(
         &db,
-        user_id,
-        challenge_id,
-        submission_id,
-        "print('Hello, Skilluv!')",
-        50,
-        Some("python"),
-        Some("Hello, Skilluv!\n"),
-        None,
+        ChallengeSubmissionInput {
+            user_id,
+            challenge_id,
+            submission_id,
+            submission_code: "print('Hello, Skilluv!')",
+            fragments_awarded: 50,
+            language: Some("python"),
+            stdout: Some("Hello, Skilluv!\n"),
+            stderr: None,
+        },
     )
     .await
     .expect("create");
 
+    type DeliverableRow = (
+        String,
+        String,
+        Option<String>,
+        String,
+        String,
+        i32,
+        Option<Uuid>,
+        Option<Uuid>,
+    );
     let (
         artifact_type,
         artifact_url,
@@ -125,16 +138,7 @@ async fn create_from_submission_produces_verified_deliverable() {
         fragments_awarded,
         stored_challenge_id,
         slice_id,
-    ): (
-        String,
-        String,
-        Option<String>,
-        String,
-        String,
-        i32,
-        Option<Uuid>,
-        Option<Uuid>,
-    ) = sqlx::query_as(
+    ): DeliverableRow = sqlx::query_as(
         "SELECT artifact_type, artifact_url, artifact_hash, verifiable_by,
                     verification_status, fragments_awarded, challenge_id, slice_id
              FROM deliverables WHERE id = $1",
@@ -178,28 +182,32 @@ async fn same_submission_code_is_idempotent() {
 
     let first = DeliverablesService::create_from_challenge_submission(
         &db,
-        user_id,
-        challenge_id,
-        submission_id,
-        code,
-        10,
-        None,
-        None,
-        None,
+        ChallengeSubmissionInput {
+            user_id,
+            challenge_id,
+            submission_id,
+            submission_code: code,
+            fragments_awarded: 10,
+            language: None,
+            stdout: None,
+            stderr: None,
+        },
     )
     .await
     .expect("first");
 
     let second = DeliverablesService::create_from_challenge_submission(
         &db,
-        user_id,
-        challenge_id,
-        submission_id,
-        code, // même code → même hash → même deliverable
-        10,
-        None,
-        None,
-        None,
+        ChallengeSubmissionInput {
+            user_id,
+            challenge_id,
+            submission_id,
+            submission_code: code, // même code → même hash → même deliverable
+            fragments_awarded: 10,
+            language: None,
+            stdout: None,
+            stderr: None,
+        },
     )
     .await
     .expect("second");
@@ -231,28 +239,32 @@ async fn different_code_creates_distinct_deliverables() {
 
     let d1 = DeliverablesService::create_from_challenge_submission(
         &db,
-        user_id,
-        challenge_id,
-        Uuid::new_v4(),
-        "first attempt",
-        5,
-        None,
-        None,
-        None,
+        ChallengeSubmissionInput {
+            user_id,
+            challenge_id,
+            submission_id: Uuid::new_v4(),
+            submission_code: "first attempt",
+            fragments_awarded: 5,
+            language: None,
+            stdout: None,
+            stderr: None,
+        },
     )
     .await
     .expect("d1");
 
     let d2 = DeliverablesService::create_from_challenge_submission(
         &db,
-        user_id,
-        challenge_id,
-        Uuid::new_v4(),
-        "second attempt",
-        10,
-        None,
-        None,
-        None,
+        ChallengeSubmissionInput {
+            user_id,
+            challenge_id,
+            submission_id: Uuid::new_v4(),
+            submission_code: "second attempt",
+            fragments_awarded: 10,
+            language: None,
+            stdout: None,
+            stderr: None,
+        },
     )
     .await
     .expect("d2");
@@ -287,28 +299,32 @@ async fn artifact_hash_is_deterministic() {
 
     let d_a = DeliverablesService::create_from_challenge_submission(
         &db,
-        user_a,
-        challenge_id,
-        Uuid::new_v4(),
-        code,
-        1,
-        None,
-        None,
-        None,
+        ChallengeSubmissionInput {
+            user_id: user_a,
+            challenge_id,
+            submission_id: Uuid::new_v4(),
+            submission_code: code,
+            fragments_awarded: 1,
+            language: None,
+            stdout: None,
+            stderr: None,
+        },
     )
     .await
     .expect("a");
 
     let d_b = DeliverablesService::create_from_challenge_submission(
         &db,
-        user_b,
-        challenge_id,
-        Uuid::new_v4(),
-        code,
-        1,
-        None,
-        None,
-        None,
+        ChallengeSubmissionInput {
+            user_id: user_b,
+            challenge_id,
+            submission_id: Uuid::new_v4(),
+            submission_code: code,
+            fragments_awarded: 1,
+            language: None,
+            stdout: None,
+            stderr: None,
+        },
     )
     .await
     .expect("b");
@@ -345,14 +361,16 @@ async fn artifact_metadata_captures_code_stdout_stderr() {
 
     let deliverable_id = DeliverablesService::create_from_challenge_submission(
         &db,
-        user_id,
-        challenge_id,
-        submission_id,
-        "print(42)",
-        10,
-        Some("python"),
-        Some("42\n"),
-        Some(""),
+        ChallengeSubmissionInput {
+            user_id,
+            challenge_id,
+            submission_id,
+            submission_code: "print(42)",
+            fragments_awarded: 10,
+            language: Some("python"),
+            stdout: Some("42\n"),
+            stderr: Some(""),
+        },
     )
     .await
     .expect("create");
@@ -385,14 +403,16 @@ async fn artifact_metadata_omits_optional_when_none() {
 
     let deliverable_id = DeliverablesService::create_from_challenge_submission(
         &db,
-        user_id,
-        challenge_id,
-        Uuid::new_v4(),
-        "code",
-        1,
-        None,
-        None,
-        None,
+        ChallengeSubmissionInput {
+            user_id,
+            challenge_id,
+            submission_id: Uuid::new_v4(),
+            submission_code: "code",
+            fragments_awarded: 1,
+            language: None,
+            stdout: None,
+            stderr: None,
+        },
     )
     .await
     .expect("create");

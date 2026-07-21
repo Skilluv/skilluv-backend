@@ -336,7 +336,7 @@ pub async fn list_backups(cfg: &BackupConfig) -> Result<Vec<BackupEntry>> {
             });
         }
     }
-    entries.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    entries.sort_by_key(|e| std::cmp::Reverse(e.created_at));
     Ok(entries)
 }
 
@@ -747,8 +747,10 @@ pub async fn mirror_minio(cfg: &BackupConfig) -> Result<MirrorReport> {
     info!(target_prefix = %prefix, "listing R2 mirror target objects");
     let target_index = list_target_index(&target, &prefix).await?;
 
-    let mut report = MirrorReport::default();
-    report.source_objects = source_objects.len();
+    let mut report = MirrorReport {
+        source_objects: source_objects.len(),
+        ..MirrorReport::default()
+    };
 
     for object in source_objects {
         let source_key = object.key.clone();

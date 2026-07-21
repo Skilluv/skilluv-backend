@@ -15,6 +15,17 @@ use crate::errors::AppError;
 use crate::middleware::AuthUser;
 use crate::services::{credits, invoices, stripe};
 
+// Type aliases pour clippy::type_complexity (rangées sqlx::query_as).
+type EnterpriseCreditsRow586 = (
+    Uuid,
+    String,
+    bigdecimal::BigDecimal,
+    Option<i32>,
+    i32,
+    Option<chrono::DateTime<chrono::Utc>>,
+    chrono::DateTime<chrono::Utc>,
+);
+
 pub fn enterprise_credits_routes() -> Router<AppState> {
     Router::new()
         .route("/enterprise/credits", get(get_credits))
@@ -474,15 +485,17 @@ async fn handle_subscription_started(state: &AppState, obj: &Value) -> Result<()
     let now = chrono::Utc::now();
     let sub = crate::services::subscriptions::upsert_from_stripe(
         &state.db,
-        enterprise_id,
-        &plan_slug,
-        customer_id.as_deref(),
-        &stripe_sub_id,
-        "active",
-        Some(now),
-        Some(now + chrono::Duration::days(30)),
-        false,
-        monthly_credit_grant,
+        crate::services::subscriptions::StripeSubscriptionUpsert {
+            enterprise_id,
+            plan_slug: &plan_slug,
+            stripe_customer_id: customer_id.as_deref(),
+            stripe_subscription_id: &stripe_sub_id,
+            status: "active",
+            current_period_start: Some(now),
+            current_period_end: Some(now + chrono::Duration::days(30)),
+            cancel_at_period_end: false,
+            monthly_credit_grant,
+        },
     )
     .await?;
     let _ = crate::services::subscriptions::grant_monthly_credits_if_due(&state.db, &sub).await;
@@ -581,7 +594,7 @@ async fn redeem_promo(
 ) -> Result<Json<Value>, AppError> {
     let enterprise_id = current_enterprise_for(&state.db, auth.user_id).await?;
     let code_normalised = body.code.trim().to_uppercase();
-    let row: Option<(Uuid, String, bigdecimal::BigDecimal, Option<i32>, i32, Option<chrono::DateTime<chrono::Utc>>, chrono::DateTime<chrono::Utc>)> = sqlx::query_as(
+    let row: Option<EnterpriseCreditsRow586> = sqlx::query_as(
         "SELECT id, kind, value, max_uses, uses_count, valid_until, valid_from FROM promo_codes WHERE UPPER(code) = $1",
     )
     .bind(&code_normalised)
@@ -593,17 +606,17 @@ async fn redeem_promo(
     if valid_from > now {
         return Err(AppError::Validation("Promo code not yet active".into()));
     }
-    if let Some(vu) = valid_until {
-        if vu < now {
-            return Err(AppError::Validation("Promo code expired".into()));
-        }
+    if let Some(vu) = valid_until
+        && vu < now
+    {
+        return Err(AppError::Validation("Promo code expired".into()));
     }
-    if let Some(max) = max_uses {
-        if uses_count >= max {
-            return Err(AppError::Validation(
-                "Promo code has reached max uses".into(),
-            ));
-        }
+    if let Some(max) = max_uses
+        && uses_count >= max
+    {
+        return Err(AppError::Validation(
+            "Promo code has reached max uses".into(),
+        ));
     }
     // One redemption per enterprise
     let already: Option<(i32,)> = sqlx::query_as(

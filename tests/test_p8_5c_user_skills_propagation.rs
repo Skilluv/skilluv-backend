@@ -112,7 +112,7 @@ async fn propagates_when_language_matches_slug() {
 
     assert_eq!(proven_count, 1);
     assert_eq!(wpc, 5);
-    assert!(level >= 1 && level <= 5);
+    assert!((1..=5).contains(&level));
 
     db.close().await;
     cleanup_test_db(&db_name).await;

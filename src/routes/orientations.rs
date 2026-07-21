@@ -343,12 +343,12 @@ async fn update_orientation(
     Path(slug): Path<String>,
     Json(body): Json<UpdateBody>,
 ) -> Result<Json<Value>, AppError> {
-    if let Some(m) = &body.mode {
-        if !matches!(m.as_str(), "learning" | "active") {
-            return Err(AppError::Validation(
-                "mode must be 'learning' or 'active'".into(),
-            ));
-        }
+    if let Some(m) = &body.mode
+        && !matches!(m.as_str(), "learning" | "active")
+    {
+        return Err(AppError::Validation(
+            "mode must be 'learning' or 'active'".into(),
+        ));
     }
 
     let mut tx = state.db.begin().await?;

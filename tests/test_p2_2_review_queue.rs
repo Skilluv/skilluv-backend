@@ -5,7 +5,7 @@
 //! - Auto-création review_task quand deliverable en pending_manual_review
 //! - Workflow reviewer : list_open → claim → submit_verdict
 //! - Verdict propagation : approve → verified + fragments + skills,
-//!                        reject → rejected, request_changes → reste pending
+//!   reject → rejected, request_changes → reste pending
 //! - Filtres queue par domaine et séniorité
 //! - Anti double-review (UNIQUE deliverable_id + reviewer_user_id)
 //! - Cron expire_stale_claims + escalate_stale_sla

@@ -13,15 +13,16 @@ use common::TestApp;
 use hmac::{Hmac, Mac};
 use serde_json::json;
 use sha2::Sha256;
-use std::sync::Mutex;
+use tokio::sync::Mutex;
 use uuid::Uuid;
 
 type HmacSha256 = Hmac<Sha256>;
 
 // Sérialise les tests P13.2 : ils mutent des env vars process-globales
 // (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET). Sans mutex, un test qui unset
-// pendant qu'un autre est mid-request → race.
-static ENV_MUTEX: Mutex<()> = Mutex::new(());
+// pendant qu'un autre est mid-request → race. On utilise `tokio::sync::Mutex`
+// pour rester valide `Send` cross-`.await` (clippy::await_holding_lock).
+static ENV_MUTEX: Mutex<()> = Mutex::const_new(());
 
 fn sign_stripe_webhook(secret: &str, payload: &[u8]) -> String {
     let ts = chrono::Utc::now().timestamp();
@@ -46,7 +47,7 @@ fn set_stripe_env() {
 
 #[tokio::test]
 async fn stripe_onboard_fails_without_config() {
-    let _env_guard = ENV_MUTEX.lock().unwrap();
+    let _env_guard = ENV_MUTEX.lock().await;
     // Snapshot + clear + restore : évite de piéger les autres tests parallèles
     // qui partagent le même process env.
     let saved_key = std::env::var("STRIPE_SECRET_KEY").ok();
@@ -98,7 +99,7 @@ async fn stripe_onboard_fails_without_config() {
 
 #[tokio::test]
 async fn stripe_withdraw_refuses_when_kyc_not_verified() {
-    let _env_guard = ENV_MUTEX.lock().unwrap();
+    let _env_guard = ENV_MUTEX.lock().await;
     set_stripe_env();
     let app = TestApp::spawn().await;
     let body = app.register_user("u_kyc").await;
@@ -143,7 +144,7 @@ async fn stripe_withdraw_refuses_when_kyc_not_verified() {
 
 #[tokio::test]
 async fn stripe_withdraw_refuses_non_eur() {
-    let _env_guard = ENV_MUTEX.lock().unwrap();
+    let _env_guard = ENV_MUTEX.lock().await;
     set_stripe_env();
     let app = TestApp::spawn().await;
     app.register_user("u_xof").await;
@@ -166,7 +167,7 @@ async fn stripe_withdraw_refuses_non_eur() {
 
 #[tokio::test]
 async fn webhook_account_updated_marks_kyc_verified() {
-    let _env_guard = ENV_MUTEX.lock().unwrap();
+    let _env_guard = ENV_MUTEX.lock().await;
     set_stripe_env();
     let app = TestApp::spawn().await;
     let body = app.register_user("u_wh").await;
@@ -226,7 +227,7 @@ async fn webhook_account_updated_marks_kyc_verified() {
 
 #[tokio::test]
 async fn webhook_ignores_unrelated_events() {
-    let _env_guard = ENV_MUTEX.lock().unwrap();
+    let _env_guard = ENV_MUTEX.lock().await;
     set_stripe_env();
     let app = TestApp::spawn().await;
 
@@ -255,7 +256,7 @@ async fn webhook_ignores_unrelated_events() {
 
 #[tokio::test]
 async fn webhook_rejects_invalid_signature() {
-    let _env_guard = ENV_MUTEX.lock().unwrap();
+    let _env_guard = ENV_MUTEX.lock().await;
     set_stripe_env();
     let app = TestApp::spawn().await;
 

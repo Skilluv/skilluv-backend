@@ -158,7 +158,7 @@ async fn user_badge_stores_source_proofs_and_rarity() {
     .bind(u)
     .bind(badge_id)
     .bind(rule_id)
-    .bind(&vec![proof_a, proof_b])
+    .bind(vec![proof_a, proof_b])
     .execute(&db)
     .await
     .expect("insert");

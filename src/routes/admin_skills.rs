@@ -16,6 +16,17 @@ use crate::AppState;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
 
+// Type aliases pour clippy::type_complexity (rangées sqlx::query_as).
+type AdminSkillsRow99 = (
+    Uuid,
+    String,
+    String,
+    Option<String>,
+    String,
+    Option<Uuid>,
+    bool,
+);
+
 pub fn admin_skill_routes() -> Router<AppState> {
     Router::new()
         .route("/admin/skills", get(list_skills).post(create_skill))
@@ -87,25 +98,17 @@ async fn list_skills(
     let per_page = q.per_page.unwrap_or(50).clamp(1, 200);
     let offset = (page - 1) * per_page;
 
-    if let Some(d) = q.domain.as_ref() {
-        if !ALLOWED_DOMAINS.contains(&d.as_str()) {
-            return Err(AppError::Validation(format!(
-                "domain invalid; allowed: {ALLOWED_DOMAINS:?}"
-            )));
-        }
+    if let Some(d) = q.domain.as_ref()
+        && !ALLOWED_DOMAINS.contains(&d.as_str())
+    {
+        return Err(AppError::Validation(format!(
+            "domain invalid; allowed: {ALLOWED_DOMAINS:?}"
+        )));
     }
 
     let search = q.q.as_ref().map(|s| format!("%{}%", s.to_lowercase()));
 
-    let rows: Vec<(
-        Uuid,
-        String,
-        String,
-        Option<String>,
-        String,
-        Option<Uuid>,
-        bool,
-    )> = sqlx::query_as(
+    let rows: Vec<AdminSkillsRow99> = sqlx::query_as(
         r#"
             SELECT id, slug, display_name, description, domain, parent_id, is_skilluv_specific
             FROM skill_nodes
@@ -297,20 +300,20 @@ async fn update_skill(
     crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     crate::middleware::admin_destructive::enforce_admin_destructive(&state, auth.user_id).await?;
 
-    if let Some(d) = body.domain.as_ref() {
-        if !ALLOWED_DOMAINS.contains(&d.as_str()) {
-            return Err(AppError::Validation(format!(
-                "domain invalid; allowed: {ALLOWED_DOMAINS:?}"
-            )));
-        }
+    if let Some(d) = body.domain.as_ref()
+        && !ALLOWED_DOMAINS.contains(&d.as_str())
+    {
+        return Err(AppError::Validation(format!(
+            "domain invalid; allowed: {ALLOWED_DOMAINS:?}"
+        )));
     }
     // Anti-self-parent (contrainte DB aussi).
-    if let Some(Some(pid)) = body.parent_id {
-        if pid == id {
-            return Err(AppError::Validation(
-                "skill cannot be its own parent".into(),
-            ));
-        }
+    if let Some(Some(pid)) = body.parent_id
+        && pid == id
+    {
+        return Err(AppError::Validation(
+            "skill cannot be its own parent".into(),
+        ));
     }
 
     // COALESCE côté SQL pour patch partiel. parent_id est Option<Option<Uuid>>

@@ -13,6 +13,21 @@ use crate::middleware::AuthUser;
 use crate::models::ChallengeTemplate;
 use crate::services::LeaderboardService;
 
+// Type aliases pour clippy::type_complexity (rangées sqlx::query_as).
+type AdminRow636 = (
+    Uuid,
+    Uuid,
+    Option<String>,
+    Option<String>,
+    chrono::DateTime<chrono::Utc>,
+    chrono::DateTime<chrono::Utc>,
+    String,
+    String,
+    Option<Uuid>,
+    Option<String>,
+    Option<String>,
+);
+
 pub fn admin_routes() -> Router<AppState> {
     Router::new()
         .route("/admin/challenges", post(create_challenge))
@@ -633,19 +648,7 @@ async fn list_sso_sessions(
     let per_page = q.per_page.unwrap_or(50).clamp(1, 200);
     let offset = (page - 1) * per_page;
 
-    let rows: Vec<(
-        Uuid,
-        Uuid,
-        Option<String>,
-        Option<String>,
-        chrono::DateTime<chrono::Utc>,
-        chrono::DateTime<chrono::Utc>,
-        String,
-        String,
-        Option<Uuid>,
-        Option<String>,
-        Option<String>,
-    )> = sqlx::query_as(
+    let rows: Vec<AdminRow636> = sqlx::query_as(
         r#"
         SELECT
             us.id, us.user_id, us.ip, us.user_agent,

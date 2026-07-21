@@ -132,7 +132,7 @@ async fn my_feed(
         });
     }
 
-    items.sort_by(|a, b| b.happened_at.cmp(&a.happened_at));
+    items.sort_by_key(|i| std::cmp::Reverse(i.happened_at));
     items.truncate(limit as usize);
 
     if analytics_consent(&headers) {
@@ -288,7 +288,7 @@ async fn for_you_feed(
         });
     }
 
-    items.sort_by(|a, b| b.happened_at.cmp(&a.happened_at));
+    items.sort_by_key(|i| std::cmp::Reverse(i.happened_at));
     items.truncate(limit as usize);
 
     Ok(Json(json!({

@@ -297,7 +297,7 @@ pub async fn refund_spend(
         BigDecimal::from_str(ratio_str).map_err(|_| AppError::Internal("invalid ratio".into()))?;
     let original_amount = original.delta.abs();
     let refund_amount = (&original_amount * &ratio).round(2);
-    if refund_amount <= BigDecimal::from(0) {
+    if refund_amount <= 0 {
         return Ok(None);
     }
     let txn = grant(

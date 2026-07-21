@@ -8,6 +8,7 @@
 //! Deprovisioning contract: PATCH `active=false` or DELETE on a user →
 //!   - membership status flipped to `revoked`
 //!   - every non-revoked session for that user is killed (login_method-agnostic)
+//!
 //! The user row itself is never deleted (audit / RGPD retention).
 
 use base64::Engine;
@@ -18,6 +19,54 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::errors::AppError;
+
+// Type aliases pour clippy::type_complexity (rangées sqlx::query_as).
+type ScimRow130 = (
+    Uuid,
+    Option<Vec<u8>>,
+    Option<Vec<u8>>,
+    Option<DateTime<Utc>>,
+);
+type ScimRow307 = (
+    Uuid,
+    Option<String>,
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    DateTime<Utc>,
+    DateTime<Utc>,
+);
+type ScimRow343 = (
+    Uuid,
+    Option<String>,
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    DateTime<Utc>,
+    DateTime<Utc>,
+);
+type ScimRow523 = (
+    Uuid,
+    Option<String>,
+    String,
+    Option<String>,
+    DateTime<Utc>,
+    DateTime<Utc>,
+);
+type ScimRow564 = (
+    Uuid,
+    Option<String>,
+    String,
+    Option<String>,
+    DateTime<Utc>,
+    DateTime<Utc>,
+);
 
 // ─── Token generation & verification ─────────────────────────────
 
@@ -126,12 +175,7 @@ pub async fn clear_token(db: &PgPool, enterprise_id: Uuid) -> Result<(), AppErro
 /// its grace window. Bumps `scim_last_used_at` for observability.
 pub async fn resolve_token(db: &PgPool, cleartext: &str) -> Result<Uuid, AppError> {
     let hash = hash_token(cleartext);
-    let candidates: Vec<(
-        Uuid,
-        Option<Vec<u8>>,
-        Option<Vec<u8>>,
-        Option<DateTime<Utc>>,
-    )> = sqlx::query_as(
+    let candidates: Vec<ScimRow130> = sqlx::query_as(
         r#"
         SELECT enterprise_id,
                scim_token_hash,
@@ -147,17 +191,17 @@ pub async fn resolve_token(db: &PgPool, cleartext: &str) -> Result<Uuid, AppErro
 
     for (eid, current, previous, prev_expires) in candidates {
         let mut ok = false;
-        if let Some(cur) = current {
-            if constant_time_eq(&cur, &hash) {
-                ok = true;
-            }
+        if let Some(cur) = current
+            && constant_time_eq(&cur, &hash)
+        {
+            ok = true;
         }
-        if !ok {
-            if let (Some(prev), Some(expires)) = (previous, prev_expires) {
-                if expires > Utc::now() && constant_time_eq(&prev, &hash) {
-                    ok = true;
-                }
-            }
+        if !ok
+            && let (Some(prev), Some(expires)) = (previous, prev_expires)
+            && expires > Utc::now()
+            && constant_time_eq(&prev, &hash)
+        {
+            ok = true;
         }
         if ok {
             let _ = sqlx::query(
@@ -306,18 +350,7 @@ pub async fn get_user(
     enterprise_id: Uuid,
     user_id: Uuid,
 ) -> Result<Option<ScimUserView>, AppError> {
-    let row: Option<(
-        Uuid,
-        Option<String>,
-        String,
-        String,
-        String,
-        String,
-        String,
-        String,
-        DateTime<Utc>,
-        DateTime<Utc>,
-    )> = sqlx::query_as(
+    let row: Option<ScimRow307> = sqlx::query_as(
         r#"
         SELECT u.id, u.scim_external_id, u.username, u.email,
                u.first_name, u.last_name, u.display_name,
@@ -342,18 +375,7 @@ pub async fn list_users(
     start_index: i64,
     count: i64,
 ) -> Result<(Vec<ScimUserView>, i64), AppError> {
-    let rows: Vec<(
-        Uuid,
-        Option<String>,
-        String,
-        String,
-        String,
-        String,
-        String,
-        String,
-        DateTime<Utc>,
-        DateTime<Utc>,
-    )> = sqlx::query_as(
+    let rows: Vec<ScimRow343> = sqlx::query_as(
         r#"
         SELECT u.id, u.scim_external_id, u.username, u.email,
                u.first_name, u.last_name, u.display_name,
@@ -390,20 +412,7 @@ pub async fn list_users(
     Ok((rows.into_iter().map(map_user_view).collect(), total))
 }
 
-fn map_user_view(
-    row: (
-        Uuid,
-        Option<String>,
-        String,
-        String,
-        String,
-        String,
-        String,
-        String,
-        DateTime<Utc>,
-        DateTime<Utc>,
-    ),
-) -> ScimUserView {
+fn map_user_view(row: ScimRow307) -> ScimUserView {
     ScimUserView {
         id: row.0,
         external_id: row.1,
@@ -522,14 +531,7 @@ pub async fn get_group(
     enterprise_id: Uuid,
     group_id: Uuid,
 ) -> Result<Option<ScimGroupView>, AppError> {
-    let row: Option<(
-        Uuid,
-        Option<String>,
-        String,
-        Option<String>,
-        DateTime<Utc>,
-        DateTime<Utc>,
-    )> = sqlx::query_as(
+    let row: Option<ScimRow523> = sqlx::query_as(
         "SELECT id, external_id, display_name, mapped_role, created_at, updated_at FROM scim_groups
          WHERE id = $1 AND enterprise_id = $2",
     )
@@ -563,14 +565,7 @@ pub async fn list_groups(
     start_index: i64,
     count: i64,
 ) -> Result<(Vec<ScimGroupView>, i64), AppError> {
-    let rows: Vec<(
-        Uuid,
-        Option<String>,
-        String,
-        Option<String>,
-        DateTime<Utc>,
-        DateTime<Utc>,
-    )> = sqlx::query_as(
+    let rows: Vec<ScimRow564> = sqlx::query_as(
         r#"
         SELECT id, external_id, display_name, mapped_role, created_at, updated_at
         FROM scim_groups
@@ -731,12 +726,12 @@ pub async fn set_group_mapped_role(
     group_id: Uuid,
     mapped_role: Option<&str>,
 ) -> Result<Vec<Uuid>, AppError> {
-    if let Some(r) = mapped_role {
-        if !matches!(r, "recruiter" | "enterprise") {
-            return Err(AppError::Validation(
-                "mapped_role must be 'recruiter' or 'enterprise'".into(),
-            ));
-        }
+    if let Some(r) = mapped_role
+        && !matches!(r, "recruiter" | "enterprise")
+    {
+        return Err(AppError::Validation(
+            "mapped_role must be 'recruiter' or 'enterprise'".into(),
+        ));
     }
     let affected = sqlx::query(
         "UPDATE scim_groups SET mapped_role = $1, updated_at = NOW()

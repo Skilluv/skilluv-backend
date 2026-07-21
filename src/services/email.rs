@@ -17,6 +17,17 @@ pub struct EmailService {
     from_name: String,
 }
 
+/// Paramètres pour [`EmailService::send_with_log`].
+#[derive(Debug, Clone, Copy)]
+pub struct SendWithLogParams<'a> {
+    pub user_id: Uuid,
+    pub to_email: &'a str,
+    pub to_name: &'a str,
+    pub subject: &'a str,
+    pub html: &'a str,
+    pub kind: &'a str,
+}
+
 impl EmailService {
     pub fn new(api_key: Option<String>, from_email: &str, from_name: &str) -> Self {
         let smtp = build_smtp_from_env();
@@ -178,13 +189,16 @@ impl EmailService {
     pub async fn send_with_log(
         &self,
         db: &PgPool,
-        user_id: Uuid,
-        to_email: &str,
-        to_name: &str,
-        subject: &str,
-        html: &str,
-        kind: &str,
+        params: SendWithLogParams<'_>,
     ) -> Result<bool, AppError> {
+        let SendWithLogParams {
+            user_id,
+            to_email,
+            to_name,
+            subject,
+            html,
+            kind,
+        } = params;
         // Bail if the user has hard-bounced or globally disabled emails
         let disabled: Option<(bool,)> =
             sqlx::query_as("SELECT email_disabled FROM users WHERE id = $1")

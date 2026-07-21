@@ -155,7 +155,7 @@ pub fn build_router(state: AppState) -> Router {
         .layer(build_cors_layer())
         // Sentry layers (outermost so they wrap everything). NewSentryLayer creates a
         // per-request Hub so user/tag context set in handlers doesn't leak across requests.
-        .layer(sentry_tower::SentryHttpLayer::with_transaction())
+        .layer(sentry_tower::SentryHttpLayer::new().enable_transaction())
         .layer(sentry_tower::NewSentryLayer::new_from_top())
         .with_state(state)
 }

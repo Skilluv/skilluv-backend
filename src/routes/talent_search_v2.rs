@@ -165,8 +165,8 @@ async fn search_v2(
         "SELECT COUNT(*) FROM users u WHERE u.role = 'user' AND u.profile_active = TRUE AND u.is_banned = FALSE{where_sql}",
     );
 
-    let mut db_query = sqlx::query(&sql);
-    let mut count_query = sqlx::query_scalar::<_, i64>(&count_sql);
+    let mut db_query = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()));
+    let mut count_query = sqlx::query_scalar::<_, i64>(sqlx::AssertSqlSafe(count_sql.as_str()));
     for b in &binds {
         db_query = b.apply(db_query);
         count_query = b.apply_scalar(count_query);

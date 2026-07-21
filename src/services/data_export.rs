@@ -252,7 +252,10 @@ async fn fetch_table(
     user_col: &str,
 ) -> Result<Value, AppError> {
     let sql = format!("SELECT * FROM {table} WHERE {user_col} = $1");
-    let rows = sqlx::query(&sql).bind(user_id).fetch_all(db).await?;
+    let rows = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
+        .bind(user_id)
+        .fetch_all(db)
+        .await?;
     let arr: Vec<Value> = rows.iter().map(|r| pg_row_to_json(r, &[])).collect();
     Ok(Value::Array(arr))
 }

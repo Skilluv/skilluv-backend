@@ -37,7 +37,7 @@ services:
       - skilluv-net
 
   postgres:
-    image: postgres:17-alpine
+    image: postgres:18.4-alpine
     container_name: skilluv-postgres
     environment:
       POSTGRES_USER: skilluv
@@ -124,7 +124,7 @@ services:
       - skilluv-net
 
   judge0-postgres:
-    image: postgres:17-alpine
+    image: postgres:18.4-alpine
     container_name: skilluv-judge0-postgres
     environment:
       POSTGRES_USER: judge0

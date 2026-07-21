@@ -10,14 +10,14 @@ default-run = "skilluv-backend"
 axum = { version = "0.8", features = ["macros", "ws", "multipart"] }
 tokio = { version = "1", features = ["full"] }
 tower = { version = "0.5", features = ["timeout", "limit"] }
-tower-http = { version = "0.6", features = ["cors", "trace", "compression-gzip"] }
+tower-http = { version = "0.7", features = ["cors", "trace", "compression-gzip"] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 # Database
-sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "migrate", "bigdecimal"] }
+sqlx = { version = "0.9", features = ["runtime-tokio", "tls-rustls-ring", "postgres", "uuid", "chrono", "migrate", "bigdecimal"] }
 bigdecimal = { version = "0.4", features = ["serde"] }
 num-traits = "0.2"
 
@@ -65,11 +65,12 @@ rust-s3 = { version = "0.37", features = ["tokio-rustls-tls"], default-features 
 
 # Monitoring
 metrics = "0.24"
-metrics-exporter-prometheus = "0.16"
+metrics-exporter-prometheus = "0.18"
 
-# gRPC
-tonic = "0.12"
-prost = "0.13"
+# gRPC (tonic 0.14 split: runtime split into tonic + tonic-prost) (tonic 0.14 split: runtime split into tonic + tonic-prost)
+tonic = "0.14"
+tonic-prost = "0.14"
+prost = "0.14"
 
 # WebSocket
 futures-util = "0.3"
@@ -79,9 +80,9 @@ clap = { version = "4", features = ["derive"] }
 anyhow = "1"
 
 # Error tracking (Sentry-compatible; works with self-hosted GlitchTip)
-sentry = { version = "0.36", default-features = false, features = ["backtrace", "contexts", "panic", "reqwest", "rustls"] }
-sentry-tower = { version = "0.36", features = ["http"] }
-sentry-tracing = "0.36"
+sentry = { version = "0.48", default-features = false, features = ["backtrace", "contexts", "panic", "reqwest", "rustls"] }
+sentry-tower = { version = "0.48", features = ["http"] }
+sentry-tracing = "0.48"
 
 # ZIP for GDPR data export
 zip = { version = "2", default-features = false, features = ["deflate"] }
@@ -90,7 +91,7 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 rust-i18n = "3"
 
 # Authenticated encryption for at-rest secrets (GitHub OAuth tokens, etc.)
-chacha20poly1305 = "0.10"
+chacha20poly1305 = "0.11"
 
 # Web push VAPID natif (pure Rust, sans OpenSSL) — RFC 8291 + 8292
 p256 = { version = "0.13", features = ["ecdh", "ecdsa", "pkcs8"] }
@@ -98,7 +99,7 @@ aes-gcm = "0.10"
 hkdf = "0.13"
 
 # OIDC B2B SSO (enterprise) — discovery, PKCE, JWKS rotation, ID token verify.
-openidconnect = "3"
+openidconnect = "4"
 elliptic-curve = { version = "0.13", features = ["sec1"] }
 
 [[bin]]
@@ -122,8 +123,9 @@ name = "skilluv-github-ingest"
 path = "src/bin/github_ingest.rs"
 
 [build-dependencies]
-tonic-build = { version = "0.12", features = ["prost"] }
-protox = "0.7"
+tonic-build = "0.14"
+tonic-prost-build = "0.14"
+protox = "0.9"
 
 [dev-dependencies]
 reqwest = { version = "0.12", features = ["json", "cookies"] }

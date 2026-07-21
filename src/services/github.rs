@@ -7,7 +7,7 @@
 
 use chacha20poly1305::{
     ChaCha20Poly1305, Key, Nonce,
-    aead::{Aead, AeadCore, KeyInit, OsRng},
+    aead::{Aead, AeadCore, Generate, KeyInit},
 };
 use chrono::{DateTime, Utc};
 use hmac::{Hmac, KeyInit as HmacKeyInit, Mac};
@@ -39,9 +39,11 @@ fn derive_token_key(jwt_secret: &str) -> [u8; 32] {
 }
 
 pub fn encrypt_token(jwt_secret: &str, token: &str) -> Result<(Vec<u8>, Vec<u8>), AppError> {
-    let key = derive_token_key(jwt_secret);
-    let cipher = ChaCha20Poly1305::new(Key::from_slice(&key));
-    let nonce = ChaCha20Poly1305::generate_nonce(&mut OsRng);
+    let key_bytes = derive_token_key(jwt_secret);
+    let key = Key::try_from(key_bytes.as_slice())
+        .map_err(|_| AppError::Internal("github token key size invalid".into()))?;
+    let cipher = ChaCha20Poly1305::new(&key);
+    let nonce = Nonce::generate();
     let ciphertext = cipher
         .encrypt(&nonce, token.as_bytes())
         .map_err(|_| AppError::Internal("github token encryption failed".into()))?;
@@ -56,11 +58,14 @@ pub fn decrypt_token(
     if nonce_bytes.len() != 12 {
         return Err(AppError::Internal("invalid nonce length".into()));
     }
-    let key = derive_token_key(jwt_secret);
-    let cipher = ChaCha20Poly1305::new(Key::from_slice(&key));
-    let nonce = Nonce::from_slice(nonce_bytes);
+    let key_bytes = derive_token_key(jwt_secret);
+    let key = Key::try_from(key_bytes.as_slice())
+        .map_err(|_| AppError::Internal("github token key size invalid".into()))?;
+    let cipher = ChaCha20Poly1305::new(&key);
+    let nonce = Nonce::try_from(nonce_bytes)
+        .map_err(|_| AppError::Internal("nonce parse failed".into()))?;
     let plain = cipher
-        .decrypt(nonce, ciphertext)
+        .decrypt(&nonce, ciphertext)
         .map_err(|_| AppError::Internal("github token decryption failed".into()))?;
     String::from_utf8(plain).map_err(|_| AppError::Internal("github token utf8 invalid".into()))
 }

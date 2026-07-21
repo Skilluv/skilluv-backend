@@ -10,7 +10,7 @@ default-run = "skilluv-backend"
 axum = { version = "0.8", features = ["macros", "ws", "multipart"] }
 tokio = { version = "1", features = ["full"] }
 tower = { version = "0.5", features = ["timeout", "limit"] }
-tower-http = { version = "0.6", features = ["cors", "trace", "compression-gzip"] }
+tower-http = { version = "0.7", features = ["cors", "trace", "compression-gzip"] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
@@ -65,7 +65,7 @@ rust-s3 = { version = "0.35", features = ["tokio-rustls-tls"], default-features 
 
 # Monitoring
 metrics = "0.24"
-metrics-exporter-prometheus = "0.16"
+metrics-exporter-prometheus = "0.18"
 
 # gRPC
 tonic = "0.12"
@@ -79,9 +79,9 @@ clap = { version = "4", features = ["derive"] }
 anyhow = "1"
 
 # Error tracking (Sentry-compatible; works with self-hosted GlitchTip)
-sentry = { version = "0.36", default-features = false, features = ["backtrace", "contexts", "panic", "reqwest", "rustls"] }
-sentry-tower = { version = "0.36", features = ["http"] }
-sentry-tracing = "0.36"
+sentry = { version = "0.48", default-features = false, features = ["backtrace", "contexts", "panic", "reqwest", "rustls"] }
+sentry-tower = { version = "0.48", features = ["http"] }
+sentry-tracing = "0.48"
 
 # ZIP for GDPR data export
 zip = { version = "2", default-features = false, features = ["deflate"] }
@@ -90,7 +90,7 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 rust-i18n = "3"
 
 # Authenticated encryption for at-rest secrets (GitHub OAuth tokens, etc.)
-chacha20poly1305 = "0.10"
+chacha20poly1305 = "0.11"
 
 # Web push VAPID natif (pure Rust, sans OpenSSL) — RFC 8291 + 8292
 p256 = { version = "0.13", features = ["ecdh", "ecdsa", "pkcs8"] }

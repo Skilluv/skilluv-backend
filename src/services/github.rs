@@ -232,6 +232,75 @@ pub async fn fetch_public_repos(
     Ok(all)
 }
 
+// ─── Fork API (Bonjour Skilluv onboarding) ───────────────────────
+
+/// Result of forking a `skilluv-community/starter-*` template onto the user's
+/// GitHub account. Used by the Bonjour Skilluv onboarding flow.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForkResult {
+    pub id: i64,
+    pub full_name: String, // e.g. "amina/starter-fullstack-rust"
+    pub html_url: String,  // e.g. "https://github.com/amina/starter-fullstack-rust"
+    pub default_branch: String,
+}
+
+/// Fork a repository via GitHub API. The fork is created on the authenticated
+/// user's account (determined by the access_token owner).
+///
+/// GitHub's fork endpoint is idempotent: calling it on an existing fork
+/// returns the existing fork rather than erroring. This is the desired
+/// behavior for our onboarding flow (a user can re-trigger without side
+/// effects).
+///
+/// See https://docs.github.com/en/rest/repos/forks#create-a-fork
+pub async fn fork_repo(access_token: &str, source_full_name: &str) -> Result<ForkResult, AppError> {
+    #[derive(Debug, Deserialize)]
+    struct ForkResponse {
+        id: i64,
+        full_name: String,
+        html_url: String,
+        default_branch: String,
+    }
+
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(format!("{GITHUB_API}/repos/{source_full_name}/forks"))
+        .bearer_auth(access_token)
+        .header("User-Agent", USER_AGENT)
+        .header("Accept", "application/vnd.github+json")
+        .header("X-GitHub-Api-Version", "2022-11-28")
+        // Empty body: default settings (fork to authenticated user, keep repo name)
+        .body("{}")
+        .header("Content-Type", "application/json")
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("github fork request failed: {e}")))?;
+
+    let status = resp.status();
+    if !status.is_success() {
+        let body = resp.text().await.unwrap_or_default();
+        // 202 Accepted is actually valid — GitHub returned the fork data before
+        // it's fully created. But `is_success()` covers 200-299, so we should
+        // never enter this branch on 202. This handles 4xx/5xx.
+        return Err(AppError::Internal(format!(
+            "github fork status {status}: {}",
+            &body[..body.len().min(200)]
+        )));
+    }
+
+    let fork: ForkResponse = resp
+        .json()
+        .await
+        .map_err(|e| AppError::Internal(format!("github fork decode failed: {e}")))?;
+
+    Ok(ForkResult {
+        id: fork.id,
+        full_name: fork.full_name,
+        html_url: fork.html_url,
+        default_branch: fork.default_branch,
+    })
+}
+
 // ─── Storage ─────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]

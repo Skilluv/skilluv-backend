@@ -268,6 +268,218 @@ fn validate_starter_slug(slug: &str) -> Result<(), AppError> {
     Ok(())
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// Webhook handler — called from bounties.rs::handle_pull_request_event
+// ═══════════════════════════════════════════════════════════════════
+
+/// Handle a `pull_request` event on a fork we're tracking for Bonjour Skilluv.
+///
+/// Trigger conditions:
+///   - action = "opened"
+///   - The repo full_name matches an existing `onboarding_bonjour_skilluv.fork_full_name`
+///   - The PR modifies `HELLO.md`
+///
+/// Actions taken:
+///   1. Transition onboarding_bonjour_skilluv.status from `forked` to `pr_opened`,
+///      set pr_number and pr_url, timestamp pr_opened_at
+///   2. Fetch the HELLO.md content from the fork at the PR head sha
+///   3. Insert a hello_wall_entries row so the user's Hello Wall page renders
+///   4. Log the event for observability
+///
+/// Badge unlock is NOT triggered here — that's the proof engine's job (P17-P19),
+/// which reads the transition and unlocks the "Bonjour Skilluv" badge based on
+/// a badge_rules entry (to be seeded separately).
+///
+/// Idempotence: if the onboarding row already has status = 'pr_opened' or
+/// 'completed', this handler is a no-op. Multiple webhook deliveries for the
+/// same PR won't create duplicate hello_wall_entries (protected by UNIQUE
+/// user_id on hello_wall_entries).
+pub async fn handle_bonjour_skilluv_pr_event(
+    state: &crate::AppState,
+    payload: &Value,
+) -> Result<(), AppError> {
+    let action = payload.get("action").and_then(|v| v.as_str()).unwrap_or("");
+    // Only react to the initial "opened" action. Later actions on the same PR
+    // (synchronize, closed, reopened) don't change the onboarding status here.
+    if action != "opened" {
+        return Ok(());
+    }
+
+    let pr = payload.get("pull_request").cloned().unwrap_or(Value::Null);
+    let pr_number = pr.get("number").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+    let pr_url = pr
+        .get("html_url")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    if pr_number == 0 || pr_url.is_empty() {
+        return Ok(());
+    }
+
+    // Repo full_name = the fork where the PR was opened. For a Bonjour Skilluv
+    // PR, base and head are on the SAME fork (user PRs their own fork's main
+    // → showcase branch). So we look up by base.repo.full_name.
+    let fork_full_name = pr
+        .get("base")
+        .and_then(|b| b.get("repo"))
+        .and_then(|r| r.get("full_name"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    if fork_full_name.is_empty() {
+        return Ok(());
+    }
+
+    // Load the onboarding row by fork_full_name.
+    let onboarding: Option<(Uuid, String)> = sqlx::query_as(
+        "SELECT user_id, status FROM onboarding_bonjour_skilluv WHERE fork_full_name = $1",
+    )
+    .bind(fork_full_name)
+    .fetch_optional(&state.db)
+    .await?;
+
+    let Some((user_id, current_status)) = onboarding else {
+        // Not a tracked Bonjour Skilluv fork — nothing to do.
+        return Ok(());
+    };
+
+    // Idempotence: already at pr_opened or completed = skip.
+    if matches!(current_status.as_str(), "pr_opened" | "completed") {
+        return Ok(());
+    }
+
+    // Fetch the user's GitHub token to call the API for PR files and content.
+    let access_token =
+        crate::services::github::load_token(&state.db, &state.config.jwt_secret, user_id)
+            .await?
+            .ok_or_else(|| {
+                AppError::Internal(
+            "Bonjour Skilluv webhook: user has no GitHub connection, cannot verify PR files".into(),
+        )
+            })?;
+
+    // List files changed in the PR. Skip if HELLO.md not in the diff.
+    let files =
+        crate::services::github::list_pr_files(&access_token, fork_full_name, pr_number).await?;
+    let hello_touched = files
+        .iter()
+        .any(|f| f.filename == "HELLO.md" && matches!(f.status.as_str(), "added" | "modified"));
+    if !hello_touched {
+        // User opened a PR unrelated to HELLO.md — legitimate, but not a
+        // completion trigger. We could store an intermediate state, but keep
+        // it simple: no-op.
+        tracing::info!(
+            user_id = %user_id,
+            pr_number,
+            fork_full_name,
+            "Bonjour Skilluv PR opened but HELLO.md not touched — skipping"
+        );
+        return Ok(());
+    }
+
+    // Fetch the current HELLO.md content on the PR's head branch. This lets us
+    // snapshot what the user actually wrote for archival on the Hello Wall.
+    let head_ref = pr
+        .get("head")
+        .and_then(|h| h.get("ref"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("main");
+    let hello_content = crate::services::github::fetch_file_content(
+        &access_token,
+        fork_full_name,
+        "HELLO.md",
+        head_ref,
+    )
+    .await
+    .unwrap_or_else(|e| {
+        tracing::warn!(
+            error = %e,
+            user_id = %user_id,
+            fork_full_name,
+            "Bonjour Skilluv: failed to fetch HELLO.md content, using placeholder"
+        );
+        String::from("(content could not be fetched from GitHub)")
+    });
+
+    let hello_hash = {
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        hasher.update(hello_content.as_bytes());
+        hex::encode(hasher.finalize())
+    };
+
+    // Transaction: update onboarding row + insert hello_wall_entries row.
+    let mut tx = state.db.begin().await?;
+
+    sqlx::query(
+        r#"
+        UPDATE onboarding_bonjour_skilluv
+        SET status = 'pr_opened',
+            pr_number = $1,
+            pr_url = $2,
+            pr_opened_at = NOW()
+        WHERE user_id = $3
+        "#,
+    )
+    .bind(pr_number)
+    .bind(&pr_url)
+    .bind(user_id)
+    .execute(&mut *tx)
+    .await?;
+
+    // Insert Hello Wall entry. UNIQUE(user_id) prevents duplicates.
+    // Extract the source starter repo from the fork_full_name.
+    // Example: "amina/starter-fullstack-rust" → "starter-fullstack-rust"
+    let source_starter = fork_full_name
+        .split('/')
+        .nth(1)
+        .unwrap_or("starter-unknown")
+        .to_string();
+
+    let github_entry_url = format!(
+        "https://github.com/skilluv-community/hello-wall/blob/main/entries/{}.md",
+        // Very light sanitization: keep only ASCII alphanumerics + dash.
+        // Real username sanitization happens application-side when the bot
+        // mirrors to the repo; this is a placeholder URL until then.
+        fork_full_name
+            .split('/')
+            .next()
+            .unwrap_or("unknown")
+            .chars()
+            .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
+            .collect::<String>()
+    );
+
+    sqlx::query(
+        r#"
+        INSERT INTO hello_wall_entries
+            (user_id, hello_markdown, hello_hash, github_entry_url,
+             source_pr_url, source_starter_repo)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT (user_id) DO NOTHING
+        "#,
+    )
+    .bind(user_id)
+    .bind(&hello_content)
+    .bind(&hello_hash)
+    .bind(&github_entry_url)
+    .bind(&pr_url)
+    .bind(&source_starter)
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+
+    tracing::info!(
+        user_id = %user_id,
+        pr_number,
+        fork_full_name,
+        hello_hash = %hello_hash,
+        "Bonjour Skilluv completion detected — status transitioned to pr_opened, Hello Wall entry created"
+    );
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

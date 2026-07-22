@@ -244,6 +244,124 @@ pub struct ForkResult {
     pub default_branch: String,
 }
 
+/// Metadata about a single file changed in a Pull Request.
+#[derive(Debug, Clone, Deserialize)]
+pub struct PrFile {
+    pub filename: String,
+    pub status: String, // "added" | "modified" | "removed" | "renamed"
+    #[serde(default)]
+    pub additions: u32,
+    #[serde(default)]
+    pub deletions: u32,
+}
+
+/// List the files changed in a Pull Request.
+///
+/// Used by the Bonjour Skilluv webhook to check whether a PR touches
+/// `HELLO.md` on a tracked starter fork.
+///
+/// The endpoint returns at most 30 files per page by default; we cap at
+/// 3 pages (90 files) to bound work — a Bonjour Skilluv PR should only
+/// touch 1-2 files, so a paginated fetch of the whole diff is overkill.
+///
+/// See https://docs.github.com/en/rest/pulls/pulls#list-pull-requests-files
+pub async fn list_pr_files(
+    access_token: &str,
+    fork_full_name: &str,
+    pr_number: i32,
+) -> Result<Vec<PrFile>, AppError> {
+    let client = reqwest::Client::new();
+    let mut all = Vec::new();
+    for page in 1..=3 {
+        let resp = client
+            .get(format!(
+                "{GITHUB_API}/repos/{fork_full_name}/pulls/{pr_number}/files?per_page=100&page={page}"
+            ))
+            .bearer_auth(access_token)
+            .header("User-Agent", USER_AGENT)
+            .header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .send()
+            .await
+            .map_err(|e| AppError::Internal(format!("github pr files fetch failed: {e}")))?;
+        if !resp.status().is_success() {
+            return Err(AppError::Internal(format!(
+                "github pr files status {}",
+                resp.status()
+            )));
+        }
+        let batch: Vec<PrFile> = resp
+            .json()
+            .await
+            .map_err(|e| AppError::Internal(format!("github pr files decode failed: {e}")))?;
+        let was_full = batch.len() == 100;
+        all.extend(batch);
+        if !was_full {
+            break;
+        }
+    }
+    Ok(all)
+}
+
+/// Fetch the raw content of a file at a specific commit ref from GitHub.
+///
+/// Used to snapshot the HELLO.md content of a tracked Bonjour Skilluv PR
+/// for archival in the Hello Wall repository.
+///
+/// Returns the plain-text content decoded from base64 (GitHub API default).
+pub async fn fetch_file_content(
+    access_token: &str,
+    fork_full_name: &str,
+    path: &str,
+    git_ref: &str,
+) -> Result<String, AppError> {
+    #[derive(Debug, Deserialize)]
+    struct ContentResponse {
+        content: String,
+        encoding: String,
+    }
+    let client = reqwest::Client::new();
+    let resp = client
+        .get(format!(
+            "{GITHUB_API}/repos/{fork_full_name}/contents/{path}?ref={git_ref}"
+        ))
+        .bearer_auth(access_token)
+        .header("User-Agent", USER_AGENT)
+        .header("Accept", "application/vnd.github+json")
+        .header("X-GitHub-Api-Version", "2022-11-28")
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("github content fetch failed: {e}")))?;
+    if !resp.status().is_success() {
+        return Err(AppError::Internal(format!(
+            "github content status {}",
+            resp.status()
+        )));
+    }
+    let body: ContentResponse = resp
+        .json()
+        .await
+        .map_err(|e| AppError::Internal(format!("github content decode failed: {e}")))?;
+    if body.encoding != "base64" {
+        return Err(AppError::Internal(format!(
+            "unexpected github content encoding: {}",
+            body.encoding
+        )));
+    }
+    // GitHub base64-encodes with line breaks; strip whitespace first.
+    let cleaned: String = body
+        .content
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .collect();
+    use base64::Engine;
+    let decoded = base64::engine::general_purpose::STANDARD
+        .decode(cleaned)
+        .map_err(|e| AppError::Internal(format!("github content base64 decode failed: {e}")))?;
+    String::from_utf8(decoded)
+        .map_err(|e| AppError::Internal(format!("github content utf8 decode failed: {e}")))
+}
+
 /// Fork a repository via GitHub API. The fork is created on the authenticated
 /// user's account (determined by the access_token owner).
 ///

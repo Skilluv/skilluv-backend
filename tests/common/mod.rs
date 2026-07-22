@@ -8,10 +8,24 @@ pub mod mock_oidc;
 use reqwest::{Client, StatusCode};
 use serde_json::{Value, json};
 use sqlx::postgres::{PgPool, PgPoolOptions};
-use std::sync::Arc;
+use std::sync::{Arc, Once};
 use uuid::Uuid;
 
 use skilluv_backend::{AppState, AppStateConfig, build_router};
+
+/// Init a tracing subscriber once per test-binary process, so backend
+/// `tracing::error!` calls surface in `cargo test -- --nocapture`.
+/// Without this, a 500 in a handler is invisible during test debugging.
+///
+/// Verbosity controlled by `RUST_LOG` env-var (default: warn).
+fn init_test_tracing() {
+    static INIT: Once = Once::new();
+    INIT.call_once(|| {
+        use tracing_subscriber::{EnvFilter, fmt};
+        let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn"));
+        let _ = fmt().with_env_filter(filter).with_test_writer().try_init();
+    });
+}
 
 /// A test application instance with isolated database.
 pub struct TestApp {
@@ -25,6 +39,7 @@ impl TestApp {
     /// Spawn a test server with an isolated database.
     /// Emails are delivered to the local Mailpit container (SMTP :1025, UI :8025).
     pub async fn spawn() -> Self {
+        init_test_tracing();
         // Wire the EmailService onto Mailpit for tests. Read by `email::build_smtp_from_env`.
         // Safe to set for every test — env vars are process-global, but the values don't vary.
         // SAFETY: we're only reading and setting env at test-startup, before any concurrent

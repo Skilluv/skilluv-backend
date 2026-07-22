@@ -86,6 +86,10 @@ jobs:
       MINIO_ACCESS_KEY: skilluv
       MINIO_SECRET_KEY: skilluv_secret
       MINIO_BUCKET: avatars
+      # Backend tracing is invisible in tests without a subscriber (see
+      # tests/common/mod.rs::init_test_tracing). Verbose here to surface any
+      # 500 root causes in the CI logs.
+      RUST_LOG: info,skilluv_backend=debug,sqlx=warn
 
     steps:
       - uses: actions/checkout@v7
@@ -145,7 +149,7 @@ jobs:
           restore-keys: ${{ runner.os }}-cargo-test-
 
       - name: Run integration tests
-        run: cargo test -- --test-threads=1
+        run: cargo test -- --test-threads=1 --nocapture
 
       - name: Cleanup MinIO container
         if: always()

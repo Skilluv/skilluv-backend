@@ -55,42 +55,91 @@ fn wrap(data: Value) -> Value {
     })
 }
 
-/// Resolve a starter slug from the user's primary orientation.
+/// Public wrapper : resolve a starter slug from the user's primary
+/// orientation, falling back to `DEFAULT_STARTER_SLUG` if no explicit
+/// mapping exists.
+fn starter_for_orientation(orientation_slug: &str) -> &'static str {
+    explicit_starter_for_orientation(orientation_slug).unwrap_or(DEFAULT_STARTER_SLUG)
+}
+
+/// Resolve a starter slug from the user's primary orientation, returning
+/// `None` if the orientation has no explicit mapping.
 ///
-/// The mapping favors the most likely stack a beginner would use in that
-/// orientation. Some orientations don't have a dedicated starter (yet); those
-/// fall back to `DEFAULT_STARTER_SLUG`. The user can always override this
-/// choice via the `?starter=starter-{slug}` query param on the start endpoint.
+/// Every orientation slug declared in migration `0002_initial_content.sql`
+/// + additions (0105, 0106) is explicitly mapped here — no orientation falls
+/// through today. Coverage is enforced by unit test
+/// `every_db_orientation_maps_to_a_known_starter`.
+///
+/// The user can override this choice via the `?starter=starter-{slug}` query
+/// param on the start endpoint.
 ///
 /// See content strategy annex G for the full list of 15 starters.
-fn starter_for_orientation(orientation_slug: &str) -> &'static str {
-    match orientation_slug {
-        // Fullstack — Rust default (Skilluv signature)
+fn explicit_starter_for_orientation(orientation_slug: &str) -> Option<&'static str> {
+    Some(match orientation_slug {
+        // ── Fullstack — Rust default (Skilluv signature)
         "dev-fullstack" | "dev-backend" | "systems-programmer" => "starter-fullstack-rust",
-        // Frontend
+
+        // ── Frontend
         "dev-frontend" | "web-designer" => "starter-frontend-svelte",
-        // Mobile
+
+        // ── Mobile
         "mobile-android" => "starter-mobile-kotlin",
         "mobile-cross" => "starter-mobile-react-native",
         "mobile-ios" => "starter-mobile-react-native", // Swift starter not day-1
-        // Game
+        // Mobile designers land on RN — closest ecosystem where design ↔ code
+        // dialogue happens naturally (Figma → RN component).
+        "mobile-designer" => "starter-mobile-react-native",
+
+        // ── Game
         "game-programmer" => "starter-game-godot",
         "game-designer" | "game-artist-2d" | "game-artist-3d" | "game-sound-engineer" => {
             "starter-game-godot"
         }
-        // Data / AI
+        // 3D artist : Godot's 3D pipeline is the most Skilluv-relevant entry
+        // (open-source, tuto-friendly, doc trans-culturelle). Blender workflow
+        // se branche naturellement dessus.
+        "3d-artist" => "starter-game-godot",
+
+        // ── Data / AI
         "data-engineer" | "data-analyst" | "ml-engineer" | "prompt-engineer" => {
             "starter-data-python"
         }
-        // Embarqué / IoT (new orientation added by migration 0105)
+
+        // ── Embarqué / IoT (new orientation added by migration 0105)
         "dev-embarque-iot" => "starter-iot-esp32",
-        // Ops
+
+        // ── Ops
         "devops-engineer" | "sre" | "cloud-architect" => "starter-devops",
-        // Soft skills / misc
+
+        // ── Soft skills / misc
         "tech-writer" | "open-source-maintainer" => "starter-frontend-htmx",
-        // Everything else → default
-        _ => DEFAULT_STARTER_SLUG,
-    }
+
+        // ── Design roles (illustrator, motion) — Svelte starter is the
+        // Skilluv-signature UI environment, and its docs/getting-started is
+        // le premier terrain naturel où un·e designer peut contribuer
+        // (assets SVG, animations d'illustration, motion tokens).
+        "illustrator" | "motion-designer" => "starter-frontend-svelte",
+
+        // ── Security (web, engineer, SOC) — Node fullstack expose la surface
+        // d'attaque web classique (Express/Nest + JWT + upload) que ces
+        // profils apprennent à auditer. Doc OWASP + secrets management y sont
+        // les mieux documentés côté écosystème.
+        "pentester-web" | "security-engineer" | "soc-analyst" => "starter-fullstack-node",
+
+        // ── Pentester mobile — RN pour le même raisonnement côté surface
+        // d'attaque mobile (JS bridge, storage, in-app deep links).
+        "pentester-mobile" => "starter-mobile-react-native",
+
+        // ── Smart contracts — toolchain Solidity mainstream (Hardhat/Foundry)
+        // vit dans l'écosystème Node. Le starter Node offre donc le hors-code
+        // le plus proche (package.json + scripts npm) sans imposer une chaîne
+        // blockchain complète day-1.
+        "smart-contract-dev" => "starter-fullstack-node",
+
+        // ── Fallback : future-added orientations. Aujourd'hui aucune ne
+        // devrait passer par ici — test unitaire dédié.
+        _ => return None,
+    })
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -515,10 +564,108 @@ mod tests {
             starter_for_orientation("tech-writer"),
             "starter-frontend-htmx"
         );
+        // Design roles
+        assert_eq!(
+            starter_for_orientation("illustrator"),
+            "starter-frontend-svelte"
+        );
+        assert_eq!(
+            starter_for_orientation("motion-designer"),
+            "starter-frontend-svelte"
+        );
+        assert_eq!(
+            starter_for_orientation("mobile-designer"),
+            "starter-mobile-react-native"
+        );
+        assert_eq!(
+            starter_for_orientation("3d-artist"),
+            "starter-game-godot"
+        );
+        // Security roles
+        assert_eq!(
+            starter_for_orientation("pentester-web"),
+            "starter-fullstack-node"
+        );
+        assert_eq!(
+            starter_for_orientation("security-engineer"),
+            "starter-fullstack-node"
+        );
+        assert_eq!(
+            starter_for_orientation("soc-analyst"),
+            "starter-fullstack-node"
+        );
+        assert_eq!(
+            starter_for_orientation("pentester-mobile"),
+            "starter-mobile-react-native"
+        );
+        // Blockchain
+        assert_eq!(
+            starter_for_orientation("smart-contract-dev"),
+            "starter-fullstack-node"
+        );
         // Unknown orientation → default
         assert_eq!(
             starter_for_orientation("unknown-slug"),
             DEFAULT_STARTER_SLUG
+        );
+    }
+
+    /// Regression guard : chaque slug d'orientation dans la DB doit avoir un
+    /// mapping *explicite* dans `starter_for_orientation`, jamais tomber au
+    /// `DEFAULT_STARTER_SLUG`. Le test lit la liste des 32 slugs (migrations
+    /// 0002 + 0105 + 0106) et vérifie que chaque appel retourne un starter
+    /// != du DEFAULT. Si on ajoute une orientation future, ce test échoue
+    /// tant qu'on n'a pas ajouté un cas dédié dans le match.
+    ///
+    /// Note : la liste est hard-codée ici plutôt que lue de la DB pour que le
+    /// test soit unitaire pur (pas de connexion Postgres requise en CI).
+    #[test]
+    fn every_db_orientation_maps_to_a_known_starter() {
+        // Source : SELECT slug FROM orientations ORDER BY slug — snapshot au
+        // 2026-07-22, 32 slugs (24 initial + 6 game + 1 IoT + 1 smart-contract).
+        const ALL_ORIENTATION_SLUGS: &[&str] = &[
+            "3d-artist",
+            "cloud-architect",
+            "data-analyst",
+            "data-engineer",
+            "dev-backend",
+            "dev-embarque-iot",
+            "dev-frontend",
+            "dev-fullstack",
+            "devops-engineer",
+            "game-artist-2d",
+            "game-artist-3d",
+            "game-designer",
+            "game-programmer",
+            "game-sound-engineer",
+            "illustrator",
+            "ml-engineer",
+            "mobile-android",
+            "mobile-cross",
+            "mobile-designer",
+            "mobile-ios",
+            "motion-designer",
+            "open-source-maintainer",
+            "pentester-mobile",
+            "pentester-web",
+            "prompt-engineer",
+            "security-engineer",
+            "smart-contract-dev",
+            "soc-analyst",
+            "sre",
+            "systems-programmer",
+            "tech-writer",
+            "web-designer",
+        ];
+
+        let unmapped: Vec<_> = ALL_ORIENTATION_SLUGS
+            .iter()
+            .filter(|slug| explicit_starter_for_orientation(slug).is_none())
+            .copied()
+            .collect();
+        assert!(
+            unmapped.is_empty(),
+            "Orientations sans mapping explicite (fallback DEFAULT) : {unmapped:?}. Ajoute un cas dédié dans explicit_starter_for_orientation()."
         );
     }
 

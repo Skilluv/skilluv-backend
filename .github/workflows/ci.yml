@@ -71,18 +71,10 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
-      minio:
-        image: minio/minio:RELEASE.2025-09-07T16-13-09Z
-        ports:
-          - 9004:9000
-        env:
-          MINIO_ROOT_USER: skilluv
-          MINIO_ROOT_PASSWORD: skilluv_secret
-        options: >-
-          --health-cmd "mc ready local || true"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+      # MinIO n'est PAS declare comme service GHA : les services ne supportent
+      # pas de champ `command`, et l'image minio/minio requiert `server /data`
+      # en argument (sans ca, elle affiche l'usage et sort). On la lance en step
+      # (voir "Start MinIO container" plus bas).
 
     env:
       DATABASE_URL: postgres://skilluv:skilluv_secret@localhost:5433/skilluv
@@ -101,6 +93,28 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Start MinIO container
+        run: |
+          docker run -d --name minio \
+            -p 9004:9000 \
+            -e MINIO_ROOT_USER=skilluv \
+            -e MINIO_ROOT_PASSWORD=skilluv_secret \
+            minio/minio:RELEASE.2025-09-07T16-13-09Z \
+            server /data
+
+      - name: Wait for MinIO to be ready
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:9004/minio/health/live > /dev/null 2>&1; then
+              echo "MinIO ready after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "MinIO failed to become ready after 30s"
+          docker logs minio
+          exit 1
+
       - name: Cache cargo registry & build
         uses: actions/cache@v6
         with:
@@ -113,3 +127,7 @@ jobs:
 
       - name: Run integration tests
         run: cargo test -- --test-threads=1
+
+      - name: Cleanup MinIO container
+        if: always()
+        run: docker rm -f minio || true

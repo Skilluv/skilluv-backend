@@ -115,6 +115,25 @@ jobs:
           docker logs minio
           exit 1
 
+      # GeoNames data files are gitignored (~31MB total) but required by
+      # `GeoService::load` which several integration tests instantiate. Download
+      # them once here, cache across runs.
+      - name: Cache GeoNames data
+        id: cache-geonames
+        uses: actions/cache@v6
+        with:
+          path: data
+          key: geonames-cities1000-countryinfo-v1
+
+      - name: Download GeoNames data
+        if: steps.cache-geonames.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p data
+          curl -fsSL https://download.geonames.org/export/dump/cities1000.zip -o /tmp/cities1000.zip
+          unzip -o /tmp/cities1000.zip -d data
+          curl -fsSL https://download.geonames.org/export/dump/countryInfo.txt -o data/countryInfo.txt
+          ls -lh data/
+
       - name: Cache cargo registry & build
         uses: actions/cache@v6
         with:

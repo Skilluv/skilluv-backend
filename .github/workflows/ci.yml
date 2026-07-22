@@ -71,6 +71,20 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+      # Mailpit — SMTP dev catcher. Le test harness force SMTP_HOST=localhost:1025
+      # (voir tests/common/mod.rs::spawn). Sans ce service, /api/auth/register et
+      # /api/enterprise/register renvoient 500 sur echec SMTP.
+      mailpit:
+        image: axllent/mailpit:latest
+        ports:
+          - 1025:1025
+          - 8025:8025
+        options: >-
+          --health-cmd "wget -q --spider http://localhost:8025 || exit 1"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
       # MinIO n'est PAS declare comme service GHA : les services ne supportent
       # pas de champ `command`, et l'image minio/minio requiert `server /data`
       # en argument (sans ca, elle affiche l'usage et sort). On la lance en step

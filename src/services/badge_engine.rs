@@ -7,12 +7,17 @@
 //! Grammar des conditions JSONB supportée en v1 :
 //!
 //!   {
-//!     "proof_types": ["deliverable_verified" | "attestation_received"],
+//!     "proof_types": ["deliverable_verified" | "attestation_received"
+//!                     | "onboarding_bonjour_completed"],
 //!     "min_count":   integer (obligatoire, default 1),
 //!     "skill_tag":   "react"      // filtre : deliverables/attestations sur ce skill
 //!                                   // (via user_skills touchées)
 //!     "display_category": "craft" // filtre par catégorie UX (P17.2)
 //!   }
+//!
+//! Le proof_type `onboarding_bonjour_completed` compte la ligne
+//! `onboarding_bonjour_skilluv` du user si son `completed_at IS NOT NULL`.
+//! Utilise pour ancrer la rule "Bonjour Skilluv" (1re contribution mergee).
 //!
 //! Grammar volontairement simple ; extensible en P17.4/5 (within_days,
 //! quality thresholds, guild membership, etc.).
@@ -77,6 +82,10 @@ async fn count_matching_proofs(
         .proof_types
         .iter()
         .any(|t| t == "attestation_received");
+    let want_onboarding_bonjour = conds
+        .proof_types
+        .iter()
+        .any(|t| t == "onboarding_bonjour_completed");
 
     let mut total: i64 = 0;
     let mut sources: Vec<Uuid> = Vec::new();
@@ -117,6 +126,25 @@ async fn count_matching_proofs(
         .await?;
         total += ids.len() as i64;
         sources.extend(ids);
+    }
+
+    if want_onboarding_bonjour {
+        // La table a une PK sur user_id -> au plus 1 ligne. On compte 1 si
+        // completed_at set, 0 sinon. La "source_proof" est l'user_id lui-meme
+        // (pas d'id dedie car on utilise l'user_id comme PK).
+        let count: Option<i64> = sqlx::query_scalar(
+            r#"
+            SELECT 1::BIGINT FROM onboarding_bonjour_skilluv
+            WHERE user_id = $1 AND completed_at IS NOT NULL
+            "#,
+        )
+        .bind(user_id)
+        .fetch_optional(db)
+        .await?;
+        if count.is_some() {
+            total += 1;
+            sources.push(user_id);
+        }
     }
 
     Ok((total, sources))

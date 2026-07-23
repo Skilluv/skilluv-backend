@@ -1,6 +1,7 @@
 mod admin;
 mod admin_badge_rules;
 mod admin_community;
+mod admin_content_ops;
 mod admin_dashboard;
 mod admin_enterprises;
 mod admin_fraud;
@@ -86,6 +87,7 @@ mod webauthn;
 pub use admin::admin_routes;
 pub use admin_badge_rules::admin_badge_rule_routes;
 pub use admin_community::admin_community_routes;
+pub use admin_content_ops::admin_content_ops_routes;
 pub use admin_dashboard::admin_dashboard_routes;
 pub use admin_enterprises::admin_enterprise_routes;
 pub use admin_fraud::admin_fraud_routes;

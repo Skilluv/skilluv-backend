@@ -426,9 +426,16 @@ async fn test_admin_ban_revokes_sessions_and_blocks_login() {
     let victim = app.register_user("victim").await;
     let victim_id = victim["data"]["user"]["id"].as_str().unwrap().to_string();
 
-    // Fresh admin client so it has its own cookies.
+    // Fresh admin client so it has its own cookies. Doit inclure Origin (admin
+    // gate check) — sinon /api/admin/* renvoie 403 AdminOriginRequired.
+    let mut admin_headers = reqwest::header::HeaderMap::new();
+    admin_headers.insert(
+        reqwest::header::ORIGIN,
+        reqwest::header::HeaderValue::from_static("http://localhost:5174"),
+    );
     let admin_client = reqwest::Client::builder()
         .cookie_store(true)
+        .default_headers(admin_headers)
         .build()
         .unwrap();
     let resp = admin_client
@@ -450,6 +457,24 @@ async fn test_admin_ban_revokes_sessions_and_blocks_login() {
         .execute(&app.db)
         .await
         .unwrap();
+    // Passkey fictive pour satisfaire ensure_admin_2fa (voir register_admin
+    // helper dans common/mod.rs pour la meme technique).
+    let admin_uuid: uuid::Uuid = sqlx::query_scalar(
+        "SELECT id FROM users WHERE username = 'adminuser'",
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO webauthn_credentials (user_id, credential_id, credential, label)
+         VALUES ($1, $2, '{}'::jsonb, 'test_setup')
+         ON CONFLICT DO NOTHING",
+    )
+    .bind(admin_uuid)
+    .bind(admin_uuid.as_bytes().as_slice())
+    .execute(&app.db)
+    .await
+    .unwrap();
     // Re-login to refresh the JWT with the new role.
     admin_client
         .post(format!("{}/api/auth/login", app.addr))

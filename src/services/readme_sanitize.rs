@@ -52,6 +52,7 @@ pub fn sanitize_readme_markdown(input: &str) -> String {
         }
 
         // Balise ouvrante potentielle
+        #[allow(clippy::collapsible_if)]
         if bytes[cursor] == b'<' {
             if let Some(tag_end_off) = find_tag_end(&bytes[cursor..]) {
                 let tag = &input[cursor..cursor + tag_end_off + 1];

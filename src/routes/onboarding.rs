@@ -66,8 +66,8 @@ fn starter_for_orientation(orientation_slug: &str) -> &'static str {
 /// `None` if the orientation has no explicit mapping.
 ///
 /// Every orientation slug declared in migration `0002_initial_content.sql`
-/// + additions (0105, 0106) is explicitly mapped here — no orientation falls
-/// through today. Coverage is enforced by unit test
+/// (plus additions in 0105, 0106) is explicitly mapped here — no orientation
+/// falls through today. Coverage is enforced by unit test
 /// `every_db_orientation_maps_to_a_known_starter`.
 ///
 /// The user can override this choice via the `?starter=starter-{slug}` query

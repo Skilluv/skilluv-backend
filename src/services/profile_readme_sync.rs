@@ -154,24 +154,18 @@ fn parse_github_url(url: &str) -> Option<(String, String)> {
     let stripped = url
         .strip_prefix("https://github.com/")
         .or_else(|| url.strip_prefix("https://raw.githubusercontent.com/"))?;
-    let mut parts = stripped.splitn(2, '/');
-    let owner = parts.next()?;
-    let rest = parts.next()?;
+    let (owner, rest) = stripped.split_once('/')?;
     // On veut juste owner/repo — le path suit apres /blob/{ref}/ ou /{ref}/.
-    let mut rest_parts = rest.splitn(2, '/');
-    let repo = rest_parts.next()?;
-    let after = rest_parts.next()?;
+    let (repo, after) = rest.split_once('/')?;
     // Skippe le segment blob (github.com) ou pas (raw).
     let path = if let Some(after_blob) = after.strip_prefix("blob/") {
         // On skip le refname en +1 segment.
-        let mut segs = after_blob.splitn(2, '/');
-        segs.next(); // ref
-        segs.next()?.to_string()
+        let (_ref, rest) = after_blob.split_once('/')?;
+        rest.to_string()
     } else {
         // raw : {ref}/{path}
-        let mut segs = after.splitn(2, '/');
-        segs.next(); // ref
-        segs.next()?.to_string()
+        let (_ref, rest) = after.split_once('/')?;
+        rest.to_string()
     };
     Some((format!("{owner}/{repo}"), path))
 }

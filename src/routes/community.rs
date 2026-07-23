@@ -103,20 +103,33 @@ async fn create_community_challenge(
     // Community challenges sont user-generated, sans project_id : on les marque
     // is_training=TRUE pour satisfaire la règle dure #1 (contrainte
     // challenges_project_or_training, migration 0061) au moment du publish.
+    // Auto-populate i18n columns from plain fields (migration 0104 constraint).
+    let title_trimmed = body.title.trim();
+    let description_trimmed = body.description.trim();
+    let instructions_trimmed = body.instructions.trim();
+    let title_i18n = serde_json::json!({ "fr": title_trimmed });
+    let description_i18n = serde_json::json!({ "fr": description_trimmed });
+    let instructions_i18n = serde_json::json!({ "fr": instructions_trimmed });
+
     let challenge: ChallengeTemplate = sqlx::query_as(
         r#"
         INSERT INTO challenge_templates (
-            title, description, instructions, skill_domain, difficulty,
+            title, description, instructions,
+            title_i18n, description_i18n, instructions_i18n,
+            skill_domain, difficulty,
             language, expected_output, test_cases,
             reward_fragments, duration_minutes,
             is_community, community_status, created_by, status, is_training
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,TRUE,$11,$12,'draft',TRUE)
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,TRUE,$14,$15,'draft',TRUE)
         RETURNING *
         "#,
     )
-    .bind(body.title.trim())
-    .bind(body.description.trim())
-    .bind(body.instructions.trim())
+    .bind(title_trimmed)
+    .bind(description_trimmed)
+    .bind(instructions_trimmed)
+    .bind(&title_i18n)
+    .bind(&description_i18n)
+    .bind(&instructions_i18n)
     .bind(&body.skill_domain)
     .bind(body.difficulty)
     .bind(&body.language)

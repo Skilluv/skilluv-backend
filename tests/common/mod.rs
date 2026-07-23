@@ -218,6 +218,15 @@ impl TestApp {
             reqwest::header::HeaderName::from_static("x-forwarded-for"),
             reqwest::header::HeaderValue::from_str(&uniq_ip).unwrap(),
         );
+        // Origin header : le middleware `ensure_admin_origin` (BE-C) exige
+        // Origin (ou Referer) matchant l'admin panel dev/prod. Sans ce header,
+        // toutes les routes /admin/* renvoient 403 AdminOriginRequired.
+        // On envoie le dev admin origin par defaut ; les endpoints publics
+        // ignorent l'Origin, donc pas d'effet de bord.
+        headers.insert(
+            reqwest::header::ORIGIN,
+            reqwest::header::HeaderValue::from_static("http://localhost:5174"),
+        );
         let client = Client::builder()
             .cookie_store(true)
             .default_headers(headers)
@@ -293,7 +302,11 @@ impl TestApp {
         let result = self.register_user(username).await;
         let user_id = result["data"]["user"]["id"].as_str().expect("No user id");
 
-        sqlx::query("UPDATE users SET role = 'admin' WHERE id = $1::UUID")
+        // `role = 'admin'` + `totp_enabled = TRUE` en une passe : le middleware
+        // `ensure_admin_2fa` bloque tout admin sans TOTP ni passkey (renvoi 403
+        // AdminTwoFaSetupRequired). En prod l'admin a le pop-up d'activation TOTP
+        // au premier login ; en tests on simule l'etat post-activation directement.
+        sqlx::query("UPDATE users SET role = 'admin', totp_enabled = TRUE WHERE id = $1::UUID")
             .bind(user_id)
             .execute(&self.db)
             .await

@@ -474,6 +474,17 @@ async fn test_admin_ban_revokes_sessions_and_blocks_login() {
     .execute(&app.db)
     .await
     .unwrap();
+    // Capability 'admin' (require_capability lit user_capabilities, pas
+    // users.role — le UPDATE role='admin' plus haut ne suffit pas).
+    sqlx::query(
+        "INSERT INTO user_capabilities (user_id, capability, granted_reason)
+         VALUES ($1, 'admin', 'test_setup')
+         ON CONFLICT DO NOTHING",
+    )
+    .bind(admin_uuid)
+    .execute(&app.db)
+    .await
+    .unwrap();
     // Re-login to refresh the JWT with the new role.
     admin_client
         .post(format!("{}/api/auth/login", app.addr))

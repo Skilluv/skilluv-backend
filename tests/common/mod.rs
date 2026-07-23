@@ -302,15 +302,28 @@ impl TestApp {
         let result = self.register_user(username).await;
         let user_id = result["data"]["user"]["id"].as_str().expect("No user id");
 
-        // `role = 'admin'` + `totp_enabled = TRUE` en une passe : le middleware
-        // `ensure_admin_2fa` bloque tout admin sans TOTP ni passkey (renvoi 403
-        // AdminTwoFaSetupRequired). En prod l'admin a le pop-up d'activation TOTP
-        // au premier login ; en tests on simule l'etat post-activation directement.
-        sqlx::query("UPDATE users SET role = 'admin', totp_enabled = TRUE WHERE id = $1::UUID")
+        sqlx::query("UPDATE users SET role = 'admin' WHERE id = $1::UUID")
             .bind(user_id)
             .execute(&self.db)
             .await
             .expect("Failed to set admin role");
+
+        // Middleware ensure_admin_2fa exige TOTP OU passkey. Setter totp_enabled
+        // casserait le login (TotpRequired), donc on insere plutot une passkey
+        // fictive (webauthn_credentials) — satisfait le middleware sans affecter
+        // le flow login. credential_id doit etre unique, on derive des bytes de
+        // l'user_id UUID (parse -> as_bytes).
+        let user_uuid = Uuid::parse_str(user_id).expect("user_id is valid UUID");
+        sqlx::query(
+            "INSERT INTO webauthn_credentials (user_id, credential_id, credential, label)
+             VALUES ($1, $2, '{}'::jsonb, 'test_setup')
+             ON CONFLICT DO NOTHING",
+        )
+        .bind(user_uuid)
+        .bind(user_uuid.as_bytes().as_slice())
+        .execute(&self.db)
+        .await
+        .expect("Failed to insert test passkey");
 
         // P21.1 — require_admin lit désormais depuis user_capabilities.
         // On grant explicitement la capability admin pour rester compatible.

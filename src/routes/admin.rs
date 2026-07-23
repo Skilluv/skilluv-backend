@@ -892,28 +892,19 @@ async fn admin_generate_variant(
         .ok_or_else(|| AppError::Internal("IA returned success but empty challenge".into()))?;
 
     // 3. Persist comme NOUVEAU challenge en draft. Aucun update sur l'original.
-    // Auto-populate i18n columns from plain fields (migration 0104 constraint).
-    let title_i18n = serde_json::json!({ "fr": &generated.title });
-    let description_i18n = serde_json::json!({ "fr": &generated.description });
-    let instructions_i18n = serde_json::json!({ "fr": &generated.instructions });
     let new_challenge: crate::models::ChallengeTemplate = sqlx::query_as(
         r#"
         INSERT INTO challenge_templates
-            (title, description, instructions,
-             title_i18n, description_i18n, instructions_i18n,
-             skill_domain, difficulty,
+            (title, description, instructions, skill_domain, difficulty,
              mode, duration_minutes, ai_policy, tone, language,
              reward_fragments, is_training, created_by, status)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'solo', $9, $10, $11, $12, $13, $14, $15, 'draft')
+        VALUES ($1, $2, $3, $4, $5, 'solo', $6, $7, $8, $9, $10, $11, $12, 'draft')
         RETURNING *
         "#,
     )
     .bind(&generated.title)
     .bind(&generated.description)
     .bind(&generated.instructions)
-    .bind(&title_i18n)
-    .bind(&description_i18n)
-    .bind(&instructions_i18n)
     .bind(&generated.skill_domain)
     .bind(generated.difficulty as i16)
     .bind(generated.duration_minutes)

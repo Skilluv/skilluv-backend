@@ -312,3 +312,72 @@ async fn recompute_is_idempotent() {
     db.close().await;
     cleanup_test_db(&name).await;
 }
+
+/// Priorite haute strategy doc #1 : la rule Bonjour Skilluv match sur le nouveau
+/// proof_type `onboarding_bonjour_completed`. Une ligne dans
+/// `onboarding_bonjour_skilluv` avec completed_at NOT NULL suffit a decrocher
+/// le badge.
+#[tokio::test]
+async fn onboarding_bonjour_completed_awards_badge() {
+    let (db, name) = setup_test_db().await;
+    let u = create_user(&db).await;
+
+    insert_rule(
+        &db,
+        "bonjour_skilluv",
+        serde_json::json!({
+            "proof_types": ["onboarding_bonjour_completed"],
+            "min_count": 1
+        }),
+        "common",
+    )
+    .await;
+
+    // Pas encore d'onboarding row -> aucun award
+    let r0 = badge_engine::recompute_badges_for_user(&db, u)
+        .await
+        .unwrap();
+    assert!(!r0.awarded.contains(&"bonjour_skilluv".to_string()));
+
+    // Onboarding en cours (pas completed) -> toujours 0 award
+    sqlx::query(
+        "INSERT INTO onboarding_bonjour_skilluv
+            (user_id, starter_slug, fork_full_name, fork_html_url, github_fork_id, status)
+         VALUES ($1, 'starter-fullstack-rust', 'testuser/starter-fullstack-rust',
+                 'https://github.com/testuser/starter-fullstack-rust', 12345, 'forked')",
+    )
+    .bind(u)
+    .execute(&db)
+    .await
+    .expect("insert onboarding row");
+    let r1 = badge_engine::recompute_badges_for_user(&db, u)
+        .await
+        .unwrap();
+    assert!(!r1.awarded.contains(&"bonjour_skilluv".to_string()));
+
+    // Passe en completed -> award
+    sqlx::query(
+        "UPDATE onboarding_bonjour_skilluv
+         SET status = 'completed',
+             pr_number = 1,
+             pr_url = 'https://github.com/testuser/starter-fullstack-rust/pull/1',
+             pr_opened_at = NOW(),
+             completed_at = NOW()
+         WHERE user_id = $1",
+    )
+    .bind(u)
+    .execute(&db)
+    .await
+    .expect("mark completed");
+    let r2 = badge_engine::recompute_badges_for_user(&db, u)
+        .await
+        .unwrap();
+    assert!(
+        r2.awarded.contains(&"bonjour_skilluv".to_string()),
+        "onboarding completed doit decrocher le badge, got: {:?}",
+        r2.awarded
+    );
+
+    db.close().await;
+    cleanup_test_db(&name).await;
+}

@@ -727,6 +727,21 @@ fn truncate(s: &str, max: usize) -> String {
 
 async fn handle_pull_request_event(state: &AppState, payload: &Value) -> Result<(), AppError> {
     let action = payload.get("action").and_then(|v| v.as_str()).unwrap_or("");
+
+    // Bonjour Skilluv onboarding: react to pull_request.opened on tracked
+    // starter forks. Runs independently of the bounty flow below.
+    if action == "opened" {
+        // Best-effort: errors here should not block other handlers. Log and continue.
+        if let Err(e) =
+            crate::routes::onboarding::handle_bonjour_skilluv_pr_event(state, payload).await
+        {
+            tracing::error!(
+                error = %e,
+                "Bonjour Skilluv PR handler failed (non-fatal for bounty flow)"
+            );
+        }
+    }
+
     if action != "closed" {
         return Ok(());
     }

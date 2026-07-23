@@ -161,6 +161,15 @@ async fn async_main(config: AppConfig) {
         webauthn,
     };
 
+    // Startup tasks — services background lances a interval fixe. Chacun est
+    // gate par un env-var pour eviter les surprises en dev. En staging/prod,
+    // activer avec :
+    //   SKILLUV_HELLO_WALL_MIRROR_ENABLED=1
+    //   SKILLUV_PROFILE_README_SYNC_ENABLED=1
+    // Sans le flag, la tache spawn quand meme mais log un no-op.
+    spawn_hello_wall_mirror_worker(state.clone());
+    spawn_profile_readme_sync_worker(state.clone());
+
     let app = build_router(state);
     tracing::info!("Skilluv backend listening on {}", addr);
 
@@ -169,4 +178,87 @@ async fn async_main(config: AppConfig) {
         .expect("Failed to bind address");
 
     axum::serve(listener, app).await.expect("Server error");
+}
+
+/// Worker cron du mirror Hello Wall. Toutes les 5 min, pousse les entrees
+/// pending sur `skilluv-community/hello-wall`.
+///
+/// Requiert `SKILLUV_HELLO_WALL_MIRROR_ENABLED=1` + `SKILLUV_BOT_GITHUB_TOKEN`.
+/// Sans le token, la tache log un warning au demarrage puis dort — permet
+/// d'ajouter le token plus tard sans redemarrer.
+fn spawn_hello_wall_mirror_worker(state: skilluv_backend::AppState) {
+    tokio::spawn(async move {
+        if std::env::var("SKILLUV_HELLO_WALL_MIRROR_ENABLED").as_deref() != Ok("1") {
+            tracing::info!("hello_wall_mirror worker : disabled (env flag absent)");
+            return;
+        }
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(5 * 60));
+        // Skip la premiere tick immediate (comportement par defaut = fire now).
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+            let token = match std::env::var("SKILLUV_BOT_GITHUB_TOKEN") {
+                Ok(t) => t,
+                Err(_) => {
+                    tracing::warn!(
+                        "hello_wall_mirror worker : SKILLUV_BOT_GITHUB_TOKEN manquant, skip cycle"
+                    );
+                    continue;
+                }
+            };
+            match skilluv_backend::services::hello_wall_mirror::mirror_pending_entries(
+                &state.db, &token,
+            )
+            .await
+            {
+                Ok(report) => {
+                    if !report.mirrored.is_empty() || !report.failed.is_empty() {
+                        tracing::info!(
+                            mirrored = report.mirrored.len(),
+                            failed = report.failed.len(),
+                            "hello_wall_mirror worker cycle done"
+                        );
+                    }
+                }
+                Err(e) => tracing::error!(error = %e, "hello_wall_mirror worker cycle failed"),
+            }
+        }
+    });
+}
+
+/// Worker cron du sync Profile README. 1x/heure, iterate les users
+/// `profile_readme_source='github_sync'` et refetch leur README GitHub.
+///
+/// Requiert `SKILLUV_PROFILE_README_SYNC_ENABLED=1`. Token bot optionnel.
+fn spawn_profile_readme_sync_worker(state: skilluv_backend::AppState) {
+    tokio::spawn(async move {
+        if std::env::var("SKILLUV_PROFILE_README_SYNC_ENABLED").as_deref() != Ok("1") {
+            tracing::info!("profile_readme_sync worker : disabled (env flag absent)");
+            return;
+        }
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(60 * 60));
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+            let token = std::env::var("SKILLUV_BOT_GITHUB_TOKEN").ok();
+            match skilluv_backend::services::profile_readme_sync::sync_pending_readmes(
+                &state.db,
+                token.as_deref(),
+            )
+            .await
+            {
+                Ok(report) => {
+                    if !report.synced.is_empty() || !report.failed.is_empty() {
+                        tracing::info!(
+                            synced = report.synced.len(),
+                            failed = report.failed.len(),
+                            skipped_no_readme = report.skipped_no_readme.len(),
+                            "profile_readme_sync worker cycle done"
+                        );
+                    }
+                }
+                Err(e) => tracing::error!(error = %e, "profile_readme_sync worker cycle failed"),
+            }
+        }
+    });
 }

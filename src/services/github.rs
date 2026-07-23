@@ -232,6 +232,292 @@ pub async fn fetch_public_repos(
     Ok(all)
 }
 
+// ─── Fork API (Bonjour Skilluv onboarding) ───────────────────────
+
+/// Result of forking a `skilluv-community/starter-*` template onto the user's
+/// GitHub account. Used by the Bonjour Skilluv onboarding flow.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForkResult {
+    pub id: i64,
+    pub full_name: String, // e.g. "amina/starter-fullstack-rust"
+    pub html_url: String,  // e.g. "https://github.com/amina/starter-fullstack-rust"
+    pub default_branch: String,
+}
+
+/// Metadata about a single file changed in a Pull Request.
+#[derive(Debug, Clone, Deserialize)]
+pub struct PrFile {
+    pub filename: String,
+    pub status: String, // "added" | "modified" | "removed" | "renamed"
+    #[serde(default)]
+    pub additions: u32,
+    #[serde(default)]
+    pub deletions: u32,
+}
+
+/// List the files changed in a Pull Request.
+///
+/// Used by the Bonjour Skilluv webhook to check whether a PR touches
+/// `HELLO.md` on a tracked starter fork.
+///
+/// The endpoint returns at most 30 files per page by default; we cap at
+/// 3 pages (90 files) to bound work — a Bonjour Skilluv PR should only
+/// touch 1-2 files, so a paginated fetch of the whole diff is overkill.
+///
+/// See https://docs.github.com/en/rest/pulls/pulls#list-pull-requests-files
+pub async fn list_pr_files(
+    access_token: &str,
+    fork_full_name: &str,
+    pr_number: i32,
+) -> Result<Vec<PrFile>, AppError> {
+    let client = reqwest::Client::new();
+    let mut all = Vec::new();
+    for page in 1..=3 {
+        let resp = client
+            .get(format!(
+                "{GITHUB_API}/repos/{fork_full_name}/pulls/{pr_number}/files?per_page=100&page={page}"
+            ))
+            .bearer_auth(access_token)
+            .header("User-Agent", USER_AGENT)
+            .header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .send()
+            .await
+            .map_err(|e| AppError::Internal(format!("github pr files fetch failed: {e}")))?;
+        if !resp.status().is_success() {
+            return Err(AppError::Internal(format!(
+                "github pr files status {}",
+                resp.status()
+            )));
+        }
+        let batch: Vec<PrFile> = resp
+            .json()
+            .await
+            .map_err(|e| AppError::Internal(format!("github pr files decode failed: {e}")))?;
+        let was_full = batch.len() == 100;
+        all.extend(batch);
+        if !was_full {
+            break;
+        }
+    }
+    Ok(all)
+}
+
+/// Fetch the raw content of a file at a specific commit ref from GitHub.
+///
+/// Used to snapshot the HELLO.md content of a tracked Bonjour Skilluv PR
+/// for archival in the Hello Wall repository.
+///
+/// Returns the plain-text content decoded from base64 (GitHub API default).
+pub async fn fetch_file_content(
+    access_token: &str,
+    fork_full_name: &str,
+    path: &str,
+    git_ref: &str,
+) -> Result<String, AppError> {
+    #[derive(Debug, Deserialize)]
+    struct ContentResponse {
+        content: String,
+        encoding: String,
+    }
+    let client = reqwest::Client::new();
+    let resp = client
+        .get(format!(
+            "{GITHUB_API}/repos/{fork_full_name}/contents/{path}?ref={git_ref}"
+        ))
+        .bearer_auth(access_token)
+        .header("User-Agent", USER_AGENT)
+        .header("Accept", "application/vnd.github+json")
+        .header("X-GitHub-Api-Version", "2022-11-28")
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("github content fetch failed: {e}")))?;
+    if !resp.status().is_success() {
+        return Err(AppError::Internal(format!(
+            "github content status {}",
+            resp.status()
+        )));
+    }
+    let body: ContentResponse = resp
+        .json()
+        .await
+        .map_err(|e| AppError::Internal(format!("github content decode failed: {e}")))?;
+    if body.encoding != "base64" {
+        return Err(AppError::Internal(format!(
+            "unexpected github content encoding: {}",
+            body.encoding
+        )));
+    }
+    // GitHub base64-encodes with line breaks; strip whitespace first.
+    let cleaned: String = body
+        .content
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .collect();
+    use base64::Engine;
+    let decoded = base64::engine::general_purpose::STANDARD
+        .decode(cleaned)
+        .map_err(|e| AppError::Internal(format!("github content base64 decode failed: {e}")))?;
+    String::from_utf8(decoded)
+        .map_err(|e| AppError::Internal(format!("github content utf8 decode failed: {e}")))
+}
+
+/// Create or update a file in a repository via GitHub API.
+///
+/// GitHub `PUT /repos/{owner}/{repo}/contents/{path}` semantics :
+/// - Si le fichier n'existe pas -> le cree (avec le commit_message donne).
+/// - Si le fichier existe -> il faut fournir le sha du blob actuel via `sha`
+///   dans le body, sinon 409. On fetch d'abord pour recuperer le sha.
+///
+/// Utilise par le hello_wall_mirror pour publier `entries/{username}.md` sur
+/// `skilluv-community/hello-wall` avec un service-account token
+/// (`SKILLUV_BOT_GITHUB_TOKEN`).
+pub async fn create_or_update_file(
+    access_token: &str,
+    repo_full_name: &str,
+    path: &str,
+    content_utf8: &str,
+    commit_message: &str,
+) -> Result<String, AppError> {
+    use base64::Engine;
+
+    // 1. Try to fetch existing file's sha (needed for update).
+    let client = reqwest::Client::new();
+    let existing_sha: Option<String> = {
+        let resp = client
+            .get(format!(
+                "{GITHUB_API}/repos/{repo_full_name}/contents/{path}"
+            ))
+            .bearer_auth(access_token)
+            .header("User-Agent", USER_AGENT)
+            .header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .send()
+            .await
+            .map_err(|e| AppError::Internal(format!("github file fetch failed: {e}")))?;
+        if resp.status() == reqwest::StatusCode::NOT_FOUND {
+            None
+        } else if resp.status().is_success() {
+            #[derive(Deserialize)]
+            struct ShaResponse {
+                sha: String,
+            }
+            let body: ShaResponse = resp
+                .json()
+                .await
+                .map_err(|e| AppError::Internal(format!("github file sha decode: {e}")))?;
+            Some(body.sha)
+        } else {
+            return Err(AppError::Internal(format!(
+                "github file fetch status {}",
+                resp.status()
+            )));
+        }
+    };
+
+    // 2. PUT with base64-encoded content.
+    let content_b64 = base64::engine::general_purpose::STANDARD.encode(content_utf8.as_bytes());
+    let mut body = serde_json::json!({
+        "message": commit_message,
+        "content": content_b64,
+    });
+    if let Some(sha) = existing_sha {
+        body["sha"] = serde_json::Value::String(sha);
+    }
+
+    let resp = client
+        .put(format!(
+            "{GITHUB_API}/repos/{repo_full_name}/contents/{path}"
+        ))
+        .bearer_auth(access_token)
+        .header("User-Agent", USER_AGENT)
+        .header("Accept", "application/vnd.github+json")
+        .header("X-GitHub-Api-Version", "2022-11-28")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("github file put failed: {e}")))?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(AppError::Internal(format!(
+            "github file put status {status}: {body}"
+        )));
+    }
+
+    #[derive(Deserialize)]
+    struct PutResponse {
+        content: ContentRef,
+    }
+    #[derive(Deserialize)]
+    struct ContentRef {
+        html_url: String,
+    }
+    let parsed: PutResponse = resp
+        .json()
+        .await
+        .map_err(|e| AppError::Internal(format!("github put response decode: {e}")))?;
+    Ok(parsed.content.html_url)
+}
+
+/// Fork a repository via GitHub API. The fork is created on the authenticated
+/// user's account (determined by the access_token owner).
+///
+/// GitHub's fork endpoint is idempotent: calling it on an existing fork
+/// returns the existing fork rather than erroring. This is the desired
+/// behavior for our onboarding flow (a user can re-trigger without side
+/// effects).
+///
+/// See https://docs.github.com/en/rest/repos/forks#create-a-fork
+pub async fn fork_repo(access_token: &str, source_full_name: &str) -> Result<ForkResult, AppError> {
+    #[derive(Debug, Deserialize)]
+    struct ForkResponse {
+        id: i64,
+        full_name: String,
+        html_url: String,
+        default_branch: String,
+    }
+
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(format!("{GITHUB_API}/repos/{source_full_name}/forks"))
+        .bearer_auth(access_token)
+        .header("User-Agent", USER_AGENT)
+        .header("Accept", "application/vnd.github+json")
+        .header("X-GitHub-Api-Version", "2022-11-28")
+        // Empty body: default settings (fork to authenticated user, keep repo name)
+        .body("{}")
+        .header("Content-Type", "application/json")
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("github fork request failed: {e}")))?;
+
+    let status = resp.status();
+    if !status.is_success() {
+        let body = resp.text().await.unwrap_or_default();
+        // 202 Accepted is actually valid — GitHub returned the fork data before
+        // it's fully created. But `is_success()` covers 200-299, so we should
+        // never enter this branch on 202. This handles 4xx/5xx.
+        return Err(AppError::Internal(format!(
+            "github fork status {status}: {}",
+            &body[..body.len().min(200)]
+        )));
+    }
+
+    let fork: ForkResponse = resp
+        .json()
+        .await
+        .map_err(|e| AppError::Internal(format!("github fork decode failed: {e}")))?;
+
+    Ok(ForkResult {
+        id: fork.id,
+        full_name: fork.full_name,
+        html_url: fork.html_url,
+        default_branch: fork.default_branch,
+    })
+}
+
 // ─── Storage ─────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]

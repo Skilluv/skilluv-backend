@@ -22,6 +22,7 @@ pub mod fx;
 pub mod geo;
 pub mod github;
 pub mod guild;
+pub mod hello_wall_mirror;
 pub mod invoices;
 pub mod leaderboard;
 pub mod llm_verifier;

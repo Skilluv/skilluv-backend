@@ -362,6 +362,101 @@ pub async fn fetch_file_content(
         .map_err(|e| AppError::Internal(format!("github content utf8 decode failed: {e}")))
 }
 
+/// Create or update a file in a repository via GitHub API.
+///
+/// GitHub `PUT /repos/{owner}/{repo}/contents/{path}` semantics :
+/// - Si le fichier n'existe pas -> le cree (avec le commit_message donne).
+/// - Si le fichier existe -> il faut fournir le sha du blob actuel via `sha`
+///   dans le body, sinon 409. On fetch d'abord pour recuperer le sha.
+///
+/// Utilise par le hello_wall_mirror pour publier `entries/{username}.md` sur
+/// `skilluv-community/hello-wall` avec un service-account token
+/// (`SKILLUV_BOT_GITHUB_TOKEN`).
+pub async fn create_or_update_file(
+    access_token: &str,
+    repo_full_name: &str,
+    path: &str,
+    content_utf8: &str,
+    commit_message: &str,
+) -> Result<String, AppError> {
+    use base64::Engine;
+
+    // 1. Try to fetch existing file's sha (needed for update).
+    let client = reqwest::Client::new();
+    let existing_sha: Option<String> = {
+        let resp = client
+            .get(format!("{GITHUB_API}/repos/{repo_full_name}/contents/{path}"))
+            .bearer_auth(access_token)
+            .header("User-Agent", USER_AGENT)
+            .header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .send()
+            .await
+            .map_err(|e| AppError::Internal(format!("github file fetch failed: {e}")))?;
+        if resp.status() == reqwest::StatusCode::NOT_FOUND {
+            None
+        } else if resp.status().is_success() {
+            #[derive(Deserialize)]
+            struct ShaResponse {
+                sha: String,
+            }
+            let body: ShaResponse = resp
+                .json()
+                .await
+                .map_err(|e| AppError::Internal(format!("github file sha decode: {e}")))?;
+            Some(body.sha)
+        } else {
+            return Err(AppError::Internal(format!(
+                "github file fetch status {}",
+                resp.status()
+            )));
+        }
+    };
+
+    // 2. PUT with base64-encoded content.
+    let content_b64 = base64::engine::general_purpose::STANDARD.encode(content_utf8.as_bytes());
+    let mut body = serde_json::json!({
+        "message": commit_message,
+        "content": content_b64,
+    });
+    if let Some(sha) = existing_sha {
+        body["sha"] = serde_json::Value::String(sha);
+    }
+
+    let resp = client
+        .put(format!("{GITHUB_API}/repos/{repo_full_name}/contents/{path}"))
+        .bearer_auth(access_token)
+        .header("User-Agent", USER_AGENT)
+        .header("Accept", "application/vnd.github+json")
+        .header("X-GitHub-Api-Version", "2022-11-28")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("github file put failed: {e}")))?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(AppError::Internal(format!(
+            "github file put status {status}: {body}"
+        )));
+    }
+
+    #[derive(Deserialize)]
+    struct PutResponse {
+        content: ContentRef,
+    }
+    #[derive(Deserialize)]
+    struct ContentRef {
+        html_url: String,
+    }
+    let parsed: PutResponse = resp
+        .json()
+        .await
+        .map_err(|e| AppError::Internal(format!("github put response decode: {e}")))?;
+    Ok(parsed.content.html_url)
+}
+
 /// Fork a repository via GitHub API. The fork is created on the authenticated
 /// user's account (determined by the access_token owner).
 ///

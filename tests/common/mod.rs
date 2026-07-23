@@ -8,10 +8,24 @@ pub mod mock_oidc;
 use reqwest::{Client, StatusCode};
 use serde_json::{Value, json};
 use sqlx::postgres::{PgPool, PgPoolOptions};
-use std::sync::Arc;
+use std::sync::{Arc, Once};
 use uuid::Uuid;
 
 use skilluv_backend::{AppState, AppStateConfig, build_router};
+
+/// Init a tracing subscriber once per test-binary process, so backend
+/// `tracing::error!` calls surface in `cargo test -- --nocapture`.
+/// Without this, a 500 in a handler is invisible during test debugging.
+///
+/// Verbosity controlled by `RUST_LOG` env-var (default: warn).
+fn init_test_tracing() {
+    static INIT: Once = Once::new();
+    INIT.call_once(|| {
+        use tracing_subscriber::{EnvFilter, fmt};
+        let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn"));
+        let _ = fmt().with_env_filter(filter).with_test_writer().try_init();
+    });
+}
 
 /// A test application instance with isolated database.
 pub struct TestApp {
@@ -25,6 +39,7 @@ impl TestApp {
     /// Spawn a test server with an isolated database.
     /// Emails are delivered to the local Mailpit container (SMTP :1025, UI :8025).
     pub async fn spawn() -> Self {
+        init_test_tracing();
         // Wire the EmailService onto Mailpit for tests. Read by `email::build_smtp_from_env`.
         // Safe to set for every test — env vars are process-global, but the values don't vary.
         // SAFETY: we're only reading and setting env at test-startup, before any concurrent
@@ -203,6 +218,15 @@ impl TestApp {
             reqwest::header::HeaderName::from_static("x-forwarded-for"),
             reqwest::header::HeaderValue::from_str(&uniq_ip).unwrap(),
         );
+        // Origin header : le middleware `ensure_admin_origin` (BE-C) exige
+        // Origin (ou Referer) matchant l'admin panel dev/prod. Sans ce header,
+        // toutes les routes /admin/* renvoient 403 AdminOriginRequired.
+        // On envoie le dev admin origin par defaut ; les endpoints publics
+        // ignorent l'Origin, donc pas d'effet de bord.
+        headers.insert(
+            reqwest::header::ORIGIN,
+            reqwest::header::HeaderValue::from_static("http://localhost:5174"),
+        );
         let client = Client::builder()
             .cookie_store(true)
             .default_headers(headers)
@@ -283,6 +307,23 @@ impl TestApp {
             .execute(&self.db)
             .await
             .expect("Failed to set admin role");
+
+        // Middleware ensure_admin_2fa exige TOTP OU passkey. Setter totp_enabled
+        // casserait le login (TotpRequired), donc on insere plutot une passkey
+        // fictive (webauthn_credentials) — satisfait le middleware sans affecter
+        // le flow login. credential_id doit etre unique, on derive des bytes de
+        // l'user_id UUID (parse -> as_bytes).
+        let user_uuid = Uuid::parse_str(user_id).expect("user_id is valid UUID");
+        sqlx::query(
+            "INSERT INTO webauthn_credentials (user_id, credential_id, credential, label)
+             VALUES ($1, $2, '{}'::jsonb, 'test_setup')
+             ON CONFLICT DO NOTHING",
+        )
+        .bind(user_uuid)
+        .bind(user_uuid.as_bytes().as_slice())
+        .execute(&self.db)
+        .await
+        .expect("Failed to insert test passkey");
 
         // P21.1 — require_admin lit désormais depuis user_capabilities.
         // On grant explicitement la capability admin pour rester compatible.

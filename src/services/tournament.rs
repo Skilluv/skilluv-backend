@@ -7,7 +7,13 @@ use uuid::Uuid;
 
 use crate::errors::AppError;
 
-pub const VALID_KINDS: &[&str] = &["individual", "guild_war", "hackathon"];
+pub const VALID_KINDS: &[&str] = &[
+    "individual",
+    "guild_war",
+    "hackathon",
+    "marathon",       // Format 1 Grande Epreuve : saisons impaires, cooperatif
+    "defi_solitaire", // Format 3 : background permanent, defi ultime solo
+];
 pub const VALID_FORMATS: &[&str] = &["swiss", "bracket", "ladder"];
 pub const VALID_PARTICIPANT_TYPES: &[&str] = &["user", "guild"];
 
@@ -633,6 +639,9 @@ mod tests {
         assert!(VALID_KINDS.contains(&"individual"));
         assert!(VALID_KINDS.contains(&"guild_war"));
         assert!(VALID_KINDS.contains(&"hackathon"));
+        // Grande Epreuve Formats 1 + 3 (migration 0114).
+        assert!(VALID_KINDS.contains(&"marathon"));
+        assert!(VALID_KINDS.contains(&"defi_solitaire"));
         assert!(VALID_FORMATS.contains(&"swiss"));
         assert!(VALID_FORMATS.contains(&"bracket"));
         assert!(VALID_FORMATS.contains(&"ladder"));

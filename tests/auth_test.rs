@@ -459,12 +459,11 @@ async fn test_admin_ban_revokes_sessions_and_blocks_login() {
         .unwrap();
     // Passkey fictive pour satisfaire ensure_admin_2fa (voir register_admin
     // helper dans common/mod.rs pour la meme technique).
-    let admin_uuid: uuid::Uuid = sqlx::query_scalar(
-        "SELECT id FROM users WHERE username = 'adminuser'",
-    )
-    .fetch_one(&app.db)
-    .await
-    .unwrap();
+    let admin_uuid: uuid::Uuid =
+        sqlx::query_scalar("SELECT id FROM users WHERE username = 'adminuser'")
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
     sqlx::query(
         "INSERT INTO webauthn_credentials (user_id, credential_id, credential, label)
          VALUES ($1, $2, '{}'::jsonb, 'test_setup')

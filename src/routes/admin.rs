@@ -387,21 +387,36 @@ async fn create_challenge(
     let is_onboarding = body.is_onboarding.unwrap_or(false);
     let is_training = body.is_training.unwrap_or(is_onboarding);
 
+    // Migration 0104 impose title_i18n avec au moins 'fr' ou 'en'. On
+    // auto-populate depuis les champs plain quand le caller ne fournit rien
+    // (backward compat + endpoint utilisable en unilingue simple).
+    let title_trimmed = body.title.trim();
+    let description_trimmed = body.description.trim();
+    let instructions_trimmed = body.instructions.trim();
+    let title_i18n = serde_json::json!({ "fr": title_trimmed });
+    let description_i18n = serde_json::json!({ "fr": description_trimmed });
+    let instructions_i18n = serde_json::json!({ "fr": instructions_trimmed });
+
     let challenge: ChallengeTemplate = sqlx::query_as(
         r#"
         INSERT INTO challenge_templates (
-            title, description, instructions, skill_domain, difficulty,
+            title, description, instructions,
+            title_i18n, description_i18n, instructions_i18n,
+            skill_domain, difficulty,
             mode, duration_minutes, ai_policy, tone, language,
             reward_fragments, is_onboarding, is_training,
             project_id, expected_output, test_cases, created_by, status,
             team_composition
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,'draft',$18)
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,'draft',$21)
         RETURNING *
         "#,
     )
-    .bind(body.title.trim())
-    .bind(body.description.trim())
-    .bind(body.instructions.trim())
+    .bind(title_trimmed)
+    .bind(description_trimmed)
+    .bind(instructions_trimmed)
+    .bind(&title_i18n)
+    .bind(&description_i18n)
+    .bind(&instructions_i18n)
     .bind(&body.skill_domain)
     .bind(body.difficulty)
     .bind(body.mode.as_deref().unwrap_or("solo"))

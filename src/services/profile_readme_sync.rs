@@ -92,9 +92,14 @@ pub async fn sync_pending_readmes(
             }
         };
 
+        // Defense en profondeur : sanitize serveur avant persistance (priorite
+        // basse #8). Le README github est du contenu externe non-controle.
+        let sanitized =
+            crate::services::readme_sanitize::sanitize_readme_markdown(&content);
+
         // Tronque a la limite du quota anti-abus (check DB length <= 20480).
-        let truncated = if content.len() > MAX_README_BYTES {
-            let mut cut = content.into_bytes();
+        let truncated = if sanitized.len() > MAX_README_BYTES {
+            let mut cut = sanitized.into_bytes();
             cut.truncate(MAX_README_BYTES);
             match String::from_utf8(cut) {
                 Ok(s) => s,
@@ -108,7 +113,7 @@ pub async fn sync_pending_readmes(
                 }
             }
         } else {
-            content
+            sanitized
         };
 
         sqlx::query(

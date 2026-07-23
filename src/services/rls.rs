@@ -19,6 +19,36 @@
 //!
 //! Voir `docs/RLS-ENFORCEMENT.md` pour la procédure d'activation prod complète
 //! (création du rôle, migration de la config sqlx, tests d'intégration).
+//!
+//! ## Sites d'appel à patcher lors de l'activation prod
+//!
+//! Ces call sites font des INSERT/UPDATE sur des tables tenant-scoped
+//! (deliverables, attestations, user_badges, hello_wall_entries, etc.). Si
+//! RLS est activé (`SKILLUV_RLS_ENFORCED=1`) et le rôle SQL passe en
+//! NOSUPERUSER NOBYPASSRLS, chacun de ces sites doit appeler
+//! `set_tenant_context_on_tx(&mut tx, tenant_id)` juste après `db.begin()`,
+//! avant toute query dans la tx.
+//!
+//! Snapshot au 2026-07-23 (priorite basse #7 strategy doc §15) :
+//!
+//! - `services::deliverables::DeliverableService::insert_deliverable_verified`
+//!   (4 INSERT sites au total : pr_merged webhook, manual submit, capstone,
+//!   admin fixture). Tenant_id derive de user.tenant_id ou
+//!   challenge_template.tenant_id.
+//! - `routes::onboarding::handle_bonjour_skilluv_pr_event` (INSERT
+//!   hello_wall_entries + UPDATE onboarding_bonjour_skilluv). Tenant_id
+//!   derive de user.tenant_id.
+//! - `services::attestations` (tous les INSERT). Tenant_id derive de user.
+//! - `services::badge_engine::recompute_badges_for_user` (INSERT user_badges).
+//!
+//! Le pattern d'activation :
+//! 1. Passer `SKILLUV_RLS_ENFORCED=1` en staging
+//! 2. Faire tourner la suite d'integration — tous les tests deliverables/
+//!    attestations vont echouer (0 rows visibles ou insert refuse selon les
+//!    policies)
+//! 3. Patcher chaque site en ajoutant `rls::set_tenant_context_on_tx` en tete
+//!    de tx
+//! 4. Roll out en prod avec le nouveau role SQL NOSUPERUSER NOBYPASSRLS
 
 use sqlx::{Postgres, Transaction};
 use uuid::Uuid;

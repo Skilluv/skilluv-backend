@@ -385,7 +385,9 @@ pub async fn create_or_update_file(
     let client = reqwest::Client::new();
     let existing_sha: Option<String> = {
         let resp = client
-            .get(format!("{GITHUB_API}/repos/{repo_full_name}/contents/{path}"))
+            .get(format!(
+                "{GITHUB_API}/repos/{repo_full_name}/contents/{path}"
+            ))
             .bearer_auth(access_token)
             .header("User-Agent", USER_AGENT)
             .header("Accept", "application/vnd.github+json")
@@ -424,7 +426,9 @@ pub async fn create_or_update_file(
     }
 
     let resp = client
-        .put(format!("{GITHUB_API}/repos/{repo_full_name}/contents/{path}"))
+        .put(format!(
+            "{GITHUB_API}/repos/{repo_full_name}/contents/{path}"
+        ))
         .bearer_auth(access_token)
         .header("User-Agent", USER_AGENT)
         .header("Accept", "application/vnd.github+json")

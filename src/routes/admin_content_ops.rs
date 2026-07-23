@@ -25,10 +25,7 @@ use crate::services::{badge_engine, hello_wall_mirror, profile_readme_sync};
 
 pub fn admin_content_ops_routes() -> Router<AppState> {
     Router::new()
-        .route(
-            "/admin/hello-wall/mirror-run",
-            post(hello_wall_mirror_run),
-        )
+        .route("/admin/hello-wall/mirror-run", post(hello_wall_mirror_run))
         .route(
             "/admin/profile-readme/sync-run",
             post(profile_readme_sync_run),

@@ -185,8 +185,7 @@ mod tests {
             id: Uuid::new_v4(),
             user_id: Uuid::new_v4(),
             hello_markdown: "Hello world.".to_string(),
-            source_pr_url: "https://github.com/testuser/starter-fullstack-rust/pull/1"
-                .to_string(),
+            source_pr_url: "https://github.com/testuser/starter-fullstack-rust/pull/1".to_string(),
             source_starter_repo: "starter-fullstack-rust".to_string(),
             mirror_attempt_count: 0,
         };

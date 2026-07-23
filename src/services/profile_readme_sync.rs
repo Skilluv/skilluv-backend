@@ -94,8 +94,7 @@ pub async fn sync_pending_readmes(
 
         // Defense en profondeur : sanitize serveur avant persistance (priorite
         // basse #8). Le README github est du contenu externe non-controle.
-        let sanitized =
-            crate::services::readme_sanitize::sanitize_readme_markdown(&content);
+        let sanitized = crate::services::readme_sanitize::sanitize_readme_markdown(&content);
 
         // Tronque a la limite du quota anti-abus (check DB length <= 20480).
         let truncated = if sanitized.len() > MAX_README_BYTES {
@@ -202,9 +201,7 @@ async fn fetch_readme(
         None => {
             // Fetch anonyme via raw.githubusercontent — pas de rate limit token
             // mais plus limite (60 req/h par IP).
-            let url = format!(
-                "https://raw.githubusercontent.com/{repo_full_name}/HEAD/{path}"
-            );
+            let url = format!("https://raw.githubusercontent.com/{repo_full_name}/HEAD/{path}");
             let resp = reqwest::Client::new()
                 .get(&url)
                 .header("User-Agent", "skilluv-backend")
@@ -220,7 +217,9 @@ async fn fetch_readme(
                     resp.status()
                 )));
             }
-            resp.text().await.map_err(|e| FetchError::Other(e.to_string()))
+            resp.text()
+                .await
+                .map_err(|e| FetchError::Other(e.to_string()))
         }
     }
 }
@@ -231,30 +230,24 @@ mod tests {
 
     #[test]
     fn parse_github_blob_url() {
-        let (repo, path) = parse_github_url(
-            "https://github.com/octocat/octocat/blob/main/README.md",
-        )
-        .unwrap();
+        let (repo, path) =
+            parse_github_url("https://github.com/octocat/octocat/blob/main/README.md").unwrap();
         assert_eq!(repo, "octocat/octocat");
         assert_eq!(path, "README.md");
     }
 
     #[test]
     fn parse_github_blob_with_nested_path() {
-        let (repo, path) = parse_github_url(
-            "https://github.com/user/repo/blob/main/docs/PROFILE.md",
-        )
-        .unwrap();
+        let (repo, path) =
+            parse_github_url("https://github.com/user/repo/blob/main/docs/PROFILE.md").unwrap();
         assert_eq!(repo, "user/repo");
         assert_eq!(path, "docs/PROFILE.md");
     }
 
     #[test]
     fn parse_raw_githubusercontent() {
-        let (repo, path) = parse_github_url(
-            "https://raw.githubusercontent.com/user/repo/main/README.md",
-        )
-        .unwrap();
+        let (repo, path) =
+            parse_github_url("https://raw.githubusercontent.com/user/repo/main/README.md").unwrap();
         assert_eq!(repo, "user/repo");
         assert_eq!(path, "README.md");
     }

@@ -577,10 +577,7 @@ mod tests {
             starter_for_orientation("mobile-designer"),
             "starter-mobile-react-native"
         );
-        assert_eq!(
-            starter_for_orientation("3d-artist"),
-            "starter-game-godot"
-        );
+        assert_eq!(starter_for_orientation("3d-artist"), "starter-game-godot");
         // Security roles
         assert_eq!(
             starter_for_orientation("pentester-web"),

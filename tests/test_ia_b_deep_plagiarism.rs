@@ -44,8 +44,14 @@ async fn setup_admin_with_passkey(app: &TestApp, username: &str) -> uuid::Uuid {
 async fn create_deliverable(app: &TestApp, code: Option<&str>) -> uuid::Uuid {
     let cid: uuid::Uuid = sqlx::query_scalar(
         "INSERT INTO challenge_templates
-            (title, description, instructions, skill_domain, difficulty, is_training, status)
-         VALUES ('T', 'D', 'I', 'code', 2, TRUE, 'published') RETURNING id",
+            (title, description, instructions,
+             title_i18n, description_i18n, instructions_i18n,
+             skill_domain, difficulty, is_training, status)
+         VALUES ('T', 'D', 'I',
+             jsonb_build_object('fr', 'T'),
+             jsonb_build_object('fr', 'D'),
+             jsonb_build_object('fr', 'I'),
+             'code', 2, TRUE, 'published') RETURNING id",
     )
     .fetch_one(&app.db)
     .await

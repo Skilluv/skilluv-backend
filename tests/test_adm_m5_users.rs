@@ -162,8 +162,8 @@ async fn peek_user_orientations_admin_scoped() {
     let app = TestApp::spawn().await;
     setup_admin(&app, "adm_m5_d").await;
     let target_id: uuid::Uuid = sqlx::query_scalar(
-        "INSERT INTO users (email, username, password_hash, first_name, last_name, display_name, role, skill_domain)
-         VALUES ('target_m5_d@test.com', 'target_m5_d', 'x', 'T', 'D', 'Target D', 'user', 'code')
+        "INSERT INTO users (email, username, password_hash, first_name, last_name, display_name, role, skill_domain, profile_active)
+         VALUES ('target_m5_d@test.com', 'target_m5_d', 'x', 'T', 'D', 'Target D', 'user', 'code', TRUE)
          RETURNING id",
     ).fetch_one(&app.db).await.unwrap();
 

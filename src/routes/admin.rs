@@ -895,10 +895,16 @@ async fn admin_generate_variant(
     let new_challenge: crate::models::ChallengeTemplate = sqlx::query_as(
         r#"
         INSERT INTO challenge_templates
-            (title, description, instructions, skill_domain, difficulty,
+            (title, description, instructions,
+             title_i18n, description_i18n, instructions_i18n,
+             skill_domain, difficulty,
              mode, duration_minutes, ai_policy, tone, language,
              reward_fragments, is_training, created_by, status)
-        VALUES ($1, $2, $3, $4, $5, 'solo', $6, $7, $8, $9, $10, $11, $12, 'draft')
+        VALUES ($1, $2, $3,
+                jsonb_build_object('fr', $1::text),
+                jsonb_build_object('fr', $2::text),
+                jsonb_build_object('fr', $3::text),
+                $4, $5, 'solo', $6, $7, $8, $9, $10, $11, $12, 'draft')
         RETURNING *
         "#,
     )

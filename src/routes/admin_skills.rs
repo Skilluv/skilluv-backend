@@ -6,7 +6,7 @@
 //!   - PUT   /admin/skills/{id}           — édite (slug + domain + parent + is_skilluv_specific)
 
 use axum::extract::{Path, Query, State};
-use axum::routing::{get, post, put};
+use axum::routing::{get, put};
 use axum::{Json, Router};
 use serde::Deserialize;
 use serde_json::{Value, json};

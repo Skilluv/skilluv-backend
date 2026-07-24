@@ -5,7 +5,7 @@
 //! - GET  /users/{id}/orientations             — admin-scoped read (via admin_gate)
 
 use axum::extract::{Path, Query, State};
-use axum::routing::{get, post};
+use axum::routing::post;
 use axum::{Json, Router};
 use serde::Deserialize;
 use serde_json::{Value, json};

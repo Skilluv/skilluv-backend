@@ -49,8 +49,21 @@ async fn admin_without_2fa_gets_admin_2fa_setup_required_on_admin_routes() {
     let app = TestApp::spawn().await;
     app.register_admin("admin_no_2fa").await;
 
-    // register_admin met users.role='admin' + user_capabilities.admin
-    // MAIS ne configure PAS TOTP ni webauthn. Donc admin sans 2FA.
+    // register_admin inserts a stub webauthn credential to satisfy the 2FA gate for
+    // most tests. For this specific test we need "no 2FA", so wipe both channels.
+    sqlx::query(
+        "DELETE FROM webauthn_credentials WHERE user_id = (SELECT id FROM users WHERE username = 'admin_no_2fa')",
+    )
+    .execute(&app.db)
+    .await
+    .unwrap();
+    sqlx::query(
+        "UPDATE users SET totp_enabled = FALSE, totp_secret = NULL WHERE username = 'admin_no_2fa'",
+    )
+    .execute(&app.db)
+    .await
+    .unwrap();
+
     // Appel depuis origin admin → passe le BE-C origin gate mais bloqué par BE-A 2fa gate.
     let resp = app
         .client

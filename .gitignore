@@ -20,6 +20,9 @@
 # Local docker-compose overrides (postgres bug workaround, etc.)
 docker-compose.override.yml
 
+# Trello local snapshots (regenerated via scripts/trello.py)
+.trello-*.md
+
 # BMAD workflow
 _bmad/
 _bmad.*

@@ -319,13 +319,16 @@ Auth via header `Authorization: Bearer sk_live_xxx` ou query `?api_key=sk_live_x
 
 ---
 
-## Admin — Community (3 routes)
+## Community moderation (3 routes)
+
+Servies par `community_curator` OU `admin` (voir `docs/MODERATION-vs-ADMIN.md`).
+Le préfixe est `/api/community/...` — pas `/api/admin/community/...` (fix BE-P0-05).
 
 | Method | Path | Body | Response |
 |--------|------|------|----------|
-| GET | `/admin/community/review` | — | `{ challenges: [{ challenge, creator }], total }` |
-| POST | `/admin/community/{id}/approve` | — | `{ challenge, message }` — publie + notifie créateur |
-| POST | `/admin/community/{id}/reject` | `{ feedback }` | `{ challenge, message }` — notifie créateur |
+| GET | `/community/challenges/review` | — | `{ challenges: [{ challenge, creator }], total }` |
+| POST | `/community/challenges/{id}/approve` | — | `{ challenge, message }` — publie + notifie créateur |
+| POST | `/community/challenges/{id}/reject` | `{ reason }` (min 8 chars ; `feedback` accepté en alias legacy) | `{ id, title, rejected: true }` — notifie créateur |
 
 ---
 

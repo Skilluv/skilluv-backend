@@ -258,7 +258,7 @@ def cmd_move(card_id_prefix: str, target_list: str) -> None:
         list_name = next(
             n for n, lid in meta["lists_by_name"].items() if lid == target
         )
-        print(f"  {c['name']}  →  {list_name}")
+        print(f"  {c['name']}  ->  {list_name}")
 
 
 # ─── CLI ─────────────────────────────────────────────────────────────

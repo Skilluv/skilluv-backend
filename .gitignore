@@ -14,6 +14,12 @@
 .env.*
 !.env.example
 
+# Deployment secrets (never commit)
+.secrets-*
+
+# Local docker-compose overrides (postgres bug workaround, etc.)
+docker-compose.override.yml
+
 # BMAD workflow
 _bmad/
 _bmad.*

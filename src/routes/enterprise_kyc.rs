@@ -170,7 +170,7 @@ async fn upload_document(
     let storage_key = format!("kyc/{enterprise_id}/{doc_id}.{ext}");
     state
         .storage
-        .upload_generic(&storage_key, &bytes, &content_type)
+        .upload_private(&storage_key, &bytes, &content_type)
         .await?;
     sqlx::query(
         r#"

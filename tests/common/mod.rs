@@ -124,6 +124,7 @@ impl TestApp {
             minio_access_key: "skilluv".to_string(),
             minio_secret_key: "skilluv_secret".to_string(),
             minio_bucket: format!("test-{}", &db_name[..20]),
+            minio_bucket_private: format!("testpriv-{}", &db_name[..16]),
             avatar_cdn_base_url: None,
             grpc_ai_url: None,
             brevo_api_key: None,

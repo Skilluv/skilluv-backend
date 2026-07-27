@@ -12,6 +12,10 @@ pub struct AppConfig {
     pub minio_access_key: String,
     pub minio_secret_key: String,
     pub minio_bucket: String,
+    /// Private bucket for KYC docs, RGPD exports, anything not meant to be
+    /// reachable via a stable URL. Split from `minio_bucket` (public) so the
+    /// public bucket can safely enable anonymous `GetObject`.
+    pub minio_bucket_private: String,
     pub avatar_cdn_base_url: Option<String>,
     pub grpc_ai_url: Option<String>,
     pub brevo_api_key: Option<String>,
@@ -49,6 +53,8 @@ impl AppConfig {
             minio_secret_key: env::var("MINIO_SECRET_KEY")
                 .unwrap_or_else(|_| "skilluv_secret".to_string()),
             minio_bucket: env::var("MINIO_BUCKET").unwrap_or_else(|_| "avatars".to_string()),
+            minio_bucket_private: env::var("MINIO_BUCKET_PRIVATE")
+                .unwrap_or_else(|_| "documents".to_string()),
             avatar_cdn_base_url: env::var("AVATAR_CDN_BASE_URL")
                 .ok()
                 .filter(|s| !s.is_empty()),

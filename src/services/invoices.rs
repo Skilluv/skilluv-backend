@@ -11,6 +11,14 @@ use uuid::Uuid;
 
 use crate::errors::AppError;
 
+/// BE-P0-35 : convert the invoice's BigDecimal `tva_rate` to a numeric
+/// `tva_rate_pct` when the front asks for it. Used by the enterprise_credits
+/// handlers to enrich the JSON response — see call sites there.
+pub fn tva_rate_as_f64(v: &bigdecimal::BigDecimal) -> f64 {
+    use num_traits::ToPrimitive;
+    v.to_f64().unwrap_or(0.0)
+}
+
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 pub struct Invoice {
     pub id: Uuid,

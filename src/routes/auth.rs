@@ -184,10 +184,30 @@ struct TotpCodeRequest {
     code: String,
 }
 
+/// Disabling 2FA is a sensitive downgrade. We require BOTH factors — the
+/// current TOTP code AND the account password — so that a stolen session
+/// alone can't unlock the account. Modeled on GitHub / Google's flow.
+#[derive(Debug, Deserialize)]
+struct TotpDisableRequest {
+    password: String,
+    code: String,
+}
+
+/// Body for any endpoint that gates a sensitive action on password re-entry
+/// (enable/disable email 2FA, other sudo-mode toggles). Avoids leaking the
+/// unrelated fields of `ChangePasswordRequest` that caused BE-P0-04.
+#[derive(Debug, Deserialize)]
+struct PasswordConfirmRequest {
+    password: String,
+}
+
 #[derive(Debug, Deserialize)]
 struct DeleteAccountRequest {
     password: String,
     totp_code: Option<String>,
+    /// Free-text reason captured for the audit trail (RGPD compliance).
+    /// Optional — front sends it when the user filled the "why leaving?" prompt.
+    reason: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1363,7 +1383,7 @@ async fn totp_enable(
 async fn totp_disable(
     State(state): State<AppState>,
     auth: AuthUser,
-    Json(body): Json<TotpCodeRequest>,
+    Json(body): Json<TotpDisableRequest>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let user: User = sqlx::query_as("SELECT * FROM users WHERE id = $1")
         .bind(auth.user_id)
@@ -1372,6 +1392,11 @@ async fn totp_disable(
 
     if !user.totp_enabled {
         return Err(AppError::Validation("TOTP 2FA is not enabled".to_string()));
+    }
+
+    // Password check first — cheap and rate-limited by argon2 cost.
+    if !AuthService::verify_password(&body.password, &user.password_hash)? {
+        return Err(AppError::InvalidCredentials);
     }
 
     let secret = user
@@ -1421,11 +1446,18 @@ async fn totp_disable(
 async fn email_2fa_enable(
     State(state): State<AppState>,
     auth: AuthUser,
+    Json(body): Json<PasswordConfirmRequest>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let user: User = sqlx::query_as("SELECT * FROM users WHERE id = $1")
         .bind(auth.user_id)
         .fetch_one(&state.db)
         .await?;
+
+    // Confirm the user really typed the password (protect against a stolen
+    // session flipping 2FA silently).
+    if !AuthService::verify_password(&body.password, &user.password_hash)? {
+        return Err(AppError::InvalidCredentials);
+    }
 
     if !user.email_verified {
         return Err(AppError::Validation(
@@ -1463,7 +1495,7 @@ async fn email_2fa_enable(
 async fn email_2fa_disable(
     State(state): State<AppState>,
     auth: AuthUser,
-    Json(body): Json<ChangePasswordRequest>,
+    Json(body): Json<PasswordConfirmRequest>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let user: User = sqlx::query_as("SELECT * FROM users WHERE id = $1")
         .bind(auth.user_id)
@@ -1475,7 +1507,7 @@ async fn email_2fa_disable(
     }
 
     // Require password confirmation to disable
-    let valid = AuthService::verify_password(&body.current_password, &user.password_hash)?;
+    let valid = AuthService::verify_password(&body.password, &user.password_hash)?;
     if !valid {
         return Err(AppError::InvalidCredentials);
     }
@@ -1575,7 +1607,13 @@ async fn delete_account(
     let clear_admin_csrf =
         "admin_csrf_token=; Secure; SameSite=Strict; Path=/api; Max-Age=0".to_string();
 
-    tracing::info!(user_id = %auth.user_id, email = %user.email, "Account deleted (RGPD right to erasure)");
+    let deleted_at = chrono::Utc::now();
+    tracing::info!(
+        user_id = %auth.user_id,
+        email = %user.email,
+        reason = body.reason.as_deref().unwrap_or("(no reason)"),
+        "Account deleted (RGPD right to erasure)"
+    );
 
     Ok((
         AppendHeaders([
@@ -1587,6 +1625,11 @@ async fn delete_account(
             (SET_COOKIE, clear_admin_csrf),
         ]),
         Json(build_response(json!({
+            "account_deleted": true,
+            // Deletion is immediate ; `scheduled_for` == now for symmetry with
+            // any future grace-period implementation the front can already
+            // display ("deleted at").
+            "scheduled_for": deleted_at.to_rfc3339(),
             "message": "Your account and all personal data have been permanently deleted."
         }))),
     ))

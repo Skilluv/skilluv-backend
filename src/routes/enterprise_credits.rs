@@ -37,6 +37,9 @@ pub fn enterprise_credits_routes() -> Router<AppState> {
         .route("/enterprise/invoices", get(list_invoices))
         .route("/enterprise/invoices/{id}", get(get_invoice))
         .route("/enterprise/invoices/{id}/html", get(get_invoice_html))
+        // Alias — front called it `/preview` (per BE-P0-13 audit) and there's
+        // no reason to make the front migrate the name for a doc mismatch.
+        .route("/enterprise/invoices/{id}/preview", get(get_invoice_html))
         // Pricing public endpoint (Phase 3.14)
         .route("/pricing", get(public_pricing))
 }

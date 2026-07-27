@@ -159,7 +159,16 @@ async fn public_profile(
     // Source unique user_skills (skill_fragments droppée en P8.7).
     // La signature du helper retourne AppError alors que les autres futures
     // retournent sqlx::Error — on encapsule manuellement pour try_join!.
-    let (fragments_result, challenges_count_result, heatmap_result, badges_result) = tokio::try_join!(
+    let (
+        fragments_result,
+        challenges_count_result,
+        heatmap_result,
+        badges_result,
+        experiences_result,
+        educations_result,
+        languages_result,
+        availability_result,
+    ) = tokio::try_join!(
         async {
             crate::services::SkillsService::list_user_skill_fragments_or_backfill(
                 &state.db,
@@ -191,6 +200,36 @@ async fn public_profile(
         )
         .bind(user.id)
         .fetch_all(&state.db),
+
+        // BE-P0-14 — experiences, educations, languages, availability sont
+        // publics par défaut (pas de flag dans user_privacy aujourd'hui).
+        // Payload enrichi ici pour éviter 4 round-trips côté front.
+        sqlx::query(
+            "SELECT id, company, title, description, started_on, ended_on, position
+             FROM user_experiences WHERE user_id = $1 ORDER BY started_on DESC"
+        )
+        .bind(user.id)
+        .fetch_all(&state.db),
+
+        sqlx::query(
+            "SELECT id, school, degree, field, description, started_on, ended_on, position
+             FROM user_educations WHERE user_id = $1 ORDER BY started_on DESC"
+        )
+        .bind(user.id)
+        .fetch_all(&state.db),
+
+        sqlx::query(
+            "SELECT code, level FROM user_languages WHERE user_id = $1 ORDER BY code"
+        )
+        .bind(user.id)
+        .fetch_all(&state.db),
+
+        sqlx::query(
+            "SELECT looking_for_job, looking_for_freelance, notice_period_days, updated_at
+             FROM user_availability WHERE user_id = $1"
+        )
+        .bind(user.id)
+        .fetch_optional(&state.db),
     )?;
 
     // Build skill tree grouped by domain
@@ -254,6 +293,57 @@ async fn public_profile(
         })
         .collect();
 
+    use sqlx::Row;
+    let experiences_data: Vec<serde_json::Value> = experiences_result
+        .iter()
+        .map(|r| {
+            json!({
+                "id": r.get::<Uuid, _>("id"),
+                "company": r.get::<String, _>("company"),
+                "title": r.get::<String, _>("title"),
+                "description": r.get::<Option<String>, _>("description"),
+                "started_on": r.get::<chrono::NaiveDate, _>("started_on"),
+                "ended_on": r.get::<Option<chrono::NaiveDate>, _>("ended_on"),
+                "position": r.get::<i32, _>("position"),
+            })
+        })
+        .collect();
+
+    let educations_data: Vec<serde_json::Value> = educations_result
+        .iter()
+        .map(|r| {
+            json!({
+                "id": r.get::<Uuid, _>("id"),
+                "school": r.get::<String, _>("school"),
+                "degree": r.get::<Option<String>, _>("degree"),
+                "field": r.get::<Option<String>, _>("field"),
+                "description": r.get::<Option<String>, _>("description"),
+                "started_on": r.get::<chrono::NaiveDate, _>("started_on"),
+                "ended_on": r.get::<Option<chrono::NaiveDate>, _>("ended_on"),
+                "position": r.get::<i32, _>("position"),
+            })
+        })
+        .collect();
+
+    let languages_data: Vec<serde_json::Value> = languages_result
+        .iter()
+        .map(|r| {
+            json!({
+                "code": r.get::<String, _>("code"),
+                "level": r.get::<String, _>("level"),
+            })
+        })
+        .collect();
+
+    let availability_data = availability_result.as_ref().map(|r| {
+        json!({
+            "looking_for_job": r.get::<bool, _>("looking_for_job"),
+            "looking_for_freelance": r.get::<bool, _>("looking_for_freelance"),
+            "notice_period_days": r.get::<Option<i32>, _>("notice_period_days"),
+            "updated_at": r.get::<chrono::DateTime<chrono::Utc>, _>("updated_at").to_rfc3339(),
+        })
+    });
+
     Ok(Json(build_response(json!({
         "user": {
             "username": user.username,
@@ -284,5 +374,10 @@ async fn public_profile(
             "last_30_days": heatmap_data,
         })) } else { None },
         "badges": if privacy.show_badges { Some(badges_data) } else { None },
+        // BE-P0-14 — sections publiques CV enrichi (recruteurs + pairs).
+        "experiences": experiences_data,
+        "educations": educations_data,
+        "languages": languages_data,
+        "availability": availability_data,
     }))))
 }

@@ -259,11 +259,15 @@ async fn create_user(db: &PgPool, tenant: Option<Uuid>) -> Uuid {
 }
 
 async fn create_challenge(db: &PgPool, tenant: Option<Uuid>) -> Uuid {
+    // title_i18n gets a `fr` key inline — migration 0104 added
+    // challenge_templates_title_i18n_min_locale which rejects an empty
+    // JSONB. Description + instructions have no such constraint, so the
+    // default `{}` on their i18n columns is fine.
     sqlx::query_scalar(
         "INSERT INTO challenge_templates
-            (title, description, instructions, skill_domain, difficulty,
+            (title, title_i18n, description, instructions, skill_domain, difficulty,
              is_training, status, tenant_id)
-         VALUES ('Anchor', 'D', 'I', 'code', 2, TRUE, 'published', $1)
+         VALUES ('Anchor', '{\"fr\":\"Anchor\"}'::jsonb, 'D', 'I', 'code', 2, TRUE, 'published', $1)
          RETURNING id",
     )
     .bind(tenant)

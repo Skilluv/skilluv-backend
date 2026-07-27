@@ -54,6 +54,9 @@ fn one() -> i64 {
 struct RuleRow {
     id: Uuid,
     slug: String,
+    /// Selected for future rules that dispatch on the output type (e.g. XP
+    /// vs badge). Not read today ; kept in the row to avoid a schema
+    /// migration if we start needing it.
     #[allow(dead_code)]
     output_type: String,
     conditions: serde_json::Value,

@@ -3,7 +3,8 @@
 //! Vérifie que les migrations 0055-0060 :
 //! - Montent proprement sur une DB fresh
 //! - Créent les tables attendues avec les colonnes/contraintes correctes
-//! - Le seed 0057 insère bien 337 skill_nodes (47 catégories + 290 skills)
+//! - Le seed 0057 + seeds content-strategy batch2 insèrent 343 skill_nodes
+//!   (53 catégories + 290 skills atomiques)
 //! - Les contraintes CHECK / UNIQUE / FK fonctionnent
 //!
 //! Voir docs/challenges-target-model-and-roadmap.md pour le rationale.
@@ -124,7 +125,7 @@ async fn migrations_up_to_p0_apply_cleanly() {
 async fn skill_nodes_seed_has_expected_counts() {
     let (db, db_name) = setup_test_db().await;
 
-    // 47 catégories (parent_id NULL) + 290 skills atomiques = 337 total
+    // 53 catégories (parent_id NULL) + 290 skills atomiques = 343 total
     let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM skill_nodes")
         .fetch_one(&db)
         .await
@@ -142,8 +143,8 @@ async fn skill_nodes_seed_has_expected_counts() {
             .await
             .expect("count atomic skills failed");
 
-    assert_eq!(total, 337, "Expected 337 total skill_nodes, got {total}");
-    assert_eq!(categories, 47, "Expected 47 categories, got {categories}");
+    assert_eq!(total, 343, "Expected 343 total skill_nodes, got {total}");
+    assert_eq!(categories, 53, "Expected 53 categories, got {categories}");
     assert_eq!(atomic, 290, "Expected 290 atomic skills, got {atomic}");
 
     db.close().await;

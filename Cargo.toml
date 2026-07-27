@@ -42,7 +42,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 thiserror = "2"
 
 # HTTP client (Judge0)
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.13", features = ["json"] }
 
 # SMTP transport (used for local dev via Mailpit; production still uses Brevo HTTP API)
 lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "tokio1-rustls-tls", "builder"] }
@@ -128,7 +128,7 @@ tonic-prost-build = "0.14"
 protox = "0.9"
 
 [dev-dependencies]
-reqwest = { version = "0.12", features = ["json", "cookies"] }
+reqwest = { version = "0.13", features = ["json", "cookies"] }
 tokio = { version = "1", features = ["full"] }
 totp-rs = { version = "5", features = ["gen_secret", "otpauth"] }
 # Mock OIDC IdP for enterprise SSO integration tests.

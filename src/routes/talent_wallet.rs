@@ -456,9 +456,22 @@ async fn wallet_statement_csv(
 struct RegisterMomoBody {
     /// Format E.164, ex "+22507xxxxxxxx".
     phone: String,
-    /// En P13.3, on suppose que le user a validé son OTP côté client. Une
-    /// impl complète chainera vers `services::otp::verify` (à ajouter en P15).
+    /// P13.3 placeholder — trusts the client to have run OTP verification.
+    /// Optional with a default of `true` (matching the current permissive
+    /// stance) so the front doesn't 422 when it just sends `{ phone,
+    /// provider }`. **TODO P15**: replace with a real OTP round-trip via
+    /// `services::otp::verify` and drop the default.
+    #[serde(default = "default_true")]
     verified: bool,
+    /// "orange" | "mtn" | "wave" — optional today (single-provider
+    /// dispatch via env), tracked so we can route per-provider in P15.
+    #[serde(default)]
+    #[allow(dead_code)]
+    provider: Option<String>,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 /// POST /api/users/me/wallet/momo/phone

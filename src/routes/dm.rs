@@ -95,8 +95,12 @@ async fn list_messages(
     Ok(Json(build_response(json!({ "messages": messages }))))
 }
 
+/// `text` accepted as alias — the audit doc used to name the field `text` ;
+/// keeping both means a stale client (or an SDK that trusted the doc) won't
+/// 422 while the front migrates.
 #[derive(Deserialize)]
 struct SendMessageBody {
+    #[serde(alias = "text")]
     body: String,
 }
 

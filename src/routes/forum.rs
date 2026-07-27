@@ -189,9 +189,15 @@ async fn delete_post(
     Ok(Json(build_response(json!({ "deleted": true }))))
 }
 
+/// Field renamed from `answer_comment_id` to the more concise `answer_id`
+/// (the accepted answer is more than "just" a comment — it's the
+/// canonical resolution of the question). Both legacy names are accepted
+/// as aliases so we can roll out the front migration (FE-P0-BE08) without
+/// coordinating a big-bang deploy.
 #[derive(Deserialize)]
 struct AcceptAnswerBody {
-    answer_comment_id: Uuid,
+    #[serde(alias = "comment_id", alias = "answer_comment_id")]
+    answer_id: Uuid,
 }
 
 async fn accept_answer(
@@ -200,7 +206,7 @@ async fn accept_answer(
     Path(id): Path<Uuid>,
     Json(body): Json<AcceptAnswerBody>,
 ) -> Result<Json<Value>, AppError> {
-    let res = forum::accept_answer(&state.db, auth.user_id, id, body.answer_comment_id).await?;
+    let res = forum::accept_answer(&state.db, auth.user_id, id, body.answer_id).await?;
 
     // Notify answer author
     let bounty_msg = if res.bounty_transferred > 0 {

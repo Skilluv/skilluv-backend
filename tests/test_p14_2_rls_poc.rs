@@ -229,6 +229,11 @@ async fn policy_filter_isolates_correctly() {
     .expect("v3");
     assert_eq!(b_visible, 2);
 
+    // Release the pool connection before closing the pool — otherwise
+    // `db.close()` hangs forever waiting for the still-live PoolConnection
+    // to drop (which only happens at end of scope, i.e. after close).
+    // This was the cause of the 58 min CI hang on prior runs.
+    drop(conn);
     db.close().await;
     cleanup_test_db(&name).await;
 }

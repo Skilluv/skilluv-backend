@@ -24,7 +24,10 @@ pub fn guild_routes() -> Router<AppState> {
         .route("/guilds/{id}/members/{user_id}", delete(kick_member))
         .route("/guilds/me/leave", post(leave_guild))
         // Invitations
-        .route("/guilds/{id}/invitations", post(invite_direct))
+        .route(
+            "/guilds/{id}/invitations",
+            post(invite_direct).get(list_invitations), // BE-P0-40
+        )
         .route("/guilds/{id}/invitations/link", post(create_token_link))
         .route("/guild-invitations/{id}/accept", post(accept_invite))
         .route("/guilds/join-by-token", post(join_by_token))
@@ -366,6 +369,68 @@ async fn apply(
         );
     }
     Ok(Json(build_response(json!({ "application": app }))))
+}
+
+/// BE-P0-40 : list pending invitations for a guild (owner/officer only).
+/// Missing endpoint made the front's "Invitations" tab a black hole for
+/// duplicate detection / revocation.
+async fn list_invitations(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(guild_id): Path<Uuid>,
+) -> Result<Json<Value>, AppError> {
+    let is_officer: Option<(String,)> = sqlx::query_as(
+        "SELECT role FROM guild_members
+         WHERE guild_id = $1 AND user_id = $2 AND role IN ('founder', 'officer')",
+    )
+    .bind(guild_id)
+    .bind(auth.user_id)
+    .fetch_optional(&state.db)
+    .await?;
+    if is_officer.is_none() && auth.role != "admin" {
+        return Err(AppError::Forbidden);
+    }
+
+    let rows: Vec<(
+        Uuid,
+        Option<Uuid>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        chrono::DateTime<chrono::Utc>,
+        chrono::DateTime<chrono::Utc>,
+    )> = sqlx::query_as(
+        r#"
+        SELECT gi.id, gi.invited_user_id, u.username, u.display_name,
+               gi.token, gi.expires_at, gi.created_at
+        FROM guild_invitations gi
+        LEFT JOIN users u ON u.id = gi.invited_user_id
+        WHERE gi.guild_id = $1 AND gi.accepted_at IS NULL AND gi.revoked_at IS NULL
+        ORDER BY gi.created_at DESC
+        "#,
+    )
+    .bind(guild_id)
+    .fetch_all(&state.db)
+    .await?;
+
+    let items: Vec<Value> = rows
+        .into_iter()
+        .map(|(id, invited_user_id, username, display_name, token, expires_at, created_at)| {
+            json!({
+                "id": id,
+                "invitee": invited_user_id.map(|uid| json!({
+                    "id": uid,
+                    "username": username,
+                    "display_name": display_name,
+                })),
+                "token": token.map(|t| json!({ "value": t })),
+                "expires_at": expires_at.to_rfc3339(),
+                "sent_at": created_at.to_rfc3339(),
+            })
+        })
+        .collect();
+
+    Ok(Json(build_response(json!({ "invitations": items }))))
 }
 
 /// BE-P0-39 : founder/officer of a guild lists the pending applications.

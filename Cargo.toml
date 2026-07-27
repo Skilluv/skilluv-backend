@@ -100,7 +100,7 @@ hkdf = "0.13"
 
 # OIDC B2B SSO (enterprise) — discovery, PKCE, JWKS rotation, ID token verify.
 openidconnect = "4"
-elliptic-curve = { version = "0.13", features = ["sec1"] }
+elliptic-curve = { version = "0.14", features = ["sec1"] }
 
 [[bin]]
 name = "skilluv-backend"

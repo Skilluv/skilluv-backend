@@ -224,9 +224,12 @@ async fn public_profile(
         .bind(user.id)
         .fetch_all(&state.db),
 
+        // Availability lives on the `users` table directly (there is no
+        // user_availability table). Columns match /profile/me/availability.
         sqlx::query(
-            "SELECT looking_for_job, looking_for_freelance, notice_period_days, updated_at
-             FROM user_availability WHERE user_id = $1"
+            "SELECT available_for_hire, looking_for, salary_range_min_eur,
+                    salary_range_max_eur, salary_visibility
+             FROM users WHERE id = $1"
         )
         .bind(user.id)
         .fetch_optional(&state.db),
@@ -336,11 +339,19 @@ async fn public_profile(
         .collect();
 
     let availability_data = availability_result.as_ref().map(|r| {
+        // Hide salary range when user chose salary_visibility = 'hidden'
+        // (respecte le paramètre privacy déjà utilisé côté /profile/me).
+        let visibility: String = r.get("salary_visibility");
+        let show_salary = visibility != "hidden";
         json!({
-            "looking_for_job": r.get::<bool, _>("looking_for_job"),
-            "looking_for_freelance": r.get::<bool, _>("looking_for_freelance"),
-            "notice_period_days": r.get::<Option<i32>, _>("notice_period_days"),
-            "updated_at": r.get::<chrono::DateTime<chrono::Utc>, _>("updated_at").to_rfc3339(),
+            "available_for_hire": r.get::<Option<bool>, _>("available_for_hire"),
+            "looking_for": r.get::<Option<String>, _>("looking_for"),
+            "salary_range_min_eur": if show_salary {
+                r.get::<Option<i32>, _>("salary_range_min_eur")
+            } else { None },
+            "salary_range_max_eur": if show_salary {
+                r.get::<Option<i32>, _>("salary_range_max_eur")
+            } else { None },
         })
     });
 

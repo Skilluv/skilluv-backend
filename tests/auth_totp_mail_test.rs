@@ -82,11 +82,14 @@ async fn test_totp_setup_enable_login_and_disable() {
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 
-    // Disable with a fresh code.
-    // Small delay so we don't hit the same 30-sec window twice in a row (harmless but cleaner).
+    // Disable with a fresh code + password (BE-P0-02 : the handler now
+    // requires both factors to disable, matching GitHub / Google flow).
     let disable_code = totp_now(&secret);
     let resp = app
-        .post("/api/auth/totp/disable", &json!({ "code": disable_code }))
+        .post(
+            "/api/auth/totp/disable",
+            &json!({ "password": TestApp::TEST_PASSWORD, "code": disable_code }),
+        )
         .await;
     assert_eq!(resp.status(), StatusCode::OK);
 }
@@ -303,8 +306,14 @@ async fn test_email_2fa_login_flow() {
         .await;
     assert_eq!(resp.status(), StatusCode::OK);
 
-    // Enable email 2FA on the current session.
-    let resp = app.post("/api/auth/email-2fa/enable", &json!({})).await;
+    // Enable email 2FA — BE-P0-03 now requires the password (symmetry with
+    // disable, blocks stolen sessions from flipping 2FA silently).
+    let resp = app
+        .post(
+            "/api/auth/email-2fa/enable",
+            &json!({ "password": TestApp::TEST_PASSWORD }),
+        )
+        .await;
     assert_eq!(resp.status(), StatusCode::OK);
 
     mp.wipe().await;

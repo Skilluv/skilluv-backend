@@ -17,13 +17,13 @@ use aes_gcm::aead::Aead;
 use aes_gcm::{Aes128Gcm, KeyInit, Nonce};
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD as B64_URL;
-use elliptic_curve::sec1::ToEncodedPoint;
 use hkdf::Hkdf;
 use hmac::{KeyInit as HmacKeyInit, Mac};
 use p256::PublicKey;
 use p256::ecdh::EphemeralSecret;
 use p256::ecdsa::signature::Signer;
 use p256::ecdsa::{Signature, SigningKey};
+use p256::elliptic_curve::sec1::ToEncodedPoint;
 use serde::Serialize;
 use sha2::Sha256;
 use sqlx::PgPool;
@@ -218,12 +218,11 @@ fn encrypt_aes128gcm(
 
     // Salt = 16 bytes random pour ce message
     let mut salt = [0u8; 16];
-    getrandom::getrandom(&mut salt)
-        .map_err(|e| AppError::Internal(format!("salt getrandom: {e}")))?;
+    getrandom::fill(&mut salt).map_err(|e| AppError::Internal(format!("salt getrandom: {e}")))?;
 
     // IKM = HKDF-Expand(HKDF-Extract(auth_secret, ecdh_shared), key_info, 32)
     let mut prk_key_ikm = [0u8; 32];
-    let h1 = Hkdf::<Sha256>::new(Some(auth_secret), ikm_raw.as_slice());
+    let h1 = Hkdf::<Sha256>::new(Some(auth_secret), &ikm_raw[..]);
     h1.expand(&key_info, &mut prk_key_ikm)
         .map_err(|_| AppError::Internal("HKDF expand ikm".into()))?;
 
@@ -244,7 +243,11 @@ fn encrypt_aes128gcm(
 
     let cipher = Aes128Gcm::new(&cek.into());
     let ciphertext = cipher
-        .encrypt(Nonce::from_slice(&nonce), plaintext.as_ref())
+        .encrypt(
+            &Nonce::try_from(&nonce[..])
+                .map_err(|_| AppError::Internal("nonce length invalid".into()))?,
+            plaintext.as_ref(),
+        )
         .map_err(|_| AppError::Internal("aes-gcm encrypt failed".into()))?;
     // ciphertext already includes the 16-byte tag suffix.
 
@@ -285,7 +288,7 @@ fn build_vapid_jwt(vapid: &VapidConfig, audience: &str) -> Result<String, AppErr
         .map_err(|e| AppError::Internal(format!("vapid signing key: {e}")))?;
     let sig: Signature = signing_key.sign(signing_input.as_bytes());
     let sig_bytes = sig.to_bytes();
-    let sig_b64 = B64_URL.encode(sig_bytes.as_slice());
+    let sig_b64 = B64_URL.encode(&sig_bytes[..]);
     Ok(format!("{signing_input}.{sig_b64}"))
 }
 

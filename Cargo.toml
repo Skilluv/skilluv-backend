@@ -42,7 +42,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 thiserror = "2"
 
 # HTTP client (Judge0)
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.13", features = ["json", "form"] }
 
 # SMTP transport (used for local dev via Mailpit; production still uses Brevo HTTP API)
 lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "tokio1-rustls-tls", "builder"] }
@@ -57,7 +57,7 @@ hmac = "0.13"
 sha2 = "0.11"
 hex = "0.4"
 base64 = "0.22"
-getrandom = "0.2"
+getrandom = "0.4"
 rand_core = "0.6"
 
 # S3/MinIO storage
@@ -95,12 +95,12 @@ chacha20poly1305 = "0.11"
 
 # Web push VAPID natif (pure Rust, sans OpenSSL) — RFC 8291 + 8292
 p256 = { version = "0.13", features = ["ecdh", "ecdsa", "pkcs8"] }
-aes-gcm = "0.10"
+aes-gcm = "0.11"
 hkdf = "0.13"
 
 # OIDC B2B SSO (enterprise) — discovery, PKCE, JWKS rotation, ID token verify.
 openidconnect = "4"
-elliptic-curve = { version = "0.13", features = ["sec1"] }
+elliptic-curve = { version = "0.14", features = ["sec1"] }
 
 [[bin]]
 name = "skilluv-backend"
@@ -128,7 +128,7 @@ tonic-prost-build = "0.14"
 protox = "0.9"
 
 [dev-dependencies]
-reqwest = { version = "0.12", features = ["json", "cookies"] }
+reqwest = { version = "0.13", features = ["json", "cookies", "form"] }
 tokio = { version = "1", features = ["full"] }
 totp-rs = { version = "5", features = ["gen_secret", "otpauth"] }
 # Mock OIDC IdP for enterprise SSO integration tests.

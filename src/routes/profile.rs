@@ -212,14 +212,15 @@ async fn public_profile(
         .fetch_all(&state.db),
 
         sqlx::query(
-            "SELECT id, school, degree, field, description, started_on, ended_on, position
+            "SELECT id, school, degree, field, started_on, ended_on, position
              FROM user_educations WHERE user_id = $1 ORDER BY started_on DESC"
         )
         .bind(user.id)
         .fetch_all(&state.db),
 
         sqlx::query(
-            "SELECT code, level FROM user_languages WHERE user_id = $1 ORDER BY code"
+            "SELECT language, proficiency FROM user_languages
+             WHERE user_id = $1 ORDER BY language"
         )
         .bind(user.id)
         .fetch_all(&state.db),
@@ -320,7 +321,6 @@ async fn public_profile(
                 "school": r.get::<String, _>("school"),
                 "degree": r.get::<Option<String>, _>("degree"),
                 "field": r.get::<Option<String>, _>("field"),
-                "description": r.get::<Option<String>, _>("description"),
                 "started_on": r.get::<chrono::NaiveDate, _>("started_on"),
                 "ended_on": r.get::<Option<chrono::NaiveDate>, _>("ended_on"),
                 "position": r.get::<i32, _>("position"),
@@ -332,8 +332,10 @@ async fn public_profile(
         .iter()
         .map(|r| {
             json!({
-                "code": r.get::<String, _>("code"),
-                "level": r.get::<String, _>("level"),
+                // Renamed on the wire : `language` -> `code`, `proficiency`
+                // -> `level` so the front's TS type stays stable.
+                "code": r.get::<String, _>("language"),
+                "level": r.get::<String, _>("proficiency"),
             })
         })
         .collect();

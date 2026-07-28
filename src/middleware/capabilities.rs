@@ -2,7 +2,9 @@
 //!
 //! Chaque handler HTTP qui a besoin d'un droit particulier appelle :
 //!
-//!     require_capability(&state.db, auth.user_id, "admin").await?;
+//! ```ignore
+//! require_capability(&state.db, auth.user_id, "admin").await?;
+//! ```
 //!
 //! Retourne :
 //!   - Ok(()) si l'user a la capability active (revoked_at IS NULL et

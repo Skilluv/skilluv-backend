@@ -159,7 +159,16 @@ async fn public_profile(
     // Source unique user_skills (skill_fragments droppée en P8.7).
     // La signature du helper retourne AppError alors que les autres futures
     // retournent sqlx::Error — on encapsule manuellement pour try_join!.
-    let (fragments_result, challenges_count_result, heatmap_result, badges_result) = tokio::try_join!(
+    let (
+        fragments_result,
+        challenges_count_result,
+        heatmap_result,
+        badges_result,
+        experiences_result,
+        educations_result,
+        languages_result,
+        availability_result,
+    ) = tokio::try_join!(
         async {
             crate::services::SkillsService::list_user_skill_fragments_or_backfill(
                 &state.db,
@@ -191,6 +200,40 @@ async fn public_profile(
         )
         .bind(user.id)
         .fetch_all(&state.db),
+
+        // BE-P0-14 — experiences, educations, languages, availability sont
+        // publics par défaut (pas de flag dans user_privacy aujourd'hui).
+        // Payload enrichi ici pour éviter 4 round-trips côté front.
+        sqlx::query(
+            "SELECT id, company, title, description, started_on, ended_on, position
+             FROM user_experiences WHERE user_id = $1 ORDER BY started_on DESC"
+        )
+        .bind(user.id)
+        .fetch_all(&state.db),
+
+        sqlx::query(
+            "SELECT id, school, degree, field, started_on, ended_on, position
+             FROM user_educations WHERE user_id = $1 ORDER BY started_on DESC"
+        )
+        .bind(user.id)
+        .fetch_all(&state.db),
+
+        sqlx::query(
+            "SELECT language, proficiency FROM user_languages
+             WHERE user_id = $1 ORDER BY language"
+        )
+        .bind(user.id)
+        .fetch_all(&state.db),
+
+        // Availability lives on the `users` table directly (there is no
+        // user_availability table). Columns match /profile/me/availability.
+        sqlx::query(
+            "SELECT available_for_hire, looking_for, salary_range_min_eur,
+                    salary_range_max_eur, salary_visibility
+             FROM users WHERE id = $1"
+        )
+        .bind(user.id)
+        .fetch_optional(&state.db),
     )?;
 
     // Build skill tree grouped by domain
@@ -254,6 +297,66 @@ async fn public_profile(
         })
         .collect();
 
+    use sqlx::Row;
+    let experiences_data: Vec<serde_json::Value> = experiences_result
+        .iter()
+        .map(|r| {
+            json!({
+                "id": r.get::<Uuid, _>("id"),
+                "company": r.get::<String, _>("company"),
+                "title": r.get::<String, _>("title"),
+                "description": r.get::<Option<String>, _>("description"),
+                "started_on": r.get::<chrono::NaiveDate, _>("started_on"),
+                "ended_on": r.get::<Option<chrono::NaiveDate>, _>("ended_on"),
+                "position": r.get::<i32, _>("position"),
+            })
+        })
+        .collect();
+
+    let educations_data: Vec<serde_json::Value> = educations_result
+        .iter()
+        .map(|r| {
+            json!({
+                "id": r.get::<Uuid, _>("id"),
+                "school": r.get::<String, _>("school"),
+                "degree": r.get::<Option<String>, _>("degree"),
+                "field": r.get::<Option<String>, _>("field"),
+                "started_on": r.get::<chrono::NaiveDate, _>("started_on"),
+                "ended_on": r.get::<Option<chrono::NaiveDate>, _>("ended_on"),
+                "position": r.get::<i32, _>("position"),
+            })
+        })
+        .collect();
+
+    let languages_data: Vec<serde_json::Value> = languages_result
+        .iter()
+        .map(|r| {
+            json!({
+                // Renamed on the wire : `language` -> `code`, `proficiency`
+                // -> `level` so the front's TS type stays stable.
+                "code": r.get::<String, _>("language"),
+                "level": r.get::<String, _>("proficiency"),
+            })
+        })
+        .collect();
+
+    let availability_data = availability_result.as_ref().map(|r| {
+        // Hide salary range when user chose salary_visibility = 'hidden'
+        // (respecte le paramètre privacy déjà utilisé côté /profile/me).
+        let visibility: String = r.get("salary_visibility");
+        let show_salary = visibility != "hidden";
+        json!({
+            "available_for_hire": r.get::<Option<bool>, _>("available_for_hire"),
+            "looking_for": r.get::<Option<String>, _>("looking_for"),
+            "salary_range_min_eur": if show_salary {
+                r.get::<Option<i32>, _>("salary_range_min_eur")
+            } else { None },
+            "salary_range_max_eur": if show_salary {
+                r.get::<Option<i32>, _>("salary_range_max_eur")
+            } else { None },
+        })
+    });
+
     Ok(Json(build_response(json!({
         "user": {
             "username": user.username,
@@ -284,5 +387,10 @@ async fn public_profile(
             "last_30_days": heatmap_data,
         })) } else { None },
         "badges": if privacy.show_badges { Some(badges_data) } else { None },
+        // BE-P0-14 — sections publiques CV enrichi (recruteurs + pairs).
+        "experiences": experiences_data,
+        "educations": educations_data,
+        "languages": languages_data,
+        "availability": availability_data,
     }))))
 }

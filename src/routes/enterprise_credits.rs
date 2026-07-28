@@ -37,6 +37,9 @@ pub fn enterprise_credits_routes() -> Router<AppState> {
         .route("/enterprise/invoices", get(list_invoices))
         .route("/enterprise/invoices/{id}", get(get_invoice))
         .route("/enterprise/invoices/{id}/html", get(get_invoice_html))
+        // Alias — front called it `/preview` (per BE-P0-13 audit) and there's
+        // no reason to make the front migrate the name for a doc mismatch.
+        .route("/enterprise/invoices/{id}/preview", get(get_invoice_html))
         // Pricing public endpoint (Phase 3.14)
         .route("/pricing", get(public_pricing))
 }
@@ -687,7 +690,21 @@ async fn list_invoices(
     let rows =
         crate::services::invoices::list_for_enterprise(&state.db, enterprise_id, per_page, offset)
             .await?;
-    Ok(Json(build_response(json!({ "invoices": rows }))))
+    // BE-P0-35 : emit tva_rate_pct (numeric) alongside the default serialization.
+    let enriched: Vec<Value> = rows
+        .iter()
+        .map(|inv| {
+            let mut v = serde_json::to_value(inv).unwrap_or(Value::Null);
+            if let Some(obj) = v.as_object_mut() {
+                obj.insert(
+                    "tva_rate_pct".to_string(),
+                    json!(crate::services::invoices::tva_rate_as_f64(&inv.tva_rate)),
+                );
+            }
+            v
+        })
+        .collect();
+    Ok(Json(build_response(json!({ "invoices": enriched }))))
 }
 
 async fn get_invoice(
@@ -697,7 +714,14 @@ async fn get_invoice(
 ) -> Result<Json<Value>, AppError> {
     let enterprise_id = current_enterprise_for(&state.db, auth.user_id).await?;
     let inv = crate::services::invoices::by_id_for_enterprise(&state.db, id, enterprise_id).await?;
-    Ok(Json(build_response(json!({ "invoice": inv }))))
+    let mut v = serde_json::to_value(&inv).unwrap_or(Value::Null);
+    if let Some(obj) = v.as_object_mut() {
+        obj.insert(
+            "tva_rate_pct".to_string(),
+            json!(crate::services::invoices::tva_rate_as_f64(&inv.tva_rate)),
+        );
+    }
+    Ok(Json(build_response(json!({ "invoice": v }))))
 }
 
 async fn get_invoice_html(

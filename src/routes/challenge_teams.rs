@@ -524,36 +524,58 @@ async fn get_timer(
     }))))
 }
 
-// POST /api/challenges/:id/timer/extend — admin only
+// POST /api/challenges/:id/timer/extend — admin OR team captain (BE-P0-37)
 async fn extend_timer(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(challenge_id): Path<Uuid>,
     Json(body): Json<ExtendTimerRequest>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    // Require admin
-    let role: String = sqlx::query_scalar("SELECT role FROM users WHERE id = $1")
-        .bind(auth.user_id)
-        .fetch_one(&state.db)
-        .await?;
-    if role != "admin" {
-        return Err(AppError::Forbidden);
-    }
-
     if body.minutes <= 0 || body.minutes > 120 {
         return Err(AppError::Validation(
             "Extension must be between 1 and 120 minutes".to_string(),
         ));
     }
 
-    // Extend all active submissions for this challenge
-    let updated = sqlx::query(sqlx::AssertSqlSafe(format!(
-        "UPDATE challenge_submissions SET expires_at = expires_at + INTERVAL '{} minutes' WHERE challenge_id = $1 AND status = 'in_progress' AND expires_at IS NOT NULL",
-        body.minutes
-    )))
-    .bind(challenge_id)
-    .execute(&state.db)
-    .await?;
+    let role: String = sqlx::query_scalar("SELECT role FROM users WHERE id = $1")
+        .bind(auth.user_id)
+        .fetch_one(&state.db)
+        .await?;
+
+    let updated = if role == "admin" {
+        // Admin extends every active submission on the challenge.
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "UPDATE challenge_submissions SET expires_at = expires_at + INTERVAL '{} minutes' \
+             WHERE challenge_id = $1 AND status = 'in_progress' AND expires_at IS NOT NULL",
+            body.minutes
+        )))
+        .bind(challenge_id)
+        .execute(&state.db)
+        .await?
+    } else {
+        // Non-admin path : must be captain of a team on this challenge.
+        // Extends only that team's active submission (fair play + no
+        // cross-team advantage).
+        let captain_team: Option<(Uuid,)> = sqlx::query_as(
+            "SELECT id FROM challenge_teams
+             WHERE challenge_id = $1 AND created_by = $2 LIMIT 1",
+        )
+        .bind(challenge_id)
+        .bind(auth.user_id)
+        .fetch_optional(&state.db)
+        .await?;
+        let (team_id,) = captain_team.ok_or(AppError::Forbidden)?;
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "UPDATE challenge_submissions SET expires_at = expires_at + INTERVAL '{} minutes' \
+             WHERE challenge_id = $1 AND team_id = $2 \
+               AND status = 'in_progress' AND expires_at IS NOT NULL",
+            body.minutes
+        )))
+        .bind(challenge_id)
+        .bind(team_id)
+        .execute(&state.db)
+        .await?
+    };
 
     Ok(Json(build_response(json!({
         "message": format!("Extended timer by {} minutes", body.minutes),

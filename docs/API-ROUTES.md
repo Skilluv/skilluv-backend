@@ -319,13 +319,68 @@ Auth via header `Authorization: Bearer sk_live_xxx` ou query `?api_key=sk_live_x
 
 ---
 
-## Admin — Community (3 routes)
+## Community moderation (3 routes)
+
+Servies par `community_curator` OU `admin` (voir `docs/MODERATION-vs-ADMIN.md`).
+Le préfixe est `/api/community/...` — pas `/api/admin/community/...` (fix BE-P0-05).
 
 | Method | Path | Body | Response |
 |--------|------|------|----------|
-| GET | `/admin/community/review` | — | `{ challenges: [{ challenge, creator }], total }` |
-| POST | `/admin/community/{id}/approve` | — | `{ challenge, message }` — publie + notifie créateur |
-| POST | `/admin/community/{id}/reject` | `{ feedback }` | `{ challenge, message }` — notifie créateur |
+| GET | `/community/challenges/review` | — | `{ challenges: [{ challenge, creator }], total }` |
+| POST | `/community/challenges/{id}/approve` | — | `{ challenge, message }` — publie + notifie créateur |
+| POST | `/community/challenges/{id}/reject` | `{ reason }` (min 8 chars ; `feedback` accepté en alias legacy) | `{ id, title, rejected: true }` — notifie créateur |
+
+---
+
+## Talent wallet — payouts (5 routes)
+
+Payouts vers Stripe Connect (EUR) ou Mobile Money africain (XOF).
+
+| Method | Path | Body | Response |
+|--------|------|------|----------|
+| POST | `/users/me/wallet/onboard/stripe` | `{ refresh_url, return_url }` | `{ onboarding_url }` |
+| POST | `/users/me/wallet/withdraw/stripe` | `{ amount: "12.50", currency?: "EUR" }` (fix BE-P0-11 — amount en devise, converti en cents server-side) | `{ transaction_id, stripe_transfer_id, amount_cents }` |
+| POST | `/users/me/wallet/momo/phone` | `{ phone: "+22507...", verified?: bool, provider?: "orange"\|"mtn"\|"wave" }` (fix BE-P0-12 — `verified` default true en P13.3, deviendra OTP-gated en P15) | `{ registered: true }` |
+| POST | `/users/me/wallet/withdraw/momo` | `{ provider, amount, currency?: "XOF" }` | `{ transaction_id, momo_ref }` |
+| GET | `/users/me/wallet/statement.csv` | — | CSV compliance |
+
+## DM messaging (3 routes)
+
+| Method | Path | Body | Response |
+|--------|------|------|----------|
+| GET | `/dm/conversations` | — | `{ conversations }` |
+| GET | `/dm/conversations/{id}/messages` | — | `{ messages }` |
+| POST | `/dm/conversations/{id}/messages` | `{ body }` (alias `text` accepté — fix BE-P0-09) | `{ message }` |
+
+## Fraud / plagiarism review (3 routes)
+
+Servies par `plagiarism_reviewer` OU `admin`. Cible = un **deliverable** individuel
+(pas un user entier — fix BE-P0-06).
+
+| Method | Path | Body | Response |
+|--------|------|------|----------|
+| GET | `/fraud/deliverables/flagged` | — | `{ data: [{ id, user_id, ... }], pagination }` |
+| POST | `/fraud/deliverables/{id}/mark-valid` | `{ reason? }` | `{ marked_valid: true, id }` — faux positif |
+| POST | `/fraud/deliverables/{id}/revoke` | `{ reason }` (min 8 chars) | `{ revoked: true, id }` — plagiat confirmé |
+
+## Forum posts (5 core routes)
+
+| Method | Path | Body | Response |
+|--------|------|------|----------|
+| GET | `/forum/posts` | — | `{ posts: [...], pagination }` |
+| POST | `/forum/posts` | `{ category_slug, kind, title, body, bounty_fragments? }` (fix BE-P0-07) | `{ post }` |
+| GET | `/forum/posts/{id}` | — | `{ post }` |
+| PUT | `/forum/posts/{id}` | `{ title, body }` | `{ post }` |
+| POST | `/forum/posts/{id}/accept-answer` | `{ answer_id }` (aliases `comment_id`, `answer_comment_id` acceptés — fix BE-P0-08) | `{ accepted, bounty_transferred }` |
+
+## Forum moderation (2 routes)
+
+Servies par `forum_moderator` OU `admin`.
+
+| Method | Path | Body | Response |
+|--------|------|------|----------|
+| POST | `/forum/posts/{id}/moderate` | `{ action: 'hide'\|'delete', reason }` | `{ moderated: true }` |
+| POST | `/forum/users/{id}/mute` | `{ duration_hours, reason }` | `{ muted_until }` |
 
 ---
 

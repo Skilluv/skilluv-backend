@@ -15,6 +15,27 @@ use crate::routes::analytics_consent;
 use crate::services::analytics::{events, props};
 use crate::services::{NotificationService, guild};
 
+// Type aliases pour clippy::type_complexity (rows sqlx::query_as des handlers
+// BE-P0-39/40 qui joignent applications/invitations avec users).
+type ApplicationRow = (
+    Uuid,
+    Uuid,
+    String,
+    String,
+    chrono::DateTime<chrono::Utc>,
+    String,
+    Option<String>,
+);
+type InvitationRow = (
+    Uuid,
+    Option<Uuid>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    chrono::DateTime<chrono::Utc>,
+    chrono::DateTime<chrono::Utc>,
+);
+
 pub fn guild_routes() -> Router<AppState> {
     Router::new()
         .route("/guilds", post(create_guild).get(list_for_leaderboard))
@@ -24,12 +45,18 @@ pub fn guild_routes() -> Router<AppState> {
         .route("/guilds/{id}/members/{user_id}", delete(kick_member))
         .route("/guilds/me/leave", post(leave_guild))
         // Invitations
-        .route("/guilds/{id}/invitations", post(invite_direct))
+        .route(
+            "/guilds/{id}/invitations",
+            post(invite_direct).get(list_invitations), // BE-P0-40
+        )
         .route("/guilds/{id}/invitations/link", post(create_token_link))
         .route("/guild-invitations/{id}/accept", post(accept_invite))
         .route("/guilds/join-by-token", post(join_by_token))
         // Applications
-        .route("/guilds/{id}/applications", post(apply))
+        .route(
+            "/guilds/{id}/applications",
+            post(apply).get(list_applications), // BE-P0-39
+        )
         .route("/guild-applications/{id}/decide", post(decide_application))
         // Wars
         .route("/guild-wars", post(propose_war).get(list_wars))
@@ -365,6 +392,120 @@ async fn apply(
     Ok(Json(build_response(json!({ "application": app }))))
 }
 
+/// BE-P0-40 : list pending invitations for a guild (owner/officer only).
+/// Missing endpoint made the front's "Invitations" tab a black hole for
+/// duplicate detection / revocation.
+async fn list_invitations(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(guild_id): Path<Uuid>,
+) -> Result<Json<Value>, AppError> {
+    let is_officer: Option<(String,)> = sqlx::query_as(
+        "SELECT role FROM guild_members
+         WHERE guild_id = $1 AND user_id = $2 AND role IN ('founder', 'officer')",
+    )
+    .bind(guild_id)
+    .bind(auth.user_id)
+    .fetch_optional(&state.db)
+    .await?;
+    if is_officer.is_none() && auth.role != "admin" {
+        return Err(AppError::Forbidden);
+    }
+
+    let rows: Vec<InvitationRow> = sqlx::query_as(
+        r#"
+        SELECT gi.id, gi.invited_user_id, u.username, u.display_name,
+               gi.token, gi.expires_at, gi.created_at
+        FROM guild_invitations gi
+        LEFT JOIN users u ON u.id = gi.invited_user_id
+        WHERE gi.guild_id = $1 AND gi.accepted_at IS NULL AND gi.revoked_at IS NULL
+        ORDER BY gi.created_at DESC
+        "#,
+    )
+    .bind(guild_id)
+    .fetch_all(&state.db)
+    .await?;
+
+    let items: Vec<Value> = rows
+        .into_iter()
+        .map(
+            |(id, invited_user_id, username, display_name, token, expires_at, created_at)| {
+                json!({
+                    "id": id,
+                    "invitee": invited_user_id.map(|uid| json!({
+                        "id": uid,
+                        "username": username,
+                        "display_name": display_name,
+                    })),
+                    "token": token.map(|t| json!({ "value": t })),
+                    "expires_at": expires_at.to_rfc3339(),
+                    "sent_at": created_at.to_rfc3339(),
+                })
+            },
+        )
+        .collect();
+
+    Ok(Json(build_response(json!({ "invitations": items }))))
+}
+
+/// BE-P0-39 : founder/officer of a guild lists the pending applications.
+/// Missing endpoint was making the "Applications" tab in the guild page
+/// forever empty on the front (the ID needed by `/decide` was never
+/// discoverable).
+async fn list_applications(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(guild_id): Path<Uuid>,
+) -> Result<Json<Value>, AppError> {
+    // Owner/officer gate — same rule as the decide endpoint.
+    let is_officer: Option<(String,)> = sqlx::query_as(
+        "SELECT role FROM guild_members
+         WHERE guild_id = $1 AND user_id = $2 AND role IN ('founder', 'officer')",
+    )
+    .bind(guild_id)
+    .bind(auth.user_id)
+    .fetch_optional(&state.db)
+    .await?;
+    if is_officer.is_none() && auth.role != "admin" {
+        return Err(AppError::Forbidden);
+    }
+
+    let rows: Vec<ApplicationRow> = sqlx::query_as(
+        r#"
+            SELECT ga.id, ga.applicant_id, ga.message, ga.status, ga.created_at,
+                   u.username, u.display_name
+            FROM guild_applications ga
+            JOIN users u ON u.id = ga.applicant_id
+            WHERE ga.guild_id = $1 AND ga.status = 'pending'
+            ORDER BY ga.created_at ASC
+            "#,
+    )
+    .bind(guild_id)
+    .fetch_all(&state.db)
+    .await?;
+
+    let items: Vec<Value> = rows
+        .into_iter()
+        .map(
+            |(id, applicant_id, message, status, created_at, username, display_name)| {
+                json!({
+                    "id": id,
+                    "applicant": {
+                        "id": applicant_id,
+                        "username": username,
+                        "display_name": display_name,
+                    },
+                    "message": message,
+                    "status": status,
+                    "applied_at": created_at.to_rfc3339(),
+                })
+            },
+        )
+        .collect();
+
+    Ok(Json(build_response(json!({ "applications": items }))))
+}
+
 #[derive(Deserialize)]
 struct DecideBody {
     accept: bool,
@@ -532,9 +673,20 @@ async fn conclude_war(
     headers: HeaderMap,
     Json(body): Json<ConcludeBody>,
 ) -> Result<Json<Value>, AppError> {
-    // For Sprint 4 V1, only admins can conclude (Sprint 6 will add automatic scoring).
+    // BE-P0-38 : admin OR founder/officer of the winner guild can conclude.
+    // (Sprint 6 will add automatic scoring based on evidence submissions.)
     if auth.role != "admin" {
-        return Err(AppError::Forbidden);
+        let is_officer: Option<(String,)> = sqlx::query_as(
+            "SELECT role FROM guild_members
+             WHERE guild_id = $1 AND user_id = $2 AND role IN ('founder', 'officer')",
+        )
+        .bind(body.winner_guild_id)
+        .bind(auth.user_id)
+        .fetch_optional(&state.db)
+        .await?;
+        if is_officer.is_none() {
+            return Err(AppError::Forbidden);
+        }
     }
     let war = guild::conclude_war(&state.db, war_id, body.winner_guild_id).await?;
     if analytics_consent(&headers) {

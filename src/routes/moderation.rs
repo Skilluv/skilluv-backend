@@ -187,9 +187,13 @@ async fn community_challenge_approve(
     )))
 }
 
+/// Reject reason. `feedback` accepted as legacy alias so front clients
+/// mid-migration don't break — remove the alias once the frontend contract
+/// pins `reason` (see FE-P0-BE10).
 #[derive(Debug, Deserialize)]
 struct RejectBody {
-    feedback: String,
+    #[serde(alias = "feedback")]
+    reason: String,
 }
 
 async fn community_challenge_reject(
@@ -205,9 +209,9 @@ async fn community_challenge_reject(
     )
     .await?;
 
-    if body.feedback.trim().len() < 8 {
+    if body.reason.trim().len() < 8 {
         return Err(AppError::Validation(
-            "feedback must be at least 8 chars".into(),
+            "reason must be at least 8 chars".into(),
         ));
     }
 
@@ -217,7 +221,7 @@ async fn community_challenge_reject(
            WHERE id = $2 AND is_community = TRUE AND community_status = 'review'
            RETURNING title"#,
     )
-    .bind(&body.feedback)
+    .bind(&body.reason)
     .bind(id)
     .fetch_optional(&state.db)
     .await?
@@ -231,7 +235,7 @@ async fn community_challenge_reject(
             action: "community_challenge_reject",
             target_type: Some("challenge_template"),
             target_id: Some(id),
-            metadata: Some(json!({ "title": title, "feedback": body.feedback })),
+            metadata: Some(json!({ "title": title, "reason": body.reason })),
             headers: None,
         },
     )

@@ -3,11 +3,12 @@
 #   docker compose up -d postgres redis minio mailpit
 #
 # Usage:
-#   scripts/test-local.sh                    # runs full test suite (~15 min)
-#   scripts/test-local.sh --lib              # unit tests only (~30 sec)
-#   scripts/test-local.sh <test_name>        # run one integration test file
+#   scripts/test-local.sh                    # fmt + clippy + full test suite (~15 min)
+#   scripts/test-local.sh --lib              # fmt + clippy + unit tests only (~1 min)
+#   scripts/test-local.sh --check            # fmt + clippy only (no tests, ~30 sec)
+#   scripts/test-local.sh <test_name>        # fmt + clippy + one integration test file
 #
-# Exits non-zero if any test fails — safe to call from git hooks.
+# Exits non-zero on any failure — safe to call from git hooks.
 
 set -euo pipefail
 
@@ -30,7 +31,22 @@ export ENVIRONMENT="${ENVIRONMENT:-test}"
 # Silence noisy logs during tests
 export RUST_LOG="${RUST_LOG:-warn}"
 
-# ─── Verify infra is up ───────────────────────────────────────────────
+# ─── Static checks first (fmt + clippy) — matches CI Build & Lint step ─
+# Cheap ; run before tests so we fail fast and don't wait 15 min to hear
+# about a missing space.
+echo "▶ cargo fmt --all -- --check"
+cargo fmt --all -- --check
+
+echo "▶ cargo clippy -- -D warnings -A dead_code -A unused_imports"
+cargo clippy --lib --bins --tests -- -D warnings -A dead_code -A unused_imports
+
+# Allow --check to stop right here for a quick pre-push sanity pass.
+if [ "${1:-}" = "--check" ]; then
+  echo "✅ fmt + clippy clean (skipping tests)"
+  exit 0
+fi
+
+# ─── Verify infra is up (needed for tests) ────────────────────────────
 missing=()
 for svc in skilluv-postgres skilluv-redis skilluv-minio skilluv-mailpit; do
   if ! docker ps --format '{{.Names}}' | grep -qx "$svc"; then

@@ -15,6 +15,27 @@ use crate::routes::analytics_consent;
 use crate::services::analytics::{events, props};
 use crate::services::{NotificationService, guild};
 
+// Type aliases pour clippy::type_complexity (rows sqlx::query_as des handlers
+// BE-P0-39/40 qui joignent applications/invitations avec users).
+type ApplicationRow = (
+    Uuid,
+    Uuid,
+    String,
+    String,
+    chrono::DateTime<chrono::Utc>,
+    String,
+    Option<String>,
+);
+type InvitationRow = (
+    Uuid,
+    Option<Uuid>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    chrono::DateTime<chrono::Utc>,
+    chrono::DateTime<chrono::Utc>,
+);
+
 pub fn guild_routes() -> Router<AppState> {
     Router::new()
         .route("/guilds", post(create_guild).get(list_for_leaderboard))
@@ -391,15 +412,7 @@ async fn list_invitations(
         return Err(AppError::Forbidden);
     }
 
-    let rows: Vec<(
-        Uuid,
-        Option<Uuid>,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-        chrono::DateTime<chrono::Utc>,
-        chrono::DateTime<chrono::Utc>,
-    )> = sqlx::query_as(
+    let rows: Vec<InvitationRow> = sqlx::query_as(
         r#"
         SELECT gi.id, gi.invited_user_id, u.username, u.display_name,
                gi.token, gi.expires_at, gi.created_at
@@ -457,15 +470,7 @@ async fn list_applications(
         return Err(AppError::Forbidden);
     }
 
-    let rows: Vec<(
-        Uuid,
-        Uuid,
-        String,
-        String,
-        chrono::DateTime<chrono::Utc>,
-        String,
-        Option<String>,
-    )> = sqlx::query_as(
+    let rows: Vec<ApplicationRow> = sqlx::query_as(
         r#"
             SELECT ga.id, ga.applicant_id, ga.message, ga.status, ga.created_at,
                    u.username, u.display_name

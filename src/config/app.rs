@@ -29,6 +29,11 @@ pub struct AppConfig {
     pub sentry_dsn: Option<String>,
     pub sentry_traces_sample_rate: f32,
     pub release: Option<String>,
+    /// External PDF renderer service URL (e.g. http://skilluv-pdf-renderer:8000).
+    /// If unset, the invoice `/pdf` endpoint returns 503 rather than a broken
+    /// blob. The service is expected to accept `POST {url}/render` with HTML in
+    /// the body and return `application/pdf`.
+    pub pdf_renderer_url: Option<String>,
 }
 
 impl AppConfig {
@@ -80,6 +85,7 @@ impl AppConfig {
             release: env::var("RELEASE")
                 .ok()
                 .or_else(|| option_env!("CARGO_PKG_VERSION").map(String::from)),
+            pdf_renderer_url: env::var("PDF_RENDERER_URL").ok().filter(|s| !s.is_empty()),
         }
     }
 

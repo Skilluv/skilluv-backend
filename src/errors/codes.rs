@@ -79,6 +79,9 @@ pub enum AppError {
 
     #[error("Internal server error: {0}")]
     Internal(String),
+
+    #[error("Service unavailable: {0}")]
+    ServiceUnavailable(String),
 }
 
 impl AppError {
@@ -107,6 +110,7 @@ impl AppError {
             Self::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::Redis(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::ServiceUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
         }
     }
 
@@ -135,6 +139,7 @@ impl AppError {
             Self::Database(_) => "DATABASE_ERROR",
             Self::Redis(_) => "CACHE_ERROR",
             Self::Internal(_) => "INTERNAL_ERROR",
+            Self::ServiceUnavailable(_) => "SERVICE_UNAVAILABLE",
         }
     }
 }

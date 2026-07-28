@@ -149,6 +149,7 @@ async fn async_main(config: AppConfig) {
             jwt_secret: config.jwt_secret,
             base_url: config.base_url,
             sso_encryption_key: config.sso_encryption_key,
+            pdf_renderer_url: config.pdf_renderer_url,
         },
         sandbox,
         storage,

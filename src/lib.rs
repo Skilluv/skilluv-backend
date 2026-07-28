@@ -52,6 +52,8 @@ pub struct AppStateConfig {
     /// 32-byte AES-256-GCM key for enterprise SSO client_secret at-rest encryption.
     /// `None` in dev when the env var is unset ; SSO endpoints error out cleanly.
     pub sso_encryption_key: Option<[u8; 32]>,
+    /// External PDF renderer service URL — `None` returns 503 on `/pdf` endpoints.
+    pub pdf_renderer_url: Option<String>,
 }
 
 pub fn build_router(state: AppState) -> Router {

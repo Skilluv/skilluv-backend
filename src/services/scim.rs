@@ -74,7 +74,7 @@ type ScimRow564 = (
 /// caller (owner); only the SHA-256 hash is persisted.
 pub fn generate_token() -> (String, Vec<u8>) {
     let mut bytes = [0u8; 32];
-    getrandom::getrandom(&mut bytes).expect("OS RNG");
+    getrandom::fill(&mut bytes).expect("OS RNG");
     // A dedicated `scim_` prefix helps operators recognise these tokens in
     // logs / secret managers without leaking entropy.
     let cleartext = format!(

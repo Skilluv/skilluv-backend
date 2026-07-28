@@ -9,8 +9,8 @@
 //! stay local. This module handles storage and provisioning only.
 
 use aes_gcm::{
-    Aes256Gcm, Key, Nonce,
-    aead::{Aead, AeadCore, KeyInit, OsRng},
+    Aes256Gcm, Nonce,
+    aead::{Aead, KeyInit},
 };
 use chrono::{DateTime, Utc};
 use redis::AsyncCommands;
@@ -48,12 +48,17 @@ impl SsoConfigRow {
 // ─── Encryption (AES-256-GCM with dedicated key) ─────────────────
 
 pub fn encrypt_secret(key: &[u8; 32], plaintext: &str) -> Result<(Vec<u8>, Vec<u8>), AppError> {
-    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key));
-    let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
+    let cipher = Aes256Gcm::new_from_slice(key)
+        .map_err(|_| AppError::Internal("sso key length invalid".into()))?;
+    let mut nonce_bytes = [0u8; 12];
+    getrandom::fill(&mut nonce_bytes)
+        .map_err(|_| AppError::Internal("sso nonce rng failed".into()))?;
+    let nonce = Nonce::try_from(&nonce_bytes[..])
+        .map_err(|_| AppError::Internal("sso nonce length invalid".into()))?;
     let ciphertext = cipher
         .encrypt(&nonce, plaintext.as_bytes())
         .map_err(|_| AppError::Internal("sso secret encrypt failed".into()))?;
-    Ok((ciphertext, nonce.to_vec()))
+    Ok((ciphertext, nonce_bytes.to_vec()))
 }
 
 pub fn decrypt_secret(
@@ -64,10 +69,12 @@ pub fn decrypt_secret(
     if nonce_bytes.len() != 12 {
         return Err(AppError::Internal("sso invalid nonce length".into()));
     }
-    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key));
-    let nonce = Nonce::from_slice(nonce_bytes);
+    let cipher = Aes256Gcm::new_from_slice(key)
+        .map_err(|_| AppError::Internal("sso key length invalid".into()))?;
+    let nonce = Nonce::try_from(nonce_bytes)
+        .map_err(|_| AppError::Internal("sso nonce length invalid".into()))?;
     let plain = cipher
-        .decrypt(nonce, ciphertext)
+        .decrypt(&nonce, ciphertext)
         .map_err(|_| AppError::Internal("sso secret decrypt failed".into()))?;
     String::from_utf8(plain).map_err(|_| AppError::Internal("sso secret utf8 invalid".into()))
 }

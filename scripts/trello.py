@@ -24,6 +24,11 @@ from pathlib import Path
 
 import requests
 
+# Windows cp1252 stdout chokes on any non-ASCII char in card titles/body.
+# Force UTF-8 output.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 ROOT = Path(__file__).resolve().parent.parent
 ENV_FILE = ROOT / ".env.trello"
 
@@ -44,6 +49,19 @@ BOARD = os.environ["TRELLO_BOARD_ID"]
 AUTH = {"key": KEY, "token": TOKEN}
 BASE = "https://api.trello.com/1"
 SLEEP = 0.2  # ~5 req/s, well under Trello's 100/10s per token cap.
+
+# Trello POST endpoints (create card, create label) reject the short board ID.
+# We resolve short -> long once and cache it here.
+_BOARD_LONG_ID: str | None = None
+
+
+def board_id() -> str:
+    global _BOARD_LONG_ID
+    if _BOARD_LONG_ID is None:
+        r = requests.get(f"{BASE}/boards/{BOARD}", params={**AUTH, "fields": "id"}, timeout=15)
+        r.raise_for_status()
+        _BOARD_LONG_ID = r.json()["id"]
+    return _BOARD_LONG_ID
 
 
 # ─── HTTP ────────────────────────────────────────────────────────────
@@ -93,7 +111,7 @@ def ensure_label(name: str, color: str | None = None) -> str:
     m = board_meta()
     if name in m["labels_by_name"]:
         return m["labels_by_name"][name]
-    params = {"name": name, "idBoard": BOARD}
+    params = {"name": name, "idBoard": board_id()}
     if color:
         params["color"] = color
     lid = req("POST", "/labels", params)["id"]
@@ -208,7 +226,7 @@ def cmd_push(md_path: Path, scope: str, dry_run: bool) -> None:
     if dry_run:
         print("\n[DRY RUN] cards that would be created:")
         for it in to_create:
-            print(f"  + {it['id']} — {it['title']}  labels={it['labels'] or [scope_label]}")
+            print(f"  + {it['id']} - {it['title']}  labels={it['labels'] or [scope_label]}")
         return
 
     ensure_label(scope_label, scope_color)
@@ -235,7 +253,7 @@ def cmd_push(md_path: Path, scope: str, dry_run: bool) -> None:
             "idLabels": ",".join(label_ids),
         }
         req("POST", "/cards", params)
-        print(f"  [{i:>3}/{len(to_create)}] + {it['id']} — {it['title'][:60]}")
+        print(f"  [{i:>3}/{len(to_create)}] + {it['id']} - {it['title'][:60]}")
 
 
 # ─── move ────────────────────────────────────────────────────────────

@@ -415,19 +415,21 @@ async fn list_invitations(
 
     let items: Vec<Value> = rows
         .into_iter()
-        .map(|(id, invited_user_id, username, display_name, token, expires_at, created_at)| {
-            json!({
-                "id": id,
-                "invitee": invited_user_id.map(|uid| json!({
-                    "id": uid,
-                    "username": username,
-                    "display_name": display_name,
-                })),
-                "token": token.map(|t| json!({ "value": t })),
-                "expires_at": expires_at.to_rfc3339(),
-                "sent_at": created_at.to_rfc3339(),
-            })
-        })
+        .map(
+            |(id, invited_user_id, username, display_name, token, expires_at, created_at)| {
+                json!({
+                    "id": id,
+                    "invitee": invited_user_id.map(|uid| json!({
+                        "id": uid,
+                        "username": username,
+                        "display_name": display_name,
+                    })),
+                    "token": token.map(|t| json!({ "value": t })),
+                    "expires_at": expires_at.to_rfc3339(),
+                    "sent_at": created_at.to_rfc3339(),
+                })
+            },
+        )
         .collect();
 
     Ok(Json(build_response(json!({ "invitations": items }))))
@@ -455,9 +457,16 @@ async fn list_applications(
         return Err(AppError::Forbidden);
     }
 
-    let rows: Vec<(Uuid, Uuid, String, String, chrono::DateTime<chrono::Utc>, String, Option<String>)> =
-        sqlx::query_as(
-            r#"
+    let rows: Vec<(
+        Uuid,
+        Uuid,
+        String,
+        String,
+        chrono::DateTime<chrono::Utc>,
+        String,
+        Option<String>,
+    )> = sqlx::query_as(
+        r#"
             SELECT ga.id, ga.applicant_id, ga.message, ga.status, ga.created_at,
                    u.username, u.display_name
             FROM guild_applications ga
@@ -465,26 +474,28 @@ async fn list_applications(
             WHERE ga.guild_id = $1 AND ga.status = 'pending'
             ORDER BY ga.created_at ASC
             "#,
-        )
-        .bind(guild_id)
-        .fetch_all(&state.db)
-        .await?;
+    )
+    .bind(guild_id)
+    .fetch_all(&state.db)
+    .await?;
 
     let items: Vec<Value> = rows
         .into_iter()
-        .map(|(id, applicant_id, message, status, created_at, username, display_name)| {
-            json!({
-                "id": id,
-                "applicant": {
-                    "id": applicant_id,
-                    "username": username,
-                    "display_name": display_name,
-                },
-                "message": message,
-                "status": status,
-                "applied_at": created_at.to_rfc3339(),
-            })
-        })
+        .map(
+            |(id, applicant_id, message, status, created_at, username, display_name)| {
+                json!({
+                    "id": id,
+                    "applicant": {
+                        "id": applicant_id,
+                        "username": username,
+                        "display_name": display_name,
+                    },
+                    "message": message,
+                    "status": status,
+                    "applied_at": created_at.to_rfc3339(),
+                })
+            },
+        )
         .collect();
 
     Ok(Json(build_response(json!({ "applications": items }))))

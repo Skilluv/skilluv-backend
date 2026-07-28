@@ -88,14 +88,15 @@ async fn my_tracks(State(state): State<AppState>, auth: AuthUser) -> Result<Json
 
     // BE-P0-34 : join with tracks so the front doesn't need N+1 lookups just
     // to show a track name in the "My tracks" dashboard tile.
-    let rows: Vec<(Uuid, String, String)> = sqlx::query_as(
-        "SELECT id, slug, name FROM tracks WHERE id = ANY($1)",
-    )
-    .bind(user_tracks.iter().map(|t| t.track_id).collect::<Vec<_>>())
-    .fetch_all(&state.db)
-    .await?;
-    let by_id: std::collections::HashMap<Uuid, (String, String)> =
-        rows.into_iter().map(|(id, slug, name)| (id, (slug, name))).collect();
+    let rows: Vec<(Uuid, String, String)> =
+        sqlx::query_as("SELECT id, slug, name FROM tracks WHERE id = ANY($1)")
+            .bind(user_tracks.iter().map(|t| t.track_id).collect::<Vec<_>>())
+            .fetch_all(&state.db)
+            .await?;
+    let by_id: std::collections::HashMap<Uuid, (String, String)> = rows
+        .into_iter()
+        .map(|(id, slug, name)| (id, (slug, name)))
+        .collect();
 
     let enriched: Vec<Value> = user_tracks
         .iter()

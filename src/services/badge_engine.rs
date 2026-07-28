@@ -54,6 +54,7 @@ fn one() -> i64 {
 struct RuleRow {
     id: Uuid,
     slug: String,
+    #[allow(dead_code)]
     output_type: String,
     conditions: serde_json::Value,
     rarity: String,

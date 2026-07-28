@@ -7,7 +7,7 @@
 
 use chacha20poly1305::{
     ChaCha20Poly1305, Key, Nonce,
-    aead::{Aead, AeadCore, Generate, KeyInit},
+    aead::{Aead, Generate, KeyInit},
 };
 use chrono::{DateTime, Utc};
 use hmac::{Hmac, KeyInit as HmacKeyInit, Mac};

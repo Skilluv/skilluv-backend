@@ -106,11 +106,19 @@ async fn create_community_challenge(
     let challenge: ChallengeTemplate = sqlx::query_as(
         r#"
         INSERT INTO challenge_templates (
-            title, description, instructions, skill_domain, difficulty,
+            title, description, instructions,
+            title_i18n, description_i18n, instructions_i18n,
+            skill_domain, difficulty,
             language, expected_output, test_cases,
             reward_fragments, duration_minutes,
             is_community, community_status, created_by, status, is_training
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,TRUE,$11,$12,'draft',TRUE)
+        ) VALUES (
+            $1,$2,$3,
+            jsonb_build_object('fr', $1::text),
+            jsonb_build_object('fr', $2::text),
+            jsonb_build_object('fr', $3::text),
+            $4,$5,$6,$7,$8,$9,$10,TRUE,$11,$12,'draft',TRUE
+        )
         RETURNING *
         "#,
     )

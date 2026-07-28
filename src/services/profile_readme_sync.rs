@@ -19,7 +19,6 @@
 //! Non wire dans un cron : appelable depuis un endpoint admin ou un worker
 //! quotidien a ajouter dans une PR suivante.
 
-use serde::Deserialize;
 use sqlx::PgPool;
 use uuid::Uuid;
 

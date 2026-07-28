@@ -104,7 +104,10 @@ async fn set_tenant_context_sets_the_guc() {
         .expect("get");
     assert_eq!(current, tenant.to_string());
 
-    db.close().await;
+    // Skip db.close() — it deadlocks when a PoolConnection (`conn`) is
+    // still alive in the same scope. cleanup_test_db runs
+    // pg_terminate_backend anyway.
+    drop(conn);
     cleanup_test_db(&name).await;
 }
 
@@ -147,7 +150,7 @@ async fn policies_are_installed_and_rls_can_be_enabled() {
     .expect("cls");
     assert!(rls_on && rls_forced);
 
-    db.close().await;
+    // No explicit db.close() (same rationale as first test).
     cleanup_test_db(&name).await;
 }
 
@@ -229,7 +232,8 @@ async fn policy_filter_isolates_correctly() {
     .expect("v3");
     assert_eq!(b_visible, 2);
 
-    db.close().await;
+    // Drop conn ; skip db.close() (deadlock — see first test).
+    drop(conn);
     cleanup_test_db(&name).await;
 }
 

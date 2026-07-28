@@ -160,7 +160,7 @@ pub async fn generate_export(
     let timestamp = chrono::Utc::now().format("%Y%m%dT%H%M%S");
     let key = format!("{EXPORT_KEY_PREFIX}{user_id}/{timestamp}.zip");
     storage
-        .upload_generic(&key, &bytes, "application/zip")
+        .upload_private(&key, &bytes, "application/zip")
         .await?;
 
     // Presigned URL valid 7 days

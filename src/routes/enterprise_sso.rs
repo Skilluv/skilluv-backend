@@ -95,7 +95,14 @@ async fn require_enterprise_owner_direct(
     crate::routes::enterprise::require_enterprise_owner_pub(state, auth).await
 }
 
-async fn upsert_config(
+/// Upsert enterprise SSO config (owner only).
+#[utoipa::path(
+    post, path = "/api/enterprise/sso/config", tag = "enterprise",
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn upsert_config(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<UpsertConfigBody>,
@@ -163,7 +170,13 @@ async fn upsert_config(
     }))))
 }
 
-async fn get_config(
+/// Get the current enterprise SSO config.
+#[utoipa::path(
+    get, path = "/api/enterprise/sso/config", tag = "enterprise",
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn get_config(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
@@ -178,7 +191,13 @@ async fn get_config(
     }
 }
 
-async fn disable_config(
+/// Disable enterprise SSO.
+#[utoipa::path(
+    delete, path = "/api/enterprise/sso/config", tag = "enterprise",
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn disable_config(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
@@ -210,7 +229,12 @@ struct DiscoverQuery {
     email: String,
 }
 
-async fn discover(
+/// Discover whether SSO is available for an email domain.
+#[utoipa::path(
+    get, path = "/api/enterprise/sso/discover", tag = "enterprise",
+    responses((status = 200, body = serde_json::Value)),
+)]
+pub async fn discover(
     State(state): State<AppState>,
     Query(q): Query<DiscoverQuery>,
 ) -> Result<Json<Value>, AppError> {
@@ -292,7 +316,13 @@ async fn build_client(
     Ok(client)
 }
 
-async fn start(
+/// Start the SSO flow (redirects to the IdP).
+#[utoipa::path(
+    get, path = "/api/enterprise/sso/{slug}/start", tag = "enterprise",
+    params(("slug" = String, Path)),
+    responses((status = 302, description = "Redirect to IdP")),
+)]
+pub async fn start(
     State(state): State<AppState>,
     Path(slug): Path<String>,
 ) -> Result<Redirect, AppError> {
@@ -345,7 +375,13 @@ struct CallbackQuery {
     state: String,
 }
 
-async fn callback(
+/// Handle the IdP callback and establish a session.
+#[utoipa::path(
+    get, path = "/api/enterprise/sso/{slug}/callback", tag = "enterprise",
+    params(("slug" = String, Path)),
+    responses((status = 302, description = "Redirect to app after session established")),
+)]
+pub async fn callback(
     State(state): State<AppState>,
     Path(slug): Path<String>,
     Query(q): Query<CallbackQuery>,

@@ -70,7 +70,13 @@ async fn current_enterprise_for(db: &sqlx::PgPool, user_id: Uuid) -> Result<Uuid
     row.map(|(id,)| id).ok_or(AppError::Forbidden)
 }
 
-async fn get_credits(
+/// Get the current enterprise credits balance.
+#[utoipa::path(
+    get, path = "/api/enterprise/credits", tag = "enterprise",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn get_credits(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
@@ -94,7 +100,13 @@ struct PaginationQuery {
     per_page: Option<i64>,
 }
 
-async fn list_txns(
+/// List enterprise credits transactions.
+#[utoipa::path(
+    get, path = "/api/enterprise/credits/transactions", tag = "enterprise",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_txns(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<PaginationQuery>,
@@ -129,7 +141,14 @@ struct CheckoutBody {
     pack_slug: String,
 }
 
-async fn create_checkout(
+/// Create a Stripe checkout session for a credits pack.
+#[utoipa::path(
+    post, path = "/api/enterprise/credits/checkout", tag = "enterprise",
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create_checkout(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<CheckoutBody>,
@@ -167,7 +186,13 @@ async fn create_checkout(
     }))))
 }
 
-async fn billing_portal(
+/// Open the Stripe billing portal (owner only).
+#[utoipa::path(
+    post, path = "/api/enterprise/billing/portal", tag = "enterprise",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn billing_portal(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
@@ -197,7 +222,13 @@ async fn billing_portal(
 
 // ─── Stripe Webhook ──────────────────────────────────────────────
 
-async fn stripe_webhook(
+/// Stripe webhook receiver.
+#[utoipa::path(
+    post, path = "/api/stripe/webhook", tag = "enterprise",
+    request_body(content = serde_json::Value),
+    responses((status = 200)),
+)]
+pub async fn stripe_webhook(
     State(state): State<AppState>,
     headers: HeaderMap,
     body: Bytes,
@@ -594,7 +625,14 @@ struct RedeemBody {
     code: String,
 }
 
-async fn redeem_promo(
+/// Redeem a promo code for credits.
+#[utoipa::path(
+    post, path = "/api/enterprise/credits/redeem", tag = "enterprise",
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn redeem_promo(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<RedeemBody>,
@@ -683,7 +721,13 @@ async fn redeem_promo(
 
 // ─── Invoices (3.10) ─────────────────────────────────────────────
 
-async fn list_invoices(
+/// List enterprise invoices.
+#[utoipa::path(
+    get, path = "/api/enterprise/invoices", tag = "enterprise",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_invoices(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<PaginationQuery>,
@@ -711,7 +755,14 @@ async fn list_invoices(
     Ok(Json(build_response(json!({ "invoices": enriched }))))
 }
 
-async fn get_invoice(
+/// Get a single invoice.
+#[utoipa::path(
+    get, path = "/api/enterprise/invoices/{id}", tag = "enterprise",
+    params(("id" = uuid::Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn get_invoice(
     State(state): State<AppState>,
     auth: AuthUser,
     axum::extract::Path(id): axum::extract::Path<Uuid>,
@@ -728,7 +779,14 @@ async fn get_invoice(
     Ok(Json(build_response(json!({ "invoice": v }))))
 }
 
-async fn get_invoice_html(
+/// Render an invoice as HTML.
+#[utoipa::path(
+    get, path = "/api/enterprise/invoices/{id}/html", tag = "enterprise",
+    params(("id" = uuid::Uuid, Path)),
+    responses((status = 200, description = "HTML content")),
+    security(("cookie_auth" = [])),
+)]
+pub async fn get_invoice_html(
     State(state): State<AppState>,
     auth: AuthUser,
     axum::extract::Path(id): axum::extract::Path<Uuid>,
@@ -831,7 +889,12 @@ struct PricingQuery {
     currency: Option<String>,
 }
 
-async fn public_pricing(
+/// Public pricing endpoint (packs + subscriptions).
+#[utoipa::path(
+    get, path = "/api/pricing", tag = "enterprise",
+    responses((status = 200, body = serde_json::Value)),
+)]
+pub async fn public_pricing(
     State(state): State<AppState>,
     Query(q): Query<PricingQuery>,
 ) -> Result<Json<Value>, AppError> {

@@ -21,7 +21,20 @@ pub fn portfolio_routes() -> Router<AppState> {
         .route("/users/{username}/badge.svg", get(badge_svg))
 }
 
-async fn portfolio_json(
+/// Public portfolio as JSON-LD (schema.org Person). The exact shape is
+/// defined by schema.org, not by Skilluv, so it is documented here as a
+/// free-form JSON object — the front consumes it verbatim for SSR meta.
+#[utoipa::path(
+    get,
+    path = "/api/users/{username}/portfolio.json",
+    tag = "profile",
+    params(("username" = String, Path, description = "Public username")),
+    responses(
+        (status = 200, description = "JSON-LD schema.org Person", body = serde_json::Value),
+        (status = 404, description = "User not found", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn portfolio_json(
     State(state): State<AppState>,
     Path(username): Path<String>,
 ) -> Result<Json<Value>, AppError> {
@@ -31,7 +44,19 @@ async fn portfolio_json(
     Ok(Json(portfolio))
 }
 
-async fn badge_svg(
+/// SVG badge for embedding in a README. Not JSON — served as
+/// `image/svg+xml` with 15-min public cache.
+#[utoipa::path(
+    get,
+    path = "/api/users/{username}/badge.svg",
+    tag = "profile",
+    params(("username" = String, Path, description = "Public username")),
+    responses(
+        (status = 200, description = "SVG badge", content_type = "image/svg+xml"),
+        (status = 404, description = "User not found", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn badge_svg(
     State(state): State<AppState>,
     Path(username): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {

@@ -4,10 +4,12 @@ use axum::extract::State;
 use axum::http::HeaderMap;
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use serde::Deserialize;
-use serde_json::{Value, json};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use utoipa::ToSchema;
 
 use crate::AppState;
+use crate::api_response::ApiResponse;
 use crate::errors::AppError;
 use crate::middleware::{OptionalAuth, extract_ip};
 
@@ -21,41 +23,82 @@ pub fn legal_routes() -> Router<AppState> {
         .route("/legal/consent", post(record_consent))
 }
 
-fn build_response(data: Value) -> Value {
-    json!({
-        "data": data,
-        "meta": {
-            "request_id": uuid::Uuid::new_v4().to_string(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-        }
-    })
+#[derive(Debug, Serialize, ToSchema)]
+pub struct LegalPages {
+    #[schema(example = "https://skilluv.com/legal/terms")]
+    pub terms: &'static str,
+    #[schema(example = "https://skilluv.com/legal/privacy")]
+    pub privacy: &'static str,
+    #[schema(example = "https://skilluv.com/legal/cookies")]
+    pub cookies: &'static str,
 }
 
-async fn consent_version() -> Json<Value> {
-    Json(build_response(json!({
-        "version": CURRENT_CONSENT_VERSION,
-        "pages": {
-            "terms": "https://skilluv.com/legal/terms",
-            "privacy": "https://skilluv.com/legal/privacy",
-            "cookies": "https://skilluv.com/legal/cookies",
-        }
-    })))
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ConsentVersionResponse {
+    /// Monotonically-increasing consent version. Front re-prompts when
+    /// this exceeds `users.consent_version_accepted`.
+    pub version: i32,
+    pub pages: LegalPages,
 }
 
-#[derive(Deserialize)]
-struct ConsentBody {
-    analytics: bool,
-    marketing: bool,
+/// Return the current consent-banner version + canonical URLs to the
+/// legal pages. Public — used by the cookie banner on first visit.
+#[utoipa::path(
+    get,
+    path = "/api/legal/consent-version",
+    tag = "profile",
+    responses(
+        (status = 200, description = "Current consent version + legal URLs", body = ApiResponse<ConsentVersionResponse>),
+    ),
+)]
+pub async fn consent_version() -> Json<ApiResponse<ConsentVersionResponse>> {
+    Json(ApiResponse::new(ConsentVersionResponse {
+        version: CURRENT_CONSENT_VERSION,
+        pages: LegalPages {
+            terms: "https://skilluv.com/legal/terms",
+            privacy: "https://skilluv.com/legal/privacy",
+            cookies: "https://skilluv.com/legal/cookies",
+        },
+    }))
 }
 
-/// Records the user's consent decision. Called whenever the banner is dismissed
-/// (front), with the categories the user accepted.
-async fn record_consent(
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct ConsentBody {
+    /// True → PostHog + Sentry may capture non-essential events.
+    pub analytics: bool,
+    /// True → marketing emails / product updates allowed.
+    pub marketing: bool,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ConsentRecordedResponse {
+    pub version: i32,
+    pub analytics: bool,
+    pub marketing: bool,
+    /// Always `true` — essential cookies are outside the consent gate.
+    pub essential: bool,
+    pub stored: bool,
+}
+
+/// Record the user's consent decision. Called whenever the banner is
+/// dismissed (front), with the categories the user accepted. Works
+/// both anonymous (writes to `consent_log` only) and authenticated
+/// (also mirrors the decision on the `users` row).
+#[utoipa::path(
+    post,
+    path = "/api/legal/consent",
+    tag = "profile",
+    request_body = ConsentBody,
+    responses(
+        (status = 200, description = "Consent stored", body = ApiResponse<ConsentRecordedResponse>),
+    ),
+)]
+pub async fn record_consent(
     State(state): State<AppState>,
     OptionalAuth(auth): OptionalAuth,
     headers: HeaderMap,
     Json(body): Json<ConsentBody>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<ConsentRecordedResponse>>, AppError> {
     let user_id = auth.as_ref().map(|a| a.user_id);
     let ip = extract_ip(&headers);
     let user_agent = headers
@@ -97,13 +140,13 @@ async fn record_consent(
         .await?;
     }
 
-    Ok(Json(build_response(json!({
-        "version": CURRENT_CONSENT_VERSION,
-        "analytics": body.analytics,
-        "marketing": body.marketing,
-        "essential": true,
-        "stored": true,
-    }))))
+    Ok(Json(ApiResponse::new(ConsentRecordedResponse {
+        version: CURRENT_CONSENT_VERSION,
+        analytics: body.analytics,
+        marketing: body.marketing,
+        essential: true,
+        stored: true,
+    })))
 }
 
 /// Parse the `cookie_consent` cookie and return whether the user has given analytics consent.

@@ -12,7 +12,10 @@ use totp_rs::{Algorithm, Secret, TOTP};
 use uuid::Uuid;
 
 use crate::AppState;
+use crate::api_response::{ApiResponse, SimpleMessage};
 use crate::errors::AppError;
+use crate::services::session::SessionRow;
+
 use crate::middleware::{
     AuthUser, RateLimiter, build_csrf_cookie, build_csrf_cookie_with_prefix, extract_ip,
     generate_csrf_token,
@@ -22,6 +25,82 @@ use crate::routes::analytics_consent;
 use crate::services::analytics::{events, props};
 use crate::services::audit::{self, ActorType, AuditEntry};
 use crate::services::{AuthService, LeaderboardService, SessionService};
+
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct ListSessionsResponse {
+    /// Every currently-active session for the authenticated user.
+    pub sessions: Vec<SessionRow>,
+    /// ID of the session the caller is currently using — `None` when the
+    /// request arrived without a refresh cookie (e.g. mobile flows that
+    /// only carry the access token).
+    pub current_session_id: Option<Uuid>,
+}
+
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct RankInfo {
+    /// Global all-time rank across every skill domain. `None` when the
+    /// user has not accumulated any activity yet.
+    pub global: Option<i64>,
+    /// Rank within the caller's current `skill_domain`. `None` when the
+    /// user has not picked a domain (Pattern C SSO signups before
+    /// onboarding).
+    pub domain: Option<i64>,
+}
+
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct TotpSetupResponse {
+    /// otpauth:// URL — feed it to `qrcode` on the front and render.
+    #[schema(example = "otpauth://totp/Skilluv:user@example.com?secret=JBSW…&issuer=Skilluv")]
+    pub otpauth_url: String,
+    /// Base-32 encoded TOTP secret. Displayed as a fallback for users
+    /// whose authenticator can't scan the QR.
+    pub secret_base32: String,
+    pub message: String,
+}
+
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct TotpEnableResponse {
+    pub message: String,
+    /// One-time backup codes generated for this account. Formatted
+    /// `XXXX-XXXX`. Displayed **once** — the server keeps only hashes.
+    pub backup_codes: Vec<String>,
+    pub backup_codes_note: String,
+}
+
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct RefreshResponse {
+    /// Always `true` on success — kept as a redundant flag because a few
+    /// legacy front-end callers still branch on `data.ok`.
+    pub ok: bool,
+    /// Freshly minted CSRF token — the front must store it and send it
+    /// back as `X-CSRF-Token` on the next mutating request.
+    pub csrf_token: String,
+    /// Same enumeration as `MeResponse.login_method` — preserved across
+    /// rotation so downstream policy stays faithful.
+    pub login_method: String,
+}
+
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct CompleteProfileResponse {
+    pub message: String,
+    /// Always `true` on success — mirrors `UserPrivate.profile_completed`
+    /// so the caller can update local state without a follow-up `/me`.
+    pub profile_completed: bool,
+}
+
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct MeResponse {
+    pub user: UserPrivate,
+    /// Which primary factor authenticated the current session — one of
+    /// `password`, `sso`, `webauthn`, `magic_link`. Frontends use it to
+    /// skip the enterprise TOTP-setup redirect for non-password sessions.
+    pub login_method: String,
+    /// True when the account has at least one registered WebAuthn
+    /// credential. Combined with `totp_enabled`, satisfies the
+    /// enterprise/admin second-factor requirement.
+    pub has_passkey: bool,
+    pub rank: RankInfo,
+}
 
 pub fn auth_routes() -> Router<AppState> {
     Router::new()
@@ -62,11 +141,95 @@ pub fn auth_routes() -> Router<AppState> {
         .route("/auth/me/data-export", post(request_data_export))
 }
 
-/// POST /api/auth/me/data-export — rate-limited 1/24h per user, spawns background task.
-async fn request_data_export(
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct RegisterResponse {
+    pub user: UserPrivate,
+    /// Fresh CSRF token — front sends it back as `X-CSRF-Token` on
+    /// subsequent mutating requests.
+    pub csrf_token: String,
+    /// Always `"password"` for the register endpoint — the field is
+    /// echoed to match the shape of `/login` so the front can reuse
+    /// the same store logic.
+    pub login_method: String,
+    pub message: String,
+}
+
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct LoginSuccessResponse {
+    pub user: UserPrivate,
+    pub csrf_token: String,
+    pub login_method: String,
+    /// True when the account has at least one WebAuthn credential —
+    /// satisfies the enterprise/admin second-factor requirement even
+    /// without TOTP.
+    pub has_passkey: bool,
+    /// True when the account is enterprise / recruiter / admin AND has
+    /// neither TOTP nor a passkey — front must route to the 2FA
+    /// enrolment wizard before allowing admin surfaces.
+    pub requires_totp_setup: bool,
+}
+
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct LoginPending2faResponse {
+    /// Always `true` — signals the front should prompt for the email
+    /// 2FA code and re-POST /login with it.
+    pub requires_email_2fa: bool,
+    pub user_id: Uuid,
+    pub message: String,
+}
+
+/// The two possible shapes of a successful `/api/auth/login` (and
+/// `/api/auth/email-2fa/verify`) response. Serialized untagged — the
+/// front discriminates on the presence of `requires_email_2fa`. Utoipa
+/// renders it as `oneOf` in the generated schema, so schemathesis can
+/// fuzz both branches.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+#[serde(untagged)]
+#[allow(clippy::large_enum_variant)]
+pub enum LoginOutcome {
+    Success(LoginSuccessResponse),
+    Pending2fa(LoginPending2faResponse),
+}
+
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct DeleteAccountResponse {
+    /// Always `true` on success — the account row is already gone by
+    /// the time the client parses this.
+    pub account_deleted: bool,
+    /// RFC 3339 timestamp of the deletion. Currently equal to `now()`
+    /// (immediate deletion); future grace-period implementations will
+    /// set it to `now() + N days` for the same wire shape.
+    pub scheduled_for: String,
+    pub message: String,
+}
+
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct DataExportResponse {
+    /// Always `"queued"` on success — kept as a discriminated field so
+    /// clients don't parse the human-facing message.
+    #[schema(example = "queued")]
+    pub status: String,
+    pub message: String,
+}
+
+/// Request a full RGPD data export (background job — user gets an email
+/// with a signed download link). Rate-limited to 1/24h per account to
+/// prevent abuse of the archive generator.
+#[utoipa::path(
+    post,
+    path = "/api/auth/me/data-export",
+    tag = "auth",
+    responses(
+        (status = 200, description = "Export job queued", body = ApiResponse<DataExportResponse>),
+        (status = 400, description = "Already requested in the last 24h", body = crate::api_response::ErrorResponse),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn request_data_export(
     State(state): State<AppState>,
     auth: AuthUser,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<DataExportResponse>>, AppError> {
     let mut redis = state.redis.clone();
     let key = format!("rate:data_export:{}", auth.user_id);
     let exists: bool = redis::cmd("EXISTS")
@@ -103,118 +266,151 @@ async fn request_data_export(
         }
     });
 
-    Ok(Json(build_response(json!({
-        "status": "queued",
-        "message": "Your archive is being prepared. You'll receive it by email within a few minutes."
-    }))))
+    Ok(Json(ApiResponse::new(DataExportResponse {
+        status: "queued".to_string(),
+        message: "Your archive is being prepared. You'll receive it by email within a few minutes."
+            .to_string(),
+    })))
 }
 
 // ─── Request types ───────────────────────────────────────────────
 
-#[derive(Debug, Deserialize)]
-struct RegisterRequest {
-    email: String,
-    username: String,
-    password: String,
-    first_name: String,
-    last_name: String,
-    skill_domain: String,
-    country: Option<String>,
-    city: Option<String>,
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct RegisterRequest {
+    #[schema(example = "user@example.com")]
+    pub email: String,
+    #[schema(example = "jdoe")]
+    pub username: String,
+    /// 10–128 chars, upper + lower + digit + symbol.
+    pub password: String,
+    pub first_name: String,
+    pub last_name: String,
+    /// One of `code`, `design`, `game`, `security`.
+    pub skill_domain: String,
+    /// ISO 3166-1 alpha-2 country code (e.g. `SN`).
+    pub country: Option<String>,
+    pub city: Option<String>,
     /// Must be true — user acknowledges Terms of Service and Privacy Policy.
     #[serde(default)]
-    terms_accepted: bool,
+    pub terms_accepted: bool,
 }
 
-#[derive(Debug, Deserialize)]
-struct LoginRequest {
-    /// Email or username
-    identifier: String,
-    password: String,
-    totp_code: Option<String>,
-    email_2fa_code: Option<String>,
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct LoginRequest {
+    /// Email or username.
+    pub identifier: String,
+    pub password: String,
+    /// Live 6-digit TOTP code — required when the account has TOTP 2FA
+    /// enabled and no `backup_code` is provided.
+    pub totp_code: Option<String>,
+    /// Email 2FA code — required on the second call to /login when the
+    /// account has email 2FA enabled.
+    pub email_2fa_code: Option<String>,
     /// One-time TOTP backup code (used when the user lost their authenticator).
-    backup_code: Option<String>,
+    pub backup_code: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
-struct VerifyEmailQuery {
-    token: String,
+#[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+pub struct VerifyEmailQuery {
+    /// One-shot verification token sent by email. Consumed after first use.
+    pub token: String,
 }
 
-#[derive(Debug, Deserialize)]
-struct ForgotPasswordRequest {
-    email: String,
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct ForgotPasswordRequest {
+    /// Email address whose account should receive the reset link. The
+    /// endpoint always returns 200 to prevent account enumeration.
+    #[schema(example = "user@example.com")]
+    pub email: String,
 }
 
-#[derive(Debug, Deserialize)]
-struct ResetPasswordRequest {
-    token: String,
-    new_password: String,
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct ResetPasswordRequest {
+    /// One-shot token from the reset email (valid 1h, single-use).
+    pub token: String,
+    /// New password. Must meet policy: 10–128 chars, upper+lower+digit+symbol.
+    pub new_password: String,
 }
 
-#[derive(Debug, Deserialize)]
-struct ChangePasswordRequest {
-    current_password: String,
-    new_password: String,
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct ChangePasswordRequest {
+    /// Existing password, re-entered to authorize the change.
+    pub current_password: String,
+    /// New password. Must meet policy: 10–128 chars, upper+lower+digit+symbol.
+    pub new_password: String,
 }
 
-#[derive(Debug, Deserialize)]
-struct ChangeEmailRequest {
-    current_password: String,
-    new_email: String,
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct ChangeEmailRequest {
+    pub current_password: String,
+    /// New email address — must not already be in use. A confirmation
+    /// email is sent there; the change only lands once the recipient
+    /// clicks the confirmation link.
+    #[schema(example = "new-address@example.com")]
+    pub new_email: String,
 }
 
-#[derive(Debug, Deserialize)]
-struct CompleteProfileRequest {
-    skill_domain: String,
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct CompleteProfileRequest {
+    /// One of `code`, `design`, `game`, `security`.
+    #[schema(example = "code")]
+    pub skill_domain: String,
+    /// Must be `true` — user acknowledges ToS + Privacy Policy.
     #[serde(default)]
-    terms_accepted: bool,
-    country: Option<String>,
-    city: Option<String>,
+    pub terms_accepted: bool,
+    /// ISO 3166-1 alpha-2 country code (e.g. `SN`, `CI`, `FR`).
+    pub country: Option<String>,
+    pub city: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
-struct ConfirmEmailChangeQuery {
-    token: String,
+#[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+pub struct ConfirmEmailChangeQuery {
+    /// One-shot confirmation token from the email sent to the new
+    /// address. Valid 1h, single-use.
+    pub token: String,
 }
 
-#[derive(Debug, Deserialize)]
-struct TotpCodeRequest {
-    code: String,
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct TotpCodeRequest {
+    /// Live 6-digit TOTP code from the authenticator app.
+    #[schema(example = "123456")]
+    pub code: String,
 }
 
 /// Disabling 2FA is a sensitive downgrade. We require BOTH factors — the
 /// current TOTP code AND the account password — so that a stolen session
 /// alone can't unlock the account. Modeled on GitHub / Google's flow.
-#[derive(Debug, Deserialize)]
-struct TotpDisableRequest {
-    password: String,
-    code: String,
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct TotpDisableRequest {
+    pub password: String,
+    /// Live 6-digit TOTP code from the authenticator app.
+    pub code: String,
 }
 
 /// Body for any endpoint that gates a sensitive action on password re-entry
 /// (enable/disable email 2FA, other sudo-mode toggles). Avoids leaking the
 /// unrelated fields of `ChangePasswordRequest` that caused BE-P0-04.
-#[derive(Debug, Deserialize)]
-struct PasswordConfirmRequest {
-    password: String,
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct PasswordConfirmRequest {
+    pub password: String,
 }
 
-#[derive(Debug, Deserialize)]
-struct DeleteAccountRequest {
-    password: String,
-    totp_code: Option<String>,
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct DeleteAccountRequest {
+    pub password: String,
+    /// Required when TOTP 2FA is enabled — otherwise ignored.
+    pub totp_code: Option<String>,
     /// Free-text reason captured for the audit trail (RGPD compliance).
     /// Optional — front sends it when the user filled the "why leaving?" prompt.
-    reason: Option<String>,
+    pub reason: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
-struct Email2faVerifyRequest {
-    code: String,
-    /// Needed for login flow (user not yet authenticated)
-    user_id: Option<Uuid>,
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct Email2faVerifyRequest {
+    /// 6-digit code received by email.
+    pub code: String,
+    /// Needed for login flow (user not yet authenticated).
+    pub user_id: Option<Uuid>,
 }
 
 // ─── Validation helpers ──────────────────────────────────────────
@@ -443,8 +639,21 @@ fn login_pending_2fa_key(user_id: Uuid) -> String {
 
 // ─── Routes ──────────────────────────────────────────────────────
 
-// POST /api/auth/register
-async fn register(
+/// Register a new user account. Sends the email verification link,
+/// mints session + CSRF cookies, returns the private user record.
+/// Rate-limited to 5 registrations per IP per hour.
+#[utoipa::path(
+    post,
+    path = "/api/auth/register",
+    tag = "auth",
+    request_body = RegisterRequest,
+    responses(
+        (status = 201, description = "Account created — verification email sent", body = ApiResponse<RegisterResponse>),
+        (status = 400, description = "Validation error (email, username, password policy, terms not accepted, duplicate)", body = crate::api_response::ErrorResponse),
+        (status = 429, description = "Rate limit hit (5/h per IP)", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn register(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
     Json(body): Json<RegisterRequest>,
@@ -578,20 +787,42 @@ async fn register(
             (SET_COOKIE, refresh_cookie),
             (SET_COOKIE, csrf_cookie),
         ]),
-        Json(build_response(json!({
-            "user": user_private,
-            "csrf_token": csrf,
-            "login_method": "password",
-            "message": "Account created. Please verify your email."
-        }))),
+        Json(ApiResponse::new(RegisterResponse {
+            user: user_private,
+            csrf_token: csrf,
+            login_method: "password".to_string(),
+            message: "Account created. Please verify your email.".to_string(),
+        })),
     ))
 }
 
 const LOGIN_LOCKOUT_THRESHOLD: i32 = 5;
 const LOGIN_LOCKOUT_MINUTES: i64 = 15;
 
-// POST /api/auth/login
-async fn login(
+/// Authenticate with password + optional 2FA. Response is `oneOf` two
+/// shapes:
+///
+/// - **Success** — cookies set, `LoginSuccessResponse` returned.
+/// - **Pending 2FA** — the account has email 2FA enabled and no
+///   `email_2fa_code` was sent; the server sends the code by email and
+///   returns `LoginPending2faResponse` so the front can prompt.
+///
+/// TOTP is checked inline (never returns pending) — the front sends
+/// `totp_code` or `backup_code` on the first call.
+#[utoipa::path(
+    post,
+    path = "/api/auth/login",
+    tag = "auth",
+    request_body = LoginRequest,
+    responses(
+        (status = 200, description = "Login success OR email 2FA pending", body = ApiResponse<LoginOutcome>),
+        (status = 400, description = "Account locked after too many failed attempts", body = crate::api_response::ErrorResponse),
+        (status = 401, description = "Invalid credentials, TOTP invalid, email 2FA invalid", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "SSO required (enterprise), account banned, or TOTP required (no code sent)", body = crate::api_response::ErrorResponse),
+        (status = 429, description = "Rate limit hit (20/min per IP)", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn login(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
     Json(body): Json<LoginRequest>,
@@ -730,11 +961,13 @@ async fn login(
                     (SET_COOKIE, String::new()),
                     (SET_COOKIE, String::new()),
                 ]),
-                Json(build_response(json!({
-                    "requires_email_2fa": true,
-                    "user_id": user.id,
-                    "message": "A verification code has been sent to your email"
-                }))),
+                Json(ApiResponse::new(LoginOutcome::Pending2fa(
+                    LoginPending2faResponse {
+                        requires_email_2fa: true,
+                        user_id: user.id,
+                        message: "A verification code has been sent to your email".to_string(),
+                    },
+                ))),
             ));
         }
     }
@@ -822,18 +1055,33 @@ async fn login(
             (SET_COOKIE, refresh_cookie),
             (SET_COOKIE, csrf_cookie),
         ]),
-        Json(build_response(json!({
-            "user": user_private,
-            "csrf_token": csrf,
-            "login_method": "password",
-            "has_passkey": has_passkey,
-            "requires_totp_setup": requires_totp_setup,
-        }))),
+        Json(ApiResponse::new(LoginOutcome::Success(
+            LoginSuccessResponse {
+                user: user_private,
+                csrf_token: csrf,
+                login_method: "password".to_string(),
+                has_passkey,
+                requires_totp_setup,
+            },
+        ))),
     ))
 }
 
-// POST /api/auth/email-2fa/verify — complete login after email 2FA
-async fn email_2fa_verify(
+/// Complete a login that was gated on email 2FA. Same success shape as
+/// `/api/auth/login` — the pending-2FA branch is never returned here.
+#[utoipa::path(
+    post,
+    path = "/api/auth/email-2fa/verify",
+    tag = "auth",
+    request_body = Email2faVerifyRequest,
+    responses(
+        (status = 200, description = "Login complete — cookies issued", body = ApiResponse<LoginSuccessResponse>),
+        (status = 400, description = "Missing user_id or no pending 2FA", body = crate::api_response::ErrorResponse),
+        (status = 401, description = "Code invalid or user not found", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Account banned", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn email_2fa_verify(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
     Json(body): Json<Email2faVerifyRequest>,
@@ -911,18 +1159,31 @@ async fn email_2fa_verify(
             (SET_COOKIE, refresh_cookie),
             (SET_COOKIE, csrf_cookie),
         ]),
-        Json(build_response(json!({
-            "user": user_private,
-            "csrf_token": csrf,
-            "login_method": "password",
-            "has_passkey": has_passkey,
-            "requires_totp_setup": requires_totp_setup,
-        }))),
+        Json(ApiResponse::new(LoginSuccessResponse {
+            user: user_private,
+            csrf_token: csrf,
+            login_method: "password".to_string(),
+            has_passkey,
+            requires_totp_setup,
+        })),
     ))
 }
 
-// POST /api/auth/refresh — refresh token read from httpOnly cookie
-async fn refresh(
+/// Rotate the refresh + access tokens. Refresh token is read from the
+/// httpOnly cookie (either `refresh_token` or `admin_refresh_token`
+/// depending on the caller's origin). Emits fresh access + refresh +
+/// CSRF cookies on the caller's namespace.
+#[utoipa::path(
+    post,
+    path = "/api/auth/refresh",
+    tag = "auth",
+    responses(
+        (status = 200, description = "Tokens rotated, new cookies issued", body = ApiResponse<RefreshResponse>),
+        (status = 401, description = "No refresh cookie, reuse detected, or session revoked", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Account banned since last refresh", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn refresh(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
 ) -> Result<impl IntoResponse, AppError> {
@@ -977,23 +1238,31 @@ async fn refresh(
             (SET_COOKIE, refresh_cookie),
             (SET_COOKIE, csrf_cookie),
         ]),
-        Json(build_response(json!({
-            "ok": true,
-            "csrf_token": csrf,
-            "login_method": login_method.0,
-        }))),
+        Json(ApiResponse::new(RefreshResponse {
+            ok: true,
+            csrf_token: csrf,
+            login_method: login_method.0,
+        })),
     ))
 }
 
-// POST /api/auth/logout
-//
-// Deliberately does NOT require a valid `AuthUser`: an expired access_token
-// would otherwise 401 before we reach the revocation code, leaving the DB
-// row orphaned even though the client considers itself logged out. The
-// refresh_token cookie carries a `session_id` we can trust structurally
-// (uuid + opaque token) — we look the row up ourselves and revoke it,
-// regardless of whether the JWT is still valid.
-async fn logout(
+/// Log the current session out and clear every auth cookie in both
+/// namespaces (public + admin). Deliberately does NOT require a valid
+/// `AuthUser`: an expired access_token would otherwise 401 before we
+/// reach the revocation code, leaving the DB row orphaned even though
+/// the client considers itself logged out. The refresh_token cookie
+/// carries a `session_id` we can trust structurally (uuid + opaque token)
+/// — we look the row up ourselves and revoke it, regardless of whether
+/// the JWT is still valid.
+#[utoipa::path(
+    post,
+    path = "/api/auth/logout",
+    tag = "auth",
+    responses(
+        (status = 200, description = "Session revoked and cookies cleared", body = ApiResponse<SimpleMessage>),
+    ),
+)]
+pub async fn logout(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
 ) -> Result<impl IntoResponse, AppError> {
@@ -1032,17 +1301,30 @@ async fn logout(
             (SET_COOKIE, clear_admin_refresh),
             (SET_COOKIE, clear_admin_csrf),
         ]),
-        Json(build_response(json!({
-            "message": "Logged out successfully"
-        }))),
+        Json(ApiResponse::new(SimpleMessage::new(
+            "Logged out successfully",
+        ))),
     ))
 }
 
-// GET /api/auth/me
-async fn me(
+/// Return the currently authenticated user's private profile alongside
+/// the leaderboard ranks (global + domain) and `login_method` /
+/// `has_passkey` flags used by the frontend to gate enterprise flows.
+#[utoipa::path(
+    get,
+    path = "/api/auth/me",
+    tag = "auth",
+    responses(
+        (status = 200, description = "Profile + rank + auth-method flags", body = ApiResponse<MeResponse>),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "User row missing (rare — stale JWT)", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn me(
     State(state): State<AppState>,
     auth: AuthUser,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<MeResponse>>, AppError> {
     let user: User = sqlx::query_as("SELECT * FROM users WHERE id = $1")
         .bind(auth.user_id)
         .fetch_optional(&state.db)
@@ -1069,24 +1351,36 @@ async fn me(
         None => None,
     };
 
-    Ok(Json(build_response(json!({
-        "user": user_private,
+    Ok(Json(ApiResponse::new(MeResponse {
+        user: user_private,
         // Surfaced so the frontend can decide policy without decoding the JWT
         // (e.g. skipping the enterprise TOTP redirect for `sso` / `webauthn`).
-        "login_method": auth.login_method,
-        "has_passkey": has_passkey,
-        "rank": {
-            "global": global_rank,
-            "domain": domain_rank,
-        }
-    }))))
+        login_method: auth.login_method,
+        has_passkey,
+        rank: RankInfo {
+            global: global_rank,
+            domain: domain_rank,
+        },
+    })))
 }
 
-// GET /api/auth/verify-email?token=xxx
-async fn verify_email(
+/// Verify the account email using the one-shot token sent at registration.
+/// The link is emailed as `${base_url}/verify-email?token=...`; frontends
+/// simply forward the query string to this endpoint.
+#[utoipa::path(
+    get,
+    path = "/api/auth/verify-email",
+    tag = "auth",
+    params(VerifyEmailQuery),
+    responses(
+        (status = 200, description = "Email successfully verified", body = ApiResponse<SimpleMessage>),
+        (status = 400, description = "Token invalid or expired", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn verify_email(
     State(state): State<AppState>,
     Query(query): Query<VerifyEmailQuery>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<SimpleMessage>>, AppError> {
     let mut redis = state.redis.clone();
     let key = email_verify_key(&query.token);
     let user_id_str: Option<String> = redis.get(&key).await?;
@@ -1106,16 +1400,29 @@ async fn verify_email(
 
     let () = redis.del(&key).await?;
 
-    Ok(Json(build_response(json!({
-        "message": "Email verified successfully"
-    }))))
+    Ok(Json(ApiResponse::new(SimpleMessage::new(
+        "Email verified successfully",
+    ))))
 }
 
-// POST /api/auth/resend-verification
-async fn resend_verification(
+/// Re-send the account verification email. Rate-limit lives on the email
+/// service (Brevo throttles duplicates); we still refuse if the account is
+/// already verified.
+#[utoipa::path(
+    post,
+    path = "/api/auth/resend-verification",
+    tag = "auth",
+    responses(
+        (status = 200, description = "Verification email queued", body = ApiResponse<SimpleMessage>),
+        (status = 400, description = "Email is already verified", body = crate::api_response::ErrorResponse),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn resend_verification(
     State(state): State<AppState>,
     auth: AuthUser,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<SimpleMessage>>, AppError> {
     let user: User = sqlx::query_as("SELECT * FROM users WHERE id = $1")
         .bind(auth.user_id)
         .fetch_one(&state.db)
@@ -1144,20 +1451,30 @@ async fn resend_verification(
         )
         .await?;
 
-    Ok(Json(build_response(json!({
-        "message": "Verification email sent"
-    }))))
+    Ok(Json(ApiResponse::new(SimpleMessage::new(
+        "Verification email sent",
+    ))))
 }
 
-// POST /api/auth/forgot-password
-async fn forgot_password(
+/// Kick off a password-reset email. Always returns 200 with the same message
+/// whether the account exists or not — anti-enumeration.
+#[utoipa::path(
+    post,
+    path = "/api/auth/forgot-password",
+    tag = "auth",
+    request_body = ForgotPasswordRequest,
+    responses(
+        (status = 200, description = "Reset email queued if account exists", body = ApiResponse<SimpleMessage>),
+    ),
+)]
+pub async fn forgot_password(
     State(state): State<AppState>,
     Json(body): Json<ForgotPasswordRequest>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<SimpleMessage>>, AppError> {
     // Always return success to prevent email enumeration
-    let response = build_response(json!({
-        "message": "If an account exists with this email, a reset link has been sent"
-    }));
+    let response = ApiResponse::new(SimpleMessage::new(
+        "If an account exists with this email, a reset link has been sent",
+    ));
 
     let email = body.email.trim().to_lowercase();
     let user: Option<User> = sqlx::query_as("SELECT * FROM users WHERE email = $1")
@@ -1187,11 +1504,23 @@ async fn forgot_password(
     Ok(Json(response))
 }
 
-// POST /api/auth/reset-password
-async fn reset_password(
+/// Complete a password reset with the one-shot token. Revokes every
+/// existing session (all devices signed out) as a defensive measure —
+/// mirrors GitHub / Google behaviour after credential reset.
+#[utoipa::path(
+    post,
+    path = "/api/auth/reset-password",
+    tag = "auth",
+    request_body = ResetPasswordRequest,
+    responses(
+        (status = 200, description = "Password reset — all sessions revoked", body = ApiResponse<SimpleMessage>),
+        (status = 400, description = "Token invalid or password fails policy", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn reset_password(
     State(state): State<AppState>,
     Json(body): Json<ResetPasswordRequest>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<SimpleMessage>>, AppError> {
     validate_password(&body.new_password)?;
 
     let mut redis = state.redis.clone();
@@ -1239,17 +1568,31 @@ async fn reset_password(
             .await;
     }
 
-    Ok(Json(build_response(json!({
-        "message": "Password reset successfully. Please log in with your new password."
-    }))))
+    Ok(Json(ApiResponse::new(SimpleMessage::new(
+        "Password reset successfully. Please log in with your new password.",
+    ))))
 }
 
-// POST /api/auth/change-password
-async fn change_password(
+/// Change the current password. Requires re-entering the existing one —
+/// even for a logged-in user — so a hijacked session alone can't rotate
+/// credentials silently.
+#[utoipa::path(
+    post,
+    path = "/api/auth/change-password",
+    tag = "auth",
+    request_body = ChangePasswordRequest,
+    responses(
+        (status = 200, description = "Password updated", body = ApiResponse<SimpleMessage>),
+        (status = 400, description = "New password fails policy", body = crate::api_response::ErrorResponse),
+        (status = 401, description = "Unauthenticated or current_password wrong", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn change_password(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<ChangePasswordRequest>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<SimpleMessage>>, AppError> {
     validate_password(&body.new_password)?;
 
     let user: User = sqlx::query_as("SELECT * FROM users WHERE id = $1")
@@ -1282,18 +1625,32 @@ async fn change_password(
         )
         .await;
 
-    Ok(Json(build_response(json!({
-        "message": "Password changed successfully"
-    }))))
+    Ok(Json(ApiResponse::new(SimpleMessage::new(
+        "Password changed successfully",
+    ))))
 }
 
 // ─── TOTP 2FA ────────────────────────────────────────────────────
 
-// POST /api/auth/totp/setup
-async fn totp_setup(
+/// Kick off TOTP 2FA enrolment. Generates a fresh secret, persists it,
+/// and returns the `otpauth://` URL + base-32 secret so the front can
+/// render a QR code. The user must then confirm with `/totp/enable`
+/// within a reasonable window.
+#[utoipa::path(
+    post,
+    path = "/api/auth/totp/setup",
+    tag = "auth",
+    responses(
+        (status = 200, description = "TOTP secret staged — scan and confirm", body = ApiResponse<TotpSetupResponse>),
+        (status = 400, description = "TOTP is already enabled", body = crate::api_response::ErrorResponse),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn totp_setup(
     State(state): State<AppState>,
     auth: AuthUser,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<TotpSetupResponse>>, AppError> {
     let user: User = sqlx::query_as("SELECT * FROM users WHERE id = $1")
         .bind(auth.user_id)
         .fetch_one(&state.db)
@@ -1318,19 +1675,35 @@ async fn totp_setup(
         .execute(&state.db)
         .await?;
 
-    Ok(Json(build_response(json!({
-        "otpauth_url": totp.get_url(),
-        "secret_base32": secret.to_encoded().to_string(),
-        "message": "Scan the QR code with your authenticator app, then confirm with /auth/totp/enable"
-    }))))
+    Ok(Json(ApiResponse::new(TotpSetupResponse {
+        otpauth_url: totp.get_url(),
+        secret_base32: secret.to_encoded().to_string(),
+        message:
+            "Scan the QR code with your authenticator app, then confirm with /auth/totp/enable"
+                .to_string(),
+    })))
 }
 
-// POST /api/auth/totp/enable
-async fn totp_enable(
+/// Confirm TOTP enrolment with a live code from the authenticator app.
+/// Issues a fresh set of backup codes — displayed **once**, since we
+/// only persist their hashes.
+#[utoipa::path(
+    post,
+    path = "/api/auth/totp/enable",
+    tag = "auth",
+    request_body = TotpCodeRequest,
+    responses(
+        (status = 200, description = "TOTP enabled — save the backup codes", body = ApiResponse<TotpEnableResponse>),
+        (status = 400, description = "TOTP already enabled or setup not run first", body = crate::api_response::ErrorResponse),
+        (status = 401, description = "TOTP code invalid or unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn totp_enable(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<TotpCodeRequest>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<TotpEnableResponse>>, AppError> {
     let user: User = sqlx::query_as("SELECT * FROM users WHERE id = $1")
         .bind(auth.user_id)
         .fetch_one(&state.db)
@@ -1372,19 +1745,34 @@ async fn totp_enable(
         )
         .await;
 
-    Ok(Json(build_response(json!({
-        "message": "TOTP 2FA enabled successfully",
-        "backup_codes": codes,
-        "backup_codes_note": "Store these codes somewhere safe — they will not be shown again."
-    }))))
+    Ok(Json(ApiResponse::new(TotpEnableResponse {
+        message: "TOTP 2FA enabled successfully".to_string(),
+        backup_codes: codes,
+        backup_codes_note: "Store these codes somewhere safe — they will not be shown again."
+            .to_string(),
+    })))
 }
 
-// POST /api/auth/totp/disable
-async fn totp_disable(
+/// Disable TOTP 2FA. Requires **both** the current password AND a live
+/// TOTP code — a stolen session alone can't drop the second factor.
+/// Deletes all backup codes as well so a leaked code sheet is neutralised.
+#[utoipa::path(
+    post,
+    path = "/api/auth/totp/disable",
+    tag = "auth",
+    request_body = TotpDisableRequest,
+    responses(
+        (status = 200, description = "TOTP 2FA disabled", body = ApiResponse<SimpleMessage>),
+        (status = 400, description = "TOTP not enabled", body = crate::api_response::ErrorResponse),
+        (status = 401, description = "Password wrong or TOTP invalid", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn totp_disable(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<TotpDisableRequest>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<SimpleMessage>>, AppError> {
     let user: User = sqlx::query_as("SELECT * FROM users WHERE id = $1")
         .bind(auth.user_id)
         .fetch_one(&state.db)
@@ -1435,19 +1823,33 @@ async fn totp_disable(
         )
         .await;
 
-    Ok(Json(build_response(json!({
-        "message": "TOTP 2FA disabled successfully"
-    }))))
+    Ok(Json(ApiResponse::new(SimpleMessage::new(
+        "TOTP 2FA disabled successfully",
+    ))))
 }
 
 // ─── Email 2FA ───────────────────────────────────────────────────
 
-// POST /api/auth/email-2fa/enable
-async fn email_2fa_enable(
+/// Enable email-based 2FA. Requires the account email to already be
+/// verified — otherwise the user could lock themselves out. Password
+/// re-entry gates against session hijack.
+#[utoipa::path(
+    post,
+    path = "/api/auth/email-2fa/enable",
+    tag = "auth",
+    request_body = PasswordConfirmRequest,
+    responses(
+        (status = 200, description = "Email 2FA enabled", body = ApiResponse<SimpleMessage>),
+        (status = 400, description = "Email not verified or already enabled", body = crate::api_response::ErrorResponse),
+        (status = 401, description = "Password wrong", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn email_2fa_enable(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<PasswordConfirmRequest>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<SimpleMessage>>, AppError> {
     let user: User = sqlx::query_as("SELECT * FROM users WHERE id = $1")
         .bind(auth.user_id)
         .fetch_one(&state.db)
@@ -1486,17 +1888,29 @@ async fn email_2fa_enable(
         )
         .await;
 
-    Ok(Json(build_response(json!({
-        "message": "Email 2FA enabled. A code will be sent to your email on each login."
-    }))))
+    Ok(Json(ApiResponse::new(SimpleMessage::new(
+        "Email 2FA enabled. A code will be sent to your email on each login.",
+    ))))
 }
 
-// POST /api/auth/email-2fa/disable
-async fn email_2fa_disable(
+/// Disable email-based 2FA. Password re-entry required.
+#[utoipa::path(
+    post,
+    path = "/api/auth/email-2fa/disable",
+    tag = "auth",
+    request_body = PasswordConfirmRequest,
+    responses(
+        (status = 200, description = "Email 2FA disabled", body = ApiResponse<SimpleMessage>),
+        (status = 400, description = "Email 2FA not enabled", body = crate::api_response::ErrorResponse),
+        (status = 401, description = "Password wrong", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn email_2fa_disable(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<PasswordConfirmRequest>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<SimpleMessage>>, AppError> {
     let user: User = sqlx::query_as("SELECT * FROM users WHERE id = $1")
         .bind(auth.user_id)
         .fetch_one(&state.db)
@@ -1527,15 +1941,31 @@ async fn email_2fa_disable(
         )
         .await;
 
-    Ok(Json(build_response(json!({
-        "message": "Email 2FA disabled successfully"
-    }))))
+    Ok(Json(ApiResponse::new(SimpleMessage::new(
+        "Email 2FA disabled successfully",
+    ))))
 }
 
 // ─── Account deletion (RGPD) ─────────────────────────────────────
 
-// DELETE /api/auth/account
-async fn delete_account(
+/// Permanently delete the account and every piece of personal data
+/// (RGPD right to erasure). Requires password re-entry, plus a live
+/// TOTP code when TOTP 2FA is enabled. Cascading deletes: user_skills,
+/// challenge_submissions, users. Also removes the user from every
+/// leaderboard and clears all auth cookies (both namespaces).
+#[utoipa::path(
+    delete,
+    path = "/api/auth/account",
+    tag = "auth",
+    request_body = DeleteAccountRequest,
+    responses(
+        (status = 200, description = "Account and all personal data deleted", body = ApiResponse<DeleteAccountResponse>),
+        (status = 401, description = "Password wrong, TOTP invalid, or unauthenticated", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "TOTP required (2FA enabled but no code sent)", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn delete_account(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<DeleteAccountRequest>,
@@ -1624,28 +2054,42 @@ async fn delete_account(
             (SET_COOKIE, clear_admin_refresh),
             (SET_COOKIE, clear_admin_csrf),
         ]),
-        Json(build_response(json!({
-            "account_deleted": true,
-            // Deletion is immediate ; `scheduled_for` == now for symmetry with
-            // any future grace-period implementation the front can already
-            // display ("deleted at").
-            "scheduled_for": deleted_at.to_rfc3339(),
-            "message": "Your account and all personal data have been permanently deleted."
-        }))),
+        // Deletion is immediate ; `scheduled_for` == now for symmetry with
+        // any future grace-period implementation the front can already
+        // display ("deleted at").
+        Json(ApiResponse::new(DeleteAccountResponse {
+            account_deleted: true,
+            scheduled_for: deleted_at.to_rfc3339(),
+            message: "Your account and all personal data have been permanently deleted."
+                .to_string(),
+        })),
     ))
 }
 
 // ─── Onboarding (Pattern C) ───────────────────────────────────────
 
-// POST /api/auth/complete-profile
-// Called by any user whose signup path didn't collect skill_domain / terms_accepted
-// (OAuth + magic link). Idempotent when the profile is already complete: 400 explains why.
-async fn complete_profile(
+/// Complete the onboarding profile (skill_domain + ToS + optional
+/// geo) for users whose signup path didn't collect these fields
+/// (OAuth + magic link). Refuses to run twice — once the profile is
+/// complete the caller must go through `/change-*` endpoints instead.
+#[utoipa::path(
+    post,
+    path = "/api/auth/complete-profile",
+    tag = "auth",
+    request_body = CompleteProfileRequest,
+    responses(
+        (status = 200, description = "Profile completed", body = ApiResponse<CompleteProfileResponse>),
+        (status = 400, description = "Invalid skill_domain, terms not accepted, or profile already complete", body = crate::api_response::ErrorResponse),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn complete_profile(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
     auth: AuthUser,
     Json(body): Json<CompleteProfileRequest>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<CompleteProfileResponse>>, AppError> {
     validate_skill_domain(&body.skill_domain)?;
     if !body.terms_accepted {
         return Err(AppError::Validation(
@@ -1706,10 +2150,10 @@ async fn complete_profile(
     )
     .increment(1);
 
-    Ok(Json(build_response(json!({
-        "message": "Profile completed",
-        "profile_completed": true,
-    }))))
+    Ok(Json(ApiResponse::new(CompleteProfileResponse {
+        message: "Profile completed".to_string(),
+        profile_completed: true,
+    })))
 }
 
 // ─── Email change (double confirmation) ──────────────────────────
@@ -1722,13 +2166,27 @@ fn email_change_token_lookup(token: &str) -> String {
     format!("email_change_token:{token}")
 }
 
-// POST /api/auth/change-email — kicks off a change; confirmation link goes to the NEW address,
-// notification email goes to the OLD address.
-async fn request_email_change(
+/// Kick off an email change. Confirmation link is sent to the NEW
+/// address (proving control of it), notification email lands on the OLD
+/// address (proving to the current owner that a change is underway).
+/// Password re-entry gates against session hijack.
+#[utoipa::path(
+    post,
+    path = "/api/auth/change-email",
+    tag = "auth",
+    request_body = ChangeEmailRequest,
+    responses(
+        (status = 200, description = "Confirmation email sent to new address", body = ApiResponse<SimpleMessage>),
+        (status = 400, description = "Invalid email or already in use", body = crate::api_response::ErrorResponse),
+        (status = 401, description = "Password wrong or unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn request_email_change(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<ChangeEmailRequest>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<SimpleMessage>>, AppError> {
     validate_email(&body.new_email)?;
     let new_email = body.new_email.trim().to_lowercase();
 
@@ -1829,16 +2287,28 @@ async fn request_email_change(
         )
         .await;
 
-    Ok(Json(build_response(json!({
-        "message": "Confirmation email sent to the new address"
-    }))))
+    Ok(Json(ApiResponse::new(SimpleMessage::new(
+        "Confirmation email sent to the new address",
+    ))))
 }
 
-// GET /api/auth/change-email/confirm?token=...
-async fn confirm_email_change(
+/// Confirm the email change with the one-shot token. Revokes every
+/// active session (all devices signed out) — the old email is no longer
+/// valid, so any credential-recovery flow keyed on it must fail closed.
+#[utoipa::path(
+    get,
+    path = "/api/auth/change-email/confirm",
+    tag = "auth",
+    params(ConfirmEmailChangeQuery),
+    responses(
+        (status = 200, description = "Email updated, all sessions revoked", body = ApiResponse<SimpleMessage>),
+        (status = 400, description = "Token invalid, expired, or no pending change", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn confirm_email_change(
     State(state): State<AppState>,
     Query(query): Query<ConfirmEmailChangeQuery>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<SimpleMessage>>, AppError> {
     let mut redis = state.redis.clone();
     let uid_str: Option<String> = redis.get(email_change_token_lookup(&query.token)).await?;
     let user_id: Uuid = uid_str
@@ -1886,9 +2356,9 @@ async fn confirm_email_change(
     // Revoke all sessions — force re-login with the new email
     SessionService::revoke_all(&state.db, user_id).await?;
 
-    Ok(Json(build_response(json!({
-        "message": "Email updated. Please log in again."
-    }))))
+    Ok(Json(ApiResponse::new(SimpleMessage::new(
+        "Email updated. Please log in again.",
+    ))))
 }
 
 // ─── TOTP backup codes ───────────────────────────────────────────
@@ -1958,11 +2428,26 @@ async fn consume_backup_code(db: &PgPool, user_id: Uuid, presented: &str) -> Res
 }
 
 // POST /api/auth/totp/backup-codes/regenerate — requires a valid live TOTP code.
-async fn regenerate_backup_codes(
+/// Regenerate the set of one-time TOTP backup codes. Invalidates every
+/// previously-issued code — including unused ones — as a defensive
+/// rotation. TOTP code required to prove authenticator possession.
+#[utoipa::path(
+    post,
+    path = "/api/auth/totp/backup-codes/regenerate",
+    tag = "auth",
+    request_body = TotpCodeRequest,
+    responses(
+        (status = 200, description = "Fresh backup codes — displayed once", body = ApiResponse<TotpEnableResponse>),
+        (status = 400, description = "TOTP not enabled", body = crate::api_response::ErrorResponse),
+        (status = 401, description = "TOTP code invalid or unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn regenerate_backup_codes(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<TotpCodeRequest>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<TotpEnableResponse>>, AppError> {
     let user: User = sqlx::query_as("SELECT * FROM users WHERE id = $1")
         .bind(auth.user_id)
         .fetch_one(&state.db)
@@ -1985,46 +2470,87 @@ async fn regenerate_backup_codes(
     }
 
     let codes = issue_backup_codes(&state.db, auth.user_id).await?;
-    Ok(Json(build_response(json!({
-        "backup_codes": codes,
-        "message": "Store these codes somewhere safe. They will not be shown again."
-    }))))
+    Ok(Json(ApiResponse::new(TotpEnableResponse {
+        message: "Store these codes somewhere safe. They will not be shown again.".to_string(),
+        backup_codes: codes,
+        backup_codes_note: "Previously-issued codes are now invalid.".to_string(),
+    })))
 }
 
 // ─── Sessions / device management ────────────────────────────────
 
 // GET /api/auth/sessions
-async fn list_sessions(
+/// List every active session for the caller (device management screen).
+/// The current session — the one making this request — is highlighted via
+/// `current_session_id` so the frontend can render "this device" badges
+/// without leaking cookie contents to JS.
+#[utoipa::path(
+    get,
+    path = "/api/auth/sessions",
+    tag = "auth",
+    responses(
+        (status = 200, description = "Active sessions list", body = ApiResponse<ListSessionsResponse>),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_sessions(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
     auth: AuthUser,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<ListSessionsResponse>>, AppError> {
     let sessions = SessionService::list_active(&state.db, auth.user_id).await?;
     let current = parse_refresh_cookie(&headers).map(|(sid, _)| sid);
-    Ok(Json(build_response(json!({
-        "sessions": sessions,
-        "current_session_id": current,
-    }))))
+    Ok(Json(ApiResponse::new(ListSessionsResponse {
+        sessions,
+        current_session_id: current,
+    })))
 }
 
-// DELETE /api/auth/sessions/:id
-async fn revoke_session(
+/// Revoke a specific session by ID. No-op (still 200) if the session
+/// already ended or belongs to another user — the query is scoped on
+/// `user_id`, so it silently ignores foreign IDs.
+#[utoipa::path(
+    delete,
+    path = "/api/auth/sessions/{id}",
+    tag = "auth",
+    params(("id" = Uuid, Path, description = "Session UUID to revoke")),
+    responses(
+        (status = 200, description = "Session revoked", body = ApiResponse<SimpleMessage>),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn revoke_session(
     State(state): State<AppState>,
     auth: AuthUser,
     axum::extract::Path(session_id): axum::extract::Path<Uuid>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<SimpleMessage>>, AppError> {
     SessionService::revoke_one(&state.db, auth.user_id, session_id).await?;
-    Ok(Json(build_response(
-        json!({ "message": "Session revoked" }),
-    )))
+    Ok(Json(ApiResponse::new(SimpleMessage::new(
+        "Session revoked",
+    ))))
 }
 
-// POST /api/auth/sessions/revoke-all — revoke every session except the current one
-async fn revoke_all_other_sessions(
+/// Revoke every session except the current one (useful after a password
+/// change or when the user notices unfamiliar devices). If no refresh
+/// cookie is present, every session — including the current one — is
+/// revoked.
+#[utoipa::path(
+    post,
+    path = "/api/auth/sessions/revoke-all",
+    tag = "auth",
+    responses(
+        (status = 200, description = "Other sessions revoked", body = ApiResponse<SimpleMessage>),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn revoke_all_other_sessions(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
     auth: AuthUser,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<SimpleMessage>>, AppError> {
     match parse_refresh_cookie(&headers) {
         Some((current, _)) => {
             SessionService::revoke_all_except(&state.db, auth.user_id, current).await?;
@@ -2033,9 +2559,9 @@ async fn revoke_all_other_sessions(
             SessionService::revoke_all(&state.db, auth.user_id).await?;
         }
     }
-    Ok(Json(build_response(json!({
-        "message": "All other sessions revoked"
-    }))))
+    Ok(Json(ApiResponse::new(SimpleMessage::new(
+        "All other sessions revoked",
+    ))))
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────

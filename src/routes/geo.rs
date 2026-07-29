@@ -2,11 +2,12 @@ use axum::extract::{Query, State};
 use axum::routing::get;
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
-use uuid::Uuid;
+use utoipa::{IntoParams, ToSchema};
 
 use crate::AppState;
+use crate::api_response::ApiResponse;
 use crate::errors::AppError;
+use crate::services::geo::Country;
 
 pub fn geo_routes() -> Router<AppState> {
     Router::new()
@@ -14,38 +15,57 @@ pub fn geo_routes() -> Router<AppState> {
         .route("/geo/cities", get(search_cities))
 }
 
-fn build_response(data: serde_json::Value) -> serde_json::Value {
-    json!({
-        "data": data,
-        "meta": {
-            "request_id": Uuid::new_v4().to_string(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-        }
-    })
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct CitiesQuery {
+    /// ISO 3166-1 alpha-2 or alpha-3 country code (e.g. `SN` or `SEN`).
+    pub country: String,
+    /// Optional case-insensitive prefix/substring filter on city name.
+    pub q: Option<String>,
+    /// Max rows to return, clamped to `[1, 50]`. Defaults to 20.
+    pub limit: Option<usize>,
 }
 
-#[derive(Debug, Deserialize)]
-struct CitiesQuery {
-    country: String,
-    q: Option<String>,
-    limit: Option<usize>,
+/// Owned city view returned by the search endpoint. Population is
+/// pulled from the GeoNames dump baked into the binary.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CityOut {
+    pub name: String,
+    /// ISO 3166-1 alpha-2 country code.
+    pub country: String,
+    pub population: i64,
 }
 
-#[derive(Debug, Serialize)]
-struct CityOut<'a> {
-    name: &'a str,
-    country: &'a str,
-    population: i64,
+/// List every country the platform knows about (baked-in GeoNames
+/// dataset). Used by the register / profile / talent-search forms.
+#[utoipa::path(
+    get,
+    path = "/api/geo/countries",
+    tag = "profile",
+    responses(
+        (status = 200, description = "Full country list", body = ApiResponse<Vec<Country>>),
+    ),
+)]
+pub async fn list_countries(State(state): State<AppState>) -> Json<ApiResponse<Vec<Country>>> {
+    Json(ApiResponse::new(state.geo.countries().to_vec()))
 }
 
-async fn list_countries(State(state): State<AppState>) -> Json<serde_json::Value> {
-    Json(build_response(json!(state.geo.countries())))
-}
-
-async fn search_cities(
+/// Search cities within a country by optional name prefix. Sorted by
+/// population desc — the first hit is the largest match. Bounded to
+/// 50 results max.
+#[utoipa::path(
+    get,
+    path = "/api/geo/cities",
+    tag = "profile",
+    params(CitiesQuery),
+    responses(
+        (status = 200, description = "Matching cities", body = ApiResponse<Vec<CityOut>>),
+        (status = 400, description = "Missing country param", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn search_cities(
     State(state): State<AppState>,
     Query(q): Query<CitiesQuery>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<Vec<CityOut>>>, AppError> {
     if q.country.trim().is_empty() {
         return Err(AppError::Validation(
             "country query parameter is required (ISO2 or ISO3)".into(),
@@ -57,10 +77,10 @@ async fn search_cities(
         .search_cities(&q.country, q.q.as_deref(), limit)
         .into_iter()
         .map(|c| CityOut {
-            name: &c.name,
-            country: &c.country,
+            name: c.name.clone(),
+            country: c.country.clone(),
             population: c.population,
         })
         .collect();
-    Ok(Json(build_response(json!(results))))
+    Ok(Json(ApiResponse::new(results)))
 }

@@ -12,13 +12,27 @@ use axum::extract::{Query, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use redis::AsyncCommands;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::AppState;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
+
+/// Envelope for AI-backed endpoints. Distinct from `ApiResponse<T>`
+/// because these routes want to signal cache-freshness to the front
+/// without an extra header. The `data` payload shape is defined by
+/// the AI worker (skilluv-ia) and evolves independently — see
+/// `docs/BACKEND-INTEGRATION.md §6` for the current fields.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AiCoachEnvelope {
+    pub data: serde_json::Value,
+    /// True when the payload came from Redis (24h TTL for performance,
+    /// 7d for orientation suggestions).
+    pub cached: bool,
+}
 
 // Type aliases pour clippy::type_complexity (rangées sqlx::query_as).
 type AiCoachRow179 = (
@@ -46,13 +60,31 @@ pub fn ai_coach_routes() -> Router<AppState> {
 // IA-C.2 — GET /users/me/performance
 // ═══════════════════════════════════════════════════════════════════
 
-#[derive(Debug, Deserialize)]
-struct PerfQuery {
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct PerfQuery {
+    /// Force a fresh IA call (busts the 24h Redis cache). Rate-limited
+    /// to 1/hour per user to cap LLM cost.
     #[serde(default)]
-    refresh: bool,
+    pub refresh: bool,
 }
 
-async fn my_performance(
+/// AI-coach performance analysis of the caller: strengths, gaps,
+/// next actions, rank-readiness signal. Cached 24h in Redis; a
+/// rate-limited `?refresh=1` busts the cache.
+#[utoipa::path(
+    get,
+    path = "/api/users/me/performance",
+    tag = "profile",
+    params(PerfQuery),
+    responses(
+        (status = 200, description = "Coach analysis (see docs/BACKEND-INTEGRATION.md §6 for data shape)", body = AiCoachEnvelope),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+        (status = 429, description = "Refresh rate-limit hit", body = crate::api_response::ErrorResponse),
+        (status = 500, description = "AI worker offline", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn my_performance(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<PerfQuery>,
@@ -266,17 +298,36 @@ async fn build_analyze_request(
 // IA-C.3 — POST /users/me/orientations/suggest
 // ═══════════════════════════════════════════════════════════════════
 
-#[derive(Debug, Deserialize)]
-struct SuggestBody {
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SuggestBody {
+    /// `"africa"` or `"international"`. Defaults to `international`.
     #[serde(default)]
-    target_market: Option<String>, // 'africa' | 'international'
+    pub target_market: Option<String>,
+    /// Clamped to `[1, 10]`. Defaults to 3.
     #[serde(default)]
-    max_suggestions: Option<i32>,
+    pub max_suggestions: Option<i32>,
+    /// Busts the 7-day Redis cache. Rate-limited 1/hour/user.
     #[serde(default)]
-    refresh: bool,
+    pub refresh: bool,
 }
 
-async fn suggest_orientations(
+/// AI-suggested career orientations from the catalog. Returns 1-10
+/// suggestions ranked by confidence, plus a primary + secondary
+/// recommendation. Cached 7 days.
+#[utoipa::path(
+    post,
+    path = "/api/users/me/orientations/suggest",
+    tag = "profile",
+    request_body = SuggestBody,
+    responses(
+        (status = 200, description = "Ranked orientation suggestions (see docs/BACKEND-INTEGRATION.md §6)", body = AiCoachEnvelope),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+        (status = 429, description = "Refresh rate-limit hit", body = crate::api_response::ErrorResponse),
+        (status = 500, description = "AI worker offline", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn suggest_orientations(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<SuggestBody>,

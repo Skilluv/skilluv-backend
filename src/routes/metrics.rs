@@ -3,13 +3,14 @@ use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Json, Router};
 use metrics_exporter_prometheus::PrometheusHandle;
-use serde_json::json;
+use serde::Serialize;
 use sqlx::PgPool;
 use std::sync::OnceLock;
 use std::time::Duration;
-use uuid::Uuid;
+use utoipa::ToSchema;
 
 use crate::AppState;
+use crate::api_response::ApiResponse;
 
 static PROMETHEUS_HANDLE: OnceLock<PrometheusHandle> = OnceLock::new();
 
@@ -79,10 +80,10 @@ pub fn metrics_routes() -> Router<AppState> {
         .route("/api/metrics/summary", get(metrics_summary))
 }
 
-/// GET /metrics — Prometheus scrape endpoint (text format)
-///
-/// If `METRICS_TOKEN` is set in env, requires `Authorization: Bearer <token>`.
-/// Otherwise public (dev convenience).
+/// Prometheus scrape endpoint (text format, not JSON — kept out of
+/// the OpenAPI schema for that reason). If `METRICS_TOKEN` is set in
+/// env, requires `Authorization: Bearer <token>`. Otherwise public
+/// (dev convenience).
 async fn prometheus_metrics(headers: HeaderMap) -> impl IntoResponse {
     if let Ok(expected) = std::env::var("METRICS_TOKEN")
         && !expected.is_empty()
@@ -103,10 +104,71 @@ async fn prometheus_metrics(headers: HeaderMap) -> impl IntoResponse {
     (StatusCode::OK, body).into_response()
 }
 
-/// GET /api/metrics/summary — JSON summary for internal dashboards
-async fn metrics_summary(
+#[derive(Debug, Serialize, ToSchema)]
+pub struct UsersStats {
+    pub total: i64,
+    /// Non-banned, `profile_active = TRUE`.
+    pub active: i64,
+    /// Distinct users with at least one activity row for today (UTC).
+    pub today_active: i64,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ChallengesStats {
+    pub published: i64,
+    pub total_submissions: i64,
+    /// Submissions started in the last 24h.
+    pub today_submissions: i64,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ModerationStats {
+    pub pending_reports: i64,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct MessagingStats {
+    pub active_conversations: i64,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct MetricsWebsocketStats {
+    pub connections: usize,
+    pub rooms: usize,
+    pub users: usize,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct DatabasePoolStats {
+    pub pool_size: u32,
+    pub pool_idle: usize,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct MetricsSummary {
+    pub users: UsersStats,
+    pub challenges: ChallengesStats,
+    pub enterprises: i64,
+    pub moderation: ModerationStats,
+    pub messaging: MessagingStats,
+    pub websocket: MetricsWebsocketStats,
+    pub database: DatabasePoolStats,
+}
+
+/// JSON summary of the same counters exposed via Prometheus, for
+/// internal dashboards that speak JSON. Public today — plan is to
+/// gate behind admin auth once the admin UI consumes it.
+#[utoipa::path(
+    get,
+    path = "/api/metrics/summary",
+    tag = "admin",
+    responses(
+        (status = 200, description = "Business metrics snapshot", body = ApiResponse<MetricsSummary>),
+    ),
+)]
+pub async fn metrics_summary(
     axum::extract::State(state): axum::extract::State<AppState>,
-) -> Result<Json<serde_json::Value>, crate::errors::AppError> {
+) -> Result<Json<ApiResponse<MetricsSummary>>, crate::errors::AppError> {
     // DB stats
     let total_users: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users")
         .fetch_one(&state.db)
@@ -160,38 +222,30 @@ async fn metrics_summary(
     let pool_size = state.db.size();
     let pool_idle = state.db.num_idle();
 
-    Ok(Json(json!({
-        "data": {
-            "users": {
-                "total": total_users,
-                "active": active_users,
-                "today_active": today_active_users,
-            },
-            "challenges": {
-                "published": total_challenges,
-                "total_submissions": total_submissions,
-                "today_submissions": today_submissions,
-            },
-            "enterprises": total_enterprises,
-            "moderation": {
-                "pending_reports": pending_reports,
-            },
-            "messaging": {
-                "active_conversations": active_conversations,
-            },
-            "websocket": {
-                "connections": ws_connections,
-                "rooms": ws_rooms,
-                "users": ws_users,
-            },
-            "database": {
-                "pool_size": pool_size,
-                "pool_idle": pool_idle,
-            },
+    Ok(Json(ApiResponse::new(MetricsSummary {
+        users: UsersStats {
+            total: total_users,
+            active: active_users,
+            today_active: today_active_users,
         },
-        "meta": {
-            "request_id": Uuid::new_v4().to_string(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-        }
+        challenges: ChallengesStats {
+            published: total_challenges,
+            total_submissions,
+            today_submissions,
+        },
+        enterprises: total_enterprises,
+        moderation: ModerationStats { pending_reports },
+        messaging: MessagingStats {
+            active_conversations,
+        },
+        websocket: MetricsWebsocketStats {
+            connections: ws_connections,
+            rooms: ws_rooms,
+            users: ws_users,
+        },
+        database: DatabasePoolStats {
+            pool_size,
+            pool_idle,
+        },
     })))
 }

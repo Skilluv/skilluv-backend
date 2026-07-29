@@ -88,7 +88,14 @@ struct CreateOrientationBody {
     is_curated: Option<bool>,
 }
 
-async fn create_orientation(
+/// Admin: create an orientation entry.
+#[utoipa::path(
+    post, path = "/api/admin/orientations", tag = "admin",
+    request_body(content = serde_json::Value, description = "Orientation payload"),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create_orientation(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<CreateOrientationBody>,
@@ -187,7 +194,15 @@ struct PatchOrientationBody {
     is_archived: Option<bool>,
 }
 
-async fn patch_orientation(
+/// Admin: partial update of an orientation (slug immutable).
+#[utoipa::path(
+    patch, path = "/api/admin/orientations/{slug}", tag = "admin",
+    params(("slug" = String, Path)),
+    request_body(content = serde_json::Value, description = "Orientation partial payload"),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn patch_orientation(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(slug): Path<String>,
@@ -305,7 +320,15 @@ struct AttachSkillBody {
     weight: Option<f32>,
 }
 
-async fn attach_skill(
+/// Admin: attach a skill to an orientation (upsert).
+#[utoipa::path(
+    post, path = "/api/admin/orientations/{slug}/skills", tag = "admin",
+    params(("slug" = String, Path)),
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn attach_skill(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(slug): Path<String>,
@@ -387,7 +410,14 @@ async fn attach_skill(
 // DELETE /admin/orientations/{slug}/skills/{skill_id}   (idempotent)
 // ═══════════════════════════════════════════════════════════════════
 
-async fn detach_skill(
+/// Admin: detach a skill from an orientation.
+#[utoipa::path(
+    delete, path = "/api/admin/orientations/{slug}/skills/{skill_id}", tag = "admin",
+    params(("slug" = String, Path), ("skill_id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn detach_skill(
     State(state): State<AppState>,
     auth: AuthUser,
     Path((slug, skill_id)): Path<(String, Uuid)>,

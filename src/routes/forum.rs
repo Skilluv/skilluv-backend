@@ -6,6 +6,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::Deserialize;
 use serde_json::{Value, json};
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::AppState;
@@ -39,21 +40,41 @@ fn build_response(data: Value) -> Value {
     })
 }
 
-async fn list_categories(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
+/// Public forum categories.
+#[utoipa::path(
+    get,
+    path = "/api/forum/categories",
+    tag = "forum",
+    responses(
+        (status = 200, description = "Categories", body = serde_json::Value),
+    ),
+)]
+pub async fn list_categories(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
     let cats = forum::list_categories(&state.db).await?;
     Ok(Json(build_response(json!({ "categories": cats }))))
 }
 
-#[derive(Deserialize)]
-struct ListPostsQuery {
-    category: Option<String>,
-    kind: Option<String>,
-    sort: Option<String>,
-    page: Option<i64>,
-    per_page: Option<i64>,
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct ListPostsQuery {
+    pub category: Option<String>,
+    pub kind: Option<String>,
+    /// `recent` (default), `hot`, `top-bounty`.
+    pub sort: Option<String>,
+    pub page: Option<i64>,
+    pub per_page: Option<i64>,
 }
 
-async fn list_posts(
+/// Paginated forum posts. Optional filters on category and kind.
+#[utoipa::path(
+    get,
+    path = "/api/forum/posts",
+    tag = "forum",
+    params(ListPostsQuery),
+    responses(
+        (status = 200, description = "Posts", body = serde_json::Value),
+    ),
+)]
+pub async fn list_posts(
     State(state): State<AppState>,
     Query(q): Query<ListPostsQuery>,
 ) -> Result<Json<Value>, AppError> {
@@ -78,16 +99,30 @@ async fn list_posts(
     Ok(Json(build_response(json!({ "posts": posts }))))
 }
 
-#[derive(Deserialize)]
-struct CreatePostBody {
-    category_slug: String,
-    kind: String,
-    title: String,
-    body: String,
-    bounty_fragments: Option<i32>,
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CreatePostBody {
+    pub category_slug: String,
+    /// `question`, `discussion`, `announcement`, …
+    pub kind: String,
+    pub title: String,
+    pub body: String,
+    /// Bounty fragments for a question (0 = no bounty).
+    pub bounty_fragments: Option<i32>,
 }
 
-async fn create_post(
+/// Create a forum post. Question kind is rate-limited by user tier.
+#[utoipa::path(
+    post,
+    path = "/api/forum/posts",
+    tag = "forum",
+    request_body = CreatePostBody,
+    responses(
+        (status = 200, description = "Post created", body = serde_json::Value),
+        (status = 429, description = "Question rate limit hit for tier", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create_post(
     State(state): State<AppState>,
     auth: AuthUserComplete,
     headers: HeaderMap,
@@ -146,7 +181,18 @@ async fn create_post(
     Ok(Json(build_response(json!({ "post": post }))))
 }
 
-async fn get_post(
+/// Get a post by id. Bumps the view counter.
+#[utoipa::path(
+    get,
+    path = "/api/forum/posts/{id}",
+    tag = "forum",
+    params(("id" = Uuid, Path, description = "Post UUID")),
+    responses(
+        (status = 200, description = "Post", body = serde_json::Value),
+        (status = 404, description = "Post not found", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn get_post(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Value>, AppError> {
@@ -156,13 +202,26 @@ async fn get_post(
     Ok(Json(build_response(json!({ "post": post }))))
 }
 
-#[derive(Deserialize)]
-struct EditPostBody {
-    title: String,
-    body: String,
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct EditPostBody {
+    pub title: String,
+    pub body: String,
 }
 
-async fn edit_post(
+/// Edit a post — restricted to author or moderator+ role.
+#[utoipa::path(
+    put,
+    path = "/api/forum/posts/{id}",
+    tag = "forum",
+    params(("id" = Uuid, Path, description = "Post UUID")),
+    request_body = EditPostBody,
+    responses(
+        (status = 200, description = "Post updated", body = serde_json::Value),
+        (status = 403, description = "Not the author nor moderator", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn edit_post(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -180,7 +239,19 @@ async fn edit_post(
     Ok(Json(build_response(json!({ "post": post }))))
 }
 
-async fn delete_post(
+/// Delete a post — restricted to author or moderator+ role.
+#[utoipa::path(
+    delete,
+    path = "/api/forum/posts/{id}",
+    tag = "forum",
+    params(("id" = Uuid, Path, description = "Post UUID")),
+    responses(
+        (status = 200, description = "Deleted", body = serde_json::Value),
+        (status = 403, description = "Not the author nor moderator", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn delete_post(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -194,13 +265,27 @@ async fn delete_post(
 /// canonical resolution of the question). Both legacy names are accepted
 /// as aliases so we can roll out the front migration (FE-P0-BE08) without
 /// coordinating a big-bang deploy.
-#[derive(Deserialize)]
-struct AcceptAnswerBody {
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct AcceptAnswerBody {
     #[serde(alias = "comment_id", alias = "answer_comment_id")]
-    answer_id: Uuid,
+    pub answer_id: Uuid,
 }
 
-async fn accept_answer(
+/// Accept an answer on a question. Transfers any bounty to the answer
+/// author and notifies them.
+#[utoipa::path(
+    post,
+    path = "/api/forum/posts/{id}/accept-answer",
+    tag = "forum",
+    params(("id" = Uuid, Path, description = "Question post UUID")),
+    request_body = AcceptAnswerBody,
+    responses(
+        (status = 200, description = "Answer accepted, bounty transferred", body = serde_json::Value),
+        (status = 403, description = "Not the question author", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn accept_answer(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -243,12 +328,25 @@ async fn accept_answer(
     }))))
 }
 
-#[derive(Deserialize)]
-struct TogglePinBody {
-    pinned: bool,
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct TogglePinBody {
+    pub pinned: bool,
 }
 
-async fn toggle_pin(
+/// Pin / unpin a post — moderator+ only.
+#[utoipa::path(
+    post,
+    path = "/api/forum/posts/{id}/pin",
+    tag = "forum",
+    params(("id" = Uuid, Path, description = "Post UUID")),
+    request_body = TogglePinBody,
+    responses(
+        (status = 200, description = "Toggled", body = serde_json::Value),
+        (status = 403, description = "Not a moderator", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn toggle_pin(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -258,12 +356,25 @@ async fn toggle_pin(
     Ok(Json(build_response(json!({ "pinned": body.pinned }))))
 }
 
-#[derive(Deserialize)]
-struct ToggleLockBody {
-    locked: bool,
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct ToggleLockBody {
+    pub locked: bool,
 }
 
-async fn toggle_lock(
+/// Lock / unlock a post — moderator+ only.
+#[utoipa::path(
+    post,
+    path = "/api/forum/posts/{id}/lock",
+    tag = "forum",
+    params(("id" = Uuid, Path, description = "Post UUID")),
+    request_body = ToggleLockBody,
+    responses(
+        (status = 200, description = "Toggled", body = serde_json::Value),
+        (status = 403, description = "Not a moderator", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn toggle_lock(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -273,13 +384,24 @@ async fn toggle_lock(
     Ok(Json(build_response(json!({ "locked": body.locked }))))
 }
 
-#[derive(Deserialize)]
-struct SearchQuery {
-    q: String,
-    limit: Option<i64>,
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct SearchQuery {
+    pub q: String,
+    /// Max hits. Defaults to 20.
+    pub limit: Option<i64>,
 }
 
-async fn search(
+/// Full-text search across forum posts.
+#[utoipa::path(
+    get,
+    path = "/api/forum/search",
+    tag = "forum",
+    params(SearchQuery),
+    responses(
+        (status = 200, description = "Search hits", body = serde_json::Value),
+    ),
+)]
+pub async fn search(
     State(state): State<AppState>,
     Query(query): Query<SearchQuery>,
 ) -> Result<Json<Value>, AppError> {

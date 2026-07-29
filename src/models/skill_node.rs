@@ -16,7 +16,7 @@ use uuid::Uuid;
 ///
 /// Les slices sont tagguées via `slice_skills` (M2M). Les users prouvent leurs
 /// skills via `user_skills` mis à jour à chaque `deliverable` vérifié.
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow, utoipa::ToSchema)]
 pub struct SkillNode {
     pub id: Uuid,
     pub slug: String,

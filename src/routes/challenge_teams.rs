@@ -124,7 +124,15 @@ struct Team {
 }
 
 // POST /api/challenges/:id/team/create
-async fn create_team(
+/// Create a team for a challenge.
+#[utoipa::path(
+    post, path = "/api/challenges/{id}/team/create", tag = "challenges",
+    params(("id" = uuid::Uuid, Path)),
+    request_body(content = serde_json::Value),
+    responses((status = 201, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create_team(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(challenge_id): Path<Uuid>,
@@ -206,7 +214,14 @@ async fn create_team(
 }
 
 // POST /api/challenges/:id/team/:team_id/join
-async fn join_team(
+/// Join a team for a challenge.
+#[utoipa::path(
+    post, path = "/api/challenges/{id}/team/{team_id}/join", tag = "challenges",
+    params(("id" = uuid::Uuid, Path), ("team_id" = uuid::Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn join_team(
     State(state): State<AppState>,
     auth: AuthUser,
     Path((challenge_id, team_id)): Path<(Uuid, Uuid)>,
@@ -271,7 +286,14 @@ async fn join_team(
 }
 
 // GET /api/challenges/:id/teams
-async fn list_teams(
+/// List teams for a challenge.
+#[utoipa::path(
+    get, path = "/api/challenges/{id}/teams", tag = "challenges",
+    params(("id" = uuid::Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_teams(
     State(state): State<AppState>,
     _auth: AuthUser,
     Path(challenge_id): Path<Uuid>,
@@ -306,7 +328,15 @@ async fn list_teams(
 }
 
 // POST /api/challenges/:id/team/:team_id/submit
-async fn submit_team(
+/// Submit a team attempt for a challenge.
+#[utoipa::path(
+    post, path = "/api/challenges/{id}/team/{team_id}/submit", tag = "challenges",
+    params(("id" = uuid::Uuid, Path), ("team_id" = uuid::Uuid, Path)),
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn submit_team(
     State(state): State<AppState>,
     auth: AuthUser,
     Path((challenge_id, team_id)): Path<(Uuid, Uuid)>,
@@ -487,7 +517,14 @@ async fn submit_team(
 }
 
 // GET /api/challenges/:id/timer — time remaining for current submission
-async fn get_timer(
+/// Get remaining timer for the current submission.
+#[utoipa::path(
+    get, path = "/api/challenges/{id}/timer", tag = "challenges",
+    params(("id" = uuid::Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn get_timer(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(challenge_id): Path<Uuid>,
@@ -525,7 +562,15 @@ async fn get_timer(
 }
 
 // POST /api/challenges/:id/timer/extend — admin OR team captain (BE-P0-37)
-async fn extend_timer(
+/// Extend the challenge timer (admin or team captain).
+#[utoipa::path(
+    post, path = "/api/challenges/{id}/timer/extend", tag = "challenges",
+    params(("id" = uuid::Uuid, Path)),
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn extend_timer(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(challenge_id): Path<Uuid>,
@@ -594,10 +639,14 @@ struct CreatePersistentTeamRequest {
     max_members: Option<i32>,
 }
 
-/// POST /api/teams — crée une team persistente réutilisable.
-///
-/// Le créateur est automatiquement ajouté comme premier membre.
-async fn create_persistent_team(
+/// Create a persistent team (independent of a challenge).
+#[utoipa::path(
+    post, path = "/api/teams", tag = "challenges",
+    request_body(content = serde_json::Value),
+    responses((status = 201, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create_persistent_team(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<CreatePersistentTeamRequest>,
@@ -640,8 +689,14 @@ async fn create_persistent_team(
     ))
 }
 
-/// GET /api/teams/{team_id} — détail d'une team + membres.
-async fn get_team(
+/// Get details of a team with members.
+#[utoipa::path(
+    get, path = "/api/teams/{team_id}", tag = "challenges",
+    params(("team_id" = uuid::Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn get_team(
     State(state): State<AppState>,
     _auth: AuthUser,
     Path(team_id): Path<Uuid>,
@@ -673,8 +728,14 @@ async fn get_team(
     }))))
 }
 
-/// POST /api/teams/{team_id} — join une team persistente ouverte.
-async fn join_persistent_team(
+/// Join an open persistent team.
+#[utoipa::path(
+    post, path = "/api/teams/{team_id}", tag = "challenges",
+    params(("team_id" = uuid::Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn join_persistent_team(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(team_id): Path<Uuid>,
@@ -720,8 +781,14 @@ async fn join_persistent_team(
     Ok(Json(build_response(json!({ "joined": true }))))
 }
 
-/// POST /api/teams/{team_id}/disband — le créateur dissout la team.
-async fn disband_team(
+/// Disband a team (creator only).
+#[utoipa::path(
+    post, path = "/api/teams/{team_id}/disband", tag = "challenges",
+    params(("team_id" = uuid::Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn disband_team(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(team_id): Path<Uuid>,
@@ -741,8 +808,13 @@ async fn disband_team(
     Ok(Json(build_response(json!({ "disbanded": true }))))
 }
 
-/// GET /api/users/me/teams — teams (challenge ou persistentes) où je suis membre.
-async fn my_teams(
+/// List teams (challenge or persistent) the caller is a member of.
+#[utoipa::path(
+    get, path = "/api/users/me/teams", tag = "challenges",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn my_teams(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<serde_json::Value>, AppError> {
@@ -798,8 +870,14 @@ async fn require_team_creator(
     }
 }
 
-/// GET /api/teams/{team_id}/slots
-async fn list_team_slots(
+/// List role slots for a team.
+#[utoipa::path(
+    get, path = "/api/teams/{team_id}/slots", tag = "challenges",
+    params(("team_id" = uuid::Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_team_slots(
     State(state): State<AppState>,
     _auth: AuthUser,
     Path(team_id): Path<Uuid>,
@@ -808,8 +886,15 @@ async fn list_team_slots(
     Ok(Json(build_response(json!({ "slots": slots }))))
 }
 
-/// POST /api/teams/{team_id}/slots — le créateur de la team définit un slot.
-async fn create_team_slot(
+/// Create a role slot in a team (creator only).
+#[utoipa::path(
+    post, path = "/api/teams/{team_id}/slots", tag = "challenges",
+    params(("team_id" = uuid::Uuid, Path)),
+    request_body(content = serde_json::Value),
+    responses((status = 201, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create_team_slot(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(team_id): Path<Uuid>,
@@ -845,8 +930,13 @@ async fn create_team_slot(
     ))
 }
 
-/// GET /api/teams/marketplace?role=&skill=&limit= — marketplace public.
-async fn marketplace_slots(
+/// Public marketplace of open team slots.
+#[utoipa::path(
+    get, path = "/api/teams/marketplace", tag = "challenges",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn marketplace_slots(
     State(state): State<AppState>,
     _auth: AuthUser,
     axum::extract::Query(q): axum::extract::Query<MarketplaceQuery>,
@@ -868,8 +958,14 @@ struct MarketplaceQuery {
     limit: Option<i64>,
 }
 
-/// POST /api/teams/{team_id}/slots/{slot_id}/fill — user prend le slot.
-async fn fill_team_slot(
+/// Fill a team slot with the caller.
+#[utoipa::path(
+    post, path = "/api/teams/{team_id}/slots/{slot_id}/fill", tag = "challenges",
+    params(("team_id" = uuid::Uuid, Path), ("slot_id" = uuid::Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn fill_team_slot(
     State(state): State<AppState>,
     auth: AuthUser,
     Path((_team_id, slot_id)): Path<(Uuid, Uuid)>,
@@ -879,8 +975,14 @@ async fn fill_team_slot(
     Ok(Json(build_response(json!({ "slot": slot }))))
 }
 
-/// POST /api/teams/{team_id}/slots/{slot_id}/leave — user libère son slot.
-async fn leave_team_slot(
+/// Leave a team slot.
+#[utoipa::path(
+    post, path = "/api/teams/{team_id}/slots/{slot_id}/leave", tag = "challenges",
+    params(("team_id" = uuid::Uuid, Path), ("slot_id" = uuid::Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn leave_team_slot(
     State(state): State<AppState>,
     auth: AuthUser,
     Path((_team_id, slot_id)): Path<(Uuid, Uuid)>,
@@ -890,8 +992,14 @@ async fn leave_team_slot(
     Ok(Json(build_response(json!({ "slot": slot }))))
 }
 
-/// DELETE /api/teams/{team_id}/slots/{slot_id} — créateur supprime un slot vide.
-async fn delete_team_slot(
+/// Delete an empty team slot (creator only).
+#[utoipa::path(
+    delete, path = "/api/teams/{team_id}/slots/{slot_id}", tag = "challenges",
+    params(("team_id" = uuid::Uuid, Path), ("slot_id" = uuid::Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn delete_team_slot(
     State(state): State<AppState>,
     auth: AuthUser,
     Path((team_id, slot_id)): Path<(Uuid, Uuid)>,
@@ -901,9 +1009,13 @@ async fn delete_team_slot(
     Ok(Json(build_response(json!({ "deleted": true }))))
 }
 
-/// GET /api/team-slots/open?role=musician&limit=20
-/// Marketplace : trouver les teams qui cherchent mon rôle.
-async fn list_open_slots_by_role(
+/// List open team slots by role (marketplace).
+#[utoipa::path(
+    get, path = "/api/team-slots/open", tag = "challenges",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_open_slots_by_role(
     State(state): State<AppState>,
     _auth: AuthUser,
     axum::extract::Query(q): axum::extract::Query<OpenSlotsQuery>,
@@ -926,12 +1038,15 @@ struct AttachGuildBody {
     guild_id: Uuid,
 }
 
-/// POST /api/teams/{team_id}/guild — le créateur de la team la lie à une guilde.
-///
-/// Prérequis : le créateur doit être membre de la guilde ciblée. La team
-/// devient "officielle" de cette guilde → chaque submit qui rapporte des
-/// fragments donne un bonus GP collectif à la guilde (P10.5).
-async fn attach_team_to_guild(
+/// Attach a team to a guild (creator only, must be guild member).
+#[utoipa::path(
+    post, path = "/api/teams/{team_id}/guild", tag = "challenges",
+    params(("team_id" = uuid::Uuid, Path)),
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn attach_team_to_guild(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(team_id): Path<Uuid>,
@@ -964,8 +1079,14 @@ async fn attach_team_to_guild(
     }))))
 }
 
-/// DELETE /api/teams/{team_id}/guild — détache la team de sa guilde.
-async fn detach_team_from_guild(
+/// Detach a team from its guild.
+#[utoipa::path(
+    delete, path = "/api/teams/{team_id}/guild", tag = "challenges",
+    params(("team_id" = uuid::Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn detach_team_from_guild(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(team_id): Path<Uuid>,

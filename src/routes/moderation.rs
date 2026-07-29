@@ -75,19 +75,31 @@ fn wrap(data: Value) -> Value {
     })
 }
 
-#[derive(Debug, Deserialize)]
-struct PaginationQuery {
+#[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+pub struct PaginationQuery {
     #[serde(default)]
-    page: Option<i64>,
+    pub page: Option<i64>,
     #[serde(default)]
-    per_page: Option<i64>,
+    pub per_page: Option<i64>,
 }
 
 // ═══════════════════════════════════════════════════════════════════
 // Community curation
 // ═══════════════════════════════════════════════════════════════════
 
-async fn community_review_queue(
+/// Community curation review queue (curator or admin).
+#[utoipa::path(
+    get,
+    path = "/api/community/challenges/review",
+    tag = "moderation",
+    params(PaginationQuery),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 403, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn community_review_queue(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<PaginationQuery>,
@@ -145,7 +157,19 @@ async fn community_review_queue(
     })))
 }
 
-async fn community_challenge_approve(
+/// Approve a community challenge (curator or admin).
+#[utoipa::path(
+    post,
+    path = "/api/community/challenges/{id}/approve",
+    tag = "moderation",
+    params(("id" = Uuid, Path)),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 403, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn community_challenge_approve(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -190,13 +214,26 @@ async fn community_challenge_approve(
 /// Reject reason. `feedback` accepted as legacy alias so front clients
 /// mid-migration don't break — remove the alias once the frontend contract
 /// pins `reason` (see FE-P0-BE10).
-#[derive(Debug, Deserialize)]
-struct RejectBody {
+#[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+pub struct RejectBody {
     #[serde(alias = "feedback")]
-    reason: String,
+    pub reason: String,
 }
 
-async fn community_challenge_reject(
+/// Reject a community challenge with reason (curator or admin).
+#[utoipa::path(
+    post,
+    path = "/api/community/challenges/{id}/reject",
+    tag = "moderation",
+    params(("id" = Uuid, Path)),
+    request_body = RejectBody,
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 403, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn community_challenge_reject(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -250,7 +287,19 @@ async fn community_challenge_reject(
 // Fraud review
 // ═══════════════════════════════════════════════════════════════════
 
-async fn fraud_flagged_list(
+/// List deliverables flagged for anti-plagiarism review (plagiarism_reviewer or admin).
+#[utoipa::path(
+    get,
+    path = "/api/fraud/deliverables/flagged",
+    tag = "moderation",
+    params(PaginationQuery),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 403, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn fraud_flagged_list(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<PaginationQuery>,
@@ -299,13 +348,26 @@ async fn fraud_flagged_list(
     })))
 }
 
-#[derive(Debug, Deserialize)]
-struct ReasonBody {
+#[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+pub struct ReasonBody {
     #[serde(default)]
-    reason: Option<String>,
+    pub reason: Option<String>,
 }
 
-async fn fraud_mark_valid(
+/// Mark a flagged deliverable as valid (false positive).
+#[utoipa::path(
+    post,
+    path = "/api/fraud/deliverables/{id}/mark-valid",
+    tag = "moderation",
+    params(("id" = Uuid, Path)),
+    request_body = ReasonBody,
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 403, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn fraud_mark_valid(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -355,7 +417,20 @@ async fn fraud_mark_valid(
     Ok(Json(wrap(json!({ "marked_valid": true, "id": id }))))
 }
 
-async fn fraud_revoke(
+/// Revoke a flagged deliverable (confirmed plagiarism / fraud).
+#[utoipa::path(
+    post,
+    path = "/api/fraud/deliverables/{id}/revoke",
+    tag = "moderation",
+    params(("id" = Uuid, Path)),
+    request_body = ReasonBody,
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 403, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn fraud_revoke(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -413,14 +488,27 @@ async fn fraud_revoke(
 // Forum moderation
 // ═══════════════════════════════════════════════════════════════════
 
-#[derive(Debug, Deserialize)]
-struct ModeratePostBody {
+#[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+pub struct ModeratePostBody {
     /// `hide` (soft-delete) | `lock` | `unlock` | `unhide`.
-    action: String,
-    reason: String,
+    pub action: String,
+    pub reason: String,
 }
 
-async fn forum_moderate_post(
+/// Forum moderator action on a post (hide/lock/unlock/unhide).
+#[utoipa::path(
+    post,
+    path = "/api/forum/posts/{id}/moderate",
+    tag = "moderation",
+    params(("id" = Uuid, Path)),
+    request_body = ModeratePostBody,
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 403, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn forum_moderate_post(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -478,18 +566,34 @@ async fn forum_moderate_post(
     )))
 }
 
-#[derive(Debug, Deserialize)]
-struct MuteUserBody {
+#[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+pub struct MuteUserBody {
     /// Durée en heures. Défaut 24. Max 168 (7j) pour un moderator ; illimité
     /// pour admin (utiliser is_banned via un autre endpoint).
     #[serde(default)]
-    duration_hours: Option<i32>,
-    reason: String,
+    pub duration_hours: Option<i32>,
+    pub reason: String,
+    /// `forum`, `community`, `all`.
     #[serde(default)]
-    scope: Option<String>, // forum | community | all
+    pub scope: Option<String>,
 }
 
-async fn forum_mute_user(
+/// Mute a user in scope forum/community/all. Duration in hours,
+/// capped 168h for moderators.
+#[utoipa::path(
+    post,
+    path = "/api/forum/users/{id}/mute",
+    tag = "moderation",
+    params(("id" = Uuid, Path)),
+    request_body = MuteUserBody,
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 400, body = crate::api_response::ErrorResponse),
+        (status = 403, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn forum_mute_user(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(target_id): Path<Uuid>,

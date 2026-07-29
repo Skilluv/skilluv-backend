@@ -1,14 +1,14 @@
 use axum::extract::{Path, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use serde::Deserialize;
-use serde_json::json;
-use uuid::Uuid;
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use crate::AppState;
+use crate::api_response::ApiResponse;
 use crate::errors::AppError;
 use crate::middleware::{AuthUser, RateLimiter};
-use crate::services::sandbox::{self, ExecutionResult};
+use crate::services::sandbox::{self, ExecutionResult, LanguageInfo};
 
 pub fn sandbox_routes() -> Router<AppState> {
     Router::new()
@@ -18,22 +18,16 @@ pub fn sandbox_routes() -> Router<AppState> {
         .route("/sandbox/languages", get(list_languages))
 }
 
-#[derive(Debug, Deserialize)]
-struct ExecuteRequest {
-    source_code: String,
-    language: String,
-    stdin: Option<String>,
-    expected_output: Option<String>,
-}
-
-fn build_response(data: serde_json::Value) -> serde_json::Value {
-    json!({
-        "data": data,
-        "meta": {
-            "request_id": Uuid::new_v4().to_string(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-        }
-    })
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct ExecuteRequest {
+    /// Source code. Cap: 100 KB.
+    pub source_code: String,
+    /// Judge0 language slug (`rust`, `python`, `cpp`, …).
+    pub language: String,
+    pub stdin: Option<String>,
+    /// If provided, Judge0 compares stdout to this and returns status 3
+    /// (Accepted) or 4 (Wrong Answer).
+    pub expected_output: Option<String>,
 }
 
 /// Judge0 status IDs:
@@ -53,12 +47,60 @@ fn classify_result(result: &ExecutionResult) -> (&'static str, bool) {
     }
 }
 
-// POST /api/sandbox/execute — synchronous execution
-async fn execute(
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ExecuteResponse {
+    pub execution: ExecutionResult,
+    /// One of `accepted`, `wrong_answer`, `time_limit_exceeded`,
+    /// `compilation_error`, `runtime_error`, `internal_error`,
+    /// `processing`, `unknown`.
+    pub verdict: String,
+    pub success: bool,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AsyncExecuteResponse {
+    pub token: String,
+    pub message: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AsyncResultResponse {
+    pub execution: ExecutionResult,
+    pub verdict: String,
+    pub success: bool,
+    /// True while Judge0 still has the submission (status id 1 or 2).
+    pub processing: bool,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct LanguagesResponse {
+    /// Fully-supported languages (docs, tests, examples ready).
+    pub tier1: Vec<LanguageInfo>,
+    /// Judge0-supported but not officially curated.
+    pub tier2: Vec<LanguageInfo>,
+    pub total: usize,
+}
+
+/// Execute code synchronously via Judge0. Rate-limited to 20 exec/min
+/// per user. Source cap: 100 KB.
+#[utoipa::path(
+    post,
+    path = "/api/sandbox/execute",
+    tag = "challenges",
+    request_body = ExecuteRequest,
+    responses(
+        (status = 200, description = "Execution finished", body = ApiResponse<ExecuteResponse>),
+        (status = 400, description = "Empty source or over 100 KB", body = crate::api_response::ErrorResponse),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+        (status = 429, description = "Rate limit hit", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn execute(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<ExecuteRequest>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<ExecuteResponse>>, AppError> {
     // Rate limit: 20 executions per minute per user
     RateLimiter::check(
         &mut state.redis.clone(),
@@ -95,19 +137,33 @@ async fn execute(
 
     let (verdict, success) = classify_result(&result);
 
-    Ok(Json(build_response(json!({
-        "execution": result,
-        "verdict": verdict,
-        "success": success,
-    }))))
+    Ok(Json(ApiResponse::new(ExecuteResponse {
+        execution: result,
+        verdict: verdict.to_string(),
+        success,
+    })))
 }
 
-// POST /api/sandbox/execute-async — async execution (returns token)
-async fn execute_async(
+/// Enqueue a Judge0 submission and return a token. Poll
+/// `/sandbox/result/{token}` for the result. No result-fetching
+/// rate-limit — just the submission.
+#[utoipa::path(
+    post,
+    path = "/api/sandbox/execute-async",
+    tag = "challenges",
+    request_body = ExecuteRequest,
+    responses(
+        (status = 200, description = "Submission queued", body = ApiResponse<AsyncExecuteResponse>),
+        (status = 400, description = "Empty source", body = crate::api_response::ErrorResponse),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn execute_async(
     State(state): State<AppState>,
     _auth: AuthUser,
     Json(body): Json<ExecuteRequest>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<AsyncExecuteResponse>>, AppError> {
     if body.source_code.is_empty() {
         return Err(AppError::Validation(
             "source_code cannot be empty".to_string(),
@@ -119,40 +175,64 @@ async fn execute_async(
         .execute_async(&body.source_code, &body.language, body.stdin.as_deref())
         .await?;
 
-    Ok(Json(build_response(json!({
-        "token": token,
-        "message": "Submission queued. Poll /sandbox/result/{token} for results."
-    }))))
+    Ok(Json(ApiResponse::new(AsyncExecuteResponse {
+        token,
+        message: "Submission queued. Poll /sandbox/result/{token} for results.".to_string(),
+    })))
 }
 
-// GET /api/sandbox/result/:token — poll result
-async fn get_result(
+/// Fetch the result of an async submission. `processing: true` when
+/// Judge0 still has it queued or running.
+#[utoipa::path(
+    get,
+    path = "/api/sandbox/result/{token}",
+    tag = "challenges",
+    params(("token" = String, Path, description = "Judge0 submission token")),
+    responses(
+        (status = 200, description = "Current execution state", body = ApiResponse<AsyncResultResponse>),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn get_result(
     State(state): State<AppState>,
     _auth: AuthUser,
     Path(token): Path<String>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<AsyncResultResponse>>, AppError> {
     let result = state.sandbox.get_result(&token).await?;
     let (verdict, success) = classify_result(&result);
 
     let processing = result.status.id <= 2;
 
-    Ok(Json(build_response(json!({
-        "execution": result,
-        "verdict": verdict,
-        "success": success,
-        "processing": processing,
-    }))))
+    Ok(Json(ApiResponse::new(AsyncResultResponse {
+        execution: result,
+        verdict: verdict.to_string(),
+        success,
+        processing,
+    })))
 }
 
-// GET /api/sandbox/languages — list supported languages
-async fn list_languages(_auth: AuthUser) -> Json<serde_json::Value> {
+/// List Judge0-supported languages the sandbox exposes, split by tier
+/// (1 = officially curated, 2 = available but unpolished).
+#[utoipa::path(
+    get,
+    path = "/api/sandbox/languages",
+    tag = "challenges",
+    responses(
+        (status = 200, description = "Supported languages", body = ApiResponse<LanguagesResponse>),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_languages(_auth: AuthUser) -> Json<ApiResponse<LanguagesResponse>> {
     let languages = sandbox::supported_languages();
-    let tier1: Vec<_> = languages.iter().filter(|l| l.tier == 1).collect();
-    let tier2: Vec<_> = languages.iter().filter(|l| l.tier == 2).collect();
+    let tier1: Vec<LanguageInfo> = languages.iter().filter(|l| l.tier == 1).cloned().collect();
+    let tier2: Vec<LanguageInfo> = languages.iter().filter(|l| l.tier == 2).cloned().collect();
+    let total = languages.len();
 
-    Json(build_response(json!({
-        "tier1": tier1,
-        "tier2": tier2,
-        "total": languages.len(),
-    })))
+    Json(ApiResponse::new(LanguagesResponse {
+        tier1,
+        tier2,
+        total,
+    }))
 }

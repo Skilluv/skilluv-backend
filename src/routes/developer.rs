@@ -54,23 +54,23 @@ fn rand_byte() -> u8 {
 
 // ─── Request types ──────────────────────────────────────────────
 
-#[derive(Debug, Deserialize)]
-struct CreateKeyRequest {
-    name: String,
-    permissions: Option<Vec<String>>,
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct CreateKeyRequest {
+    pub name: String,
+    pub permissions: Option<Vec<String>>,
 }
 
-#[derive(Debug, Deserialize)]
-struct CreateWebhookRequest {
-    url: String,
-    events: Vec<String>,
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct CreateWebhookRequest {
+    pub url: String,
+    pub events: Vec<String>,
 }
 
-#[derive(Debug, Deserialize)]
-struct UpdateWebhookRequest {
-    url: Option<String>,
-    events: Option<Vec<String>>,
-    active: Option<bool>,
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct UpdateWebhookRequest {
+    pub url: Option<String>,
+    pub events: Option<Vec<String>>,
+    pub active: Option<bool>,
 }
 
 // ─── Structs ────────────────────────────────────────────────────
@@ -101,7 +101,14 @@ struct WebhookInfo {
 // ─── API Keys ───────────────────────────────────────────────────
 
 // POST /api/developer/keys
-async fn create_key(
+/// Create an API key. Full key returned once; only hash stored server-side.
+#[utoipa::path(
+    post, path = "/api/developer/keys", tag = "profile",
+    request_body = CreateKeyRequest,
+    responses((status = 201, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create_key(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<CreateKeyRequest>,
@@ -165,7 +172,13 @@ async fn create_key(
 }
 
 // GET /api/developer/keys
-async fn list_keys(
+/// List the caller's API keys (prefix only, never full key).
+#[utoipa::path(
+    get, path = "/api/developer/keys", tag = "profile",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_keys(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<serde_json::Value>, AppError> {
@@ -180,7 +193,14 @@ async fn list_keys(
 }
 
 // DELETE /api/developer/keys/:id
-async fn revoke_key(
+/// Revoke an API key.
+#[utoipa::path(
+    delete, path = "/api/developer/keys/{id}", tag = "profile",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn revoke_key(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -201,7 +221,14 @@ async fn revoke_key(
 }
 
 // POST /api/developer/keys/:id/regenerate
-async fn regenerate_key(
+/// Rotate an API key. Returns the new full key once.
+#[utoipa::path(
+    post, path = "/api/developer/keys/{id}/regenerate", tag = "profile",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn regenerate_key(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -233,7 +260,14 @@ async fn regenerate_key(
 }
 
 // GET /api/developer/keys/:id/usage
-async fn key_usage(
+/// Usage stats for an API key (request count / last used).
+#[utoipa::path(
+    get, path = "/api/developer/keys/{id}/usage", tag = "profile",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn key_usage(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -259,7 +293,14 @@ async fn key_usage(
 // ─── Webhooks ───────────────────────────────────────────────────
 
 // POST /api/developer/webhooks
-async fn create_webhook(
+/// Register an outbound webhook (per-event subscription).
+#[utoipa::path(
+    post, path = "/api/developer/webhooks", tag = "profile",
+    request_body = CreateWebhookRequest,
+    responses((status = 201, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create_webhook(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<CreateWebhookRequest>,
@@ -317,7 +358,13 @@ async fn create_webhook(
 }
 
 // GET /api/developer/webhooks
-async fn list_webhooks(
+/// List the caller's webhooks.
+#[utoipa::path(
+    get, path = "/api/developer/webhooks", tag = "profile",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_webhooks(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<serde_json::Value>, AppError> {
@@ -332,7 +379,15 @@ async fn list_webhooks(
 }
 
 // PUT /api/developer/webhooks/:id
-async fn update_webhook(
+/// Update a webhook (url / events / active).
+#[utoipa::path(
+    put, path = "/api/developer/webhooks/{id}", tag = "profile",
+    params(("id" = Uuid, Path)),
+    request_body = UpdateWebhookRequest,
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn update_webhook(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -362,7 +417,14 @@ async fn update_webhook(
 }
 
 // DELETE /api/developer/webhooks/:id
-async fn delete_webhook(
+/// Delete a webhook.
+#[utoipa::path(
+    delete, path = "/api/developer/webhooks/{id}", tag = "profile",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn delete_webhook(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -383,7 +445,14 @@ async fn delete_webhook(
 }
 
 // POST /api/developer/webhooks/:id/test
-async fn test_webhook(
+/// Send a synthetic test event to a webhook (useful for setup).
+#[utoipa::path(
+    post, path = "/api/developer/webhooks/{id}/test", tag = "profile",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn test_webhook(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,

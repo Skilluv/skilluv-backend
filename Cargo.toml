@@ -102,6 +102,14 @@ hkdf = "0.13"
 openidconnect = "4"
 elliptic-curve = { version = "0.14", features = ["sec1"] }
 
+# OpenAPI generation + contract testing (BE-P1-CONTRACT).
+# utoipa builds a rustc-verified OpenAPI 3.1 schema from #[utoipa::path]
+# annotations. utoipa-swagger-ui serves the interactive docs UI. The generated
+# openapi.json feeds schemathesis in CI for property-based contract fuzzing.
+utoipa = { version = "5", features = ["axum_extras", "chrono", "uuid", "decimal"] }
+utoipa-swagger-ui = { version = "9", features = ["axum"] }
+utoipa-axum = "0.2"
+
 [[bin]]
 name = "skilluv-backend"
 path = "src/main.rs"

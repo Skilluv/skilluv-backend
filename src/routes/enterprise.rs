@@ -315,7 +315,13 @@ struct RegisterAndAcceptRequest {
 // same rate-limit budget, same validators, same terms + verification-email +
 // CSRF + audit + analytics wiring — with enterprise-specific fields laid on
 // top (company profile + owner-tier membership).
-async fn register_enterprise(
+/// Register a new enterprise account (owner + company).
+#[utoipa::path(
+    post, path = "/api/enterprise/register", tag = "enterprise",
+    request_body(content = serde_json::Value),
+    responses((status = 201, body = serde_json::Value), (status = 400, body = crate::api_response::ErrorResponse)),
+)]
+pub async fn register_enterprise(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
     Json(body): Json<RegisterEnterpriseRequest>,
@@ -529,7 +535,13 @@ async fn register_enterprise(
 }
 
 // GET /api/enterprise/profile
-async fn get_profile(
+/// Get the current enterprise profile.
+#[utoipa::path(
+    get, path = "/api/enterprise/profile", tag = "enterprise",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn get_profile(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<serde_json::Value>, AppError> {
@@ -549,7 +561,14 @@ async fn get_profile(
 }
 
 // PUT /api/enterprise/profile
-async fn update_profile(
+/// Update the enterprise profile (owner only).
+#[utoipa::path(
+    put, path = "/api/enterprise/profile", tag = "enterprise",
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn update_profile(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<UpdateProfileRequest>,
@@ -598,7 +617,14 @@ async fn update_profile(
 }
 
 // POST /api/enterprise/logo — upload company logo (multipart)
-async fn upload_logo(
+/// Upload the enterprise logo (multipart).
+#[utoipa::path(
+    post, path = "/api/enterprise/logo", tag = "enterprise",
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn upload_logo(
     State(state): State<AppState>,
     auth: AuthUser,
     mut multipart: Multipart,
@@ -671,7 +697,13 @@ async fn upload_logo(
 }
 
 // DELETE /api/enterprise/logo
-async fn delete_logo(
+/// Delete the enterprise logo.
+#[utoipa::path(
+    delete, path = "/api/enterprise/logo", tag = "enterprise",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn delete_logo(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<serde_json::Value>, AppError> {
@@ -690,7 +722,14 @@ async fn delete_logo(
 }
 
 // POST /api/enterprise/invite
-async fn invite_recruiter(
+/// Invite a recruiter to the enterprise.
+#[utoipa::path(
+    post, path = "/api/enterprise/invite", tag = "enterprise",
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn invite_recruiter(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<InviteRequest>,
@@ -761,7 +800,14 @@ async fn invite_recruiter(
 // with an unrelated account. For invitees without an existing account, use the
 // OAuth-with-invite flow instead (which creates the account and consumes the
 // invite atomically).
-async fn accept_invite(
+/// Accept a recruiter invitation.
+#[utoipa::path(
+    post, path = "/api/enterprise/invite/accept", tag = "enterprise",
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn accept_invite(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<AcceptInviteRequest>,
@@ -797,7 +843,12 @@ async fn accept_invite(
 // Public: the token IS the secret. Returns just enough to render the landing
 // page ("Join {company_name} as {email}") — no membership state, no user info,
 // no PII beyond the invited email itself.
-async fn invite_preview(
+/// Preview a recruiter invitation (public, token-gated).
+#[utoipa::path(
+    get, path = "/api/enterprise/invite/preview", tag = "enterprise",
+    responses((status = 200, body = serde_json::Value)),
+)]
+pub async fn invite_preview(
     State(state): State<AppState>,
     Query(query): Query<InvitePreviewQuery>,
 ) -> Result<Json<serde_json::Value>, AppError> {
@@ -836,7 +887,13 @@ async fn invite_preview(
 // marked verified because the invite was delivered by us to that inbox — the
 // user proving they received the token IS the verification. The invite token
 // is deleted only after the membership is committed.
-async fn invite_register_and_accept(
+/// Register a new recruiter and accept invitation in one call.
+#[utoipa::path(
+    post, path = "/api/enterprise/invite/register-and-accept", tag = "enterprise",
+    request_body(content = serde_json::Value),
+    responses((status = 201, body = serde_json::Value)),
+)]
+pub async fn invite_register_and_accept(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
     Json(body): Json<RegisterAndAcceptRequest>,
@@ -1025,7 +1082,13 @@ async fn invite_register_and_accept(
 }
 
 // GET /api/enterprise/members
-async fn list_members(
+/// List enterprise members.
+#[utoipa::path(
+    get, path = "/api/enterprise/members", tag = "enterprise",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_members(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<serde_json::Value>, AppError> {
@@ -1079,7 +1142,13 @@ async fn list_members(
 // selected via `active_enterprise` cookie (or the fallback used when the
 // cookie is missing/invalid), so the UI can highlight it without a separate
 // round-trip.
-async fn list_memberships(
+/// List all enterprise memberships for the caller.
+#[utoipa::path(
+    get, path = "/api/enterprise/memberships", tag = "enterprise",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_memberships(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<serde_json::Value>, AppError> {
@@ -1140,7 +1209,14 @@ async fn list_memberships(
 // Flip the workspace switcher: verify the caller is an active member of the
 // target enterprise, then re-emit the `active_enterprise` cookie so future
 // `require_enterprise` calls pin to that workspace.
-async fn switch_enterprise(
+/// Switch the active enterprise workspace.
+#[utoipa::path(
+    post, path = "/api/enterprise/switch/{enterprise_id}", tag = "enterprise",
+    params(("enterprise_id" = uuid::Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn switch_enterprise(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(enterprise_id): Path<Uuid>,
@@ -1173,7 +1249,14 @@ async fn switch_enterprise(
 }
 
 // DELETE /api/enterprise/members/:user_id
-async fn revoke_member(
+/// Revoke an enterprise member (owner only).
+#[utoipa::path(
+    delete, path = "/api/enterprise/members/{user_id}", tag = "enterprise",
+    params(("user_id" = uuid::Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn revoke_member(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(user_id): Path<Uuid>,

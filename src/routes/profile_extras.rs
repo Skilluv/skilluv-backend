@@ -58,7 +58,13 @@ fn build_response(data: Value) -> Value {
 
 // ─── Availability + salary ───────────────────────────────────────
 
-async fn get_availability(
+/// Read the caller's availability + salary range settings.
+#[utoipa::path(
+    get, path = "/api/profile/me/availability", tag = "profile",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn get_availability(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
@@ -77,16 +83,23 @@ async fn get_availability(
     }))))
 }
 
-#[derive(Deserialize)]
-struct AvailabilityBody {
-    available_for_hire: Option<bool>,
-    looking_for: Option<String>,
-    salary_range_min_eur: Option<i32>,
-    salary_range_max_eur: Option<i32>,
-    salary_visibility: Option<String>,
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct AvailabilityBody {
+    pub available_for_hire: Option<bool>,
+    pub looking_for: Option<String>,
+    pub salary_range_min_eur: Option<i32>,
+    pub salary_range_max_eur: Option<i32>,
+    pub salary_visibility: Option<String>,
 }
 
-async fn update_availability(
+/// Partial update of availability + salary settings.
+#[utoipa::path(
+    put, path = "/api/profile/me/availability", tag = "profile",
+    request_body = AvailabilityBody,
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn update_availability(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<AvailabilityBody>,
@@ -144,7 +157,13 @@ struct ExperienceInput {
     position: Option<i32>,
 }
 
-async fn list_experiences(
+/// List the caller's work experiences.
+#[utoipa::path(
+    get, path = "/api/profile/me/experiences", tag = "profile",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_experiences(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
@@ -172,7 +191,14 @@ async fn list_experiences(
     Ok(Json(build_response(json!({ "experiences": items }))))
 }
 
-async fn add_experience(
+/// Add a work experience entry.
+#[utoipa::path(
+    post, path = "/api/profile/me/experiences", tag = "profile",
+    request_body(content = serde_json::Value, description = "Experience payload"),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn add_experience(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<ExperienceInput>,
@@ -198,7 +224,15 @@ async fn add_experience(
     Ok(Json(build_response(json!({ "id": id.0 }))))
 }
 
-async fn update_experience(
+/// Update a work experience entry.
+#[utoipa::path(
+    put, path = "/api/profile/me/experiences/{id}", tag = "profile",
+    params(("id" = Uuid, Path)),
+    request_body(content = serde_json::Value, description = "Experience payload"),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn update_experience(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -224,7 +258,14 @@ async fn update_experience(
     Ok(Json(build_response(json!({ "updated": true }))))
 }
 
-async fn delete_experience(
+/// Delete a work experience entry.
+#[utoipa::path(
+    delete, path = "/api/profile/me/experiences/{id}", tag = "profile",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn delete_experience(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -249,7 +290,13 @@ struct EducationInput {
     position: Option<i32>,
 }
 
-async fn list_educations(
+/// List the caller's education entries.
+#[utoipa::path(
+    get, path = "/api/profile/me/educations", tag = "profile",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_educations(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
@@ -277,7 +324,14 @@ async fn list_educations(
     Ok(Json(build_response(json!({ "educations": items }))))
 }
 
-async fn add_education(
+/// Add an education entry.
+#[utoipa::path(
+    post, path = "/api/profile/me/educations", tag = "profile",
+    request_body(content = serde_json::Value, description = "Education payload"),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn add_education(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<EducationInput>,
@@ -303,7 +357,15 @@ async fn add_education(
     Ok(Json(build_response(json!({ "id": id.0 }))))
 }
 
-async fn update_education(
+/// Update an education entry.
+#[utoipa::path(
+    put, path = "/api/profile/me/educations/{id}", tag = "profile",
+    params(("id" = Uuid, Path)),
+    request_body(content = serde_json::Value, description = "Education payload"),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn update_education(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -325,7 +387,14 @@ async fn update_education(
     Ok(Json(build_response(json!({ "updated": true }))))
 }
 
-async fn delete_education(
+/// Delete an education entry.
+#[utoipa::path(
+    delete, path = "/api/profile/me/educations/{id}", tag = "profile",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn delete_education(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -340,7 +409,13 @@ async fn delete_education(
 
 // ─── Languages ───────────────────────────────────────────────────
 
-async fn list_languages(
+/// List the caller's declared languages + proficiency.
+#[utoipa::path(
+    get, path = "/api/profile/me/languages", tag = "profile",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_languages(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
@@ -357,13 +432,20 @@ async fn list_languages(
     Ok(Json(build_response(json!({ "languages": items }))))
 }
 
-#[derive(Deserialize)]
-struct LanguageBody {
-    language: String,
-    proficiency: String,
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct LanguageBody {
+    pub language: String,
+    pub proficiency: String,
 }
 
-async fn set_language(
+/// Add / update a language proficiency (upsert per ISO 639-1 code).
+#[utoipa::path(
+    put, path = "/api/profile/me/languages", tag = "profile",
+    request_body = LanguageBody,
+    responses((status = 200, body = serde_json::Value), (status = 400, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn set_language(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<LanguageBody>,
@@ -397,7 +479,14 @@ async fn set_language(
     )))
 }
 
-async fn remove_language(
+/// Remove one language by ISO 639-1 code.
+#[utoipa::path(
+    delete, path = "/api/profile/me/languages/{code}", tag = "profile",
+    params(("code" = String, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn remove_language(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(code): Path<String>,
@@ -410,7 +499,13 @@ async fn remove_language(
     Ok(Json(build_response(json!({ "deleted": true }))))
 }
 
-async fn clear_languages(
+/// Clear all declared languages.
+#[utoipa::path(
+    delete, path = "/api/profile/me/languages", tag = "profile",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn clear_languages(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {

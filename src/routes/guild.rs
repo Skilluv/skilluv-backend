@@ -91,7 +91,14 @@ struct CreateGuildBody {
     cofounder_ids: Vec<Uuid>,
 }
 
-async fn create_guild(
+/// Create a new guild.
+#[utoipa::path(
+    post, path = "/api/guilds", tag = "guilds",
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create_guild(
     State(state): State<AppState>,
     auth: AuthUser,
     headers: HeaderMap,
@@ -157,7 +164,12 @@ struct LeaderboardQuery {
     limit: Option<i64>,
 }
 
-async fn list_for_leaderboard(
+/// List guilds for leaderboard.
+#[utoipa::path(
+    get, path = "/api/guilds", tag = "guilds",
+    responses((status = 200, body = serde_json::Value)),
+)]
+pub async fn list_for_leaderboard(
     State(state): State<AppState>,
     Query(q): Query<LeaderboardQuery>,
 ) -> Result<Json<Value>, AppError> {
@@ -171,7 +183,13 @@ async fn list_for_leaderboard(
     Ok(Json(build_response(json!({ "guilds": rows }))))
 }
 
-async fn get_by_slug(
+/// Get a guild by slug.
+#[utoipa::path(
+    get, path = "/api/guilds/{slug}", tag = "guilds",
+    params(("slug" = String, Path)),
+    responses((status = 200, body = serde_json::Value)),
+)]
+pub async fn get_by_slug(
     State(state): State<AppState>,
     Path(slug): Path<String>,
 ) -> Result<Json<Value>, AppError> {
@@ -179,7 +197,13 @@ async fn get_by_slug(
     Ok(Json(build_response(json!({ "guild": g }))))
 }
 
-async fn list_members(
+/// List guild members.
+#[utoipa::path(
+    get, path = "/api/guilds/{id}/members", tag = "guilds",
+    params(("id" = uuid::Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+)]
+pub async fn list_members(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Value>, AppError> {
@@ -192,7 +216,15 @@ struct PromoteBody {
     role: String,
 }
 
-async fn promote_member(
+/// Change a guild member's role.
+#[utoipa::path(
+    post, path = "/api/guilds/{id}/members/{user_id}/role", tag = "guilds",
+    params(("id" = uuid::Uuid, Path), ("user_id" = uuid::Uuid, Path)),
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn promote_member(
     State(state): State<AppState>,
     auth: AuthUser,
     Path((guild_id, target_id)): Path<(Uuid, Uuid)>,
@@ -227,7 +259,14 @@ async fn promote_member(
     Ok(Json(build_response(json!({ "updated": true }))))
 }
 
-async fn kick_member(
+/// Kick a member from a guild.
+#[utoipa::path(
+    delete, path = "/api/guilds/{id}/members/{user_id}", tag = "guilds",
+    params(("id" = uuid::Uuid, Path), ("user_id" = uuid::Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn kick_member(
     State(state): State<AppState>,
     auth: AuthUser,
     Path((guild_id, target_id)): Path<(Uuid, Uuid)>,
@@ -249,7 +288,13 @@ async fn kick_member(
     Ok(Json(build_response(json!({ "kicked": true }))))
 }
 
-async fn leave_guild(
+/// Leave your current guild.
+#[utoipa::path(
+    post, path = "/api/guilds/me/leave", tag = "guilds",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn leave_guild(
     State(state): State<AppState>,
     auth: AuthUser,
     headers: HeaderMap,
@@ -273,7 +318,15 @@ struct InviteDirectBody {
     invited_user_id: Uuid,
 }
 
-async fn invite_direct(
+/// Send a direct guild invitation to a user.
+#[utoipa::path(
+    post, path = "/api/guilds/{id}/invitations", tag = "guilds",
+    params(("id" = uuid::Uuid, Path)),
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn invite_direct(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(guild_id): Path<Uuid>,
@@ -306,7 +359,14 @@ async fn invite_direct(
     Ok(Json(build_response(json!({ "invitation": invite }))))
 }
 
-async fn create_token_link(
+/// Create a shareable invitation token link.
+#[utoipa::path(
+    post, path = "/api/guilds/{id}/invitations/link", tag = "guilds",
+    params(("id" = uuid::Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create_token_link(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(guild_id): Path<Uuid>,
@@ -323,7 +383,14 @@ async fn create_token_link(
     Ok(Json(build_response(json!({ "invitation": invite }))))
 }
 
-async fn accept_invite(
+/// Accept a direct guild invitation.
+#[utoipa::path(
+    post, path = "/api/guild-invitations/{id}/accept", tag = "guilds",
+    params(("id" = uuid::Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn accept_invite(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(invitation_id): Path<Uuid>,
@@ -349,7 +416,14 @@ struct JoinByTokenBody {
     token: String,
 }
 
-async fn join_by_token(
+/// Join a guild via a shareable token.
+#[utoipa::path(
+    post, path = "/api/guilds/join-by-token", tag = "guilds",
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn join_by_token(
     State(state): State<AppState>,
     auth: AuthUser,
     headers: HeaderMap,
@@ -374,7 +448,15 @@ struct ApplyBody {
     message: String,
 }
 
-async fn apply(
+/// Apply to join a guild.
+#[utoipa::path(
+    post, path = "/api/guilds/{id}/applications", tag = "guilds",
+    params(("id" = uuid::Uuid, Path)),
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn apply(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(guild_id): Path<Uuid>,
@@ -395,7 +477,14 @@ async fn apply(
 /// BE-P0-40 : list pending invitations for a guild (owner/officer only).
 /// Missing endpoint made the front's "Invitations" tab a black hole for
 /// duplicate detection / revocation.
-async fn list_invitations(
+/// List pending guild invitations (officer/owner only).
+#[utoipa::path(
+    get, path = "/api/guilds/{id}/invitations", tag = "guilds",
+    params(("id" = uuid::Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_invitations(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(guild_id): Path<Uuid>,
@@ -452,7 +541,14 @@ async fn list_invitations(
 /// Missing endpoint was making the "Applications" tab in the guild page
 /// forever empty on the front (the ID needed by `/decide` was never
 /// discoverable).
-async fn list_applications(
+/// List pending guild applications (officer/owner only).
+#[utoipa::path(
+    get, path = "/api/guilds/{id}/applications", tag = "guilds",
+    params(("id" = uuid::Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_applications(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(guild_id): Path<Uuid>,
@@ -511,7 +607,15 @@ struct DecideBody {
     accept: bool,
 }
 
-async fn decide_application(
+/// Decide (accept/reject) a guild application.
+#[utoipa::path(
+    post, path = "/api/guild-applications/{id}/decide", tag = "guilds",
+    params(("id" = uuid::Uuid, Path)),
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn decide_application(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(application_id): Path<Uuid>,
@@ -559,7 +663,14 @@ struct ProposeWarBody {
     stake_gp: i64,
 }
 
-async fn propose_war(
+/// Propose a guild war.
+#[utoipa::path(
+    post, path = "/api/guild-wars", tag = "guilds",
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn propose_war(
     State(state): State<AppState>,
     auth: AuthUser,
     headers: HeaderMap,
@@ -613,7 +724,12 @@ async fn propose_war(
     Ok(Json(build_response(json!({ "war": war }))))
 }
 
-async fn list_wars(
+/// List guild wars.
+#[utoipa::path(
+    get, path = "/api/guild-wars", tag = "guilds",
+    responses((status = 200, body = serde_json::Value)),
+)]
+pub async fn list_wars(
     State(state): State<AppState>,
     Query(q): Query<ListWarsQuery>,
 ) -> Result<Json<Value>, AppError> {
@@ -643,7 +759,15 @@ struct WarResponseBody {
     accept: bool,
 }
 
-async fn respond_war(
+/// Respond to a proposed guild war.
+#[utoipa::path(
+    post, path = "/api/guild-wars/{id}/respond", tag = "guilds",
+    params(("id" = uuid::Uuid, Path)),
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn respond_war(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(war_id): Path<Uuid>,
@@ -666,7 +790,15 @@ struct ConcludeBody {
     winner_guild_id: Uuid,
 }
 
-async fn conclude_war(
+/// Conclude a guild war (admin or winner officer).
+#[utoipa::path(
+    post, path = "/api/guild-wars/{id}/conclude", tag = "guilds",
+    params(("id" = uuid::Uuid, Path)),
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn conclude_war(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(war_id): Path<Uuid>,
@@ -705,7 +837,14 @@ async fn conclude_war(
 
 // ─── Admin moderation ────────────────────────────────────────────
 
-async fn admin_dissolve(
+/// Admin: dissolve a guild.
+#[utoipa::path(
+    post, path = "/api/admin/guilds/{id}/dissolve", tag = "guilds",
+    params(("id" = uuid::Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_dissolve(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -725,7 +864,13 @@ async fn admin_dissolve(
 ///
 /// Retourne l'agrégat par domaine des skills des membres :
 /// { domain, member_count, avg_level, top_skills }.
-async fn guild_composition(
+/// Get the skill composition matrix of a guild.
+#[utoipa::path(
+    get, path = "/api/guilds/{slug}/composition", tag = "guilds",
+    params(("slug" = String, Path)),
+    responses((status = 200, body = serde_json::Value)),
+)]
+pub async fn guild_composition(
     State(state): State<AppState>,
     Path(slug): Path<String>,
 ) -> Result<Json<Value>, AppError> {

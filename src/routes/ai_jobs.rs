@@ -9,11 +9,13 @@
 use axum::extract::{Path, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::AppState;
+use crate::api_response::ApiResponse;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
 
@@ -26,29 +28,54 @@ pub fn ai_job_routes() -> Router<AppState> {
         .route("/admin/ai/churn", post(admin_churn))
 }
 
-fn build_response(data: Value) -> Value {
-    json!({
-        "data": data,
-        "meta": {
-            "request_id": Uuid::new_v4().to_string(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-        }
-    })
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CodeReviewBody {
+    pub submission_id: Uuid,
+    pub challenge_id: Uuid,
+    /// Judge0 language slug (`rust`, `python`, …).
+    pub language: String,
+    /// Optional caller-provided level hint. Defaults to `intermediate`.
+    pub user_level: Option<String>,
 }
 
-#[derive(Deserialize)]
-struct CodeReviewBody {
-    submission_id: Uuid,
-    challenge_id: Uuid,
-    language: String,
-    user_level: Option<String>,
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AiJobEnqueuedResponse {
+    /// Opaque job id — poll `/api/ai/jobs/{job_id}` until `status ==
+    /// "ready"` to fetch the result.
+    pub job_id: String,
 }
 
-async fn request_code_review(
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AiJobResultResponse {
+    /// Either `"ready"` or `"pending"`. When `pending`, `result` is
+    /// absent and `job_id` is echoed back.
+    pub status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub result: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub job_id: Option<String>,
+}
+
+/// Enqueue a code-review job for one of the caller's submissions.
+/// The heavy lifting happens in a background worker (skilluv-ia); poll
+/// `/api/ai/jobs/{job_id}` for the result.
+#[utoipa::path(
+    post,
+    path = "/api/ai/code-review",
+    tag = "challenges",
+    request_body = CodeReviewBody,
+    responses(
+        (status = 200, description = "Job enqueued", body = ApiResponse<AiJobEnqueuedResponse>),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "Submission or challenge not found", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn request_code_review(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<CodeReviewBody>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<AiJobEnqueuedResponse>>, AppError> {
     // Récupération de la soumission + challenge
     let sub = sqlx::query(
         r#"
@@ -95,14 +122,29 @@ async fn request_code_review(
     };
     let mut redis = state.redis.clone();
     let job_id = crate::services::ai_queue::enqueue_code_review(&mut redis, &payload).await?;
-    Ok(Json(build_response(json!({ "job_id": job_id }))))
+    Ok(Json(ApiResponse::new(AiJobEnqueuedResponse { job_id })))
 }
 
-async fn request_recommendations(
+/// Enqueue a personalised-recommendations job. Payload shape is
+/// front-defined (user snapshot + candidate list) — the backend
+/// spoofs the `user.user_id` field to the authenticated user's id.
+/// Kept as free-form JSON since the payload evolves quickly.
+#[utoipa::path(
+    post,
+    path = "/api/ai/recommendations",
+    tag = "feed",
+    request_body(content = serde_json::Value, description = "Free-form snapshot + candidates payload"),
+    responses(
+        (status = 200, description = "Job enqueued", body = ApiResponse<AiJobEnqueuedResponse>),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn request_recommendations(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<Value>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<AiJobEnqueuedResponse>>, AppError> {
     // La construction du payload complet (snapshot user + candidats filtrés)
     // reste au client pour éviter une requête DB coûteuse ici : le front peut
     // pré-filtrer la liste des candidats. On force cependant l'user_id à celui
@@ -115,49 +157,92 @@ async fn request_recommendations(
     }
     let mut redis = state.redis.clone();
     let job_id = crate::services::ai_queue::enqueue_recommendations(&mut redis, &merged).await?;
-    Ok(Json(build_response(json!({ "job_id": job_id }))))
+    Ok(Json(ApiResponse::new(AiJobEnqueuedResponse { job_id })))
 }
 
-async fn get_job_result(
+/// Poll an AI job result. Returns `status: "ready"` + result when the
+/// worker has finished, otherwise `status: "pending"` + job_id.
+#[utoipa::path(
+    get,
+    path = "/api/ai/jobs/{job_id}",
+    tag = "challenges",
+    params(("job_id" = String, Path, description = "Opaque job id from an enqueue call")),
+    responses(
+        (status = 200, description = "Job result or still-pending marker", body = ApiResponse<AiJobResultResponse>),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn get_job_result(
     State(state): State<AppState>,
     _auth: AuthUser,
     Path(job_id): Path<String>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<AiJobResultResponse>>, AppError> {
     let mut redis = state.redis.clone();
-    match crate::services::ai_queue::fetch_result(&mut redis, &job_id).await? {
-        Some(result) => Ok(Json(build_response(json!({
-            "status": "ready",
-            "result": result
-        })))),
-        None => Ok(Json(build_response(json!({
-            "status": "pending",
-            "job_id": job_id
-        })))),
-    }
+    let resp = match crate::services::ai_queue::fetch_result(&mut redis, &job_id).await? {
+        Some(result) => AiJobResultResponse {
+            status: "ready".to_string(),
+            result: Some(result),
+            job_id: None,
+        },
+        None => AiJobResultResponse {
+            status: "pending".to_string(),
+            result: None,
+            job_id: Some(job_id),
+        },
+    };
+    Ok(Json(ApiResponse::new(resp)))
 }
 
-async fn admin_hidden_gems(
+/// Admin only: enqueue a hidden-gems talent-mining job. Payload shape
+/// is defined by skilluv-ia (talent pool + filters).
+#[utoipa::path(
+    post,
+    path = "/api/admin/ai/hidden-gems",
+    tag = "admin",
+    request_body(content = serde_json::Value, description = "Talents pool + filter parameters"),
+    responses(
+        (status = 200, description = "Job enqueued", body = ApiResponse<AiJobEnqueuedResponse>),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_hidden_gems(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<Value>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<AiJobEnqueuedResponse>>, AppError> {
     if auth.role != "admin" {
         return Err(AppError::Forbidden);
     }
     let mut redis = state.redis.clone();
     let job_id = crate::services::ai_queue::enqueue_hidden_gems(&mut redis, &body).await?;
-    Ok(Json(build_response(json!({ "job_id": job_id }))))
+    Ok(Json(ApiResponse::new(AiJobEnqueuedResponse { job_id })))
 }
 
-async fn admin_churn(
+/// Admin only: enqueue a churn-analysis job.
+#[utoipa::path(
+    post,
+    path = "/api/admin/ai/churn",
+    tag = "admin",
+    request_body(content = serde_json::Value, description = "Talents + horizon_days"),
+    responses(
+        (status = 200, description = "Job enqueued", body = ApiResponse<AiJobEnqueuedResponse>),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_churn(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<Value>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<AiJobEnqueuedResponse>>, AppError> {
     if auth.role != "admin" {
         return Err(AppError::Forbidden);
     }
     let mut redis = state.redis.clone();
     let job_id = crate::services::ai_queue::enqueue_churn_analysis(&mut redis, &body).await?;
-    Ok(Json(build_response(json!({ "job_id": job_id }))))
+    Ok(Json(ApiResponse::new(AiJobEnqueuedResponse { job_id })))
 }

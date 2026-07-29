@@ -53,7 +53,18 @@ fn build_response(data: Value) -> Value {
 // GET /api/deliverables/{id}
 // ═══════════════════════════════════════════════════════════════════
 
-async fn get_deliverable(
+/// Public deliverable detail (only when public + not revoked).
+#[utoipa::path(
+    get,
+    path = "/api/deliverables/{id}",
+    tag = "projects",
+    params(("id" = Uuid, Path)),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 404, body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn get_deliverable(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Value>, AppError> {
@@ -72,12 +83,23 @@ async fn get_deliverable(
 // GET /api/users/{user_id}/deliverables
 // ═══════════════════════════════════════════════════════════════════
 
-#[derive(Deserialize)]
-struct UserDeliverablesQuery {
-    limit: Option<i64>,
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+pub struct UserDeliverablesQuery {
+    pub limit: Option<i64>,
 }
 
-async fn list_user_deliverables(
+/// Public portfolio: a user's public deliverables.
+#[utoipa::path(
+    get,
+    path = "/api/users/{user_id}/deliverables",
+    tag = "profile",
+    params(
+        ("user_id" = Uuid, Path),
+        UserDeliverablesQuery,
+    ),
+    responses((status = 200, body = serde_json::Value)),
+)]
+pub async fn list_user_deliverables(
     State(state): State<AppState>,
     Path(user_id): Path<Uuid>,
     Query(q): Query<UserDeliverablesQuery>,
@@ -93,7 +115,20 @@ async fn list_user_deliverables(
 // POST /api/webhooks/github/slices/{project_id}
 // ═══════════════════════════════════════════════════════════════════
 
-async fn github_slices_webhook(
+/// GitHub webhook: creates auto-verified deliverables from merged PRs.
+/// HMAC-signed via `GITHUB_WEBHOOK_SECRET`. Idempotent per delivery id.
+#[utoipa::path(
+    post,
+    path = "/api/webhooks/github/slices/{project_id}",
+    tag = "webhooks",
+    params(("project_id" = Uuid, Path)),
+    request_body(content = serde_json::Value, description = "GitHub pull_request event payload"),
+    responses(
+        (status = 200, description = "Processed (or ignored / duplicate)", body = serde_json::Value),
+        (status = 401, body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn github_slices_webhook(
     State(state): State<AppState>,
     Path(project_id): Path<Uuid>,
     headers: HeaderMap,

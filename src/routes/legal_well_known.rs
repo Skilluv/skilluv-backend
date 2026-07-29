@@ -6,10 +6,12 @@ use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Json, Router};
 use chrono::Datelike;
-use serde_json::{Value, json};
+use serde::Serialize;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::AppState;
+use crate::api_response::ApiResponse;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
 
@@ -27,6 +29,9 @@ pub fn well_known_routes() -> Router<AppState> {
 
 // ─── security.txt (RFC 9116) ─────────────────────────────────────
 
+/// RFC 9116 security.txt. Served as `text/plain` at both `/.well-known/`
+/// (canonical) and `/security.txt` for legacy scanners. Not JSON —
+/// intentionally omitted from the OpenAPI schema.
 async fn security_txt() -> impl IntoResponse {
     let one_year_ahead = chrono::Utc::now() + chrono::Duration::days(365);
     let body = format!(
@@ -43,7 +48,30 @@ async fn security_txt() -> impl IntoResponse {
 
 // ─── Accounting export (3.18) ────────────────────────────────────
 
-async fn admin_accounting_export(
+#[derive(Debug, serde::Deserialize, IntoParams)]
+pub struct AccountingQuery {
+    /// 4-digit year. Defaults to current year.
+    pub year: Option<i32>,
+    /// 1-12. Defaults to current month.
+    pub month: Option<i32>,
+}
+
+/// Admin only: export the month's invoices as a semicolon-separated
+/// CSV suitable for the French accountant's import. Not JSON — the
+/// OpenAPI entry documents the CSV content-type.
+#[utoipa::path(
+    get,
+    path = "/api/admin/accounting/export",
+    tag = "admin",
+    params(AccountingQuery),
+    responses(
+        (status = 200, description = "CSV export (attachment)", content_type = "text/csv"),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_accounting_export(
     State(state): State<AppState>,
     auth: AuthUser,
     axum::extract::Query(q): axum::extract::Query<AccountingQuery>,
@@ -104,12 +132,6 @@ async fn admin_accounting_export(
     ))
 }
 
-#[derive(serde::Deserialize)]
-struct AccountingQuery {
-    year: Option<i32>,
-    month: Option<i32>,
-}
-
 // ─── Enterprise dashboard (3.13) ─────────────────────────────────
 
 async fn current_enterprise_for(db: &sqlx::PgPool, user_id: Uuid) -> Result<Uuid, AppError> {
@@ -122,20 +144,63 @@ async fn current_enterprise_for(db: &sqlx::PgPool, user_id: Uuid) -> Result<Uuid
     row.map(|(id,)| id).ok_or(AppError::Forbidden)
 }
 
-fn build_response(data: Value) -> Value {
-    json!({
-        "data": data,
-        "meta": {
-            "request_id": Uuid::new_v4().to_string(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-        }
-    })
+#[derive(Debug, Serialize, ToSchema)]
+pub struct DashboardCredits {
+    pub balance: f64,
+    pub total_purchased: i32,
+    pub total_used: f64,
+    pub total_refunded: f64,
 }
 
-async fn dashboard_overview(
+#[derive(Debug, Serialize, ToSchema)]
+pub struct DashboardInterestRequests {
+    pub pending: i64,
+    pub accepted: i64,
+    pub declined: i64,
+    pub total: i64,
+    pub last_30d: i64,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct DashboardOverviewResponse {
+    pub credits: DashboardCredits,
+    pub interest_requests: DashboardInterestRequests,
+    pub conversations_active: i64,
+    pub sponsored_challenges_live: i64,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct DashboardFunnel {
+    pub interest_requests_sent: i64,
+    pub interest_requests_accepted: i64,
+    pub conversations_started: i64,
+    pub messages_sent_by_enterprise: i64,
+    /// Percentage 0–100, rounded to 2 decimals.
+    pub accept_rate_pct: f64,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct DashboardFunnelResponse {
+    pub funnel: DashboardFunnel,
+}
+
+/// Enterprise dashboard: credits balance + interest-request funnel
+/// snapshot + active conversations + live sponsored challenges count.
+#[utoipa::path(
+    get,
+    path = "/api/enterprise/dashboard/overview",
+    tag = "enterprise",
+    responses(
+        (status = 200, description = "Dashboard snapshot", body = ApiResponse<DashboardOverviewResponse>),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Caller has no enterprise", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn dashboard_overview(
     State(state): State<AppState>,
     auth: AuthUser,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<DashboardOverviewResponse>>, AppError> {
     let enterprise_id = current_enterprise_for(&state.db, auth.user_id).await?;
     let credits = crate::services::credits::get_or_init_credits(&state.db, enterprise_id).await?;
 
@@ -177,29 +242,42 @@ async fn dashboard_overview(
     .fetch_one(&state.db)
     .await?;
 
-    Ok(Json(build_response(json!({
-        "credits": {
-            "balance": crate::services::credits::balance_as_f64(&credits.balance),
-            "total_purchased": credits.total_purchased,
-            "total_used": crate::services::credits::balance_as_f64(&credits.total_used),
-            "total_refunded": crate::services::credits::balance_as_f64(&credits.total_refunded),
+    Ok(Json(ApiResponse::new(DashboardOverviewResponse {
+        credits: DashboardCredits {
+            balance: crate::services::credits::balance_as_f64(&credits.balance),
+            total_purchased: credits.total_purchased,
+            total_used: crate::services::credits::balance_as_f64(&credits.total_used),
+            total_refunded: crate::services::credits::balance_as_f64(&credits.total_refunded),
         },
-        "interest_requests": {
-            "pending": interest_stats.0,
-            "accepted": interest_stats.1,
-            "declined": interest_stats.2,
-            "total": interest_stats.3,
-            "last_30d": last_30d,
+        interest_requests: DashboardInterestRequests {
+            pending: interest_stats.0,
+            accepted: interest_stats.1,
+            declined: interest_stats.2,
+            total: interest_stats.3,
+            last_30d,
         },
-        "conversations_active": active_conversations,
-        "sponsored_challenges_live": sponsored_live,
-    }))))
+        conversations_active: active_conversations,
+        sponsored_challenges_live: sponsored_live,
+    })))
 }
 
-async fn dashboard_funnel(
+/// Enterprise recruiting funnel: interest requests sent, accepted,
+/// conversations started, messages sent, and the accept rate.
+#[utoipa::path(
+    get,
+    path = "/api/enterprise/dashboard/funnel",
+    tag = "enterprise",
+    responses(
+        (status = 200, description = "Funnel breakdown", body = ApiResponse<DashboardFunnelResponse>),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Caller has no enterprise", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn dashboard_funnel(
     State(state): State<AppState>,
     auth: AuthUser,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<DashboardFunnelResponse>>, AppError> {
     let enterprise_id = current_enterprise_for(&state.db, auth.user_id).await?;
     let row: (i64, i64, i64, i64) = sqlx::query_as(
         r#"
@@ -223,13 +301,13 @@ async fn dashboard_funnel(
         0.0
     };
 
-    Ok(Json(build_response(json!({
-        "funnel": {
-            "interest_requests_sent": row.0,
-            "interest_requests_accepted": row.1,
-            "conversations_started": row.2,
-            "messages_sent_by_enterprise": row.3,
-            "accept_rate_pct": (accept_rate * 100.0).round() / 100.0,
-        }
-    }))))
+    Ok(Json(ApiResponse::new(DashboardFunnelResponse {
+        funnel: DashboardFunnel {
+            interest_requests_sent: row.0,
+            interest_requests_accepted: row.1,
+            conversations_started: row.2,
+            messages_sent_by_enterprise: row.3,
+            accept_rate_pct: (accept_rate * 100.0).round() / 100.0,
+        },
+    })))
 }

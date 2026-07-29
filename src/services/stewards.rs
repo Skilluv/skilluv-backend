@@ -15,7 +15,7 @@ use crate::errors::AppError;
 
 pub struct StewardsService;
 
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, utoipa::ToSchema)]
 pub struct ProjectSteward {
     pub project_id: Uuid,
     pub user_id: Uuid,

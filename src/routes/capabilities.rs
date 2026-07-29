@@ -12,10 +12,11 @@ use axum::response::IntoResponse;
 use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::AppState;
+use crate::api_response::ApiResponse;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
 use crate::middleware::capabilities::require_capability;
@@ -34,22 +35,36 @@ pub fn capability_routes() -> Router<AppState> {
         )
 }
 
-fn wrap(data: Value) -> Value {
-    json!({
-        "data": data,
-        "meta": {
-            "request_id": Uuid::new_v4().to_string(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-        }
-    })
+#[derive(Debug, Serialize, sqlx::FromRow, ToSchema)]
+pub struct CapabilityRow {
+    /// Enum value from `user_capabilities` (`admin`, `forum_mod`,
+    /// `plagiarism_reviewer`, `kyc_reviewer`, `community_moderator`,
+    /// `community_curator`, `mentor`, `super_admin`, `steward`).
+    pub capability: String,
+    pub granted_at: chrono::DateTime<chrono::Utc>,
+    pub granted_reason: String,
+    /// `None` for permanent grants; otherwise the auto-expiry deadline.
+    pub expires_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Debug, Serialize, sqlx::FromRow)]
-struct CapabilityRow {
-    capability: String,
-    granted_at: chrono::DateTime<chrono::Utc>,
-    granted_reason: String,
-    expires_at: Option<chrono::DateTime<chrono::Utc>>,
+#[derive(Debug, Serialize, ToSchema)]
+pub struct UserCapabilitiesResponse {
+    pub user_id: Uuid,
+    pub capabilities: Vec<CapabilityRow>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CapabilityGrantResponse {
+    pub granted: bool,
+    pub user_id: Uuid,
+    pub capability: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CapabilityRevokeResponse {
+    pub revoked: bool,
+    pub user_id: Uuid,
+    pub capability: String,
 }
 
 async fn fetch_active(db: &sqlx::PgPool, user_id: Uuid) -> Result<Vec<CapabilityRow>, AppError> {
@@ -68,36 +83,80 @@ async fn fetch_active(db: &sqlx::PgPool, user_id: Uuid) -> Result<Vec<Capability
     .await?)
 }
 
-async fn user_capabilities_public(
+/// Public: list every active capability granted to a user. Used by
+/// front to render moderator/mentor badges next to the display name.
+#[utoipa::path(
+    get,
+    path = "/api/users/{id}/capabilities",
+    tag = "profile",
+    params(("id" = Uuid, Path, description = "User UUID")),
+    responses(
+        (status = 200, description = "Active capabilities", body = ApiResponse<UserCapabilitiesResponse>),
+    ),
+)]
+pub async fn user_capabilities_public(
     State(state): State<AppState>,
     Path(user_id): Path<Uuid>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<UserCapabilitiesResponse>>, AppError> {
     let rows = fetch_active(&state.db, user_id).await?;
-    Ok(Json(wrap(
-        json!({ "user_id": user_id, "capabilities": rows }),
-    )))
+    Ok(Json(ApiResponse::new(UserCapabilitiesResponse {
+        user_id,
+        capabilities: rows,
+    })))
 }
 
-async fn my_capabilities(
+/// Authenticated: the caller's own capabilities. Used by admin/mod
+/// panels to gate UI without hitting the public endpoint (avoids
+/// leaking the current user's ID in the URL).
+#[utoipa::path(
+    get,
+    path = "/api/users/me/capabilities",
+    tag = "profile",
+    responses(
+        (status = 200, description = "Caller's capabilities", body = ApiResponse<UserCapabilitiesResponse>),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn my_capabilities(
     State(state): State<AppState>,
     auth: AuthUser,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<UserCapabilitiesResponse>>, AppError> {
     let rows = fetch_active(&state.db, auth.user_id).await?;
-    Ok(Json(wrap(
-        json!({ "user_id": auth.user_id, "capabilities": rows }),
-    )))
+    Ok(Json(ApiResponse::new(UserCapabilitiesResponse {
+        user_id: auth.user_id,
+        capabilities: rows,
+    })))
 }
 
-#[derive(Debug, Deserialize)]
-struct GrantBody {
-    capability: String,
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct GrantBody {
+    /// Capability to grant (see `CapabilityRow.capability` for the enum).
+    pub capability: String,
+    /// Free-text audit reason. Defaults to `admin_grant:by_<uuid>`.
     #[serde(default)]
-    granted_reason: Option<String>,
+    pub granted_reason: Option<String>,
+    /// Auto-expiry; `None` = permanent.
     #[serde(default)]
-    expires_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub expires_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-async fn admin_grant_capability(
+/// Admin only: grant a capability to a user. Idempotent (ON CONFLICT
+/// DO NOTHING). Requires the caller to hold the `admin` capability.
+#[utoipa::path(
+    post,
+    path = "/api/admin/users/{id}/capabilities",
+    tag = "admin",
+    params(("id" = Uuid, Path, description = "Target user UUID")),
+    request_body = GrantBody,
+    responses(
+        (status = 201, description = "Capability granted (or already present)", body = ApiResponse<CapabilityGrantResponse>),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Caller lacks 'admin' capability", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_grant_capability(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(target_id): Path<Uuid>,
@@ -127,19 +186,38 @@ async fn admin_grant_capability(
 
     Ok((
         StatusCode::CREATED,
-        Json(wrap(json!({
-            "granted": true,
-            "user_id": target_id,
-            "capability": body.capability,
-        }))),
+        Json(ApiResponse::new(CapabilityGrantResponse {
+            granted: true,
+            user_id: target_id,
+            capability: body.capability,
+        })),
     ))
 }
 
-async fn admin_revoke_capability(
+/// Admin only: revoke an active capability. Sets `revoked_at` and a
+/// stamped `revoked_reason`. 404 if the capability isn't currently
+/// active on the target.
+#[utoipa::path(
+    delete,
+    path = "/api/admin/users/{id}/capabilities/{cap}",
+    tag = "admin",
+    params(
+        ("id" = Uuid, Path, description = "Target user UUID"),
+        ("cap" = String, Path, description = "Capability slug to revoke"),
+    ),
+    responses(
+        (status = 200, description = "Capability revoked", body = ApiResponse<CapabilityRevokeResponse>),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Caller lacks 'admin' capability", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "No active capability of that slug on the target", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_revoke_capability(
     State(state): State<AppState>,
     auth: AuthUser,
     Path((target_id, cap)): Path<(Uuid, String)>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<CapabilityRevokeResponse>>, AppError> {
     require_capability(&state.db, auth.user_id, "admin").await?;
     let res = sqlx::query(
         r#"
@@ -159,9 +237,9 @@ async fn admin_revoke_capability(
             "active capability '{cap}' not found on user {target_id}"
         )));
     }
-    Ok(Json(wrap(json!({
-        "revoked": true,
-        "user_id": target_id,
-        "capability": cap,
-    }))))
+    Ok(Json(ApiResponse::new(CapabilityRevokeResponse {
+        revoked: true,
+        user_id: target_id,
+        capability: cap,
+    })))
 }

@@ -66,7 +66,13 @@ fn build_cookie(name: &str, value: &str, max_age_secs: i64, path: &str) -> Strin
 
 // ─── Provider listing / unlinking ────────────────────────────────
 
-async fn list_my_providers(
+/// List OAuth providers linked to the current account.
+#[utoipa::path(
+    get, path = "/api/auth/me/oauth-providers", tag = "auth",
+    responses((status = 200, body = serde_json::Value), (status = 401, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_my_providers(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
@@ -74,7 +80,14 @@ async fn list_my_providers(
     Ok(Json(build_response(json!({ "providers": list }))))
 }
 
-async fn unlink_provider(
+/// Unlink an OAuth provider from the current account.
+#[utoipa::path(
+    delete, path = "/api/auth/me/oauth-providers/{provider}", tag = "auth",
+    params(("provider" = String, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 401, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn unlink_provider(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(provider): Path<String>,
@@ -90,14 +103,25 @@ async fn unlink_provider(
 
 // ─── Google ──────────────────────────────────────────────────────
 
-async fn google_start(
+/// Start Google OAuth login flow (redirects to Google).
+#[utoipa::path(
+    get, path = "/api/auth/google/start", tag = "auth",
+    responses((status = 302, description = "Redirect to Google")),
+)]
+pub async fn google_start(
     State(state): State<AppState>,
     Query(q): Query<StartQuery>,
 ) -> Result<Redirect, AppError> {
     start_flow(&state, "google", None, q.invite_token).await
 }
 
-async fn google_link_start(
+/// Link Google to an existing account (redirects to Google).
+#[utoipa::path(
+    get, path = "/api/auth/google/link", tag = "auth",
+    responses((status = 302, description = "Redirect to Google")),
+    security(("cookie_auth" = [])),
+)]
+pub async fn google_link_start(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Redirect, AppError> {
@@ -110,7 +134,12 @@ struct CallbackQuery {
     state: String,
 }
 
-async fn google_callback(
+/// Google OAuth callback (session cookie or link).
+#[utoipa::path(
+    get, path = "/api/auth/google/callback", tag = "auth",
+    responses((status = 200, body = serde_json::Value), (status = 400, body = crate::api_response::ErrorResponse)),
+)]
+pub async fn google_callback(
     State(state): State<AppState>,
     Query(q): Query<CallbackQuery>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -128,21 +157,37 @@ async fn google_callback(
 
 // ─── LinkedIn ────────────────────────────────────────────────────
 
-async fn linkedin_start(
+/// Start LinkedIn OAuth login flow (redirects to LinkedIn).
+#[utoipa::path(
+    get, path = "/api/auth/linkedin/start", tag = "auth",
+    responses((status = 302, description = "Redirect to LinkedIn")),
+)]
+pub async fn linkedin_start(
     State(state): State<AppState>,
     Query(q): Query<StartQuery>,
 ) -> Result<Redirect, AppError> {
     start_flow(&state, "linkedin", None, q.invite_token).await
 }
 
-async fn linkedin_link_start(
+/// Link LinkedIn to an existing account.
+#[utoipa::path(
+    get, path = "/api/auth/linkedin/link", tag = "auth",
+    responses((status = 302, description = "Redirect to LinkedIn")),
+    security(("cookie_auth" = [])),
+)]
+pub async fn linkedin_link_start(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Redirect, AppError> {
     start_flow(&state, "linkedin", Some(auth.user_id), None).await
 }
 
-async fn linkedin_callback(
+/// LinkedIn OAuth callback.
+#[utoipa::path(
+    get, path = "/api/auth/linkedin/callback", tag = "auth",
+    responses((status = 200, body = serde_json::Value), (status = 400, body = crate::api_response::ErrorResponse)),
+)]
+pub async fn linkedin_callback(
     State(state): State<AppState>,
     Query(q): Query<CallbackQuery>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -160,7 +205,12 @@ async fn linkedin_callback(
 
 // ─── GitHub login (distinct from Sprint 5 repo-sync flow) ────────
 
-async fn github_login_start(
+/// Start GitHub OAuth login flow (distinct from repo-sync flow).
+#[utoipa::path(
+    get, path = "/api/auth/github/login", tag = "auth",
+    responses((status = 302, description = "Redirect to GitHub")),
+)]
+pub async fn github_login_start(
     State(state): State<AppState>,
     Query(q): Query<StartQuery>,
 ) -> Result<Redirect, AppError> {
@@ -185,7 +235,12 @@ async fn github_login_start(
     Ok(Redirect::to(&url))
 }
 
-async fn github_login_callback(
+/// GitHub OAuth login callback.
+#[utoipa::path(
+    get, path = "/api/auth/github/login/callback", tag = "auth",
+    responses((status = 200, body = serde_json::Value), (status = 400, body = crate::api_response::ErrorResponse)),
+)]
+pub async fn github_login_callback(
     State(state): State<AppState>,
     Query(q): Query<CallbackQuery>,
 ) -> Result<impl IntoResponse, AppError> {

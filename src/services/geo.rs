@@ -5,9 +5,11 @@ use std::path::Path;
 
 use serde::Serialize;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct Country {
+    /// ISO 3166-1 alpha-2 code (e.g. `SN`).
     pub iso2: String,
+    /// ISO 3166-1 alpha-3 code (e.g. `SEN`).
     pub iso3: String,
     pub name: String,
 }

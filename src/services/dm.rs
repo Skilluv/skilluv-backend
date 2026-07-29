@@ -22,7 +22,7 @@ type DmRow235 = (
     i64,
 );
 
-#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, sqlx::FromRow, utoipa::ToSchema)]
 pub struct DmConversation {
     pub id: Uuid,
     pub user_a_id: Uuid,
@@ -31,7 +31,7 @@ pub struct DmConversation {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, sqlx::FromRow, utoipa::ToSchema)]
 pub struct DmMessage {
     pub id: Uuid,
     pub conversation_id: Uuid,
@@ -41,7 +41,7 @@ pub struct DmMessage {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct ConversationSummary {
     pub conversation: DmConversation,
     pub peer_id: Uuid,
@@ -49,7 +49,7 @@ pub struct ConversationSummary {
     pub last_message_body: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, sqlx::FromRow, utoipa::ToSchema)]
 pub struct UserBlock {
     pub blocker_id: Uuid,
     pub blocked_id: Uuid,

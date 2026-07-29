@@ -9,6 +9,7 @@ use axum::routing::get;
 use axum::{Json, Router};
 use serde::Deserialize;
 use serde_json::{Value, json};
+use utoipa::IntoParams;
 use uuid::Uuid;
 
 use crate::AppState;
@@ -19,29 +20,48 @@ pub fn talent_search_v2_routes() -> Router<AppState> {
     Router::new().route("/talents/search/v2", get(search_v2))
 }
 
-#[derive(Debug, Deserialize)]
-struct SearchQuery {
-    q: Option<String>,
-    skill_domain: Option<String>,
-    title: Option<String>,
-    country: Option<String>,
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct SearchQuery {
+    pub q: Option<String>,
+    pub skill_domain: Option<String>,
+    pub title: Option<String>,
+    pub country: Option<String>,
     /// ISO2 (Phase 3.3). Falls back to legacy `country` (ISO3) if not provided.
-    country_iso2: Option<String>,
-    min_fragments: Option<i32>,
-    min_streak: Option<i32>,
-    tag: Option<String>,         // tag slug — multiple joins if repeated
-    badge: Option<String>,       // badge slug
-    looking_for: Option<String>, // cdi | cdd | freelance | internship | contract
-    available_only: Option<bool>,
-    language_spoken: Option<String>, // 2-letter ISO code (min B2)
-    has_projects: Option<bool>,
-    min_github_repos: Option<i32>,
-    sort_by: Option<String>, // fragments | recent | most_active_recently | top_in_domain
-    page: Option<i64>,
-    per_page: Option<i64>,
+    pub country_iso2: Option<String>,
+    pub min_fragments: Option<i32>,
+    pub min_streak: Option<i32>,
+    /// Tag slug — repeatable.
+    pub tag: Option<String>,
+    /// Badge slug.
+    pub badge: Option<String>,
+    /// `cdi`, `cdd`, `freelance`, `internship`, `contract`.
+    pub looking_for: Option<String>,
+    pub available_only: Option<bool>,
+    /// 2-letter ISO code (matches min B2 proficiency).
+    pub language_spoken: Option<String>,
+    pub has_projects: Option<bool>,
+    pub min_github_repos: Option<i32>,
+    /// `fragments`, `recent`, `most_active_recently`, `top_in_domain`.
+    pub sort_by: Option<String>,
+    pub page: Option<i64>,
+    pub per_page: Option<i64>,
 }
 
-async fn search_v2(
+/// Advanced talent search — v2 endpoint with 8 additional filters.
+/// Returns an enriched shape (top_skills, badge_count, project_count,
+/// last_activity_at, optional is_bookmarked for enterprise callers).
+/// Response is kept as free-form JSON because the shape has multiple
+/// optional fields depending on auth + tenant context.
+#[utoipa::path(
+    get,
+    path = "/api/talents/search/v2",
+    tag = "enterprise",
+    params(SearchQuery),
+    responses(
+        (status = 200, description = "Paginated talents", body = serde_json::Value),
+    ),
+)]
+pub async fn search_v2(
     State(state): State<AppState>,
     OptionalAuth(auth): OptionalAuth,
     tenant: crate::middleware::TenantContext,

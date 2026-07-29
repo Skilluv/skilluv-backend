@@ -12,10 +12,11 @@ use axum::response::IntoResponse;
 use axum::routing::{get, patch};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::AppState;
+use crate::api_response::ApiResponse;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
 
@@ -69,28 +70,75 @@ async fn resolve_enterprise(state: &AppState, auth: &AuthUser) -> Result<(Uuid, 
     ent.ok_or(AppError::Forbidden)
 }
 
-async fn get_type_config(
+#[derive(Debug, Serialize, ToSchema)]
+pub struct TypeConfigResponse {
+    /// `staffing_agency`, `remote_international`, or `direct_hire`.
+    pub enterprise_type: String,
+    /// Free-form JSONB — shape depends on enterprise_type. Only keys
+    /// present in `allowed_keys` are honoured by PATCH.
+    pub type_config: serde_json::Value,
+    pub allowed_keys: Vec<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct TypeConfigUpdatedResponse {
+    pub updated: bool,
+    pub keys_set: Vec<String>,
+}
+
+/// Read the caller enterprise's `type_config` JSONB and the enum of
+/// keys the current enterprise_type allows.
+#[utoipa::path(
+    get,
+    path = "/api/enterprises/me/type-config",
+    tag = "enterprise",
+    responses(
+        (status = 200, description = "Type-config snapshot", body = ApiResponse<TypeConfigResponse>),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Caller has no enterprise", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn get_type_config(
     State(state): State<AppState>,
     auth: AuthUser,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<TypeConfigResponse>>, AppError> {
     let (ent_id, ent_type) = resolve_enterprise(&state, &auth).await?;
     let cfg: serde_json::Value =
         sqlx::query_scalar("SELECT type_config FROM enterprises WHERE id = $1")
             .bind(ent_id)
             .fetch_one(&state.db)
             .await?;
-    Ok(Json(wrap(json!({
-        "enterprise_type": ent_type,
-        "type_config": cfg,
-        "allowed_keys": allowed_keys_for(&ent_type),
-    }))))
+    let allowed: Vec<String> = allowed_keys_for(&ent_type)
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    Ok(Json(ApiResponse::new(TypeConfigResponse {
+        enterprise_type: ent_type,
+        type_config: cfg,
+        allowed_keys: allowed,
+    })))
 }
 
-async fn patch_type_config(
+/// Merge-patch the type_config JSONB. Only allowlisted keys per
+/// enterprise_type are accepted; unknown keys yield 400.
+#[utoipa::path(
+    patch,
+    path = "/api/enterprises/me/type-config",
+    tag = "enterprise",
+    request_body(content = serde_json::Value, description = "Partial JSON object; only allowlisted keys accepted"),
+    responses(
+        (status = 200, description = "type_config merged", body = ApiResponse<TypeConfigUpdatedResponse>),
+        (status = 400, description = "Non-allowlisted key or bad body shape", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Caller has no enterprise", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn patch_type_config(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(patch): Json<serde_json::Value>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<TypeConfigUpdatedResponse>>, AppError> {
     let (ent_id, ent_type) = resolve_enterprise(&state, &auth).await?;
     let allowed = allowed_keys_for(&ent_type);
     if allowed.is_empty() {
@@ -118,19 +166,11 @@ async fn patch_type_config(
     .bind(&patch)
     .execute(&state.db)
     .await?;
-    Ok(Json(wrap(
-        json!({ "updated": true, "keys_set": patch_obj.keys().collect::<Vec<_>>() }),
-    )))
-}
-
-fn wrap(data: Value) -> Value {
-    json!({
-        "data": data,
-        "meta": {
-            "request_id": Uuid::new_v4().to_string(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-        }
-    })
+    let keys_set: Vec<String> = patch_obj.keys().cloned().collect();
+    Ok(Json(ApiResponse::new(TypeConfigUpdatedResponse {
+        updated: true,
+        keys_set,
+    })))
 }
 
 /// Résout l'enterprise active du user et vérifie qu'elle est staffing_agency.
@@ -161,17 +201,54 @@ async fn resolve_staffing_agency(state: &AppState, auth: &AuthUser) -> Result<Uu
     Ok(enterprise_id)
 }
 
-#[derive(Debug, Serialize, sqlx::FromRow)]
-struct AgencyClientRow {
-    id: Uuid,
-    client_name: String,
-    client_contact_email: Option<String>,
-    notes: Option<String>,
-    active: bool,
-    created_at: chrono::DateTime<chrono::Utc>,
+#[derive(Debug, Serialize, sqlx::FromRow, ToSchema)]
+pub struct AgencyClientRow {
+    pub id: Uuid,
+    pub client_name: String,
+    pub client_contact_email: Option<String>,
+    pub notes: Option<String>,
+    pub active: bool,
+    pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
-async fn list(State(state): State<AppState>, auth: AuthUser) -> Result<Json<Value>, AppError> {
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AgencyClientsListResponse {
+    pub clients: Vec<AgencyClientRow>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AgencyClientCreatedResponse {
+    pub id: Uuid,
+    pub client_name: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AgencyClientUpdatedResponse {
+    pub updated: bool,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AgencyClientDeactivatedResponse {
+    pub deactivated: bool,
+}
+
+/// List every agency-client row for the caller's staffing_agency.
+/// Ordered active-first then newest-first.
+#[utoipa::path(
+    get,
+    path = "/api/enterprises/me/agency-clients",
+    tag = "enterprise",
+    responses(
+        (status = 200, description = "Agency clients", body = ApiResponse<AgencyClientsListResponse>),
+        (status = 400, description = "Enterprise is not a staffing_agency", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Caller has no enterprise", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Json<ApiResponse<AgencyClientsListResponse>>, AppError> {
     let ent_id = resolve_staffing_agency(&state, &auth).await?;
     let rows: Vec<AgencyClientRow> = sqlx::query_as(
         "SELECT id, client_name, client_contact_email, notes, active, created_at
@@ -181,19 +258,36 @@ async fn list(State(state): State<AppState>, auth: AuthUser) -> Result<Json<Valu
     .bind(ent_id)
     .fetch_all(&state.db)
     .await?;
-    Ok(Json(wrap(json!({ "clients": rows }))))
+    Ok(Json(ApiResponse::new(AgencyClientsListResponse {
+        clients: rows,
+    })))
 }
 
-#[derive(Debug, Deserialize)]
-struct CreateBody {
-    client_name: String,
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CreateBody {
+    pub client_name: String,
     #[serde(default)]
-    client_contact_email: Option<String>,
+    pub client_contact_email: Option<String>,
     #[serde(default)]
-    notes: Option<String>,
+    pub notes: Option<String>,
 }
 
-async fn create(
+/// Create an agency-client row. The PG trigger
+/// `agency_clients_enforce_type` blocks insertion when the enterprise
+/// is not staffing_agency (defense-in-depth on top of the app check).
+#[utoipa::path(
+    post,
+    path = "/api/enterprises/me/agency-clients",
+    tag = "enterprise",
+    request_body = CreateBody,
+    responses(
+        (status = 201, description = "Agency client created", body = ApiResponse<AgencyClientCreatedResponse>),
+        (status = 400, description = "Not a staffing_agency", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Caller has no enterprise", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<CreateBody>,
@@ -211,28 +305,45 @@ async fn create(
     .await?;
     Ok((
         StatusCode::CREATED,
-        Json(wrap(json!({ "id": id, "client_name": body.client_name }))),
+        Json(ApiResponse::new(AgencyClientCreatedResponse {
+            id,
+            client_name: body.client_name,
+        })),
     ))
 }
 
-#[derive(Debug, Deserialize)]
-struct UpdateBody {
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UpdateBody {
     #[serde(default)]
-    client_name: Option<String>,
+    pub client_name: Option<String>,
     #[serde(default)]
-    client_contact_email: Option<String>,
+    pub client_contact_email: Option<String>,
     #[serde(default)]
-    notes: Option<String>,
+    pub notes: Option<String>,
     #[serde(default)]
-    active: Option<bool>,
+    pub active: Option<bool>,
 }
 
-async fn update(
+/// Partial update of an agency-client row (COALESCE per field).
+#[utoipa::path(
+    patch,
+    path = "/api/enterprises/me/agency-clients/{id}",
+    tag = "enterprise",
+    params(("id" = Uuid, Path, description = "Agency-client UUID")),
+    request_body = UpdateBody,
+    responses(
+        (status = 200, description = "Updated", body = ApiResponse<AgencyClientUpdatedResponse>),
+        (status = 400, description = "Not a staffing_agency", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "Row not found under this enterprise", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn update(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
     Json(body): Json<UpdateBody>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<AgencyClientUpdatedResponse>>, AppError> {
     let ent_id = resolve_staffing_agency(&state, &auth).await?;
     let res = sqlx::query(
         r#"
@@ -256,14 +367,29 @@ async fn update(
     if res.rows_affected() == 0 {
         return Err(AppError::NotFound("agency_client not found".into()));
     }
-    Ok(Json(wrap(json!({ "updated": true }))))
+    Ok(Json(ApiResponse::new(AgencyClientUpdatedResponse {
+        updated: true,
+    })))
 }
 
-async fn deactivate(
+/// Soft-delete: flip `active = FALSE`. Historical rows stay in DB for
+/// audit / reporting.
+#[utoipa::path(
+    delete,
+    path = "/api/enterprises/me/agency-clients/{id}",
+    tag = "enterprise",
+    params(("id" = Uuid, Path, description = "Agency-client UUID")),
+    responses(
+        (status = 200, description = "Deactivated", body = ApiResponse<AgencyClientDeactivatedResponse>),
+        (status = 404, description = "Row not found under this enterprise", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn deactivate(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<AgencyClientDeactivatedResponse>>, AppError> {
     let ent_id = resolve_staffing_agency(&state, &auth).await?;
     let res = sqlx::query(
         "UPDATE agency_clients SET active = FALSE, updated_at = NOW()
@@ -276,5 +402,7 @@ async fn deactivate(
     if res.rows_affected() == 0 {
         return Err(AppError::NotFound("agency_client not found".into()));
     }
-    Ok(Json(wrap(json!({ "deactivated": true }))))
+    Ok(Json(ApiResponse::new(AgencyClientDeactivatedResponse {
+        deactivated: true,
+    })))
 }

@@ -39,25 +39,46 @@ fn build_response(data: Value) -> Value {
     })
 }
 
-#[derive(Debug, Deserialize)]
-struct DryRunQuery {
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+pub struct DryRunQuery {
     #[serde(default)]
-    dry_run: bool,
+    pub dry_run: bool,
 }
 
 // ═══════════════════════════════════════════════════════════════════
 // POST /admin/users/{id}/recompute-proofs
 // ═══════════════════════════════════════════════════════════════════
 
-#[derive(Debug, Deserialize)]
-struct RecomputeBody {
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct RecomputeBody {
+    /// `capabilities`, `badges`, `ranks`, `all` — currently accepted
+    /// but forced to full recompute internally.
     #[serde(default)]
-    scope: Option<String>, // "capabilities|badges|ranks|all", accepté mais actuellement no-op (recompute complet)
+    pub scope: Option<String>,
     #[serde(default)]
-    reason: Option<String>,
+    pub reason: Option<String>,
 }
 
-async fn admin_recompute_proofs(
+/// Admin only: force a full proof-engine recompute for a user
+/// (capabilities + badges + rank). Supports dry-run mode returning the
+/// current state without side effects.
+#[utoipa::path(
+    post,
+    path = "/api/admin/users/{id}/recompute-proofs",
+    tag = "admin",
+    params(
+        ("id" = Uuid, Path, description = "Target user UUID"),
+        DryRunQuery,
+    ),
+    request_body = RecomputeBody,
+    responses(
+        (status = 200, description = "Recompute report", body = serde_json::Value),
+        (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "User not found", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_recompute_proofs(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(target_id): Path<Uuid>,
@@ -158,13 +179,33 @@ async fn admin_recompute_proofs(
 // POST /admin/users/{id}/rank-override
 // ═══════════════════════════════════════════════════════════════════
 
-#[derive(Debug, Deserialize)]
-struct RankOverrideBody {
-    new_rank: String,
-    reason: String,
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct RankOverrideBody {
+    /// One of `apprenti`, `ranger`, `artisan`, `maitre`, `doyen`.
+    pub new_rank: String,
+    /// Audit reason — min 8 chars.
+    pub reason: String,
 }
 
-async fn admin_rank_override(
+/// Admin only: force a user's rank to a specific value + audit-log
+/// the override. Persists a `rank_overrides` row for governance.
+#[utoipa::path(
+    post,
+    path = "/api/admin/users/{id}/rank-override",
+    tag = "admin",
+    params(
+        ("id" = Uuid, Path, description = "Target user UUID"),
+        DryRunQuery,
+    ),
+    request_body = RankOverrideBody,
+    responses(
+        (status = 200, description = "Rank overridden", body = serde_json::Value),
+        (status = 400, description = "Invalid rank or reason too short", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_rank_override(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(target_id): Path<Uuid>,

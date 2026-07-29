@@ -16,10 +16,11 @@ use axum::response::IntoResponse;
 use axum::routing::{get, patch};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::AppState;
+use crate::api_response::ApiResponse;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
 
@@ -45,53 +46,168 @@ pub fn orientation_routes() -> Router<AppState> {
         .route("/users/{id}/orientations", get(public_user_orientations))
 }
 
-fn wrap(data: Value) -> Value {
-    json!({
-        "data": data,
-        "meta": {
-            "request_id": Uuid::new_v4().to_string(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-        }
-    })
-}
-
 // ═══════════════════════════════════════════════════════════════════
-// GET /orientations — catalogue public paginé
+// Types partagés
 // ═══════════════════════════════════════════════════════════════════
 
-#[derive(Debug, Deserialize)]
-struct CatalogQuery {
-    domain: Option<String>,
-    tag: Option<String>,
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct CatalogQuery {
+    pub domain: Option<String>,
+    pub tag: Option<String>,
     #[serde(default = "default_limit")]
-    limit: i64,
+    pub limit: i64,
     #[serde(default)]
-    offset: i64,
+    pub offset: i64,
     #[serde(default)]
-    include_archived: bool,
+    pub include_archived: bool,
 }
 
 fn default_limit() -> i64 {
     50
 }
 
-#[derive(Debug, Serialize, sqlx::FromRow)]
-struct OrientationRow {
-    id: Uuid,
-    slug: String,
-    name: String,
-    description: String,
-    primary_domain: String,
-    secondary_domains: Vec<String>,
-    tags: Vec<String>,
-    is_curated: bool,
-    is_archived: bool,
+#[derive(Debug, Serialize, sqlx::FromRow, ToSchema)]
+pub struct OrientationRow {
+    pub id: Uuid,
+    pub slug: String,
+    pub name: String,
+    pub description: String,
+    /// `code`, `design`, `game`, `security`, etc.
+    pub primary_domain: String,
+    pub secondary_domains: Vec<String>,
+    pub tags: Vec<String>,
+    pub is_curated: bool,
+    pub is_archived: bool,
 }
 
-async fn list_orientations(
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CatalogPagination {
+    pub limit: i64,
+    pub offset: i64,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct OrientationsCatalogResponse {
+    pub orientations: Vec<OrientationRow>,
+    pub pagination: CatalogPagination,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct OrientationSkillEntry {
+    pub slug: String,
+    pub display_name: String,
+    pub is_core: bool,
+    pub is_recommended: bool,
+    pub weight: f32,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct OrientationDetailResponse {
+    pub orientation: OrientationRow,
+    pub skills: Vec<OrientationSkillEntry>,
+}
+
+#[derive(Debug, Serialize, sqlx::FromRow, ToSchema)]
+pub struct UserOrientationRow {
+    pub orientation_slug: String,
+    pub orientation_name: String,
+    /// `learning` or `active`.
+    pub mode: String,
+    pub is_primary: bool,
+    pub started_at: chrono::DateTime<chrono::Utc>,
+    pub ended_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub working_languages: Vec<String>,
+    pub timezone: Option<String>,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct MyOrientationsResponse {
+    pub orientations: Vec<UserOrientationRow>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct RegisterBody {
+    pub slug: String,
+    /// `learning` (default) or `active`.
+    #[serde(default = "default_mode")]
+    pub mode: String,
+    #[serde(default)]
+    pub is_primary: bool,
+    #[serde(default)]
+    pub working_languages: Option<Vec<String>>,
+    #[serde(default)]
+    pub timezone: Option<String>,
+    #[serde(default)]
+    pub notes: Option<String>,
+}
+
+fn default_mode() -> String {
+    "learning".into()
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct RegisterOrientationResponse {
+    pub slug: String,
+    pub mode: String,
+    pub is_primary: bool,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UpdateBody {
+    pub mode: Option<String>,
+    pub is_primary: Option<bool>,
+    pub working_languages: Option<Vec<String>>,
+    pub timezone: Option<String>,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct UpdateOrientationResponse {
+    pub updated: bool,
+    pub slug: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct EndOrientationResponse {
+    pub ended: bool,
+    pub slug: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PublicUserOrientationRow {
+    pub orientation_slug: String,
+    pub orientation_name: String,
+    pub mode: String,
+    pub is_primary: bool,
+    /// RFC 3339 timestamp.
+    pub picked_at: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PublicUserOrientationsResponse {
+    pub orientations: Vec<PublicUserOrientationRow>,
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// GET /orientations — catalogue public paginé
+// ═══════════════════════════════════════════════════════════════════
+
+/// Public paginated catalogue of curated orientations. Optional
+/// filters on `domain` and `tag`.
+#[utoipa::path(
+    get,
+    path = "/api/orientations",
+    tag = "profile",
+    params(CatalogQuery),
+    responses(
+        (status = 200, description = "Orientations catalogue", body = ApiResponse<OrientationsCatalogResponse>),
+    ),
+)]
+pub async fn list_orientations(
     State(state): State<AppState>,
     Query(q): Query<CatalogQuery>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<OrientationsCatalogResponse>>, AppError> {
     let limit = q.limit.clamp(1, 200);
     let rows = sqlx::query_as::<_, OrientationRow>(
         r#"
@@ -114,20 +230,35 @@ async fn list_orientations(
     .fetch_all(&state.db)
     .await?;
 
-    Ok(Json(wrap(json!({
-        "orientations": rows,
-        "pagination": { "limit": limit, "offset": q.offset.max(0) },
-    }))))
+    Ok(Json(ApiResponse::new(OrientationsCatalogResponse {
+        orientations: rows,
+        pagination: CatalogPagination {
+            limit,
+            offset: q.offset.max(0),
+        },
+    })))
 }
 
 // ═══════════════════════════════════════════════════════════════════
 // GET /orientations/{slug} — détail + skills recommandés
 // ═══════════════════════════════════════════════════════════════════
 
-async fn get_orientation(
+/// Detail on a single orientation + the map of recommended /
+/// core skills that unlock it.
+#[utoipa::path(
+    get,
+    path = "/api/orientations/{slug}",
+    tag = "profile",
+    params(("slug" = String, Path, description = "Orientation slug")),
+    responses(
+        (status = 200, description = "Orientation detail", body = ApiResponse<OrientationDetailResponse>),
+        (status = 404, description = "Slug unknown", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn get_orientation(
     State(state): State<AppState>,
     Path(slug): Path<String>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<OrientationDetailResponse>>, AppError> {
     let orientation = sqlx::query_as::<_, OrientationRow>(
         "SELECT id, slug, name, description, primary_domain, secondary_domains,
                 tags, is_curated, is_archived
@@ -151,46 +282,42 @@ async fn get_orientation(
     .fetch_all(&state.db)
     .await?;
 
-    let skills_json: Vec<Value> = skills
+    let skills_json: Vec<OrientationSkillEntry> = skills
         .into_iter()
-        .map(|(slug, name, core, rec, w)| {
-            json!({
-                "slug": slug,
-                "display_name": name,
-                "is_core": core,
-                "is_recommended": rec,
-                "weight": w,
-            })
+        .map(|(slug, name, core, rec, w)| OrientationSkillEntry {
+            slug,
+            display_name: name,
+            is_core: core,
+            is_recommended: rec,
+            weight: w,
         })
         .collect();
 
-    Ok(Json(wrap(json!({
-        "orientation": orientation,
-        "skills": skills_json,
-    }))))
+    Ok(Json(ApiResponse::new(OrientationDetailResponse {
+        orientation,
+        skills: skills_json,
+    })))
 }
 
 // ═══════════════════════════════════════════════════════════════════
 // GET /users/me/orientations — les miennes
 // ═══════════════════════════════════════════════════════════════════
 
-#[derive(Debug, Serialize, sqlx::FromRow)]
-struct UserOrientationRow {
-    orientation_slug: String,
-    orientation_name: String,
-    mode: String,
-    is_primary: bool,
-    started_at: chrono::DateTime<chrono::Utc>,
-    ended_at: Option<chrono::DateTime<chrono::Utc>>,
-    working_languages: Vec<String>,
-    timezone: Option<String>,
-    notes: Option<String>,
-}
-
-async fn my_orientations(
+/// List every orientation the caller has ever picked (active + ended).
+#[utoipa::path(
+    get,
+    path = "/api/users/me/orientations",
+    tag = "profile",
+    responses(
+        (status = 200, description = "Caller's orientations", body = ApiResponse<MyOrientationsResponse>),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn my_orientations(
     State(state): State<AppState>,
     auth: AuthUser,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<MyOrientationsResponse>>, AppError> {
     let rows = sqlx::query_as::<_, UserOrientationRow>(
         r#"
         SELECT o.slug AS orientation_slug, o.name AS orientation_name,
@@ -205,32 +332,33 @@ async fn my_orientations(
     .bind(auth.user_id)
     .fetch_all(&state.db)
     .await?;
-    Ok(Json(wrap(json!({ "orientations": rows }))))
+    Ok(Json(ApiResponse::new(MyOrientationsResponse {
+        orientations: rows,
+    })))
 }
 
 // ═══════════════════════════════════════════════════════════════════
 // POST /users/me/orientations — s'inscrire (cap 3 actives)
 // ═══════════════════════════════════════════════════════════════════
 
-#[derive(Debug, Deserialize)]
-struct RegisterBody {
-    slug: String,
-    #[serde(default = "default_mode")]
-    mode: String, // 'learning' | 'active'
-    #[serde(default)]
-    is_primary: bool,
-    #[serde(default)]
-    working_languages: Option<Vec<String>>,
-    #[serde(default)]
-    timezone: Option<String>,
-    #[serde(default)]
-    notes: Option<String>,
-}
-fn default_mode() -> String {
-    "learning".into()
-}
-
-async fn register_orientation(
+/// Enroll the caller in an orientation. Idempotent on
+/// `(user_id, orientation_id)` — re-POSTing an already-active row
+/// refreshes the mode/languages/etc fields and un-ends it. Enforces
+/// the 3-active cap.
+#[utoipa::path(
+    post,
+    path = "/api/users/me/orientations",
+    tag = "profile",
+    request_body = RegisterBody,
+    responses(
+        (status = 201, description = "Orientation registered", body = ApiResponse<RegisterOrientationResponse>),
+        (status = 400, description = "Invalid mode, archived orientation, or 3-active cap reached", body = crate::api_response::ErrorResponse),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "Slug unknown or not curated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn register_orientation(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<RegisterBody>,
@@ -316,11 +444,11 @@ async fn register_orientation(
 
     Ok((
         StatusCode::CREATED,
-        Json(wrap(json!({
-            "slug": body.slug,
-            "mode": inserted.0,
-            "is_primary": final_is_primary,
-        }))),
+        Json(ApiResponse::new(RegisterOrientationResponse {
+            slug: body.slug,
+            mode: inserted.0,
+            is_primary: final_is_primary,
+        })),
     ))
 }
 
@@ -328,21 +456,27 @@ async fn register_orientation(
 // PATCH /users/me/orientations/{slug}
 // ═══════════════════════════════════════════════════════════════════
 
-#[derive(Debug, Deserialize)]
-struct UpdateBody {
-    mode: Option<String>,
-    is_primary: Option<bool>,
-    working_languages: Option<Vec<String>>,
-    timezone: Option<String>,
-    notes: Option<String>,
-}
-
-async fn update_orientation(
+/// Partial update on an active orientation. Setting `is_primary=true`
+/// automatically un-flags any other active primary.
+#[utoipa::path(
+    patch,
+    path = "/api/users/me/orientations/{slug}",
+    tag = "profile",
+    params(("slug" = String, Path, description = "Orientation slug")),
+    request_body = UpdateBody,
+    responses(
+        (status = 200, description = "Updated", body = ApiResponse<UpdateOrientationResponse>),
+        (status = 400, description = "Invalid mode", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "Active orientation not found for this user", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn update_orientation(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(slug): Path<String>,
     Json(body): Json<UpdateBody>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<UpdateOrientationResponse>>, AppError> {
     if let Some(m) = &body.mode
         && !matches!(m.as_str(), "learning" | "active")
     {
@@ -389,33 +523,61 @@ async fn update_orientation(
         )));
     }
     tx.commit().await?;
-    Ok(Json(wrap(json!({ "updated": true, "slug": slug }))))
+    Ok(Json(ApiResponse::new(UpdateOrientationResponse {
+        updated: true,
+        slug,
+    })))
 }
-
-// ═══════════════════════════════════════════════════════════════════
-// DELETE /users/me/orientations/{slug} — historise (ended_at = NOW)
-// ═══════════════════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════════════════
 // GET /users/me/orientations/{slug}/playlist — P16.5
 // ═══════════════════════════════════════════════════════════════════
 
-async fn orientation_playlist(
+/// Personalised learning playlist for an orientation. The playlist
+/// service returns a rich structured payload (recommended slices,
+/// missing skills, next steps) — documented here as free-form JSON
+/// since it evolves independently.
+#[utoipa::path(
+    get,
+    path = "/api/users/me/orientations/{slug}/playlist",
+    tag = "profile",
+    params(("slug" = String, Path, description = "Orientation slug")),
+    responses(
+        (status = 200, description = "Playlist payload", body = serde_json::Value),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "Orientation not active for this user", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn orientation_playlist(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(slug): Path<String>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<serde_json::Value>, AppError> {
     let playlist =
         crate::services::orientations_playlist::playlist_for(&state.db, auth.user_id, &slug)
             .await?;
-    Ok(Json(wrap(json!(playlist))))
+    Ok(Json(serde_json::json!(playlist)))
 }
 
-async fn end_orientation(
+/// End an active orientation (soft — sets `ended_at`, un-flags
+/// `is_primary`).
+#[utoipa::path(
+    delete,
+    path = "/api/users/me/orientations/{slug}",
+    tag = "profile",
+    params(("slug" = String, Path, description = "Orientation slug")),
+    responses(
+        (status = 200, description = "Ended", body = ApiResponse<EndOrientationResponse>),
+        (status = 404, description = "No active orientation with this slug", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn end_orientation(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(slug): Path<String>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<EndOrientationResponse>>, AppError> {
     let res = sqlx::query(
         r#"
         UPDATE user_orientations uo
@@ -434,7 +596,10 @@ async fn end_orientation(
             "active orientation '{slug}' not found"
         )));
     }
-    Ok(Json(wrap(json!({ "ended": true, "slug": slug }))))
+    Ok(Json(ApiResponse::new(EndOrientationResponse {
+        ended: true,
+        slug,
+    })))
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -446,10 +611,24 @@ async fn end_orientation(
 // (les orientations sont une info d'identité professionnelle, comme le
 // job title public sur LinkedIn). Si un user veut cacher son profil, il
 // utilise le mécanisme users.profile_active = FALSE (déjà existant).
-async fn public_user_orientations(
+
+/// Public projection of a user's active orientations. Returns an
+/// empty list rather than 403 when the target's profile is inactive
+/// (anti-enumeration).
+#[utoipa::path(
+    get,
+    path = "/api/users/{id}/orientations",
+    tag = "profile",
+    params(("id" = Uuid, Path, description = "User UUID")),
+    responses(
+        (status = 200, description = "Active orientations (public projection)", body = ApiResponse<PublicUserOrientationsResponse>),
+        (status = 404, description = "User not found or banned", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn public_user_orientations(
     State(state): State<AppState>,
     Path(user_id): Path<Uuid>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<PublicUserOrientationsResponse>>, AppError> {
     // Si le user a désactivé son profil public, renvoie un tableau vide (pas
     // une 403 : évite l'énumération).
     let public: Option<bool> =
@@ -461,7 +640,9 @@ async fn public_user_orientations(
         return Err(AppError::NotFound("user not found".into()));
     };
     if !active {
-        return Ok(Json(wrap(json!({ "orientations": [] }))));
+        return Ok(Json(ApiResponse::new(PublicUserOrientationsResponse {
+            orientations: vec![],
+        })));
     }
 
     let rows: Vec<(String, String, String, bool, chrono::DateTime<chrono::Utc>)> = sqlx::query_as(
@@ -477,18 +658,20 @@ async fn public_user_orientations(
     .fetch_all(&state.db)
     .await?;
 
-    let orientations: Vec<Value> = rows
+    let orientations: Vec<PublicUserOrientationRow> = rows
         .into_iter()
-        .map(|(slug, name, mode, primary, picked)| {
-            json!({
-                "orientation_slug": slug,
-                "orientation_name": name,
-                "mode": mode,
-                "is_primary": primary,
-                "picked_at": picked.to_rfc3339(),
-            })
-        })
+        .map(
+            |(slug, name, mode, primary, picked)| PublicUserOrientationRow {
+                orientation_slug: slug,
+                orientation_name: name,
+                mode,
+                is_primary: primary,
+                picked_at: picked.to_rfc3339(),
+            },
+        )
         .collect();
 
-    Ok(Json(wrap(json!({ "orientations": orientations }))))
+    Ok(Json(ApiResponse::new(PublicUserOrientationsResponse {
+        orientations,
+    })))
 }

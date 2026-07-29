@@ -3,14 +3,16 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::{delete, get, post, put};
 use axum::{Json, Router};
-use serde::Deserialize;
-use serde_json::json;
+use serde::{Deserialize, Serialize};
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::AppState;
+use crate::api_response::{ApiResponse, MetaInfo, SimpleMessage};
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
 use crate::models::{Enterprise, TalentList};
+use crate::routes::notifications::Pagination;
 
 // Type aliases pour clippy::type_complexity (rangées sqlx::query_as).
 type TalentListsRow142 = (
@@ -57,16 +59,6 @@ pub fn talent_list_routes() -> Router<AppState> {
         )
 }
 
-fn build_response(data: serde_json::Value) -> serde_json::Value {
-    json!({
-        "data": data,
-        "meta": {
-            "request_id": Uuid::new_v4().to_string(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-        }
-    })
-}
-
 async fn require_enterprise(state: &AppState, auth: &AuthUser) -> Result<Enterprise, AppError> {
     crate::routes::enterprise::resolve_active_enterprise(
         &state.db,
@@ -76,28 +68,107 @@ async fn require_enterprise(state: &AppState, auth: &AuthUser) -> Result<Enterpr
     .await
 }
 
-#[derive(Debug, Deserialize)]
-struct PaginationQuery {
-    page: Option<i64>,
-    per_page: Option<i64>,
+// ─── Types de réponse ────────────────────────────────────────────
+
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct PaginationQuery {
+    pub page: Option<i64>,
+    pub per_page: Option<i64>,
 }
 
-#[derive(Debug, Deserialize)]
-struct CreateListRequest {
-    name: String,
-    description: Option<String>,
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CreateListRequest {
+    pub name: String,
+    pub description: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
-struct UpdateListRequest {
-    name: Option<String>,
-    description: Option<String>,
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UpdateListRequest {
+    pub name: Option<String>,
+    pub description: Option<String>,
+}
+
+/// Bookmarked talent — minimal projection for the enterprise-side
+/// bookmarks list.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct BookmarkedTalent {
+    pub id: Uuid,
+    pub username: String,
+    pub display_name: String,
+    pub skill_domain: String,
+    pub title: String,
+    pub golden_stars: i32,
+    pub total_fragments: i32,
+    pub country: Option<String>,
+    /// RFC 3339 timestamp of when the talent was bookmarked.
+    pub bookmarked_at: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct BookmarksPageResponse {
+    pub data: Vec<BookmarkedTalent>,
+    pub pagination: Pagination,
+    pub meta: MetaInfo,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ListResponse {
+    pub list: TalentList,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct TalentListSummary {
+    pub id: Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub talent_count: i64,
+    /// RFC 3339 timestamp.
+    pub created_at: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ListsResponse {
+    pub lists: Vec<TalentListSummary>,
+}
+
+/// Talent projection inside a list — same shape as BookmarkedTalent
+/// minus the bookmarked_at.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ListMemberTalent {
+    pub id: Uuid,
+    pub username: String,
+    pub display_name: String,
+    pub skill_domain: String,
+    pub title: String,
+    pub golden_stars: i32,
+    pub total_fragments: i32,
+    pub country: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ListDetailResponse {
+    pub list: TalentList,
+    pub talents: Vec<ListMemberTalent>,
 }
 
 // ─── Bookmarks ──────────────────────────────────────────────────
 
-// POST /api/enterprise/bookmarks/:talent_id
-async fn add_bookmark(
+/// Add a talent to the enterprise's bookmarks. Idempotent (ON
+/// CONFLICT DO NOTHING).
+#[utoipa::path(
+    post,
+    path = "/api/enterprise/bookmarks/{talent_id}",
+    tag = "enterprise",
+    params(("talent_id" = Uuid, Path, description = "Talent user UUID")),
+    responses(
+        (status = 201, description = "Bookmark added", body = ApiResponse<SimpleMessage>),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Caller has no enterprise", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "Talent not found or inactive", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn add_bookmark(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(talent_id): Path<Uuid>,
@@ -127,16 +198,28 @@ async fn add_bookmark(
 
     Ok((
         StatusCode::CREATED,
-        Json(build_response(json!({ "message": "Bookmark added" }))),
+        Json(ApiResponse::new(SimpleMessage::new("Bookmark added"))),
     ))
 }
 
-// DELETE /api/enterprise/bookmarks/:talent_id
-async fn remove_bookmark(
+/// Remove a bookmark. No-op with 200 if the bookmark doesn't exist.
+#[utoipa::path(
+    delete,
+    path = "/api/enterprise/bookmarks/{talent_id}",
+    tag = "enterprise",
+    params(("talent_id" = Uuid, Path, description = "Talent user UUID")),
+    responses(
+        (status = 200, description = "Bookmark removed (or was already absent)", body = ApiResponse<SimpleMessage>),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Caller has no enterprise", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn remove_bookmark(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(talent_id): Path<Uuid>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<SimpleMessage>>, AppError> {
     let enterprise = require_enterprise(&state, &auth).await?;
 
     sqlx::query("DELETE FROM enterprise_bookmarks WHERE enterprise_id = $1 AND talent_id = $2")
@@ -145,17 +228,29 @@ async fn remove_bookmark(
         .execute(&state.db)
         .await?;
 
-    Ok(Json(build_response(json!({
-        "message": "Bookmark removed"
-    }))))
+    Ok(Json(ApiResponse::new(SimpleMessage::new(
+        "Bookmark removed",
+    ))))
 }
 
-// GET /api/enterprise/bookmarks
-async fn list_bookmarks(
+/// Paginated list of the enterprise's bookmarked talents.
+#[utoipa::path(
+    get,
+    path = "/api/enterprise/bookmarks",
+    tag = "enterprise",
+    params(PaginationQuery),
+    responses(
+        (status = 200, description = "Bookmarked talents", body = BookmarksPageResponse),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Caller has no enterprise", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_bookmarks(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(query): Query<PaginationQuery>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<BookmarksPageResponse>, AppError> {
     let enterprise = require_enterprise(&state, &auth).await?;
 
     let page = query.page.unwrap_or(1).max(1);
@@ -185,42 +280,49 @@ async fn list_bookmarks(
     .fetch_one(&state.db)
     .await?;
 
-    let results: Vec<serde_json::Value> = bookmarks
+    let results: Vec<BookmarkedTalent> = bookmarks
         .iter()
-        .map(|b| {
-            json!({
-                "id": b.0,
-                "username": b.1,
-                "display_name": b.2,
-                "skill_domain": b.3,
-                "title": b.4,
-                "golden_stars": b.5,
-                "total_fragments": b.6,
-                "country": b.7,
-                "bookmarked_at": b.8.to_rfc3339(),
-            })
+        .map(|b| BookmarkedTalent {
+            id: b.0,
+            username: b.1.clone(),
+            display_name: b.2.clone(),
+            skill_domain: b.3.clone(),
+            title: b.4.clone(),
+            golden_stars: b.5,
+            total_fragments: b.6,
+            country: b.7.clone(),
+            bookmarked_at: b.8.to_rfc3339(),
         })
         .collect();
 
-    Ok(Json(json!({
-        "data": results,
-        "pagination": {
-            "page": page,
-            "per_page": per_page,
-            "total": total,
-            "total_pages": (total as f64 / per_page as f64).ceil() as i64,
+    Ok(Json(BookmarksPageResponse {
+        data: results,
+        pagination: Pagination {
+            page,
+            per_page,
+            total,
+            total_pages: (total as f64 / per_page as f64).ceil() as i64,
         },
-        "meta": {
-            "request_id": Uuid::new_v4().to_string(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-        }
-    })))
+        meta: MetaInfo::now(),
+    }))
 }
 
 // ─── Talent Lists ───────────────────────────────────────────────
 
-// POST /api/enterprise/lists
-async fn create_list(
+/// Create a new talent list for the enterprise.
+#[utoipa::path(
+    post,
+    path = "/api/enterprise/lists",
+    tag = "enterprise",
+    request_body = CreateListRequest,
+    responses(
+        (status = 201, description = "List created", body = ApiResponse<ListResponse>),
+        (status = 400, description = "Name empty or too long", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Caller has no enterprise", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create_list(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<CreateListRequest>,
@@ -245,15 +347,25 @@ async fn create_list(
 
     Ok((
         StatusCode::CREATED,
-        Json(build_response(json!({ "list": list }))),
+        Json(ApiResponse::new(ListResponse { list })),
     ))
 }
 
-// GET /api/enterprise/lists
-async fn list_lists(
+/// List the enterprise's talent lists with member counts pre-joined.
+#[utoipa::path(
+    get,
+    path = "/api/enterprise/lists",
+    tag = "enterprise",
+    responses(
+        (status = 200, description = "Talent lists (with member counts)", body = ApiResponse<ListsResponse>),
+        (status = 403, description = "Caller has no enterprise", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_lists(
     State(state): State<AppState>,
     auth: AuthUser,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<ListsResponse>>, AppError> {
     let enterprise = require_enterprise(&state, &auth).await?;
 
     let lists: Vec<TalentList> = sqlx::query_as(
@@ -274,28 +386,38 @@ async fn list_lists(
 
     let count_map: std::collections::HashMap<Uuid, i64> = counts.into_iter().collect();
 
-    let results: Vec<serde_json::Value> = lists
+    let results: Vec<TalentListSummary> = lists
         .iter()
-        .map(|l| {
-            json!({
-                "id": l.id,
-                "name": l.name,
-                "description": l.description,
-                "talent_count": count_map.get(&l.id).unwrap_or(&0),
-                "created_at": l.created_at.to_rfc3339(),
-            })
+        .map(|l| TalentListSummary {
+            id: l.id,
+            name: l.name.clone(),
+            description: l.description.clone(),
+            talent_count: *count_map.get(&l.id).unwrap_or(&0),
+            created_at: l.created_at.to_rfc3339(),
         })
         .collect();
 
-    Ok(Json(build_response(json!({ "lists": results }))))
+    Ok(Json(ApiResponse::new(ListsResponse { lists: results })))
 }
 
-// GET /api/enterprise/lists/:list_id
-async fn get_list(
+/// Get a list with its full talent roster.
+#[utoipa::path(
+    get,
+    path = "/api/enterprise/lists/{list_id}",
+    tag = "enterprise",
+    params(("list_id" = Uuid, Path, description = "Talent-list UUID")),
+    responses(
+        (status = 200, description = "List + talents", body = ApiResponse<ListDetailResponse>),
+        (status = 403, description = "Caller has no enterprise", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "List not found under this enterprise", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn get_list(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(list_id): Path<Uuid>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<ListDetailResponse>>, AppError> {
     let enterprise = require_enterprise(&state, &auth).await?;
 
     let list: TalentList =
@@ -319,35 +441,45 @@ async fn get_list(
     .fetch_all(&state.db)
     .await?;
 
-    let talent_data: Vec<serde_json::Value> = talents
+    let talent_data: Vec<ListMemberTalent> = talents
         .iter()
-        .map(|t| {
-            json!({
-                "id": t.0,
-                "username": t.1,
-                "display_name": t.2,
-                "skill_domain": t.3,
-                "title": t.4,
-                "golden_stars": t.5,
-                "total_fragments": t.6,
-                "country": t.7,
-            })
+        .map(|t| ListMemberTalent {
+            id: t.0,
+            username: t.1.clone(),
+            display_name: t.2.clone(),
+            skill_domain: t.3.clone(),
+            title: t.4.clone(),
+            golden_stars: t.5,
+            total_fragments: t.6,
+            country: t.7.clone(),
         })
         .collect();
 
-    Ok(Json(build_response(json!({
-        "list": list,
-        "talents": talent_data,
-    }))))
+    Ok(Json(ApiResponse::new(ListDetailResponse {
+        list,
+        talents: talent_data,
+    })))
 }
 
-// PUT /api/enterprise/lists/:list_id
-async fn update_list(
+/// Partial update on a talent list.
+#[utoipa::path(
+    put,
+    path = "/api/enterprise/lists/{list_id}",
+    tag = "enterprise",
+    params(("list_id" = Uuid, Path, description = "Talent-list UUID")),
+    request_body = UpdateListRequest,
+    responses(
+        (status = 200, description = "List updated", body = ApiResponse<ListResponse>),
+        (status = 404, description = "List not found under this enterprise", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn update_list(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(list_id): Path<Uuid>,
     Json(body): Json<UpdateListRequest>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<ListResponse>>, AppError> {
     let enterprise = require_enterprise(&state, &auth).await?;
 
     let list: TalentList = sqlx::query_as(
@@ -368,15 +500,26 @@ async fn update_list(
     .await?
     .ok_or(AppError::NotFound("List not found".to_string()))?;
 
-    Ok(Json(build_response(json!({ "list": list }))))
+    Ok(Json(ApiResponse::new(ListResponse { list })))
 }
 
-// DELETE /api/enterprise/lists/:list_id
-async fn delete_list(
+/// Delete a talent list.
+#[utoipa::path(
+    delete,
+    path = "/api/enterprise/lists/{list_id}",
+    tag = "enterprise",
+    params(("list_id" = Uuid, Path, description = "Talent-list UUID")),
+    responses(
+        (status = 200, description = "List deleted", body = ApiResponse<SimpleMessage>),
+        (status = 404, description = "List not found under this enterprise", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn delete_list(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(list_id): Path<Uuid>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<SimpleMessage>>, AppError> {
     let enterprise = require_enterprise(&state, &auth).await?;
 
     let result = sqlx::query("DELETE FROM talent_lists WHERE id = $1 AND enterprise_id = $2")
@@ -389,13 +532,25 @@ async fn delete_list(
         return Err(AppError::NotFound("List not found".to_string()));
     }
 
-    Ok(Json(build_response(json!({
-        "message": "List deleted"
-    }))))
+    Ok(Json(ApiResponse::new(SimpleMessage::new("List deleted"))))
 }
 
-// POST /api/enterprise/lists/:list_id/talents/:talent_id
-async fn add_to_list(
+/// Add a talent to a list. Idempotent.
+#[utoipa::path(
+    post,
+    path = "/api/enterprise/lists/{list_id}/talents/{talent_id}",
+    tag = "enterprise",
+    params(
+        ("list_id" = Uuid, Path, description = "Talent-list UUID"),
+        ("talent_id" = Uuid, Path, description = "Talent user UUID"),
+    ),
+    responses(
+        (status = 201, description = "Talent added", body = ApiResponse<SimpleMessage>),
+        (status = 404, description = "List not found under this enterprise", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn add_to_list(
     State(state): State<AppState>,
     auth: AuthUser,
     Path((list_id, talent_id)): Path<(Uuid, Uuid)>,
@@ -425,18 +580,30 @@ async fn add_to_list(
 
     Ok((
         StatusCode::CREATED,
-        Json(build_response(json!({
-            "message": "Talent added to list"
-        }))),
+        Json(ApiResponse::new(SimpleMessage::new("Talent added to list"))),
     ))
 }
 
-// DELETE /api/enterprise/lists/:list_id/talents/:talent_id
-async fn remove_from_list(
+/// Remove a talent from a list.
+#[utoipa::path(
+    delete,
+    path = "/api/enterprise/lists/{list_id}/talents/{talent_id}",
+    tag = "enterprise",
+    params(
+        ("list_id" = Uuid, Path, description = "Talent-list UUID"),
+        ("talent_id" = Uuid, Path, description = "Talent user UUID"),
+    ),
+    responses(
+        (status = 200, description = "Talent removed", body = ApiResponse<SimpleMessage>),
+        (status = 404, description = "List not found under this enterprise", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn remove_from_list(
     State(state): State<AppState>,
     auth: AuthUser,
     Path((list_id, talent_id)): Path<(Uuid, Uuid)>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<SimpleMessage>>, AppError> {
     let enterprise = require_enterprise(&state, &auth).await?;
 
     // Verify list belongs to enterprise
@@ -457,7 +624,7 @@ async fn remove_from_list(
         .execute(&state.db)
         .await?;
 
-    Ok(Json(build_response(json!({
-        "message": "Talent removed from list"
-    }))))
+    Ok(Json(ApiResponse::new(SimpleMessage::new(
+        "Talent removed from list",
+    ))))
 }

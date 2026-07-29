@@ -87,7 +87,13 @@ struct ListQuery {
     per_page: Option<i64>,
 }
 
-async fn list_skills(
+/// Admin: paginated list of skill_nodes (filter by domain / parent_id).
+#[utoipa::path(
+    get, path = "/api/admin/skills", tag = "admin",
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_skills(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<ListQuery>,
@@ -189,7 +195,14 @@ struct CreateSkillBody {
     is_skilluv_specific: Option<bool>,
 }
 
-async fn create_skill(
+/// Admin: create a new skill_node.
+#[utoipa::path(
+    post, path = "/api/admin/skills", tag = "admin",
+    request_body(content = serde_json::Value, description = "SkillNode payload"),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create_skill(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<CreateSkillBody>,
@@ -291,7 +304,15 @@ struct UpdateSkillBody {
     is_skilluv_specific: Option<bool>,
 }
 
-async fn update_skill(
+/// Admin: update a skill_node.
+#[utoipa::path(
+    put, path = "/api/admin/skills/{id}", tag = "admin",
+    params(("id" = Uuid, Path)),
+    request_body(content = serde_json::Value, description = "SkillNode partial payload"),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn update_skill(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,

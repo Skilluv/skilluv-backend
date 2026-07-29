@@ -61,7 +61,14 @@ fn build_response(data: Value) -> Value {
 // ─── Seasons admin ───────────────────────────────────────────────
 // GET /seasons + /seasons/current publics : voir routes/seasons.rs (P6).
 
-async fn admin_create_season(
+/// Admin: create a season (workflow tournois).
+#[utoipa::path(
+    post, path = "/api/admin/seasons", tag = "admin",
+    request_body(content = serde_json::Value, description = "CreateSeasonInput"),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_create_season(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(input): Json<tournament::CreateSeasonInput>,
@@ -73,12 +80,19 @@ async fn admin_create_season(
     Ok(Json(build_response(json!({ "season": s }))))
 }
 
-#[derive(Deserialize)]
-struct StatusBody {
-    status: String,
+#[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+pub struct StatusBody {
+    pub status: String,
 }
 
-async fn admin_set_season_status(
+/// Admin: change season status.
+#[utoipa::path(
+    post, path = "/api/admin/seasons/{id}/status", tag = "admin",
+    params(("id" = Uuid, Path)), request_body = StatusBody,
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_set_season_status(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -91,7 +105,14 @@ async fn admin_set_season_status(
     Ok(Json(build_response(json!({ "season": s }))))
 }
 
-async fn admin_close_season(
+/// Admin: close a season and distribute final rewards.
+#[utoipa::path(
+    post, path = "/api/admin/seasons/{id}/close", tag = "admin",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_close_season(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -106,14 +127,20 @@ async fn admin_close_season(
 
 // ─── Tournaments ─────────────────────────────────────────────────
 
-#[derive(Deserialize)]
-struct ListTournamentsQuery {
-    status: Option<String>,
-    upcoming: Option<bool>,
-    limit: Option<i64>,
+#[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+pub struct ListTournamentsQuery {
+    pub status: Option<String>,
+    pub upcoming: Option<bool>,
+    pub limit: Option<i64>,
 }
 
-async fn list_tournaments(
+/// List tournaments (filterable by status / upcoming).
+#[utoipa::path(
+    get, path = "/api/tournaments", tag = "challenges",
+    params(ListTournamentsQuery),
+    responses((status = 200, body = serde_json::Value)),
+)]
+pub async fn list_tournaments(
     State(state): State<AppState>,
     Query(q): Query<ListTournamentsQuery>,
 ) -> Result<Json<Value>, AppError> {
@@ -127,7 +154,13 @@ async fn list_tournaments(
     Ok(Json(build_response(json!({ "tournaments": rows }))))
 }
 
-async fn get_tournament(
+/// Fetch a tournament by slug.
+#[utoipa::path(
+    get, path = "/api/tournaments/{slug}", tag = "challenges",
+    params(("slug" = String, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 404, body = crate::api_response::ErrorResponse)),
+)]
+pub async fn get_tournament(
     State(state): State<AppState>,
     Path(slug): Path<String>,
 ) -> Result<Json<Value>, AppError> {
@@ -135,7 +168,13 @@ async fn get_tournament(
     Ok(Json(build_response(json!({ "tournament": t }))))
 }
 
-async fn get_leaderboard(
+/// Tournament leaderboard.
+#[utoipa::path(
+    get, path = "/api/tournaments/{slug}/leaderboard", tag = "challenges",
+    params(("slug" = String, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 404, body = crate::api_response::ErrorResponse)),
+)]
+pub async fn get_leaderboard(
     State(state): State<AppState>,
     Path(slug): Path<String>,
 ) -> Result<Json<Value>, AppError> {
@@ -144,13 +183,23 @@ async fn get_leaderboard(
     Ok(Json(build_response(json!({ "leaderboard": rows }))))
 }
 
-#[derive(Deserialize)]
-struct RegisterBody {
+#[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+pub struct RegisterBody {
     /// Required for guild_war tournaments; ignored otherwise.
-    guild_id: Option<Uuid>,
+    pub guild_id: Option<Uuid>,
 }
 
-async fn register(
+/// Register for a tournament (individual or guild_war).
+#[utoipa::path(
+    post, path = "/api/tournaments/{slug}/register", tag = "challenges",
+    params(("slug" = String, Path)), request_body = RegisterBody,
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 400, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn register(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(slug): Path<String>,
@@ -178,7 +227,14 @@ async fn register(
     Ok(Json(build_response(json!({ "participant": participant }))))
 }
 
-async fn admin_create_tournament(
+/// Admin: create a tournament.
+#[utoipa::path(
+    post, path = "/api/admin/tournaments", tag = "admin",
+    request_body(content = serde_json::Value, description = "CreateTournamentInput"),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_create_tournament(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(input): Json<tournament::CreateTournamentInput>,
@@ -191,7 +247,14 @@ async fn admin_create_tournament(
     Ok(Json(build_response(json!({ "tournament": t }))))
 }
 
-async fn admin_set_tournament_status(
+/// Admin: change tournament status.
+#[utoipa::path(
+    post, path = "/api/admin/tournaments/{id}/status", tag = "admin",
+    params(("id" = Uuid, Path)), request_body = StatusBody,
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_set_tournament_status(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -204,14 +267,21 @@ async fn admin_set_tournament_status(
     Ok(Json(build_response(json!({ "tournament": t }))))
 }
 
-#[derive(Deserialize)]
-struct ScoreBody {
-    participant_type: String,
-    participant_id: Uuid,
-    score: i32,
+#[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+pub struct ScoreBody {
+    pub participant_type: String,
+    pub participant_id: Uuid,
+    pub score: i32,
 }
 
-async fn admin_set_score(
+/// Admin: set a participant's score.
+#[utoipa::path(
+    post, path = "/api/admin/tournaments/{id}/score", tag = "admin",
+    params(("id" = Uuid, Path)), request_body = ScoreBody,
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_set_score(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -231,7 +301,14 @@ async fn admin_set_score(
     Ok(Json(build_response(json!({ "updated": true }))))
 }
 
-async fn admin_conclude(
+/// Admin: conclude tournament (compute ranks, award prizes, notify top 3).
+#[utoipa::path(
+    post, path = "/api/admin/tournaments/{id}/conclude", tag = "admin",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_conclude(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -304,7 +381,12 @@ async fn admin_conclude(
 
 // ─── Events feed (public landing) ────────────────────────────────
 
-async fn events_feed(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
+/// Public events feed (tournaments + season milestones).
+#[utoipa::path(
+    get, path = "/api/events", tag = "feed",
+    responses((status = 200, body = serde_json::Value)),
+)]
+pub async fn events_feed(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
     let upcoming = tournament::list_tournaments(&state.db, None, true, 20).await?;
     let current = tournament::current_season(&state.db).await?;
     Ok(Json(build_response(json!({

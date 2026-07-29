@@ -25,7 +25,14 @@ pub fn profile_routes() -> Router<AppState> {
 }
 
 // GET /api/users/{id}/rank-history — historique public des transitions de rang.
-async fn user_rank_history(
+/// Public rank-transition history for a user. Empty when the profile
+/// is inactive (anti-enumeration).
+#[utoipa::path(
+    get, path = "/api/users/{id}/rank-history", tag = "profile",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 404, body = crate::api_response::ErrorResponse)),
+)]
+pub async fn user_rank_history(
     State(state): State<AppState>,
     Path(user_id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, AppError> {
@@ -109,7 +116,13 @@ struct ActivityDay {
 }
 
 // GET /api/profile/{username} — public profile (no auth, SSR-ready)
-async fn public_profile(
+/// Public profile page (SSR-ready, no auth required).
+#[utoipa::path(
+    get, path = "/api/profile/{username}", tag = "profile",
+    params(("username" = String, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 404, body = crate::api_response::ErrorResponse)),
+)]
+pub async fn public_profile(
     State(state): State<AppState>,
     Path(username): Path<String>,
 ) -> Result<Json<serde_json::Value>, AppError> {

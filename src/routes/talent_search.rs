@@ -2,13 +2,15 @@ use axum::extract::{Path, Query, State};
 use axum::http::request::Parts;
 use axum::routing::get;
 use axum::{Json, Router};
-use serde::Deserialize;
-use serde_json::json;
+use serde::{Deserialize, Serialize};
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::AppState;
+use crate::api_response::{ApiResponse, MetaInfo};
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
+use crate::routes::notifications::Pagination;
 use crate::services::AuthService;
 
 pub fn talent_search_routes() -> Router<AppState> {
@@ -17,26 +19,18 @@ pub fn talent_search_routes() -> Router<AppState> {
         .route("/talents/{username}/card", get(talent_card))
 }
 
-fn build_response(data: serde_json::Value) -> serde_json::Value {
-    json!({
-        "data": data,
-        "meta": {
-            "request_id": Uuid::new_v4().to_string(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-        }
-    })
-}
-
-#[derive(Debug, Deserialize)]
-struct SearchQuery {
-    q: Option<String>,
-    skill_domain: Option<String>,
-    title: Option<String>,
-    country: Option<String>,
-    min_fragments: Option<i32>,
-    sort_by: Option<String>,
-    page: Option<i64>,
-    per_page: Option<i64>,
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct SearchQuery {
+    /// Free-text query (FTS on `search_vector`).
+    pub q: Option<String>,
+    pub skill_domain: Option<String>,
+    pub title: Option<String>,
+    pub country: Option<String>,
+    pub min_fragments: Option<i32>,
+    /// `fragments` (default), `recent`, `relevance`.
+    pub sort_by: Option<String>,
+    pub page: Option<i64>,
+    pub per_page: Option<i64>,
 }
 
 #[derive(Debug, sqlx::FromRow)]
@@ -51,6 +45,55 @@ struct TalentResult {
     streak_current: i32,
     country: Option<String>,
     created_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Search-result entry. `is_bookmarked` is only populated for
+/// authenticated enterprise callers.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct TalentSearchEntry {
+    pub id: Uuid,
+    pub username: String,
+    pub display_name: String,
+    pub skill_domain: String,
+    pub title: String,
+    pub golden_stars: i32,
+    pub total_fragments: i32,
+    pub streak_current: i32,
+    pub country: Option<String>,
+    /// RFC 3339 timestamp of account creation.
+    pub member_since: String,
+    /// Present only when the caller is an active enterprise member.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_bookmarked: Option<bool>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct TalentSearchResponse {
+    pub data: Vec<TalentSearchEntry>,
+    pub pagination: Pagination,
+    pub meta: MetaInfo,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct TalentCardTopSkill {
+    pub domain: String,
+    pub sub_skill: String,
+    pub fragments: i32,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct TalentCardResponse {
+    pub username: String,
+    pub display_name: String,
+    pub skill_domain: String,
+    pub title: String,
+    pub golden_stars: i32,
+    pub total_fragments: i32,
+    pub streak_current: i32,
+    pub country: Option<String>,
+    pub member_since: String,
+    pub top_skills: Vec<TalentCardTopSkill>,
+    pub badge_count: i64,
 }
 
 /// Try to extract auth from cookies without failing if absent.
@@ -81,12 +124,22 @@ fn try_extract_auth(parts: &Parts, state: &AppState) -> Option<AuthUser> {
     })
 }
 
-// GET /api/talents/search — no auth required (SSR-ready), optional auth for enterprise features
-async fn search_talents(
+/// Paginated talent search — no auth required (SSR-ready). Authenticated
+/// enterprise callers get an extra `is_bookmarked` flag per entry.
+#[utoipa::path(
+    get,
+    path = "/api/talents/search",
+    tag = "enterprise",
+    params(SearchQuery),
+    responses(
+        (status = 200, description = "Paginated talents", body = TalentSearchResponse),
+    ),
+)]
+pub async fn search_talents(
     State(state): State<AppState>,
     parts: Parts,
     Query(query): Query<SearchQuery>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<TalentSearchResponse>, AppError> {
     let auth = try_extract_auth(&parts, &state);
     let page = query.page.unwrap_or(1).max(1);
     let per_page = query.per_page.unwrap_or(20).clamp(1, 50);
@@ -196,48 +249,50 @@ async fn search_talents(
         }
     }
 
-    let results: Vec<serde_json::Value> = talents
+    let results: Vec<TalentSearchEntry> = talents
         .iter()
-        .map(|t| {
-            let mut entry = json!({
-                "id": t.id,
-                "username": t.username,
-                "display_name": t.display_name,
-                "skill_domain": t.skill_domain,
-                "title": t.title,
-                "golden_stars": t.golden_stars,
-                "total_fragments": t.total_fragments,
-                "streak_current": t.streak_current,
-                "country": t.country,
-                "member_since": t.created_at.to_rfc3339(),
-            });
-            if enterprise_id.is_some() {
-                entry["is_bookmarked"] = json!(bookmarked_ids.contains(&t.id));
-            }
-            entry
+        .map(|t| TalentSearchEntry {
+            id: t.id,
+            username: t.username.clone(),
+            display_name: t.display_name.clone(),
+            skill_domain: t.skill_domain.clone(),
+            title: t.title.clone(),
+            golden_stars: t.golden_stars,
+            total_fragments: t.total_fragments,
+            streak_current: t.streak_current,
+            country: t.country.clone(),
+            member_since: t.created_at.to_rfc3339(),
+            is_bookmarked: enterprise_id.map(|_| bookmarked_ids.contains(&t.id)),
         })
         .collect();
 
-    Ok(Json(json!({
-        "data": results,
-        "pagination": {
-            "page": page,
-            "per_page": per_page,
-            "total": total,
-            "total_pages": (total as f64 / per_page as f64).ceil() as i64,
+    Ok(Json(TalentSearchResponse {
+        data: results,
+        pagination: Pagination {
+            page,
+            per_page,
+            total,
+            total_pages: (total as f64 / per_page as f64).ceil() as i64,
         },
-        "meta": {
-            "request_id": Uuid::new_v4().to_string(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-        }
-    })))
+        meta: MetaInfo::now(),
+    }))
 }
 
-// GET /api/talents/{username}/card — lightweight talent card (no auth, SSR-ready)
-async fn talent_card(
+/// Lightweight talent card by username. Public, SSR-ready.
+#[utoipa::path(
+    get,
+    path = "/api/talents/{username}/card",
+    tag = "enterprise",
+    params(("username" = String, Path, description = "Public username")),
+    responses(
+        (status = 200, description = "Talent card", body = ApiResponse<TalentCardResponse>),
+        (status = 404, description = "Talent not found", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn talent_card(
     State(state): State<AppState>,
     Path(username): Path<String>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<TalentCardResponse>>, AppError> {
     let talent: Option<TalentResult> = sqlx::query_as(
         "SELECT id, username, display_name, skill_domain, title, golden_stars, total_fragments, streak_current, country, created_at FROM users WHERE username = $1 AND profile_active = TRUE AND is_banned = FALSE",
     )
@@ -258,17 +313,24 @@ async fn talent_card(
             .fetch_one(&state.db)
             .await?;
 
-    Ok(Json(build_response(json!({
-        "username": talent.username,
-        "display_name": talent.display_name,
-        "skill_domain": talent.skill_domain,
-        "title": talent.title,
-        "golden_stars": talent.golden_stars,
-        "total_fragments": talent.total_fragments,
-        "streak_current": talent.streak_current,
-        "country": talent.country,
-        "member_since": talent.created_at.to_rfc3339(),
-        "top_skills": top_skills.iter().map(|(d, s, f)| json!({"domain": d, "sub_skill": s, "fragments": f})).collect::<Vec<_>>(),
-        "badge_count": badge_count,
-    }))))
+    Ok(Json(ApiResponse::new(TalentCardResponse {
+        username: talent.username,
+        display_name: talent.display_name,
+        skill_domain: talent.skill_domain,
+        title: talent.title,
+        golden_stars: talent.golden_stars,
+        total_fragments: talent.total_fragments,
+        streak_current: talent.streak_current,
+        country: talent.country,
+        member_since: talent.created_at.to_rfc3339(),
+        top_skills: top_skills
+            .into_iter()
+            .map(|(d, s, f)| TalentCardTopSkill {
+                domain: d,
+                sub_skill: s,
+                fragments: f,
+            })
+            .collect(),
+        badge_count,
+    })))
 }

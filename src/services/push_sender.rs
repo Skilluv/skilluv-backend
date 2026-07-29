@@ -1,3 +1,6 @@
+// BE-P1-CONTRACT — silence pre-existing deprecation warnings from the
+// `elliptic-curve` crate (generic-array 0.14). Upgrade path deferred.
+#![allow(deprecated)]
 //! Web Push natif RFC 8291 (aes128gcm) + VAPID RFC 8292 — Phase 4.12.
 //!
 //! Implémentation pure-Rust (p256 + aes-gcm + hkdf), pas d'OpenSSL.

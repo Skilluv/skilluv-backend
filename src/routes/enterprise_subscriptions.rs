@@ -7,11 +7,12 @@
 use axum::extract::State;
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use serde::Deserialize;
-use serde_json::{Value, json};
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::AppState;
+use crate::api_response::ApiResponse;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
 
@@ -31,16 +32,6 @@ pub fn enterprise_subscription_routes() -> Router<AppState> {
         )
 }
 
-fn build_response(data: Value) -> Value {
-    json!({
-        "data": data,
-        "meta": {
-            "request_id": Uuid::new_v4().to_string(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-        }
-    })
-}
-
 async fn current_enterprise_for(db: &sqlx::PgPool, user_id: Uuid) -> Result<Uuid, AppError> {
     let row: Option<(Uuid,)> = sqlx::query_as(
         "SELECT enterprise_id FROM enterprise_members WHERE user_id = $1 AND status = 'active' LIMIT 1",
@@ -51,25 +42,87 @@ async fn current_enterprise_for(db: &sqlx::PgPool, user_id: Uuid) -> Result<Uuid
     row.map(|(id,)| id).ok_or(AppError::Forbidden)
 }
 
-#[derive(Deserialize)]
-struct SubscribeBody {
-    plan_slug: String,
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SubscribeBody {
+    /// Slug of the subscription pack (see `packs` table where
+    /// `kind = 'subscription'`).
+    pub plan_slug: String,
 }
 
-async fn subscribe_to_pipeline(
+/// Response of the subscribe endpoint. When the enterprise already has
+/// an active subscription, `message` + `current_plan` + `status` are
+/// populated; otherwise `checkout_url` + `session_id` for the Stripe
+/// flow.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct SubscribeResponse {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_plan: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checkout_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct SubscriptionDetail {
+    pub id: Uuid,
+    pub plan_slug: String,
+    /// `active`, `trialing`, `past_due`, `cancelled`, `unpaid`.
+    pub status: String,
+    pub current_period_start: Option<chrono::DateTime<chrono::Utc>>,
+    pub current_period_end: Option<chrono::DateTime<chrono::Utc>>,
+    pub cancel_at_period_end: bool,
+    pub monthly_credit_grant: i32,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CurrentSubscriptionResponse {
+    /// `None` when the enterprise has no active subscription.
+    pub subscription: Option<SubscriptionDetail>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CancelSubscriptionResponse {
+    pub cancel_at_period_end: bool,
+    pub current_period_end: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+/// Kick off a Stripe checkout for a subscription pack. Refuses if the
+/// enterprise already has an active subscription (returns the current
+/// plan info instead — front routes to the manage-subscription screen).
+#[utoipa::path(
+    post,
+    path = "/api/enterprise/subscriptions/subscribe",
+    tag = "wallet",
+    request_body = SubscribeBody,
+    responses(
+        (status = 200, description = "Checkout URL OR already-subscribed marker", body = ApiResponse<SubscribeResponse>),
+        (status = 400, description = "plan_slug is not a subscription pack", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Caller has no enterprise", body = crate::api_response::ErrorResponse),
+        (status = 500, description = "Stripe not configured", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn subscribe_to_pipeline(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<SubscribeBody>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<SubscribeResponse>>, AppError> {
     let enterprise_id = current_enterprise_for(&state.db, auth.user_id).await?;
     // Vérifier qu'il n'y a pas déjà un abo actif.
     let existing = crate::services::subscriptions::active_for(&state.db, enterprise_id).await?;
     if let Some(sub) = existing {
-        return Ok(Json(build_response(json!({
-            "message": "already subscribed",
-            "current_plan": sub.plan_slug,
-            "status": sub.status,
-        }))));
+        return Ok(Json(ApiResponse::new(SubscribeResponse {
+            message: Some("already subscribed".to_string()),
+            current_plan: Some(sub.plan_slug),
+            status: Some(sub.status),
+            checkout_url: None,
+            session_id: None,
+        })));
     }
     // Vérifier que le pack existe en kind='subscription'
     let pack = crate::services::fx::pack_by_slug(&state.db, &body.plan_slug).await?;
@@ -102,38 +155,68 @@ async fn subscribe_to_pipeline(
         "plan" => body.plan_slug.clone()
     )
     .increment(1);
-    Ok(Json(build_response(json!({
-        "checkout_url": session.checkout_url,
-        "session_id": session.session_id,
-    }))))
+    Ok(Json(ApiResponse::new(SubscribeResponse {
+        message: None,
+        current_plan: None,
+        status: None,
+        checkout_url: Some(session.checkout_url),
+        session_id: Some(session.session_id),
+    })))
 }
 
-async fn current_subscription(
+/// Read the caller enterprise's current subscription (or `null`).
+#[utoipa::path(
+    get,
+    path = "/api/enterprise/subscriptions/current",
+    tag = "wallet",
+    responses(
+        (status = 200, description = "Current subscription detail", body = ApiResponse<CurrentSubscriptionResponse>),
+        (status = 403, description = "Caller has no enterprise", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn current_subscription(
     State(state): State<AppState>,
     auth: AuthUser,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<CurrentSubscriptionResponse>>, AppError> {
     let enterprise_id = current_enterprise_for(&state.db, auth.user_id).await?;
     let sub = crate::services::subscriptions::active_for(&state.db, enterprise_id).await?;
     let Some(sub) = sub else {
-        return Ok(Json(build_response(json!({ "subscription": null }))));
+        return Ok(Json(ApiResponse::new(CurrentSubscriptionResponse {
+            subscription: None,
+        })));
     };
-    Ok(Json(build_response(json!({
-        "subscription": {
-            "id": sub.id,
-            "plan_slug": sub.plan_slug,
-            "status": sub.status,
-            "current_period_start": sub.current_period_start,
-            "current_period_end": sub.current_period_end,
-            "cancel_at_period_end": sub.cancel_at_period_end,
-            "monthly_credit_grant": sub.monthly_credit_grant,
-        }
-    }))))
+    Ok(Json(ApiResponse::new(CurrentSubscriptionResponse {
+        subscription: Some(SubscriptionDetail {
+            id: sub.id,
+            plan_slug: sub.plan_slug,
+            status: sub.status,
+            current_period_start: sub.current_period_start,
+            current_period_end: sub.current_period_end,
+            cancel_at_period_end: sub.cancel_at_period_end,
+            monthly_credit_grant: sub.monthly_credit_grant,
+        }),
+    })))
 }
 
-async fn cancel_subscription(
+/// Mark the subscription for cancellation at the end of the current
+/// period. The Stripe webhook `customer.subscription.updated` will
+/// reconcile the final state.
+#[utoipa::path(
+    post,
+    path = "/api/enterprise/subscriptions/cancel",
+    tag = "wallet",
+    responses(
+        (status = 200, description = "Cancellation scheduled", body = ApiResponse<CancelSubscriptionResponse>),
+        (status = 403, description = "Caller has no enterprise", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "No active subscription", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn cancel_subscription(
     State(state): State<AppState>,
     auth: AuthUser,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<CancelSubscriptionResponse>>, AppError> {
     let enterprise_id = current_enterprise_for(&state.db, auth.user_id).await?;
     let sub = crate::services::subscriptions::active_for(&state.db, enterprise_id).await?;
     let Some(sub) = sub else {
@@ -148,8 +231,8 @@ async fn cancel_subscription(
     .execute(&state.db)
     .await?;
     metrics::counter!("skilluv_subscriptions_cancel_requested_total").increment(1);
-    Ok(Json(build_response(json!({
-        "cancel_at_period_end": true,
-        "current_period_end": sub.current_period_end,
-    }))))
+    Ok(Json(ApiResponse::new(CancelSubscriptionResponse {
+        cancel_at_period_end: true,
+        current_period_end: sub.current_period_end,
+    })))
 }

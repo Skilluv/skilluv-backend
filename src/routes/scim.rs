@@ -58,7 +58,7 @@ pub fn scim_routes() -> Router<AppState> {
 /// Best-effort audit log for a SCIM operation. Actor is always
 /// `ActorType::Enterprise` (the IdP acts on behalf of the enterprise) ;
 /// enterprise_id and any interesting IDs go into `metadata`.
-async fn audit_scim(
+pub async fn audit_scim(
     state: &AppState,
     action: &'static str,
     enterprise_id: Uuid,
@@ -113,7 +113,13 @@ impl FromRequestParts<AppState> for ScimAuth {
 
 // ─── Owner-authenticated token management ────────────────────────
 
-async fn create_scim_token(
+/// Enterprise owner: create/rotate SCIM bearer token.
+#[utoipa::path(
+    post, path = "/api/enterprise/sso/scim/token", tag = "scim",
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create_scim_token(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
@@ -142,7 +148,13 @@ async fn create_scim_token(
     })))
 }
 
-async fn revoke_scim_token(
+/// Enterprise owner: revoke the active SCIM token.
+#[utoipa::path(
+    delete, path = "/api/enterprise/sso/scim/token", tag = "scim",
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn revoke_scim_token(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
@@ -166,7 +178,15 @@ struct MappedRoleRequest {
     mapped_role: Option<String>,
 }
 
-async fn set_group_role_mapping(
+/// Enterprise owner: map a SCIM group to a Skilluv role.
+#[utoipa::path(
+    put, path = "/api/enterprise/sso/scim/groups/{id}/mapped-role", tag = "scim",
+    params(("id" = Uuid, Path)),
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn set_group_role_mapping(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(group_id): Path<Uuid>,
@@ -203,7 +223,13 @@ async fn set_group_role_mapping(
 
 // ─── Discovery endpoints ─────────────────────────────────────────
 
-async fn sp_config(_scim: ScimAuth) -> Json<Value> {
+/// SCIM 2.0 ServiceProviderConfig discovery.
+#[utoipa::path(
+    get, path = "/api/scim/v2/ServiceProviderConfig", tag = "scim",
+    responses((status = 200, body = serde_json::Value)),
+    security(("bearer_auth" = [])),
+)]
+pub async fn sp_config(_scim: ScimAuth) -> Json<Value> {
     Json(json!({
         "schemas": ["urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"],
         "documentationUri": "https://tools.ietf.org/html/rfc7644",
@@ -222,7 +248,13 @@ async fn sp_config(_scim: ScimAuth) -> Json<Value> {
     }))
 }
 
-async fn resource_types(_scim: ScimAuth) -> Json<Value> {
+/// SCIM 2.0 ResourceTypes.
+#[utoipa::path(
+    get, path = "/api/scim/v2/ResourceTypes", tag = "scim",
+    responses((status = 200, body = serde_json::Value)),
+    security(("bearer_auth" = [])),
+)]
+pub async fn resource_types(_scim: ScimAuth) -> Json<Value> {
     Json(json!({
         "schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
         "totalResults": 2,
@@ -245,7 +277,13 @@ async fn resource_types(_scim: ScimAuth) -> Json<Value> {
     }))
 }
 
-async fn schemas(_scim: ScimAuth) -> Json<Value> {
+/// SCIM 2.0 Schemas.
+#[utoipa::path(
+    get, path = "/api/scim/v2/Schemas", tag = "scim",
+    responses((status = 200, body = serde_json::Value)),
+    security(("bearer_auth" = [])),
+)]
+pub async fn schemas(_scim: ScimAuth) -> Json<Value> {
     Json(json!({
         "schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
         "totalResults": 2,
@@ -309,7 +347,13 @@ fn parse_eq_filter<'a>(filter: &'a str, attr: &str) -> Option<&'a str> {
     rest.strip_suffix('"')
 }
 
-async fn list_users(
+/// SCIM: list users (supports filter, startIndex, count).
+#[utoipa::path(
+    get, path = "/api/scim/v2/Users", tag = "scim",
+    responses((status = 200, body = serde_json::Value)),
+    security(("bearer_auth" = [])),
+)]
+pub async fn list_users(
     State(state): State<AppState>,
     scim: ScimAuth,
     Query(q): Query<ListQuery>,
@@ -375,7 +419,14 @@ struct ScimEmail {
     primary: Option<bool>,
 }
 
-async fn create_user(
+/// SCIM: create user.
+#[utoipa::path(
+    post, path = "/api/scim/v2/Users", tag = "scim",
+    request_body(content = serde_json::Value),
+    responses((status = 201, body = serde_json::Value)),
+    security(("bearer_auth" = [])),
+)]
+pub async fn create_user(
     State(state): State<AppState>,
     scim: ScimAuth,
     Json(body): Json<ScimUserRequest>,
@@ -433,7 +484,14 @@ async fn create_user(
     Ok((StatusCode::CREATED, Json(user_to_scim(&view))))
 }
 
-async fn get_user(
+/// SCIM: get user by id.
+#[utoipa::path(
+    get, path = "/api/scim/v2/Users/{id}", tag = "scim",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 404, body = crate::api_response::ErrorResponse)),
+    security(("bearer_auth" = [])),
+)]
+pub async fn get_user(
     State(state): State<AppState>,
     scim: ScimAuth,
     Path(id): Path<Uuid>,
@@ -444,7 +502,15 @@ async fn get_user(
     Ok(Json(user_to_scim(&view)))
 }
 
-async fn replace_user(
+/// SCIM: replace user (full PUT).
+#[utoipa::path(
+    put, path = "/api/scim/v2/Users/{id}", tag = "scim",
+    params(("id" = Uuid, Path)),
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value)),
+    security(("bearer_auth" = [])),
+)]
+pub async fn replace_user(
     State(state): State<AppState>,
     scim: ScimAuth,
     Path(id): Path<Uuid>,
@@ -486,7 +552,15 @@ struct PatchOp {
     value: Value,
 }
 
-async fn patch_user(
+/// SCIM: patch user (RFC 7644 PatchOp).
+#[utoipa::path(
+    patch, path = "/api/scim/v2/Users/{id}", tag = "scim",
+    params(("id" = Uuid, Path)),
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value)),
+    security(("bearer_auth" = [])),
+)]
+pub async fn patch_user(
     State(state): State<AppState>,
     scim: ScimAuth,
     Path(id): Path<Uuid>,
@@ -561,7 +635,14 @@ async fn patch_user(
     Ok(Json(user_to_scim(&view)))
 }
 
-async fn delete_user(
+/// SCIM: delete user (soft).
+#[utoipa::path(
+    delete, path = "/api/scim/v2/Users/{id}", tag = "scim",
+    params(("id" = Uuid, Path)),
+    responses((status = 204)),
+    security(("bearer_auth" = [])),
+)]
+pub async fn delete_user(
     State(state): State<AppState>,
     scim: ScimAuth,
     Path(id): Path<Uuid>,
@@ -626,7 +707,14 @@ struct ScimGroupMember {
     value: String, // user id (UUID)
 }
 
-async fn create_group(
+/// SCIM: create group.
+#[utoipa::path(
+    post, path = "/api/scim/v2/Groups", tag = "scim",
+    request_body(content = serde_json::Value),
+    responses((status = 201, body = serde_json::Value)),
+    security(("bearer_auth" = [])),
+)]
+pub async fn create_group(
     State(state): State<AppState>,
     scim: ScimAuth,
     Json(body): Json<ScimGroupRequest>,
@@ -657,7 +745,14 @@ async fn create_group(
     Ok((StatusCode::CREATED, Json(group_to_scim(&view))))
 }
 
-async fn get_group(
+/// SCIM: get group by id.
+#[utoipa::path(
+    get, path = "/api/scim/v2/Groups/{id}", tag = "scim",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 404, body = crate::api_response::ErrorResponse)),
+    security(("bearer_auth" = [])),
+)]
+pub async fn get_group(
     State(state): State<AppState>,
     scim: ScimAuth,
     Path(id): Path<Uuid>,
@@ -668,7 +763,13 @@ async fn get_group(
     Ok(Json(group_to_scim(&view)))
 }
 
-async fn list_groups(
+/// SCIM: list groups.
+#[utoipa::path(
+    get, path = "/api/scim/v2/Groups", tag = "scim",
+    responses((status = 200, body = serde_json::Value)),
+    security(("bearer_auth" = [])),
+)]
+pub async fn list_groups(
     State(state): State<AppState>,
     scim: ScimAuth,
     Query(q): Query<ListQuery>,
@@ -690,7 +791,15 @@ async fn list_groups(
     })))
 }
 
-async fn replace_group(
+/// SCIM: replace group (full PUT).
+#[utoipa::path(
+    put, path = "/api/scim/v2/Groups/{id}", tag = "scim",
+    params(("id" = Uuid, Path)),
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value)),
+    security(("bearer_auth" = [])),
+)]
+pub async fn replace_group(
     State(state): State<AppState>,
     scim: ScimAuth,
     Path(id): Path<Uuid>,
@@ -708,7 +817,15 @@ async fn replace_group(
     Ok(Json(group_to_scim(&view)))
 }
 
-async fn patch_group(
+/// SCIM: patch group (PatchOp on members etc).
+#[utoipa::path(
+    patch, path = "/api/scim/v2/Groups/{id}", tag = "scim",
+    params(("id" = Uuid, Path)),
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value)),
+    security(("bearer_auth" = [])),
+)]
+pub async fn patch_group(
     State(state): State<AppState>,
     scim: ScimAuth,
     Path(id): Path<Uuid>,
@@ -766,7 +883,14 @@ async fn patch_group(
     Ok(Json(group_to_scim(&view)))
 }
 
-async fn delete_group(
+/// SCIM: delete group.
+#[utoipa::path(
+    delete, path = "/api/scim/v2/Groups/{id}", tag = "scim",
+    params(("id" = Uuid, Path)),
+    responses((status = 204)),
+    security(("bearer_auth" = [])),
+)]
+pub async fn delete_group(
     State(state): State<AppState>,
     scim: ScimAuth,
     Path(id): Path<Uuid>,

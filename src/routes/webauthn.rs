@@ -71,13 +71,20 @@ fn build_refresh_cookie(session_id: Uuid, token: &str) -> String {
 
 // ─── Registration ─────────────────────────────────────────────────
 
-#[derive(Debug, Deserialize)]
-struct RegisterStartRequest {
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct RegisterStartRequest {
     /// Optional user-facing label ("MacBook Touch ID", "Yubikey 5C") — persisted at finish.
-    label: Option<String>,
+    pub label: Option<String>,
 }
 
-async fn register_start(
+/// Start passkey enrolment ceremony. Returns the challenge for the browser.
+#[utoipa::path(
+    post, path = "/api/auth/webauthn/register/start", tag = "auth",
+    request_body = RegisterStartRequest,
+    responses((status = 200, body = serde_json::Value), (status = 401, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn register_start(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<RegisterStartRequest>,
@@ -133,13 +140,20 @@ async fn register_start(
 }
 
 #[derive(Debug, Deserialize)]
-struct RegisterFinishRequest {
-    ceremony_handle: String,
-    credential: RegisterPublicKeyCredential,
-    label: Option<String>,
+pub struct RegisterFinishRequest {
+    pub ceremony_handle: String,
+    pub credential: RegisterPublicKeyCredential,
+    pub label: Option<String>,
 }
 
-async fn register_finish(
+/// Finish passkey enrolment (browser sends the attestation).
+#[utoipa::path(
+    post, path = "/api/auth/webauthn/register/finish", tag = "auth",
+    request_body(content = serde_json::Value, description = "RegisterFinishRequest (webauthn attestation)"),
+    responses((status = 200, body = serde_json::Value), (status = 401, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn register_finish(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<RegisterFinishRequest>,
@@ -210,7 +224,13 @@ async fn register_finish(
 
 // ─── Credential management ────────────────────────────────────────
 
-async fn list_credentials(
+/// List the caller's registered webauthn credentials.
+#[utoipa::path(
+    get, path = "/api/auth/webauthn/credentials", tag = "auth",
+    responses((status = 200, body = serde_json::Value), (status = 401, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_credentials(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<serde_json::Value>, AppError> {
@@ -237,12 +257,19 @@ async fn list_credentials(
     Ok(Json(envelope(json!({ "credentials": items }))))
 }
 
-#[derive(Debug, Deserialize)]
-struct RenameRequest {
-    label: String,
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct RenameRequest {
+    pub label: String,
 }
 
-async fn rename_credential(
+/// Rename a passkey credential label.
+#[utoipa::path(
+    patch, path = "/api/auth/webauthn/credentials/{id}", tag = "auth",
+    params(("id" = Uuid, Path)), request_body = RenameRequest,
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn rename_credential(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -267,7 +294,14 @@ async fn rename_credential(
     Ok(Json(envelope(json!({ "message": "Renamed" }))))
 }
 
-async fn delete_credential(
+/// Delete a passkey credential.
+#[utoipa::path(
+    delete, path = "/api/auth/webauthn/credentials/{id}", tag = "auth",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn delete_credential(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -285,13 +319,19 @@ async fn delete_credential(
 
 // ─── Login ────────────────────────────────────────────────────────
 
-#[derive(Debug, Deserialize)]
-struct LoginStartRequest {
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct LoginStartRequest {
     /// Email OR username. Used to look up the credentials to send back to the browser.
-    identifier: String,
+    pub identifier: String,
 }
 
-async fn login_start(
+/// Start passkey login ceremony (public).
+#[utoipa::path(
+    post, path = "/api/auth/webauthn/login/start", tag = "auth",
+    request_body = LoginStartRequest,
+    responses((status = 200, body = serde_json::Value), (status = 404, body = crate::api_response::ErrorResponse)),
+)]
+pub async fn login_start(
     State(state): State<AppState>,
     Json(body): Json<LoginStartRequest>,
 ) -> Result<Json<serde_json::Value>, AppError> {
@@ -357,12 +397,18 @@ async fn login_start(
 }
 
 #[derive(Debug, Deserialize)]
-struct LoginFinishRequest {
-    ceremony_handle: String,
-    credential: PublicKeyCredential,
+pub struct LoginFinishRequest {
+    pub ceremony_handle: String,
+    pub credential: PublicKeyCredential,
 }
 
-async fn login_finish(
+/// Finish passkey login (browser sends the assertion). Sets cookies.
+#[utoipa::path(
+    post, path = "/api/auth/webauthn/login/finish", tag = "auth",
+    request_body(content = serde_json::Value, description = "LoginFinishRequest (webauthn assertion)"),
+    responses((status = 200, body = serde_json::Value), (status = 401, body = crate::api_response::ErrorResponse)),
+)]
+pub async fn login_finish(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
     Json(body): Json<LoginFinishRequest>,

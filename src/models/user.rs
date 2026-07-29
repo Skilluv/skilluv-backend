@@ -108,7 +108,7 @@ impl From<User> for UserPublic {
 }
 
 /// Données privées retournées uniquement au propriétaire du compte
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct UserPrivate {
     pub id: Uuid,
     pub email: String,

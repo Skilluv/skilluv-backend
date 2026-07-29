@@ -75,7 +75,15 @@ struct Reset2faBody {
     reason: String,
 }
 
-async fn admin_reset_2fa(
+/// Admin reset a user's 2FA (TOTP + WebAuthn wiped).
+#[utoipa::path(
+    post, path = "/api/admin/users/{id}/reset-2fa", tag = "admin",
+    params(("id" = Uuid, Path)),
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_reset_2fa(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(target_user_id): Path<Uuid>,
@@ -195,7 +203,13 @@ struct AuditLogQuery {
     per_page: Option<i64>,
 }
 
-async fn list_audit_log(
+/// List generic audit log entries (Phase 1.18 table).
+#[utoipa::path(
+    get, path = "/api/admin/audit-log/generic", tag = "admin",
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_audit_log(
     State(state): State<AppState>,
     auth: AuthUser,
     axum::extract::Query(q): axum::extract::Query<AuditLogQuery>,
@@ -350,12 +364,18 @@ fn build_response(data: serde_json::Value) -> serde_json::Value {
 // P21.1 : délègue à la source de vérité canonique (user_capabilities).
 // Backfill 0094 garantit que tout users.role='admin' historique a la
 // capability. Fait fallback nul — plus de query users.role directe.
-async fn require_admin(state: &AppState, auth: &AuthUser) -> Result<(), AppError> {
+pub async fn require_admin(state: &AppState, auth: &AuthUser) -> Result<(), AppError> {
     crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await
 }
 
-// POST /api/admin/challenges
-async fn create_challenge(
+/// Create a new challenge (draft status).
+#[utoipa::path(
+    post, path = "/api/admin/challenges", tag = "admin",
+    request_body(content = serde_json::Value),
+    responses((status = 201, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create_challenge(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<CreateChallengeRequest>,
@@ -441,8 +461,13 @@ async fn create_challenge(
     ))
 }
 
-// GET /api/admin/challenges
-async fn list_all_challenges(
+/// List all challenges (any status).
+#[utoipa::path(
+    get, path = "/api/admin/challenges", tag = "admin",
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_all_challenges(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<serde_json::Value>, AppError> {
@@ -467,8 +492,15 @@ async fn list_all_challenges(
     })))
 }
 
-// PUT /api/admin/challenges/:id
-async fn update_challenge(
+/// Update an existing challenge.
+#[utoipa::path(
+    put, path = "/api/admin/challenges/{id}", tag = "admin",
+    params(("id" = Uuid, Path)),
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse), (status = 404, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn update_challenge(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -541,8 +573,14 @@ async fn update_challenge(
     Ok(Json(build_response(json!({ "challenge": challenge }))))
 }
 
-// POST /api/admin/challenges/:id/publish
-async fn publish_challenge(
+/// Publish a challenge (draft -> published).
+#[utoipa::path(
+    post, path = "/api/admin/challenges/{id}/publish", tag = "admin",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse), (status = 404, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn publish_challenge(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -576,8 +614,14 @@ async fn publish_challenge(
     Ok(Json(build_response(json!({ "challenge": challenge }))))
 }
 
-// POST /api/admin/challenges/:id/archive
-async fn archive_challenge(
+/// Archive a challenge.
+#[utoipa::path(
+    post, path = "/api/admin/challenges/{id}/archive", tag = "admin",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse), (status = 404, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn archive_challenge(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -595,8 +639,13 @@ async fn archive_challenge(
     Ok(Json(build_response(json!({ "challenge": challenge }))))
 }
 
-// GET /api/admin/stats
-async fn admin_stats(
+/// Admin platform stats snapshot.
+#[utoipa::path(
+    get, path = "/api/admin/stats", tag = "admin",
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_stats(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<serde_json::Value>, AppError> {
@@ -630,8 +679,13 @@ async fn admin_stats(
     }))))
 }
 
-// POST /api/admin/leaderboards/rebuild
-async fn rebuild_leaderboards(
+/// Rebuild Redis leaderboards from the DB.
+#[utoipa::path(
+    post, path = "/api/admin/leaderboards/rebuild", tag = "admin",
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn rebuild_leaderboards(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<serde_json::Value>, AppError> {
@@ -658,7 +712,12 @@ struct SsoSessionsQuery {
 /// Joins `user_sessions` × `users` × `enterprise_members` × `enterprises` so
 /// operators can see who is currently logged in via an external IdP, from
 /// which enterprise, and revoke sessions on demand.
-async fn list_sso_sessions(
+#[utoipa::path(
+    get, path = "/api/admin/sso/sessions", tag = "admin",
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_sso_sessions(
     State(state): State<AppState>,
     auth: AuthUser,
     axum::extract::Query(q): axum::extract::Query<SsoSessionsQuery>,
@@ -760,7 +819,13 @@ async fn list_sso_sessions(
 }
 
 /// POST /api/admin/sso/sessions/{id}/revoke — kill a specific SSO session.
-async fn revoke_sso_session(
+#[utoipa::path(
+    post, path = "/api/admin/sso/sessions/{id}/revoke", tag = "admin",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse), (status = 404, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn revoke_sso_session(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(session_id): Path<Uuid>,
@@ -820,7 +885,15 @@ struct GenerateVariantBody {
     target_param: String,
 }
 
-async fn admin_generate_variant(
+/// Generate an AI variant (harder/easier) of an existing challenge.
+#[utoipa::path(
+    post, path = "/api/admin/challenges/{id}/variant", tag = "admin",
+    params(("id" = Uuid, Path)),
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_generate_variant(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(original_id): Path<Uuid>,

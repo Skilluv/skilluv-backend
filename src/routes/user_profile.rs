@@ -34,52 +34,59 @@ fn build_response(data: serde_json::Value) -> serde_json::Value {
 
 // ─── Request types ──────────────────────────────────────────────
 
-#[derive(Debug, Deserialize)]
-struct UpdateProfileRequest {
-    bio: Option<String>,
-    github: Option<String>,
-    linkedin: Option<String>,
-    website: Option<String>,
-    twitter: Option<String>,
-    country: Option<String>,
-    city: Option<String>,
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct UpdateProfileRequest {
+    pub bio: Option<String>,
+    pub github: Option<String>,
+    pub linkedin: Option<String>,
+    pub website: Option<String>,
+    pub twitter: Option<String>,
+    pub country: Option<String>,
+    pub city: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
-struct UpdateDisplayNameRequest {
-    display_name: String,
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct UpdateDisplayNameRequest {
+    pub display_name: String,
 }
 
-#[derive(Debug, Deserialize)]
-struct UpdateSkillDomainRequest {
-    skill_domain: String,
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct UpdateSkillDomainRequest {
+    pub skill_domain: String,
 }
 
-#[derive(Debug, Deserialize)]
-struct UpdatePrivacyRequest {
-    show_email: Option<bool>,
-    show_heatmap: Option<bool>,
-    show_skill_tree: Option<bool>,
-    show_badges: Option<bool>,
-    show_streak: Option<bool>,
-    allow_interest_requests: Option<bool>,
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct UpdatePrivacyRequest {
+    pub show_email: Option<bool>,
+    pub show_heatmap: Option<bool>,
+    pub show_skill_tree: Option<bool>,
+    pub show_badges: Option<bool>,
+    pub show_streak: Option<bool>,
+    pub allow_interest_requests: Option<bool>,
 }
 
-#[derive(Debug, serde::Serialize, sqlx::FromRow)]
-struct PrivacySettings {
-    show_email: bool,
-    show_heatmap: bool,
-    show_skill_tree: bool,
-    show_badges: bool,
-    show_streak: bool,
-    allow_interest_requests: bool,
-    updated_at: chrono::DateTime<chrono::Utc>,
+#[derive(Debug, serde::Serialize, sqlx::FromRow, utoipa::ToSchema)]
+pub struct PrivacySettings {
+    pub show_email: bool,
+    pub show_heatmap: bool,
+    pub show_skill_tree: bool,
+    pub show_badges: bool,
+    pub show_streak: bool,
+    pub allow_interest_requests: bool,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
 }
 
 // ─── Routes ─────────────────────────────────────────────────────
 
 // PUT /api/profile/me — update bio, social links, country
-async fn update_profile(
+/// Update the caller's profile (bio + social links + geo).
+#[utoipa::path(
+    put, path = "/api/profile/me", tag = "profile",
+    request_body = UpdateProfileRequest,
+    responses((status = 200, body = serde_json::Value), (status = 401, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn update_profile(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<UpdateProfileRequest>,
@@ -176,7 +183,18 @@ async fn update_profile(
 }
 
 // POST /api/profile/me/avatar — upload avatar (multipart)
-async fn upload_avatar(
+/// Upload avatar (multipart, max 2 MB).
+#[utoipa::path(
+    post, path = "/api/profile/me/avatar", tag = "profile",
+    request_body(content_type = "multipart/form-data"),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 400, body = crate::api_response::ErrorResponse),
+        (status = 401, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn upload_avatar(
     State(state): State<AppState>,
     auth: AuthUser,
     mut multipart: Multipart,
@@ -248,7 +266,13 @@ async fn upload_avatar(
 }
 
 // DELETE /api/profile/me/avatar
-async fn delete_avatar(
+/// Delete the caller's avatar.
+#[utoipa::path(
+    delete, path = "/api/profile/me/avatar", tag = "profile",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn delete_avatar(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<serde_json::Value>, AppError> {
@@ -265,7 +289,13 @@ async fn delete_avatar(
 }
 
 // GET /api/profile/me/privacy
-async fn get_privacy(
+/// Read the caller's privacy settings.
+#[utoipa::path(
+    get, path = "/api/profile/me/privacy", tag = "profile",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn get_privacy(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<serde_json::Value>, AppError> {
@@ -286,7 +316,14 @@ async fn get_privacy(
 }
 
 // PUT /api/profile/me/privacy
-async fn update_privacy(
+/// Partial update of the caller's privacy settings.
+#[utoipa::path(
+    put, path = "/api/profile/me/privacy", tag = "profile",
+    request_body = UpdatePrivacyRequest,
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn update_privacy(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<UpdatePrivacyRequest>,
@@ -320,7 +357,14 @@ async fn update_privacy(
 }
 
 // PUT /api/auth/me/display-name
-async fn update_display_name(
+/// Change the caller's display name.
+#[utoipa::path(
+    put, path = "/api/auth/me/display-name", tag = "profile",
+    request_body = UpdateDisplayNameRequest,
+    responses((status = 200, body = serde_json::Value), (status = 400, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn update_display_name(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<UpdateDisplayNameRequest>,
@@ -345,7 +389,14 @@ async fn update_display_name(
 }
 
 // PUT /api/auth/me/skill-domain
-async fn update_skill_domain(
+/// Change the caller's skill domain.
+#[utoipa::path(
+    put, path = "/api/auth/me/skill-domain", tag = "profile",
+    request_body = UpdateSkillDomainRequest,
+    responses((status = 200, body = serde_json::Value), (status = 400, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn update_skill_domain(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<UpdateSkillDomainRequest>,

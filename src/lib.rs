@@ -1,13 +1,22 @@
 #![recursion_limit = "512"]
+// BE-P1-CONTRACT — route handlers are marked `pub async fn` so that utoipa
+// can generate their OpenAPI schema, but many of their internal request /
+// response DTOs remain private inside the route module (they are only
+// referenced through utoipa's `request_body(content = serde_json::Value)`
+// fast-lane path, never re-exported). Silence the resulting `private_interfaces`
+// warnings crate-wide rather than pub-ing 100+ single-use structs.
+#![allow(private_interfaces)]
 
 rust_i18n::i18n!("locales", fallback = "en");
 
+pub mod api_response;
 pub mod config;
 pub mod errors;
 pub mod grpc;
 pub mod middleware;
 pub mod models;
 pub mod observability;
+pub mod openapi;
 pub mod routes;
 pub mod services;
 pub mod validators;
@@ -72,7 +81,7 @@ pub fn build_router(state: AppState) -> Router {
         ))
     };
 
-    Router::new()
+    let router = Router::new()
         .nest("/api", routes::health_routes())
         .nest("/api", routes::auth_routes())
         .nest("/api", routes::email_prefs_routes())
@@ -165,7 +174,13 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::enterprise_subscription_routes())
         .merge(routes::well_known_routes().with_state(state.clone()))
         .merge(routes::metrics_routes().with_state(state.clone()))
-        .merge(websocket::ws_routes().with_state(state.clone()))
+        .merge(websocket::ws_routes().with_state(state.clone()));
+
+    // BE-P1-CONTRACT — attach the OpenAPI JSON + Swagger UI *before* the
+    // security layers so they don't accidentally block schemathesis introspection.
+    let router = openapi::attach(router);
+
+    router
         .layer(middleware::SecurityHeadersLayer)
         .layer(TraceLayer::new_for_http())
         .layer(build_cors_layer())

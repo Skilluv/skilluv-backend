@@ -16,7 +16,7 @@ use crate::services::EmailService;
 
 type HmacSha256 = Hmac<Sha256>;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct DigestRunReport {
     pub users_processed: usize,
     pub emails_sent: usize,

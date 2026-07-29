@@ -134,6 +134,17 @@ impl AppConfig {
         if self.sso_encryption_key.is_none() {
             issues.push("SSO_ENCRYPTION_KEY is not set (32 bytes base64)".into());
         }
+        // Belt-and-braces : dev-mode helpers (see src/routes/dev.rs) must NEVER
+        // be reachable in prod. `dev_routes` handlers self-gate on the same
+        // env var, but this check refuses to boot at all — clearer signal for
+        // an operator who mis-set the env.
+        if std::env::var("SKILLUV_DEV_MODE").as_deref() == Ok("true") {
+            issues.push(
+                "SKILLUV_DEV_MODE=true is set — dev helper endpoints would be reachable. \
+                 Never enable this in prod, only in staging/local"
+                    .into(),
+            );
+        }
         issues
     }
 }

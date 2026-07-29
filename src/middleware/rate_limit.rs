@@ -18,6 +18,11 @@ impl RateLimiter {
     /// (utilisé exclusivement par la suite de tests d'intégration : plusieurs
     /// binaires en parallèle sur le même Redis heurtaient le bucket partagé et
     /// se mangeaient mutuellement les 5 registers/heure).
+    ///
+    /// L'env var `SKILLUV_RATELIMIT_IP_WHITELIST=ip1,ip2,ip3` skip le check pour
+    /// les IPs listées (comma-separated). Utile en staging pour laisser tourner
+    /// les runs Playwright depuis une IP de dev sans se manger un 429 après
+    /// ~5 tentatives. À ne PAS activer en prod pour des IPs publiques.
     pub async fn check(
         redis: &mut ConnectionManager,
         category: &str,
@@ -26,6 +31,9 @@ impl RateLimiter {
         window_secs: u64,
     ) -> Result<(), AppError> {
         if std::env::var("SKILLUV_DISABLE_RATELIMIT").as_deref() == Ok("1") {
+            return Ok(());
+        }
+        if is_whitelisted_ip(identifier) {
             return Ok(());
         }
         let key = format!("ratelimit:{category}:{identifier}");
@@ -45,6 +53,19 @@ impl RateLimiter {
 
         Ok(())
     }
+}
+
+/// Check if the given identifier (IP) is in the SKILLUV_RATELIMIT_IP_WHITELIST
+/// env var (comma-separated). Reads the env fresh on every call — the list
+/// is small (0-10 entries) and rate-limit checks are already cheap.
+fn is_whitelisted_ip(identifier: &str) -> bool {
+    let Ok(raw) = std::env::var("SKILLUV_RATELIMIT_IP_WHITELIST") else {
+        return false;
+    };
+    if raw.is_empty() {
+        return false;
+    }
+    raw.split(',').any(|ip| ip.trim() == identifier)
 }
 
 /// Extract client IP from request headers (X-Forwarded-For or peer addr).

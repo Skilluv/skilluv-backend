@@ -453,12 +453,18 @@ async fn list_all_challenges(
             .fetch_all(&state.db)
             .await?;
 
+    // Trello rQLFhAmG — flat `{data: T[], pagination}` convention (comme
+    // MshrIOYf pour /admin/sso/sessions). L'ancienne shape
+    // `{data: {challenges: [...], total: N}}` est droppée.
     let total = challenges.len();
-
-    Ok(Json(build_response(json!({
-        "challenges": challenges,
-        "total": total,
-    }))))
+    Ok(Json(json!({
+        "data": challenges,
+        "pagination": { "total": total },
+        "meta": {
+            "request_id": Uuid::new_v4().to_string(),
+            "timestamp": chrono::Utc::now().to_rfc3339(),
+        }
+    })))
 }
 
 // PUT /api/admin/challenges/:id

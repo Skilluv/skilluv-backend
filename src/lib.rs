@@ -130,6 +130,10 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::moderation_routes())
         .nest("/api", routes::challenge_team_routes())
         .nest("/api", routes::developer_routes())
+        // Dev-mode-only helpers (verify token peek etc). Gated inside each
+        // handler by SKILLUV_DEV_MODE=true env — endpoints exist unconditionally
+        // but return 403 in prod. See src/routes/dev.rs.
+        .nest("/api", routes::dev_routes())
         .nest("/api", routes::public_api_routes())
         .nest("/api", routes::openapi_routes())
         .nest("/api", routes::sponsored_routes())

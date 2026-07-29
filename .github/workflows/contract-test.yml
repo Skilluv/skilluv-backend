@@ -113,5 +113,5 @@ jobs:
         if: always()
         run: |
           if [ -f backend.pid ]; then
-            kill $(cat backend.pid) || true
+            kill "$(cat backend.pid)" || true
           fi

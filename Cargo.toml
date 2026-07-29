@@ -3,6 +3,7 @@ name = "skilluv-backend"
 version = "0.1.0"
 edition = "2024"
 description = "Skilluv — Plateforme gamifiée de démonstration de compétences"
+license = "AGPL-3.0-or-later"
 default-run = "skilluv-backend"
 
 [dependencies]

@@ -50,7 +50,10 @@ jobs:
   check:
     name: Build & Lint
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # 25 min budget : cold cache full cargo build (release) + clippy + fmt
+    # is 12-18 min. sccache accelerates subsequent runs but the FIRST run
+    # after a Cargo.lock change is cold.
+    timeout-minutes: 25
     permissions:
       contents: read
       # sccache-action needs the GHA cache API (mozilla-actions/sccache-action).

@@ -20,6 +20,16 @@ ignore = [
     # No upstream fix yet — track https://github.com/RustCrypto/RSA/issues/19
     # and drop this ignore once openidconnect ships an updated rsa dep.
     "RUSTSEC-2023-0071",
+    # RUSTSEC-2024-0436 — `paste` crate unmaintained. Transitive via metrics
+    # ecosystem (metrics-exporter-prometheus → metrics-util → paste). Fork
+    # exists (`pastey`) but our deps haven't migrated yet. No CVE, only
+    # unmaintained flag. Revisit when metrics-exporter-prometheus bumps.
+    "RUSTSEC-2024-0436",
+    # RUSTSEC-2026-0194 / 2026-0195 — quick-xml unmaintained advisories,
+    # transitive via aws-creds → rust-s3. Same fixup path as paste : wait
+    # for rust-s3 to update or migrate to a maintained fork.
+    "RUSTSEC-2026-0194",
+    "RUSTSEC-2026-0195",
 ]
 # YANKED = crate.io yanked crates. Warn only ; a yanked dep still works but
 # should be updated at the next Dependabot cycle.
@@ -44,6 +54,8 @@ allow = [
     "CDLA-Permissive-2.0",
     "OpenSSL",       # rare, needed by aws-lc-sys / ring
     "0BSD",          # BSD Zero Clause — permissive, used by quoted_printable
+    "BSL-1.0",       # Boost Software License — permissive, used by ryu
+    "AGPL-3.0-or-later",  # our own repo license (skilluv-backend)
 ]
 # Fail on unlicensed or unclear crates rather than silently accepting them.
 confidence-threshold = 0.93

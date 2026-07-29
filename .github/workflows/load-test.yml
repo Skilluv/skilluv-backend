@@ -1,0 +1,48 @@
+name: k6 load test
+
+# Runs the smoke load test against a target URL. Not a PR gate — used to
+# validate a deployment or catch perf regressions between releases.
+#
+# Manual: gh workflow run load-test.yml -f target=https://api.skill-uv.com
+# Nightly: 03:30 UTC against staging (once we have one).
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Base URL to hit (e.g. https://staging.skill-uv.com)"
+        required: true
+        default: "http://localhost:3001"
+      scenario:
+        description: "k6 script to run"
+        required: false
+        default: "tests/load/smoke.js"
+        type: choice
+        options:
+          - tests/load/smoke.js
+  # Uncomment once staging exists — nightly automated smoke.
+  # schedule:
+  #   - cron: "30 3 * * *"
+
+jobs:
+  k6:
+    name: k6 load test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run k6
+        uses: grafana/k6-action@v0.3.1
+        with:
+          filename: ${{ inputs.scenario || 'tests/load/smoke.js' }}
+        env:
+          BASE_URL: ${{ inputs.target || 'http://localhost:3001' }}
+
+      - name: Upload k6 summary
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: k6-summary-${{ github.run_id }}
+          path: |
+            *.json
+            *.html

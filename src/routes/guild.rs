@@ -51,6 +51,8 @@ pub fn guild_routes() -> Router<AppState> {
         )
         .route("/guilds/{id}/invitations/link", post(create_token_link))
         .route("/guild-invitations/{id}/accept", post(accept_invite))
+        // Trello BE-P0-41 — owner/officer révoque une invitation avant expires_at.
+        .route("/guild-invitations/{id}", delete(revoke_invitation))
         .route("/guilds/join-by-token", post(join_by_token))
         // Applications
         .route(
@@ -409,6 +411,20 @@ pub async fn accept_invite(
     }
     metrics::counter!("skilluv_guild_joins_total", "via" => "direct_invite").increment(1);
     Ok(Json(build_response(json!({ "joined_guild_id": guild_id }))))
+}
+
+/// DELETE /api/guild-invitations/{id} — owner/officer révoque une invitation
+/// direct ou un lien token avant `expires_at`. Trello BE-P0-41.
+async fn revoke_invitation(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(invitation_id): Path<Uuid>,
+) -> Result<Json<Value>, AppError> {
+    guild::revoke_invitation(&state.db, invitation_id, auth.user_id).await?;
+    Ok(Json(build_response(json!({
+        "revoked": true,
+        "invitation_id": invitation_id,
+    }))))
 }
 
 #[derive(Deserialize)]

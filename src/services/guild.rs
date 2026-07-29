@@ -755,6 +755,44 @@ pub async fn create_shareable_token(
     Ok(invite)
 }
 
+/// Trello BE-P0-41 — owner/officer révoque une invitation direct ou un lien
+/// token avant `expires_at`. Marque `revoked_at = NOW()` pour que le prochain
+/// GET la filtre. Idempotent : rejette proprement si déjà révoquée ou acceptée.
+pub async fn revoke_invitation(
+    db: &PgPool,
+    invitation_id: Uuid,
+    caller_id: Uuid,
+) -> Result<(), AppError> {
+    let invite: Option<GuildInvitation> =
+        sqlx::query_as("SELECT * FROM guild_invitations WHERE id = $1")
+            .bind(invitation_id)
+            .fetch_optional(db)
+            .await?;
+    let invite = invite.ok_or(AppError::NotFound("Invitation not found".into()))?;
+
+    if invite.accepted_at.is_some() {
+        return Err(AppError::Validation(
+            "Invitation already accepted, cannot revoke".into(),
+        ));
+    }
+    if invite.revoked_at.is_some() {
+        return Err(AppError::Validation("Invitation already revoked".into()));
+    }
+
+    let role = role_of(db, invite.guild_id, caller_id)
+        .await?
+        .ok_or(AppError::Forbidden)?;
+    if !is_officer(&role) {
+        return Err(AppError::Forbidden);
+    }
+
+    sqlx::query("UPDATE guild_invitations SET revoked_at = NOW() WHERE id = $1")
+        .bind(invitation_id)
+        .execute(db)
+        .await?;
+    Ok(())
+}
+
 pub async fn accept_direct_invitation(
     db: &PgPool,
     invitation_id: Uuid,

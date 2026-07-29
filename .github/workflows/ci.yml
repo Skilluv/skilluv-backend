@@ -3,17 +3,50 @@ name: CI
 on:
   push:
     branches: [master]
+    # Skip CI entirely when only docs / config / readme change on master.
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "LICENSE"
+      - ".gitignore"
+      - ".editorconfig"
+      - ".github/ISSUE_TEMPLATE/**"
+      - ".github/FUNDING.yml"
   pull_request:
     branches: [master]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "LICENSE"
+      - ".gitignore"
+      - ".editorconfig"
+      - ".github/ISSUE_TEMPLATE/**"
+      - ".github/FUNDING.yml"
+
+# Cancel any in-progress run on the same branch when a new commit arrives.
+# Saves ~30 min of GHA time per force-push during PR iteration.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  # sccache — shared rustc build cache across jobs. Backend is GHA Cache API
+  # (built-in, no external infra). See mozilla-actions/sccache-action.
+  SCCACHE_GHA_ENABLED: "true"
+  RUSTC_WRAPPER: sccache
 
 jobs:
+  # ─── Static gates ──────────────────────────────────────────────────
+  # Cheap, fail-fast : lint, secret leaks, known CVEs. All three run in
+  # parallel and gate the heavier test job.
+
   check:
     name: Build & Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
 
@@ -21,6 +54,9 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.6
 
       - name: Cache cargo registry & build
         uses: actions/cache@v6
@@ -41,10 +77,74 @@ jobs:
       - name: Clippy lint
         run: cargo clippy -- -D warnings -A dead_code -A unused_imports
 
-  test:
-    name: Integration Tests
+      - name: Install cargo-machete
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-machete
+
+      - name: Detect unused dependencies
+        # cargo-machete reports crates declared in Cargo.toml but never used
+        # in the source. Prevents dep-graph bloat. `--with-metadata` cross-
+        # references features flags to reduce false positives.
+        run: cargo machete --with-metadata
+
+  audit:
+    name: Cargo Audit + Deny (CVE, licenses, banned crates)
     runs-on: ubuntu-latest
-    needs: check
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-deny
+        # cargo-deny supersets cargo-audit : same RustSec advisory DB PLUS
+        # license compliance PLUS banned/duplicate crate detection. Config
+        # in `deny.toml` at repo root.
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+      - name: Run cargo deny
+        run: cargo deny check advisories licenses bans sources
+
+  secrets:
+    name: Secret Scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Full history so gitleaks scans every commit, not just HEAD.
+          fetch-depth: 0
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          # Free for public repos ; token needed for private. Optional secret.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  test:
+    # Matrix sharding — nextest partitions tests by hash across N runners.
+    # Each shard is a fresh job with its own Postgres/Redis/MinIO, so there
+    # are no shared-state collisions and wall time drops from ~30 min
+    # sequential to ~8 min for 4 shards.
+    #
+    # Trello BE-P2-CI-CONTRACT-EXPAND — extended from 2 to 4 shards. GHA
+    # storage quota is now healthy (post-Aug reset), and per-PR wall time
+    # matters more than total compute for developer flow (halved from
+    # ~15 min to ~8 min). Total compute rises from 2× ≈ 30 min to 4× ≈
+    # 40 min ; acceptable trade-off.
+    #
+    # fail-fast: false ensures we see all shard failures at once instead of
+    # the first one aborting the rest — critical for debugging.
+    name: Integration Tests (shard ${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    needs: [check, audit, secrets]
+    # Skip drafts to save quota — devs can mark PR ready when they want CI.
+    if: github.event.pull_request.draft == false
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
 
     services:
       postgres:
@@ -111,6 +211,9 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.6
+
       - name: Start MinIO container
         run: |
           docker run -d --name minio \
@@ -162,8 +265,28 @@ jobs:
           key: ${{ runner.os }}-cargo-test-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-test-
 
-      - name: Run integration tests
-        run: cargo test -- --test-threads=1 --nocapture
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+      - name: Run integration tests (shard ${{ matrix.shard }}/4)
+        # `--partition count:N/4` — nextest hash-partitions ~540 tests
+        # across 4 shards. `--test-threads=1` kept within each shard
+        # because a few tests still touch shared Postgres server-side
+        # state (RLS GUC, metrics counters).
+        run: |
+          cargo nextest run \
+            --test-threads=1 \
+            --partition count:${{ matrix.shard }}/4 \
+            --failure-output=immediate \
+            --success-output=never
+
+      - name: Run doctests (shard 1 only)
+        # Doctests are cheap and not sharded ; run them once on shard 1 to
+        # avoid duplicating the same run across 4 jobs.
+        if: matrix.shard == 1
+        run: cargo test --doc
 
       - name: Cleanup MinIO container
         if: always()

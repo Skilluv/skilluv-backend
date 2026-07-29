@@ -1,0 +1,73 @@
+name: Workflow security lint (zizmor)
+
+# zizmor is a static analyzer for GitHub Actions workflows. Catches :
+#   - command injection via untrusted inputs (`${{ github.event.* }}`)
+#   - over-privileged `permissions:` blocks
+#   - unpinned action versions (best practice : pin to SHA)
+#   - use of dangerous patterns like `pull_request_target` with checkout
+#   - insecure secrets handling
+#
+# https://github.com/woodruffw/zizmor
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - ".github/workflows/**"
+      - ".github/actions/**"
+  pull_request:
+    branches: [master]
+    paths:
+      - ".github/workflows/**"
+      - ".github/actions/**"
+
+permissions:
+  contents: read
+  security-events: write
+
+concurrency:
+  group: workflow-lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  actionlint:
+    # Complementary to zizmor : catches YAML/shell syntax errors, missing
+    # inputs, references to undefined jobs, etc. Very fast (no build).
+    name: actionlint (syntax)
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install actionlint
+        run: |
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          echo "$PWD" >> $GITHUB_PATH
+      - name: Run actionlint
+        run: actionlint -color
+
+  zizmor:
+    name: zizmor (security)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install zizmor
+        uses: taiki-e/install-action@v2
+        with:
+          tool: zizmor
+
+      - name: Run zizmor (SARIF output)
+        run: |
+          zizmor --format sarif .github/workflows > zizmor.sarif || true
+
+      - name: Upload SARIF to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: zizmor.sarif
+          category: zizmor
+
+      - name: Fail on high-severity findings
+        run: |
+          # zizmor exit codes : 0 = clean, 10+ = findings (see docs)
+          zizmor --min-severity high .github/workflows

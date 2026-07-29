@@ -596,16 +596,6 @@ fn extract_ua(headers: &axum::http::HeaderMap) -> Option<&str> {
     headers.get("user-agent").and_then(|v| v.to_str().ok())
 }
 
-fn build_response(data: serde_json::Value) -> serde_json::Value {
-    json!({
-        "data": data,
-        "meta": {
-            "request_id": Uuid::new_v4().to_string(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-        }
-    })
-}
-
 fn generate_token() -> String {
     format!("{}{}", Uuid::new_v4(), Uuid::new_v4()).replace('-', "")
 }

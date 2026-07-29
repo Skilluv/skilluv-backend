@@ -47,10 +47,7 @@ pub async fn list_leaderboards() -> Json<ApiResponse<LeaderboardsIndexResponse>>
 
     let leaderboards: Vec<LeaderboardMeta> = domains
         .iter()
-        .map(|d| LeaderboardMeta {
-            domain: d,
-            periods,
-        })
+        .map(|d| LeaderboardMeta { domain: d, periods })
         .collect();
 
     Json(ApiResponse::new(LeaderboardsIndexResponse { leaderboards }))

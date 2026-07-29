@@ -1,0 +1,74 @@
+name: SLSA provenance attestation
+
+# Generates SLSA level 3 provenance for the published container image so
+# downstream consumers can cryptographically verify :
+#   - which git SHA the image was built from
+#   - which GitHub Actions workflow built it
+#   - that the build was non-tampered (isolated runner, signed by Sigstore)
+#
+# https://slsa.dev/spec/v1.0/provenance
+#
+# Runs after CI succeeds on master (paired with image-sign.yml).
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [master]
+
+permissions:
+  actions: read
+  id-token: write     # needed for keyless signing
+  contents: read
+  packages: write     # to push provenance attestation to GHCR
+
+concurrency:
+  group: slsa-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Read the digest of the just-published image so the SLSA generator has
+  # something concrete to attest to.
+  resolve-digest:
+    name: Resolve pushed image digest
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      digest: ${{ steps.get-digest.outputs.digest }}
+      image: ${{ steps.get-digest.outputs.image }}
+    steps:
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Get digest of master-<sha> tag
+        id: get-digest
+        run: |
+          IMAGE="ghcr.io/${{ github.repository_owner }}/skilluv-backend"
+          SHA="${{ github.event.workflow_run.head_sha }}"
+          DIGEST=$(docker buildx imagetools inspect "${IMAGE}:master-${SHA}" \
+            --format '{{json .Manifest}}' | jq -r .digest)
+          echo "digest=${DIGEST}" >> $GITHUB_OUTPUT
+          echo "image=${IMAGE}" >> $GITHUB_OUTPUT
+
+  provenance:
+    needs: resolve-digest
+    permissions:
+      actions: read
+      id-token: write
+      packages: write
+    # Official SLSA generator reusable workflow — audited, does not need
+    # custom code. Attestation is pushed to the same registry alongside the
+    # image with `.att` suffix.
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.0.0
+    with:
+      image: ${{ needs.resolve-digest.outputs.image }}
+      digest: ${{ needs.resolve-digest.outputs.digest }}
+      registry-username: ${{ github.repository_owner }}
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}

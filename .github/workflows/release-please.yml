@@ -1,0 +1,36 @@
+name: Release Please
+
+# Parses conventional-commit messages on master and opens/updates a
+# release PR that :
+#   - bumps the version in Cargo.toml (via extra-files config below)
+#   - regenerates CHANGELOG.md
+#   - tags the release when the PR is merged
+#
+# https://github.com/googleapis/release-please
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write        # commit CHANGELOG + Cargo.toml bump
+  pull-requests: write   # open/update the release PR
+
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          release-type: rust
+          # Bump Cargo.toml + Cargo.lock automatically on release.
+          extra-files: |
+            Cargo.toml
+          # Draft the changelog on every push, only publish when the release
+          # PR is merged. Failsafe : never auto-publish without a human OK.
+          skip-github-release: false

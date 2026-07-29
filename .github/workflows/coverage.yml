@@ -1,0 +1,136 @@
+name: Test coverage
+
+# Coverage report via cargo-llvm-cov. Runs on-demand (workflow_dispatch) and
+# on push to master. Does NOT gate PRs — we don't want a "coverage % dropped
+# by 0.3%" churn. Report is uploaded as a GHA artifact + printed in the job
+# summary. Wire to Codecov / Coveralls later if we want per-PR deltas.
+
+on:
+  workflow_dispatch:
+  # Removed push:master + nightly triggers — coverage doubled compute
+  # per merge and per day. Weekly + manual dispatch is enough signal
+  # for a solo team on the free tier.
+  schedule:
+    # Weekly on Sunday 02:00 UTC.
+    - cron: "0 2 * * 0"
+
+env:
+  CARGO_TERM_COLOR: always
+  # Same env parity as the test job in ci.yml — coverage runs the same tests.
+  DATABASE_URL: postgres://skilluv:skilluv_secret@localhost:5433/skilluv
+  REDIS_URL: redis://localhost:6379
+  JWT_SECRET: ci-test-secret
+  BASE_URL: http://localhost:3001
+  JUDGE0_URL: http://localhost:2358
+  MINIO_ENDPOINT: http://localhost:9004
+  MINIO_ACCESS_KEY: skilluv
+  MINIO_SECRET_KEY: skilluv_secret
+  MINIO_BUCKET: avatars
+  MINIO_BUCKET_PRIVATE: documents
+  RUST_LOG: warn
+
+concurrency:
+  group: coverage-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  coverage:
+    name: llvm-cov
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    services:
+      postgres:
+        image: postgres:18.4-alpine
+        env:
+          POSTGRES_USER: skilluv
+          POSTGRES_PASSWORD: skilluv_secret
+          POSTGRES_DB: skilluv
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U skilluv" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:8.8-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s
+          --health-timeout 5s --health-retries 5
+      mailpit:
+        image: axllent/mailpit:latest
+        ports: ["1025:1025", "8025:8025"]
+        options: >-
+          --health-cmd "wget -q --spider http://localhost:8025 || exit 1"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+
+      - name: Start MinIO
+        run: |
+          docker run -d --name minio -p 9004:9000 \
+            -e MINIO_ROOT_USER=skilluv \
+            -e MINIO_ROOT_PASSWORD=skilluv_secret \
+            minio/minio:RELEASE.2025-09-07T16-13-09Z server /data
+          for i in $(seq 1 30); do
+            curl -fsS http://localhost:9004/minio/health/live > /dev/null 2>&1 && break
+            sleep 1
+          done
+
+      - name: Cache GeoNames data
+        id: cache-geonames
+        uses: actions/cache@v6
+        with:
+          path: data
+          key: geonames-cities1000-countryinfo-v1
+
+      - name: Download GeoNames data
+        if: steps.cache-geonames.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p data
+          curl -fsSL https://download.geonames.org/export/dump/cities1000.zip -o /tmp/cities1000.zip
+          unzip -o /tmp/cities1000.zip -d data
+          curl -fsSL https://download.geonames.org/export/dump/countryInfo.txt -o data/countryInfo.txt
+
+      - name: Run tests with coverage
+        run: |
+          cargo llvm-cov --workspace --lcov --output-path lcov.info \
+            -- --test-threads=1
+
+      - name: Generate HTML report
+        run: cargo llvm-cov report --html --output-dir coverage-html
+
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            lcov.info
+            coverage-html/
+
+      - name: Coverage summary
+        run: |
+          echo "## Coverage summary" >> $GITHUB_STEP_SUMMARY
+          cargo llvm-cov report >> $GITHUB_STEP_SUMMARY || true
+
+      # Codecov gives us per-PR coverage deltas + a badge for the README.
+      # No token needed for public repos ; private repos require CODECOV_TOKEN
+      # in Actions secrets.
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v5
+        if: always()
+        with:
+          files: lcov.info
+          fail_ci_if_error: false  # informational, don't fail the run
+          token: ${{ secrets.CODECOV_TOKEN }}  # optional for public repos
+          flags: unittests

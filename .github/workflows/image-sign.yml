@@ -56,9 +56,9 @@ jobs:
       - name: Sign the image (keyless)
         run: |
           cosign sign --yes \
-            "${IMAGE}:master@$(docker buildx imagetools inspect ${IMAGE}:master --format '{{json .Manifest}}' | jq -r .digest)"
+            "${IMAGE}:master@$(docker buildx imagetools inspect "${IMAGE}:master" --format '{{json .Manifest}}' | jq -r .digest)"
           cosign sign --yes \
-            "${IMAGE}:master-${SHA}@$(docker buildx imagetools inspect ${IMAGE}:master-${SHA} --format '{{json .Manifest}}' | jq -r .digest)"
+            "${IMAGE}:master-${SHA}@$(docker buildx imagetools inspect "${IMAGE}:master-${SHA}" --format '{{json .Manifest}}' | jq -r .digest)"
 
       - name: Generate SBOM
         run: |

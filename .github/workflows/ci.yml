@@ -33,10 +33,9 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
-  # sccache — shared rustc build cache across jobs. Backend is GHA Cache API
-  # (built-in, no external infra). See mozilla-actions/sccache-action.
-  SCCACHE_GHA_ENABLED: "true"
-  RUSTC_WRAPPER: sccache
+  # NB : SCCACHE_GHA_ENABLED + RUSTC_WRAPPER are scoped to the `check` job
+  # only (see its own env block). At workflow level, RUSTC_WRAPPER=sccache
+  # crashes jobs that don't install the sccache binary (audit, secrets).
 
 # Least-privilege default. Jobs that need more (publish → packages:write,
 # check → actions:write for sccache) override in their own `permissions:` block.
@@ -56,6 +55,11 @@ jobs:
       contents: read
       # sccache-action needs the GHA cache API (mozilla-actions/sccache-action).
       actions: write
+    env:
+      # sccache is installed in this job only — RUSTC_WRAPPER is job-scoped
+      # so cargo commands in other jobs don't try to invoke a non-existent binary.
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: sccache
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:

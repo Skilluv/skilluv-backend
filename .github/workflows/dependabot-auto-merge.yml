@@ -19,11 +19,11 @@ permissions:
 
 jobs:
   auto-merge:
-    # actor_id is the numeric user id — cannot be spoofed by naming a fork
-    # branch 'dependabot[bot]'. The `actor` field name check is bypassable
-    # via a PR from a fork whose owner renamed themselves ; actor_id 49699333
-    # is Dependabot's real user id and is immutable.
-    if: ${{ github.actor == 'dependabot[bot]' && github.event.pull_request.user.id == 49699333 }}
+    # Gate strictly on numeric actor_id (49699333 = Dependabot's real,
+    # immutable user id). We deliberately do NOT check github.actor by name
+    # — that's spoofable by a fork owner renaming themselves 'dependabot[bot]'.
+    # The user.id check is unforgeable.
+    if: ${{ github.event.pull_request.user.id == 49699333 }}
     runs-on: ubuntu-latest
     timeout-minutes: 2
 

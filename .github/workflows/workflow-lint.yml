@@ -21,9 +21,10 @@ on:
       - ".github/workflows/**"
       - ".github/actions/**"
 
+# Workflow-level default: minimal. Only the `zizmor` job needs
+# security-events:write for SARIF upload (see per-job block below).
 permissions:
   contents: read
-  security-events: write
 
 concurrency:
   group: workflow-lint-${{ github.ref }}
@@ -38,6 +39,8 @@ jobs:
     timeout-minutes: 3
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          persist-credentials: false
       - name: Install actionlint
         run: |
           bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
@@ -49,8 +52,13 @@ jobs:
     name: zizmor (security)
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      security-events: write   # upload SARIF to GitHub Security tab
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          persist-credentials: false
 
       - name: Install zizmor
         uses: taiki-e/install-action@18b1216eba7f8039b0f8d131d5473787f0edce68  # v2

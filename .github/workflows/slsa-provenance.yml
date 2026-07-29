@@ -53,8 +53,8 @@ jobs:
           SHA="${{ github.event.workflow_run.head_sha }}"
           DIGEST=$(docker buildx imagetools inspect "${IMAGE}:master-${SHA}" \
             --format '{{json .Manifest}}' | jq -r .digest)
-          echo "digest=${DIGEST}" >> $GITHUB_OUTPUT
-          echo "image=${IMAGE}" >> $GITHUB_OUTPUT
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
 
   provenance:
     needs: resolve-digest

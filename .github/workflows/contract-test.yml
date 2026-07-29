@@ -72,6 +72,24 @@ jobs:
       - name: Build backend (release)
         run: cargo build --release --bin skilluv-backend
 
+      # GeoNames data (gitignored, ~31MB) : backend refuses to boot
+      # without it (see src/main.rs GeoService::load). Cache across runs
+      # keyed by content-invariant name so we don't re-download every PR.
+      - name: Cache GeoNames data
+        id: cache-geonames
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6
+        with:
+          path: data
+          key: geonames-cities1000-countryinfo-v1
+
+      - name: Download GeoNames data
+        if: steps.cache-geonames.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p data
+          curl -fsSL https://download.geonames.org/export/dump/cities1000.zip -o /tmp/cities1000.zip
+          unzip -o /tmp/cities1000.zip -d data
+          curl -fsSL https://download.geonames.org/export/dump/countryInfo.txt -o data/countryInfo.txt
+
       - name: Start backend
         # 3-min boot budget : the 116+ sqlx migrations + GeoNames load (~30s)
         # + Sentry/PostHog init routinely takes 45-90s on cold GHA runners.

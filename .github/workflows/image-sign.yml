@@ -36,16 +36,16 @@ jobs:
       SHA: ${{ github.event.workflow_run.head_sha }}
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@v3.7.0
+        uses: sigstore/cosign-installer@dc72c7d5c4d10cd6bcb8cf6e3fd625a9e5e537da  # v3.7.0
 
       - name: Install syft (SBOM generator)
-        uses: anchore/sbom-action/download-syft@v0.17.7
+        uses: anchore/sbom-action/download-syft@fc46e51fd3cb168ffb36c6d1915723c47db58abb  # v0.17.7
 
       - name: Login to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
@@ -71,7 +71,7 @@ jobs:
             "${IMAGE}:master-${SHA}"
 
       - name: Upload SBOMs as artifact (90d retention)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: sbom-${{ env.SHA }}
           path: |

@@ -68,15 +68,15 @@ jobs:
           --health-interval 5s --health-timeout 5s --health-retries 10
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4  # stable
         with:
           components: llvm-tools-preview
 
       - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@18b1216eba7f8039b0f8d131d5473787f0edce68  # v2
         with:
           tool: cargo-llvm-cov
 
@@ -93,7 +93,7 @@ jobs:
 
       - name: Cache GeoNames data
         id: cache-geonames
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6
         with:
           path: data
           key: geonames-cities1000-countryinfo-v1
@@ -115,7 +115,7 @@ jobs:
         run: cargo llvm-cov report --html --output-dir coverage-html
 
       - name: Upload coverage artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: coverage-report
           path: |
@@ -131,7 +131,7 @@ jobs:
       # No token needed for public repos ; private repos require CODECOV_TOKEN
       # in Actions secrets.
       - name: Upload to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac  # v5
         if: always()
         with:
           files: lcov.info

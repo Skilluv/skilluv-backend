@@ -52,15 +52,15 @@ jobs:
       RUST_LOG: warn,skilluv_backend=info
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4  # stable
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32  # v2
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
         with:
           python-version: '3.12'
 
@@ -71,17 +71,19 @@ jobs:
         run: cargo build --release --bin skilluv-backend
 
       - name: Start backend
+        # 3-min boot budget : the 116+ sqlx migrations + GeoNames load (~30s)
+        # + Sentry/PostHog init routinely takes 45-90s on cold GHA runners.
         run: |
           ./target/release/skilluv-backend &
           echo $! > backend.pid
-          for i in $(seq 1 30); do
+          for i in $(seq 1 90); do
             if curl -fsS http://localhost:3001/api/health > /dev/null 2>&1; then
-              echo "Backend ready after ${i}s"
+              echo "Backend ready after $((i*2))s"
               exit 0
             fi
             sleep 2
           done
-          echo "Backend failed to become ready after 60s"
+          echo "Backend failed to become ready after 180s"
           exit 1
 
       - name: Smoke check /api/openapi.json

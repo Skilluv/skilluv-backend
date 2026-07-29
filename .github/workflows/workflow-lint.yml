@@ -37,7 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
       - name: Install actionlint
         run: |
           bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
@@ -50,10 +50,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
 
       - name: Install zizmor
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@18b1216eba7f8039b0f8d131d5473787f0edce68  # v2
         with:
           tool: zizmor
 
@@ -62,7 +62,7 @@ jobs:
           zizmor --format sarif .github/workflows > zizmor.sarif || true
 
       - name: Upload SARIF to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@4187e74d05793876e9989daffde9c3e66b4acd07  # v3
         with:
           sarif_file: zizmor.sarif
           category: zizmor

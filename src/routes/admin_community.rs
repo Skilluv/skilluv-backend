@@ -92,6 +92,40 @@ async fn approve_challenge(
 ) -> Result<Json<serde_json::Value>, AppError> {
     require_admin(&state, &auth).await?;
 
+    // Trello hVImXbUS — pré-check business avant UPDATE.
+    // Règle dure P3 (migration 0061 + trigger PG) : aucun challenge ne peut
+    // passer status='published' sans project_id, sauf si is_training=TRUE.
+    // Si on tente l'UPDATE sans respecter la règle, le trigger renvoie une
+    // erreur DB qui remonte en 500. On préfère renvoyer 400 avec un message
+    // clair pour que le front admin puisse guider l'action de l'admin.
+    let precheck: Option<(bool, Option<Uuid>, String)> = sqlx::query_as(
+        "SELECT is_training, project_id, community_status \
+         FROM challenge_templates \
+         WHERE id = $1 AND is_community = TRUE",
+    )
+    .bind(id)
+    .fetch_optional(&state.db)
+    .await?;
+    let Some((is_training, project_id, community_status)) = precheck else {
+        return Err(AppError::NotFound(
+            "Challenge not found or not a community challenge".into(),
+        ));
+    };
+    if community_status != "review" {
+        return Err(AppError::Validation(format!(
+            "Challenge is in '{community_status}' state, only 'review' can be approved"
+        )));
+    }
+    if !is_training && project_id.is_none() {
+        return Err(AppError::Validation(
+            "Community challenge must be linked to a project (project_id) \
+             or flagged as training (is_training=true) before approval — \
+             ask the creator to attach one, or set is_training via \
+             PATCH /admin/challenges/{id}"
+                .into(),
+        ));
+    }
+
     let challenge: ChallengeTemplate = sqlx::query_as(
         r#"
         UPDATE challenge_templates SET

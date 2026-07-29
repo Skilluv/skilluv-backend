@@ -246,6 +246,14 @@ async fn get_user(
             .fetch_one(&state.db)
             .await?;
 
+    // Trello xHnNZa5G + gWSCzyz0 + RXEWNI6y — expose 2FA + passkey posture
+    // to admin panel so we can see who is/isn't secured without SQL access.
+    let webauthn_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM webauthn_credentials WHERE user_id = $1")
+            .bind(id)
+            .fetch_one(&state.db)
+            .await?;
+
     Ok(Json(build_response(json!({
         "user": {
             "id": user.id,
@@ -263,6 +271,9 @@ async fn get_user(
             "profile_active": user.profile_active,
             "is_banned": user.is_banned,
             "created_at": user.created_at.to_rfc3339(),
+            "totp_enabled": user.totp_enabled,
+            "email_2fa_enabled": user.email_2fa_enabled,
+            "webauthn_credentials_count": webauthn_count,
         },
         "reports_against": reports_count,
         "total_submissions": submissions_count,

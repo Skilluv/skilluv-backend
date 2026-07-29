@@ -145,6 +145,13 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", admin_gate(routes::admin_fraud_routes()))
         .nest("/api", admin_gate(routes::admin_project_routes()))
         .nest("/api", admin_gate(routes::admin_content_ops_routes()))
+        // Trello vx5q6jW4 — admin_tournament_routes (seasons + tournaments
+        // admin) était mixé dans tournament_routes sans admin_gate. Split
+        // out et wired ici. Les 6 autres admin_* modules (users, skills,
+        // orientations, enterprises, badge_rules, ops) sont déjà merged
+        // dans admin_routes() (lignes 55-65 de src/routes/admin.rs) — les
+        // re-nest ici causerait un "Overlapping method route" panic axum.
+        .nest("/api", admin_gate(routes::admin_tournament_routes()))
         // Phase 5
         .nest("/api", routes::bounty_routes())
         .nest("/api", routes::certification_routes())

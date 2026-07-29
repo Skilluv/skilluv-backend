@@ -42,7 +42,8 @@ async fn test_admin_lists_sso_sessions() {
     let resp = app.get("/api/admin/sso/sessions").await;
     assert_eq!(resp.status(), StatusCode::OK);
     let body: serde_json::Value = resp.json().await.unwrap();
-    let sessions = body["data"]["sessions"].as_array().unwrap();
+    // Trello MshrIOYf — shape flattened from {data:{sessions:[…]}} to {data:[…]}.
+    let sessions = body["data"].as_array().unwrap();
     assert_eq!(sessions.len(), 1);
     assert_eq!(sessions[0]["session_id"], session_id.to_string());
     assert_eq!(sessions[0]["enterprise_slug"], "ssoadmincorp");
@@ -81,7 +82,7 @@ async fn test_admin_revokes_sso_session() {
     // Listing again must not return the revoked session.
     let resp = app.get("/api/admin/sso/sessions").await;
     let body: serde_json::Value = resp.json().await.unwrap();
-    assert_eq!(body["data"]["sessions"].as_array().unwrap().len(), 0);
+    assert_eq!(body["data"].as_array().unwrap().len(), 0);
 }
 
 #[tokio::test]

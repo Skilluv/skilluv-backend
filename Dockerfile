@@ -31,6 +31,13 @@ WORKDIR /app
 
 # Copy binary and migrations
 COPY --from=builder /app/target/release/skilluv-backend ./skilluv-backend
+# Auxiliary binaries — seed catalog data, provision admin, dump DB, ingest GitHub.
+# Shipped in the same image so ops can `docker exec` any of them without
+# rebuilding. Kept in /usr/local/bin so they're on PATH.
+COPY --from=builder /app/target/release/skilluv-seed         /usr/local/bin/skilluv-seed
+COPY --from=builder /app/target/release/skilluv-seed-admin   /usr/local/bin/skilluv-seed-admin
+COPY --from=builder /app/target/release/skilluv-backup       /usr/local/bin/skilluv-backup
+COPY --from=builder /app/target/release/skilluv-github-ingest /usr/local/bin/skilluv-github-ingest
 COPY --from=builder /app/migrations/ ./migrations/
 
 EXPOSE 3001

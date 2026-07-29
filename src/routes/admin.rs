@@ -736,8 +736,11 @@ async fn list_sso_sessions(
         )
         .collect();
 
+    // Trello MshrIOYf — front admin attend `{data: T[], pagination}` comme
+    // convention de toutes les listes admin. Anciennement enveloppé dans
+    // `{data: {sessions: [...]}}`, ce qui cassait la table front sans erreur.
     Ok(Json(json!({
-        "data": { "sessions": sessions },
+        "data": sessions,
         "pagination": {
             "page": page,
             "per_page": per_page,

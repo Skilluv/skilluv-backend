@@ -17,18 +17,28 @@ use crate::services::{NotificationService, tournament};
 
 pub fn tournament_routes() -> Router<AppState> {
     Router::new()
-        // Seasons admin (les GET /seasons + /seasons/current publics vivent dans
-        // seasons.rs Phase P6 ; on ne les redéclare pas ici pour éviter le
-        // conflit de routes axum). Les endpoints /admin/seasons/* sont propres
-        // à ce module (workflow tournois) et n'existent pas dans seasons.rs.
-        .route("/admin/seasons", post(admin_create_season))
-        .route("/admin/seasons/{id}/status", post(admin_set_season_status))
-        .route("/admin/seasons/{id}/close", post(admin_close_season))
-        // Tournaments
+        // Public — tournaments read + registration.
         .route("/tournaments", get(list_tournaments))
         .route("/tournaments/{slug}", get(get_tournament))
         .route("/tournaments/{slug}/leaderboard", get(get_leaderboard))
         .route("/tournaments/{slug}/register", post(register))
+        // Public events feed
+        .route("/events", get(events_feed))
+}
+
+/// Trello vx5q6jW4 — les admin routes de seasons/tournaments vivaient dans
+/// `tournament_routes` sans admin_gate (juste un `if auth.role != "admin"`
+/// inline). Split maintenant pour permettre à `lib.rs` de nest ce sous-router
+/// derrière `admin_gate` (ensure_admin_origin + ensure_admin_2fa) comme les
+/// autres surfaces admin.
+pub fn admin_tournament_routes() -> Router<AppState> {
+    Router::new()
+        // Seasons admin (les GET /seasons + /seasons/current publics vivent
+        // dans seasons.rs Phase P6). Endpoints admin propres au workflow tournois.
+        .route("/admin/seasons", post(admin_create_season))
+        .route("/admin/seasons/{id}/status", post(admin_set_season_status))
+        .route("/admin/seasons/{id}/close", post(admin_close_season))
+        // Tournaments admin.
         .route("/admin/tournaments", post(admin_create_tournament))
         .route(
             "/admin/tournaments/{id}/status",
@@ -36,8 +46,6 @@ pub fn tournament_routes() -> Router<AppState> {
         )
         .route("/admin/tournaments/{id}/score", post(admin_set_score))
         .route("/admin/tournaments/{id}/conclude", post(admin_conclude))
-        // Public events feed
-        .route("/events", get(events_feed))
 }
 
 fn build_response(data: Value) -> Value {

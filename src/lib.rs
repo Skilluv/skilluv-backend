@@ -155,6 +155,7 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", admin_gate(routes::admin_enterprise_routes()))
         .nest("/api", admin_gate(routes::admin_badge_rule_routes()))
         .nest("/api", admin_gate(routes::admin_ops_routes()))
+        .nest("/api", admin_gate(routes::admin_tournament_routes()))
         // Phase 5
         .nest("/api", routes::bounty_routes())
         .nest("/api", routes::certification_routes())

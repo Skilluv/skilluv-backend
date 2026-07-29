@@ -145,6 +145,16 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", admin_gate(routes::admin_fraud_routes()))
         .nest("/api", admin_gate(routes::admin_project_routes()))
         .nest("/api", admin_gate(routes::admin_content_ops_routes()))
+        // Trello HMSIwsjq — ces 6 modules admin existaient depuis longtemps
+        // sous src/routes/admin_* mais n'étaient jamais nested dans le router.
+        // Le front admin les appelait et récupérait des 404. Wired maintenant
+        // avec admin_gate (origin + 2FA obligatoire), comme les 7 autres.
+        .nest("/api", admin_gate(routes::admin_user_routes()))
+        .nest("/api", admin_gate(routes::admin_skill_routes()))
+        .nest("/api", admin_gate(routes::admin_orientation_routes()))
+        .nest("/api", admin_gate(routes::admin_enterprise_routes()))
+        .nest("/api", admin_gate(routes::admin_badge_rule_routes()))
+        .nest("/api", admin_gate(routes::admin_ops_routes()))
         // Phase 5
         .nest("/api", routes::bounty_routes())
         .nest("/api", routes::certification_routes())

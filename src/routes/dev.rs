@@ -45,10 +45,11 @@ async fn get_verify_token(
     }
 
     // Fetch user_id from email — case-insensitive to match /auth/register.
-    let user_id: Option<Uuid> = sqlx::query_scalar("SELECT id FROM users WHERE LOWER(email) = LOWER($1)")
-        .bind(&email)
-        .fetch_optional(&state.db)
-        .await?;
+    let user_id: Option<Uuid> =
+        sqlx::query_scalar("SELECT id FROM users WHERE LOWER(email) = LOWER($1)")
+            .bind(&email)
+            .fetch_optional(&state.db)
+            .await?;
     let Some(user_id) = user_id else {
         return Err(AppError::NotFound(format!("no user with email {email}")));
     };

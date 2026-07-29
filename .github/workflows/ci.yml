@@ -71,7 +71,7 @@ jobs:
           components: clippy, rustfmt
 
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@9e326ebed976843c9932b3aa0e021c6f50310eb4  # v0.0.6
+        uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba  # v0.0.11
 
       - name: Cache cargo registry & build
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6
@@ -168,6 +168,10 @@ jobs:
     # Skip drafts to save quota — devs can mark PR ready when they want CI.
     if: github.event.pull_request.draft == false
     timeout-minutes: 15
+    permissions:
+      contents: read
+      # sccache-action needs the GHA cache API (mozilla-actions/sccache-action).
+      actions: write
     strategy:
       fail-fast: false
       matrix:
@@ -218,6 +222,9 @@ jobs:
       # (voir "Start MinIO container" plus bas).
 
     env:
+      # sccache installed via sccache-action below (matches check job pattern).
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: sccache
       DATABASE_URL: postgres://skilluv:skilluv_secret@localhost:5433/skilluv
       REDIS_URL: redis://localhost:6379
       JWT_SECRET: ci-test-secret
@@ -241,7 +248,7 @@ jobs:
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4  # stable
 
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@9e326ebed976843c9932b3aa0e021c6f50310eb4  # v0.0.6
+        uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba  # v0.0.11
 
       - name: Start MinIO container
         run: |
@@ -254,7 +261,7 @@ jobs:
 
       - name: Wait for MinIO to be ready
         run: |
-          for i in $(seq 1 30); do
+          for _ in $(seq 1 30); do
             if curl -fsS http://localhost:9004/minio/health/live > /dev/null 2>&1; then
               echo "MinIO ready after ${i}s"
               exit 0

@@ -7,8 +7,11 @@
 # (rust:latest = anti-pattern for prod images).
 FROM rust:1.97-slim-trixie AS builder
 
+# curl is required by utoipa-swagger-ui's build.rs to fetch the Swagger UI
+# zip from GitHub at compile time. Without it, the build panics with
+# 'failed to download Swagger UI: curl command not found'.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        pkg-config libssl-dev \
+        pkg-config libssl-dev curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

@@ -8,8 +8,19 @@
 
 [advisories]
 version = 2
-# Any advisory (RustSec) fails the check unless explicitly allowed below.
-ignore = []
+# Advisories we ACCEPT and why — each entry needs a written rationale.
+ignore = [
+    # RUSTSEC-2023-0071 — Marvin timing attack on `rsa` crate.
+    # We pull `rsa` transitively via openidconnect 4.x (SSO OIDC flow) and
+    # directly in [dev-dependencies] for the mock IdP used in integration
+    # tests. Attack vector requires an attacker to time RSA operations on
+    # our server ; only relevant on the SSO callback which runs on TLS-
+    # terminated origin behind Cloudflare + Traefik. Impact bounded to
+    # enterprise SSO login timing.
+    # No upstream fix yet — track https://github.com/RustCrypto/RSA/issues/19
+    # and drop this ignore once openidconnect ships an updated rsa dep.
+    "RUSTSEC-2023-0071",
+]
 # YANKED = crate.io yanked crates. Warn only ; a yanked dep still works but
 # should be updated at the next Dependabot cycle.
 yanked = "warn"
@@ -32,6 +43,7 @@ allow = [
     "CC0-1.0",       # public domain equivalent
     "CDLA-Permissive-2.0",
     "OpenSSL",       # rare, needed by aws-lc-sys / ring
+    "0BSD",          # BSD Zero Clause — permissive, used by quoted_printable
 ]
 # Fail on unlicensed or unclear crates rather than silently accepting them.
 confidence-threshold = 0.93

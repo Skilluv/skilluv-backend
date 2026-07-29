@@ -40,6 +40,10 @@ pub fn enterprise_credits_routes() -> Router<AppState> {
         // Alias — front called it `/preview` (per BE-P0-13 audit) and there's
         // no reason to make the front migrate the name for a doc mismatch.
         .route("/enterprise/invoices/{id}/preview", get(get_invoice_html))
+        // BE-P0-36 — PDF endpoint. Delegates to the external
+        // `skilluv-pdf-renderer` service (Python + weasyprint) via HTTP.
+        // Returns 503 when `PDF_RENDERER_URL` isn't configured.
+        .route("/enterprise/invoices/{id}/pdf", get(get_invoice_pdf))
         // Pricing public endpoint (Phase 3.14)
         .route("/pricing", get(public_pricing))
 }
@@ -738,6 +742,83 @@ async fn get_invoice_html(
     Ok(axum::response::Html(
         crate::services::invoices::render_html(&inv, &row.0),
     ))
+}
+
+// BE-P0-36 / BE-P2-INVOICE-PDF — invoice PDF via external renderer.
+//
+// The backend stays in Rust land : it renders the same HTML as `/html` then
+// POSTs it to a sidecar `skilluv-pdf-renderer` service (Python + weasyprint)
+// deployed alongside via Coolify. Splitting the concern avoids pulling
+// weasyprint / chromiumoxide / wkhtmltopdf into this image.
+//
+// Contract (renderer side) : POST {PDF_RENDERER_URL}/render with
+//   Content-Type: text/html, body = the HTML
+// returns 200 application/pdf on success.
+//
+// When `PDF_RENDERER_URL` isn't configured we surface a clear 503 rather than
+// a broken blob or 500 — the front knows to fall back to browser print.
+async fn get_invoice_pdf(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    axum::extract::Path(id): axum::extract::Path<Uuid>,
+) -> Result<axum::response::Response, AppError> {
+    let Some(renderer_url) = state.config.pdf_renderer_url.as_deref() else {
+        return Err(AppError::ServiceUnavailable(
+            "pdf renderer not configured (set PDF_RENDERER_URL)".into(),
+        ));
+    };
+
+    let enterprise_id = current_enterprise_for(&state.db, auth.user_id).await?;
+    let inv = crate::services::invoices::by_id_for_enterprise(&state.db, id, enterprise_id).await?;
+    let row: (String,) = sqlx::query_as("SELECT company_name FROM enterprises WHERE id = $1")
+        .bind(enterprise_id)
+        .fetch_one(&state.db)
+        .await?;
+    let html = crate::services::invoices::render_html(&inv, &row.0);
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(20))
+        .build()
+        .map_err(|e| AppError::Internal(format!("pdf client build: {e}")))?;
+
+    let endpoint = format!("{}/render", renderer_url.trim_end_matches('/'));
+    let resp = client
+        .post(&endpoint)
+        .header("Content-Type", "text/html; charset=utf-8")
+        .body(html)
+        .send()
+        .await
+        .map_err(|e| AppError::ServiceUnavailable(format!("pdf renderer unreachable: {e}")))?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let snippet = resp
+            .text()
+            .await
+            .unwrap_or_default()
+            .chars()
+            .take(200)
+            .collect::<String>();
+        return Err(AppError::Internal(format!(
+            "pdf renderer returned {status}: {snippet}"
+        )));
+    }
+
+    let bytes = resp
+        .bytes()
+        .await
+        .map_err(|e| AppError::Internal(format!("pdf body read: {e}")))?;
+
+    let filename = format!(
+        "attachment; filename=\"invoice-{}.pdf\"",
+        inv.invoice_number
+    );
+    axum::response::Response::builder()
+        .status(200)
+        .header("Content-Type", "application/pdf")
+        .header("Content-Disposition", filename)
+        .body(axum::body::Body::from(bytes))
+        .map_err(|e| AppError::Internal(format!("pdf response build: {e}")))
 }
 
 // ─── Public pricing (3.14 + 4.4 dynamic multi-currency) ──────────

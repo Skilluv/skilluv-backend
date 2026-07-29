@@ -135,6 +135,7 @@ impl TestApp {
             sentry_dsn: None,
             sentry_traces_sample_rate: 0.0,
             release: None,
+            pdf_renderer_url: None,
         };
 
         let storage =
@@ -165,6 +166,7 @@ impl TestApp {
                 jwt_secret: "test-secret-key-for-testing".to_string(),
                 base_url: addr.clone(),
                 sso_encryption_key: Some([42u8; 32]),
+                pdf_renderer_url: None,
             },
             sandbox,
             storage,

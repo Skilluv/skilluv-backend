@@ -17,10 +17,7 @@ on:
     branches: [master]
 
 permissions:
-  actions: read
-  id-token: write     # needed for keyless signing
   contents: read
-  packages: write     # to push provenance attestation to GHCR
 
 concurrency:
   group: slsa-${{ github.ref }}
@@ -36,6 +33,9 @@ jobs:
       github.event.workflow_run.head_branch == 'master'
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      packages: read   # read metadata from GHCR to compute digest
     outputs:
       digest: ${{ steps.get-digest.outputs.digest }}
       image: ${{ steps.get-digest.outputs.image }}
@@ -48,13 +48,18 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Get digest of master-<sha> tag
         id: get-digest
+        # SHA is bound to an env var (not interpolated in the shell) to
+        # prevent template-injection via a malicious ref pushed to master.
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/skilluv-backend
         run: |
-          IMAGE="ghcr.io/${{ github.repository_owner }}/skilluv-backend"
-          SHA="${{ github.event.workflow_run.head_sha }}"
-          DIGEST=$(docker buildx imagetools inspect "${IMAGE}:master-${SHA}" \
+          DIGEST=$(docker buildx imagetools inspect "${IMAGE_REPO}:master-${HEAD_SHA}" \
             --format '{{json .Manifest}}' | jq -r .digest)
-          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
-          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+          {
+            echo "digest=${DIGEST}"
+            echo "image=${IMAGE_REPO}"
+          } >> "$GITHUB_OUTPUT"
 
   provenance:
     needs: resolve-digest

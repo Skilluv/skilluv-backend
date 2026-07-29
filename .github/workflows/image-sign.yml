@@ -80,10 +80,14 @@ jobs:
           retention-days: 90
 
       - name: Verification instructions
+        env:
+          REPO: ${{ github.repository }}
         run: |
-          echo "## How to verify this image" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "cosign verify ${IMAGE}:master-${SHA} \\" >> $GITHUB_STEP_SUMMARY
-          echo "  --certificate-identity-regexp='https://github.com/${{ github.repository }}/.*' \\" >> $GITHUB_STEP_SUMMARY
-          echo "  --certificate-oidc-issuer='https://token.actions.githubusercontent.com'" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## How to verify this image"
+            echo '```'
+            echo "cosign verify ${IMAGE}:master-${SHA} \\"
+            echo "  --certificate-identity-regexp='https://github.com/${REPO}/.*' \\"
+            echo "  --certificate-oidc-issuer='https://token.actions.githubusercontent.com'"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

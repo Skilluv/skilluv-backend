@@ -1,0 +1,29 @@
+# zizmor configuration — https://docs.zizmor.sh/configuration/
+#
+# We ignore ONLY specific findings that are intentional architectural
+# decisions, documented per instance. We do NOT disable rules blanket
+# to bypass CI. Every ignore below has a written justification.
+
+rules:
+  # `workflow_run` triggers are the standard, documented GitHub pattern for
+  # "run job B after workflow A succeeds" — used here for image-sign and
+  # SLSA provenance which MUST run only after CI green on master to attest
+  # to a validated artifact. Downgrading to push:master triggers would
+  # break the attestation invariant (unvalidated code would get signed).
+  # Mitigation : both workflows self-check `event.workflow_run.conclusion == 'success'`.
+  dangerous-triggers:
+    ignore:
+      - image-sign.yml
+      - slsa-provenance.yml
+      # dependabot-auto-merge uses pull_request_target — required by GitHub
+      # for a bot to merge its own PRs with write perms. Standard pattern.
+      # Mitigation : gated on actor + actor_id numeric check (line 22).
+      - dependabot-auto-merge.yml
+
+  # SLSA framework reusable workflow (generator_container_slsa3.yml) must NOT
+  # be pinned to a commit hash per SLSA docs — the framework relies on tag
+  # provenance for its own auth. See :
+  # https://github.com/slsa-framework/slsa-github-generator#recommended-usage
+  unpinned-uses:
+    ignore:
+      - slsa-provenance.yml

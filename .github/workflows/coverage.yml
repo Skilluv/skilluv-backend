@@ -61,7 +61,7 @@ jobs:
           --health-cmd "redis-cli ping" --health-interval 5s
           --health-timeout 5s --health-retries 5
       mailpit:
-        image: axllent/mailpit:latest
+        image: axllent/mailpit:v1.20.7
         ports: ["1025:1025", "8025:8025"]
         options: >-
           --health-cmd "wget -q --spider http://localhost:8025 || exit 1"

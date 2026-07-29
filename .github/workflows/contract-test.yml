@@ -78,12 +78,14 @@ jobs:
         run: |
           ./target/release/skilluv-backend &
           echo $! > backend.pid
-          for i in $(seq 1 90); do
+          elapsed=0
+          for _ in $(seq 1 90); do
             if curl -fsS http://localhost:3001/api/health > /dev/null 2>&1; then
-              echo "Backend ready after $((i*2))s"
+              echo "Backend ready after ${elapsed}s"
               exit 0
             fi
             sleep 2
+            elapsed=$((elapsed + 2))
           done
           echo "Backend failed to become ready after 180s"
           exit 1

@@ -24,6 +24,10 @@ on:
   # schedule:
   #   - cron: "30 3 * * *"
 
+# Least-privilege default — k6 only hits an external URL.
+permissions:
+  contents: read
+
 jobs:
   k6:
     name: k6 load test

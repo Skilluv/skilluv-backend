@@ -9,6 +9,10 @@ on:
       - '.github/workflows/contract-test.yml'
   workflow_dispatch:
 
+# Least-privilege default — schemathesis only reads the repo + hits the API.
+permissions:
+  contents: read
+
 jobs:
   schemathesis:
     name: schemathesis fuzz OpenAPI contract

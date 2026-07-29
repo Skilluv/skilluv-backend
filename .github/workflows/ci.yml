@@ -38,6 +38,11 @@ env:
   SCCACHE_GHA_ENABLED: "true"
   RUSTC_WRAPPER: sccache
 
+# Least-privilege default. Jobs that need more (publish → packages:write,
+# provenance → id-token:write) override in their own `permissions:` block.
+permissions:
+  contents: read
+
 jobs:
   # ─── Static gates ──────────────────────────────────────────────────
   # Cheap, fail-fast : lint, secret leaks, known CVEs. All three run in

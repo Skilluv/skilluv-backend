@@ -144,7 +144,11 @@ pub fn build_router(state: AppState) -> Router {
         // but return 403 in prod. See src/routes/dev.rs.
         .nest("/api", routes::dev_routes())
         .nest("/api", routes::public_api_routes())
-        .nest("/api", routes::openapi_routes())
+        // BE-P1-CONTRACT — the legacy routes::openapi_routes() serving a
+        // hand-written spec at /api/docs/openapi.json is superseded by
+        // openapi::attach() below (utoipa-generated spec at
+        // /api/openapi.json + Swagger UI at /api/docs/*). Removed here to
+        // avoid the 'Overlapping method route' axum panic between the two.
         .nest("/api", routes::sponsored_routes())
         .nest("/api", routes::enterprise_credits_routes())
         .nest("/api", routes::enterprise_pipeline_routes())

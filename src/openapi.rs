@@ -1136,12 +1136,17 @@ where
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(cfg!(debug_assertions));
 
-    let router = router.route("/api/openapi.json", axum::routing::get(openapi_json));
-
+    // Only ONE of the two branches registers /api/openapi.json — either via
+    // SwaggerUi.url() (which serves both the UI and the spec) OR via a manual
+    // route (spec only, no UI). Registering both simultaneously causes axum
+    // to panic with 'Overlapping method route' the first time any test calls
+    // build_router().
     if expose_swagger {
         router.merge(SwaggerUi::new("/api/docs").url("/api/openapi.json", ApiDoc::openapi()))
     } else {
-        router
+        // Prod-mode : ship the spec JSON at /api/openapi.json but no Swagger
+        // UI shell. Schemathesis in CI reads the JSON directly ; humans get 404.
+        router.route("/api/openapi.json", axum::routing::get(openapi_json))
     }
 }
 

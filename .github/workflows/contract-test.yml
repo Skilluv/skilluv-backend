@@ -48,6 +48,9 @@ jobs:
       REDIS_URL: redis://localhost:6379
       JWT_SECRET: schemathesis_test_secret_key_must_be_32_chars_or_more
       BASE_URL: http://localhost:3001
+      # Backend defaults to PORT=3000 ; keep the historical 3001 for BASE_URL /
+      # curl probes so the schema paths stay stable across CI checkouts.
+      PORT: "3001"
       SKILLUV_EXPOSE_SWAGGER: "1"
       RUST_LOG: warn,skilluv_backend=info
 

@@ -170,7 +170,12 @@ jobs:
     needs: [check, audit, secrets]
     # Skip drafts to save quota — devs can mark PR ready when they want CI.
     if: github.event.pull_request.draft == false
-    timeout-minutes: 15
+    # 25 min budget : cold cache = ~6-7 min compile (dev profile, hyper-timeout
+    # + prost + tonic-prost + skilluv-backend) + ~8 min test run. All 4 shards
+    # run in parallel with independent sccache caches, so the first PR after a
+    # Cargo.lock bump is uniformly cold. Shards 1&2 hit the 15 min ceiling on
+    # #40's cold run; shards 3&4 finished at ~13-14 min. 25 = check job budget.
+    timeout-minutes: 25
     permissions:
       contents: read
       # sccache-action needs the GHA cache API (mozilla-actions/sccache-action).

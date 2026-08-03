@@ -277,22 +277,79 @@ pub async fn request_data_export(
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct RegisterRequest {
-    #[schema(example = "user@example.com")]
+    // Constraints ci-dessous : miroir strict des `validate_*` handlers plus bas
+    // dans ce fichier. Toute modification d'un validator doit se refléter ici
+    // pour que le schéma OpenAPI reste opposable (contrat schemathesis).
+    #[schema(
+        format = "email",
+        min_length = 5,
+        max_length = 255,
+        example = "user@example.com"
+    )]
     pub email: String,
-    #[schema(example = "jdoe")]
+    #[schema(
+        min_length = 3,
+        max_length = 30,
+        pattern = r"^[a-zA-Z0-9][a-zA-Z0-9_-]*$",
+        example = "jdoe"
+    )]
     pub username: String,
     /// 10–128 chars, upper + lower + digit + symbol.
+    #[schema(
+        min_length = 10,
+        max_length = 128,
+        pattern = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9\s]).+$"
+    )]
     pub password: String,
+    #[schema(min_length = 1, max_length = 50)]
     pub first_name: String,
+    #[schema(min_length = 1, max_length = 50)]
     pub last_name: String,
     /// One of `code`, `design`, `game`, `security`.
+    #[schema(pattern = r"^(code|design|game|security)$")]
     pub skill_domain: String,
     /// ISO 3166-1 alpha-2 country code (e.g. `SN`).
+    #[schema(pattern = r"^[A-Z]{2}$")]
     pub country: Option<String>,
+    #[schema(max_length = 100)]
     pub city: Option<String>,
-    /// Must be true — user acknowledges Terms of Service and Privacy Policy.
-    #[serde(default)]
+    /// Must be `true` — user acknowledges Terms of Service and Privacy Policy.
+    /// Custom deserializer ne laisse passer que `true` ; le schéma associé
+    /// (schema_with) émet `{ type: boolean, const: true }` pour que
+    /// schemathesis ne génère jamais `false`.
+    #[serde(deserialize_with = "deserialize_true_bool")]
+    #[schema(schema_with = terms_accepted_schema)]
     pub terms_accepted: bool,
+}
+
+/// Refuse toute valeur autre que `true` au niveau serde/DTO. Message d'erreur
+/// aligné sur le validator serveur — même code (400) pour la même intention.
+fn deserialize_true_bool<'de, D>(deserializer: D) -> Result<bool, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+    let v = bool::deserialize(deserializer)?;
+    if !v {
+        return Err(serde::de::Error::custom(
+            "You must accept the Terms of Service and Privacy Policy",
+        ));
+    }
+    Ok(true)
+}
+
+/// Génère `{ type: boolean, enum: [true] }` — équivalent à `const: true`
+/// que utoipa 5 n'a pas encore comme attribut direct. `enum_values` est une
+/// forme JSON Schema Draft 2020-12 pleinement supportée par schemathesis.
+fn terms_accepted_schema() -> utoipa::openapi::schema::Object {
+    use utoipa::openapi::schema::{ObjectBuilder, Type};
+    ObjectBuilder::new()
+        .schema_type(utoipa::openapi::schema::SchemaType::Type(Type::Boolean))
+        .enum_values(Some(vec![serde_json::json!(true)]))
+        .description(Some(
+            "Must be true — user acknowledges Terms of Service and Privacy Policy",
+        ))
+        .build()
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]

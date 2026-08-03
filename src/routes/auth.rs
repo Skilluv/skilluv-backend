@@ -317,31 +317,14 @@ pub struct RegisterRequest {
     /// Custom deserializer ne laisse passer que `true` ; le schéma associé
     /// (schema_with) émet `{ type: boolean, const: true }` pour que
     /// schemathesis ne génère jamais `false`.
-    // `default` : quand le field est absent, on veut que la validation
-    // metier serveur (if !body.terms_accepted) se declenche avec un 400
-    // clair "You must accept the ToS", plutot qu'un 422 opaque de serde
-    // "missing field". Le deserializer custom ne tourne que si le field
-    // est present avec value=false ; la valeur par defaut (false) skip
-    // le custom deserializer.
-    #[serde(default, deserialize_with = "deserialize_true_bool")]
+    // Absent ou `false` produisent un 400 metier "You must accept the ToS"
+    // via le check `if !body.terms_accepted` cote handler. `serde(default)`
+    // evite un 422 serde "missing field" quand le field est omis.
+    // Cote schema, `terms_accepted_schema` emet `const: true` pour que
+    // schemathesis positive_data_acceptance ne genere que true.
+    #[serde(default)]
     #[schema(schema_with = terms_accepted_schema)]
     pub terms_accepted: bool,
-}
-
-/// Refuse toute valeur autre que `true` au niveau serde/DTO. Message d'erreur
-/// aligné sur le validator serveur — même code (400) pour la même intention.
-fn deserialize_true_bool<'de, D>(deserializer: D) -> Result<bool, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    use serde::Deserialize;
-    let v = bool::deserialize(deserializer)?;
-    if !v {
-        return Err(serde::de::Error::custom(
-            "You must accept the Terms of Service and Privacy Policy",
-        ));
-    }
-    Ok(true)
 }
 
 /// Génère `{ type: boolean, enum: [true] }` — équivalent à `const: true`
@@ -450,13 +433,12 @@ pub struct CompleteProfileRequest {
     /// Must be `true` — user acknowledges ToS + Privacy Policy. Voir
     /// `deserialize_true_bool` + `terms_accepted_schema` sur RegisterRequest
     /// pour l'explication du couple serde/utoipa.
-    // `default` : quand le field est absent, on veut que la validation
-    // metier serveur (if !body.terms_accepted) se declenche avec un 400
-    // clair "You must accept the ToS", plutot qu'un 422 opaque de serde
-    // "missing field". Le deserializer custom ne tourne que si le field
-    // est present avec value=false ; la valeur par defaut (false) skip
-    // le custom deserializer.
-    #[serde(default, deserialize_with = "deserialize_true_bool")]
+    // Absent ou `false` produisent un 400 metier "You must accept the ToS"
+    // via le check `if !body.terms_accepted` cote handler. `serde(default)`
+    // evite un 422 serde "missing field" quand le field est omis.
+    // Cote schema, `terms_accepted_schema` emet `const: true` pour que
+    // schemathesis positive_data_acceptance ne genere que true.
+    #[serde(default)]
     #[schema(schema_with = terms_accepted_schema)]
     pub terms_accepted: bool,
     /// ISO 3166-1 alpha-2 country code (e.g. `SN`, `CI`, `FR`).

@@ -57,7 +57,12 @@ jobs:
       # IP) et retourne 429 — que schemathesis flagge en
       # positive_data_acceptance ("valid data was rejected"). 429 est un
       # comportement stateful legitime hors du scope contract-test.
-      SKILLUV_RATELIMIT_IP_WHITELIST: "127.0.0.1,::1"
+      # "unknown" est la valeur litterale retournee par extract_ip quand ni
+      # X-Forwarded-For ni X-Real-IP ne sont set — schemathesis appelle
+      # directement localhost sans proxy, donc l identifiant rate-limit est
+      # cette string. On whitelist les trois formes pour couvrir tous les
+      # environnements (dev/staging/CI direct + prod derriere reverse proxy).
+      SKILLUV_RATELIMIT_IP_WHITELIST: "127.0.0.1,::1,unknown"
       RUST_LOG: warn,skilluv_backend=info
 
     steps:

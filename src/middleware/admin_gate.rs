@@ -120,12 +120,14 @@ const _NOTE: StatusCode = StatusCode::FORBIDDEN;
 ///   pour les routes matchées.
 ///
 /// Usage handler :
-///   ```
+///   ```ignore
 ///   async fn my_admin_handler(
 ///       _gate: AdminGate,           // <-- fait le check origin + 2FA
 ///       State(state): State<AppState>,
-///       ...
-///   ) -> Result<..., AppError> { ... }
+///       // ... autres extractors
+///   ) -> Result<Json<Value>, AppError> {
+///       // ... logique métier
+///   }
 ///   ```
 ///
 /// Le champ zero-sized ne porte aucune donnée — sa seule construction via

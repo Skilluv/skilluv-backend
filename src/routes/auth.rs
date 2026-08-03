@@ -1557,6 +1557,14 @@ pub async fn forgot_password(
     State(state): State<AppState>,
     Json(body): Json<ForgotPasswordRequest>,
 ) -> Result<Json<ApiResponse<SimpleMessage>>, AppError> {
+    // Valide d'abord le format email — schema-invalid input doit etre
+    // rejete en 400 (RFC : negative_data_rejection). L'anti-enumeration
+    // s'applique APRES : email format valide + user inexistant -> 200
+    // silencieux. Email malforme (< 5 chars, pas d'@) -> 400, ne leake
+    // pas d'info sur les comptes existants puisque tout email malforme
+    // recoit 400.
+    validate_email(&body.email)?;
+
     // Always return success to prevent email enumeration
     let response = ApiResponse::new(SimpleMessage::new(
         "If an account exists with this email, a reset link has been sent",

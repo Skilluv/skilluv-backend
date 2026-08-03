@@ -128,7 +128,7 @@ jobs:
             --max-examples=25 \
             --seed=42 \
             --workers=4 \
-            --exitfirst
+            --max-failures=1
 
       - name: Stop backend
         if: always()

@@ -53,7 +53,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         (url = "/", description = "Same-origin (typical Coolify deploy)"),
         (url = "http://localhost:3001", description = "Local dev"),
     ),
-    modifiers(&SecurityAddon),
+    modifiers(&SecurityAddon, &CommonErrorResponsesAddon),
     paths(
         // ─── auth ─────────────────────────────────────────────────
         crate::routes::auth::verify_email,
@@ -1107,6 +1107,64 @@ pub struct ApiDoc;
 ///
 /// Individual handlers reference these via `security(("cookie_auth" = []))`
 /// in their `#[utoipa::path]` annotation.
+/// Injecte les réponses d'erreur communes (4xx/5xx) sur *toutes* les
+/// operations du document OpenAPI. Motivation :
+///
+/// Chaque handler du crate peut retourner `AppError` (~30 variants mappés à
+/// ~10 codes HTTP distincts) via `?`, mais utoipa ne peut pas inférer ça
+/// depuis le type de retour `Result<..., AppError>`. Déclarer manuellement
+/// `responses(...)` sur 500+ handlers pour lister 400/401/403/404/500 est
+/// intenable et se déphase à la moindre refacto.
+///
+/// Ce modifier remplit le trou : il ajoute les codes d'erreur communs à
+/// chaque operation, SAUF si le handler a déjà déclaré ce code (auquel cas
+/// on respecte la déclaration explicite, souvent plus précise). Résultat :
+/// schemathesis ne râle plus sur un 400 renvoyé mais non-documenté.
+///
+/// Non-régressif : on ne touche pas aux 2xx explicites, on n'écrase jamais
+/// une déclaration existante, on ne change pas les schémas de body.
+struct CommonErrorResponsesAddon;
+
+impl Modify for CommonErrorResponsesAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        use utoipa::openapi::response::ResponseBuilder;
+
+        // (status, description) — description bien lue par les IDE Swagger,
+        // pas critique pour la conformité schemathesis.
+        const COMMON_ERRORS: &[(&str, &str)] = &[
+            ("400", "Validation error / bad request payload"),
+            ("401", "Authentication required or token invalid"),
+            ("403", "Forbidden — caller lacks the required capability"),
+            ("404", "Resource not found"),
+            ("409", "Conflict — resource state prevents the operation"),
+            ("422", "Semantic validation error (well-formed but invalid)"),
+            ("429", "Rate limit exceeded"),
+            ("500", "Internal server error"),
+        ];
+
+        for path_item in openapi.paths.paths.values_mut() {
+            let ops = [
+                path_item.get.as_mut(),
+                path_item.put.as_mut(),
+                path_item.post.as_mut(),
+                path_item.delete.as_mut(),
+                path_item.patch.as_mut(),
+                path_item.options.as_mut(),
+                path_item.head.as_mut(),
+                path_item.trace.as_mut(),
+            ];
+            for op in ops.into_iter().flatten() {
+                for (status, desc) in COMMON_ERRORS {
+                    op.responses
+                        .responses
+                        .entry(status.to_string())
+                        .or_insert_with(|| ResponseBuilder::new().description(*desc).build().into());
+                }
+            }
+        }
+    }
+}
+
 struct SecurityAddon;
 
 impl Modify for SecurityAddon {

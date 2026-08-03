@@ -493,9 +493,9 @@ pub async fn fraud_revoke(
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
 pub struct ModeratePostBody {
     /// `hide` (soft-delete) | `lock` | `unlock` | `unhide`.
-    #[schema(max_length = 10000)]
+    #[schema(pattern = r"^(hide|lock|unlock|unhide)$")]
     pub action: String,
-    #[schema(max_length = 10000)]
+    #[schema(max_length = 2000)]
     pub reason: String,
 }
 

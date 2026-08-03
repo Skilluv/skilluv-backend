@@ -71,7 +71,7 @@ pub struct ClaimResponse {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct SubmitReviewBody {
     /// `approve`, `request_changes`, `reject`, `abstain`.
-    #[schema(max_length = 10000)]
+    #[schema(pattern = r"^(approve|request_changes|reject|abstain)$")]
     pub verdict: String,
     #[schema(max_length = 10000)]
     pub body: String,

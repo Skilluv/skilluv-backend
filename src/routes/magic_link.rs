@@ -57,11 +57,16 @@ fn hash_token(token: &str) -> Vec<u8> {
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct MagicLinkRequestBody {
-    #[schema(example = "user@example.com")]
+    #[schema(
+        format = "email",
+        min_length = 5,
+        max_length = 255,
+        example = "user@example.com"
+    )]
     pub email: String,
     /// `"login"` (default) or `"signup"`. A signup-intent link creates
     /// the user on consumption if no account matches the email.
-    #[schema(example = "login")]
+    #[schema(pattern = r"^(login|signup)$", example = "login")]
     pub intent: Option<String>,
 }
 
@@ -154,6 +159,7 @@ pub async fn request_link(
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct MagicLinkConsumeBody {
     /// Raw 26-char base-32 token from the emailed link.
+    #[schema(min_length = 20, max_length = 40, pattern = r"^[A-Z2-7]+$")]
     pub token: String,
 }
 

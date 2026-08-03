@@ -22,14 +22,18 @@ pub fn report_routes() -> Router<AppState> {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateReportRequest {
     /// One of `user`, `challenge`, `message`, `enterprise`.
-    #[schema(example = "user")]
+    #[schema(pattern = r"^(user|challenge|message|enterprise)$", example = "user")]
     pub target_type: String,
     pub target_id: Uuid,
     /// One of `spam`, `harassment`, `inappropriate`, `cheating`,
     /// `fake_profile`, `other`.
-    #[schema(example = "harassment")]
+    #[schema(
+        pattern = r"^(spam|harassment|inappropriate|cheating|fake_profile|other)$",
+        example = "harassment"
+    )]
     pub reason: String,
     /// Free-text details, up to 2000 chars.
+    #[schema(max_length = 2000)]
     pub details: Option<String>,
 }
 

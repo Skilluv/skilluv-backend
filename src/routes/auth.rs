@@ -355,21 +355,27 @@ fn terms_accepted_schema() -> utoipa::openapi::schema::Object {
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct LoginRequest {
     /// Email or username.
+    #[schema(min_length = 3, max_length = 255)]
     pub identifier: String,
+    #[schema(min_length = 1, max_length = 128)]
     pub password: String,
     /// Live 6-digit TOTP code — required when the account has TOTP 2FA
     /// enabled and no `backup_code` is provided.
+    #[schema(pattern = r"^[0-9]{6}$")]
     pub totp_code: Option<String>,
     /// Email 2FA code — required on the second call to /login when the
     /// account has email 2FA enabled.
+    #[schema(pattern = r"^[0-9]{6}$")]
     pub email_2fa_code: Option<String>,
     /// One-time TOTP backup code (used when the user lost their authenticator).
+    #[schema(min_length = 8, max_length = 32)]
     pub backup_code: Option<String>,
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
 pub struct VerifyEmailQuery {
     /// One-shot verification token sent by email. Consumed after first use.
+    #[schema(min_length = 20, max_length = 128)]
     pub token: String,
 }
 
@@ -377,46 +383,74 @@ pub struct VerifyEmailQuery {
 pub struct ForgotPasswordRequest {
     /// Email address whose account should receive the reset link. The
     /// endpoint always returns 200 to prevent account enumeration.
-    #[schema(example = "user@example.com")]
+    #[schema(
+        format = "email",
+        min_length = 5,
+        max_length = 255,
+        example = "user@example.com"
+    )]
     pub email: String,
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct ResetPasswordRequest {
     /// One-shot token from the reset email (valid 1h, single-use).
+    #[schema(min_length = 20, max_length = 128)]
     pub token: String,
     /// New password. Must meet policy: 10–128 chars, upper+lower+digit+symbol.
+    #[schema(
+        min_length = 10,
+        max_length = 128,
+        pattern = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9\s]).+$"
+    )]
     pub new_password: String,
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct ChangePasswordRequest {
     /// Existing password, re-entered to authorize the change.
+    #[schema(min_length = 1, max_length = 128)]
     pub current_password: String,
     /// New password. Must meet policy: 10–128 chars, upper+lower+digit+symbol.
+    #[schema(
+        min_length = 10,
+        max_length = 128,
+        pattern = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9\s]).+$"
+    )]
     pub new_password: String,
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct ChangeEmailRequest {
+    #[schema(min_length = 1, max_length = 128)]
     pub current_password: String,
     /// New email address — must not already be in use. A confirmation
     /// email is sent there; the change only lands once the recipient
     /// clicks the confirmation link.
-    #[schema(example = "new-address@example.com")]
+    #[schema(
+        format = "email",
+        min_length = 5,
+        max_length = 255,
+        example = "new-address@example.com"
+    )]
     pub new_email: String,
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct CompleteProfileRequest {
     /// One of `code`, `design`, `game`, `security`.
-    #[schema(example = "code")]
+    #[schema(pattern = r"^(code|design|game|security)$", example = "code")]
     pub skill_domain: String,
-    /// Must be `true` — user acknowledges ToS + Privacy Policy.
-    #[serde(default)]
+    /// Must be `true` — user acknowledges ToS + Privacy Policy. Voir
+    /// `deserialize_true_bool` + `terms_accepted_schema` sur RegisterRequest
+    /// pour l'explication du couple serde/utoipa.
+    #[serde(deserialize_with = "deserialize_true_bool")]
+    #[schema(schema_with = terms_accepted_schema)]
     pub terms_accepted: bool,
     /// ISO 3166-1 alpha-2 country code (e.g. `SN`, `CI`, `FR`).
+    #[schema(pattern = r"^[A-Z]{2}$")]
     pub country: Option<String>,
+    #[schema(max_length = 100)]
     pub city: Option<String>,
 }
 
@@ -424,13 +458,14 @@ pub struct CompleteProfileRequest {
 pub struct ConfirmEmailChangeQuery {
     /// One-shot confirmation token from the email sent to the new
     /// address. Valid 1h, single-use.
+    #[schema(min_length = 20, max_length = 128)]
     pub token: String,
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct TotpCodeRequest {
     /// Live 6-digit TOTP code from the authenticator app.
-    #[schema(example = "123456")]
+    #[schema(pattern = r"^[0-9]{6}$", example = "123456")]
     pub code: String,
 }
 
@@ -439,8 +474,10 @@ pub struct TotpCodeRequest {
 /// alone can't unlock the account. Modeled on GitHub / Google's flow.
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct TotpDisableRequest {
+    #[schema(min_length = 1, max_length = 128)]
     pub password: String,
     /// Live 6-digit TOTP code from the authenticator app.
+    #[schema(pattern = r"^[0-9]{6}$")]
     pub code: String,
 }
 
@@ -449,22 +486,27 @@ pub struct TotpDisableRequest {
 /// unrelated fields of `ChangePasswordRequest` that caused BE-P0-04.
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct PasswordConfirmRequest {
+    #[schema(min_length = 1, max_length = 128)]
     pub password: String,
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct DeleteAccountRequest {
+    #[schema(min_length = 1, max_length = 128)]
     pub password: String,
     /// Required when TOTP 2FA is enabled — otherwise ignored.
+    #[schema(pattern = r"^[0-9]{6}$")]
     pub totp_code: Option<String>,
     /// Free-text reason captured for the audit trail (RGPD compliance).
     /// Optional — front sends it when the user filled the "why leaving?" prompt.
+    #[schema(max_length = 2000)]
     pub reason: Option<String>,
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct Email2faVerifyRequest {
     /// 6-digit code received by email.
+    #[schema(pattern = r"^[0-9]{6}$")]
     pub code: String,
     /// Needed for login flow (user not yet authenticated).
     pub user_id: Option<Uuid>,

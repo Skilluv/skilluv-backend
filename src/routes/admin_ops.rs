@@ -147,6 +147,7 @@ pub async fn admin_sweep_proof_hooks(
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
 pub struct GdprExportBody {
     /// Raison obligatoire (audit trail).
+    #[schema(max_length = 10000)]
     pub reason: String,
 }
 
@@ -396,9 +397,12 @@ pub async fn admin_list_badge_events(
 
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
 pub struct CreateEventBody {
+    #[schema(max_length = 10000)]
     pub slug: String,
+    #[schema(max_length = 10000)]
     pub name: String,
     #[serde(default)]
+    #[schema(max_length = 10000)]
     pub description: Option<String>,
     pub starts_at: chrono::DateTime<chrono::Utc>,
     #[serde(default)]

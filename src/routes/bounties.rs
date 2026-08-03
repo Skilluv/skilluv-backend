@@ -143,8 +143,11 @@ fn meta_array(meta: &Value, key: &str) -> Vec<String> {
 
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
 pub struct ListQuery {
+    #[schema(max_length = 10000)]
     pub status: Option<String>,
+    #[schema(max_length = 10000)]
     pub skill: Option<String>,
+    #[schema(max_length = 10000)]
     pub tag: Option<String>,
     pub page: Option<i64>,
     pub per_page: Option<i64>,
@@ -308,12 +311,18 @@ pub async fn get_bounty(
 
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
 pub struct CreateBountyBody {
+    #[schema(max_length = 10000)]
     pub repo_owner: String,
+    #[schema(max_length = 10000)]
     pub repo_name: String,
     pub issue_number: i32,
+    #[schema(max_length = 10000)]
     pub issue_url: String,
+    #[schema(max_length = 10000)]
     pub title: String,
+    #[schema(max_length = 10000)]
     pub description: String,
+    #[schema(max_length = 10000)]
     pub reward_credits: String,
     pub fragments_bonus: Option<i32>,
     pub required_skills: Option<Vec<String>>,
@@ -469,6 +478,7 @@ pub async fn claim_bounty(
 
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
 pub struct SubmitPrBody {
+    #[schema(max_length = 10000)]
     pub pull_request_url: String,
     pub pull_request_number: i32,
 }

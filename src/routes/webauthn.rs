@@ -74,6 +74,7 @@ fn build_refresh_cookie(session_id: Uuid, token: &str) -> String {
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct RegisterStartRequest {
     /// Optional user-facing label ("MacBook Touch ID", "Yubikey 5C") — persisted at finish.
+    #[schema(max_length = 10000)]
     pub label: Option<String>,
 }
 
@@ -259,6 +260,7 @@ pub async fn list_credentials(
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct RenameRequest {
+    #[schema(max_length = 10000)]
     pub label: String,
 }
 
@@ -322,6 +324,7 @@ pub async fn delete_credential(
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct LoginStartRequest {
     /// Email OR username. Used to look up the credentials to send back to the browser.
+    #[schema(max_length = 10000)]
     pub identifier: String,
 }
 

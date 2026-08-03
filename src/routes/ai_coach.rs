@@ -302,6 +302,7 @@ async fn build_analyze_request(
 pub struct SuggestBody {
     /// `"africa"` or `"international"`. Defaults to `international`.
     #[serde(default)]
+    #[schema(max_length = 10000)]
     pub target_market: Option<String>,
     /// Clamped to `[1, 10]`. Defaults to 3.
     #[serde(default)]

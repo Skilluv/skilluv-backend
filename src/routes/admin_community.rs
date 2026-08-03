@@ -28,6 +28,7 @@ async fn require_admin(state: &AppState, auth: &AuthUser) -> Result<(), AppError
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct RejectRequest {
     /// Feedback shown to the creator and stored in `review_feedback`.
+    #[schema(max_length = 10000)]
     pub feedback: String,
 }
 

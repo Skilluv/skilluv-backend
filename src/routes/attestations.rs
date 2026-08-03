@@ -131,7 +131,9 @@ pub async fn verify_attestation(
 pub struct CompagnonnageBody {
     pub user_id: Uuid,
     pub project_id: Uuid,
+    #[schema(max_length = 10000)]
     pub title: String,
+    #[schema(max_length = 10000)]
     pub description: String,
     pub linked_deliverable_ids: Vec<Uuid>,
     pub linked_skill_node_ids: Vec<Uuid>,
@@ -145,6 +147,7 @@ pub struct IssueAttestationResponse {
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct RevokeBody {
+    #[schema(max_length = 10000)]
     pub reason: String,
 }
 

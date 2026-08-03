@@ -156,14 +156,21 @@ pub struct TenantsListResponse {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateTenantBody {
     /// Lowercase alphanumeric with dashes, >= 2 chars. Unique.
+    #[schema(max_length = 10000)]
     pub slug: String,
+    #[schema(max_length = 10000)]
     pub name: String,
+    #[schema(max_length = 10000)]
     pub subdomain: Option<String>,
+    #[schema(max_length = 10000)]
     pub contact_email: String,
     /// `starter` (default), `pro`, `enterprise`.
+    #[schema(max_length = 10000)]
     pub plan: Option<String>,
     pub max_users: Option<i32>,
+    #[schema(max_length = 10000)]
     pub primary_color: Option<String>,
+    #[schema(max_length = 10000)]
     pub logo_url: Option<String>,
 }
 
@@ -174,12 +181,19 @@ pub struct TenantCreatedResponse {
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateTenantBody {
+    #[schema(max_length = 10000)]
     pub name: Option<String>,
+    #[schema(max_length = 10000)]
     pub subdomain: Option<String>,
+    #[schema(max_length = 10000)]
     pub custom_domain: Option<String>,
+    #[schema(max_length = 10000)]
     pub logo_url: Option<String>,
+    #[schema(max_length = 10000)]
     pub primary_color: Option<String>,
+    #[schema(max_length = 10000)]
     pub secondary_color: Option<String>,
+    #[schema(max_length = 10000)]
     pub plan: Option<String>,
     pub max_users: Option<i32>,
     pub active: Option<bool>,
@@ -212,6 +226,7 @@ pub struct AddMemberBody {
     pub user_id: Uuid,
     /// Defaults to `member`. One of `member`, `instructor`, `admin`,
     /// `owner`.
+    #[schema(max_length = 10000)]
     pub role: Option<String>,
 }
 
@@ -237,6 +252,7 @@ pub struct CohortsResponse {
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateCohortBody {
+    #[schema(max_length = 10000)]
     pub name: String,
     pub starts_at: Option<chrono::DateTime<chrono::Utc>>,
     pub ends_at: Option<chrono::DateTime<chrono::Utc>>,

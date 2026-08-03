@@ -128,17 +128,21 @@ pub struct MyOrientationsResponse {
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct RegisterBody {
+    #[schema(max_length = 10000)]
     pub slug: String,
     /// `learning` (default) or `active`.
     #[serde(default = "default_mode")]
+    #[schema(max_length = 10000)]
     pub mode: String,
     #[serde(default)]
     pub is_primary: bool,
     #[serde(default)]
     pub working_languages: Option<Vec<String>>,
     #[serde(default)]
+    #[schema(max_length = 10000)]
     pub timezone: Option<String>,
     #[serde(default)]
+    #[schema(max_length = 10000)]
     pub notes: Option<String>,
 }
 
@@ -155,10 +159,13 @@ pub struct RegisterOrientationResponse {
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateBody {
+    #[schema(max_length = 10000)]
     pub mode: Option<String>,
     pub is_primary: Option<bool>,
     pub working_languages: Option<Vec<String>>,
+    #[schema(max_length = 10000)]
     pub timezone: Option<String>,
+    #[schema(max_length = 10000)]
     pub notes: Option<String>,
 }
 

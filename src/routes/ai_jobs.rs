@@ -33,8 +33,10 @@ pub struct CodeReviewBody {
     pub submission_id: Uuid,
     pub challenge_id: Uuid,
     /// Judge0 language slug (`rust`, `python`, …).
+    #[schema(max_length = 10000)]
     pub language: String,
     /// Optional caller-provided level hint. Defaults to `intermediate`.
+    #[schema(max_length = 10000)]
     pub user_level: Option<String>,
 }
 

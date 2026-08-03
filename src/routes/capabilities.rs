@@ -132,9 +132,11 @@ pub async fn my_capabilities(
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct GrantBody {
     /// Capability to grant (see `CapabilityRow.capability` for the enum).
+    #[schema(max_length = 10000)]
     pub capability: String,
     /// Free-text audit reason. Defaults to `admin_grant:by_<uuid>`.
     #[serde(default)]
+    #[schema(max_length = 10000)]
     pub granted_reason: Option<String>,
     /// Auto-expiry; `None` = permanent.
     #[serde(default)]

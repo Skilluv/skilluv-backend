@@ -56,18 +56,21 @@ fn rand_byte() -> u8 {
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct CreateKeyRequest {
+    #[schema(max_length = 10000)]
     pub name: String,
     pub permissions: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct CreateWebhookRequest {
+    #[schema(max_length = 10000)]
     pub url: String,
     pub events: Vec<String>,
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct UpdateWebhookRequest {
+    #[schema(max_length = 10000)]
     pub url: Option<String>,
     pub events: Option<Vec<String>>,
     pub active: Option<bool>,

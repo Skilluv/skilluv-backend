@@ -54,8 +54,10 @@ pub struct RecomputeBody {
     /// `capabilities`, `badges`, `ranks`, `all` — currently accepted
     /// but forced to full recompute internally.
     #[serde(default)]
+    #[schema(max_length = 10000)]
     pub scope: Option<String>,
     #[serde(default)]
+    #[schema(max_length = 10000)]
     pub reason: Option<String>,
 }
 
@@ -183,8 +185,10 @@ pub async fn admin_recompute_proofs(
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct RankOverrideBody {
     /// One of `apprenti`, `ranger`, `artisan`, `maitre`, `doyen`.
+    #[schema(max_length = 10000)]
     pub new_rank: String,
     /// Audit reason — min 8 chars.
+    #[schema(max_length = 10000)]
     pub reason: String,
 }
 

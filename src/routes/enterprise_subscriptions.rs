@@ -46,6 +46,7 @@ async fn current_enterprise_for(db: &sqlx::PgPool, user_id: Uuid) -> Result<Uuid
 pub struct SubscribeBody {
     /// Slug of the subscription pack (see `packs` table where
     /// `kind = 'subscription'`).
+    #[schema(max_length = 10000)]
     pub plan_slug: String,
 }
 

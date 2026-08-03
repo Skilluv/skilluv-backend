@@ -217,6 +217,7 @@ pub async fn community_challenge_approve(
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
 pub struct RejectBody {
     #[serde(alias = "feedback")]
+    #[schema(max_length = 10000)]
     pub reason: String,
 }
 
@@ -351,6 +352,7 @@ pub async fn fraud_flagged_list(
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
 pub struct ReasonBody {
     #[serde(default)]
+    #[schema(max_length = 10000)]
     pub reason: Option<String>,
 }
 
@@ -491,7 +493,9 @@ pub async fn fraud_revoke(
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
 pub struct ModeratePostBody {
     /// `hide` (soft-delete) | `lock` | `unlock` | `unhide`.
+    #[schema(max_length = 10000)]
     pub action: String,
+    #[schema(max_length = 10000)]
     pub reason: String,
 }
 
@@ -572,9 +576,11 @@ pub struct MuteUserBody {
     /// pour admin (utiliser is_banned via un autre endpoint).
     #[serde(default)]
     pub duration_hours: Option<i32>,
+    #[schema(max_length = 10000)]
     pub reason: String,
     /// `forum`, `community`, `all`.
     #[serde(default)]
+    #[schema(max_length = 10000)]
     pub scope: Option<String>,
 }
 

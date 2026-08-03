@@ -53,10 +53,13 @@ async fn current_enterprise_for(db: &sqlx::PgPool, user_id: Uuid) -> Result<Uuid
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct RequestBody {
+    #[schema(max_length = 10000)]
     pub proposed_title: String,
     /// At least 30 chars — enforced server-side.
+    #[schema(max_length = 10000)]
     pub brief: String,
     /// `code`, `design`, `game`, `security`.
+    #[schema(max_length = 10000)]
     pub skill_domain: String,
     pub difficulty: i16,
     pub duration_days: i32,
@@ -113,7 +116,9 @@ pub struct AdminRequestsResponse {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct DecideBody {
     /// `approve`, `reject`, `negotiate`.
+    #[schema(max_length = 10000)]
     pub action: String,
+    #[schema(max_length = 10000)]
     pub admin_notes: Option<String>,
 }
 
@@ -126,7 +131,9 @@ pub struct DecideResponse {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct LinkChallengeBody {
     pub challenge_id: Uuid,
+    #[schema(max_length = 10000)]
     pub sponsor_logo_url: Option<String>,
+    #[schema(max_length = 10000)]
     pub sponsor_blurb: Option<String>,
     pub sponsor_visible_until: chrono::DateTime<chrono::Utc>,
     pub free_contact_until: chrono::DateTime<chrono::Utc>,

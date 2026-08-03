@@ -101,10 +101,14 @@ pub async fn list_posts(
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreatePostBody {
+    #[schema(max_length = 10000)]
     pub category_slug: String,
     /// `question`, `discussion`, `announcement`, …
+    #[schema(max_length = 10000)]
     pub kind: String,
+    #[schema(max_length = 10000)]
     pub title: String,
+    #[schema(max_length = 10000)]
     pub body: String,
     /// Bounty fragments for a question (0 = no bounty).
     pub bounty_fragments: Option<i32>,
@@ -204,7 +208,9 @@ pub async fn get_post(
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct EditPostBody {
+    #[schema(max_length = 10000)]
     pub title: String,
+    #[schema(max_length = 10000)]
     pub body: String,
 }
 

@@ -73,6 +73,7 @@ pub struct MessagesResponse {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct SendMessageBody {
     #[serde(alias = "text")]
+    #[schema(max_length = 10000)]
     pub body: String,
 }
 
@@ -90,6 +91,7 @@ pub struct MarkReadResponse {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct BlockBody {
     pub user_id: Uuid,
+    #[schema(max_length = 10000)]
     pub reason: Option<String>,
 }
 

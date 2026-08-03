@@ -86,9 +86,11 @@ pub async fn get_availability(
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct AvailabilityBody {
     pub available_for_hire: Option<bool>,
+    #[schema(max_length = 10000)]
     pub looking_for: Option<String>,
     pub salary_range_min_eur: Option<i32>,
     pub salary_range_max_eur: Option<i32>,
+    #[schema(max_length = 10000)]
     pub salary_visibility: Option<String>,
 }
 
@@ -434,7 +436,9 @@ pub async fn list_languages(
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct LanguageBody {
+    #[schema(max_length = 10000)]
     pub language: String,
+    #[schema(max_length = 10000)]
     pub proficiency: String,
 }
 

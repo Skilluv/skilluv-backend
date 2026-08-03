@@ -139,8 +139,11 @@ pub async fn get_season(
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateSeasonBody {
+    #[schema(max_length = 10000)]
     pub slug: String,
+    #[schema(max_length = 10000)]
     pub name: String,
+    #[schema(max_length = 10000)]
     pub theme: String,
     pub starts_at: DateTime<Utc>,
     pub ends_at: DateTime<Utc>,
@@ -225,6 +228,7 @@ pub async fn list_project_stewards(
 pub struct AddStewardBody {
     pub user_id: Uuid,
     /// One of the roles in `StewardsService::VALID_ROLES`.
+    #[schema(max_length = 10000)]
     pub role: String,
 }
 

@@ -21,12 +21,16 @@ pub fn sandbox_routes() -> Router<AppState> {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct ExecuteRequest {
     /// Source code. Cap: 100 KB.
+    #[schema(max_length = 10000)]
     pub source_code: String,
     /// Judge0 language slug (`rust`, `python`, `cpp`, …).
+    #[schema(max_length = 10000)]
     pub language: String,
+    #[schema(max_length = 10000)]
     pub stdin: Option<String>,
     /// If provided, Judge0 compares stdout to this and returns status 3
     /// (Accepted) or 4 (Wrong Answer).
+    #[schema(max_length = 10000)]
     pub expected_output: Option<String>,
 }
 

@@ -82,6 +82,7 @@ pub async fn admin_create_season(
 
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
 pub struct StatusBody {
+    #[schema(max_length = 10000)]
     pub status: String,
 }
 
@@ -129,6 +130,7 @@ pub async fn admin_close_season(
 
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
 pub struct ListTournamentsQuery {
+    #[schema(max_length = 10000)]
     pub status: Option<String>,
     pub upcoming: Option<bool>,
     pub limit: Option<i64>,
@@ -269,6 +271,7 @@ pub async fn admin_set_tournament_status(
 
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
 pub struct ScoreBody {
+    #[schema(max_length = 10000)]
     pub participant_type: String,
     pub participant_id: Uuid,
     pub score: i32,

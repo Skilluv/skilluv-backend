@@ -51,10 +51,13 @@ pub struct VapidPublicKeyResponse {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct SubscribeBody {
     /// Endpoint URL returned by `PushManager.subscribe`.
+    #[schema(max_length = 10000)]
     pub endpoint: String,
     /// P-256 ECDH public key (base64url).
+    #[schema(max_length = 10000)]
     pub p256dh: String,
     /// Auth secret (base64url) for AES-GCM encryption.
+    #[schema(max_length = 10000)]
     pub auth: String,
 }
 
@@ -179,10 +182,13 @@ pub async fn unsubscribe(
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct RegisterMobileTokenBody {
     /// `"fcm"` (Android) or `"apns"` (iOS).
+    #[schema(max_length = 10000)]
     pub platform: String,
     /// Opaque provider token from FCM or APNS.
+    #[schema(max_length = 10000)]
     pub token: String,
     /// Stable device id (survives token rotation).
+    #[schema(max_length = 10000)]
     pub device_id: String,
 }
 

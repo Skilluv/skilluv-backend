@@ -36,22 +36,31 @@ fn build_response(data: serde_json::Value) -> serde_json::Value {
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct UpdateProfileRequest {
+    #[schema(max_length = 10000)]
     pub bio: Option<String>,
+    #[schema(max_length = 10000)]
     pub github: Option<String>,
+    #[schema(max_length = 10000)]
     pub linkedin: Option<String>,
+    #[schema(max_length = 10000)]
     pub website: Option<String>,
+    #[schema(max_length = 10000)]
     pub twitter: Option<String>,
+    #[schema(max_length = 10000)]
     pub country: Option<String>,
+    #[schema(max_length = 10000)]
     pub city: Option<String>,
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct UpdateDisplayNameRequest {
+    #[schema(max_length = 10000)]
     pub display_name: String,
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct UpdateSkillDomainRequest {
+    #[schema(max_length = 10000)]
     pub skill_domain: String,
 }
 

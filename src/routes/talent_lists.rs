@@ -78,13 +78,17 @@ pub struct PaginationQuery {
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateListRequest {
+    #[schema(max_length = 10000)]
     pub name: String,
+    #[schema(max_length = 10000)]
     pub description: Option<String>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateListRequest {
+    #[schema(max_length = 10000)]
     pub name: Option<String>,
+    #[schema(max_length = 10000)]
     pub description: Option<String>,
 }
 

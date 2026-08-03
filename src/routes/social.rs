@@ -68,8 +68,10 @@ fn build_response(data: Value) -> Value {
 
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
 pub struct CreateCommentBody {
+    #[schema(max_length = 10000)]
     pub target_type: String,
     pub target_id: Uuid,
+    #[schema(max_length = 10000)]
     pub body: String,
     pub parent_id: Option<Uuid>,
 }
@@ -254,6 +256,7 @@ pub async fn list_comments(
 
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
 pub struct EditCommentBody {
+    #[schema(max_length = 10000)]
     pub body: String,
 }
 
@@ -295,8 +298,10 @@ pub async fn delete_comment(
 
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
 pub struct ToggleReactionBody {
+    #[schema(max_length = 10000)]
     pub target_type: String,
     pub target_id: Uuid,
+    #[schema(max_length = 10000)]
     pub kind: String,
 }
 
@@ -398,6 +403,7 @@ pub async fn my_mentions(
 
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
 pub struct ListTagsQuery {
+    #[schema(max_length = 10000)]
     pub category: Option<String>,
 }
 
@@ -435,6 +441,7 @@ pub async fn list_target_tags(
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
 pub struct TagMapBody {
     pub tag_id: Uuid,
+    #[schema(max_length = 10000)]
     pub target_type: String,
     pub target_id: Uuid,
 }

@@ -265,10 +265,13 @@ pub async fn list(
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateBody {
+    #[schema(max_length = 10000)]
     pub client_name: String,
     #[serde(default)]
+    #[schema(max_length = 10000)]
     pub client_contact_email: Option<String>,
     #[serde(default)]
+    #[schema(max_length = 10000)]
     pub notes: Option<String>,
 }
 
@@ -315,10 +318,13 @@ pub async fn create(
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateBody {
     #[serde(default)]
+    #[schema(max_length = 10000)]
     pub client_name: Option<String>,
     #[serde(default)]
+    #[schema(max_length = 10000)]
     pub client_contact_email: Option<String>,
     #[serde(default)]
+    #[schema(max_length = 10000)]
     pub notes: Option<String>,
     #[serde(default)]
     pub active: Option<bool>,

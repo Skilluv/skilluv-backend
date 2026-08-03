@@ -140,17 +140,23 @@ pub async fn register_start(
     }))))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct RegisterFinishRequest {
+    /// Ceremony handle returned by /register/start.
+    #[schema(min_length = 20, max_length = 128)]
     pub ceremony_handle: String,
+    /// WebAuthn attestation produced by the browser (fido2/webauthn spec).
+    /// Schema opaque — validation delegated to the webauthn-rs crate.
+    #[schema(value_type = serde_json::Value)]
     pub credential: RegisterPublicKeyCredential,
+    #[schema(max_length = 200)]
     pub label: Option<String>,
 }
 
 /// Finish passkey enrolment (browser sends the attestation).
 #[utoipa::path(
     post, path = "/api/auth/webauthn/register/finish", tag = "auth",
-    request_body(content = serde_json::Value, description = "RegisterFinishRequest (webauthn attestation)"),
+    request_body = RegisterFinishRequest,
     responses((status = 200, body = serde_json::Value), (status = 401, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
@@ -399,16 +405,22 @@ pub async fn login_start(
     }))))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct LoginFinishRequest {
+    /// Ceremony handle returned by /login/start, opaque string used to
+    /// look up the stored challenge in Redis.
+    #[schema(min_length = 20, max_length = 128)]
     pub ceremony_handle: String,
+    /// WebAuthn assertion produced by the browser (fido2/webauthn spec).
+    /// Schema opaque — validation delegated to the webauthn-rs crate.
+    #[schema(value_type = serde_json::Value)]
     pub credential: PublicKeyCredential,
 }
 
 /// Finish passkey login (browser sends the assertion). Sets cookies.
 #[utoipa::path(
     post, path = "/api/auth/webauthn/login/finish", tag = "auth",
-    request_body(content = serde_json::Value, description = "LoginFinishRequest (webauthn assertion)"),
+    request_body = LoginFinishRequest,
     responses((status = 200, body = serde_json::Value), (status = 401, body = crate::api_response::ErrorResponse)),
 )]
 pub async fn login_finish(

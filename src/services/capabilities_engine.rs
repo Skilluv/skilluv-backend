@@ -228,6 +228,39 @@ pub async fn recompute_capabilities_for_user(
         .await?;
     }
 
+    // ═══════════════════════════════════════════════════════════════════
+    // P26 — Sas compagnonnage débutant : verified_apprentice
+    // ═══════════════════════════════════════════════════════════════════
+    // Grant après N approbations distinctes (par template_id) du sas.
+    // Seuil paramétrable via SKILLUV_APPRENTICE_SAS_THRESHOLD (default 3).
+    // Compte DISTINCT template_id pour éviter qu'un utilisateur passe le
+    // sas en spammant 3 verdicts sur le même challenge après plusieurs
+    // rejets. Une approbation = un challenge distinct maîtrisé.
+    let threshold: i64 = std::env::var("SKILLUV_APPRENTICE_SAS_THRESHOLD")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(3);
+    let sas_approved: i64 = sqlx::query_scalar(
+        "SELECT COUNT(DISTINCT template_id) FROM apprentice_verifications
+         WHERE apprentice_user_id = $1 AND verdict = 'approved'",
+    )
+    .bind(user_id)
+    .fetch_optional(db)
+    .await
+    .unwrap_or(None)
+    .unwrap_or(0);
+    if sas_approved >= threshold {
+        grant_if_missing(
+            db,
+            user_id,
+            "verified_apprentice",
+            &format!("auto:threshold(sas_approved={sas_approved}/{threshold})"),
+            &mut granted,
+            &mut already,
+        )
+        .await?;
+    }
+
     Ok(RecomputeCapReport {
         granted,
         already_active: already,

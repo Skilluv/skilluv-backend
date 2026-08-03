@@ -96,6 +96,8 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::orientation_routes())
         .nest("/api", routes::onboarding_routes())
         .nest("/api", routes::attestation_routes())
+        // P26 — sas compagnonnage débutant (verified_apprentice unlock).
+        .nest("/api", routes::apprentice_verification_routes())
         .nest("/api", routes::season_routes())
         .nest("/api", routes::portfolio_routes())
         .nest("/api", admin_gate(routes::admin_routes()))

@@ -76,15 +76,21 @@ jobs:
       - name: Setup sccache
         uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba  # v0.0.11
 
-      - name: Cache cargo registry & build
+      - name: Cache cargo registry & git
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6
         with:
+          # `target/` deliberately EXCLUDED : it grew to ~9 GB after we
+          # added sqlx offline data + utoipa spec generation, and the
+          # save/restore round-trip alone was blowing the job timeout
+          # (7 min download + 4+ min upload out of a 25 min budget).
+          # sccache handles compile-unit caching for us via the GHA
+          # cache API — no need to also snapshot target/. Registry + git
+          # dirs stay cached to avoid re-downloading crates.io deps.
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-registry-
 
       - name: Check formatting
         run: cargo fmt --all -- --check

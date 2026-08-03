@@ -93,6 +93,7 @@ fn default_true() -> bool {
     security(("cookie_auth" = [])),
 )]
 pub async fn create_project(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<CreateProjectBody>,
@@ -199,6 +200,7 @@ struct PatchProjectBody {
     security(("cookie_auth" = [])),
 )]
 pub async fn patch_project(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(slug): Path<String>,
@@ -277,6 +279,7 @@ pub async fn patch_project(
     security(("cookie_auth" = [])),
 )]
 pub async fn archive_project(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(slug): Path<String>,
@@ -344,6 +347,7 @@ struct ListQuery {
     security(("cookie_auth" = [])),
 )]
 pub async fn list_projects(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<ListQuery>,
@@ -495,6 +499,7 @@ struct ProjectFullRow {
     security(("cookie_auth" = [])),
 )]
 pub async fn get_project(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(slug): Path<String>,

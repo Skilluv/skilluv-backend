@@ -99,6 +99,7 @@ pub struct OpsHealthResponse {
     security(("cookie_auth" = [])),
 )]
 pub async fn overview(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<ApiResponse<AdminOverviewResponse>>, AppError> {
@@ -173,6 +174,7 @@ pub async fn overview(
     security(("cookie_auth" = [])),
 )]
 pub async fn financial(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<ApiResponse<AdminFinancialResponse>>, AppError> {
@@ -233,6 +235,7 @@ pub async fn financial(
     security(("cookie_auth" = [])),
 )]
 pub async fn moderation_queue(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<ApiResponse<ModerationQueueResponse>>, AppError> {
@@ -281,6 +284,7 @@ pub async fn moderation_queue(
     security(("cookie_auth" = [])),
 )]
 pub async fn ops_health(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<ApiResponse<OpsHealthResponse>>, AppError> {

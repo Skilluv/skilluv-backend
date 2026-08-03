@@ -80,6 +80,7 @@ pub struct SweepQuery {
     security(("cookie_auth" = [])),
 )]
 pub async fn admin_sweep_proof_hooks(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<SweepQuery>,
@@ -158,6 +159,7 @@ pub struct GdprExportBody {
     security(("cookie_auth" = [])),
 )]
 pub async fn admin_trigger_gdpr_export(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(target_id): Path<Uuid>,
@@ -237,6 +239,7 @@ pub async fn admin_trigger_gdpr_export(
     security(("cookie_auth" = [])),
 )]
 pub async fn admin_recompute_capabilities(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(target_id): Path<Uuid>,
@@ -317,6 +320,7 @@ pub struct ListEventsQuery {
     security(("cookie_auth" = [])),
 )]
 pub async fn admin_list_badge_events(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<ListEventsQuery>,
@@ -413,6 +417,7 @@ pub struct CreateEventBody {
     security(("cookie_auth" = [])),
 )]
 pub async fn admin_create_badge_event(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<CreateEventBody>,

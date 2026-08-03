@@ -88,6 +88,7 @@ struct QueueQuery {
     security(("cookie_auth" = [])),
 )]
 pub async fn fraud_queue(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<QueueQuery>,
@@ -143,6 +144,7 @@ pub async fn fraud_queue(
     security(("cookie_auth" = [])),
 )]
 pub async fn mark_deliverable_valid(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -183,6 +185,7 @@ struct RevokeBody {
     security(("cookie_auth" = [])),
 )]
 pub async fn revoke_deliverable(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -219,6 +222,7 @@ pub async fn revoke_deliverable(
     security(("cookie_auth" = [])),
 )]
 pub async fn mark_user_valid(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -257,6 +261,7 @@ struct ScanQuery {
     security(("cookie_auth" = [])),
 )]
 pub async fn scan_deliverable_endpoint(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -293,6 +298,7 @@ struct DetectBody {
     security(("cookie_auth" = [])),
 )]
 pub async fn detect_multi_accounts_endpoint(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<DetectBody>,
@@ -324,6 +330,7 @@ pub async fn detect_multi_accounts_endpoint(
     security(("cookie_auth" = [])),
 )]
 pub async fn llm_evaluate_endpoint(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -372,6 +379,7 @@ struct DeepScanQuery {
     security(("cookie_auth" = [])),
 )]
 pub async fn deep_plagiarism_scan_endpoint(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,

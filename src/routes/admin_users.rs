@@ -79,6 +79,7 @@ pub struct RecomputeBody {
     security(("cookie_auth" = [])),
 )]
 pub async fn admin_recompute_proofs(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(target_id): Path<Uuid>,
@@ -206,6 +207,7 @@ pub struct RankOverrideBody {
     security(("cookie_auth" = [])),
 )]
 pub async fn admin_rank_override(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(target_id): Path<Uuid>,

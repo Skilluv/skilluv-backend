@@ -150,6 +150,7 @@ struct CreateRuleBody {
     security(("cookie_auth" = [])),
 )]
 pub async fn create_rule(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<CreateRuleBody>,
@@ -277,6 +278,7 @@ struct PatchRuleBody {
     security(("cookie_auth" = [])),
 )]
 pub async fn patch_rule(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(slug): Path<String>,
@@ -441,6 +443,7 @@ struct DeprecateBody {
     security(("cookie_auth" = [])),
 )]
 pub async fn deprecate_rule(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(slug): Path<String>,

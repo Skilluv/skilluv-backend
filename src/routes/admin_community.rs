@@ -69,6 +69,7 @@ pub struct AdminChallengeDecisionResponse {
     security(("cookie_auth" = [])),
 )]
 pub async fn pending_review(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<ApiResponse<PendingReviewResponse>>, AppError> {
@@ -132,6 +133,7 @@ pub async fn pending_review(
     security(("cookie_auth" = [])),
 )]
 pub async fn approve_challenge(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -243,6 +245,7 @@ pub async fn approve_challenge(
     security(("cookie_auth" = [])),
 )]
 pub async fn reject_challenge(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,

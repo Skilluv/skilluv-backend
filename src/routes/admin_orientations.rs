@@ -96,6 +96,7 @@ struct CreateOrientationBody {
     security(("cookie_auth" = [])),
 )]
 pub async fn create_orientation(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<CreateOrientationBody>,
@@ -203,6 +204,7 @@ struct PatchOrientationBody {
     security(("cookie_auth" = [])),
 )]
 pub async fn patch_orientation(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(slug): Path<String>,
@@ -329,6 +331,7 @@ struct AttachSkillBody {
     security(("cookie_auth" = [])),
 )]
 pub async fn attach_skill(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(slug): Path<String>,
@@ -418,6 +421,7 @@ pub async fn attach_skill(
     security(("cookie_auth" = [])),
 )]
 pub async fn detach_skill(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path((slug, skill_id)): Path<(String, Uuid)>,

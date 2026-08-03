@@ -99,6 +99,7 @@ pub struct AdminOpsEnvelope<T: ToSchema> {
     security(("cookie_auth" = [])),
 )]
 pub async fn hello_wall_mirror_run(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<AdminOpsEnvelope<HelloWallMirrorReport>>, AppError> {
@@ -153,6 +154,7 @@ pub async fn hello_wall_mirror_run(
     security(("cookie_auth" = [])),
 )]
 pub async fn profile_readme_sync_run(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<AdminOpsEnvelope<ProfileReadmeSyncReport>>, AppError> {
@@ -197,6 +199,7 @@ pub async fn profile_readme_sync_run(
     security(("cookie_auth" = [])),
 )]
 pub async fn recompute_badges_for_user(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(user_id): Path<Uuid>,

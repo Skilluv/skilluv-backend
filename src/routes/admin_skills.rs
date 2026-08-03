@@ -94,6 +94,7 @@ struct ListQuery {
     security(("cookie_auth" = [])),
 )]
 pub async fn list_skills(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<ListQuery>,
@@ -203,6 +204,7 @@ struct CreateSkillBody {
     security(("cookie_auth" = [])),
 )]
 pub async fn create_skill(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<CreateSkillBody>,
@@ -313,6 +315,7 @@ struct UpdateSkillBody {
     security(("cookie_auth" = [])),
 )]
 pub async fn update_skill(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,

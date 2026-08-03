@@ -102,3 +102,73 @@ fn extract_user_id_from_headers(headers: &HeaderMap, state: &AppState) -> Option
 // de wrapper `(StatusCode, Json)` manuellement.
 #[allow(dead_code)]
 const _NOTE: StatusCode = StatusCode::FORBIDDEN;
+
+/// Extracteur "porte admin" — équivalent aux deux middleware ci-dessus mais
+/// consommé au niveau handler (via la signature de fonction). Motivation :
+///
+///   Les middleware `ensure_admin_origin` / `ensure_admin_2fa` appliqués
+///   via `Router::layer(...)` interceptent TOUTES les requêtes qui atteignent
+///   le router, y compris celles dont la méthode ne matche aucun handler
+///   déclaré. Résultat : PUT sur une route POST-only reçoit 403 (défense
+///   en profondeur qui masque la structure) avant qu'axum ne puisse
+///   répondre 405. Schemathesis flaggue ça comme unsupported_methods.
+///
+///   Un extracteur, lui, ne s'exécute QUE si le handler est effectivement
+///   invoqué — donc uniquement quand la (path, method) matche. Une méthode
+///   non-déclarée retombe sur le fallback axum par défaut = 405 sans que
+///   l'extracteur ne tourne. Sémantique REST correcte, sécurité préservée
+///   pour les routes matchées.
+///
+/// Usage handler :
+///   ```
+///   async fn my_admin_handler(
+///       _gate: AdminGate,           // <-- fait le check origin + 2FA
+///       State(state): State<AppState>,
+///       ...
+///   ) -> Result<..., AppError> { ... }
+///   ```
+///
+/// Le champ zero-sized ne porte aucune donnée — sa seule construction via
+/// `from_request_parts` valide que la requête a passé les deux checks.
+pub struct AdminGate;
+
+impl axum::extract::FromRequestParts<AppState> for AdminGate {
+    type Rejection = axum::response::Response;
+
+    async fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        // (1) BE-C — origin check.
+        if !crate::routes::is_admin_origin(&parts.headers) {
+            return Err(AppError::AdminOriginRequired.into_response());
+        }
+
+        // (2) BE-A — 2FA check. Même logique que ensure_admin_2fa, en
+        // best-effort : DB error ou absence de session laisse passer,
+        // seul un admin sans 2FA est bloqué.
+        if let Some(user_id) = extract_user_id_from_headers(&parts.headers, state) {
+            let row: Option<(String, bool, bool)> = sqlx::query_as(
+                r#"
+                SELECT u.role, u.totp_enabled,
+                       EXISTS(SELECT 1 FROM webauthn_credentials WHERE user_id = u.id)
+                FROM users u WHERE u.id = $1
+                "#,
+            )
+            .bind(user_id)
+            .fetch_optional(&state.db)
+            .await
+            .unwrap_or(None);
+
+            if let Some((role, totp_enabled, has_passkey)) = row
+                && role == "admin"
+                && !totp_enabled
+                && !has_passkey
+            {
+                return Err(AppError::AdminTwoFaSetupRequired.into_response());
+            }
+        }
+
+        Ok(AdminGate)
+    }
+}

@@ -70,23 +70,17 @@ pub fn build_router(state: AppState) -> Router {
     // les routers réservés aux surfaces admin (origin check + 2FA mandatory).
     // L'ordre importe : `ensure_admin_origin` d'abord (rejette avant même de
     // consulter la DB), puis `ensure_admin_2fa` (lookup role + totp/passkey).
-    // `route_layer` (et non `layer`) : le middleware n'intercepte QUE les
-    // requêtes qui matchent effectivement une (route, méthode). Une
-    // requête vers un path admin avec une méthode non-déclarée (ex :
-    // PUT sur POST /admin/badge-events) retombe sur le 405 par défaut
-    // d'axum sans passer par l'admin_gate — respecte l'attente
-    // schemathesis unsupported_methods sans affaiblir la défense en
-    // profondeur : les routes matchées passent toujours par 2FA + origin.
-    let admin_gate = |r: Router<AppState>| {
-        r.route_layer(axum::middleware::from_fn_with_state(
-            state.clone(),
-            middleware::admin_gate::ensure_admin_2fa,
-        ))
-        .route_layer(axum::middleware::from_fn_with_state(
-            state.clone(),
-            middleware::admin_gate::ensure_admin_origin,
-        ))
-    };
+    // Les gates admin (origin + 2FA) sont désormais appliqués via
+    // l'extractor `middleware::admin_gate::AdminGate`, ajouté en premier
+    // paramètre de chaque handler admin. L'extractor s'exécute UNIQUEMENT
+    // quand la (path, méthode) matche un handler enregistré — les
+    // méthodes non-supportées retombent naturellement sur le 405 par
+    // défaut d'axum (au lieu du 403 qu'aurait renvoyé un middleware
+    // Router-level qui intercepte tout, y compris les 405). Voir la
+    // doc `AdminGate` pour le raisonnement complet. Ce closure est
+    // conservé en no-op le temps du refactor pour ne pas changer les
+    // .nest() call sites, mais il ne fait plus rien.
+    let admin_gate = |r: Router<AppState>| r;
 
     let router = Router::new()
         .nest("/api", routes::health_routes())

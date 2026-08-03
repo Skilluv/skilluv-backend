@@ -136,6 +136,7 @@ struct AuditEntry {
     security(("cookie_auth" = [])),
 )]
 pub async fn list_users(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Query(query): Query<ListUsersQuery>,
@@ -232,6 +233,7 @@ pub async fn list_users(
     security(("cookie_auth" = [])),
 )]
 pub async fn get_user(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -300,6 +302,7 @@ pub async fn get_user(
     security(("cookie_auth" = [])),
 )]
 pub async fn ban_user(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -408,6 +411,7 @@ pub async fn ban_user(
     security(("cookie_auth" = [])),
 )]
 pub async fn unban_user(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -476,6 +480,7 @@ pub async fn unban_user(
     security(("cookie_auth" = [])),
 )]
 pub async fn list_reports(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Query(query): Query<ReportsQuery>,
@@ -582,6 +587,7 @@ pub async fn list_reports(
     security(("cookie_auth" = [])),
 )]
 pub async fn handle_report(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -643,6 +649,7 @@ pub async fn handle_report(
     security(("cookie_auth" = [])),
 )]
 pub async fn audit_log(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Query(query): Query<AuditLogQuery>,
@@ -708,6 +715,7 @@ pub async fn audit_log(
     security(("cookie_auth" = [])),
 )]
 pub async fn moderation_dashboard(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<serde_json::Value>, AppError> {

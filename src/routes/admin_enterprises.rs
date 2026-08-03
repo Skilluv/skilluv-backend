@@ -93,6 +93,7 @@ struct ListQuery {
     security(("cookie_auth" = [])),
 )]
 pub async fn list_enterprises(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<ListQuery>,
@@ -184,6 +185,7 @@ pub async fn list_enterprises(
     security(("cookie_auth" = [])),
 )]
 pub async fn get_enterprise(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -236,6 +238,7 @@ struct DryRunQuery {
     security(("cookie_auth" = [])),
 )]
 pub async fn patch_type(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(enterprise_id): Path<Uuid>,
@@ -369,6 +372,7 @@ pub async fn patch_type(
     security(("cookie_auth" = [])),
 )]
 pub async fn get_type_config(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -401,6 +405,7 @@ pub async fn get_type_config(
     security(("cookie_auth" = [])),
 )]
 pub async fn list_agency_clients(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,

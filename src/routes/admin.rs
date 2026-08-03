@@ -84,6 +84,7 @@ struct Reset2faBody {
     security(("cookie_auth" = [])),
 )]
 pub async fn admin_reset_2fa(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(target_user_id): Path<Uuid>,
@@ -210,6 +211,7 @@ struct AuditLogQuery {
     security(("cookie_auth" = [])),
 )]
 pub async fn list_audit_log(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     axum::extract::Query(q): axum::extract::Query<AuditLogQuery>,
@@ -376,6 +378,7 @@ pub async fn require_admin(state: &AppState, auth: &AuthUser) -> Result<(), AppE
     security(("cookie_auth" = [])),
 )]
 pub async fn create_challenge(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<CreateChallengeRequest>,
@@ -468,6 +471,7 @@ pub async fn create_challenge(
     security(("cookie_auth" = [])),
 )]
 pub async fn list_all_challenges(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<serde_json::Value>, AppError> {
@@ -501,6 +505,7 @@ pub async fn list_all_challenges(
     security(("cookie_auth" = [])),
 )]
 pub async fn update_challenge(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -581,6 +586,7 @@ pub async fn update_challenge(
     security(("cookie_auth" = [])),
 )]
 pub async fn publish_challenge(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -622,6 +628,7 @@ pub async fn publish_challenge(
     security(("cookie_auth" = [])),
 )]
 pub async fn archive_challenge(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -646,6 +653,7 @@ pub async fn archive_challenge(
     security(("cookie_auth" = [])),
 )]
 pub async fn admin_stats(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<serde_json::Value>, AppError> {
@@ -686,6 +694,7 @@ pub async fn admin_stats(
     security(("cookie_auth" = [])),
 )]
 pub async fn rebuild_leaderboards(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<serde_json::Value>, AppError> {
@@ -718,6 +727,7 @@ struct SsoSessionsQuery {
     security(("cookie_auth" = [])),
 )]
 pub async fn list_sso_sessions(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     axum::extract::Query(q): axum::extract::Query<SsoSessionsQuery>,
@@ -826,6 +836,7 @@ pub async fn list_sso_sessions(
     security(("cookie_auth" = [])),
 )]
 pub async fn revoke_sso_session(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(session_id): Path<Uuid>,
@@ -894,6 +905,7 @@ struct GenerateVariantBody {
     security(("cookie_auth" = [])),
 )]
 pub async fn admin_generate_variant(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(original_id): Path<Uuid>,

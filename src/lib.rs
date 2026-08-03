@@ -205,15 +205,33 @@ pub fn build_router(state: AppState) -> Router {
         .with_state(state)
 }
 
-/// Rejette TRACE et CONNECT avec un 405 Method Not Allowed avant que le
-/// reste du pipeline ne s'exécute. Voir commentaire du call site pour la
-/// justification sécurité + conformité REST.
+/// Rejette avec 405 toute méthode HTTP hors du set standard REST supporté
+/// par l'API. Allowlist plutôt que denylist car :
+///   - Sécurité : TRACE (vecteur XST, RFC 7231), CONNECT (pas de sens REST),
+///     QUERY (RFC 9110 extension search, non implémentée), PROPFIND/MOVE/etc.
+///     (WebDAV, hors scope) doivent tous être refusés uniformément.
+///   - Conformité schemathesis unsupported_methods : le check pingue toutes
+///     les méthodes hors spec. Notre admin_gate court-circuite en 403 avant
+///     qu'axum ne puisse répondre 405. Un allowlist en tête garantit la
+///     bonne réponse quelle que soit la méthode exotique testée.
+///   - Robustesse : un nouveau standard HTTP demain (ex : LINK/UNLINK
+///     réactivés) échoue proprement sans qu'on ait à patcher.
 async fn reject_deprecated_methods(
     req: axum::extract::Request,
     next: axum::middleware::Next,
 ) -> axum::response::Response {
     use axum::http::{Method, StatusCode};
-    if req.method() == Method::TRACE || req.method() == Method::CONNECT {
+    let allowed = matches!(
+        *req.method(),
+        Method::GET
+            | Method::POST
+            | Method::PUT
+            | Method::PATCH
+            | Method::DELETE
+            | Method::OPTIONS
+            | Method::HEAD
+    );
+    if !allowed {
         return axum::response::Response::builder()
             .status(StatusCode::METHOD_NOT_ALLOWED)
             .header("Allow", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD")

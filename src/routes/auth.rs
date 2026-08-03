@@ -298,7 +298,7 @@ pub struct RegisterRequest {
     #[schema(
         min_length = 10,
         max_length = 128,
-        pattern = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9\s]).+$"
+        pattern = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!-/:-@\[-`{-~]).+$"
     )]
     pub password: String,
     #[schema(min_length = 1, max_length = 50)]
@@ -390,7 +390,7 @@ pub struct ResetPasswordRequest {
     #[schema(
         min_length = 10,
         max_length = 128,
-        pattern = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9\s]).+$"
+        pattern = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!-/:-@\[-`{-~]).+$"
     )]
     pub new_password: String,
 }
@@ -404,7 +404,7 @@ pub struct ChangePasswordRequest {
     #[schema(
         min_length = 10,
         max_length = 128,
-        pattern = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9\s]).+$"
+        pattern = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!-/:-@\[-`{-~]).+$"
     )]
     pub new_password: String,
 }

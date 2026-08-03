@@ -70,12 +70,19 @@ pub fn build_router(state: AppState) -> Router {
     // les routers réservés aux surfaces admin (origin check + 2FA mandatory).
     // L'ordre importe : `ensure_admin_origin` d'abord (rejette avant même de
     // consulter la DB), puis `ensure_admin_2fa` (lookup role + totp/passkey).
+    // `route_layer` (et non `layer`) : le middleware n'intercepte QUE les
+    // requêtes qui matchent effectivement une (route, méthode). Une
+    // requête vers un path admin avec une méthode non-déclarée (ex :
+    // PUT sur POST /admin/badge-events) retombe sur le 405 par défaut
+    // d'axum sans passer par l'admin_gate — respecte l'attente
+    // schemathesis unsupported_methods sans affaiblir la défense en
+    // profondeur : les routes matchées passent toujours par 2FA + origin.
     let admin_gate = |r: Router<AppState>| {
-        r.layer(axum::middleware::from_fn_with_state(
+        r.route_layer(axum::middleware::from_fn_with_state(
             state.clone(),
             middleware::admin_gate::ensure_admin_2fa,
         ))
-        .layer(axum::middleware::from_fn_with_state(
+        .route_layer(axum::middleware::from_fn_with_state(
             state.clone(),
             middleware::admin_gate::ensure_admin_origin,
         ))

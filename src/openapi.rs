@@ -1158,7 +1158,9 @@ impl Modify for CommonErrorResponsesAddon {
                     op.responses
                         .responses
                         .entry(status.to_string())
-                        .or_insert_with(|| ResponseBuilder::new().description(*desc).build().into());
+                        .or_insert_with(|| {
+                            ResponseBuilder::new().description(*desc).build().into()
+                        });
                 }
             }
         }

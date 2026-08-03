@@ -52,6 +52,12 @@ jobs:
       # curl probes so the schema paths stay stable across CI checkouts.
       PORT: "3001"
       SKILLUV_EXPOSE_SWAGGER: "1"
+      # Schemathesis envoie 25 examples par endpoint depuis localhost.
+      # Sans whitelist, POST /api/auth/login trigger le rate-limit (5/h par
+      # IP) et retourne 429 — que schemathesis flagge en
+      # positive_data_acceptance ("valid data was rejected"). 429 est un
+      # comportement stateful legitime hors du scope contract-test.
+      SKILLUV_RATELIMIT_IP_WHITELIST: "127.0.0.1,::1"
       RUST_LOG: warn,skilluv_backend=info
 
     steps:

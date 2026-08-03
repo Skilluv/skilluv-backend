@@ -46,8 +46,12 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         license(name = "Proprietary"),
     ),
     servers(
-        (url = "/api", description = "Same-origin (typical Coolify deploy)"),
-        (url = "http://localhost:3001/api", description = "Local dev"),
+        // Paths in the spec already carry the `/api/` prefix (utoipa
+        // `path = "/api/..."` on every handler). Base URLs here must NOT
+        // duplicate it — schemathesis / Swagger UI concatenate base + path
+        // literally, so `/api` here yielded `/api/api/...` 404s.
+        (url = "/", description = "Same-origin (typical Coolify deploy)"),
+        (url = "http://localhost:3001", description = "Local dev"),
     ),
     modifiers(&SecurityAddon),
     paths(

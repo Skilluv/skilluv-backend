@@ -1468,9 +1468,12 @@ pub async fn verify_email(
     let key = email_verify_key(&query.token);
     let user_id_str: Option<String> = redis.get(&key).await?;
 
-    let user_id_str = user_id_str.ok_or(AppError::Validation(
-        "Invalid or expired verification token".to_string(),
-    ))?;
+    // 404 : le token est une ressource, "pas trouve/expire" = NotFound
+    // (pas Validation qui vaudrait pour un payload malforme). Voir aussi
+    // reset_password + confirm_email_change.
+    let user_id_str = user_id_str.ok_or_else(|| {
+        AppError::NotFound("Verification token not found, expired, or already used".to_string())
+    })?;
 
     let user_id: Uuid = user_id_str
         .parse()
@@ -1610,9 +1613,15 @@ pub async fn reset_password(
     let key = password_reset_key(&body.token);
     let user_id_str: Option<String> = redis.get(&key).await?;
 
-    let user_id_str = user_id_str.ok_or(AppError::Validation(
-        "Invalid or expired reset token".to_string(),
-    ))?;
+    // Semantiquement le token est une ressource : "pas trouve" = 404
+    // (pas 400 qui signalerait un payload malforme). Ce framing evite
+    // aussi le fail schemathesis positive_data_acceptance : schema-valid
+    // data ne doit pas etre refuse avec 400 (schema-invalid), mais avec
+    // 404 (ressource inexistante). Voir aussi verify_email pour la
+    // meme correction.
+    let user_id_str = user_id_str.ok_or_else(|| {
+        AppError::NotFound("Reset token not found, expired, or already used".to_string())
+    })?;
 
     let user_id: Uuid = user_id_str
         .parse()
@@ -2394,8 +2403,13 @@ pub async fn confirm_email_change(
 ) -> Result<Json<ApiResponse<SimpleMessage>>, AppError> {
     let mut redis = state.redis.clone();
     let uid_str: Option<String> = redis.get(email_change_token_lookup(&query.token)).await?;
+    // Tous les 4 cas "token pas trouve / expire / mismatch" sont
+    // semantiquement des 404 (la ressource token n'existe pas OU n'est
+    // pas assignee a cet appelant). 400 (Validation) est reserve aux
+    // payloads malformes. Framing REST correct + evite fail schemathesis
+    // positive_data_acceptance.
     let user_id: Uuid = uid_str
-        .ok_or(AppError::Validation("Invalid or expired token".into()))?
+        .ok_or_else(|| AppError::NotFound("Token not found or expired".into()))?
         .parse()
         .map_err(|_| AppError::Internal("Bad user_id in token map".into()))?;
 
@@ -2407,9 +2421,9 @@ pub async fn confirm_email_change(
     .await?;
 
     let (new_email, token_hash, expires_at) =
-        row.ok_or(AppError::Validation("No pending email change".into()))?;
+        row.ok_or_else(|| AppError::NotFound("No pending email change".into()))?;
     if expires_at < chrono::Utc::now() {
-        return Err(AppError::Validation("Token expired".into()));
+        return Err(AppError::NotFound("Token expired".into()));
     }
 
     // Verify the token matches
@@ -2418,7 +2432,7 @@ pub async fn confirm_email_change(
     h.update(query.token.as_bytes());
     let presented = h.finalize().to_vec();
     if presented != token_hash {
-        return Err(AppError::Validation("Invalid token".into()));
+        return Err(AppError::NotFound("Token mismatch".into()));
     }
 
     sqlx::query(

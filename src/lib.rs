@@ -185,6 +185,16 @@ pub fn build_router(state: AppState) -> Router {
     let router = openapi::attach(router);
 
     router
+        // Rejette au niveau HTTP les methodes deprecated / dangereuses AVANT
+        // toute autre middleware. Deux objectifs :
+        //   1. Securite : TRACE est un vecteur XST connu (Cross-Site Tracing,
+        //      RFC 7231 §4.3.8 recommande de le desactiver). CONNECT n'a pas
+        //      de semantique pour une API REST — l'accepter serait suspect.
+        //   2. Conformite REST : sans ce block, notre admin_gate intercepte
+        //      TRACE en 403 (defense en profondeur) avant qu'axum ne puisse
+        //      repondre 405. Retourner 405 uniformement respecte l'attente
+        //      schemathesis unsupported_methods sans desactiver l'admin_gate.
+        .layer(axum::middleware::from_fn(reject_deprecated_methods))
         .layer(middleware::SecurityHeadersLayer)
         .layer(TraceLayer::new_for_http())
         .layer(build_cors_layer())
@@ -193,6 +203,24 @@ pub fn build_router(state: AppState) -> Router {
         .layer(sentry_tower::SentryHttpLayer::new().enable_transaction())
         .layer(sentry_tower::NewSentryLayer::new_from_top())
         .with_state(state)
+}
+
+/// Rejette TRACE et CONNECT avec un 405 Method Not Allowed avant que le
+/// reste du pipeline ne s'exécute. Voir commentaire du call site pour la
+/// justification sécurité + conformité REST.
+async fn reject_deprecated_methods(
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    use axum::http::{Method, StatusCode};
+    if req.method() == Method::TRACE || req.method() == Method::CONNECT {
+        return axum::response::Response::builder()
+            .status(StatusCode::METHOD_NOT_ALLOWED)
+            .header("Allow", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD")
+            .body(axum::body::Body::empty())
+            .expect("static response builds");
+    }
+    next.run(req).await
 }
 
 /// Build the CORS layer with an explicit origin allowlist. Reads

@@ -125,8 +125,8 @@ jobs:
           schemathesis run \
             http://localhost:3001/api/openapi.json \
             --checks all \
-            --hypothesis-max-examples=25 \
-            --hypothesis-seed=42 \
+            --max-examples=25 \
+            --seed=42 \
             --workers=4 \
             --exitfirst
 

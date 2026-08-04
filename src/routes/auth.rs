@@ -365,7 +365,7 @@ pub struct LoginRequest {
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
 pub struct VerifyEmailQuery {
     /// One-shot verification token sent by email. Consumed after first use.
-    #[schema(min_length = 20, max_length = 128)]
+    #[param(min_length = 20, max_length = 128)]
     pub token: String,
 }
 
@@ -454,7 +454,7 @@ pub struct CompleteProfileRequest {
 pub struct ConfirmEmailChangeQuery {
     /// One-shot confirmation token from the email sent to the new
     /// address. Valid 1h, single-use.
-    #[schema(min_length = 20, max_length = 128)]
+    #[param(min_length = 20, max_length = 128)]
     pub token: String,
 }
 

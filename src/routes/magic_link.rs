@@ -105,12 +105,20 @@ pub async fn request_link(
     if !email.contains('@') || email.len() < 5 || email.len() > 255 {
         return Err(AppError::Validation("invalid email".into()));
     }
-    let intent = body
-        .intent
-        .as_deref()
-        .filter(|s| matches!(*s, "login" | "signup"))
-        .unwrap_or("login")
-        .to_string();
+    // Reject invalid intent explicitement — le schema declare
+    // pattern ^(login|signup)$, donc tout autre string est schema-invalide.
+    // Anciennement on faisait un fallback silencieux sur "login" mais
+    // schemathesis negative_data_rejection flaggait car un input schema-
+    // invalide doit etre rejete (4xx), pas accepte.
+    let intent = match body.intent.as_deref() {
+        None => "login".to_string(),
+        Some(s) if matches!(s, "login" | "signup") => s.to_string(),
+        Some(_) => {
+            return Err(AppError::Validation(
+                "intent must be one of: login, signup".into(),
+            ));
+        }
+    };
     // Generate a 128-bit token, base32 encoded — 26 chars, no padding.
     let raw1 = Uuid::new_v4().as_u128().to_be_bytes();
     let token = base32::encode(base32::Alphabet::Rfc4648 { padding: false }, &raw1);

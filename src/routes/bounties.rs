@@ -143,12 +143,18 @@ fn meta_array(meta: &Value, key: &str) -> Vec<String> {
 
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
 #[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
 pub struct ListQuery {
     // Aucune contrainte declaree dans le schema : le handler fait un
     // clamp / unwrap_or lenient sur tous les params, jamais de reject.
     // Declarer des contraintes serait un mensonge (schemathesis
     // negative_data_rejection catch tout input schema-invalid accepte).
-    // Le request-size limit axum protege des DoS via giant query strings.
+    //
+    // deny_unknown_fields : rejette 400 les params inconnus. Aligne sur
+    // schemathesis qui flag les 'object with unexpected properties'.
+    // Contrainte deliberee : les integrations front ne doivent pas mixer
+    // utm/tracking params avec les params API — utiliser un canal
+    // telemetrie separe.
     pub status: Option<String>,
     pub skill: Option<String>,
     pub tag: Option<String>,

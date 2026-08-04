@@ -16,12 +16,17 @@ pub fn geo_routes() -> Router<AppState> {
 }
 
 #[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
 pub struct CitiesQuery {
     /// ISO 3166-1 alpha-2 or alpha-3 country code (e.g. `SN` or `SEN`).
+    #[param(min_length = 2, max_length = 3, pattern = r"^[A-Za-z]{2,3}$")]
     pub country: String,
     /// Optional case-insensitive prefix/substring filter on city name.
+    #[param(max_length = 100)]
     pub q: Option<String>,
     /// Max rows to return, clamped to `[1, 50]`. Defaults to 20.
+    #[param(minimum = 1, maximum = 50)]
     pub limit: Option<usize>,
 }
 
@@ -66,9 +71,25 @@ pub async fn search_cities(
     State(state): State<AppState>,
     Query(q): Query<CitiesQuery>,
 ) -> Result<Json<ApiResponse<Vec<CityOut>>>, AppError> {
-    if q.country.trim().is_empty() {
+    // Enforce les contraintes declarees dans le schema (schemathesis
+    // negative_data_rejection catch les inputs schema-invalid acceptes).
+    let country = q.country.trim();
+    if country.is_empty() {
         return Err(AppError::Validation(
             "country query parameter is required (ISO2 or ISO3)".into(),
+        ));
+    }
+    if country.len() < 2 || country.len() > 3 || !country.chars().all(|c| c.is_ascii_alphabetic()) {
+        return Err(AppError::Validation(
+            "country must be ISO 3166-1 alpha-2 or alpha-3 (2-3 letters)".into(),
+        ));
+    }
+    crate::validators::check_max_len_opt(&q.q, "q", 100)?;
+    if let Some(l) = q.limit
+        && !(1..=50).contains(&l)
+    {
+        return Err(AppError::Validation(
+            "limit must be between 1 and 50".into(),
         ));
     }
     let limit = q.limit.unwrap_or(20).clamp(1, 50);

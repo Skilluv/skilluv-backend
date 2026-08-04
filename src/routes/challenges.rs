@@ -29,11 +29,18 @@ struct OnboardingQuery {
     domain: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
 struct ListQuery {
+    /// One of `code`, `design`, `game`, `security`.
+    #[param(pattern = r"^(code|design|game|security)$")]
     domain: Option<String>,
+    #[param(minimum = 1, maximum = 5)]
     difficulty: Option<i16>,
+    #[param(minimum = 1, maximum = 100000)]
     page: Option<i64>,
+    #[param(minimum = 1, maximum = 50)]
     per_page: Option<i64>,
 }
 
@@ -103,6 +110,19 @@ pub async fn list_challenges(
     tenant: crate::middleware::TenantContext,
     Query(query): Query<ListQuery>,
 ) -> Result<Json<serde_json::Value>, AppError> {
+    // Enforce les contraintes declarees (schemathesis
+    // negative_data_rejection catch schema-invalid accepte).
+    if let Some(d) = &query.domain
+        && !matches!(d.as_str(), "code" | "design" | "game" | "security")
+    {
+        return Err(AppError::Validation(
+            "domain must be one of: code, design, game, security".into(),
+        ));
+    }
+    crate::validators::check_range_opt(query.difficulty.map(i64::from), "difficulty", 1, 5)?;
+    crate::validators::check_range_opt(query.page, "page", 1, 100_000)?;
+    crate::validators::check_range_opt(query.per_page, "per_page", 1, 50)?;
+
     let page = query.page.unwrap_or(1).max(1);
     let per_page = query.per_page.unwrap_or(20).clamp(1, 50);
     let offset = (page - 1) * per_page;

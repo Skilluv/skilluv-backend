@@ -93,6 +93,40 @@ pub fn validate_bio(bio: &str) -> Result<(), AppError> {
     Ok(())
 }
 
+/// Enforce `#[param(max_length = N)]` cote handler pour un Option<String>
+/// de Query DTO. axum Query n'enforce pas les contraintes utoipa
+/// post-deserialisation, donc chaque handler qui declare une contrainte
+/// de longueur dans son DTO DOIT appeler ce helper pour la garantir cote
+/// serveur (schema OpenAPI = contrat opposable, pas fiction).
+pub fn check_max_len_opt(value: &Option<String>, field: &str, max: usize) -> Result<(), AppError> {
+    if let Some(s) = value
+        && s.len() > max
+    {
+        return Err(AppError::Validation(format!(
+            "{field} must be at most {max} characters"
+        )));
+    }
+    Ok(())
+}
+
+/// Enforce `#[param(minimum = A, maximum = B)]` cote handler pour un
+/// Option<i64>. Meme raisonnement que check_max_len_opt.
+pub fn check_range_opt(
+    value: Option<i64>,
+    field: &str,
+    min: i64,
+    max: i64,
+) -> Result<(), AppError> {
+    if let Some(v) = value
+        && (v < min || v > max)
+    {
+        return Err(AppError::Validation(format!(
+            "{field} must be between {min} and {max}"
+        )));
+    }
+    Ok(())
+}
+
 /// Display name: 1-100 chars, trimmed, no control chars.
 pub fn validate_display_name(name: &str) -> Result<(), AppError> {
     let trimmed = name.trim();

@@ -145,20 +145,24 @@ fn meta_array(meta: &Value, key: &str) -> Vec<String> {
 #[into_params(parameter_in = Query)]
 #[serde(deny_unknown_fields)]
 pub struct ListQuery {
-    // Aucune contrainte declaree dans le schema : le handler fait un
-    // clamp / unwrap_or lenient sur tous les params, jamais de reject.
-    // Declarer des contraintes serait un mensonge (schemathesis
-    // negative_data_rejection catch tout input schema-invalid accepte).
+    // Contraintes declarees ET enforcees cote handler (validate_list_query).
+    // Les #[param(...)] vivent dans le schema OpenAPI + servent aussi de
+    // reference pour les checks handler — les 2 doivent rester en sync.
     //
     // deny_unknown_fields : rejette 400 les params inconnus. Aligne sur
     // schemathesis qui flag les 'object with unexpected properties'.
     // Contrainte deliberee : les integrations front ne doivent pas mixer
     // utm/tracking params avec les params API — utiliser un canal
     // telemetrie separe.
+    #[param(max_length = 50)]
     pub status: Option<String>,
+    #[param(max_length = 100)]
     pub skill: Option<String>,
+    #[param(max_length = 100)]
     pub tag: Option<String>,
+    #[param(minimum = 1, maximum = 100000)]
     pub page: Option<i64>,
+    #[param(minimum = 1, maximum = 100)]
     pub per_page: Option<i64>,
 }
 
@@ -172,6 +176,17 @@ pub async fn list_bounties(
     State(state): State<AppState>,
     Query(q): Query<ListQuery>,
 ) -> Result<Json<Value>, AppError> {
+    // Validation cote handler des contraintes declarees dans le schema
+    // OpenAPI (#[param(...)] sur ListQuery). axum Query n'enforce rien
+    // post-deserialisation, donc doit etre fait manuellement pour que
+    // le contrat schema soit respecte cote serveur (schemathesis
+    // negative_data_rejection).
+    crate::validators::check_max_len_opt(&q.status, "status", 50)?;
+    crate::validators::check_max_len_opt(&q.skill, "skill", 100)?;
+    crate::validators::check_max_len_opt(&q.tag, "tag", 100)?;
+    crate::validators::check_range_opt(q.page, "page", 1, 100_000)?;
+    crate::validators::check_range_opt(q.per_page, "per_page", 1, 100)?;
+
     let per_page = q.per_page.unwrap_or(20).clamp(1, 100);
     let page = q.page.unwrap_or(1).max(1);
     let offset = (page - 1) * per_page;

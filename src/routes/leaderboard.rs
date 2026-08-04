@@ -54,10 +54,15 @@ pub async fn list_leaderboards() -> Json<ApiResponse<LeaderboardsIndexResponse>>
 }
 
 #[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
 pub struct LeaderboardQuery {
     /// `alltime` (default), `weekly`, `monthly`.
+    #[param(pattern = r"^(alltime|weekly|monthly)$")]
     pub period: Option<String>,
+    #[param(minimum = 1, maximum = 100000)]
     pub page: Option<i64>,
+    #[param(minimum = 1, maximum = 50)]
     pub per_page: Option<i64>,
 }
 
@@ -184,7 +189,10 @@ pub async fn get_leaderboard(
 }
 
 #[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
 pub struct MyRankQuery {
+    #[param(pattern = r"^(alltime|weekly|monthly)$")]
     pub period: Option<String>,
 }
 

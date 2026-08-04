@@ -286,7 +286,7 @@ struct RegisterEnterpriseRequest {
     /// RGPD: owner must explicitly accept the Terms + Privacy Policy at signup.
     /// Kept optional for backwards compat during the deploy window, but the
     /// handler refuses without it.
-    #[serde(default)]
+    #[schema(schema_with = crate::routes::auth::terms_accepted_schema)]
     terms_accepted: bool,
 }
 
@@ -340,7 +340,7 @@ struct RegisterAndAcceptRequest {
         pattern = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!-/:-@\[-`{-~]).+$"
     )]
     password: String,
-    #[serde(default)]
+    #[schema(schema_with = crate::routes::auth::terms_accepted_schema)]
     terms_accepted: bool,
 }
 
@@ -884,6 +884,7 @@ pub async fn accept_invite(
 /// Preview a recruiter invitation (public, token-gated).
 #[utoipa::path(
     get, path = "/api/enterprise/invite/preview", tag = "enterprise",
+    params(InvitePreviewQuery),
     responses((status = 200, body = serde_json::Value)),
 )]
 pub async fn invite_preview(

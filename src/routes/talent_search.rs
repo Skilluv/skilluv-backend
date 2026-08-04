@@ -20,16 +20,26 @@ pub fn talent_search_routes() -> Router<AppState> {
 }
 
 #[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
 pub struct SearchQuery {
     /// Free-text query (FTS on `search_vector`).
+    #[param(max_length = 200)]
     pub q: Option<String>,
+    #[param(pattern = r"^(code|design|game|security)$")]
     pub skill_domain: Option<String>,
+    #[param(max_length = 100)]
     pub title: Option<String>,
+    #[param(pattern = r"^[A-Z]{2}$")]
     pub country: Option<String>,
+    #[param(minimum = 0, maximum = 1000000)]
     pub min_fragments: Option<i32>,
     /// `fragments` (default), `recent`, `relevance`.
+    #[param(pattern = r"^(fragments|recent|relevance)$")]
     pub sort_by: Option<String>,
+    #[param(minimum = 1, maximum = 100000)]
     pub page: Option<i64>,
+    #[param(minimum = 1, maximum = 100)]
     pub per_page: Option<i64>,
 }
 

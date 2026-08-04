@@ -331,7 +331,7 @@ pub struct RegisterRequest {
 /// Génère `{ type: boolean, enum: [true] }` — équivalent à `const: true`
 /// que utoipa 5 n'a pas encore comme attribut direct. `enum_values` est une
 /// forme JSON Schema Draft 2020-12 pleinement supportée par schemathesis.
-fn terms_accepted_schema() -> utoipa::openapi::schema::Object {
+pub fn terms_accepted_schema() -> utoipa::openapi::schema::Object {
     use utoipa::openapi::schema::{ObjectBuilder, Type};
     ObjectBuilder::new()
         .schema_type(utoipa::openapi::schema::SchemaType::Type(Type::Boolean))

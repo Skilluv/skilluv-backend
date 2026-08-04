@@ -237,7 +237,7 @@ pub struct ListCommentsQuery {
 #[utoipa::path(
     get, path = "/api/social/comments/{target_type}/{target_id}", tag = "social",
     params(
-        ("target_type" = String, Path),
+        ("target_type" = String, Path, pattern = r"^(challenge|submission|post|question|answer|project|profile|guild|comment|repo)$"),
         ("target_id" = Uuid, Path),
         ListCommentsQuery,
     ),
@@ -351,7 +351,7 @@ pub async fn toggle_reaction(
 #[utoipa::path(
     get, path = "/api/social/reactions/{target_type}/{target_id}/summary", tag = "social",
     params(
-        ("target_type" = String, Path),
+        ("target_type" = String, Path, pattern = r"^(challenge|submission|post|question|answer|project|profile|guild|comment|repo)$"),
         ("target_id" = Uuid, Path),
     ),
     responses((status = 200, body = serde_json::Value)),
@@ -425,7 +425,7 @@ pub async fn list_tags(
 #[utoipa::path(
     get, path = "/api/social/tag-map/{target_type}/{target_id}", tag = "social",
     params(
-        ("target_type" = String, Path),
+        ("target_type" = String, Path, pattern = r"^(challenge|submission|post|question|answer|project|profile|guild|comment|repo)$"),
         ("target_id" = Uuid, Path),
     ),
     responses((status = 200, body = serde_json::Value)),

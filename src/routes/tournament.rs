@@ -129,10 +129,13 @@ pub async fn admin_close_season(
 // ─── Tournaments ─────────────────────────────────────────────────
 
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
 pub struct ListTournamentsQuery {
-    #[schema(max_length = 10000)]
+    #[param(max_length = 50)]
     pub status: Option<String>,
     pub upcoming: Option<bool>,
+    #[param(minimum = 1, maximum = 200)]
     pub limit: Option<i64>,
 }
 

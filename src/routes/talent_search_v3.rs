@@ -34,25 +34,34 @@ pub fn talent_search_v3_routes() -> Router<AppState> {
 }
 
 #[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
 pub struct QueryV3 {
     /// Orientation slug — mandatory for a real match. Without it,
     /// filter is skipped and every user matches.
+    #[param(max_length = 100)]
     pub orientation: Option<String>,
     /// CSV of skill slugs, e.g. `react,typescript`. Users must have
     /// proven ALL of them at `min_proficiency`.
+    #[param(max_length = 500)]
     pub skills: Option<String>,
     /// `active` (default), `learning`, or `both`.
     #[serde(default = "default_mode")]
+    #[param(pattern = r"^(active|learning|both)$")]
     pub mode: String,
     /// True → only match users whose orientation is their primary.
     #[serde(default)]
     pub only_primary: bool,
     #[serde(default = "default_min_proficiency")]
+    #[param(minimum = 1, maximum = 5)]
     pub min_proficiency: i16,
+    #[param(pattern = r"^[a-zA-Z]{2}$")]
     pub working_language: Option<String>,
     #[serde(default = "default_per_page")]
+    #[param(minimum = 1, maximum = 100)]
     pub per_page: i64,
     #[serde(default = "default_page")]
+    #[param(minimum = 1, maximum = 100000)]
     pub page: i64,
 }
 fn default_mode() -> String {

@@ -21,29 +21,46 @@ pub fn talent_search_v2_routes() -> Router<AppState> {
 }
 
 #[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
 pub struct SearchQuery {
+    #[param(max_length = 200)]
     pub q: Option<String>,
+    #[param(pattern = r"^(code|design|game|security)$")]
     pub skill_domain: Option<String>,
+    #[param(max_length = 100)]
     pub title: Option<String>,
+    #[param(max_length = 3)]
     pub country: Option<String>,
     /// ISO2 (Phase 3.3). Falls back to legacy `country` (ISO3) if not provided.
+    #[param(pattern = r"^[A-Z]{2}$")]
     pub country_iso2: Option<String>,
+    #[param(minimum = 0, maximum = 1000000)]
     pub min_fragments: Option<i32>,
+    #[param(minimum = 0, maximum = 10000)]
     pub min_streak: Option<i32>,
     /// Tag slug — repeatable.
+    #[param(max_length = 100)]
     pub tag: Option<String>,
     /// Badge slug.
+    #[param(max_length = 100)]
     pub badge: Option<String>,
     /// `cdi`, `cdd`, `freelance`, `internship`, `contract`.
+    #[param(pattern = r"^(cdi|cdd|freelance|internship|contract)$")]
     pub looking_for: Option<String>,
     pub available_only: Option<bool>,
     /// 2-letter ISO code (matches min B2 proficiency).
+    #[param(pattern = r"^[a-zA-Z]{2}$")]
     pub language_spoken: Option<String>,
     pub has_projects: Option<bool>,
+    #[param(minimum = 0, maximum = 10000)]
     pub min_github_repos: Option<i32>,
     /// `fragments`, `recent`, `most_active_recently`, `top_in_domain`.
+    #[param(pattern = r"^(fragments|recent|most_active_recently|top_in_domain)$")]
     pub sort_by: Option<String>,
+    #[param(minimum = 1, maximum = 100000)]
     pub page: Option<i64>,
+    #[param(minimum = 1, maximum = 100)]
     pub per_page: Option<i64>,
 }
 

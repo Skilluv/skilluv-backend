@@ -398,6 +398,13 @@ pub async fn register_enterprise(
             "website must be at most 500 characters".to_string(),
         ));
     }
+    if let Some(c) = &body.country
+        && !(c.len() == 2 && c.chars().all(|ch| ch.is_ascii_uppercase()))
+    {
+        return Err(AppError::Validation(
+            "country must be an ISO 3166-1 alpha-2 code (2 uppercase letters)".to_string(),
+        ));
+    }
     if let Some(i) = &body.industry
         && i.chars().count() > 100
     {

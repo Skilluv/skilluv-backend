@@ -362,8 +362,14 @@ pub async fn stripe_connect_webhook(
     headers: axum::http::HeaderMap,
     body: axum::body::Bytes,
 ) -> Result<Json<Value>, AppError> {
-    let cfg = crate::services::stripe::StripeConfig::from_env()
-        .ok_or_else(|| AppError::Internal("Stripe is not configured".into()))?;
+    // Stripe pas configuré (dev/CI/deployments sans Stripe) : ack
+    // silencieusement 200. Best-practice pour webhooks externes.
+    let Some(cfg) = crate::services::stripe::StripeConfig::from_env() else {
+        tracing::warn!(
+            "Stripe Connect webhook received but STRIPE_* env not configured — acking silently"
+        );
+        return Ok(Json(json!({ "status": "acked_not_configured" })));
+    };
     let signature = headers
         .get("stripe-signature")
         .and_then(|v| v.to_str().ok())

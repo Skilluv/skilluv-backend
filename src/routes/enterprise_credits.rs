@@ -233,8 +233,14 @@ pub async fn stripe_webhook(
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<impl IntoResponse, AppError> {
-    let cfg = stripe::StripeConfig::from_env()
-        .ok_or(AppError::Internal("Stripe not configured".into()))?;
+    // Stripe not configured (dev/CI/deployments qui n'utilisent pas Stripe) :
+    // silently ack le webhook avec 200. C'est la best-practice Stripe — un
+    // non-200 declenche des retries indefinis. Le webhook n'est pas traite,
+    // on log pour observabilite.
+    let Some(cfg) = stripe::StripeConfig::from_env() else {
+        tracing::warn!("Stripe webhook received but STRIPE_* env not configured — acking silently");
+        return Ok(axum::http::StatusCode::OK);
+    };
     let sig = headers
         .get("stripe-signature")
         .and_then(|v| v.to_str().ok())

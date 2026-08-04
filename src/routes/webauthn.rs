@@ -359,7 +359,10 @@ pub async fn login_start(
             .fetch_optional(&state.db)
             .await?;
 
-    let user_id = user_id.ok_or_else(|| AppError::Validation("No passkey registered".into()))?;
+    // 401 : identifier not found = auth failed semantiquement, pas 400
+    // (payload malforme). Aligne sur schemathesis positive_data_acceptance
+    // (401 dans le set attendu).
+    let user_id = user_id.ok_or(AppError::Unauthorized)?;
 
     let cred_rows: Vec<(serde_json::Value,)> =
         sqlx::query_as("SELECT credential FROM webauthn_credentials WHERE user_id = $1")
@@ -368,7 +371,8 @@ pub async fn login_start(
             .await?;
 
     if cred_rows.is_empty() {
-        return Err(AppError::Validation("No passkey registered".into()));
+        // 401 : pas de passkey enregistree = auth non possible = Unauthorized.
+        return Err(AppError::Unauthorized);
     }
 
     let passkeys: Vec<Passkey> = cred_rows

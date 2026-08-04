@@ -67,7 +67,11 @@ pub async fn pop_registration(
     handle: &str,
 ) -> Result<PasskeyRegistration, AppError> {
     let json: Option<String> = redis.get(reg_key(handle)).await?;
-    let json = json.ok_or_else(|| AppError::Validation("Ceremony expired or unknown".into()))?;
+    // Ceremony handle est une ressource : "pas trouve/expire" = 401
+    // (auth failed) plutot que 400 (payload malforme). Cette semantique
+    // fait passer schemathesis positive_data_acceptance (401 est dans
+    // le set attendu 2xx/401/403/404/409/5xx pour donnee schema-valide).
+    let json = json.ok_or(AppError::Unauthorized)?;
     let () = redis.del(reg_key(handle)).await?;
     serde_json::from_str(&json)
         .map_err(|e| AppError::Internal(format!("deserialize reg state: {e}")))
@@ -91,7 +95,11 @@ pub async fn pop_authentication(
     handle: &str,
 ) -> Result<PasskeyAuthentication, AppError> {
     let json: Option<String> = redis.get(auth_key(handle)).await?;
-    let json = json.ok_or_else(|| AppError::Validation("Ceremony expired or unknown".into()))?;
+    // Ceremony handle est une ressource : "pas trouve/expire" = 401
+    // (auth failed) plutot que 400 (payload malforme). Cette semantique
+    // fait passer schemathesis positive_data_acceptance (401 est dans
+    // le set attendu 2xx/401/403/404/409/5xx pour donnee schema-valide).
+    let json = json.ok_or(AppError::Unauthorized)?;
     let () = redis.del(auth_key(handle)).await?;
     serde_json::from_str(&json)
         .map_err(|e| AppError::Internal(format!("deserialize auth state: {e}")))

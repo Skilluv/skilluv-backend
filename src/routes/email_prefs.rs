@@ -229,8 +229,14 @@ pub async fn brevo_webhook(
     Query(q): Query<BrevoWebhookQuery>,
     Json(body): Json<Value>,
 ) -> Result<StatusCode, AppError> {
-    let expected = std::env::var("BREVO_WEBHOOK_TOKEN")
-        .map_err(|_| AppError::Internal("BREVO_WEBHOOK_TOKEN not set".into()))?;
+    // BREVO_WEBHOOK_TOKEN absent (dev/CI/deployments sans Brevo) : ack
+    // silencieusement le webhook avec 200. Best-practice pour webhooks
+    // externes — un non-200 declenche des retries indefinis. On log
+    // pour observabilite.
+    let Ok(expected) = std::env::var("BREVO_WEBHOOK_TOKEN") else {
+        tracing::warn!("Brevo webhook received but BREVO_WEBHOOK_TOKEN not set — acking silently");
+        return Ok(StatusCode::OK);
+    };
     if q.token != expected {
         return Err(AppError::Unauthorized);
     }

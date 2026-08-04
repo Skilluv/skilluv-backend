@@ -585,10 +585,18 @@ pub async fn github_webhook(
     headers: HeaderMap,
     body: axum::body::Bytes,
 ) -> Result<Json<Value>, AppError> {
-    let secret = std::env::var("GITHUB_WEBHOOK_SECRET")
+    // GITHUB_WEBHOOK_SECRET absent = webhook non configuré (dev/CI) :
+    // ack silencieusement pour eviter les retries GitHub. Return empty
+    // JSON object comme les autres branches success du handler.
+    let Some(secret) = std::env::var("GITHUB_WEBHOOK_SECRET")
         .ok()
         .filter(|s| !s.is_empty())
-        .ok_or(AppError::Internal("GITHUB_WEBHOOK_SECRET not set".into()))?;
+    else {
+        tracing::warn!(
+            "GitHub bounties webhook received but GITHUB_WEBHOOK_SECRET not set — acking silently"
+        );
+        return Ok(Json(json!({ "status": "acked_not_configured" })));
+    };
     let signature = headers
         .get("x-hub-signature-256")
         .and_then(|v| v.to_str().ok())

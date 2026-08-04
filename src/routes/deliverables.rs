@@ -135,10 +135,20 @@ pub async fn github_slices_webhook(
     body: Bytes,
 ) -> Result<impl IntoResponse, AppError> {
     // 1. HMAC signature verification (partagée avec le webhook bounties existant)
-    let secret = std::env::var("GITHUB_WEBHOOK_SECRET")
+    // GITHUB_WEBHOOK_SECRET absent = webhook non configuré (dev/CI) : ack
+    // silencieusement 200 pour eviter les retries GitHub. Best-practice
+    // pour webhooks externes.
+    let Some(secret) = std::env::var("GITHUB_WEBHOOK_SECRET")
         .ok()
         .filter(|s| !s.is_empty())
-        .ok_or_else(|| AppError::Internal("GITHUB_WEBHOOK_SECRET not set".to_string()))?;
+    else {
+        tracing::warn!(
+            "GitHub slices webhook received but GITHUB_WEBHOOK_SECRET not set — acking silently"
+        );
+        return Ok(Json(build_response(
+            json!({ "outcome": "acked_not_configured" }),
+        )));
+    };
 
     let signature = headers
         .get("x-hub-signature-256")

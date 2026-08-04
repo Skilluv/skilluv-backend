@@ -386,7 +386,27 @@ pub async fn register_enterprise(
     validate_name(&body.first_name, "first_name")?;
     validate_name(&body.last_name, "last_name")?;
 
-    if body.company_name.trim().is_empty() || body.company_name.chars().count() > 200 {
+    if body.company_name.contains(['\n', '\r']) {
+        return Err(AppError::Validation(
+            "company_name must not contain line breaks".to_string(),
+        ));
+    }
+    let cn_starts_ws = body
+        .company_name
+        .chars()
+        .next()
+        .is_some_and(|c| c.is_whitespace());
+    let cn_ends_ws = body
+        .company_name
+        .chars()
+        .next_back()
+        .is_some_and(|c| c.is_whitespace());
+    if cn_starts_ws || cn_ends_ws {
+        return Err(AppError::Validation(
+            "company_name must not have leading or trailing whitespace".to_string(),
+        ));
+    }
+    if body.company_name.is_empty() || body.company_name.chars().count() > 200 {
         return Err(AppError::Validation(
             "company_name must be between 1 and 200 characters".to_string(),
         ));

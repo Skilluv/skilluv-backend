@@ -39,7 +39,9 @@ async fn test_register_duplicate() {
         )
         .await;
 
-    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    // 409 Conflict : email/username unique constraint violation. Semantiquement
+    // REST (etait 400 avant la migration vers Conflict — voir errors::AppError).
+    assert_eq!(resp.status(), StatusCode::CONFLICT);
 }
 
 #[tokio::test]

@@ -407,7 +407,8 @@ pub async fn register_enterprise(
             .fetch_optional(&state.db)
             .await?;
     if existing.is_some() {
-        return Err(AppError::Validation(
+        // 409 Conflict : ressource existe deja (unique constraint).
+        return Err(AppError::Conflict(
             "An account with this email or username already exists".to_string(),
         ));
     }
@@ -956,7 +957,7 @@ pub async fn invite_register_and_accept(
         .fetch_optional(&state.db)
         .await?;
     if existing.is_some() {
-        return Err(AppError::Validation(
+        return Err(AppError::Conflict(
             "An account already exists for this email. Please sign in instead.".to_string(),
         ));
     }

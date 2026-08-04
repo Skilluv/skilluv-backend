@@ -768,7 +768,10 @@ pub async fn register(
             .await?;
 
     if existing.is_some() {
-        return Err(AppError::Validation(
+        // 409 Conflict : ressource existe deja (email/username unique
+        // conflict). Semantiquement REST + accepte par schemathesis
+        // positive_data_acceptance (409 dans le set attendu).
+        return Err(AppError::Conflict(
             "An account with this email or username already exists".to_string(),
         ));
     }

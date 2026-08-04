@@ -64,8 +64,12 @@ pub struct UpdateCommunityChallenge {
 }
 
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
 pub struct PaginationQuery {
+    #[param(minimum = 1, maximum = 100000)]
     pub page: Option<i64>,
+    #[param(minimum = 1, maximum = 100)]
     pub per_page: Option<i64>,
 }
 
@@ -370,6 +374,9 @@ pub async fn popular_challenges(
     State(state): State<AppState>,
     Query(query): Query<PaginationQuery>,
 ) -> Result<Json<serde_json::Value>, AppError> {
+    crate::validators::check_range_opt(query.page, "page", 1, 100_000)?;
+    crate::validators::check_range_opt(query.per_page, "per_page", 1, 100)?;
+
     let page = query.page.unwrap_or(1).max(1);
     let per_page = query.per_page.unwrap_or(20).clamp(1, 50);
     let offset = (page - 1) * per_page;

@@ -57,12 +57,16 @@ fn build_response(data: Value) -> Value {
 }
 
 fn github_oauth_env() -> Result<(String, String, String), AppError> {
+    // OAuth non configure = endpoint non disponible pour ce deployment.
+    // 404 NotFound plutot que 500 : c'est un cas de configuration
+    // attendu (dev/CI/deployments qui n'exposent pas GitHub OAuth), pas
+    // un bug serveur. Aligne sur schemathesis not_a_server_error.
     let client_id = std::env::var("GITHUB_CLIENT_ID")
-        .map_err(|_| AppError::Internal("GITHUB_CLIENT_ID not set".into()))?;
+        .map_err(|_| AppError::NotFound("GitHub OAuth not enabled on this deployment".into()))?;
     let client_secret = std::env::var("GITHUB_CLIENT_SECRET")
-        .map_err(|_| AppError::Internal("GITHUB_CLIENT_SECRET not set".into()))?;
+        .map_err(|_| AppError::NotFound("GitHub OAuth not enabled on this deployment".into()))?;
     let redirect = std::env::var("GITHUB_REDIRECT_URI")
-        .map_err(|_| AppError::Internal("GITHUB_REDIRECT_URI not set".into()))?;
+        .map_err(|_| AppError::NotFound("GitHub OAuth not enabled on this deployment".into()))?;
     Ok((client_id, client_secret, redirect))
 }
 

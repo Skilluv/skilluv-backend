@@ -143,8 +143,8 @@ pub async fn google_callback(
     State(state): State<AppState>,
     Query(q): Query<CallbackQuery>,
 ) -> Result<impl IntoResponse, AppError> {
-    let cfg =
-        gp::Config::from_env().ok_or(AppError::Internal("Google OAuth not configured".into()))?;
+    let cfg = gp::Config::from_env()
+        .ok_or_else(|| AppError::NotFound("Google OAuth not enabled on this deployment".into()))?;
     handle_callback(
         &state,
         "google",
@@ -191,8 +191,9 @@ pub async fn linkedin_callback(
     State(state): State<AppState>,
     Query(q): Query<CallbackQuery>,
 ) -> Result<impl IntoResponse, AppError> {
-    let cfg =
-        lp::Config::from_env().ok_or(AppError::Internal("LinkedIn OAuth not configured".into()))?;
+    let cfg = lp::Config::from_env().ok_or_else(|| {
+        AppError::NotFound("LinkedIn OAuth not enabled on this deployment".into())
+    })?;
     handle_callback(
         &state,
         "linkedin",
@@ -215,10 +216,10 @@ pub async fn github_login_start(
     Query(q): Query<StartQuery>,
 ) -> Result<Redirect, AppError> {
     let client_id = std::env::var("GITHUB_CLIENT_ID")
-        .map_err(|_| AppError::Internal("GITHUB_CLIENT_ID not set".into()))?;
+        .map_err(|_| AppError::NotFound("GitHub OAuth not enabled on this deployment".into()))?;
     let redirect_uri = std::env::var("GITHUB_LOGIN_REDIRECT_URI")
         .or_else(|_| std::env::var("GITHUB_REDIRECT_URI"))
-        .map_err(|_| AppError::Internal("GITHUB_LOGIN_REDIRECT_URI not set".into()))?;
+        .map_err(|_| AppError::NotFound("GitHub OAuth not enabled on this deployment".into()))?;
     let mut redis = state.redis.clone();
     let token = oauth::store_state(
         &mut redis,
@@ -245,12 +246,12 @@ pub async fn github_login_callback(
     Query(q): Query<CallbackQuery>,
 ) -> Result<impl IntoResponse, AppError> {
     let client_id = std::env::var("GITHUB_CLIENT_ID")
-        .map_err(|_| AppError::Internal("GITHUB_CLIENT_ID not set".into()))?;
+        .map_err(|_| AppError::NotFound("GitHub OAuth not enabled on this deployment".into()))?;
     let client_secret = std::env::var("GITHUB_CLIENT_SECRET")
-        .map_err(|_| AppError::Internal("GITHUB_CLIENT_SECRET not set".into()))?;
+        .map_err(|_| AppError::NotFound("GitHub OAuth not enabled on this deployment".into()))?;
     let redirect_uri = std::env::var("GITHUB_LOGIN_REDIRECT_URI")
         .or_else(|_| std::env::var("GITHUB_REDIRECT_URI"))
-        .map_err(|_| AppError::Internal("GITHUB_LOGIN_REDIRECT_URI not set".into()))?;
+        .map_err(|_| AppError::NotFound("GitHub OAuth not enabled on this deployment".into()))?;
 
     let mut redis = state.redis.clone();
     let oauth_state = oauth::consume_state(&mut redis, &q.state).await?;
@@ -297,13 +298,15 @@ async fn start_flow(
     .await?;
     let url = match provider {
         "google" => {
-            let cfg = gp::Config::from_env()
-                .ok_or(AppError::Internal("Google OAuth not configured".into()))?;
+            let cfg = gp::Config::from_env().ok_or_else(|| {
+                AppError::NotFound("Google OAuth not enabled on this deployment".into())
+            })?;
             gp::authorize_url(&cfg, &token)
         }
         "linkedin" => {
-            let cfg = lp::Config::from_env()
-                .ok_or(AppError::Internal("LinkedIn OAuth not configured".into()))?;
+            let cfg = lp::Config::from_env().ok_or_else(|| {
+                AppError::NotFound("LinkedIn OAuth not enabled on this deployment".into())
+            })?;
             lp::authorize_url(&cfg, &token)
         }
         _ => return Err(AppError::Validation("unsupported provider".into())),

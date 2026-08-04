@@ -115,6 +115,8 @@ pub async fn get_leaderboard(
     LeaderboardService::validate_domain(&domain)?;
     let period = query.period.as_deref().unwrap_or("alltime");
     LeaderboardService::validate_period(period)?;
+    crate::validators::check_range_opt(query.page, "page", 1, 100_000)?;
+    crate::validators::check_range_opt(query.per_page, "per_page", 1, 50)?;
 
     let page = query.page.unwrap_or(1).max(1);
     let per_page = query.per_page.unwrap_or(20).clamp(1, 50);

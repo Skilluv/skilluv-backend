@@ -1184,7 +1184,7 @@ pub async fn email_2fa_verify(
     let pending_key = login_pending_2fa_key(user_id);
     let pending: Option<String> = redis.get(&pending_key).await?;
     if pending.is_none() {
-        return Err(AppError::Validation(
+        return Err(AppError::NotFound(
             "No pending 2FA for this user".to_string(),
         ));
     }

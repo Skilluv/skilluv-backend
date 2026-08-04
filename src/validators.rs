@@ -100,7 +100,7 @@ pub fn validate_bio(bio: &str) -> Result<(), AppError> {
 /// serveur (schema OpenAPI = contrat opposable, pas fiction).
 pub fn check_max_len_opt(value: &Option<String>, field: &str, max: usize) -> Result<(), AppError> {
     if let Some(s) = value
-        && s.len() > max
+        && s.chars().count() > max
     {
         return Err(AppError::Validation(format!(
             "{field} must be at most {max} characters"

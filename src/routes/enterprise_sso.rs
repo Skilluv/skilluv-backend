@@ -242,9 +242,10 @@ pub async fn discover(
     State(state): State<AppState>,
     Query(q): Query<DiscoverQuery>,
 ) -> Result<Json<Value>, AppError> {
-    if q.email.len() < 5 || q.email.len() > 255 {
+    let char_count = q.email.chars().count();
+    if !(5..=255).contains(&char_count) || !q.email.contains('@') {
         return Err(AppError::Validation(
-            "email must be between 5 and 255 characters".into(),
+            "email must be a valid email address".into(),
         ));
     }
     let Some(domain) = email_domain(&q.email) else {

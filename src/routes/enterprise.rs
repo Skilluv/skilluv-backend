@@ -386,9 +386,23 @@ pub async fn register_enterprise(
     validate_name(&body.first_name, "first_name")?;
     validate_name(&body.last_name, "last_name")?;
 
-    if body.company_name.trim().is_empty() || body.company_name.len() > 200 {
+    if body.company_name.trim().is_empty() || body.company_name.chars().count() > 200 {
         return Err(AppError::Validation(
             "company_name must be between 1 and 200 characters".to_string(),
+        ));
+    }
+    if let Some(w) = &body.website
+        && w.chars().count() > 500
+    {
+        return Err(AppError::Validation(
+            "website must be at most 500 characters".to_string(),
+        ));
+    }
+    if let Some(i) = &body.industry
+        && i.chars().count() > 100
+    {
+        return Err(AppError::Validation(
+            "industry must be at most 100 characters".to_string(),
         ));
     }
     let valid_sizes = ["1-10", "11-50", "51-200", "201-500", "501-1000", "1000+"];

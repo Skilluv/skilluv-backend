@@ -86,6 +86,7 @@ pub async fn search_v2(
 ) -> Result<Json<Value>, AppError> {
     crate::validators::check_max_len_opt(&q.q, "q", 200)?;
     crate::validators::check_max_len_opt(&q.title, "title", 100)?;
+    crate::validators::check_max_len_opt(&q.country, "country", 3)?;
     crate::validators::check_max_len_opt(&q.tag, "tag", 100)?;
     crate::validators::check_max_len_opt(&q.badge, "badge", 100)?;
     crate::validators::check_range_opt(

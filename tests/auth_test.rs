@@ -57,12 +57,14 @@ async fn test_register_without_terms_accepted_rejected() {
                 "first_name": "No",
                 "last_name": "Terms",
                 "skill_domain": "code",
-                // terms_accepted omitted
+                // terms_accepted omitted — sans #[serde(default)] cote DTO,
+                // axum Json extractor renvoie 422 UNPROCESSABLE_ENTITY
+                // (missing field). Semantiquement correct : payload malforme.
             }),
         )
         .await;
 
-    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
 }
 
 #[tokio::test]

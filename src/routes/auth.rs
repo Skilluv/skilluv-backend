@@ -317,12 +317,13 @@ pub struct RegisterRequest {
     /// Custom deserializer ne laisse passer que `true` ; le schéma associé
     /// (schema_with) émet `{ type: boolean, const: true }` pour que
     /// schemathesis ne génère jamais `false`.
-    // Absent ou `false` produisent un 400 metier "You must accept the ToS"
-    // via le check `if !body.terms_accepted` cote handler. `serde(default)`
-    // evite un 422 serde "missing field" quand le field est omis.
-    // Cote schema, `terms_accepted_schema` emet `const: true` pour que
-    // schemathesis positive_data_acceptance ne genere que true.
-    #[serde(default)]
+    // Pas de #[serde(default)] volontairement : sans lui, utoipa marque
+    // le field 'required' dans le schema OpenAPI, donc schemathesis
+    // l'inclut toujours dans ses payloads (avec value=true par le
+    // const:true du schema). Un client qui omet le field recoit un 422
+    // serde 'missing field' — semantiquement correct (payload malforme).
+    // Un client qui envoie explicitement false recoit 400 via le check
+    // metier serveur `if !body.terms_accepted`.
     #[schema(schema_with = terms_accepted_schema)]
     pub terms_accepted: bool,
 }
@@ -433,12 +434,13 @@ pub struct CompleteProfileRequest {
     /// Must be `true` — user acknowledges ToS + Privacy Policy. Voir
     /// `deserialize_true_bool` + `terms_accepted_schema` sur RegisterRequest
     /// pour l'explication du couple serde/utoipa.
-    // Absent ou `false` produisent un 400 metier "You must accept the ToS"
-    // via le check `if !body.terms_accepted` cote handler. `serde(default)`
-    // evite un 422 serde "missing field" quand le field est omis.
-    // Cote schema, `terms_accepted_schema` emet `const: true` pour que
-    // schemathesis positive_data_acceptance ne genere que true.
-    #[serde(default)]
+    // Pas de #[serde(default)] volontairement : sans lui, utoipa marque
+    // le field 'required' dans le schema OpenAPI, donc schemathesis
+    // l'inclut toujours dans ses payloads (avec value=true par le
+    // const:true du schema). Un client qui omet le field recoit un 422
+    // serde 'missing field' — semantiquement correct (payload malforme).
+    // Un client qui envoie explicitement false recoit 400 via le check
+    // metier serveur `if !body.terms_accepted`.
     #[schema(schema_with = terms_accepted_schema)]
     pub terms_accepted: bool,
     /// ISO 3166-1 alpha-2 country code (e.g. `SN`, `CI`, `FR`).

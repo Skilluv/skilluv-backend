@@ -528,12 +528,13 @@ pub fn validate_password_pub(password: &str) -> Result<(), AppError> {
 }
 
 fn validate_password(password: &str) -> Result<(), AppError> {
-    if password.len() < 10 {
+    let char_count = password.chars().count();
+    if char_count < 10 {
         return Err(AppError::Validation(
             "Password must be at least 10 characters".to_string(),
         ));
     }
-    if password.len() > 128 {
+    if char_count > 128 {
         return Err(AppError::Validation(
             "Password must be at most 128 characters".to_string(),
         ));

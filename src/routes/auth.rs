@@ -577,24 +577,7 @@ pub fn validate_username(username: &str) -> Result<(), AppError> {
 }
 
 pub fn validate_name(name: &str, field: &str) -> Result<(), AppError> {
-    if name.contains(['\n', '\r']) {
-        return Err(AppError::Validation(format!(
-            "{field} must not contain line breaks"
-        )));
-    }
-    let starts_ws = name.chars().next().is_some_and(|c| c.is_whitespace());
-    let ends_ws = name.chars().next_back().is_some_and(|c| c.is_whitespace());
-    if starts_ws || ends_ws {
-        return Err(AppError::Validation(format!(
-            "{field} must not have leading or trailing whitespace"
-        )));
-    }
-    if name.is_empty() || name.chars().count() > 50 {
-        return Err(AppError::Validation(format!(
-            "{field} must be between 1 and 50 characters"
-        )));
-    }
-    Ok(())
+    crate::validators::validate_bounded_line(name, field, 1, 50)
 }
 
 fn validate_skill_domain(domain: &str) -> Result<(), AppError> {

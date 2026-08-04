@@ -71,10 +71,15 @@ pub async fn list_skills(
 // ═══════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
 pub struct TalentsQuery {
     /// Minimum proficiency level. Defaults to 3.
+    #[param(minimum = 1, maximum = 5)]
     pub min_level: Option<i16>,
+    #[param(minimum = 1, maximum = 100000)]
     pub page: Option<i64>,
+    #[param(minimum = 1, maximum = 100)]
     pub per_page: Option<i64>,
 }
 
@@ -103,6 +108,9 @@ pub async fn find_talents(
     Path(slug): Path<String>,
     Query(q): Query<TalentsQuery>,
 ) -> Result<Json<SkillTalentsResponse>, AppError> {
+    crate::validators::check_range_opt(q.min_level.map(i64::from), "min_level", 1, 5)?;
+    crate::validators::check_range_opt(q.page, "page", 1, 100_000)?;
+    crate::validators::check_range_opt(q.per_page, "per_page", 1, 100)?;
     let filter = TalentSearchFilter {
         min_level: q.min_level.unwrap_or(3),
         page: q.page.unwrap_or(1),

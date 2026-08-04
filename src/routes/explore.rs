@@ -48,20 +48,29 @@ pub fn explore_routes() -> Router<AppState> {
 }
 
 #[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
 pub struct ExploreQuery {
     /// Filtre optionnel sur le kind (`slice` | `challenge`). Sinon les deux.
+    #[param(pattern = r"^(slice|challenge)$")]
     pub kind: Option<String>,
     /// Filtre domaine (`code`, `design`, `game`, `security`, `ops`, `ai`, `soft_skills`).
+    #[param(pattern = r"^(code|design|game|security|ops|ai|soft_skills)$")]
     pub domain: Option<String>,
     /// Difficulté (1-5).
+    #[param(minimum = 1, maximum = 5)]
     pub difficulty: Option<i16>,
     /// Langue de programmation (challenges uniquement).
+    #[param(max_length = 50)]
     pub language: Option<String>,
     /// Filtrer par project_id (slices uniquement).
     pub project_id: Option<Uuid>,
     /// Recherche texte simple ILIKE sur title.
+    #[param(max_length = 200)]
     pub q: Option<String>,
+    #[param(minimum = 1, maximum = 100000)]
     pub page: Option<i64>,
+    #[param(minimum = 1, maximum = 100)]
     pub per_page: Option<i64>,
 }
 
@@ -110,6 +119,11 @@ pub async fn explore(
     State(state): State<AppState>,
     Query(q): Query<ExploreQuery>,
 ) -> Result<Json<ExploreResponse>, AppError> {
+    crate::validators::check_max_len_opt(&q.language, "language", 50)?;
+    crate::validators::check_max_len_opt(&q.q, "q", 200)?;
+    crate::validators::check_range_opt(q.difficulty.map(i64::from), "difficulty", 1, 5)?;
+    crate::validators::check_range_opt(q.page, "page", 1, 100_000)?;
+    crate::validators::check_range_opt(q.per_page, "per_page", 1, 100)?;
     let page = q.page.unwrap_or(1).max(1);
     let per_page = q.per_page.unwrap_or(20).clamp(1, 100);
     // Chaque source SQL retourne assez d'items pour couvrir jusqu'à la page

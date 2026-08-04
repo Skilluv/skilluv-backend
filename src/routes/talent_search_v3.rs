@@ -147,9 +147,33 @@ pub async fn search_v3(
     State(state): State<AppState>,
     Query(q): Query<QueryV3>,
 ) -> Result<Json<SearchV3Response>, AppError> {
+    crate::validators::check_max_len_opt(&q.orientation, "orientation", 100)?;
+    crate::validators::check_max_len_opt(&q.skills, "skills", 500)?;
     if !matches!(q.mode.as_str(), "active" | "learning" | "both") {
         return Err(AppError::Validation(
             "mode must be one of: active | learning | both".into(),
+        ));
+    }
+    if !(1..=5).contains(&q.min_proficiency) {
+        return Err(AppError::Validation(
+            "min_proficiency must be between 1 and 5".into(),
+        ));
+    }
+    if let Some(l) = &q.working_language
+        && (l.len() != 2 || !l.chars().all(|c| c.is_ascii_alphabetic()))
+    {
+        return Err(AppError::Validation(
+            "working_language must be a 2-letter ISO code".into(),
+        ));
+    }
+    if !(1..=100).contains(&q.per_page) {
+        return Err(AppError::Validation(
+            "per_page must be between 1 and 100".into(),
+        ));
+    }
+    if !(1..=100_000).contains(&q.page) {
+        return Err(AppError::Validation(
+            "page must be between 1 and 100000".into(),
         ));
     }
     let per_page = q.per_page.clamp(1, 50);

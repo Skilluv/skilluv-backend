@@ -228,8 +228,12 @@ pub async fn create_comment(
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
 pub struct ListCommentsQuery {
+    #[param(minimum = 1, maximum = 100000)]
     pub page: Option<i64>,
+    #[param(minimum = 1, maximum = 200)]
     pub per_page: Option<i64>,
 }
 
@@ -248,6 +252,8 @@ pub async fn list_comments(
     Path((target_type, target_id)): Path<(String, Uuid)>,
     Query(q): Query<ListCommentsQuery>,
 ) -> Result<Json<Value>, AppError> {
+    crate::validators::check_range_opt(q.page, "page", 1, 100_000)?;
+    crate::validators::check_range_opt(q.per_page, "per_page", 1, 200)?;
     let per_page = q.per_page.unwrap_or(50).clamp(1, 200);
     let offset = (q.page.unwrap_or(1).max(1) - 1) * per_page;
     let rows = social::list_comments(&state.db, &target_type, target_id, per_page, offset).await?;

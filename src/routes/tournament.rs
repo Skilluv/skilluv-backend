@@ -149,6 +149,8 @@ pub async fn list_tournaments(
     State(state): State<AppState>,
     Query(q): Query<ListTournamentsQuery>,
 ) -> Result<Json<Value>, AppError> {
+    crate::validators::check_max_len_opt(&q.status, "status", 50)?;
+    crate::validators::check_range_opt(q.limit, "limit", 1, 200)?;
     let rows = tournament::list_tournaments(
         &state.db,
         q.status.as_deref(),

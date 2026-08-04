@@ -150,6 +150,16 @@ pub async fn search_talents(
     parts: Parts,
     Query(query): Query<SearchQuery>,
 ) -> Result<Json<TalentSearchResponse>, AppError> {
+    crate::validators::check_max_len_opt(&query.q, "q", 200)?;
+    crate::validators::check_max_len_opt(&query.title, "title", 100)?;
+    crate::validators::check_range_opt(
+        query.min_fragments.map(i64::from),
+        "min_fragments",
+        0,
+        1_000_000,
+    )?;
+    crate::validators::check_range_opt(query.page, "page", 1, 100_000)?;
+    crate::validators::check_range_opt(query.per_page, "per_page", 1, 100)?;
     let auth = try_extract_auth(&parts, &state);
     let page = query.page.unwrap_or(1).max(1);
     let per_page = query.per_page.unwrap_or(20).clamp(1, 50);

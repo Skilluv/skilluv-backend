@@ -219,7 +219,10 @@ pub async fn admin_sync(
 }
 
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
 pub struct ReposQuery {
+    #[param(minimum = 1, maximum = 100)]
     pub limit: Option<i64>,
 }
 
@@ -234,6 +237,7 @@ pub async fn public_repos(
     Path(username): Path<String>,
     Query(q): Query<ReposQuery>,
 ) -> Result<Json<Value>, AppError> {
+    crate::validators::check_range_opt(q.limit, "limit", 1, 100)?;
     let row: Option<(Uuid,)> = sqlx::query_as(
         "SELECT id FROM users WHERE username = $1 AND profile_active = TRUE AND is_banned = FALSE",
     )

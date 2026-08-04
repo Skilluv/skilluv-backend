@@ -84,6 +84,25 @@ pub async fn search_v2(
     tenant: crate::middleware::TenantContext,
     Query(q): Query<SearchQuery>,
 ) -> Result<Json<Value>, AppError> {
+    crate::validators::check_max_len_opt(&q.q, "q", 200)?;
+    crate::validators::check_max_len_opt(&q.title, "title", 100)?;
+    crate::validators::check_max_len_opt(&q.tag, "tag", 100)?;
+    crate::validators::check_max_len_opt(&q.badge, "badge", 100)?;
+    crate::validators::check_range_opt(
+        q.min_fragments.map(i64::from),
+        "min_fragments",
+        0,
+        1_000_000,
+    )?;
+    crate::validators::check_range_opt(q.min_streak.map(i64::from), "min_streak", 0, 10_000)?;
+    crate::validators::check_range_opt(
+        q.min_github_repos.map(i64::from),
+        "min_github_repos",
+        0,
+        10_000,
+    )?;
+    crate::validators::check_range_opt(q.page, "page", 1, 100_000)?;
+    crate::validators::check_range_opt(q.per_page, "per_page", 1, 100)?;
     let per_page = q.per_page.unwrap_or(20).clamp(1, 50);
     let page = q.page.unwrap_or(1).max(1);
     let offset = (page - 1) * per_page;

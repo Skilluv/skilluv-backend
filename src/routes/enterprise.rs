@@ -48,9 +48,9 @@ pub async fn peek_enterprise_invite(
 ) -> Result<EnterpriseInvitePayload, AppError> {
     let key = enterprise_invite_key(token);
     let raw: Option<String> = redis.get(&key).await?;
-    let raw = raw.ok_or(AppError::Validation(
-        "Invalid or expired invite token".to_string(),
-    ))?;
+    // Invite token = ressource. Absente/expiree = 404 NotFound
+    // (semantiquement REST + accepte par schemathesis positive_data_acceptance).
+    let raw = raw.ok_or_else(|| AppError::NotFound("Invite token not found or expired".into()))?;
     serde_json::from_str(&raw)
         .map_err(|e| AppError::Internal(format!("Corrupted invite payload: {e}")))
 }
@@ -253,17 +253,35 @@ fn slugify(name: &str) -> String {
 
 // ─── Request types ──────────────────────────────────────────────
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 struct RegisterEnterpriseRequest {
+    #[schema(format = "email", min_length = 5, max_length = 255)]
     email: String,
+    #[schema(
+        min_length = 3,
+        max_length = 30,
+        pattern = r"^[a-zA-Z0-9][a-zA-Z0-9_-]*$"
+    )]
     username: String,
+    #[schema(
+        min_length = 10,
+        max_length = 128,
+        pattern = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!-/:-@\[-`{-~]).+$"
+    )]
     password: String,
+    #[schema(min_length = 1, max_length = 50)]
     first_name: String,
+    #[schema(min_length = 1, max_length = 50)]
     last_name: String,
+    #[schema(min_length = 1, max_length = 200)]
     company_name: String,
+    #[schema(max_length = 500)]
     website: Option<String>,
+    #[schema(max_length = 100)]
     industry: Option<String>,
+    #[schema(min_length = 1, max_length = 20)]
     company_size: String,
+    #[schema(pattern = r"^[A-Z]{2}$")]
     country: Option<String>,
     /// RGPD: owner must explicitly accept the Terms + Privacy Policy at signup.
     /// Kept optional for backwards compat during the deploy window, but the
@@ -272,36 +290,53 @@ struct RegisterEnterpriseRequest {
     terms_accepted: bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 struct UpdateProfileRequest {
+    #[schema(min_length = 1, max_length = 200)]
     company_name: Option<String>,
+    #[schema(max_length = 2000)]
     description: Option<String>,
+    #[schema(max_length = 500)]
     website: Option<String>,
+    #[schema(max_length = 500)]
     logo_url: Option<String>,
+    #[schema(max_length = 100)]
     industry: Option<String>,
+    #[schema(max_length = 20)]
     company_size: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 struct InviteRequest {
+    #[schema(format = "email", min_length = 5, max_length = 255)]
     email: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 struct AcceptInviteRequest {
+    #[schema(min_length = 20, max_length = 128)]
     token: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
 struct InvitePreviewQuery {
+    #[schema(min_length = 20, max_length = 128)]
     token: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 struct RegisterAndAcceptRequest {
+    #[schema(min_length = 20, max_length = 128)]
     token: String,
+    #[schema(min_length = 1, max_length = 50)]
     first_name: String,
+    #[schema(min_length = 1, max_length = 50)]
     last_name: String,
+    #[schema(
+        min_length = 10,
+        max_length = 128,
+        pattern = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!-/:-@\[-`{-~]).+$"
+    )]
     password: String,
     #[serde(default)]
     terms_accepted: bool,
@@ -318,7 +353,7 @@ struct RegisterAndAcceptRequest {
 /// Register a new enterprise account (owner + company).
 #[utoipa::path(
     post, path = "/api/enterprise/register", tag = "enterprise",
-    request_body(content = serde_json::Value),
+    request_body = RegisterEnterpriseRequest,
     responses((status = 201, body = serde_json::Value), (status = 400, body = crate::api_response::ErrorResponse)),
 )]
 pub async fn register_enterprise(
@@ -564,7 +599,7 @@ pub async fn get_profile(
 /// Update the enterprise profile (owner only).
 #[utoipa::path(
     put, path = "/api/enterprise/profile", tag = "enterprise",
-    request_body(content = serde_json::Value),
+    request_body = UpdateProfileRequest,
     responses((status = 200, body = serde_json::Value)),
     security(("cookie_auth" = [])),
 )]
@@ -725,7 +760,7 @@ pub async fn delete_logo(
 /// Invite a recruiter to the enterprise.
 #[utoipa::path(
     post, path = "/api/enterprise/invite", tag = "enterprise",
-    request_body(content = serde_json::Value),
+    request_body = InviteRequest,
     responses((status = 200, body = serde_json::Value)),
     security(("cookie_auth" = [])),
 )]
@@ -803,7 +838,7 @@ pub async fn invite_recruiter(
 /// Accept a recruiter invitation.
 #[utoipa::path(
     post, path = "/api/enterprise/invite/accept", tag = "enterprise",
-    request_body(content = serde_json::Value),
+    request_body = AcceptInviteRequest,
     responses((status = 200, body = serde_json::Value)),
     security(("cookie_auth" = [])),
 )]
@@ -890,7 +925,7 @@ pub async fn invite_preview(
 /// Register a new recruiter and accept invitation in one call.
 #[utoipa::path(
     post, path = "/api/enterprise/invite/register-and-accept", tag = "enterprise",
-    request_body(content = serde_json::Value),
+    request_body = RegisterAndAcceptRequest,
     responses((status = 201, body = serde_json::Value)),
 )]
 pub async fn invite_register_and_accept(

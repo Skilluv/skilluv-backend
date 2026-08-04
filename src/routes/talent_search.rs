@@ -160,6 +160,27 @@ pub async fn search_talents(
     )?;
     crate::validators::check_range_opt(query.page, "page", 1, 100_000)?;
     crate::validators::check_range_opt(query.per_page, "per_page", 1, 100)?;
+    if let Some(s) = &query.sort_by
+        && !matches!(s.as_str(), "fragments" | "recent" | "relevance")
+    {
+        return Err(AppError::Validation(
+            "sort_by must be one of: fragments, recent, relevance".into(),
+        ));
+    }
+    if let Some(d) = &query.skill_domain
+        && !matches!(d.as_str(), "code" | "design" | "game" | "security")
+    {
+        return Err(AppError::Validation(
+            "skill_domain must be one of: code, design, game, security".into(),
+        ));
+    }
+    if let Some(c) = &query.country
+        && !(c.len() == 2 && c.chars().all(|c| c.is_ascii_uppercase()))
+    {
+        return Err(AppError::Validation(
+            "country must be ISO 3166-1 alpha-2".into(),
+        ));
+    }
     let auth = try_extract_auth(&parts, &state);
     let page = query.page.unwrap_or(1).max(1);
     let per_page = query.per_page.unwrap_or(20).clamp(1, 50);

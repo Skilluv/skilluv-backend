@@ -84,7 +84,10 @@ pub async fn get_deliverable(
 // ═══════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
 pub struct UserDeliverablesQuery {
+    #[param(minimum = 1, maximum = 100)]
     pub limit: Option<i64>,
 }
 
@@ -104,6 +107,7 @@ pub async fn list_user_deliverables(
     Path(user_id): Path<Uuid>,
     Query(q): Query<UserDeliverablesQuery>,
 ) -> Result<Json<Value>, AppError> {
+    crate::validators::check_range_opt(q.limit, "limit", 1, 100)?;
     let limit = q.limit.unwrap_or(20);
     let deliverables = DeliverablesService::list_public_by_user(&state.db, user_id, limit).await?;
     Ok(Json(build_response(

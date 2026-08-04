@@ -242,6 +242,11 @@ pub async fn discover(
     State(state): State<AppState>,
     Query(q): Query<DiscoverQuery>,
 ) -> Result<Json<Value>, AppError> {
+    if q.email.len() < 5 || q.email.len() > 255 {
+        return Err(AppError::Validation(
+            "email must be between 5 and 255 characters".into(),
+        ));
+    }
     let Some(domain) = email_domain(&q.email) else {
         return Ok(Json(build_response(json!({ "sso_available": false }))));
     };

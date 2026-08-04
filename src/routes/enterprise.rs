@@ -269,17 +269,17 @@ struct RegisterEnterpriseRequest {
         pattern = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!-/:-@\[-`{-~]).+$"
     )]
     password: String,
-    #[schema(min_length = 1, max_length = 50)]
+    #[schema(min_length = 1, max_length = 50, pattern = r"^\S(.*\S)?$")]
     first_name: String,
-    #[schema(min_length = 1, max_length = 50)]
+    #[schema(min_length = 1, max_length = 50, pattern = r"^\S(.*\S)?$")]
     last_name: String,
-    #[schema(min_length = 1, max_length = 200)]
+    #[schema(min_length = 1, max_length = 200, pattern = r"^\S(.*\S)?$")]
     company_name: String,
     #[schema(max_length = 500)]
     website: Option<String>,
     #[schema(max_length = 100)]
     industry: Option<String>,
-    #[schema(min_length = 1, max_length = 20)]
+    #[schema(pattern = r"^(1-10|11-50|51-200|201-500|501-1000|1000\+)$")]
     company_size: String,
     #[schema(pattern = r"^[A-Z]{2}$")]
     country: Option<String>,
@@ -330,9 +330,9 @@ struct InvitePreviewQuery {
 struct RegisterAndAcceptRequest {
     #[schema(min_length = 20, max_length = 128)]
     token: String,
-    #[schema(min_length = 1, max_length = 50)]
+    #[schema(min_length = 1, max_length = 50, pattern = r"^\S(.*\S)?$")]
     first_name: String,
-    #[schema(min_length = 1, max_length = 50)]
+    #[schema(min_length = 1, max_length = 50, pattern = r"^\S(.*\S)?$")]
     last_name: String,
     #[schema(
         min_length = 10,

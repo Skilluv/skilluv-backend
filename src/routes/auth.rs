@@ -502,12 +502,13 @@ pub struct DeleteAccountRequest {
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct Email2faVerifyRequest {
     /// 6-digit code received by email.
     #[schema(pattern = r"^[0-9]{6}$")]
     pub code: String,
-    /// Needed for login flow (user not yet authenticated).
-    pub user_id: Option<Uuid>,
+    /// User id issued by `/auth/login` when 2FA is required.
+    pub user_id: Uuid,
 }
 
 // ─── Validation helpers ──────────────────────────────────────────
@@ -1176,9 +1177,7 @@ pub async fn email_2fa_verify(
     headers: axum::http::HeaderMap,
     Json(body): Json<Email2faVerifyRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    let user_id = body.user_id.ok_or(AppError::Validation(
-        "user_id is required for email 2FA verification".to_string(),
-    ))?;
+    let user_id = body.user_id;
 
     // Check there's a pending 2FA
     let mut redis = state.redis.clone();

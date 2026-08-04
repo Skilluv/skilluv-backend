@@ -103,6 +103,47 @@ pub async fn search_v2(
     )?;
     crate::validators::check_range_opt(q.page, "page", 1, 100_000)?;
     crate::validators::check_range_opt(q.per_page, "per_page", 1, 100)?;
+    if let Some(s) = &q.sort_by
+        && !matches!(
+            s.as_str(),
+            "fragments" | "recent" | "most_active_recently" | "top_in_domain"
+        )
+    {
+        return Err(AppError::Validation(
+            "sort_by must be one of: fragments, recent, most_active_recently, top_in_domain".into(),
+        ));
+    }
+    if let Some(d) = &q.skill_domain
+        && !matches!(d.as_str(), "code" | "design" | "game" | "security")
+    {
+        return Err(AppError::Validation(
+            "skill_domain must be one of: code, design, game, security".into(),
+        ));
+    }
+    if let Some(c) = &q.country_iso2
+        && !(c.len() == 2 && c.chars().all(|c| c.is_ascii_uppercase()))
+    {
+        return Err(AppError::Validation(
+            "country_iso2 must be ISO 3166-1 alpha-2".into(),
+        ));
+    }
+    if let Some(l) = &q.looking_for
+        && !matches!(
+            l.as_str(),
+            "cdi" | "cdd" | "freelance" | "internship" | "contract"
+        )
+    {
+        return Err(AppError::Validation(
+            "looking_for must be one of: cdi, cdd, freelance, internship, contract".into(),
+        ));
+    }
+    if let Some(l) = &q.language_spoken
+        && !(l.len() == 2 && l.chars().all(|c| c.is_ascii_alphabetic()))
+    {
+        return Err(AppError::Validation(
+            "language_spoken must be a 2-letter ISO code".into(),
+        ));
+    }
     let per_page = q.per_page.unwrap_or(20).clamp(1, 50);
     let page = q.page.unwrap_or(1).max(1);
     let offset = (page - 1) * per_page;

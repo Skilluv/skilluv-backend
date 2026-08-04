@@ -45,11 +45,17 @@ pub fn slice_routes() -> Router<AppState> {
 // ═══════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
 pub struct ListQuery {
+    #[param(pattern = r"^(code|design|game|security|ops|ai|soft_skills)$")]
     domain: Option<String>,
+    #[param(minimum = 1, maximum = 5)]
     difficulty: Option<i16>,
     project_id: Option<Uuid>,
+    #[param(minimum = 1, maximum = 100000)]
     page: Option<i64>,
+    #[param(minimum = 1, maximum = 100)]
     per_page: Option<i64>,
 }
 
@@ -96,6 +102,19 @@ pub async fn list_open(
     State(state): State<AppState>,
     Query(query): Query<ListQuery>,
 ) -> Result<Json<serde_json::Value>, AppError> {
+    if let Some(d) = &query.domain
+        && !matches!(
+            d.as_str(),
+            "code" | "design" | "game" | "security" | "ops" | "ai" | "soft_skills"
+        )
+    {
+        return Err(AppError::Validation(
+            "domain must be one of: code, design, game, security, ops, ai, soft_skills".into(),
+        ));
+    }
+    crate::validators::check_range_opt(query.difficulty.map(i64::from), "difficulty", 1, 5)?;
+    crate::validators::check_range_opt(query.page, "page", 1, 100_000)?;
+    crate::validators::check_range_opt(query.per_page, "per_page", 1, 100)?;
     let filter: SlicesListFilter = query.into();
     let per_page = filter.per_page.clamp(1, 100);
     let page = filter.page.max(1);

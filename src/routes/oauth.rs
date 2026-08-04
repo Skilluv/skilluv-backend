@@ -20,11 +20,13 @@ use crate::routes::enterprise::attach_recruiter_to_enterprise;
 use crate::services::oauth::{self, OAuthProfile, OAuthState, google as gp, linkedin as lp};
 use crate::services::{AuthService, SessionService};
 
-#[derive(Deserialize, Default)]
+#[derive(Deserialize, Default, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
 struct StartQuery {
     /// Optional enterprise recruiter invite token. When present, the OAuth
     /// callback consumes the invite and attaches the user to the enterprise
     /// (rejecting the flow if the provider email doesn't match the invited email).
+    #[param(max_length = 128)]
     invite_token: Option<String>,
 }
 
@@ -106,6 +108,7 @@ pub async fn unlink_provider(
 /// Start Google OAuth login flow (redirects to Google).
 #[utoipa::path(
     get, path = "/api/auth/google/start", tag = "auth",
+    params(StartQuery),
     responses((status = 302, description = "Redirect to Google")),
 )]
 pub async fn google_start(
@@ -118,6 +121,7 @@ pub async fn google_start(
 /// Link Google to an existing account (redirects to Google).
 #[utoipa::path(
     get, path = "/api/auth/google/link", tag = "auth",
+    params(StartQuery),
     responses((status = 302, description = "Redirect to Google")),
     security(("cookie_auth" = [])),
 )]
@@ -128,15 +132,21 @@ pub async fn google_link_start(
     start_flow(&state, "google", Some(auth.user_id), None).await
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
 struct CallbackQuery {
+    /// OAuth authorization code returned by the provider.
+    #[param(min_length = 1, max_length = 2048)]
     code: String,
+    /// Opaque state token used to prevent CSRF and carry the flow context.
+    #[param(min_length = 1, max_length = 128)]
     state: String,
 }
 
 /// Google OAuth callback (session cookie or link).
 #[utoipa::path(
     get, path = "/api/auth/google/callback", tag = "auth",
+    params(CallbackQuery),
     responses((status = 200, body = serde_json::Value), (status = 400, body = crate::api_response::ErrorResponse)),
 )]
 pub async fn google_callback(
@@ -160,6 +170,7 @@ pub async fn google_callback(
 /// Start LinkedIn OAuth login flow (redirects to LinkedIn).
 #[utoipa::path(
     get, path = "/api/auth/linkedin/start", tag = "auth",
+    params(StartQuery),
     responses((status = 302, description = "Redirect to LinkedIn")),
 )]
 pub async fn linkedin_start(
@@ -172,6 +183,7 @@ pub async fn linkedin_start(
 /// Link LinkedIn to an existing account.
 #[utoipa::path(
     get, path = "/api/auth/linkedin/link", tag = "auth",
+    params(StartQuery),
     responses((status = 302, description = "Redirect to LinkedIn")),
     security(("cookie_auth" = [])),
 )]
@@ -185,6 +197,7 @@ pub async fn linkedin_link_start(
 /// LinkedIn OAuth callback.
 #[utoipa::path(
     get, path = "/api/auth/linkedin/callback", tag = "auth",
+    params(CallbackQuery),
     responses((status = 200, body = serde_json::Value), (status = 400, body = crate::api_response::ErrorResponse)),
 )]
 pub async fn linkedin_callback(
@@ -209,6 +222,7 @@ pub async fn linkedin_callback(
 /// Start GitHub OAuth login flow (distinct from repo-sync flow).
 #[utoipa::path(
     get, path = "/api/auth/github/login", tag = "auth",
+    params(StartQuery),
     responses((status = 302, description = "Redirect to GitHub")),
 )]
 pub async fn github_login_start(
@@ -239,6 +253,7 @@ pub async fn github_login_start(
 /// GitHub OAuth login callback.
 #[utoipa::path(
     get, path = "/api/auth/github/login/callback", tag = "auth",
+    params(CallbackQuery),
     responses((status = 200, body = serde_json::Value), (status = 400, body = crate::api_response::ErrorResponse)),
 )]
 pub async fn github_login_callback(

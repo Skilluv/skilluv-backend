@@ -51,12 +51,18 @@ pub fn orientation_routes() -> Router<AppState> {
 // ═══════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
 pub struct CatalogQuery {
+    #[param(max_length = 100)]
     pub domain: Option<String>,
+    #[param(max_length = 100)]
     pub tag: Option<String>,
     #[serde(default = "default_limit")]
+    #[param(minimum = 1, maximum = 200)]
     pub limit: i64,
     #[serde(default)]
+    #[param(minimum = 0, maximum = 100000)]
     pub offset: i64,
     #[serde(default)]
     pub include_archived: bool,
@@ -215,6 +221,18 @@ pub async fn list_orientations(
     State(state): State<AppState>,
     Query(q): Query<CatalogQuery>,
 ) -> Result<Json<ApiResponse<OrientationsCatalogResponse>>, AppError> {
+    crate::validators::check_max_len_opt(&q.domain, "domain", 100)?;
+    crate::validators::check_max_len_opt(&q.tag, "tag", 100)?;
+    if !(1..=200).contains(&q.limit) {
+        return Err(AppError::Validation(
+            "limit must be between 1 and 200".into(),
+        ));
+    }
+    if !(0..=100_000).contains(&q.offset) {
+        return Err(AppError::Validation(
+            "offset must be between 0 and 100000".into(),
+        ));
+    }
     let limit = q.limit.clamp(1, 200);
     let rows = sqlx::query_as::<_, OrientationRow>(
         r#"

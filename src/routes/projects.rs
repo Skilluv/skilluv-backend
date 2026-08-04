@@ -98,7 +98,10 @@ pub async fn create_project(
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
 pub struct LimitQuery {
+    #[param(minimum = 1, maximum = 200)]
     limit: Option<i64>,
 }
 
@@ -114,6 +117,7 @@ pub async fn list_looking(
     State(state): State<AppState>,
     Query(q): Query<LimitQuery>,
 ) -> Result<Json<Value>, AppError> {
+    crate::validators::check_range_opt(q.limit, "limit", 1, 200)?;
     let rows = projects::list_looking_for_contributors(&state.db, q.limit.unwrap_or(50)).await?;
     Ok(Json(build_response(json!({ "projects": rows }))))
 }
@@ -130,6 +134,7 @@ pub async fn list_curated(
     State(state): State<AppState>,
     Query(q): Query<LimitQuery>,
 ) -> Result<Json<Value>, AppError> {
+    crate::validators::check_range_opt(q.limit, "limit", 1, 200)?;
     let rows = projects::list_curated(&state.db, q.limit.unwrap_or(50)).await?;
     Ok(Json(build_response(json!({ "projects": rows }))))
 }

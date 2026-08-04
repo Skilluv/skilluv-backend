@@ -55,12 +55,19 @@ pub async fn list_categories(State(state): State<AppState>) -> Result<Json<Value
 }
 
 #[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
 pub struct ListPostsQuery {
+    #[param(max_length = 100)]
     pub category: Option<String>,
+    #[param(max_length = 50)]
     pub kind: Option<String>,
     /// `recent` (default), `hot`, `top-bounty`.
+    #[param(pattern = r"^(recent|hot|top-bounty)$")]
     pub sort: Option<String>,
+    #[param(minimum = 1, maximum = 100000)]
     pub page: Option<i64>,
+    #[param(minimum = 1, maximum = 100)]
     pub per_page: Option<i64>,
 }
 
@@ -78,6 +85,18 @@ pub async fn list_posts(
     State(state): State<AppState>,
     Query(q): Query<ListPostsQuery>,
 ) -> Result<Json<Value>, AppError> {
+    crate::validators::check_max_len_opt(&q.category, "category", 100)?;
+    crate::validators::check_max_len_opt(&q.kind, "kind", 50)?;
+    if let Some(s) = &q.sort
+        && !matches!(s.as_str(), "recent" | "hot" | "top-bounty")
+    {
+        return Err(AppError::Validation(
+            "sort must be one of: recent, hot, top-bounty".into(),
+        ));
+    }
+    crate::validators::check_range_opt(q.page, "page", 1, 100_000)?;
+    crate::validators::check_range_opt(q.per_page, "per_page", 1, 100)?;
+
     let per_page = q.per_page.unwrap_or(30).clamp(1, 100);
     let offset = (q.page.unwrap_or(1).max(1) - 1) * per_page;
     let sort = match q.sort.as_deref() {
@@ -391,9 +410,13 @@ pub async fn toggle_lock(
 }
 
 #[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
 pub struct SearchQuery {
+    #[param(min_length = 1, max_length = 200)]
     pub q: String,
     /// Max hits. Defaults to 20.
+    #[param(minimum = 1, maximum = 100)]
     pub limit: Option<i64>,
 }
 
@@ -411,6 +434,12 @@ pub async fn search(
     State(state): State<AppState>,
     Query(query): Query<SearchQuery>,
 ) -> Result<Json<Value>, AppError> {
+    if query.q.is_empty() || query.q.len() > 200 {
+        return Err(AppError::Validation(
+            "q must be between 1 and 200 characters".into(),
+        ));
+    }
+    crate::validators::check_range_opt(query.limit, "limit", 1, 100)?;
     let hits = forum::search_posts(&state.db, &query.q, query.limit.unwrap_or(20)).await?;
     Ok(Json(build_response(json!({ "hits": hits }))))
 }

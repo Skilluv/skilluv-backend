@@ -94,7 +94,7 @@ pub struct LeaderboardPageResponse {
     path = "/api/leaderboards/{domain}",
     tag = "profile",
     params(
-        ("domain" = String, Path, description = "Leaderboard domain (global, code, design, game, security)"),
+        ("domain" = String, Path, pattern = r"^(global|code|design|game|security)$", description = "Leaderboard domain"),
         LeaderboardQuery,
     ),
     responses(
@@ -204,7 +204,7 @@ pub struct MyRankResponse {
     path = "/api/leaderboards/{domain}/me",
     tag = "profile",
     params(
-        ("domain" = String, Path, description = "Leaderboard domain"),
+        ("domain" = String, Path, pattern = r"^(global|code|design|game|security)$", description = "Leaderboard domain"),
         MyRankQuery,
     ),
     responses(

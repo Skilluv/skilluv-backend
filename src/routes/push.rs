@@ -86,7 +86,7 @@ pub async fn vapid_public_key() -> Result<Json<ApiResponse<VapidPublicKeyRespons
     let key = std::env::var("VAPID_PUBLIC_KEY")
         .ok()
         .filter(|s| !s.is_empty())
-        .ok_or(AppError::Internal("VAPID_PUBLIC_KEY not set".into()))?;
+        .ok_or_else(|| AppError::NotFound("Web push not enabled on this deployment".into()))?;
     Ok(Json(ApiResponse::new(VapidPublicKeyResponse {
         public_key: key,
     })))

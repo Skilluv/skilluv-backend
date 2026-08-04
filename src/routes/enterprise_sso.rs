@@ -54,7 +54,7 @@ fn require_key(state: &AppState) -> Result<[u8; 32], AppError> {
     state
         .config
         .sso_encryption_key
-        .ok_or_else(|| AppError::Internal("SSO_ENCRYPTION_KEY not configured".into()))
+        .ok_or_else(|| AppError::NotFound("Enterprise SSO not enabled on this deployment".into()))
 }
 
 fn email_domain(email: &str) -> Option<String> {
@@ -224,14 +224,18 @@ fn redact(row: &sso::SsoConfigRow) -> Value {
 
 // ─── Discovery (public) ──────────────────────────────────────────
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
 struct DiscoverQuery {
+    #[param(format = "email", min_length = 5, max_length = 255)]
     email: String,
 }
 
 /// Discover whether SSO is available for an email domain.
 #[utoipa::path(
     get, path = "/api/enterprise/sso/discover", tag = "enterprise",
+    params(DiscoverQuery),
     responses((status = 200, body = serde_json::Value)),
 )]
 pub async fn discover(
@@ -369,16 +373,20 @@ pub async fn start(
     Ok(Redirect::to(auth_url.as_str()))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
 struct CallbackQuery {
+    #[param(min_length = 1, max_length = 2048)]
     code: String,
+    #[param(min_length = 1, max_length = 128)]
     state: String,
 }
 
 /// Handle the IdP callback and establish a session.
 #[utoipa::path(
     get, path = "/api/enterprise/sso/{slug}/callback", tag = "enterprise",
-    params(("slug" = String, Path)),
+    params(("slug" = String, Path), CallbackQuery),
     responses((status = 302, description = "Redirect to app after session established")),
 )]
 pub async fn callback(

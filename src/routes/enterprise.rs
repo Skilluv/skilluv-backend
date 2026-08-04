@@ -319,8 +319,10 @@ struct AcceptInviteRequest {
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
 struct InvitePreviewQuery {
-    #[schema(min_length = 20, max_length = 128)]
+    #[param(min_length = 20, max_length = 128)]
     token: String,
 }
 

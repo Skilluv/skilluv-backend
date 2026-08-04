@@ -144,15 +144,15 @@ fn meta_array(meta: &Value, key: &str) -> Vec<String> {
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
 #[into_params(parameter_in = Query)]
 pub struct ListQuery {
-    #[param(max_length = 50)]
+    // Aucune contrainte declaree dans le schema : le handler fait un
+    // clamp / unwrap_or lenient sur tous les params, jamais de reject.
+    // Declarer des contraintes serait un mensonge (schemathesis
+    // negative_data_rejection catch tout input schema-invalid accepte).
+    // Le request-size limit axum protege des DoS via giant query strings.
     pub status: Option<String>,
-    #[param(max_length = 100)]
     pub skill: Option<String>,
-    #[param(max_length = 100)]
     pub tag: Option<String>,
-    #[param(minimum = 1, maximum = 100000)]
     pub page: Option<i64>,
-    #[param(minimum = 1, maximum = 200)]
     pub per_page: Option<i64>,
 }
 

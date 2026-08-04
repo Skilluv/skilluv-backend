@@ -196,6 +196,13 @@ pub fn build_router(state: AppState) -> Router {
         //      repondre 405. Retourner 405 uniformement respecte l'attente
         //      schemathesis unsupported_methods sans desactiver l'admin_gate.
         .layer(axum::middleware::from_fn(reject_deprecated_methods))
+        // Convertit les reponses 4xx/5xx text/plain en JSON conforme au
+        // schema d'erreur documente. Cible principale : rejections axum
+        // built-in (Query, Json, Path, etc.) qui renvoient text/plain par
+        // defaut, ce qui fail schemathesis content_type_conformance.
+        .layer(axum::middleware::from_fn(
+            normalize_error_response_content_type,
+        ))
         .layer(middleware::SecurityHeadersLayer)
         .layer(TraceLayer::new_for_http())
         .layer(build_cors_layer())
@@ -240,6 +247,95 @@ async fn reject_deprecated_methods(
             .expect("static response builds");
     }
     next.run(req).await
+}
+
+/// Convertit toute réponse d'erreur (4xx/5xx) dont le Content-Type n'est
+/// pas `application/json` en une enveloppe JSON conforme à notre schéma
+/// d'erreur documenté. Cible principale : les rejections built-in axum
+/// (Query, Json, Path, Form) qui renvoient `text/plain` avec un message
+/// de type "Failed to deserialize query string: missing field `token`".
+///
+/// Sans cette normalisation, le schéma OpenAPI déclare
+/// `application/json` sur les 4xx (via `CommonErrorResponsesAddon`) mais
+/// le body réel arrive en text/plain, causant un fail schemathesis
+/// `content_type_conformance`.
+///
+/// Non-régressif : les handlers qui renvoient déjà du JSON (nos
+/// `AppError::IntoResponse`) passent inchangés.
+async fn normalize_error_response_content_type(
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    use axum::http::{StatusCode, header};
+
+    let response = next.run(req).await;
+    let status = response.status();
+
+    // Only touch error responses (4xx/5xx).
+    if !status.is_client_error() && !status.is_server_error() {
+        return response;
+    }
+
+    // Skip when Content-Type is already application/json (or an
+    // application/*+json variant like problem+json).
+    let is_json = response
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .map(|ct| {
+            let ct = ct.to_ascii_lowercase();
+            ct.starts_with("application/json") || ct.contains("+json")
+        })
+        .unwrap_or(false);
+    if is_json {
+        return response;
+    }
+
+    // Split off the parts we need. If we can't read the body bytes,
+    // fall back to the original response.
+    let (parts, body) = response.into_parts();
+    let bytes = match axum::body::to_bytes(body, 65_536).await {
+        Ok(b) => b,
+        Err(_) => {
+            return axum::response::Response::from_parts(parts, axum::body::Body::empty());
+        }
+    };
+    let raw_msg = String::from_utf8_lossy(&bytes).to_string();
+    let msg = if raw_msg.trim().is_empty() {
+        status.canonical_reason().unwrap_or("Error").to_string()
+    } else {
+        raw_msg
+    };
+    let code = if status == StatusCode::UNPROCESSABLE_ENTITY {
+        "UNPROCESSABLE_ENTITY"
+    } else if status.is_server_error() {
+        "INTERNAL_ERROR"
+    } else {
+        "VALIDATION_ERROR"
+    };
+
+    let envelope = serde_json::json!({
+        "error": {
+            "code": code,
+            "message": msg,
+        },
+        "meta": {
+            "request_id": uuid::Uuid::new_v4().to_string(),
+            "timestamp": chrono::Utc::now().to_rfc3339(),
+        },
+    });
+    let json_bytes = serde_json::to_vec(&envelope).unwrap_or_default();
+
+    // Rebuild the response with normalized headers.
+    let mut headers = parts.headers.clone();
+    headers.insert(
+        header::CONTENT_TYPE,
+        axum::http::HeaderValue::from_static("application/json"),
+    );
+    headers.remove(header::CONTENT_LENGTH);
+    let mut new_parts = parts;
+    new_parts.headers = headers;
+    axum::response::Response::from_parts(new_parts, axum::body::Body::from(json_bytes))
 }
 
 /// Build the CORS layer with an explicit origin allowlist. Reads

@@ -2412,7 +2412,9 @@ pub async fn request_email_change(
 )]
 pub async fn confirm_email_change(
     State(state): State<AppState>,
-    Query(query): Query<ConfirmEmailChangeQuery>,
+    crate::middleware::ValidatedQuery(query): crate::middleware::ValidatedQuery<
+        ConfirmEmailChangeQuery,
+    >,
 ) -> Result<Json<ApiResponse<SimpleMessage>>, AppError> {
     let mut redis = state.redis.clone();
     let uid_str: Option<String> = redis.get(email_change_token_lookup(&query.token)).await?;

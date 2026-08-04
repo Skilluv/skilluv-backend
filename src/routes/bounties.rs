@@ -142,14 +142,17 @@ fn meta_array(meta: &Value, key: &str) -> Vec<String> {
 // ─── Listing ─────────────────────────────────────────────────────
 
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct ListQuery {
-    #[schema(max_length = 10000)]
+    #[param(max_length = 50)]
     pub status: Option<String>,
-    #[schema(max_length = 10000)]
+    #[param(max_length = 100)]
     pub skill: Option<String>,
-    #[schema(max_length = 10000)]
+    #[param(max_length = 100)]
     pub tag: Option<String>,
+    #[param(minimum = 1, maximum = 100000)]
     pub page: Option<i64>,
+    #[param(minimum = 1, maximum = 200)]
     pub per_page: Option<i64>,
 }
 

@@ -342,6 +342,26 @@ jobs:
         if: always()
         run: docker rm -f minio || true
 
+  integration-tests:
+    # Umbrella status check for the sharded `test` matrix. Branch
+    # protection requires a check literally named "Integration Tests";
+    # each shard reports as "Integration Tests (shard N/4)", so this
+    # aggregator fans them in under the required name. Runs even on
+    # shard failure so protection sees a red "Integration Tests"
+    # instead of a pending one.
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: test
+    if: always() && github.event.pull_request.draft == false
+    steps:
+      - name: Fail if any shard failed or was cancelled
+        if: needs.test.result != 'success'
+        run: |
+          echo "test matrix result: ${{ needs.test.result }}"
+          exit 1
+      - name: All shards passed
+        run: echo "All 4 test shards succeeded."
+
   publish:
     # Build + push a Docker image to GHCR on every master push so downstream
     # consumers (skilluv-admin CI e2e job) can pull a ready-to-run backend

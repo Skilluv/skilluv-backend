@@ -29,10 +29,7 @@ pub fn apprentice_verification_routes() -> Router<AppState> {
         .route("/beginner/verifications", post(submit))
         .route("/beginner/verifications/mine", get(mine))
         .route("/beginner/verifications/queue", get(queue))
-        .route(
-            "/beginner/verifications/{id}/verdict",
-            post(record_verdict),
-        )
+        .route("/beginner/verifications/{id}/verdict", post(record_verdict))
 }
 
 fn wrap(data: Value) -> Value {
@@ -76,10 +73,7 @@ async fn submit(
 // Apprenti — voit sa progression
 // ═══════════════════════════════════════════════════════════════════
 
-async fn mine(
-    State(state): State<AppState>,
-    auth: AuthUser,
-) -> Result<Json<Value>, AppError> {
+async fn mine(State(state): State<AppState>, auth: AuthUser) -> Result<Json<Value>, AppError> {
     let progress = apprentice_verification::get_progress(&state.db, auth.user_id).await?;
     Ok(Json(wrap(json!({ "progress": progress }))))
 }

@@ -268,10 +268,7 @@ pub async fn submit_verification(
     if obj.len() != QUESTIONS_PER_SUBMISSION {
         return Err(VerificationError::AnswersMismatch.into());
     }
-    let question_ids: Vec<Uuid> = obj
-        .keys()
-        .filter_map(|k| Uuid::parse_str(k).ok())
-        .collect();
+    let question_ids: Vec<Uuid> = obj.keys().filter_map(|k| Uuid::parse_str(k).ok()).collect();
     if question_ids.len() != QUESTIONS_PER_SUBMISSION {
         return Err(VerificationError::AnswersMismatch.into());
     }
@@ -328,10 +325,7 @@ pub async fn record_verdict(
     payload: VerdictPayload,
 ) -> Result<ApprenticeVerification, AppError> {
     let verdict = payload.verdict.as_str();
-    if verdict != VERDICT_APPROVED
-        && verdict != VERDICT_REJECTED
-        && verdict != VERDICT_ABSTAIN
-    {
+    if verdict != VERDICT_APPROVED && verdict != VERDICT_REJECTED && verdict != VERDICT_ABSTAIN {
         return Err(VerificationError::InvalidVerdict.into());
     }
 
@@ -368,18 +362,17 @@ pub async fn record_verdict(
     // seuil atteint. On ignore silencieusement une erreur du recompute
     // (le verdict, lui, doit rester enregistré ; le grant est
     // rattrapable par un sweep ultérieur).
-    if verdict == VERDICT_APPROVED {
-        if let Err(err) =
+    if verdict == VERDICT_APPROVED
+        && let Err(err) =
             capabilities_engine::recompute_capabilities_for_user(db, updated.apprentice_user_id)
                 .await
-        {
-            tracing::warn!(
-                apprentice_user_id = %updated.apprentice_user_id,
-                verification_id = %verification_id,
-                error = %err,
-                "P26: verdict enregistré mais recompute capabilities a échoué"
-            );
-        }
+    {
+        tracing::warn!(
+            apprentice_user_id = %updated.apprentice_user_id,
+            verification_id = %verification_id,
+            error = %err,
+            "P26: verdict enregistré mais recompute capabilities a échoué"
+        );
     }
 
     Ok(updated)
@@ -388,13 +381,12 @@ pub async fn record_verdict(
 // ─── Helpers ──────────────────────────────────────────────────────
 
 async fn ensure_template_is_sas(db: &PgPool, template_id: Uuid) -> Result<(), AppError> {
-    let stage: Option<String> = sqlx::query_scalar(
-        "SELECT beginner_stage FROM challenge_templates WHERE id = $1",
-    )
-    .bind(template_id)
-    .fetch_optional(db)
-    .await?
-    .flatten();
+    let stage: Option<String> =
+        sqlx::query_scalar("SELECT beginner_stage FROM challenge_templates WHERE id = $1")
+            .bind(template_id)
+            .fetch_optional(db)
+            .await?
+            .flatten();
     if stage.as_deref() != Some("sas") {
         return Err(VerificationError::NotSasChallenge.into());
     }

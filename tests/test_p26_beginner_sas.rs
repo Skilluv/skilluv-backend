@@ -247,7 +247,10 @@ async fn three_approvals_grant_verified_apprentice() {
     .fetch_one(&db)
     .await
     .unwrap();
-    assert!(has_after, "verified_apprentice should be granted after 3 approvals");
+    assert!(
+        has_after,
+        "verified_apprentice should be granted after 3 approvals"
+    );
 
     // La progression reflète bien 3 approuvés + is_verified.
     let progress = apprentice_verification::get_progress(&db, apprentice)
@@ -350,7 +353,9 @@ async fn engine_grants_verified_apprentice_only_at_threshold() {
         .expect("recompute ok");
     assert!(
         !report.granted.contains(&"verified_apprentice".to_string())
-            && !report.already_active.contains(&"verified_apprentice".to_string()),
+            && !report
+                .already_active
+                .contains(&"verified_apprentice".to_string()),
         "verified_apprentice must NOT be granted below threshold, got {:?}",
         report
     );

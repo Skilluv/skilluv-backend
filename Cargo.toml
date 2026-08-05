@@ -82,6 +82,8 @@ hex = "0.4"
 base64 = "0.22"
 getrandom = "0.4"
 rand_core = "0.6"
+# `rand::rngs::OsRng` is the CryptoRng that p256 0.14's ecdh::EphemeralSecret::random accepts.
+rand = "0.10"
 
 # S3/MinIO storage
 rust-s3 = { version = "0.37", features = ["tokio-rustls-tls"], default-features = false }

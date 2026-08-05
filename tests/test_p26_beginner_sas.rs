@@ -89,13 +89,16 @@ async fn create_sas_challenge(
     n_questions: usize,
 ) -> (Uuid, Vec<Uuid>) {
     let tid = Uuid::new_v4();
+    // is_training = TRUE : SAS beginner questions are a training-tier gate,
+    // and the `challenge_templates_project_or_training` CHECK (added post-p26 on
+    // master) forbids status='published' without a project_id unless training.
     sqlx::query(
         "INSERT INTO challenge_templates
             (id, title, description, instructions, skill_domain, difficulty, mode,
              ai_policy, tone, reward_fragments, is_onboarding, is_training,
              is_capstone, status, is_community, featured, vote_count, beginner_stage)
          VALUES ($1, $2, 'd', 'i', 'code', 1, 'solo',
-                 'disclosure_required', 'friendly', 10, FALSE, FALSE,
+                 'disclosure_required', 'friendly', 10, FALSE, TRUE,
                  FALSE, 'published', FALSE, FALSE, 0, $3)",
     )
     .bind(tid)

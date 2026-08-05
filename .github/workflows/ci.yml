@@ -402,3 +402,15 @@ jobs:
             ghcr.io/skilluv/skilluv-backend:master-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Trigger Coolify redeploy
+        # Skips silently if the secret is unset — lets the workflow keep
+        # working in forks / rewinds without hard-failing on missing config.
+        env:
+          COOLIFY_WEBHOOK_URL: ${{ secrets.COOLIFY_WEBHOOK_URL }}
+        run: |
+          if [ -z "$COOLIFY_WEBHOOK_URL" ]; then
+            echo "COOLIFY_WEBHOOK_URL secret not set — skipping deploy trigger."
+            exit 0
+          fi
+          curl --fail --silent --show-error --max-time 30 "$COOLIFY_WEBHOOK_URL"

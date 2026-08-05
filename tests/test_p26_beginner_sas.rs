@@ -98,7 +98,7 @@ async fn create_sas_challenge(
              ai_policy, tone, reward_fragments, is_onboarding, is_training,
              is_capstone, status, is_community, featured, vote_count, beginner_stage)
          VALUES ($1, $2, 'd', 'i', 'code', 1, 'solo',
-                 'disclosure_required', 'friendly', 10, FALSE, TRUE,
+                 'disclosure_required', 'educational', 10, FALSE, TRUE,
                  FALSE, 'published', FALSE, FALSE, 0, $3)",
     )
     .bind(tid)

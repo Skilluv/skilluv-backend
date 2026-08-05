@@ -1,9 +1,9 @@
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::AppState;
@@ -46,25 +46,33 @@ pub struct EnrichedChallenge {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
-pub struct PendingReviewResponse {
-    pub challenges: Vec<EnrichedChallenge>,
-    pub total: usize,
-}
-
-#[derive(Debug, Serialize, ToSchema)]
 pub struct AdminChallengeDecisionResponse {
     pub challenge: ChallengeTemplate,
     pub message: String,
 }
 
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
+pub struct PendingReviewQuery {
+    #[param(minimum = 1, maximum = 100000)]
+    pub page: Option<i64>,
+    #[param(minimum = 1, maximum = 100)]
+    pub per_page: Option<i64>,
+}
+
 /// Community challenges awaiting admin review. Creator info is joined
 /// so the admin panel doesn't need N+1 lookups.
+///
+/// **Payload shape**: standard admin listing convention
+/// `{data: [EnrichedChallenge], pagination: {...}, meta: {...}}`.
 #[utoipa::path(
     get,
     path = "/api/admin/community/review",
     tag = "admin",
+    params(PendingReviewQuery),
     responses(
-        (status = 200, description = "Pending review", body = ApiResponse<PendingReviewResponse>),
+        (status = 200, description = "Pending review (paginated)", body = serde_json::Value),
         (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
@@ -73,18 +81,31 @@ pub async fn pending_review(
     _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
-) -> Result<Json<ApiResponse<PendingReviewResponse>>, AppError> {
+    Query(q): Query<PendingReviewQuery>,
+) -> Result<Json<serde_json::Value>, AppError> {
     require_admin(&state, &auth).await?;
+    crate::validators::check_range_opt(q.page, "page", 1, 100_000)?;
+    crate::validators::check_range_opt(q.per_page, "per_page", 1, 100)?;
+
+    let page = q.page.unwrap_or(1).max(1);
+    let per_page = q.per_page.unwrap_or(20).clamp(1, 100);
+    let offset = (page - 1) * per_page;
+
+    let total: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*)::BIGINT FROM challenge_templates WHERE is_community = TRUE AND community_status = 'review'",
+    )
+    .fetch_one(&state.db)
+    .await?;
 
     let challenges: Vec<ChallengeTemplate> = sqlx::query_as(
-        "SELECT * FROM challenge_templates WHERE is_community = TRUE AND community_status = 'review' ORDER BY created_at ASC",
+        "SELECT * FROM challenge_templates WHERE is_community = TRUE AND community_status = 'review' ORDER BY created_at ASC LIMIT $1 OFFSET $2",
     )
+    .bind(per_page)
+    .bind(offset)
     .fetch_all(&state.db)
     .await?;
 
-    // Get creator info
-    let creator_ids: Vec<Option<Uuid>> = challenges.iter().map(|c| c.created_by).collect();
-    let valid_ids: Vec<Uuid> = creator_ids.iter().filter_map(|id| *id).collect();
+    let valid_ids: Vec<Uuid> = challenges.iter().filter_map(|c| c.created_by).collect();
 
     let creators: Vec<(Uuid, String, String)> =
         sqlx::query_as("SELECT id, username, display_name FROM users WHERE id = ANY($1)")
@@ -112,10 +133,24 @@ pub async fn pending_review(
         })
         .collect();
 
-    let total = enriched.len();
-    Ok(Json(ApiResponse::new(PendingReviewResponse {
-        challenges: enriched,
-        total,
+    let total_pages = if per_page > 0 {
+        (total as f64 / per_page as f64).ceil() as i64
+    } else {
+        0
+    };
+
+    Ok(Json(json!({
+        "data": enriched,
+        "pagination": {
+            "page": page,
+            "per_page": per_page,
+            "total": total,
+            "total_pages": total_pages,
+        },
+        "meta": {
+            "request_id": Uuid::new_v4().to_string(),
+            "timestamp": chrono::Utc::now().to_rfc3339(),
+        }
     })))
 }
 

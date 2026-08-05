@@ -13,21 +13,25 @@ pub fn init_sentry(config: &AppConfig) -> Option<sentry::ClientInitGuard> {
     let dsn = config.sentry_dsn.clone()?;
     let release = config.release.clone().map(Into::into);
     let environment = config.environment.clone().into();
-    let traces_sample_rate = config.sentry_traces_sample_rate;
 
-    Some(sentry::init((
-        dsn,
-        sentry::ClientOptions {
-            release,
-            environment: Some(environment),
-            traces_sample_rate,
-            attach_stacktrace: true,
-            // RGPD: don't auto-capture IPs / cookies. We tag user_id manually from JWT in
-            // the AuthUser extractor, which is the only PII Sentry sees from us.
-            send_default_pii: false,
-            ..Default::default()
-        },
-    )))
+    // Sentry 0.49 gates performance monitoring behind the `traces` feature
+    // and moved the sample rate off `ClientOptions`. We keep the config
+    // value in `AppConfig` for later re-enablement but silence the unused
+    // warning here — errors + panics still flow through unchanged.
+    let _ = config.sentry_traces_sample_rate;
+
+    // Sentry 0.49 marks ClientOptions #[non_exhaustive], so struct literals
+    // (even with ..Default::default()) are rejected from downstream crates.
+    // Mutate the default instead.
+    let mut opts = sentry::ClientOptions::default();
+    opts.release = release;
+    opts.environment = Some(environment);
+    opts.attach_stacktrace = true;
+    // RGPD: don't auto-capture IPs / cookies. We tag user_id manually from JWT in
+    // the AuthUser extractor, which is the only PII Sentry sees from us.
+    opts.send_default_pii = false;
+
+    Some(sentry::init((dsn, opts)))
 }
 
 /// Forward `tracing` events at WARN/ERROR levels to Sentry as breadcrumbs + events.

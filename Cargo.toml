@@ -82,6 +82,8 @@ hex = "0.4"
 base64 = "0.22"
 getrandom = "0.4"
 rand_core = "0.6"
+# `rand::rngs::OsRng` is the CryptoRng that p256 0.14's ecdh::EphemeralSecret::random accepts.
+rand = "0.10"
 
 # S3/MinIO storage
 rust-s3 = { version = "0.37", features = ["tokio-rustls-tls"], default-features = false }
@@ -103,7 +105,7 @@ clap = { version = "4", features = ["derive"] }
 anyhow = "1"
 
 # Error tracking (Sentry-compatible; works with self-hosted GlitchTip)
-sentry = { version = "0.48", default-features = false, features = ["backtrace", "contexts", "panic", "reqwest", "rustls"] }
+sentry = { version = "0.49", default-features = false, features = ["backtrace", "contexts", "panic", "reqwest", "rustls"] }
 sentry-tower = { version = "0.48", features = ["http"] }
 sentry-tracing = "0.49"
 
@@ -111,13 +113,13 @@ sentry-tracing = "0.49"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 
 # i18n (FR/EN bundled)
-rust-i18n = "3"
+rust-i18n = "4"
 
 # Authenticated encryption for at-rest secrets (GitHub OAuth tokens, etc.)
 chacha20poly1305 = "0.11"
 
 # Web push VAPID natif (pure Rust, sans OpenSSL) — RFC 8291 + 8292
-p256 = { version = "0.13", features = ["ecdh", "ecdsa", "pkcs8"] }
+p256 = { version = "0.14", features = ["ecdh", "ecdsa", "pkcs8"] }
 aes-gcm = "0.11"
 hkdf = "0.13"
 

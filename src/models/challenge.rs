@@ -41,6 +41,10 @@ pub struct ChallengeTemplate {
     /// de { role_slug, role_display_name?, required_skill_slug?, min_proficiency_level, count }.
     /// NULL = pas de contrainte, team libre-forme.
     pub team_composition: Option<serde_json::Value>,
+    /// P26 — Sas compagnonnage débutant. NULL = challenge non-beginner.
+    /// 'sas' = review humaine du process ; 'free' = mode libre réservé
+    /// aux verified_apprentice (voir migration 0118 + gate submit_challenge).
+    pub beginner_stage: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

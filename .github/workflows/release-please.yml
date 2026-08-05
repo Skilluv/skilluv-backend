@@ -28,9 +28,10 @@ jobs:
       - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071  # v4
         with:
           release-type: rust
-          # Bump Cargo.toml + Cargo.lock automatically on release.
-          extra-files: |
-            Cargo.toml
+          # release-please v4 handles Cargo.toml + Cargo.lock version bumps
+          # automatically for `release-type: rust` — the old `extra-files`
+          # input has been removed and now triggers a warning.
+          #
           # Draft the changelog on every push, only publish when the release
           # PR is merged. Failsafe : never auto-publish without a human OK.
           skip-github-release: false

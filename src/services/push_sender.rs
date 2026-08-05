@@ -26,7 +26,7 @@ use p256::PublicKey;
 use p256::ecdh::EphemeralSecret;
 use p256::ecdsa::signature::Signer;
 use p256::ecdsa::{Signature, SigningKey};
-use p256::elliptic_curve::sec1::ToEncodedPoint;
+use p256::elliptic_curve::sec1::ToSec1Point;
 use serde::Serialize;
 use sha2::Sha256;
 use sqlx::PgPool;
@@ -200,7 +200,9 @@ fn encrypt_aes128gcm(
     payload: &[u8],
 ) -> Result<(Vec<u8>, Vec<u8>), AppError> {
     // 1. Éphémère
-    let ephemeral = EphemeralSecret::random(&mut rand_core::OsRng);
+    // rand 0.10 removed `OsRng`; `rand::rng()` returns a CSPRNG-seeded ThreadRng
+    // that satisfies p256::ecdh::EphemeralSecret::random's `CryptoRng` bound.
+    let ephemeral = EphemeralSecret::random(&mut rand::rng());
     let as_pub = ephemeral.public_key();
     let as_pub_bytes = as_pub.to_encoded_point(false).as_bytes().to_vec();
     if as_pub_bytes.len() != 65 {
@@ -287,7 +289,7 @@ fn build_vapid_jwt(vapid: &VapidConfig, audience: &str) -> Result<String, AppErr
     if priv_bytes.len() != 32 {
         return Err(AppError::Internal("vapid privkey must be 32 bytes".into()));
     }
-    let signing_key = SigningKey::from_bytes(priv_bytes.as_slice().into())
+    let signing_key = SigningKey::from_slice(priv_bytes.as_slice())
         .map_err(|e| AppError::Internal(format!("vapid signing key: {e}")))?;
     let sig: Signature = signing_key.sign(signing_input.as_bytes());
     let sig_bytes = sig.to_bytes();

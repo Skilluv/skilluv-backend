@@ -410,6 +410,28 @@ pub async fn submit_challenge(
             .fetch_one(&state.db)
             .await?;
 
+    // P26.5 — Sas compagnonnage débutant. beginner_stage='free' est
+    // réservé aux users qui ont déjà passé le sas (capability
+    // verified_apprentice). Les stages 'sas' et NULL passent sans gate :
+    // pour 'sas' la vérification humaine se fait via un endpoint séparé
+    // (POST /api/beginner/verifications), le submit code lui-même reste
+    // libre.
+    if challenge.beginner_stage.as_deref() == Some("free") {
+        crate::middleware::capabilities::require_capability(
+            &state.db,
+            auth.user_id,
+            "verified_apprentice",
+        )
+        .await
+        .map_err(|_| {
+            AppError::Validation(
+                "This challenge is reserved for verified apprentices. \
+                 Complete the beginner sas first (POST /api/beginner/verifications)."
+                    .to_string(),
+            )
+        })?;
+    }
+
     // Check timer expiration
     if let Some(expires_at) = submission.expires_at
         && chrono::Utc::now() > expires_at

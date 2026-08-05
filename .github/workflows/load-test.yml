@@ -37,12 +37,13 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install k6
+        uses: grafana/setup-k6-action@db07bd9765aac508ef18982e52ab937fe633a065  # v1.2.1
+
       - name: Run k6
-        uses: grafana/k6-action@e4714b734f2b0afaabeb7b4a69142745548ab9ec  # v0.3.1
-        with:
-          filename: ${{ inputs.scenario || 'tests/load/smoke.js' }}
         env:
           BASE_URL: ${{ inputs.target || 'http://localhost:3001' }}
+        run: k6 run "${{ inputs.scenario || 'tests/load/smoke.js' }}"
 
       - name: Upload k6 summary
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4

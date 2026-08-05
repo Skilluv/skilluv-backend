@@ -417,5 +417,6 @@ jobs:
             exit 0
           fi
           curl --fail --silent --show-error --max-time 30 \
+            -X POST \
             -H "Authorization: Bearer $COOLIFY_TOKEN" \
             "$COOLIFY_WEBHOOK_URL"

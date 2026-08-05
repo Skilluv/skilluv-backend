@@ -404,13 +404,18 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Trigger Coolify redeploy
-        # Skips silently if the secret is unset — lets the workflow keep
-        # working in forks / rewinds without hard-failing on missing config.
+        # Skips silently if the required secrets are unset — lets the workflow
+        # keep working in forks / rewinds without hard-failing on missing config.
+        # Coolify's /api/v1/deploy endpoint requires a Bearer token; the UUID
+        # in the URL only identifies which app to redeploy.
         env:
           COOLIFY_WEBHOOK_URL: ${{ secrets.COOLIFY_WEBHOOK_URL }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
         run: |
-          if [ -z "$COOLIFY_WEBHOOK_URL" ]; then
-            echo "COOLIFY_WEBHOOK_URL secret not set — skipping deploy trigger."
+          if [ -z "$COOLIFY_WEBHOOK_URL" ] || [ -z "$COOLIFY_TOKEN" ]; then
+            echo "COOLIFY_WEBHOOK_URL or COOLIFY_TOKEN unset — skipping deploy trigger."
             exit 0
           fi
-          curl --fail --silent --show-error --max-time 30 "$COOLIFY_WEBHOOK_URL"
+          curl --fail --silent --show-error --max-time 30 \
+            -H "Authorization: Bearer $COOLIFY_TOKEN" \
+            "$COOLIFY_WEBHOOK_URL"

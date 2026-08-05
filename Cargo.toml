@@ -117,7 +117,7 @@ rust-i18n = "3"
 chacha20poly1305 = "0.11"
 
 # Web push VAPID natif (pure Rust, sans OpenSSL) — RFC 8291 + 8292
-p256 = { version = "0.13", features = ["ecdh", "ecdsa", "pkcs8"] }
+p256 = { version = "0.14", features = ["ecdh", "ecdsa", "pkcs8"] }
 aes-gcm = "0.11"
 hkdf = "0.13"
 

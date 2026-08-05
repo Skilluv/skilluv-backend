@@ -416,6 +416,17 @@ jobs:
             echo "COOLIFY_WEBHOOK_URL or COOLIFY_TOKEN unset — skipping deploy trigger."
             exit 0
           fi
-          curl --fail --silent --show-error --max-time 30 \
+          # -w prints HTTP status + response body on both success and failure so
+          # any future Coolify API mismatch is diagnosable from CI logs directly,
+          # instead of guessing across multiple PRs (cf. #52/#53/#54 iteration).
+          response=$(curl --silent --show-error --max-time 30 \
+            -X POST \
             -H "Authorization: Bearer $COOLIFY_TOKEN" \
-            "$COOLIFY_WEBHOOK_URL"
+            -w "\nHTTP_STATUS:%{http_code}\n" \
+            "$COOLIFY_WEBHOOK_URL")
+          echo "$response"
+          status=$(echo "$response" | grep -oE "HTTP_STATUS:[0-9]+" | cut -d: -f2)
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "::error::Coolify webhook returned HTTP $status"
+            exit 1
+          fi

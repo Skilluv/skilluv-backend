@@ -6,6 +6,7 @@ pub mod capabilities;
 pub mod csrf;
 pub mod rate_limit;
 pub mod security_headers;
+pub mod validated_query;
 
 pub use auth::{AuthUser, AuthUserComplete, OptionalAuth, TenantContext};
 pub use csrf::{
@@ -13,3 +14,4 @@ pub use csrf::{
 };
 pub use rate_limit::{RateLimiter, extract_ip};
 pub use security_headers::SecurityHeadersLayer;
+pub use validated_query::ValidatedQuery;

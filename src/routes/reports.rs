@@ -3,11 +3,12 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::{delete, get, post};
 use axum::{Json, Router};
-use serde::Deserialize;
-use serde_json::json;
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::AppState;
+use crate::api_response::{ApiResponse, SimpleMessage};
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
 
@@ -18,41 +19,67 @@ pub fn report_routes() -> Router<AppState> {
         .route("/reports/{id}", delete(cancel_report))
 }
 
-fn build_response(data: serde_json::Value) -> serde_json::Value {
-    json!({
-        "data": data,
-        "meta": {
-            "request_id": Uuid::new_v4().to_string(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-        }
-    })
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CreateReportRequest {
+    /// One of `user`, `challenge`, `message`, `enterprise`.
+    #[schema(pattern = r"^(user|challenge|message|enterprise)$", example = "user")]
+    pub target_type: String,
+    pub target_id: Uuid,
+    /// One of `spam`, `harassment`, `inappropriate`, `cheating`,
+    /// `fake_profile`, `other`.
+    #[schema(
+        pattern = r"^(spam|harassment|inappropriate|cheating|fake_profile|other)$",
+        example = "harassment"
+    )]
+    pub reason: String,
+    /// Free-text details, up to 2000 chars.
+    #[schema(max_length = 2000)]
+    pub details: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
-struct CreateReportRequest {
-    target_type: String,
-    target_id: Uuid,
-    reason: String,
-    details: Option<String>,
+#[derive(Debug, Serialize, sqlx::FromRow, ToSchema)]
+pub struct Report {
+    pub id: Uuid,
+    pub reporter_id: Uuid,
+    pub target_type: String,
+    pub target_id: Uuid,
+    pub reason: String,
+    pub details: Option<String>,
+    /// `pending`, `handled`, `dismissed`.
+    pub status: String,
+    pub admin_note: Option<String>,
+    pub handled_by: Option<Uuid>,
+    pub handled_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
-#[derive(Debug, serde::Serialize, sqlx::FromRow)]
-struct Report {
-    id: Uuid,
-    reporter_id: Uuid,
-    target_type: String,
-    target_id: Uuid,
-    reason: String,
-    details: Option<String>,
-    status: String,
-    admin_note: Option<String>,
-    handled_by: Option<Uuid>,
-    handled_at: Option<chrono::DateTime<chrono::Utc>>,
-    created_at: chrono::DateTime<chrono::Utc>,
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CreateReportResponse {
+    pub report: Report,
+    pub message: String,
 }
 
-// POST /api/reports
-async fn create_report(
+#[derive(Debug, Serialize, ToSchema)]
+pub struct MyReportsResponse {
+    pub reports: Vec<Report>,
+}
+
+/// Submit a moderation report. Deduplicated on `(reporter_id,
+/// target_type, target_id)` while status is `pending` so a user can't
+/// flood the queue with duplicates.
+#[utoipa::path(
+    post,
+    path = "/api/reports",
+    tag = "moderation",
+    request_body = CreateReportRequest,
+    responses(
+        (status = 201, description = "Report created", body = ApiResponse<CreateReportResponse>),
+        (status = 400, description = "Invalid target_type / reason / self-report / details too long / duplicate pending", body = crate::api_response::ErrorResponse),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create_report(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<CreateReportRequest>,
@@ -124,33 +151,56 @@ async fn create_report(
 
     Ok((
         StatusCode::CREATED,
-        Json(build_response(json!({
-            "report": report,
-            "message": "Report submitted"
-        }))),
+        Json(ApiResponse::new(CreateReportResponse {
+            report,
+            message: "Report submitted".to_string(),
+        })),
     ))
 }
 
-// GET /api/reports/mine
-async fn my_reports(
+/// List every report the caller has ever filed. Ordered newest first.
+#[utoipa::path(
+    get,
+    path = "/api/reports/mine",
+    tag = "moderation",
+    responses(
+        (status = 200, description = "The caller's reports", body = ApiResponse<MyReportsResponse>),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn my_reports(
     State(state): State<AppState>,
     auth: AuthUser,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<MyReportsResponse>>, AppError> {
     let reports: Vec<Report> =
         sqlx::query_as("SELECT * FROM reports WHERE reporter_id = $1 ORDER BY created_at DESC")
             .bind(auth.user_id)
             .fetch_all(&state.db)
             .await?;
 
-    Ok(Json(build_response(json!({ "reports": reports }))))
+    Ok(Json(ApiResponse::new(MyReportsResponse { reports })))
 }
 
-// DELETE /api/reports/:id — cancel a pending report
-async fn cancel_report(
+/// Cancel a report that hasn't been handled yet. No-op with 404 if
+/// the report is already processed or belongs to another user.
+#[utoipa::path(
+    delete,
+    path = "/api/reports/{id}",
+    tag = "moderation",
+    params(("id" = Uuid, Path, description = "Report UUID")),
+    responses(
+        (status = 200, description = "Report cancelled", body = ApiResponse<SimpleMessage>),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "Report not found or already processed", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn cancel_report(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<SimpleMessage>>, AppError> {
     let result = sqlx::query(
         "DELETE FROM reports WHERE id = $1 AND reporter_id = $2 AND status = 'pending'",
     )
@@ -165,7 +215,7 @@ async fn cancel_report(
         ));
     }
 
-    Ok(Json(build_response(json!({
-        "message": "Report cancelled"
-    }))))
+    Ok(Json(ApiResponse::new(SimpleMessage::new(
+        "Report cancelled",
+    ))))
 }

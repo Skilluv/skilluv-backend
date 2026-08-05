@@ -49,7 +49,7 @@ pub enum SkillFragmentOrder {
 }
 
 /// Une skill enrichie avec la progression du user (vue "mes skills").
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct UserSkillEnriched {
     pub skill_id: Uuid,
     pub skill_slug: String,
@@ -65,7 +65,7 @@ pub struct UserSkillEnriched {
 }
 
 /// Un talent trouvé pour un skill donné (vue recruteur).
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct SkillTalent {
     pub user_id: Uuid,
     pub username: String,
@@ -77,7 +77,7 @@ pub struct SkillTalent {
 }
 
 /// Une recommandation de slice basée sur les skills proches d'un level-up.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct SliceRecommendation {
     pub slice_id: Uuid,
     pub slice_title: String,
@@ -90,7 +90,7 @@ pub struct SliceRecommendation {
     pub total_match_score: i32,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct RecommendationSkillMatch {
     pub skill_id: Uuid,
     pub skill_slug: String,

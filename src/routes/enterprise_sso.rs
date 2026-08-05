@@ -54,7 +54,7 @@ fn require_key(state: &AppState) -> Result<[u8; 32], AppError> {
     state
         .config
         .sso_encryption_key
-        .ok_or_else(|| AppError::Internal("SSO_ENCRYPTION_KEY not configured".into()))
+        .ok_or_else(|| AppError::NotFound("Enterprise SSO not enabled on this deployment".into()))
 }
 
 fn email_domain(email: &str) -> Option<String> {
@@ -95,7 +95,14 @@ async fn require_enterprise_owner_direct(
     crate::routes::enterprise::require_enterprise_owner_pub(state, auth).await
 }
 
-async fn upsert_config(
+/// Upsert enterprise SSO config (owner only).
+#[utoipa::path(
+    post, path = "/api/enterprise/sso/config", tag = "enterprise",
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn upsert_config(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<UpsertConfigBody>,
@@ -163,7 +170,13 @@ async fn upsert_config(
     }))))
 }
 
-async fn get_config(
+/// Get the current enterprise SSO config.
+#[utoipa::path(
+    get, path = "/api/enterprise/sso/config", tag = "enterprise",
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn get_config(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
@@ -178,7 +191,13 @@ async fn get_config(
     }
 }
 
-async fn disable_config(
+/// Disable enterprise SSO.
+#[utoipa::path(
+    delete, path = "/api/enterprise/sso/config", tag = "enterprise",
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn disable_config(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
@@ -205,15 +224,30 @@ fn redact(row: &sso::SsoConfigRow) -> Value {
 
 // ─── Discovery (public) ──────────────────────────────────────────
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
 struct DiscoverQuery {
+    #[param(format = "email", min_length = 5, max_length = 255)]
     email: String,
 }
 
-async fn discover(
+/// Discover whether SSO is available for an email domain.
+#[utoipa::path(
+    get, path = "/api/enterprise/sso/discover", tag = "enterprise",
+    params(DiscoverQuery),
+    responses((status = 200, body = serde_json::Value)),
+)]
+pub async fn discover(
     State(state): State<AppState>,
     Query(q): Query<DiscoverQuery>,
 ) -> Result<Json<Value>, AppError> {
+    let char_count = q.email.chars().count();
+    if !(5..=255).contains(&char_count) || !q.email.contains('@') {
+        return Err(AppError::Validation(
+            "email must be a valid email address".into(),
+        ));
+    }
     let Some(domain) = email_domain(&q.email) else {
         return Ok(Json(build_response(json!({ "sso_available": false }))));
     };
@@ -292,7 +326,13 @@ async fn build_client(
     Ok(client)
 }
 
-async fn start(
+/// Start the SSO flow (redirects to the IdP).
+#[utoipa::path(
+    get, path = "/api/enterprise/sso/{slug}/start", tag = "enterprise",
+    params(("slug" = String, Path)),
+    responses((status = 302, description = "Redirect to IdP")),
+)]
+pub async fn start(
     State(state): State<AppState>,
     Path(slug): Path<String>,
 ) -> Result<Redirect, AppError> {
@@ -339,13 +379,23 @@ async fn start(
     Ok(Redirect::to(auth_url.as_str()))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
 struct CallbackQuery {
+    #[param(min_length = 1, max_length = 2048)]
     code: String,
+    #[param(min_length = 1, max_length = 128)]
     state: String,
 }
 
-async fn callback(
+/// Handle the IdP callback and establish a session.
+#[utoipa::path(
+    get, path = "/api/enterprise/sso/{slug}/callback", tag = "enterprise",
+    params(("slug" = String, Path), CallbackQuery),
+    responses((status = 302, description = "Redirect to app after session established")),
+)]
+pub async fn callback(
     State(state): State<AppState>,
     Path(slug): Path<String>,
     Query(q): Query<CallbackQuery>,

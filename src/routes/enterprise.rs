@@ -48,9 +48,9 @@ pub async fn peek_enterprise_invite(
 ) -> Result<EnterpriseInvitePayload, AppError> {
     let key = enterprise_invite_key(token);
     let raw: Option<String> = redis.get(&key).await?;
-    let raw = raw.ok_or(AppError::Validation(
-        "Invalid or expired invite token".to_string(),
-    ))?;
+    // Invite token = ressource. Absente/expiree = 404 NotFound
+    // (semantiquement REST + accepte par schemathesis positive_data_acceptance).
+    let raw = raw.ok_or_else(|| AppError::NotFound("Invite token not found or expired".into()))?;
     serde_json::from_str(&raw)
         .map_err(|e| AppError::Internal(format!("Corrupted invite payload: {e}")))
 }
@@ -253,57 +253,94 @@ fn slugify(name: &str) -> String {
 
 // ─── Request types ──────────────────────────────────────────────
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 struct RegisterEnterpriseRequest {
+    #[schema(format = "email", min_length = 5, max_length = 255)]
     email: String,
+    #[schema(
+        min_length = 3,
+        max_length = 30,
+        pattern = r"^[a-zA-Z0-9][a-zA-Z0-9_-]*$"
+    )]
     username: String,
+    #[schema(
+        min_length = 10,
+        max_length = 128,
+        pattern = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!-/:-@\[-`{-~]).+$"
+    )]
     password: String,
+    #[schema(min_length = 1, max_length = 50, pattern = r"^\S(.*\S)?$")]
     first_name: String,
+    #[schema(min_length = 1, max_length = 50, pattern = r"^\S(.*\S)?$")]
     last_name: String,
+    #[schema(min_length = 1, max_length = 200, pattern = r"^\S(.*\S)?$")]
     company_name: String,
+    #[schema(max_length = 500)]
     website: Option<String>,
+    #[schema(max_length = 100)]
     industry: Option<String>,
+    #[schema(pattern = r"^(1-10|11-50|51-200|201-500|501-1000|1000\+)$")]
     company_size: String,
+    #[schema(pattern = r"^[A-Z]{2}$")]
     country: Option<String>,
     /// RGPD: owner must explicitly accept the Terms + Privacy Policy at signup.
     /// Kept optional for backwards compat during the deploy window, but the
     /// handler refuses without it.
-    #[serde(default)]
+    #[schema(schema_with = crate::routes::auth::terms_accepted_schema)]
     terms_accepted: bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 struct UpdateProfileRequest {
+    #[schema(min_length = 1, max_length = 200)]
     company_name: Option<String>,
+    #[schema(max_length = 2000)]
     description: Option<String>,
+    #[schema(max_length = 500)]
     website: Option<String>,
+    #[schema(max_length = 500)]
     logo_url: Option<String>,
+    #[schema(max_length = 100)]
     industry: Option<String>,
+    #[schema(max_length = 20)]
     company_size: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 struct InviteRequest {
+    #[schema(format = "email", min_length = 5, max_length = 255)]
     email: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 struct AcceptInviteRequest {
+    #[schema(min_length = 20, max_length = 128)]
     token: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
 struct InvitePreviewQuery {
+    #[param(min_length = 20, max_length = 128)]
     token: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 struct RegisterAndAcceptRequest {
+    #[schema(min_length = 20, max_length = 128)]
     token: String,
+    #[schema(min_length = 1, max_length = 50, pattern = r"^\S(.*\S)?$")]
     first_name: String,
+    #[schema(min_length = 1, max_length = 50, pattern = r"^\S(.*\S)?$")]
     last_name: String,
+    #[schema(
+        min_length = 10,
+        max_length = 128,
+        pattern = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!-/:-@\[-`{-~]).+$"
+    )]
     password: String,
-    #[serde(default)]
+    #[schema(schema_with = crate::routes::auth::terms_accepted_schema)]
     terms_accepted: bool,
 }
 
@@ -315,7 +352,13 @@ struct RegisterAndAcceptRequest {
 // same rate-limit budget, same validators, same terms + verification-email +
 // CSRF + audit + analytics wiring — with enterprise-specific fields laid on
 // top (company profile + owner-tier membership).
-async fn register_enterprise(
+/// Register a new enterprise account (owner + company).
+#[utoipa::path(
+    post, path = "/api/enterprise/register", tag = "enterprise",
+    request_body = RegisterEnterpriseRequest,
+    responses((status = 201, body = serde_json::Value), (status = 400, body = crate::api_response::ErrorResponse)),
+)]
+pub async fn register_enterprise(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
     Json(body): Json<RegisterEnterpriseRequest>,
@@ -343,9 +386,26 @@ async fn register_enterprise(
     validate_name(&body.first_name, "first_name")?;
     validate_name(&body.last_name, "last_name")?;
 
-    if body.company_name.trim().is_empty() || body.company_name.len() > 200 {
+    crate::validators::validate_bounded_line(&body.company_name, "company_name", 1, 200)?;
+    if let Some(w) = &body.website
+        && w.chars().count() > 500
+    {
         return Err(AppError::Validation(
-            "company_name must be between 1 and 200 characters".to_string(),
+            "website must be at most 500 characters".to_string(),
+        ));
+    }
+    if let Some(c) = &body.country
+        && !(c.len() == 2 && c.chars().all(|ch| ch.is_ascii_uppercase()))
+    {
+        return Err(AppError::Validation(
+            "country must be an ISO 3166-1 alpha-2 code (2 uppercase letters)".to_string(),
+        ));
+    }
+    if let Some(i) = &body.industry
+        && i.chars().count() > 100
+    {
+        return Err(AppError::Validation(
+            "industry must be at most 100 characters".to_string(),
         ));
     }
     let valid_sizes = ["1-10", "11-50", "51-200", "201-500", "501-1000", "1000+"];
@@ -366,7 +426,8 @@ async fn register_enterprise(
             .fetch_optional(&state.db)
             .await?;
     if existing.is_some() {
-        return Err(AppError::Validation(
+        // 409 Conflict : ressource existe deja (unique constraint).
+        return Err(AppError::Conflict(
             "An account with this email or username already exists".to_string(),
         ));
     }
@@ -529,7 +590,13 @@ async fn register_enterprise(
 }
 
 // GET /api/enterprise/profile
-async fn get_profile(
+/// Get the current enterprise profile.
+#[utoipa::path(
+    get, path = "/api/enterprise/profile", tag = "enterprise",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn get_profile(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<serde_json::Value>, AppError> {
@@ -549,7 +616,14 @@ async fn get_profile(
 }
 
 // PUT /api/enterprise/profile
-async fn update_profile(
+/// Update the enterprise profile (owner only).
+#[utoipa::path(
+    put, path = "/api/enterprise/profile", tag = "enterprise",
+    request_body = UpdateProfileRequest,
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn update_profile(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<UpdateProfileRequest>,
@@ -598,7 +672,14 @@ async fn update_profile(
 }
 
 // POST /api/enterprise/logo — upload company logo (multipart)
-async fn upload_logo(
+/// Upload the enterprise logo (multipart).
+#[utoipa::path(
+    post, path = "/api/enterprise/logo", tag = "enterprise",
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn upload_logo(
     State(state): State<AppState>,
     auth: AuthUser,
     mut multipart: Multipart,
@@ -671,7 +752,13 @@ async fn upload_logo(
 }
 
 // DELETE /api/enterprise/logo
-async fn delete_logo(
+/// Delete the enterprise logo.
+#[utoipa::path(
+    delete, path = "/api/enterprise/logo", tag = "enterprise",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn delete_logo(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<serde_json::Value>, AppError> {
@@ -690,7 +777,14 @@ async fn delete_logo(
 }
 
 // POST /api/enterprise/invite
-async fn invite_recruiter(
+/// Invite a recruiter to the enterprise.
+#[utoipa::path(
+    post, path = "/api/enterprise/invite", tag = "enterprise",
+    request_body = InviteRequest,
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn invite_recruiter(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<InviteRequest>,
@@ -761,7 +855,14 @@ async fn invite_recruiter(
 // with an unrelated account. For invitees without an existing account, use the
 // OAuth-with-invite flow instead (which creates the account and consumes the
 // invite atomically).
-async fn accept_invite(
+/// Accept a recruiter invitation.
+#[utoipa::path(
+    post, path = "/api/enterprise/invite/accept", tag = "enterprise",
+    request_body = AcceptInviteRequest,
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn accept_invite(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<AcceptInviteRequest>,
@@ -797,7 +898,13 @@ async fn accept_invite(
 // Public: the token IS the secret. Returns just enough to render the landing
 // page ("Join {company_name} as {email}") — no membership state, no user info,
 // no PII beyond the invited email itself.
-async fn invite_preview(
+/// Preview a recruiter invitation (public, token-gated).
+#[utoipa::path(
+    get, path = "/api/enterprise/invite/preview", tag = "enterprise",
+    params(InvitePreviewQuery),
+    responses((status = 200, body = serde_json::Value)),
+)]
+pub async fn invite_preview(
     State(state): State<AppState>,
     Query(query): Query<InvitePreviewQuery>,
 ) -> Result<Json<serde_json::Value>, AppError> {
@@ -836,7 +943,13 @@ async fn invite_preview(
 // marked verified because the invite was delivered by us to that inbox — the
 // user proving they received the token IS the verification. The invite token
 // is deleted only after the membership is committed.
-async fn invite_register_and_accept(
+/// Register a new recruiter and accept invitation in one call.
+#[utoipa::path(
+    post, path = "/api/enterprise/invite/register-and-accept", tag = "enterprise",
+    request_body = RegisterAndAcceptRequest,
+    responses((status = 201, body = serde_json::Value)),
+)]
+pub async fn invite_register_and_accept(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
     Json(body): Json<RegisterAndAcceptRequest>,
@@ -864,7 +977,7 @@ async fn invite_register_and_accept(
         .fetch_optional(&state.db)
         .await?;
     if existing.is_some() {
-        return Err(AppError::Validation(
+        return Err(AppError::Conflict(
             "An account already exists for this email. Please sign in instead.".to_string(),
         ));
     }
@@ -1025,7 +1138,13 @@ async fn invite_register_and_accept(
 }
 
 // GET /api/enterprise/members
-async fn list_members(
+/// List enterprise members.
+#[utoipa::path(
+    get, path = "/api/enterprise/members", tag = "enterprise",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_members(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<serde_json::Value>, AppError> {
@@ -1079,7 +1198,13 @@ async fn list_members(
 // selected via `active_enterprise` cookie (or the fallback used when the
 // cookie is missing/invalid), so the UI can highlight it without a separate
 // round-trip.
-async fn list_memberships(
+/// List all enterprise memberships for the caller.
+#[utoipa::path(
+    get, path = "/api/enterprise/memberships", tag = "enterprise",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_memberships(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<serde_json::Value>, AppError> {
@@ -1140,7 +1265,14 @@ async fn list_memberships(
 // Flip the workspace switcher: verify the caller is an active member of the
 // target enterprise, then re-emit the `active_enterprise` cookie so future
 // `require_enterprise` calls pin to that workspace.
-async fn switch_enterprise(
+/// Switch the active enterprise workspace.
+#[utoipa::path(
+    post, path = "/api/enterprise/switch/{enterprise_id}", tag = "enterprise",
+    params(("enterprise_id" = uuid::Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn switch_enterprise(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(enterprise_id): Path<Uuid>,
@@ -1173,7 +1305,14 @@ async fn switch_enterprise(
 }
 
 // DELETE /api/enterprise/members/:user_id
-async fn revoke_member(
+/// Revoke an enterprise member (owner only).
+#[utoipa::path(
+    delete, path = "/api/enterprise/members/{user_id}", tag = "enterprise",
+    params(("user_id" = uuid::Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn revoke_member(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(user_id): Path<Uuid>,

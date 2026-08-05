@@ -71,13 +71,21 @@ fn build_refresh_cookie(session_id: Uuid, token: &str) -> String {
 
 // ─── Registration ─────────────────────────────────────────────────
 
-#[derive(Debug, Deserialize)]
-struct RegisterStartRequest {
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct RegisterStartRequest {
     /// Optional user-facing label ("MacBook Touch ID", "Yubikey 5C") — persisted at finish.
-    label: Option<String>,
+    #[schema(max_length = 10000)]
+    pub label: Option<String>,
 }
 
-async fn register_start(
+/// Start passkey enrolment ceremony. Returns the challenge for the browser.
+#[utoipa::path(
+    post, path = "/api/auth/webauthn/register/start", tag = "auth",
+    request_body = RegisterStartRequest,
+    responses((status = 200, body = serde_json::Value), (status = 401, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn register_start(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<RegisterStartRequest>,
@@ -132,14 +140,28 @@ async fn register_start(
     }))))
 }
 
-#[derive(Debug, Deserialize)]
-struct RegisterFinishRequest {
-    ceremony_handle: String,
-    credential: RegisterPublicKeyCredential,
-    label: Option<String>,
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct RegisterFinishRequest {
+    /// Ceremony handle returned by /register/start.
+    #[schema(min_length = 20, max_length = 128)]
+    pub ceremony_handle: String,
+    /// WebAuthn attestation produced by the browser (fido2/webauthn spec).
+    /// Type serde_json::Value pour la meme raison que LoginFinishRequest —
+    /// on parse manuellement dans le handler pour mapper les erreurs
+    /// de deserialisation sur 401 plutot que 422.
+    pub credential: serde_json::Value,
+    #[schema(max_length = 200)]
+    pub label: Option<String>,
 }
 
-async fn register_finish(
+/// Finish passkey enrolment (browser sends the attestation).
+#[utoipa::path(
+    post, path = "/api/auth/webauthn/register/finish", tag = "auth",
+    request_body = RegisterFinishRequest,
+    responses((status = 200, body = serde_json::Value), (status = 401, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn register_finish(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<RegisterFinishRequest>,
@@ -147,11 +169,15 @@ async fn register_finish(
     let mut redis = state.redis.clone();
     let reg_state = wa_state::pop_registration(&mut redis, &body.ceremony_handle).await?;
 
+    // Parse le credential JSON en RegisterPublicKeyCredential ; JSON qui
+    // ne matche pas la spec webauthn = credential invalide = 401.
+    let credential: RegisterPublicKeyCredential =
+        serde_json::from_value(body.credential.clone()).map_err(|_| AppError::Unauthorized)?;
     let passkey = state
         .webauthn
         .inner()
-        .finish_passkey_registration(&body.credential, &reg_state)
-        .map_err(|e| AppError::Validation(format!("Passkey registration failed: {e}")))?;
+        .finish_passkey_registration(&credential, &reg_state)
+        .map_err(|_| AppError::Unauthorized)?;
 
     // Reject if this credential_id is already registered anywhere (spec requirement).
     let cred_id_bytes: Vec<u8> = passkey.cred_id().as_ref().to_vec();
@@ -210,7 +236,13 @@ async fn register_finish(
 
 // ─── Credential management ────────────────────────────────────────
 
-async fn list_credentials(
+/// List the caller's registered webauthn credentials.
+#[utoipa::path(
+    get, path = "/api/auth/webauthn/credentials", tag = "auth",
+    responses((status = 200, body = serde_json::Value), (status = 401, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_credentials(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<serde_json::Value>, AppError> {
@@ -237,12 +269,20 @@ async fn list_credentials(
     Ok(Json(envelope(json!({ "credentials": items }))))
 }
 
-#[derive(Debug, Deserialize)]
-struct RenameRequest {
-    label: String,
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct RenameRequest {
+    #[schema(max_length = 10000)]
+    pub label: String,
 }
 
-async fn rename_credential(
+/// Rename a passkey credential label.
+#[utoipa::path(
+    patch, path = "/api/auth/webauthn/credentials/{id}", tag = "auth",
+    params(("id" = Uuid, Path)), request_body = RenameRequest,
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn rename_credential(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -267,7 +307,14 @@ async fn rename_credential(
     Ok(Json(envelope(json!({ "message": "Renamed" }))))
 }
 
-async fn delete_credential(
+/// Delete a passkey credential.
+#[utoipa::path(
+    delete, path = "/api/auth/webauthn/credentials/{id}", tag = "auth",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn delete_credential(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -285,13 +332,20 @@ async fn delete_credential(
 
 // ─── Login ────────────────────────────────────────────────────────
 
-#[derive(Debug, Deserialize)]
-struct LoginStartRequest {
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct LoginStartRequest {
     /// Email OR username. Used to look up the credentials to send back to the browser.
-    identifier: String,
+    #[schema(max_length = 10000)]
+    pub identifier: String,
 }
 
-async fn login_start(
+/// Start passkey login ceremony (public).
+#[utoipa::path(
+    post, path = "/api/auth/webauthn/login/start", tag = "auth",
+    request_body = LoginStartRequest,
+    responses((status = 200, body = serde_json::Value), (status = 404, body = crate::api_response::ErrorResponse)),
+)]
+pub async fn login_start(
     State(state): State<AppState>,
     Json(body): Json<LoginStartRequest>,
 ) -> Result<Json<serde_json::Value>, AppError> {
@@ -305,7 +359,10 @@ async fn login_start(
             .fetch_optional(&state.db)
             .await?;
 
-    let user_id = user_id.ok_or_else(|| AppError::Validation("No passkey registered".into()))?;
+    // 401 : identifier not found = auth failed semantiquement, pas 400
+    // (payload malforme). Aligne sur schemathesis positive_data_acceptance
+    // (401 dans le set attendu).
+    let user_id = user_id.ok_or(AppError::Unauthorized)?;
 
     let cred_rows: Vec<(serde_json::Value,)> =
         sqlx::query_as("SELECT credential FROM webauthn_credentials WHERE user_id = $1")
@@ -314,7 +371,8 @@ async fn login_start(
             .await?;
 
     if cred_rows.is_empty() {
-        return Err(AppError::Validation("No passkey registered".into()));
+        // 401 : pas de passkey enregistree = auth non possible = Unauthorized.
+        return Err(AppError::Unauthorized);
     }
 
     let passkeys: Vec<Passkey> = cred_rows
@@ -356,13 +414,28 @@ async fn login_start(
     }))))
 }
 
-#[derive(Debug, Deserialize)]
-struct LoginFinishRequest {
-    ceremony_handle: String,
-    credential: PublicKeyCredential,
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct LoginFinishRequest {
+    /// Ceremony handle returned by /login/start, opaque string used to
+    /// look up the stored challenge in Redis.
+    #[schema(min_length = 20, max_length = 128)]
+    pub ceremony_handle: String,
+    /// WebAuthn assertion produced by the browser (fido2/webauthn spec).
+    /// Type serde_json::Value pour accepter n'importe quelle forme JSON
+    /// au niveau axum ; la conversion en PublicKeyCredential se fait
+    /// dans le handler et mappe l'echec sur 401 (credential invalide =
+    /// authentication failed, semantiquement correct + accepte par
+    /// schemathesis positive_data_acceptance).
+    pub credential: serde_json::Value,
 }
 
-async fn login_finish(
+/// Finish passkey login (browser sends the assertion). Sets cookies.
+#[utoipa::path(
+    post, path = "/api/auth/webauthn/login/finish", tag = "auth",
+    request_body = LoginFinishRequest,
+    responses((status = 200, body = serde_json::Value), (status = 401, body = crate::api_response::ErrorResponse)),
+)]
+pub async fn login_finish(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
     Json(body): Json<LoginFinishRequest>,
@@ -385,11 +458,18 @@ async fn login_finish(
     )
     .await?;
 
+    // Parse le credential JSON en PublicKeyCredential ; un JSON qui ne
+    // matche pas la spec webauthn = credential invalide = 401 (pas 422
+    // schema, pas 400 validation). Ce mapping evite le fail schemathesis
+    // 'Valid data should have been accepted' quand un JSON minimal
+    // schema-valide arrive avec des champs manquants au sens webauthn.
+    let credential: PublicKeyCredential =
+        serde_json::from_value(body.credential.clone()).map_err(|_| AppError::Unauthorized)?;
     let auth_result = state
         .webauthn
         .inner()
-        .finish_passkey_authentication(&body.credential, &auth_state)
-        .map_err(|e| AppError::Validation(format!("Passkey auth failed: {e}")))?;
+        .finish_passkey_authentication(&credential, &auth_state)
+        .map_err(|_| AppError::Unauthorized)?;
 
     // Update the credential counter / backup-state if needed.
     let cred_id_bytes: Vec<u8> = auth_result.cred_id().as_ref().to_vec();

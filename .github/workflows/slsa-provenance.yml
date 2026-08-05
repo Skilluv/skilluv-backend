@@ -1,0 +1,79 @@
+name: SLSA provenance attestation
+
+# Generates SLSA level 3 provenance for the published container image so
+# downstream consumers can cryptographically verify :
+#   - which git SHA the image was built from
+#   - which GitHub Actions workflow built it
+#   - that the build was non-tampered (isolated runner, signed by Sigstore)
+#
+# https://slsa.dev/spec/v1.0/provenance
+#
+# Runs after CI succeeds on master (paired with image-sign.yml).
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: slsa-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Read the digest of the just-published image so the SLSA generator has
+  # something concrete to attest to.
+  resolve-digest:
+    name: Resolve pushed image digest
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      packages: read   # read metadata from GHCR to compute digest
+    outputs:
+      digest: ${{ steps.get-digest.outputs.digest }}
+      image: ${{ steps.get-digest.outputs.image }}
+    steps:
+      - name: Login to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Get digest of master-<sha> tag
+        id: get-digest
+        # SHA is bound to an env var (not interpolated in the shell) to
+        # prevent template-injection via a malicious ref pushed to master.
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/skilluv-backend
+        run: |
+          DIGEST=$(docker buildx imagetools inspect "${IMAGE_REPO}:master-${HEAD_SHA}" \
+            --format '{{json .Manifest}}' | jq -r .digest)
+          {
+            echo "digest=${DIGEST}"
+            echo "image=${IMAGE_REPO}"
+          } >> "$GITHUB_OUTPUT"
+
+  provenance:
+    needs: resolve-digest
+    permissions:
+      actions: read
+      id-token: write
+      packages: write
+    # Official SLSA generator reusable workflow — audited, does not need
+    # custom code. Attestation is pushed to the same registry alongside the
+    # image with `.att` suffix.
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.0.0
+    with:
+      image: ${{ needs.resolve-digest.outputs.image }}
+      digest: ${{ needs.resolve-digest.outputs.digest }}
+      registry-username: ${{ github.repository_owner }}
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}

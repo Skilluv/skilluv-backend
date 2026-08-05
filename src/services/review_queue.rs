@@ -60,7 +60,7 @@ impl SeniorityLevel {
 }
 
 /// Ligne de review_task (calquée sur le schéma SQL).
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, utoipa::ToSchema)]
 pub struct ReviewTask {
     pub id: Uuid,
     pub task_type: String,

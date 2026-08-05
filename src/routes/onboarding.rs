@@ -18,10 +18,12 @@ use axum::extract::{Query, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::Value;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::AppState;
+use crate::api_response::ApiResponse;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
 use crate::services::github as gh;
@@ -45,14 +47,61 @@ pub fn onboarding_routes() -> Router<AppState> {
         )
 }
 
-fn wrap(data: Value) -> Value {
-    json!({
-        "data": data,
-        "meta": {
-            "request_id": Uuid::new_v4().to_string(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-        }
-    })
+#[derive(Debug, Serialize, ToSchema)]
+pub struct OnboardingProgress {
+    pub starter_slug: String,
+    pub fork_full_name: String,
+    pub fork_html_url: String,
+    /// `forked`, `pr_opened`, `completed`.
+    pub status: String,
+    pub pr_number: Option<i32>,
+    pub pr_url: Option<String>,
+    /// RFC 3339 timestamp.
+    pub started_at: String,
+    pub pr_opened_at: Option<String>,
+    pub completed_at: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct StartNextSteps {
+    /// `git@github.com:owner/repo.git` — hand it to the user for cloning.
+    pub clone_url: String,
+    /// i18n key the front resolves to render the step-by-step
+    /// instructions in the caller's locale.
+    pub instructions_key: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct StartBonjourResponse {
+    /// True when a fork already exists — the response echoes the
+    /// existing tracking row instead of calling GitHub again.
+    pub already_started: bool,
+    pub onboarding: OnboardingProgress,
+    /// Present only when `already_started == false`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_steps: Option<StartNextSteps>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct StatusBonjourResponse {
+    /// True when a fork exists for this user.
+    pub started: bool,
+    /// `None` when `started == false`.
+    pub onboarding: Option<OnboardingProgress>,
+}
+
+fn row_to_progress(row: &OnboardingRow) -> OnboardingProgress {
+    OnboardingProgress {
+        starter_slug: row.starter_slug.clone(),
+        fork_full_name: row.fork_full_name.clone(),
+        fork_html_url: row.fork_html_url.clone(),
+        status: row.status.clone(),
+        pr_number: row.pr_number,
+        pr_url: row.pr_url.clone(),
+        started_at: row.started_at.to_rfc3339(),
+        pr_opened_at: row.pr_opened_at.map(|d| d.to_rfc3339()),
+        completed_at: row.completed_at.map(|d| d.to_rfc3339()),
+    }
 }
 
 /// Public wrapper : resolve a starter slug from the user's primary
@@ -146,12 +195,12 @@ fn explicit_starter_for_orientation(orientation_slug: &str) -> Option<&'static s
 // POST /api/onboarding/bonjour-skilluv/start
 // ═══════════════════════════════════════════════════════════════════
 
-#[derive(Debug, Deserialize)]
-struct StartQuery {
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct StartQuery {
     /// Optional override for the starter slug. If omitted, we auto-select from
     /// the user's primary orientation.
     #[serde(default)]
-    starter: Option<String>,
+    pub starter: Option<String>,
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -169,17 +218,34 @@ struct OnboardingRow {
     completed_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-async fn start_bonjour_skilluv(
+/// Kick off the Bonjour Skilluv onboarding flow: auto-selects a starter
+/// template from the user's primary orientation, forks it on the user's
+/// GitHub account, and persists a tracking row. Idempotent — calling
+/// twice returns the existing fork.
+#[utoipa::path(
+    post,
+    path = "/api/onboarding/bonjour-skilluv/start",
+    tag = "profile",
+    params(StartQuery),
+    responses(
+        (status = 200, description = "Forked (or already forked)", body = ApiResponse<StartBonjourResponse>),
+        (status = 400, description = "GitHub not connected or invalid starter slug", body = crate::api_response::ErrorResponse),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn start_bonjour_skilluv(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<StartQuery>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<StartBonjourResponse>>, AppError> {
     // ── 1. Idempotence: existing row = return it, no fork call
     if let Some(existing) = load_row(&state.db, auth.user_id).await? {
-        return Ok(Json(wrap(json!({
-            "already_started": true,
-            "onboarding": row_to_json(&existing),
-        }))));
+        return Ok(Json(ApiResponse::new(StartBonjourResponse {
+            already_started: true,
+            onboarding: row_to_progress(&existing),
+            next_steps: None,
+        })));
     }
 
     // ── 2. Ensure user has connected GitHub
@@ -239,33 +305,45 @@ async fn start_bonjour_skilluv(
     .fetch_one(&state.db)
     .await?;
 
-    Ok(Json(wrap(json!({
-        "already_started": false,
-        "onboarding": row_to_json(&row),
-        "next_steps": {
-            "clone_url": format!("git@github.com:{}.git", fork.full_name),
-            "instructions_key": "onboarding.bonjour_skilluv.instructions",
-        },
-    }))))
+    Ok(Json(ApiResponse::new(StartBonjourResponse {
+        already_started: false,
+        onboarding: row_to_progress(&row),
+        next_steps: Some(StartNextSteps {
+            clone_url: format!("git@github.com:{}.git", fork.full_name),
+            instructions_key: "onboarding.bonjour_skilluv.instructions".to_string(),
+        }),
+    })))
 }
 
 // ═══════════════════════════════════════════════════════════════════
 // GET /api/onboarding/bonjour-skilluv/status
 // ═══════════════════════════════════════════════════════════════════
 
-async fn get_bonjour_skilluv_status(
+/// Poll the current Bonjour Skilluv onboarding status. Front uses
+/// this in the dashboard tile; WebSocket updates fire the same shape.
+#[utoipa::path(
+    get,
+    path = "/api/onboarding/bonjour-skilluv/status",
+    tag = "profile",
+    responses(
+        (status = 200, description = "Progress snapshot", body = ApiResponse<StatusBonjourResponse>),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn get_bonjour_skilluv_status(
     State(state): State<AppState>,
     auth: AuthUser,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<StatusBonjourResponse>>, AppError> {
     match load_row(&state.db, auth.user_id).await? {
-        Some(row) => Ok(Json(wrap(json!({
-            "started": true,
-            "onboarding": row_to_json(&row),
-        })))),
-        None => Ok(Json(wrap(json!({
-            "started": false,
-            "onboarding": null,
-        })))),
+        Some(row) => Ok(Json(ApiResponse::new(StatusBonjourResponse {
+            started: true,
+            onboarding: Some(row_to_progress(&row)),
+        }))),
+        None => Ok(Json(ApiResponse::new(StatusBonjourResponse {
+            started: false,
+            onboarding: None,
+        }))),
     }
 }
 
@@ -286,20 +364,6 @@ async fn load_row(db: &sqlx::PgPool, user_id: Uuid) -> Result<Option<OnboardingR
     .fetch_optional(db)
     .await?;
     Ok(row)
-}
-
-fn row_to_json(row: &OnboardingRow) -> Value {
-    json!({
-        "starter_slug": row.starter_slug,
-        "fork_full_name": row.fork_full_name,
-        "fork_html_url": row.fork_html_url,
-        "status": row.status,
-        "pr_number": row.pr_number,
-        "pr_url": row.pr_url,
-        "started_at": row.started_at.to_rfc3339(),
-        "pr_opened_at": row.pr_opened_at.map(|d| d.to_rfc3339()),
-        "completed_at": row.completed_at.map(|d| d.to_rfc3339()),
-    })
 }
 
 fn validate_starter_slug(slug: &str) -> Result<(), AppError> {

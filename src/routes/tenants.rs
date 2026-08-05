@@ -10,12 +10,13 @@ use axum::extract::{Path, State};
 use axum::http::HeaderMap;
 use axum::routing::get;
 use axum::{Json, Router};
-use serde::Deserialize;
-use serde_json::{Value, json};
+use serde::{Deserialize, Serialize};
 use sqlx::Row;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::AppState;
+use crate::api_response::ApiResponse;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
 
@@ -40,16 +41,6 @@ pub fn tenant_routes() -> Router<AppState> {
             "/admin/tenants/{id}/cohorts",
             get(list_cohorts).post(create_cohort),
         )
-}
-
-fn build_response(data: Value) -> Value {
-    json!({
-        "data": data,
-        "meta": {
-            "request_id": Uuid::new_v4().to_string(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-        }
-    })
 }
 
 /// Résout le tenant courant à partir des headers de la requête.
@@ -108,12 +99,187 @@ async fn tenant_id_by_subdomain(
     Ok(row.map(|(id,)| id))
 }
 
+// ─── Types de réponse ────────────────────────────────────────────
+
+/// Public projection of a tenant (theming + branding only — no admin
+/// fields like max_users or contact_email).
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PublicTenant {
+    pub id: Uuid,
+    pub slug: String,
+    pub name: String,
+    pub subdomain: Option<String>,
+    pub custom_domain: Option<String>,
+    pub logo_url: Option<String>,
+    pub primary_color: Option<String>,
+    pub secondary_color: Option<String>,
+    /// `starter`, `pro`, `enterprise`.
+    pub plan: String,
+}
+
+/// Admin-only projection with quotas + contact.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AdminTenant {
+    pub id: Uuid,
+    pub slug: String,
+    pub name: String,
+    pub subdomain: Option<String>,
+    pub custom_domain: Option<String>,
+    pub logo_url: Option<String>,
+    pub primary_color: Option<String>,
+    pub secondary_color: Option<String>,
+    pub plan: String,
+    pub max_users: i32,
+    pub contact_email: String,
+    pub active: bool,
+    pub settings: serde_json::Value,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AdminTenantSummary {
+    pub id: Uuid,
+    pub slug: String,
+    pub name: String,
+    pub subdomain: Option<String>,
+    pub plan: String,
+    pub max_users: i32,
+    pub active: bool,
+    pub members_count: i64,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct TenantsListResponse {
+    pub tenants: Vec<AdminTenantSummary>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CreateTenantBody {
+    /// Lowercase alphanumeric with dashes, >= 2 chars. Unique.
+    #[schema(max_length = 10000)]
+    pub slug: String,
+    #[schema(max_length = 10000)]
+    pub name: String,
+    #[schema(max_length = 10000)]
+    pub subdomain: Option<String>,
+    #[schema(max_length = 10000)]
+    pub contact_email: String,
+    /// `starter` (default), `pro`, `enterprise`.
+    #[schema(max_length = 10000)]
+    pub plan: Option<String>,
+    pub max_users: Option<i32>,
+    #[schema(max_length = 10000)]
+    pub primary_color: Option<String>,
+    #[schema(max_length = 10000)]
+    pub logo_url: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct TenantCreatedResponse {
+    pub tenant_id: Uuid,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UpdateTenantBody {
+    #[schema(max_length = 10000)]
+    pub name: Option<String>,
+    #[schema(max_length = 10000)]
+    pub subdomain: Option<String>,
+    #[schema(max_length = 10000)]
+    pub custom_domain: Option<String>,
+    #[schema(max_length = 10000)]
+    pub logo_url: Option<String>,
+    #[schema(max_length = 10000)]
+    pub primary_color: Option<String>,
+    #[schema(max_length = 10000)]
+    pub secondary_color: Option<String>,
+    #[schema(max_length = 10000)]
+    pub plan: Option<String>,
+    pub max_users: Option<i32>,
+    pub active: Option<bool>,
+    pub settings: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct TenantUpdatedResponse {
+    pub updated: bool,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct TenantMemberRow {
+    pub user_id: Uuid,
+    pub username: String,
+    pub display_name: String,
+    pub email: String,
+    /// `member`, `instructor`, `admin`, `owner`.
+    pub role: String,
+    pub joined_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct MembersResponse {
+    pub members: Vec<TenantMemberRow>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct AddMemberBody {
+    pub user_id: Uuid,
+    /// Defaults to `member`. One of `member`, `instructor`, `admin`,
+    /// `owner`.
+    #[schema(max_length = 10000)]
+    pub role: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct MemberAddedResponse {
+    pub added: bool,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CohortRow {
+    pub id: Uuid,
+    pub name: String,
+    pub starts_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub ends_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub active: bool,
+    pub members_count: i64,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CohortsResponse {
+    pub cohorts: Vec<CohortRow>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CreateCohortBody {
+    #[schema(max_length = 10000)]
+    pub name: String,
+    pub starts_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub ends_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CohortCreatedResponse {
+    pub cohort_id: Uuid,
+}
+
 // ─── Endpoints ───────────────────────────────────────────────────
 
-async fn get_current_tenant(
+/// Return the tenant resolved from the current request (via
+/// `X-Skilluv-Tenant` header or subdomain, else root).
+#[utoipa::path(
+    get,
+    path = "/api/tenants/current",
+    tag = "enterprise",
+    responses(
+        (status = 200, description = "Current tenant (public projection)", body = ApiResponse<PublicTenant>),
+        (status = 404, description = "Tenant not found (should never happen — root is a fallback)", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn get_current_tenant(
     State(state): State<AppState>,
     headers: HeaderMap,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<PublicTenant>>, AppError> {
     let tenant_id = resolve_tenant_from_headers(&state.db, &headers).await?;
     let row = sqlx::query(
         r#"
@@ -126,23 +292,34 @@ async fn get_current_tenant(
     .fetch_optional(&state.db)
     .await?
     .ok_or(AppError::NotFound("tenant not found".into()))?;
-    Ok(Json(build_response(json!({
-        "id": row.get::<Uuid, _>("id"),
-        "slug": row.get::<String, _>("slug"),
-        "name": row.get::<String, _>("name"),
-        "subdomain": row.get::<Option<String>, _>("subdomain"),
-        "custom_domain": row.get::<Option<String>, _>("custom_domain"),
-        "logo_url": row.get::<Option<String>, _>("logo_url"),
-        "primary_color": row.get::<Option<String>, _>("primary_color"),
-        "secondary_color": row.get::<Option<String>, _>("secondary_color"),
-        "plan": row.get::<String, _>("plan"),
-    }))))
+    Ok(Json(ApiResponse::new(PublicTenant {
+        id: row.get("id"),
+        slug: row.get("slug"),
+        name: row.get("name"),
+        subdomain: row.get("subdomain"),
+        custom_domain: row.get("custom_domain"),
+        logo_url: row.get("logo_url"),
+        primary_color: row.get("primary_color"),
+        secondary_color: row.get("secondary_color"),
+        plan: row.get("plan"),
+    })))
 }
 
-async fn list_tenants(
+/// Admin only: list every tenant with member counts.
+#[utoipa::path(
+    get,
+    path = "/api/admin/tenants",
+    tag = "admin",
+    responses(
+        (status = 200, description = "Tenants list", body = ApiResponse<TenantsListResponse>),
+        (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_tenants(
     State(state): State<AppState>,
     auth: AuthUser,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<TenantsListResponse>>, AppError> {
     if auth.role != "admin" {
         return Err(AppError::Forbidden);
     }
@@ -156,42 +333,43 @@ async fn list_tenants(
     )
     .fetch_all(&state.db)
     .await?;
-    let items: Vec<Value> = rows
+    let items: Vec<AdminTenantSummary> = rows
         .iter()
-        .map(|r| {
-            json!({
-                "id": r.get::<Uuid, _>("id"),
-                "slug": r.get::<String, _>("slug"),
-                "name": r.get::<String, _>("name"),
-                "subdomain": r.get::<Option<String>, _>("subdomain"),
-                "plan": r.get::<String, _>("plan"),
-                "max_users": r.get::<i32, _>("max_users"),
-                "active": r.get::<bool, _>("active"),
-                "members_count": r.get::<i64, _>("members_count"),
-                "created_at": r.get::<chrono::DateTime<chrono::Utc>, _>("created_at"),
-            })
+        .map(|r| AdminTenantSummary {
+            id: r.get("id"),
+            slug: r.get("slug"),
+            name: r.get("name"),
+            subdomain: r.get("subdomain"),
+            plan: r.get("plan"),
+            max_users: r.get("max_users"),
+            active: r.get("active"),
+            members_count: r.get("members_count"),
+            created_at: r.get("created_at"),
         })
         .collect();
-    Ok(Json(build_response(json!({ "tenants": items }))))
+    Ok(Json(ApiResponse::new(TenantsListResponse {
+        tenants: items,
+    })))
 }
 
-#[derive(Deserialize)]
-struct CreateTenantBody {
-    slug: String,
-    name: String,
-    subdomain: Option<String>,
-    contact_email: String,
-    plan: Option<String>,
-    max_users: Option<i32>,
-    primary_color: Option<String>,
-    logo_url: Option<String>,
-}
-
-async fn create_tenant(
+/// Admin only: create a new tenant.
+#[utoipa::path(
+    post,
+    path = "/api/admin/tenants",
+    tag = "admin",
+    request_body = CreateTenantBody,
+    responses(
+        (status = 200, description = "Tenant created", body = ApiResponse<TenantCreatedResponse>),
+        (status = 400, description = "Invalid slug or plan", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create_tenant(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<CreateTenantBody>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<TenantCreatedResponse>>, AppError> {
     if auth.role != "admin" {
         return Err(AppError::Forbidden);
     }
@@ -224,14 +402,29 @@ async fn create_tenant(
     .fetch_one(&state.db)
     .await?;
     metrics::counter!("skilluv_tenants_created_total").increment(1);
-    Ok(Json(build_response(json!({ "tenant_id": inserted.0 }))))
+    Ok(Json(ApiResponse::new(TenantCreatedResponse {
+        tenant_id: inserted.0,
+    })))
 }
 
-async fn get_tenant(
+/// Admin only: full tenant detail (with quotas + contact + settings).
+#[utoipa::path(
+    get,
+    path = "/api/admin/tenants/{id}",
+    tag = "admin",
+    params(("id" = Uuid, Path, description = "Tenant UUID")),
+    responses(
+        (status = 200, description = "Tenant detail", body = ApiResponse<AdminTenant>),
+        (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "Tenant not found", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn get_tenant(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<AdminTenant>>, AppError> {
     if auth.role != "admin" {
         return Err(AppError::Forbidden);
     }
@@ -240,43 +433,42 @@ async fn get_tenant(
         .fetch_optional(&state.db)
         .await?
         .ok_or(AppError::NotFound("tenant not found".into()))?;
-    Ok(Json(build_response(json!({
-        "id": row.get::<Uuid, _>("id"),
-        "slug": row.get::<String, _>("slug"),
-        "name": row.get::<String, _>("name"),
-        "subdomain": row.get::<Option<String>, _>("subdomain"),
-        "custom_domain": row.get::<Option<String>, _>("custom_domain"),
-        "logo_url": row.get::<Option<String>, _>("logo_url"),
-        "primary_color": row.get::<Option<String>, _>("primary_color"),
-        "secondary_color": row.get::<Option<String>, _>("secondary_color"),
-        "plan": row.get::<String, _>("plan"),
-        "max_users": row.get::<i32, _>("max_users"),
-        "contact_email": row.get::<String, _>("contact_email"),
-        "active": row.get::<bool, _>("active"),
-        "settings": row.get::<serde_json::Value, _>("settings"),
-    }))))
+    Ok(Json(ApiResponse::new(AdminTenant {
+        id: row.get("id"),
+        slug: row.get("slug"),
+        name: row.get("name"),
+        subdomain: row.get("subdomain"),
+        custom_domain: row.get("custom_domain"),
+        logo_url: row.get("logo_url"),
+        primary_color: row.get("primary_color"),
+        secondary_color: row.get("secondary_color"),
+        plan: row.get("plan"),
+        max_users: row.get("max_users"),
+        contact_email: row.get("contact_email"),
+        active: row.get("active"),
+        settings: row.get("settings"),
+    })))
 }
 
-#[derive(Deserialize)]
-struct UpdateTenantBody {
-    name: Option<String>,
-    subdomain: Option<String>,
-    custom_domain: Option<String>,
-    logo_url: Option<String>,
-    primary_color: Option<String>,
-    secondary_color: Option<String>,
-    plan: Option<String>,
-    max_users: Option<i32>,
-    active: Option<bool>,
-    settings: Option<serde_json::Value>,
-}
-
-async fn update_tenant(
+/// Admin only: partial update on a tenant.
+#[utoipa::path(
+    put,
+    path = "/api/admin/tenants/{id}",
+    tag = "admin",
+    params(("id" = Uuid, Path, description = "Tenant UUID")),
+    request_body = UpdateTenantBody,
+    responses(
+        (status = 200, description = "Updated", body = ApiResponse<TenantUpdatedResponse>),
+        (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn update_tenant(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
     Json(body): Json<UpdateTenantBody>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<TenantUpdatedResponse>>, AppError> {
     if auth.role != "admin" {
         return Err(AppError::Forbidden);
     }
@@ -310,14 +502,28 @@ async fn update_tenant(
     .bind(id)
     .execute(&state.db)
     .await?;
-    Ok(Json(build_response(json!({ "updated": true }))))
+    Ok(Json(ApiResponse::new(TenantUpdatedResponse {
+        updated: true,
+    })))
 }
 
-async fn list_members(
+/// Admin only: list a tenant's members (cap 500).
+#[utoipa::path(
+    get,
+    path = "/api/admin/tenants/{id}/members",
+    tag = "admin",
+    params(("id" = Uuid, Path, description = "Tenant UUID")),
+    responses(
+        (status = 200, description = "Members", body = ApiResponse<MembersResponse>),
+        (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_members(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(tenant_id): Path<Uuid>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<MembersResponse>>, AppError> {
     if auth.role != "admin" {
         return Err(AppError::Forbidden);
     }
@@ -335,34 +541,41 @@ async fn list_members(
     .bind(tenant_id)
     .fetch_all(&state.db)
     .await?;
-    let items: Vec<Value> = rows
+    let items: Vec<TenantMemberRow> = rows
         .iter()
-        .map(|r| {
-            json!({
-                "user_id": r.get::<Uuid, _>("user_id"),
-                "username": r.get::<String, _>("username"),
-                "display_name": r.get::<String, _>("display_name"),
-                "email": r.get::<String, _>("email"),
-                "role": r.get::<String, _>("role"),
-                "joined_at": r.get::<chrono::DateTime<chrono::Utc>, _>("joined_at"),
-            })
+        .map(|r| TenantMemberRow {
+            user_id: r.get("user_id"),
+            username: r.get("username"),
+            display_name: r.get("display_name"),
+            email: r.get("email"),
+            role: r.get("role"),
+            joined_at: r.get("joined_at"),
         })
         .collect();
-    Ok(Json(build_response(json!({ "members": items }))))
+    Ok(Json(ApiResponse::new(MembersResponse { members: items })))
 }
 
-#[derive(Deserialize)]
-struct AddMemberBody {
-    user_id: Uuid,
-    role: Option<String>,
-}
-
-async fn add_member(
+/// Admin only: enroll a user in a tenant. Idempotent (upserts role).
+/// Enforces `max_users` quota.
+#[utoipa::path(
+    post,
+    path = "/api/admin/tenants/{id}/members",
+    tag = "admin",
+    params(("id" = Uuid, Path, description = "Tenant UUID")),
+    request_body = AddMemberBody,
+    responses(
+        (status = 200, description = "Member added", body = ApiResponse<MemberAddedResponse>),
+        (status = 400, description = "Invalid role or quota reached", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn add_member(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(tenant_id): Path<Uuid>,
     Json(body): Json<AddMemberBody>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<MemberAddedResponse>>, AppError> {
     if auth.role != "admin" {
         return Err(AppError::Forbidden);
     }
@@ -398,14 +611,26 @@ async fn add_member(
     .bind(&role)
     .execute(&state.db)
     .await?;
-    Ok(Json(build_response(json!({ "added": true }))))
+    Ok(Json(ApiResponse::new(MemberAddedResponse { added: true })))
 }
 
-async fn list_cohorts(
+/// Admin only: list the tenant's cohorts (learning groups).
+#[utoipa::path(
+    get,
+    path = "/api/admin/tenants/{id}/cohorts",
+    tag = "admin",
+    params(("id" = Uuid, Path, description = "Tenant UUID")),
+    responses(
+        (status = 200, description = "Cohorts", body = ApiResponse<CohortsResponse>),
+        (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_cohorts(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(tenant_id): Path<Uuid>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<CohortsResponse>>, AppError> {
     if auth.role != "admin" {
         return Err(AppError::Forbidden);
     }
@@ -420,35 +645,39 @@ async fn list_cohorts(
     .bind(tenant_id)
     .fetch_all(&state.db)
     .await?;
-    let items: Vec<Value> = rows
+    let items: Vec<CohortRow> = rows
         .iter()
-        .map(|r| {
-            json!({
-                "id": r.get::<Uuid, _>("id"),
-                "name": r.get::<String, _>("name"),
-                "starts_at": r.get::<Option<chrono::DateTime<chrono::Utc>>, _>("starts_at"),
-                "ends_at": r.get::<Option<chrono::DateTime<chrono::Utc>>, _>("ends_at"),
-                "active": r.get::<bool, _>("active"),
-                "members_count": r.get::<i64, _>("members_count"),
-            })
+        .map(|r| CohortRow {
+            id: r.get("id"),
+            name: r.get("name"),
+            starts_at: r.get("starts_at"),
+            ends_at: r.get("ends_at"),
+            active: r.get("active"),
+            members_count: r.get("members_count"),
         })
         .collect();
-    Ok(Json(build_response(json!({ "cohorts": items }))))
+    Ok(Json(ApiResponse::new(CohortsResponse { cohorts: items })))
 }
 
-#[derive(Deserialize)]
-struct CreateCohortBody {
-    name: String,
-    starts_at: Option<chrono::DateTime<chrono::Utc>>,
-    ends_at: Option<chrono::DateTime<chrono::Utc>>,
-}
-
-async fn create_cohort(
+/// Admin only: create a new cohort under a tenant.
+#[utoipa::path(
+    post,
+    path = "/api/admin/tenants/{id}/cohorts",
+    tag = "admin",
+    params(("id" = Uuid, Path, description = "Tenant UUID")),
+    request_body = CreateCohortBody,
+    responses(
+        (status = 200, description = "Cohort created", body = ApiResponse<CohortCreatedResponse>),
+        (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create_cohort(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(tenant_id): Path<Uuid>,
     Json(body): Json<CreateCohortBody>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<CohortCreatedResponse>>, AppError> {
     if auth.role != "admin" {
         return Err(AppError::Forbidden);
     }
@@ -464,5 +693,7 @@ async fn create_cohort(
     .bind(body.ends_at)
     .fetch_one(&state.db)
     .await?;
-    Ok(Json(build_response(json!({ "cohort_id": inserted.0 }))))
+    Ok(Json(ApiResponse::new(CohortCreatedResponse {
+        cohort_id: inserted.0,
+    })))
 }

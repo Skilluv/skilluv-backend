@@ -129,8 +129,14 @@ struct AuditEntry {
 
 // ─── Routes ─────────────────────────────────────────────────────
 
-// GET /api/admin/users
-async fn list_users(
+/// List users with moderation filters.
+#[utoipa::path(
+    get, path = "/api/admin/users", tag = "admin",
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_users(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Query(query): Query<ListUsersQuery>,
@@ -219,8 +225,15 @@ async fn list_users(
     })))
 }
 
-// GET /api/admin/users/:id
-async fn get_user(
+/// Get user detail for moderation.
+#[utoipa::path(
+    get, path = "/api/admin/users/{id}", tag = "admin",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse), (status = 404, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn get_user(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -280,8 +293,16 @@ async fn get_user(
     }))))
 }
 
-// POST /api/admin/users/:id/ban
-async fn ban_user(
+/// Ban a user.
+#[utoipa::path(
+    post, path = "/api/admin/users/{id}/ban", tag = "admin",
+    params(("id" = Uuid, Path)),
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn ban_user(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -382,8 +403,15 @@ async fn ban_user(
     }))))
 }
 
-// POST /api/admin/users/:id/unban
-async fn unban_user(
+/// Unban a user.
+#[utoipa::path(
+    post, path = "/api/admin/users/{id}/unban", tag = "admin",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn unban_user(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -445,8 +473,14 @@ async fn unban_user(
     }))))
 }
 
-// GET /api/admin/reports
-async fn list_reports(
+/// List moderation reports.
+#[utoipa::path(
+    get, path = "/api/admin/reports", tag = "admin",
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_reports(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Query(query): Query<ReportsQuery>,
@@ -544,8 +578,16 @@ async fn list_reports(
     })))
 }
 
-// PUT /api/admin/reports/:id
-async fn handle_report(
+/// Resolve or dismiss a moderation report.
+#[utoipa::path(
+    put, path = "/api/admin/reports/{id}", tag = "admin",
+    params(("id" = Uuid, Path)),
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse), (status = 404, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn handle_report(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -600,8 +642,14 @@ async fn handle_report(
     }))))
 }
 
-// GET /api/admin/audit-log
-async fn audit_log(
+/// Legacy admin audit log listing.
+#[utoipa::path(
+    get, path = "/api/admin/audit-log", tag = "admin",
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn audit_log(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Query(query): Query<AuditLogQuery>,
@@ -660,8 +708,14 @@ async fn audit_log(
     })))
 }
 
-// GET /api/admin/dashboard/moderation
-async fn moderation_dashboard(
+/// Moderation dashboard KPIs.
+#[utoipa::path(
+    get, path = "/api/admin/dashboard/moderation", tag = "admin",
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn moderation_dashboard(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<serde_json::Value>, AppError> {

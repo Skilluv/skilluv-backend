@@ -1,0 +1,56 @@
+name: CodeQL (SAST)
+
+# CodeQL scans the code for known vulnerability patterns (SQL injection,
+# unsafe deserialization, hardcoded secrets, etc.). Free for public repos ;
+# native GitHub. Complements `cargo audit` (which scans deps) and `gitleaks`
+# (which scans git history).
+#
+# Rust support is in preview but works well for detecting most CWE patterns.
+
+on:
+  # Removed push:master + PR triggers — CodeQL is expensive (autobuild
+  # recompiles everything) and rarely surfaces new findings between two
+  # code changes. Weekly scan + on-demand dispatch is the sweet spot on
+  # a free GHA tier.
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 0"   # Sunday 03:00 UTC
+  # Re-enable if we hit a critical release cycle where every commit needs SAST :
+  # push:
+  #   branches: [master]
+  #   paths: ["src/**", "migrations/**"]
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: CodeQL / Rust
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@4187e74d05793876e9989daffde9c3e66b4acd07  # v3
+        with:
+          languages: rust
+          # Extend the default suite with security-and-quality (more queries,
+          # slightly more noise but catches more).
+          queries: security-and-quality
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@4187e74d05793876e9989daffde9c3e66b4acd07  # v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@4187e74d05793876e9989daffde9c3e66b4acd07  # v3
+        with:
+          category: "/language:rust"

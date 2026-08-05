@@ -86,7 +86,14 @@ struct ListQuery {
     per_page: Option<i64>,
 }
 
-async fn list_enterprises(
+/// Admin: paginated list of enterprises (filter by type / verified).
+#[utoipa::path(
+    get, path = "/api/admin/enterprises", tag = "admin",
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_enterprises(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<ListQuery>,
@@ -170,7 +177,15 @@ async fn list_enterprises(
 // GET /admin/enterprises/{id}
 // ═══════════════════════════════════════════════════════════════════
 
-async fn get_enterprise(
+/// Admin: enterprise detail.
+#[utoipa::path(
+    get, path = "/api/admin/enterprises/{id}", tag = "admin",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse), (status = 404, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn get_enterprise(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -214,7 +229,16 @@ struct DryRunQuery {
     dry_run: bool,
 }
 
-async fn patch_type(
+/// Admin: change enterprise_type (resets type_config).
+#[utoipa::path(
+    patch, path = "/api/admin/enterprises/{id}/type", tag = "admin",
+    params(("id" = Uuid, Path)),
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn patch_type(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(enterprise_id): Path<Uuid>,
@@ -340,7 +364,15 @@ async fn patch_type(
 // GET /admin/enterprises/{id}/type-config
 // ═══════════════════════════════════════════════════════════════════
 
-async fn get_type_config(
+/// Admin: read type_config JSONB.
+#[utoipa::path(
+    get, path = "/api/admin/enterprises/{id}/type-config", tag = "admin",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn get_type_config(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -365,7 +397,15 @@ async fn get_type_config(
 // GET /admin/enterprises/{id}/agency-clients
 // ═══════════════════════════════════════════════════════════════════
 
-async fn list_agency_clients(
+/// Admin: list agency clients for a staffing_agency enterprise (empty otherwise).
+#[utoipa::path(
+    get, path = "/api/admin/enterprises/{id}/agency-clients", tag = "admin",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_agency_clients(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,

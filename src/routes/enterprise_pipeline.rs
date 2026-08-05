@@ -64,12 +64,24 @@ fn check_stage(s: &str) -> Result<(), AppError> {
     }
 }
 
-#[derive(Deserialize)]
-struct ListQuery {
+#[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+pub struct ListQuery {
     stage: Option<String>,
 }
 
-async fn list_entries(
+/// List kanban entries for the caller enterprise. Optional stage filter.
+#[utoipa::path(
+    get,
+    path = "/api/enterprise/pipeline",
+    tag = "enterprise",
+    params(ListQuery),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 403, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_entries(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<ListQuery>,
@@ -114,15 +126,28 @@ async fn list_entries(
     Ok(Json(build_response(json!({ "entries": items }))))
 }
 
-#[derive(Deserialize)]
-struct AddEntryBody {
+#[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+pub struct AddEntryBody {
     talent_id: Uuid,
     stage: Option<String>,
     notes: Option<String>,
     salary_proposed_eur: Option<i32>,
 }
 
-async fn add_entry(
+/// Add (or upsert) a talent to the pipeline. Idempotent per
+/// `(enterprise_id, talent_id)`.
+#[utoipa::path(
+    post,
+    path = "/api/enterprise/pipeline",
+    tag = "enterprise",
+    request_body = AddEntryBody,
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 400, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn add_entry(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<AddEntryBody>,
@@ -163,15 +188,28 @@ async fn add_entry(
     Ok(Json(build_response(json!({ "entry_id": entry_id.0 }))))
 }
 
-#[derive(Deserialize)]
-struct UpdateEntryBody {
+#[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+pub struct UpdateEntryBody {
     stage: Option<String>,
     notes: Option<String>,
     salary_proposed_eur: Option<i32>,
     position: Option<i32>,
 }
 
-async fn update_entry(
+/// Partial update of a pipeline entry (stage transitions logged).
+#[utoipa::path(
+    put,
+    path = "/api/enterprise/pipeline/{id}",
+    tag = "enterprise",
+    params(("id" = Uuid, Path)),
+    request_body = UpdateEntryBody,
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 404, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn update_entry(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -228,7 +266,16 @@ async fn update_entry(
     Ok(Json(build_response(json!({ "updated": true }))))
 }
 
-async fn remove_entry(
+/// Remove a talent from the pipeline.
+#[utoipa::path(
+    delete,
+    path = "/api/enterprise/pipeline/{id}",
+    tag = "enterprise",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn remove_entry(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -242,7 +289,18 @@ async fn remove_entry(
     Ok(Json(build_response(json!({ "deleted": true }))))
 }
 
-async fn export_csv(
+/// CSV export of the entire pipeline (attachment).
+#[utoipa::path(
+    get,
+    path = "/api/enterprise/pipeline/export.csv",
+    tag = "enterprise",
+    responses(
+        (status = 200, description = "CSV attachment", content_type = "text/csv"),
+        (status = 403, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn export_csv(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<impl IntoResponse, AppError> {

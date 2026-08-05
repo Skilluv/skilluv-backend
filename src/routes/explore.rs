@@ -13,9 +13,11 @@ use axum::routing::get;
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::AppState;
+use crate::api_response::MetaInfo;
 use crate::errors::AppError;
 
 // Type aliases pour clippy::type_complexity (rangées sqlx::query_as).
@@ -45,41 +47,100 @@ pub fn explore_routes() -> Router<AppState> {
     Router::new().route("/explore", get(explore))
 }
 
-#[derive(Debug, Deserialize)]
-struct ExploreQuery {
-    /// Filtre optionnel sur le kind ('slice' | 'challenge'). Sinon les deux.
-    kind: Option<String>,
-    /// Filtre domaine ('code', 'design', 'game', 'security', 'ops', 'ai', 'soft_skills').
-    domain: Option<String>,
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
+pub struct ExploreQuery {
+    /// Filtre optionnel sur le kind (`slice` | `challenge`). Sinon les deux.
+    #[param(pattern = r"^(slice|challenge)$")]
+    pub kind: Option<String>,
+    /// Filtre domaine (`code`, `design`, `game`, `security`, `ops`, `ai`, `soft_skills`).
+    #[param(pattern = r"^(code|design|game|security|ops|ai|soft_skills)$")]
+    pub domain: Option<String>,
     /// Difficulté (1-5).
-    difficulty: Option<i16>,
+    #[param(minimum = 1, maximum = 5)]
+    pub difficulty: Option<i16>,
     /// Langue de programmation (challenges uniquement).
-    language: Option<String>,
+    #[param(max_length = 50)]
+    pub language: Option<String>,
     /// Filtrer par project_id (slices uniquement).
-    project_id: Option<Uuid>,
+    pub project_id: Option<Uuid>,
     /// Recherche texte simple ILIKE sur title.
-    q: Option<String>,
-    /// Pagination.
-    page: Option<i64>,
-    per_page: Option<i64>,
+    #[param(max_length = 200)]
+    pub q: Option<String>,
+    #[param(minimum = 1, maximum = 100000)]
+    pub page: Option<i64>,
+    #[param(minimum = 1, maximum = 100)]
+    pub per_page: Option<i64>,
 }
 
-#[derive(Debug, Clone, Serialize)]
-struct ExploreItem {
-    kind: &'static str,
-    id: Uuid,
-    title: String,
-    domain: String,
-    difficulty: i16,
-    /// Détails supplémentaires spécifiques au kind.
-    payload: Value,
-    created_at: chrono::DateTime<chrono::Utc>,
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ExploreItem {
+    /// `slice` or `challenge`.
+    pub kind: &'static str,
+    pub id: Uuid,
+    pub title: String,
+    pub domain: String,
+    pub difficulty: i16,
+    /// Kind-specific payload:
+    /// - slice: `{ project_id, slice_type, fragments_reward, credits_reward }`
+    /// - challenge: `{ language, reward_fragments, is_capstone }`
+    pub payload: Value,
+    pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
-async fn explore(
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ExplorePage {
+    pub items: Vec<ExploreItem>,
+    pub page: i64,
+    pub per_page: i64,
+    pub returned: usize,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ExploreResponse {
+    pub data: ExplorePage,
+    pub meta: MetaInfo,
+}
+
+/// Public multi-source explore endpoint — unifies open slices and
+/// published challenge templates in one paginated feed. Both sources
+/// pre-fetched then merged/sorted server-side by `created_at DESC`.
+#[utoipa::path(
+    get,
+    path = "/api/explore",
+    tag = "feed",
+    params(ExploreQuery),
+    responses(
+        (status = 200, description = "Explore results", body = ExploreResponse),
+    ),
+)]
+pub async fn explore(
     State(state): State<AppState>,
     Query(q): Query<ExploreQuery>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ExploreResponse>, AppError> {
+    if let Some(k) = &q.kind
+        && !matches!(k.as_str(), "slice" | "challenge")
+    {
+        return Err(AppError::Validation(
+            "kind must be one of: slice, challenge".into(),
+        ));
+    }
+    if let Some(d) = &q.domain
+        && !matches!(
+            d.as_str(),
+            "code" | "design" | "game" | "security" | "ops" | "ai" | "soft_skills"
+        )
+    {
+        return Err(AppError::Validation(
+            "domain must be one of: code, design, game, security, ops, ai, soft_skills".into(),
+        ));
+    }
+    crate::validators::check_max_len_opt(&q.language, "language", 50)?;
+    crate::validators::check_max_len_opt(&q.q, "q", 200)?;
+    crate::validators::check_range_opt(q.difficulty.map(i64::from), "difficulty", 1, 5)?;
+    crate::validators::check_range_opt(q.page, "page", 1, 100_000)?;
+    crate::validators::check_range_opt(q.per_page, "per_page", 1, 100)?;
     let page = q.page.unwrap_or(1).max(1);
     let per_page = q.per_page.unwrap_or(20).clamp(1, 100);
     // Chaque source SQL retourne assez d'items pour couvrir jusqu'à la page
@@ -186,18 +247,20 @@ async fn explore(
     // Tri final unifié par created_at DESC + slice de page.
     items.sort_by_key(|i| std::cmp::Reverse(i.created_at));
     let offset = ((page - 1) * per_page) as usize;
-    let page_slice: Vec<&ExploreItem> = items.iter().skip(offset).take(per_page as usize).collect();
+    let page_items: Vec<ExploreItem> = items
+        .into_iter()
+        .skip(offset)
+        .take(per_page as usize)
+        .collect();
 
-    Ok(Json(json!({
-        "data": {
-            "items": page_slice,
-            "page": page,
-            "per_page": per_page,
-            "returned": page_slice.len(),
+    let returned = page_items.len();
+    Ok(Json(ExploreResponse {
+        data: ExplorePage {
+            items: page_items,
+            page,
+            per_page,
+            returned,
         },
-        "meta": {
-            "request_id": Uuid::new_v4().to_string(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-        }
-    })))
+        meta: MetaInfo::now(),
+    }))
 }

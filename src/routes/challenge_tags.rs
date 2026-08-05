@@ -1,10 +1,12 @@
 use axum::extract::State;
 use axum::routing::get;
 use axum::{Json, Router};
-use serde_json::json;
+use serde::Serialize;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::AppState;
+use crate::api_response::ApiResponse;
 use crate::errors::AppError;
 use crate::models::ChallengeTemplate;
 
@@ -15,26 +17,48 @@ pub fn challenge_tag_routes() -> Router<AppState> {
         .route("/challenges/featured", get(featured_challenges))
 }
 
-fn build_response(data: serde_json::Value) -> serde_json::Value {
-    json!({
-        "data": data,
-        "meta": {
-            "request_id": Uuid::new_v4().to_string(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-        }
-    })
+#[derive(Debug, Serialize, sqlx::FromRow, ToSchema)]
+pub struct TagWithCount {
+    pub id: Uuid,
+    pub name: String,
+    pub category: String,
+    pub challenge_count: i64,
 }
 
-#[derive(Debug, serde::Serialize, sqlx::FromRow)]
-struct TagWithCount {
-    id: Uuid,
-    name: String,
-    category: String,
-    challenge_count: i64,
+#[derive(Debug, Serialize, ToSchema)]
+pub struct TagsResponse {
+    pub tags: Vec<TagWithCount>,
 }
 
-// GET /api/challenges/tags — all tags with usage count (no auth, SSR)
-async fn list_tags(State(state): State<AppState>) -> Result<Json<serde_json::Value>, AppError> {
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CategoryRow {
+    pub category: String,
+    pub tag_count: i64,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CategoriesResponse {
+    pub categories: Vec<CategoryRow>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct FeaturedChallengesResponse {
+    pub challenges: Vec<ChallengeTemplate>,
+}
+
+/// List every challenge tag with the number of published challenges
+/// tagged with it. Public, SSR-ready.
+#[utoipa::path(
+    get,
+    path = "/api/challenges/tags",
+    tag = "challenges",
+    responses(
+        (status = 200, description = "Tags with usage counts", body = ApiResponse<TagsResponse>),
+    ),
+)]
+pub async fn list_tags(
+    State(state): State<AppState>,
+) -> Result<Json<ApiResponse<TagsResponse>>, AppError> {
     let tags: Vec<TagWithCount> = sqlx::query_as(
         r#"
         SELECT t.id, t.name, t.category, COUNT(ctm.challenge_id) as challenge_count
@@ -47,36 +71,60 @@ async fn list_tags(State(state): State<AppState>) -> Result<Json<serde_json::Val
     .fetch_all(&state.db)
     .await?;
 
-    Ok(Json(build_response(json!({ "tags": tags }))))
+    Ok(Json(ApiResponse::new(TagsResponse { tags })))
 }
 
-// GET /api/challenges/categories — distinct categories (no auth, SSR)
-async fn list_categories(
+/// Distinct tag categories with tag counts. Public, SSR-ready.
+#[utoipa::path(
+    get,
+    path = "/api/challenges/categories",
+    tag = "challenges",
+    responses(
+        (status = 200, description = "Tag categories", body = ApiResponse<CategoriesResponse>),
+    ),
+)]
+pub async fn list_categories(
     State(state): State<AppState>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<CategoriesResponse>>, AppError> {
     let categories: Vec<(String, i64)> = sqlx::query_as(
         "SELECT category, COUNT(*) as count FROM challenge_tags GROUP BY category ORDER BY category",
     )
     .fetch_all(&state.db)
     .await?;
 
-    let result: Vec<serde_json::Value> = categories
+    let result: Vec<CategoryRow> = categories
         .iter()
-        .map(|(cat, count)| json!({ "category": cat, "tag_count": count }))
+        .map(|(cat, count)| CategoryRow {
+            category: cat.clone(),
+            tag_count: *count,
+        })
         .collect();
 
-    Ok(Json(build_response(json!({ "categories": result }))))
+    Ok(Json(ApiResponse::new(CategoriesResponse {
+        categories: result,
+    })))
 }
 
-// GET /api/challenges/featured — featured challenges (no auth, SSR)
-async fn featured_challenges(
+/// Featured challenges — capped at 20, ordered by vote_count desc.
+/// Public, SSR-ready.
+#[utoipa::path(
+    get,
+    path = "/api/challenges/featured",
+    tag = "challenges",
+    responses(
+        (status = 200, description = "Featured challenges", body = ApiResponse<FeaturedChallengesResponse>),
+    ),
+)]
+pub async fn featured_challenges(
     State(state): State<AppState>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<FeaturedChallengesResponse>>, AppError> {
     let challenges: Vec<ChallengeTemplate> = sqlx::query_as(
         "SELECT * FROM challenge_templates WHERE featured = TRUE AND status = 'published' ORDER BY vote_count DESC, created_at DESC LIMIT 20",
     )
     .fetch_all(&state.db)
     .await?;
 
-    Ok(Json(build_response(json!({ "challenges": challenges }))))
+    Ok(Json(ApiResponse::new(FeaturedChallengesResponse {
+        challenges,
+    })))
 }

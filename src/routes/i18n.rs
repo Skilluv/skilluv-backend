@@ -2,28 +2,66 @@
 
 use axum::routing::get;
 use axum::{Json, Router};
-use serde_json::{Value, json};
+use serde::Serialize;
+use utoipa::ToSchema;
 
 use crate::AppState;
+use crate::api_response::ApiResponse;
 
 pub fn i18n_routes() -> Router<AppState> {
     Router::new().route("/i18n/locales", get(list_locales))
 }
 
-async fn list_locales() -> Json<Value> {
-    Json(json!({
-        "data": {
-            "default": "en",
-            "available": [
-                { "code": "en", "name": "English", "direction": "ltr" },
-                { "code": "fr", "name": "Français", "direction": "ltr" },
-                { "code": "ar", "name": "العربية", "direction": "rtl" },
-            ]
-        },
-        "meta": {
-            "request_id": uuid::Uuid::new_v4().to_string(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-        }
+#[derive(Debug, Serialize, ToSchema)]
+pub struct LocaleEntry {
+    /// BCP-47 language subtag (`en`, `fr`, `ar`).
+    #[schema(example = "fr")]
+    pub code: &'static str,
+    /// Endonym — the language name written in its own script.
+    #[schema(example = "Français")]
+    pub name: &'static str,
+    /// `"ltr"` or `"rtl"`. Front uses it to flip layout direction.
+    pub direction: &'static str,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct LocalesResponse {
+    /// Fallback locale when nothing else matches.
+    pub default: &'static str,
+    /// Every locale the backend can serve translations for.
+    pub available: Vec<LocaleEntry>,
+}
+
+/// List every locale the backend supports. Used by the front to render
+/// the language switcher and by SSR to pick a sensible default.
+#[utoipa::path(
+    get,
+    path = "/api/i18n/locales",
+    tag = "profile",
+    responses(
+        (status = 200, description = "Supported locales", body = ApiResponse<LocalesResponse>),
+    ),
+)]
+pub async fn list_locales() -> Json<ApiResponse<LocalesResponse>> {
+    Json(ApiResponse::new(LocalesResponse {
+        default: "en",
+        available: vec![
+            LocaleEntry {
+                code: "en",
+                name: "English",
+                direction: "ltr",
+            },
+            LocaleEntry {
+                code: "fr",
+                name: "Français",
+                direction: "ltr",
+            },
+            LocaleEntry {
+                code: "ar",
+                name: "العربية",
+                direction: "rtl",
+            },
+        ],
     }))
 }
 

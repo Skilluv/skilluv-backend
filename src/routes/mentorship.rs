@@ -60,7 +60,12 @@ struct MentorListQuery {
     per_page: Option<i64>,
 }
 
-async fn list_mentors(
+/// List available mentors.
+#[utoipa::path(
+    get, path = "/api/mentors", tag = "challenges",
+    responses((status = 200, body = serde_json::Value)),
+)]
+pub async fn list_mentors(
     State(state): State<AppState>,
     Query(q): Query<MentorListQuery>,
 ) -> Result<Json<Value>, AppError> {
@@ -110,7 +115,13 @@ async fn list_mentors(
     Ok(Json(build_response(json!({ "mentors": items }))))
 }
 
-async fn get_mentor_profile(
+/// Get a mentor's public profile.
+#[utoipa::path(
+    get, path = "/api/mentors/{user_id}", tag = "challenges",
+    params(("user_id" = uuid::Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+)]
+pub async fn get_mentor_profile(
     State(state): State<AppState>,
     Path(user_id): Path<Uuid>,
 ) -> Result<Json<Value>, AppError> {
@@ -154,7 +165,14 @@ struct UpsertMentorBody {
     active: Option<bool>,
 }
 
-async fn upsert_my_mentor_profile(
+/// Create or update my mentor profile.
+#[utoipa::path(
+    put, path = "/api/mentors/me", tag = "challenges",
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn upsert_my_mentor_profile(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<UpsertMentorBody>,
@@ -192,7 +210,13 @@ async fn upsert_my_mentor_profile(
     Ok(Json(build_response(json!({ "updated": true }))))
 }
 
-async fn get_my_mentor_profile(
+/// Get my mentor profile.
+#[utoipa::path(
+    get, path = "/api/mentors/me", tag = "challenges",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn get_my_mentor_profile(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
@@ -224,7 +248,14 @@ struct AddAvailabilityBody {
     timezone: Option<String>,
 }
 
-async fn add_availability(
+/// Add a mentor availability slot.
+#[utoipa::path(
+    post, path = "/api/mentors/me/availability", tag = "challenges",
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn add_availability(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<AddAvailabilityBody>,
@@ -269,7 +300,14 @@ struct BookSessionBody {
     mentee_notes: Option<String>,
 }
 
-async fn book_session(
+/// Book a mentorship session.
+#[utoipa::path(
+    post, path = "/api/mentorship/sessions", tag = "challenges",
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn book_session(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<BookSessionBody>,
@@ -386,7 +424,13 @@ async fn book_session(
     }))))
 }
 
-async fn list_my_sessions(
+/// List my mentorship sessions.
+#[utoipa::path(
+    get, path = "/api/mentorship/sessions", tag = "challenges",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_my_sessions(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
@@ -431,7 +475,14 @@ async fn list_my_sessions(
     Ok(Json(build_response(json!({ "sessions": items }))))
 }
 
-async fn cancel_session(
+/// Cancel a mentorship session.
+#[utoipa::path(
+    post, path = "/api/mentorship/sessions/{id}/cancel", tag = "challenges",
+    params(("id" = uuid::Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn cancel_session(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -533,7 +584,13 @@ async fn cancel_session(
 
 // ─── Stripe Connect onboarding ───────────────────────────────────
 
-async fn start_connect_onboarding(
+/// Start Stripe Connect onboarding for mentor payouts.
+#[utoipa::path(
+    post, path = "/api/mentors/me/connect/onboard", tag = "wallet",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn start_connect_onboarding(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
@@ -586,7 +643,13 @@ async fn start_connect_onboarding(
     }))))
 }
 
-async fn connect_status(
+/// Get Stripe Connect onboarding status.
+#[utoipa::path(
+    get, path = "/api/mentors/me/connect/status", tag = "wallet",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn connect_status(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
@@ -614,7 +677,14 @@ async fn connect_status(
     }))))
 }
 
-async fn mark_completed(
+/// Mark a mentorship session complete (mentor).
+#[utoipa::path(
+    post, path = "/api/mentorship/sessions/{id}/complete", tag = "challenges",
+    params(("id" = uuid::Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn mark_completed(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -716,7 +786,15 @@ struct ReviewBody {
     comment: Option<String>,
 }
 
-async fn submit_review(
+/// Submit a review for a completed session.
+#[utoipa::path(
+    post, path = "/api/mentorship/sessions/{id}/review", tag = "challenges",
+    params(("id" = uuid::Uuid, Path)),
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn submit_review(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(session_id): Path<Uuid>,

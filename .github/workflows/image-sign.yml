@@ -1,0 +1,95 @@
+name: Sign published image + attach SBOM
+
+# Runs AFTER the publish workflow (see PR #33) has pushed an image to GHCR.
+# Signs the image with cosign (keyless, OIDC-based — no keys to rotate) and
+# attaches the CycloneDX SBOM as a signed attestation. Consumers can verify
+# both with `cosign verify` against our GitHub Actions identity.
+#
+# Reference : https://docs.sigstore.dev/cosign/signing/overview/
+
+on:
+  workflow_run:
+    workflows: ["CI"]   # trigger after the main CI (which contains publish) succeeds on master
+    types: [completed]
+    branches: [master]
+
+permissions:
+  contents: read
+  packages: write     # to sign packages in GHCR
+  id-token: write     # for keyless signing (Sigstore OIDC)
+
+concurrency:
+  group: image-sign-${{ github.ref }}
+  cancel-in-progress: false   # never cancel a signing run mid-way
+
+jobs:
+  sign:
+    name: cosign + SBOM attestation
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/skilluv-backend
+      SHA: ${{ github.event.workflow_run.head_sha }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          persist-credentials: false
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@dc72c7d5c4d10cd6bcb8cf6e3fd625a9e5e537da  # v3.7.0
+
+      - name: Install syft (SBOM generator)
+        uses: anchore/sbom-action/download-syft@fc46e51fd3cb168ffb36c6d1915723c47db58abb  # v0.17.7
+
+      - name: Login to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sign the image (keyless)
+        run: |
+          cosign sign --yes \
+            "${IMAGE}:master@$(docker buildx imagetools inspect "${IMAGE}:master" --format '{{json .Manifest}}' | jq -r .digest)"
+          cosign sign --yes \
+            "${IMAGE}:master-${SHA}@$(docker buildx imagetools inspect "${IMAGE}:master-${SHA}" --format '{{json .Manifest}}' | jq -r .digest)"
+
+      - name: Generate SBOM
+        run: |
+          syft "${IMAGE}:master-${SHA}" -o cyclonedx-json > sbom.cdx.json
+          syft "${IMAGE}:master-${SHA}" -o spdx-json      > sbom.spdx.json
+
+      - name: Attach SBOM as signed attestation
+        run: |
+          cosign attest --yes \
+            --predicate sbom.cdx.json \
+            --type cyclonedx \
+            "${IMAGE}:master-${SHA}"
+
+      - name: Upload SBOMs as artifact (90d retention)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: sbom-${{ env.SHA }}
+          path: |
+            sbom.cdx.json
+            sbom.spdx.json
+          retention-days: 90
+
+      - name: Verification instructions
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          {
+            echo "## How to verify this image"
+            echo '```'
+            echo "cosign verify ${IMAGE}:master-${SHA} \\"
+            echo "  --certificate-identity-regexp='https://github.com/${REPO}/.*' \\"
+            echo "  --certificate-oidc-issuer='https://token.actions.githubusercontent.com'"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -246,9 +246,12 @@ async fn test_invite_accept_invalid_token() {
             &json!({ "token": "does-not-exist" }),
         )
         .await;
-    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    // 404 : token = ressource. Absente = NotFound, plus 400 Validation
+    // (semantiquement REST + accepte par schemathesis positive_data_acceptance).
+    // Voir commit qui a change peek_enterprise_invite.
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
     let body: serde_json::Value = resp.json().await.unwrap();
-    assert_eq!(body["error"]["code"], "VALIDATION_ERROR");
+    assert_eq!(body["error"]["code"], "RESOURCE_NOT_FOUND");
 }
 
 #[tokio::test]

@@ -3,7 +3,30 @@ name = "skilluv-backend"
 version = "0.1.0"
 edition = "2024"
 description = "Skilluv — Plateforme gamifiée de démonstration de compétences"
+license = "AGPL-3.0-or-later"
 default-run = "skilluv-backend"
+
+# cargo-machete false-positive ignores. Each entry has a written reason —
+# do NOT add to this list without checking that the crate is actually
+# unused. To verify: `cargo tree -p <crate>` shows the transitive path.
+[package.metadata.cargo-machete]
+ignored = [
+    # Diamond dep : p256 0.13 re-exports elliptic-curve 0.13 while our
+    # openidconnect 4.x direct dep uses elliptic-curve 0.14. We import
+    # ToEncodedPoint via p256::elliptic_curve::sec1 (BE-P1-CONTRACT
+    # push_sender.rs) so machete can't see the direct usage.
+    "elliptic-curve",
+    # Build-only crates (tonic codegen + protobuf compiler). Referenced
+    # only in build.rs — cargo-machete's source scanner doesn't traverse
+    # build scripts.
+    "protox",
+    "tonic-build",
+    "tonic-prost-build",
+    # utoipa-axum : router integration for OpenAPI wiring. Currently
+    # unused (we use utoipa's manual attach in src/openapi.rs) but kept
+    # for future migration to the auto-router pattern.
+    "utoipa-axum",
+]
 
 [dependencies]
 # Web framework
@@ -101,6 +124,14 @@ hkdf = "0.13"
 # OIDC B2B SSO (enterprise) — discovery, PKCE, JWKS rotation, ID token verify.
 openidconnect = "4"
 elliptic-curve = { version = "0.14", features = ["sec1"] }
+
+# OpenAPI generation + contract testing (BE-P1-CONTRACT).
+# utoipa builds a rustc-verified OpenAPI 3.1 schema from #[utoipa::path]
+# annotations. utoipa-swagger-ui serves the interactive docs UI. The generated
+# openapi.json feeds schemathesis in CI for property-based contract fuzzing.
+utoipa = { version = "5", features = ["axum_extras", "chrono", "uuid", "decimal"] }
+utoipa-swagger-ui = { version = "9", features = ["axum"] }
+utoipa-axum = "0.2"
 
 [[bin]]
 name = "skilluv-backend"

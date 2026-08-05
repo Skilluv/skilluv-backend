@@ -93,6 +93,91 @@ pub fn validate_bio(bio: &str) -> Result<(), AppError> {
     Ok(())
 }
 
+/// Enforce `#[param(max_length = N)]` cote handler pour un Option<String>
+/// de Query DTO. axum Query n'enforce pas les contraintes utoipa
+/// post-deserialisation, donc chaque handler qui declare une contrainte
+/// de longueur dans son DTO DOIT appeler ce helper pour la garantir cote
+/// serveur (schema OpenAPI = contrat opposable, pas fiction).
+pub fn check_max_len_opt(value: &Option<String>, field: &str, max: usize) -> Result<(), AppError> {
+    if let Some(s) = value
+        && s.chars().count() > max
+    {
+        return Err(AppError::Validation(format!(
+            "{field} must be at most {max} characters"
+        )));
+    }
+    Ok(())
+}
+
+/// Enforce `#[param(minimum = A, maximum = B)]` cote handler pour un
+/// Option<i64>. Meme raisonnement que check_max_len_opt.
+pub fn check_range_opt(
+    value: Option<i64>,
+    field: &str,
+    min: i64,
+    max: i64,
+) -> Result<(), AppError> {
+    if let Some(v) = value
+        && (v < min || v > max)
+    {
+        return Err(AppError::Validation(format!(
+            "{field} must be between {min} and {max}"
+        )));
+    }
+    Ok(())
+}
+
+/// Enforce the OpenAPI schema pattern `^\S(.*\S)?$` + min/max character
+/// bounds on a required text field. Rules:
+///   - no `\n` / `\r` (`.` in the schema pattern doesn't span lines);
+///   - no leading / trailing whitespace (the `\S` anchors at both ends);
+///   - character count (not byte length) between `min` and `max`.
+///
+/// Every field whose OpenAPI schema declares that pattern MUST route
+/// through this helper — otherwise `negative_data_rejection` will catch
+/// the drift (server accepts what the schema rejects) and
+/// `positive_data_acceptance` will catch over-strict server rules.
+pub fn validate_bounded_line(
+    value: &str,
+    field: &str,
+    min: usize,
+    max: usize,
+) -> Result<(), AppError> {
+    if value.contains(['\n', '\r']) {
+        return Err(AppError::Validation(format!(
+            "{field} must not contain line breaks"
+        )));
+    }
+    let starts_ws = value.chars().next().is_some_and(|c| c.is_whitespace());
+    let ends_ws = value.chars().next_back().is_some_and(|c| c.is_whitespace());
+    if starts_ws || ends_ws {
+        return Err(AppError::Validation(format!(
+            "{field} must not have leading or trailing whitespace"
+        )));
+    }
+    let n = value.chars().count();
+    if n < min || n > max {
+        return Err(AppError::Validation(format!(
+            "{field} must be between {min} and {max} characters"
+        )));
+    }
+    Ok(())
+}
+
+/// Optional variant of `validate_bounded_line` — skips checks when the
+/// field is `None`, applies them when `Some`.
+pub fn validate_bounded_line_opt(
+    value: Option<&str>,
+    field: &str,
+    min: usize,
+    max: usize,
+) -> Result<(), AppError> {
+    match value {
+        Some(v) => validate_bounded_line(v, field, min, max),
+        None => Ok(()),
+    }
+}
+
 /// Display name: 1-100 chars, trimmed, no control chars.
 pub fn validate_display_name(name: &str) -> Result<(), AppError> {
     let trimmed = name.trim();
@@ -179,5 +264,48 @@ mod tests {
     fn validate_display_name_trims() {
         assert!(validate_display_name("  Foo  ").is_ok());
         assert!(validate_display_name("   ").is_err());
+    }
+
+    #[test]
+    fn bounded_line_accepts_plain() {
+        assert!(validate_bounded_line("Alice", "name", 1, 50).is_ok());
+        assert!(validate_bounded_line("Ada Lovelace", "name", 1, 50).is_ok());
+    }
+
+    #[test]
+    fn bounded_line_accepts_control_chars_non_line_break() {
+        assert!(validate_bounded_line("a\u{0089}b", "name", 1, 50).is_ok());
+    }
+
+    #[test]
+    fn bounded_line_rejects_line_breaks() {
+        assert!(validate_bounded_line("a\nb", "name", 1, 50).is_err());
+        assert!(validate_bounded_line("a\rb", "name", 1, 50).is_err());
+    }
+
+    #[test]
+    fn bounded_line_rejects_edge_whitespace() {
+        assert!(validate_bounded_line(" Alice", "name", 1, 50).is_err());
+        assert!(validate_bounded_line("Alice ", "name", 1, 50).is_err());
+        assert!(validate_bounded_line("\tAlice", "name", 1, 50).is_err());
+    }
+
+    #[test]
+    fn bounded_line_counts_chars_not_bytes() {
+        let s: String = "é".repeat(10);
+        assert!(validate_bounded_line(&s, "name", 1, 10).is_ok());
+        assert!(validate_bounded_line(&s, "name", 1, 9).is_err());
+    }
+
+    #[test]
+    fn bounded_line_rejects_below_min() {
+        assert!(validate_bounded_line("", "name", 1, 50).is_err());
+    }
+
+    #[test]
+    fn bounded_line_opt_skips_when_none() {
+        assert!(validate_bounded_line_opt(None, "name", 1, 50).is_ok());
+        assert!(validate_bounded_line_opt(Some("ok"), "name", 1, 50).is_ok());
+        assert!(validate_bounded_line_opt(Some(" bad"), "name", 1, 50).is_err());
     }
 }

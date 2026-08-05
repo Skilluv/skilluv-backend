@@ -88,7 +88,7 @@ pub struct SubmitParams {
 }
 
 /// Résultat de la soumission.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct SubmitOutcome {
     pub review_id: Uuid,
     /// Nouveau statut du deliverable après le verdict.

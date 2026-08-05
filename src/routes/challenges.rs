@@ -29,11 +29,18 @@ struct OnboardingQuery {
     domain: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
 struct ListQuery {
+    /// One of `code`, `design`, `game`, `security`.
+    #[param(pattern = r"^(code|design|game|security)$")]
     domain: Option<String>,
+    #[param(minimum = 1, maximum = 5)]
     difficulty: Option<i16>,
+    #[param(minimum = 1, maximum = 100000)]
     page: Option<i64>,
+    #[param(minimum = 1, maximum = 50)]
     per_page: Option<i64>,
 }
 
@@ -54,7 +61,13 @@ fn build_response(data: serde_json::Value) -> serde_json::Value {
 }
 
 // GET /api/challenges/onboarding?domain=code
-async fn get_onboarding(
+/// Get the onboarding challenge for a domain.
+#[utoipa::path(
+    get, path = "/api/challenges/onboarding", tag = "challenges",
+    responses((status = 200, body = serde_json::Value), (status = 404, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn get_onboarding(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(query): Query<OnboardingQuery>,
@@ -86,12 +99,30 @@ async fn get_onboarding(
 }
 
 // GET /api/challenges (public — optional auth for locked/unlocked status)
-async fn list_challenges(
+/// List published challenges (paginated).
+#[utoipa::path(
+    get, path = "/api/challenges", tag = "challenges",
+    responses((status = 200, body = serde_json::Value)),
+)]
+pub async fn list_challenges(
     State(state): State<AppState>,
     OptionalAuth(auth): OptionalAuth,
     tenant: crate::middleware::TenantContext,
     Query(query): Query<ListQuery>,
 ) -> Result<Json<serde_json::Value>, AppError> {
+    // Enforce les contraintes declarees (schemathesis
+    // negative_data_rejection catch schema-invalid accepte).
+    if let Some(d) = &query.domain
+        && !matches!(d.as_str(), "code" | "design" | "game" | "security")
+    {
+        return Err(AppError::Validation(
+            "domain must be one of: code, design, game, security".into(),
+        ));
+    }
+    crate::validators::check_range_opt(query.difficulty.map(i64::from), "difficulty", 1, 5)?;
+    crate::validators::check_range_opt(query.page, "page", 1, 100_000)?;
+    crate::validators::check_range_opt(query.per_page, "per_page", 1, 50)?;
+
     let page = query.page.unwrap_or(1).max(1);
     let per_page = query.per_page.unwrap_or(20).clamp(1, 50);
     let offset = (page - 1) * per_page;
@@ -202,7 +233,13 @@ async fn list_challenges(
 }
 
 // GET /api/challenges/:id (public)
-async fn get_challenge(
+/// Get a single published challenge by id.
+#[utoipa::path(
+    get, path = "/api/challenges/{id}", tag = "challenges",
+    params(("id" = uuid::Uuid, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 404, body = crate::api_response::ErrorResponse)),
+)]
+pub async fn get_challenge(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, AppError> {
@@ -217,7 +254,14 @@ async fn get_challenge(
 }
 
 // POST /api/challenges/:id/start
-async fn start_challenge(
+/// Start a challenge attempt for the authenticated user.
+#[utoipa::path(
+    post, path = "/api/challenges/{id}/start", tag = "challenges",
+    params(("id" = uuid::Uuid, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 201, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn start_challenge(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(challenge_id): Path<Uuid>,
@@ -334,7 +378,15 @@ fn submit_deprecation_headers() -> HeaderMap {
 }
 
 // POST /api/challenges/:id/submit
-async fn submit_challenge(
+/// Submit a challenge attempt (deprecated — use /deliverables).
+#[utoipa::path(
+    post, path = "/api/challenges/{id}/submit", tag = "challenges",
+    params(("id" = uuid::Uuid, Path)),
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value), (status = 400, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn submit_challenge(
     State(state): State<AppState>,
     auth: AuthUserComplete,
     Path(challenge_id): Path<Uuid>,
@@ -698,7 +750,14 @@ async fn submit_challenge(
 }
 
 // GET /api/challenges/:id/submissions
-async fn my_submissions(
+/// List my submissions for a challenge.
+#[utoipa::path(
+    get, path = "/api/challenges/{id}/submissions", tag = "challenges",
+    params(("id" = uuid::Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn my_submissions(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(challenge_id): Path<Uuid>,

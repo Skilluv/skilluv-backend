@@ -11,11 +11,13 @@
 use axum::extract::{Path, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use serde_json::{Value, json};
+use serde::Serialize;
 use sqlx::Row;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::AppState;
+use crate::api_response::ApiResponse;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
 
@@ -32,19 +34,126 @@ pub fn certification_routes() -> Router<AppState> {
         .route("/diplomas/my", get(my_diplomas))
 }
 
-fn build_response(data: Value) -> Value {
-    json!({
-        "data": data,
-        "meta": {
-            "request_id": Uuid::new_v4().to_string(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-        }
-    })
+// ─── Types de réponse ────────────────────────────────────────────
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CertificationRow {
+    pub id: Uuid,
+    pub slug: String,
+    pub title: String,
+    pub description: String,
+    pub skill_domain: String,
+    /// `foundation`, `expert`, `master`.
+    pub level: String,
+    pub price_eur_cents: i64,
+    pub duration_minutes: i32,
+    pub passing_score: i32,
+    pub validity_months: i32,
+    pub challenges_count: i32,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CertificationsListResponse {
+    pub certifications: Vec<CertificationRow>,
+}
+
+/// Response for `POST /certifications/{slug}/purchase`. When an
+/// in-progress attempt already exists, `checkout_url` is `None` and
+/// `message` explains the situation.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PurchaseResponse {
+    pub attempt_id: Uuid,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checkout_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct StartAttemptResponse {
+    pub attempt_id: Uuid,
+    pub challenge_ids: Vec<Uuid>,
+    pub duration_minutes: i32,
+    /// Absolute deadline (RFC 3339). Client-side timer starts from now.
+    pub deadline: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct SubmitAttemptResponse {
+    pub attempt_id: Uuid,
+    /// `passed`, `failed`, `expired`.
+    pub status: String,
+    pub score: i32,
+    pub passing_score: i32,
+    pub passed: bool,
+    pub overtime: bool,
+    pub certification_title: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub diploma_id: Option<Uuid>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub verification_code: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct DiplomaHolder {
+    pub username: String,
+    pub display_name: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct DiplomaCertification {
+    pub title: String,
+    pub skill_domain: String,
+    pub level: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct VerifyDiplomaResponse {
+    pub verification_code: String,
+    /// `valid`, `expired`, `revoked`.
+    pub status: String,
+    pub holder: DiplomaHolder,
+    pub certification: DiplomaCertification,
+    pub issued_at: chrono::DateTime<chrono::Utc>,
+    pub expires_at: chrono::DateTime<chrono::Utc>,
+    pub revoked_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub revoke_reason: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct MyDiplomaRow {
+    pub diploma_id: Uuid,
+    pub verification_code: String,
+    pub issued_at: chrono::DateTime<chrono::Utc>,
+    pub expires_at: chrono::DateTime<chrono::Utc>,
+    /// `valid`, `expired`, `revoked`.
+    pub status: String,
+    pub certification: DiplomaCertification,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct MyDiplomasResponse {
+    pub diplomas: Vec<MyDiplomaRow>,
 }
 
 // ─── Catalogue ───────────────────────────────────────────────────
 
-async fn list_certifications(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
+/// Public catalog of active certifications.
+#[utoipa::path(
+    get,
+    path = "/api/certifications",
+    tag = "challenges",
+    responses(
+        (status = 200, description = "Active certifications", body = ApiResponse<CertificationsListResponse>),
+    ),
+)]
+pub async fn list_certifications(
+    State(state): State<AppState>,
+) -> Result<Json<ApiResponse<CertificationsListResponse>>, AppError> {
     let rows = sqlx::query(
         r#"
         SELECT id, slug, title, description, skill_domain, level, price_eur_cents,
@@ -56,34 +165,52 @@ async fn list_certifications(State(state): State<AppState>) -> Result<Json<Value
     )
     .fetch_all(&state.db)
     .await?;
-    let items: Vec<Value> = rows
+    let items: Vec<CertificationRow> = rows
         .iter()
-        .map(|r| {
-            json!({
-                "id": r.get::<Uuid, _>("id"),
-                "slug": r.get::<String, _>("slug"),
-                "title": r.get::<String, _>("title"),
-                "description": r.get::<String, _>("description"),
-                "skill_domain": r.get::<String, _>("skill_domain"),
-                "level": r.get::<String, _>("level"),
-                "price_eur_cents": r.get::<i64, _>("price_eur_cents"),
-                "duration_minutes": r.get::<i32, _>("duration_minutes"),
-                "passing_score": r.get::<i32, _>("passing_score"),
-                "validity_months": r.get::<i32, _>("validity_months"),
-                "challenges_count": r.get::<Option<i32>, _>("challenges_count").unwrap_or(0),
-            })
+        .map(|r| CertificationRow {
+            id: r.get("id"),
+            slug: r.get("slug"),
+            title: r.get("title"),
+            description: r.get("description"),
+            skill_domain: r.get("skill_domain"),
+            level: r.get("level"),
+            price_eur_cents: r.get("price_eur_cents"),
+            duration_minutes: r.get("duration_minutes"),
+            passing_score: r.get("passing_score"),
+            validity_months: r.get("validity_months"),
+            challenges_count: r.get::<Option<i32>, _>("challenges_count").unwrap_or(0),
         })
         .collect();
-    Ok(Json(build_response(json!({ "certifications": items }))))
+    Ok(Json(ApiResponse::new(CertificationsListResponse {
+        certifications: items,
+    })))
 }
 
 // ─── Achat (Stripe direct) ───────────────────────────────────────
 
-async fn purchase_certification(
+/// Buy a certification: creates a Stripe checkout session. If the
+/// caller already has an in-progress attempt (`pending` / `paid` /
+/// `started`), the existing attempt is echoed back rather than a new
+/// one created — front should surface the resume flow.
+#[utoipa::path(
+    post,
+    path = "/api/certifications/{slug}/purchase",
+    tag = "wallet",
+    params(("slug" = String, Path, description = "Certification slug")),
+    responses(
+        (status = 200, description = "Checkout session created OR existing attempt echoed", body = ApiResponse<PurchaseResponse>),
+        (status = 400, description = "Certification exists but is inactive", body = crate::api_response::ErrorResponse),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "Certification / user not found", body = crate::api_response::ErrorResponse),
+        (status = 500, description = "Stripe not configured", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn purchase_certification(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(slug): Path<String>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<PurchaseResponse>>, AppError> {
     let cert = sqlx::query(
         "SELECT id, title, price_eur_cents, active FROM certifications WHERE slug = $1",
     )
@@ -114,11 +241,13 @@ async fn purchase_certification(
     .fetch_optional(&state.db)
     .await?;
     if let Some((existing_id, status)) = existing {
-        return Ok(Json(build_response(json!({
-            "attempt_id": existing_id,
-            "status": status,
-            "message": "existing attempt already in progress"
-        }))));
+        return Ok(Json(ApiResponse::new(PurchaseResponse {
+            attempt_id: existing_id,
+            status: Some(status),
+            message: Some("existing attempt already in progress".to_string()),
+            checkout_url: None,
+            session_id: None,
+        })));
     }
 
     let attempt: (Uuid,) = sqlx::query_as(
@@ -168,20 +297,37 @@ async fn purchase_certification(
     )
     .await?;
 
-    Ok(Json(build_response(json!({
-        "attempt_id": attempt.0,
-        "checkout_url": session.checkout_url,
-        "session_id": session.session_id,
-    }))))
+    Ok(Json(ApiResponse::new(PurchaseResponse {
+        attempt_id: attempt.0,
+        status: None,
+        message: None,
+        checkout_url: Some(session.checkout_url),
+        session_id: Some(session.session_id),
+    })))
 }
 
 // ─── Démarrer la tentative (après paiement) ─────────────────────
 
-async fn start_attempt(
+/// Start the timer on a paid attempt. Returns the challenge list and
+/// the absolute deadline for the client-side timer.
+#[utoipa::path(
+    post,
+    path = "/api/certifications/attempts/{id}/start",
+    tag = "challenges",
+    params(("id" = Uuid, Path, description = "Attempt UUID")),
+    responses(
+        (status = 200, description = "Timer started", body = ApiResponse<StartAttemptResponse>),
+        (status = 400, description = "Attempt not in state 'paid'", body = crate::api_response::ErrorResponse),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "Attempt not found", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn start_attempt(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(attempt_id): Path<Uuid>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<StartAttemptResponse>>, AppError> {
     let row = sqlx::query(
         r#"
         SELECT a.status, a.certification_id, c.duration_minutes, c.challenge_ids
@@ -212,21 +358,38 @@ async fn start_attempt(
     .execute(&state.db)
     .await?;
 
-    Ok(Json(build_response(json!({
-        "attempt_id": attempt_id,
-        "challenge_ids": challenge_ids,
-        "duration_minutes": duration,
-        "deadline": chrono::Utc::now() + chrono::Duration::minutes(duration as i64),
-    }))))
+    Ok(Json(ApiResponse::new(StartAttemptResponse {
+        attempt_id,
+        challenge_ids,
+        duration_minutes: duration,
+        deadline: chrono::Utc::now() + chrono::Duration::minutes(duration as i64),
+    })))
 }
 
 // ─── Soumission finale + score ───────────────────────────────────
 
-async fn submit_attempt(
+/// Submit an attempt: server-side recompute of the score from
+/// `challenge_submissions` filed after `started_at`. Passing threshold
+/// per certification; overtime beyond `duration_minutes + 2` yields
+/// status `expired`. Passing issues a diploma with a fresh
+/// verification_code.
+#[utoipa::path(
+    post,
+    path = "/api/certifications/attempts/{id}/submit",
+    tag = "challenges",
+    params(("id" = Uuid, Path, description = "Attempt UUID")),
+    responses(
+        (status = 200, description = "Attempt scored", body = ApiResponse<SubmitAttemptResponse>),
+        (status = 400, description = "Attempt not in state 'started'", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "Attempt not found", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn submit_attempt(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(attempt_id): Path<Uuid>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<SubmitAttemptResponse>>, AppError> {
     let row = sqlx::query(
         r#"
         SELECT a.status, a.started_at, a.certification_id,
@@ -348,17 +511,17 @@ async fn submit_attempt(
     )
     .increment(1);
 
-    Ok(Json(build_response(json!({
-        "attempt_id": attempt_id,
-        "status": final_status,
-        "score": score,
-        "passing_score": passing,
-        "passed": passed,
-        "overtime": overtime,
-        "certification_title": cert_title,
-        "diploma_id": diploma_id,
-        "verification_code": verification_code,
-    }))))
+    Ok(Json(ApiResponse::new(SubmitAttemptResponse {
+        attempt_id,
+        status: final_status.to_string(),
+        score,
+        passing_score: passing,
+        passed,
+        overtime,
+        certification_title: cert_title,
+        diploma_id,
+        verification_code,
+    })))
 }
 
 async fn generate_verification_code(
@@ -393,10 +556,22 @@ async fn generate_verification_code(
 
 // ─── Vérification publique du diplôme ────────────────────────────
 
-async fn verify_diploma(
+/// Public diploma verification — no auth required. Any third party
+/// with a verification_code can check the diploma's validity.
+#[utoipa::path(
+    get,
+    path = "/api/diplomas/verify/{code}",
+    tag = "profile",
+    params(("code" = String, Path, description = "Verification code")),
+    responses(
+        (status = 200, description = "Diploma detail", body = ApiResponse<VerifyDiplomaResponse>),
+        (status = 404, description = "Diploma not found", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn verify_diploma(
     State(state): State<AppState>,
     Path(code): Path<String>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<VerifyDiplomaResponse>>, AppError> {
     let code = code.trim().to_uppercase();
     let row = sqlx::query(
         r#"
@@ -426,29 +601,40 @@ async fn verify_diploma(
         "valid"
     };
 
-    Ok(Json(build_response(json!({
-        "verification_code": code,
-        "status": status,
-        "holder": {
-            "username": row.get::<String, _>("username"),
-            "display_name": row.get::<String, _>("display_name"),
+    Ok(Json(ApiResponse::new(VerifyDiplomaResponse {
+        verification_code: code,
+        status: status.to_string(),
+        holder: DiplomaHolder {
+            username: row.get("username"),
+            display_name: row.get("display_name"),
         },
-        "certification": {
-            "title": row.get::<String, _>("cert_title"),
-            "skill_domain": row.get::<String, _>("skill_domain"),
-            "level": row.get::<String, _>("level"),
+        certification: DiplomaCertification {
+            title: row.get("cert_title"),
+            skill_domain: row.get("skill_domain"),
+            level: row.get("level"),
         },
-        "issued_at": row.get::<chrono::DateTime<chrono::Utc>, _>("issued_at"),
-        "expires_at": expires_at,
-        "revoked_at": revoked_at,
-        "revoke_reason": row.get::<Option<String>, _>("revoke_reason"),
-    }))))
+        issued_at: row.get("issued_at"),
+        expires_at,
+        revoked_at,
+        revoke_reason: row.get("revoke_reason"),
+    })))
 }
 
-async fn my_diplomas(
+/// List the caller's diplomas — ordered newest first.
+#[utoipa::path(
+    get,
+    path = "/api/diplomas/my",
+    tag = "profile",
+    responses(
+        (status = 200, description = "Caller's diplomas", body = ApiResponse<MyDiplomasResponse>),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn my_diplomas(
     State(state): State<AppState>,
     auth: AuthUser,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<MyDiplomasResponse>>, AppError> {
     let rows = sqlx::query(
         r#"
         SELECT d.id, d.verification_code, d.issued_at, d.expires_at, d.revoked_at,
@@ -462,7 +648,7 @@ async fn my_diplomas(
     .bind(auth.user_id)
     .fetch_all(&state.db)
     .await?;
-    let items: Vec<Value> = rows
+    let items: Vec<MyDiplomaRow> = rows
         .iter()
         .map(|r| {
             let revoked: Option<chrono::DateTime<chrono::Utc>> = r.get("revoked_at");
@@ -474,19 +660,21 @@ async fn my_diplomas(
             } else {
                 "valid"
             };
-            json!({
-                "diploma_id": r.get::<Uuid, _>("id"),
-                "verification_code": r.get::<String, _>("verification_code"),
-                "issued_at": r.get::<chrono::DateTime<chrono::Utc>, _>("issued_at"),
-                "expires_at": expires,
-                "status": status,
-                "certification": {
-                    "title": r.get::<String, _>("title"),
-                    "skill_domain": r.get::<String, _>("skill_domain"),
-                    "level": r.get::<String, _>("level"),
-                }
-            })
+            MyDiplomaRow {
+                diploma_id: r.get("id"),
+                verification_code: r.get("verification_code"),
+                issued_at: r.get("issued_at"),
+                expires_at: expires,
+                status: status.to_string(),
+                certification: DiplomaCertification {
+                    title: r.get("title"),
+                    skill_domain: r.get("skill_domain"),
+                    level: r.get("level"),
+                },
+            }
         })
         .collect();
-    Ok(Json(build_response(json!({ "diplomas": items }))))
+    Ok(Json(ApiResponse::new(MyDiplomasResponse {
+        diplomas: items,
+    })))
 }

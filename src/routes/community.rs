@@ -35,8 +35,8 @@ fn build_response(data: serde_json::Value) -> serde_json::Value {
     })
 }
 
-#[derive(Debug, Deserialize)]
-struct CreateCommunityChallenge {
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct CreateCommunityChallenge {
     title: String,
     description: String,
     instructions: String,
@@ -51,8 +51,8 @@ struct CreateCommunityChallenge {
     submit_for_review: Option<bool>,
 }
 
-#[derive(Debug, Deserialize)]
-struct UpdateCommunityChallenge {
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct UpdateCommunityChallenge {
     title: Option<String>,
     description: Option<String>,
     instructions: Option<String>,
@@ -63,14 +63,29 @@ struct UpdateCommunityChallenge {
     submit_for_review: Option<bool>,
 }
 
-#[derive(Debug, Deserialize)]
-struct PaginationQuery {
-    page: Option<i64>,
-    per_page: Option<i64>,
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
+pub struct PaginationQuery {
+    #[param(minimum = 1, maximum = 100000)]
+    pub page: Option<i64>,
+    #[param(minimum = 1, maximum = 100)]
+    pub per_page: Option<i64>,
 }
 
-// POST /api/community/challenges
-async fn create_community_challenge(
+/// Create a community-submitted challenge (draft or submit for review).
+#[utoipa::path(
+    post,
+    path = "/api/community/challenges",
+    tag = "challenges",
+    request_body = CreateCommunityChallenge,
+    responses(
+        (status = 201, body = serde_json::Value),
+        (status = 400, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create_community_challenge(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<CreateCommunityChallenge>,
@@ -163,8 +178,18 @@ async fn create_community_challenge(
     ))
 }
 
-// GET /api/community/challenges/mine
-async fn my_challenges(
+/// List community challenges created by the caller (any status).
+#[utoipa::path(
+    get,
+    path = "/api/community/challenges/mine",
+    tag = "challenges",
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 401, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn my_challenges(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<serde_json::Value>, AppError> {
@@ -178,8 +203,21 @@ async fn my_challenges(
     Ok(Json(build_response(json!({ "challenges": challenges }))))
 }
 
-// PUT /api/community/challenges/:id
-async fn update_community_challenge(
+/// Edit a community challenge — only allowed while in draft or review.
+#[utoipa::path(
+    put,
+    path = "/api/community/challenges/{id}",
+    tag = "challenges",
+    params(("id" = Uuid, Path)),
+    request_body = UpdateCommunityChallenge,
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 400, body = crate::api_response::ErrorResponse),
+        (status = 404, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn update_community_challenge(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -241,8 +279,19 @@ async fn update_community_challenge(
     Ok(Json(build_response(json!({ "challenge": challenge }))))
 }
 
-// POST /api/community/challenges/:id/vote
-async fn vote_challenge(
+/// Upvote a published community challenge. Idempotent.
+#[utoipa::path(
+    post,
+    path = "/api/community/challenges/{id}/vote",
+    tag = "challenges",
+    params(("id" = Uuid, Path)),
+    responses(
+        (status = 201, body = serde_json::Value),
+        (status = 404, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn vote_challenge(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -280,8 +329,18 @@ async fn vote_challenge(
     ))
 }
 
-// DELETE /api/community/challenges/:id/vote
-async fn unvote_challenge(
+/// Remove the caller's vote from a challenge.
+#[utoipa::path(
+    delete,
+    path = "/api/community/challenges/{id}/vote",
+    tag = "challenges",
+    params(("id" = Uuid, Path)),
+    responses(
+        (status = 200, body = serde_json::Value),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn unvote_challenge(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -303,11 +362,21 @@ async fn unvote_challenge(
     Ok(Json(build_response(json!({ "message": "Vote removed" }))))
 }
 
-// GET /api/community/challenges/popular — top by votes (no auth, SSR)
-async fn popular_challenges(
+/// Popular community challenges paginated by vote count. Public.
+#[utoipa::path(
+    get,
+    path = "/api/community/challenges/popular",
+    tag = "challenges",
+    params(PaginationQuery),
+    responses((status = 200, body = serde_json::Value)),
+)]
+pub async fn popular_challenges(
     State(state): State<AppState>,
     Query(query): Query<PaginationQuery>,
 ) -> Result<Json<serde_json::Value>, AppError> {
+    crate::validators::check_range_opt(query.page, "page", 1, 100_000)?;
+    crate::validators::check_range_opt(query.per_page, "per_page", 1, 100)?;
+
     let page = query.page.unwrap_or(1).max(1);
     let per_page = query.per_page.unwrap_or(20).clamp(1, 50);
     let offset = (page - 1) * per_page;

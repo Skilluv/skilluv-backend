@@ -22,32 +22,47 @@ use axum::extract::{Query, State};
 use axum::routing::get;
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::AppState;
+use crate::api_response::MetaInfo;
 use crate::errors::AppError;
 
 pub fn talent_search_v3_routes() -> Router<AppState> {
     Router::new().route("/talents/search/v3", get(search_v3))
 }
 
-#[derive(Debug, Deserialize)]
-struct QueryV3 {
-    orientation: Option<String>, // slug — obligatoire pour un vrai match
-    skills: Option<String>,      // CSV : "react,typescript"
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
+pub struct QueryV3 {
+    /// Orientation slug — mandatory for a real match. Without it,
+    /// filter is skipped and every user matches.
+    #[param(max_length = 100)]
+    pub orientation: Option<String>,
+    /// CSV of skill slugs, e.g. `react,typescript`. Users must have
+    /// proven ALL of them at `min_proficiency`.
+    #[param(max_length = 500)]
+    pub skills: Option<String>,
+    /// `active` (default), `learning`, or `both`.
     #[serde(default = "default_mode")]
-    mode: String, // active | learning | both
+    #[param(pattern = r"^(active|learning|both)$")]
+    pub mode: String,
+    /// True → only match users whose orientation is their primary.
     #[serde(default)]
-    only_primary: bool,
+    pub only_primary: bool,
     #[serde(default = "default_min_proficiency")]
-    min_proficiency: i16,
-    #[serde(default)]
-    working_language: Option<String>,
+    #[param(minimum = 1, maximum = 5)]
+    pub min_proficiency: i16,
+    #[param(pattern = r"^[a-zA-Z]{2}$")]
+    pub working_language: Option<String>,
     #[serde(default = "default_per_page")]
-    per_page: i64,
+    #[param(minimum = 1, maximum = 100)]
+    pub per_page: i64,
     #[serde(default = "default_page")]
-    page: i64,
+    #[param(minimum = 1, maximum = 100000)]
+    pub page: i64,
 }
 fn default_mode() -> String {
     "active".into()
@@ -62,26 +77,103 @@ fn default_page() -> i64 {
     1
 }
 
-#[derive(Debug, Serialize, sqlx::FromRow)]
-struct TalentRow {
-    user_id: Uuid,
-    username: String,
-    display_name: String,
-    orientation_slug: String,
-    orientation_mode: String,
-    is_primary: bool,
-    matched_skills_count: i64,
-    matched_wpc_total: i64,
-    working_languages: Vec<String>,
+#[derive(Debug, Serialize, sqlx::FromRow, ToSchema)]
+pub struct TalentRow {
+    pub user_id: Uuid,
+    pub username: String,
+    pub display_name: String,
+    pub orientation_slug: String,
+    /// `active` or `learning`.
+    pub orientation_mode: String,
+    pub is_primary: bool,
+    /// Count of skills that matched the filter (or all skills if none
+    /// requested).
+    pub matched_skills_count: i64,
+    /// Cumulative weighted_proven_count over the matched skills.
+    pub matched_wpc_total: i64,
+    pub working_languages: Vec<String>,
 }
 
-async fn search_v3(
+#[derive(Debug, Serialize, ToSchema)]
+pub struct SearchV3Pagination {
+    pub page: i64,
+    pub per_page: i64,
+    /// Number of rows actually returned (may be < per_page on last page).
+    pub returned: i64,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct FiltersApplied {
+    pub orientation: Option<String>,
+    pub skills: Vec<String>,
+    pub mode: String,
+    pub only_primary: bool,
+    pub min_proficiency: i16,
+    pub working_language: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct SearchV3Data {
+    pub talents: Vec<TalentRow>,
+    pub pagination: SearchV3Pagination,
+    /// Echo of the filters actually applied (defaults resolved) so the
+    /// front can show a "clear filter" chip.
+    pub filters_applied: FiltersApplied,
+}
+
+/// The v3 search returns a bespoke `{ data, meta }` envelope (not the
+/// generic `ApiResponse<T>`) because `data` embeds pagination and
+/// filters_applied at the same level for legacy compat.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct SearchV3Response {
+    pub data: SearchV3Data,
+    pub meta: MetaInfo,
+}
+
+/// Recruiter talent search v3 — filters by orientation + skills +
+/// mode + language, sorted by matched WPC total. See file header for
+/// design notes.
+#[utoipa::path(
+    get,
+    path = "/api/talents/search/v3",
+    tag = "enterprise",
+    params(QueryV3),
+    responses(
+        (status = 200, description = "Talent search results", body = SearchV3Response),
+        (status = 400, description = "Invalid mode", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn search_v3(
     State(state): State<AppState>,
     Query(q): Query<QueryV3>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<SearchV3Response>, AppError> {
+    crate::validators::check_max_len_opt(&q.orientation, "orientation", 100)?;
+    crate::validators::check_max_len_opt(&q.skills, "skills", 500)?;
     if !matches!(q.mode.as_str(), "active" | "learning" | "both") {
         return Err(AppError::Validation(
             "mode must be one of: active | learning | both".into(),
+        ));
+    }
+    if !(1..=5).contains(&q.min_proficiency) {
+        return Err(AppError::Validation(
+            "min_proficiency must be between 1 and 5".into(),
+        ));
+    }
+    if let Some(l) = &q.working_language
+        && (l.len() != 2 || !l.chars().all(|c| c.is_ascii_alphabetic()))
+    {
+        return Err(AppError::Validation(
+            "working_language must be a 2-letter ISO code".into(),
+        ));
+    }
+    if !(1..=100).contains(&q.per_page) {
+        return Err(AppError::Validation(
+            "per_page must be between 1 and 100".into(),
+        ));
+    }
+    if !(1..=100_000).contains(&q.page) {
+        return Err(AppError::Validation(
+            "page must be between 1 and 100000".into(),
         ));
     }
     let per_page = q.per_page.clamp(1, 50);
@@ -163,26 +255,23 @@ async fn search_v3(
     .await?;
 
     let returned = rows.len() as i64;
-    Ok(Json(json!({
-        "data": {
-            "talents": rows,
-            "pagination": {
-                "page": page,
-                "per_page": per_page,
-                "returned": returned,
+    Ok(Json(SearchV3Response {
+        data: SearchV3Data {
+            talents: rows,
+            pagination: SearchV3Pagination {
+                page,
+                per_page,
+                returned,
             },
-            "filters_applied": {
-                "orientation": q.orientation,
-                "skills": skills,
-                "mode": q.mode,
-                "only_primary": q.only_primary,
-                "min_proficiency": q.min_proficiency,
-                "working_language": q.working_language,
-            }
+            filters_applied: FiltersApplied {
+                orientation: q.orientation,
+                skills,
+                mode: q.mode,
+                only_primary: q.only_primary,
+                min_proficiency: q.min_proficiency,
+                working_language: q.working_language,
+            },
         },
-        "meta": {
-            "request_id": Uuid::new_v4().to_string(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-        }
-    })))
+        meta: MetaInfo::now(),
+    }))
 }

@@ -1,0 +1,81 @@
+name: Workflow security lint (zizmor)
+
+# zizmor is a static analyzer for GitHub Actions workflows. Catches :
+#   - command injection via untrusted inputs (`${{ github.event.* }}`)
+#   - over-privileged `permissions:` blocks
+#   - unpinned action versions (best practice : pin to SHA)
+#   - use of dangerous patterns like `pull_request_target` with checkout
+#   - insecure secrets handling
+#
+# https://github.com/woodruffw/zizmor
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - ".github/workflows/**"
+      - ".github/actions/**"
+  pull_request:
+    branches: [master]
+    paths:
+      - ".github/workflows/**"
+      - ".github/actions/**"
+
+# Workflow-level default: minimal. Only the `zizmor` job needs
+# security-events:write for SARIF upload (see per-job block below).
+permissions:
+  contents: read
+
+concurrency:
+  group: workflow-lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  actionlint:
+    # Complementary to zizmor : catches YAML/shell syntax errors, missing
+    # inputs, references to undefined jobs, etc. Very fast (no build).
+    name: actionlint (syntax)
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          persist-credentials: false
+      - name: Install actionlint
+        run: |
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          echo "$PWD" >> "$GITHUB_PATH"
+      - name: Run actionlint
+        run: actionlint -color
+
+  zizmor:
+    name: zizmor (security)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      security-events: write   # upload SARIF to GitHub Security tab
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          persist-credentials: false
+
+      - name: Install zizmor
+        uses: taiki-e/install-action@18b1216eba7f8039b0f8d131d5473787f0edce68  # v2
+        with:
+          tool: zizmor
+
+      - name: Run zizmor (SARIF output)
+        run: |
+          zizmor --format sarif .github/workflows > zizmor.sarif || true
+
+      - name: Upload SARIF to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@4187e74d05793876e9989daffde9c3e66b4acd07  # v3
+        with:
+          sarif_file: zizmor.sarif
+          category: zizmor
+
+      - name: Fail on high-severity findings
+        run: |
+          # zizmor exit codes : 0 = clean, 10+ = findings (see docs)
+          zizmor --min-severity high .github/workflows

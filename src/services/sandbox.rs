@@ -90,7 +90,7 @@ pub fn supported_languages() -> Vec<LanguageInfo> {
     ]
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct LanguageInfo {
     pub id: String,
     pub name: String,
@@ -118,7 +118,7 @@ impl LanguageInfo {
 }
 
 /// Result from Judge0 execution
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct ExecutionResult {
     pub stdout: Option<String>,
     pub stderr: Option<String>,
@@ -128,7 +128,7 @@ pub struct ExecutionResult {
     pub memory: Option<u64>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct ExecutionStatus {
     pub id: u32,
     pub description: String,

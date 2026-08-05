@@ -1,0 +1,82 @@
+# cargo-deny configuration — https://embarkstudios.github.io/cargo-deny/
+#
+# Complements cargo-audit :
+#   [advisories] — same RustSec CVE DB as cargo-audit (kept for parity)
+#   [licenses]   — hard rules on what licenses we accept (compliance)
+#   [bans]       — crates we forbid or that must exist only once (duplicate detection)
+#   [sources]    — only crates.io + our own git repos, no random registries
+
+[advisories]
+version = 2
+# Advisories we ACCEPT and why — each entry needs a written rationale.
+ignore = [
+    # RUSTSEC-2023-0071 — Marvin timing attack on `rsa` crate.
+    # We pull `rsa` transitively via openidconnect 4.x (SSO OIDC flow) and
+    # directly in [dev-dependencies] for the mock IdP used in integration
+    # tests. Attack vector requires an attacker to time RSA operations on
+    # our server ; only relevant on the SSO callback which runs on TLS-
+    # terminated origin behind Cloudflare + Traefik. Impact bounded to
+    # enterprise SSO login timing.
+    # No upstream fix yet — track https://github.com/RustCrypto/RSA/issues/19
+    # and drop this ignore once openidconnect ships an updated rsa dep.
+    "RUSTSEC-2023-0071",
+    # RUSTSEC-2024-0436 — `paste` crate unmaintained. Transitive via metrics
+    # ecosystem (metrics-exporter-prometheus → metrics-util → paste). Fork
+    # exists (`pastey`) but our deps haven't migrated yet. No CVE, only
+    # unmaintained flag. Revisit when metrics-exporter-prometheus bumps.
+    "RUSTSEC-2024-0436",
+    # RUSTSEC-2026-0194 / 2026-0195 — quick-xml unmaintained advisories,
+    # transitive via aws-creds → rust-s3. Same fixup path as paste : wait
+    # for rust-s3 to update or migrate to a maintained fork.
+    "RUSTSEC-2026-0194",
+    "RUSTSEC-2026-0195",
+]
+# YANKED = crate.io yanked crates. Warn only ; a yanked dep still works but
+# should be updated at the next Dependabot cycle.
+yanked = "warn"
+
+[licenses]
+version = 2
+# Allowlist — anything else fails. Keep this tight ; loosen only after a
+# license review.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-DFS-2016",
+    "Unicode-3.0",
+    "Zlib",
+    "MPL-2.0",       # weak copyleft, fine to link
+    "CC0-1.0",       # public domain equivalent
+    "CDLA-Permissive-2.0",
+    "OpenSSL",       # rare, needed by aws-lc-sys / ring
+    "0BSD",          # BSD Zero Clause — permissive, used by quoted_printable
+    "BSL-1.0",       # Boost Software License — permissive, used by ryu
+    "AGPL-3.0-or-later",  # our own repo license (skilluv-backend)
+]
+# Fail on unlicensed or unclear crates rather than silently accepting them.
+confidence-threshold = 0.93
+# Specific exceptions — case by case, always documented.
+exceptions = []
+
+[bans]
+# Fail on duplicate versions of the same crate (bloat + potential subtle bugs).
+multiple-versions = "warn"
+# `deny` = compile error, `warn` = warning. Crates we want to ban outright.
+deny = [
+    # OpenSSL FFI is a common source of soundness bugs — prefer rustls or
+    # aws-lc where possible. Warn today, deny once migration is complete.
+    # { name = "openssl", wrappers = ["reqwest"] },
+]
+# Crates we don't want more than N versions of at once.
+skip-tree = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+# Add our own private git registries here if we ever host any.
+allow-git = []

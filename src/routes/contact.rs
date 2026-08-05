@@ -64,8 +64,14 @@ struct PaginationQuery {
 
 // ─── Interest Requests ──────────────────────────────────────────
 
-// POST /api/contact/interest
-async fn send_interest(
+/// Send an interest request from an enterprise to a talent.
+#[utoipa::path(
+    post, path = "/api/contact/interest", tag = "social",
+    request_body(content = serde_json::Value),
+    responses((status = 201, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn send_interest(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<InterestRequestBody>,
@@ -223,8 +229,13 @@ async fn send_interest(
     ))
 }
 
-// GET /api/contact/interest/sent
-async fn sent_requests(
+/// List interest requests sent by the enterprise.
+#[utoipa::path(
+    get, path = "/api/contact/interest/sent", tag = "social",
+    responses((status = 200, body = serde_json::Value), (status = 401, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn sent_requests(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(query): Query<PaginationQuery>,
@@ -292,8 +303,13 @@ async fn sent_requests(
     })))
 }
 
-// GET /api/contact/interest/received
-async fn received_requests(
+/// List interest requests received by the talent.
+#[utoipa::path(
+    get, path = "/api/contact/interest/received", tag = "social",
+    responses((status = 200, body = serde_json::Value), (status = 401, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn received_requests(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(query): Query<PaginationQuery>,
@@ -359,8 +375,14 @@ async fn received_requests(
     })))
 }
 
-// POST /api/contact/interest/:id/accept
-async fn accept_interest(
+/// Accept an interest request.
+#[utoipa::path(
+    post, path = "/api/contact/interest/{id}/accept", tag = "social",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 404, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn accept_interest(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -426,8 +448,14 @@ async fn accept_interest(
     }))))
 }
 
-// POST /api/contact/interest/:id/decline
-async fn decline_interest(
+/// Decline an interest request.
+#[utoipa::path(
+    post, path = "/api/contact/interest/{id}/decline", tag = "social",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 404, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn decline_interest(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -490,8 +518,13 @@ async fn decline_interest(
 
 // ─── Conversations ──────────────────────────────────────────────
 
-// GET /api/contact/conversations
-async fn list_conversations(
+/// List conversations for the current user (talent or enterprise member).
+#[utoipa::path(
+    get, path = "/api/contact/conversations", tag = "social",
+    responses((status = 200, body = serde_json::Value), (status = 401, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_conversations(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<serde_json::Value>, AppError> {
@@ -574,8 +607,14 @@ async fn list_conversations(
     }))))
 }
 
-// GET /api/contact/conversations/:id
-async fn get_conversation(
+/// Get a conversation with paginated messages.
+#[utoipa::path(
+    get, path = "/api/contact/conversations/{id}", tag = "social",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 404, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn get_conversation(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -648,8 +687,15 @@ struct SendMessageBody {
     content: String,
 }
 
-// POST /api/contact/conversations/:id/messages
-async fn send_message(
+/// Send a message in a conversation.
+#[utoipa::path(
+    post, path = "/api/contact/conversations/{id}/messages", tag = "social",
+    params(("id" = Uuid, Path)),
+    request_body(content = serde_json::Value),
+    responses((status = 201, body = serde_json::Value), (status = 404, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn send_message(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -736,8 +782,14 @@ async fn send_message(
 
 // ─── Blocking ───────────────────────────────────────────────────
 
-// POST /api/contact/block/:enterprise_id
-async fn block_enterprise(
+/// Block an enterprise from contacting this talent.
+#[utoipa::path(
+    post, path = "/api/contact/block/{enterprise_id}", tag = "social",
+    params(("enterprise_id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn block_enterprise(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(enterprise_id): Path<Uuid>,
@@ -765,8 +817,14 @@ async fn block_enterprise(
     }))))
 }
 
-// DELETE /api/contact/block/:enterprise_id
-async fn unblock_enterprise(
+/// Unblock a previously blocked enterprise.
+#[utoipa::path(
+    delete, path = "/api/contact/block/{enterprise_id}", tag = "social",
+    params(("enterprise_id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn unblock_enterprise(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(enterprise_id): Path<Uuid>,

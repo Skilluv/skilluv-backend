@@ -3,11 +3,13 @@
 use axum::extract::{Path, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use serde::Deserialize;
-use serde_json::{Value, json};
+use serde::{Deserialize, Serialize};
+use sqlx::Row;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::AppState;
+use crate::api_response::ApiResponse;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
 
@@ -37,16 +39,6 @@ pub fn sponsored_routes() -> Router<AppState> {
         )
 }
 
-fn build_response(data: Value) -> Value {
-    json!({
-        "data": data,
-        "meta": {
-            "request_id": Uuid::new_v4().to_string(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-        }
-    })
-}
-
 async fn current_enterprise_for(db: &sqlx::PgPool, user_id: Uuid) -> Result<Uuid, AppError> {
     let row: Option<(Uuid,)> = sqlx::query_as(
         "SELECT enterprise_id FROM enterprise_members WHERE user_id = $1 AND status = 'active' LIMIT 1",
@@ -57,21 +49,160 @@ async fn current_enterprise_for(db: &sqlx::PgPool, user_id: Uuid) -> Result<Uuid
     row.map(|(id,)| id).ok_or(AppError::Forbidden)
 }
 
-#[derive(Deserialize)]
-struct RequestBody {
-    proposed_title: String,
-    brief: String,
-    skill_domain: String,
-    difficulty: i16,
-    duration_days: i32,
-    budget_eur_cents: i64,
+// ─── Response types ──────────────────────────────────────────────
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct RequestBody {
+    #[schema(max_length = 10000)]
+    pub proposed_title: String,
+    /// At least 30 chars — enforced server-side.
+    #[schema(max_length = 10000)]
+    pub brief: String,
+    /// `code`, `design`, `game`, `security`.
+    #[schema(max_length = 10000)]
+    pub skill_domain: String,
+    pub difficulty: i16,
+    pub duration_days: i32,
+    pub budget_eur_cents: i64,
 }
 
-async fn request_sponsorship(
+#[derive(Debug, Serialize, ToSchema)]
+pub struct RequestCreatedResponse {
+    pub request_id: Uuid,
+    /// Always `"pending"` on creation.
+    pub status: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct SponsorshipRequestRow {
+    pub id: Uuid,
+    pub proposed_title: String,
+    /// `pending`, `approved`, `rejected`, `negotiating`, `live`.
+    pub status: String,
+    pub skill_domain: String,
+    pub difficulty: i16,
+    pub duration_days: i32,
+    pub budget_eur_cents: i64,
+    pub challenge_id: Option<Uuid>,
+    pub decided_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct MyRequestsResponse {
+    pub requests: Vec<SponsorshipRequestRow>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AdminSponsorshipRow {
+    pub id: Uuid,
+    pub enterprise_id: Uuid,
+    pub proposed_title: String,
+    pub status: String,
+    pub brief: String,
+    pub skill_domain: String,
+    pub difficulty: i16,
+    pub duration_days: i32,
+    pub budget_eur_cents: i64,
+    pub challenge_id: Option<Uuid>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AdminRequestsResponse {
+    pub requests: Vec<AdminSponsorshipRow>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct DecideBody {
+    /// `approve`, `reject`, `negotiate`.
+    #[schema(max_length = 10000)]
+    pub action: String,
+    #[schema(max_length = 10000)]
+    pub admin_notes: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct DecideResponse {
+    pub id: Uuid,
+    pub status: String,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct LinkChallengeBody {
+    pub challenge_id: Uuid,
+    #[schema(max_length = 10000)]
+    pub sponsor_logo_url: Option<String>,
+    #[schema(max_length = 10000)]
+    pub sponsor_blurb: Option<String>,
+    pub sponsor_visible_until: chrono::DateTime<chrono::Utc>,
+    pub free_contact_until: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct LinkChallengeResponse {
+    pub linked: bool,
+    pub challenge_id: Uuid,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ActiveSponsoredRow {
+    pub id: Uuid,
+    pub title: String,
+    pub skill_domain: String,
+    pub difficulty: i16,
+    pub sponsor_logo_url: Option<String>,
+    pub sponsor_blurb: Option<String>,
+    pub sponsor_name: String,
+    pub sponsor_visible_until: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ActiveSponsoredResponse {
+    pub active: Vec<ActiveSponsoredRow>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct SponsorSubmissionRow {
+    pub submission_id: Uuid,
+    pub user_id: Uuid,
+    pub username: String,
+    pub display_name: String,
+    pub skill_domain: Option<String>,
+    pub total_fragments: i32,
+    pub title: String,
+    pub fragments_earned: i32,
+    pub evaluated_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct SponsorSubmissionsResponse {
+    pub submissions: Vec<SponsorSubmissionRow>,
+    /// True as long as `free_contact_until > now()`. After the window
+    /// the sponsor pays per contact like every other enterprise.
+    pub free_contact_active: bool,
+    pub free_contact_until: chrono::DateTime<chrono::Utc>,
+}
+
+/// Submit a sponsorship request. The admin then reviews and either
+/// approves + links to a challenge, rejects, or negotiates.
+#[utoipa::path(
+    post,
+    path = "/api/enterprise/sponsored-challenges",
+    tag = "enterprise",
+    request_body = RequestBody,
+    responses(
+        (status = 200, description = "Request created", body = ApiResponse<RequestCreatedResponse>),
+        (status = 400, description = "Invalid skill_domain or brief too short", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Caller has no enterprise", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn request_sponsorship(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<RequestBody>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<RequestCreatedResponse>>, AppError> {
     let enterprise_id = current_enterprise_for(&state.db, auth.user_id).await?;
     if !matches!(
         body.skill_domain.as_str(),
@@ -103,15 +234,27 @@ async fn request_sponsorship(
     .fetch_one(&state.db)
     .await?;
     metrics::counter!("skilluv_sponsorship_requests_total").increment(1);
-    Ok(Json(build_response(
-        json!({ "request_id": row.0, "status": "pending" }),
-    )))
+    Ok(Json(ApiResponse::new(RequestCreatedResponse {
+        request_id: row.0,
+        status: "pending".to_string(),
+    })))
 }
 
-async fn list_my_requests(
+/// List the caller enterprise's sponsorship requests.
+#[utoipa::path(
+    get,
+    path = "/api/enterprise/sponsored-challenges",
+    tag = "enterprise",
+    responses(
+        (status = 200, description = "Requests list", body = ApiResponse<MyRequestsResponse>),
+        (status = 403, description = "Caller has no enterprise", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_my_requests(
     State(state): State<AppState>,
     auth: AuthUser,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<MyRequestsResponse>>, AppError> {
     let enterprise_id = current_enterprise_for(&state.db, auth.user_id).await?;
     let rows: Vec<sqlx::postgres::PgRow> = sqlx::query(
         "SELECT id, proposed_title, status, skill_domain, difficulty, duration_days, budget_eur_cents, challenge_id, decided_at, created_at FROM sponsored_challenge_requests WHERE enterprise_id = $1 ORDER BY created_at DESC",
@@ -119,31 +262,41 @@ async fn list_my_requests(
     .bind(enterprise_id)
     .fetch_all(&state.db)
     .await?;
-    use sqlx::Row;
-    let items: Vec<Value> = rows
+    let items: Vec<SponsorshipRequestRow> = rows
         .iter()
-        .map(|r| {
-            json!({
-                "id": r.get::<Uuid, _>("id"),
-                "proposed_title": r.get::<String, _>("proposed_title"),
-                "status": r.get::<String, _>("status"),
-                "skill_domain": r.get::<String, _>("skill_domain"),
-                "difficulty": r.get::<i16, _>("difficulty"),
-                "duration_days": r.get::<i32, _>("duration_days"),
-                "budget_eur_cents": r.get::<i64, _>("budget_eur_cents"),
-                "challenge_id": r.get::<Option<Uuid>, _>("challenge_id"),
-                "decided_at": r.get::<Option<chrono::DateTime<chrono::Utc>>, _>("decided_at"),
-                "created_at": r.get::<chrono::DateTime<chrono::Utc>, _>("created_at"),
-            })
+        .map(|r| SponsorshipRequestRow {
+            id: r.get("id"),
+            proposed_title: r.get("proposed_title"),
+            status: r.get("status"),
+            skill_domain: r.get("skill_domain"),
+            difficulty: r.get("difficulty"),
+            duration_days: r.get("duration_days"),
+            budget_eur_cents: r.get("budget_eur_cents"),
+            challenge_id: r.get("challenge_id"),
+            decided_at: r.get("decided_at"),
+            created_at: r.get("created_at"),
         })
         .collect();
-    Ok(Json(build_response(json!({ "requests": items }))))
+    Ok(Json(ApiResponse::new(MyRequestsResponse {
+        requests: items,
+    })))
 }
 
-async fn admin_list_requests(
+/// Admin only: list the last 200 sponsorship requests, all statuses.
+#[utoipa::path(
+    get,
+    path = "/api/admin/sponsored-challenges",
+    tag = "admin",
+    responses(
+        (status = 200, description = "Requests list", body = ApiResponse<AdminRequestsResponse>),
+        (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_list_requests(
     State(state): State<AppState>,
     auth: AuthUser,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<AdminRequestsResponse>>, AppError> {
     if auth.role != "admin" {
         return Err(AppError::Forbidden);
     }
@@ -152,40 +305,49 @@ async fn admin_list_requests(
     )
     .fetch_all(&state.db)
     .await?;
-    use sqlx::Row;
-    let items: Vec<Value> = rows
+    let items: Vec<AdminSponsorshipRow> = rows
         .iter()
-        .map(|r| {
-            json!({
-                "id": r.get::<Uuid, _>("id"),
-                "enterprise_id": r.get::<Uuid, _>("enterprise_id"),
-                "proposed_title": r.get::<String, _>("proposed_title"),
-                "status": r.get::<String, _>("status"),
-                "brief": r.get::<String, _>("brief"),
-                "skill_domain": r.get::<String, _>("skill_domain"),
-                "difficulty": r.get::<i16, _>("difficulty"),
-                "duration_days": r.get::<i32, _>("duration_days"),
-                "budget_eur_cents": r.get::<i64, _>("budget_eur_cents"),
-                "challenge_id": r.get::<Option<Uuid>, _>("challenge_id"),
-                "created_at": r.get::<chrono::DateTime<chrono::Utc>, _>("created_at"),
-            })
+        .map(|r| AdminSponsorshipRow {
+            id: r.get("id"),
+            enterprise_id: r.get("enterprise_id"),
+            proposed_title: r.get("proposed_title"),
+            status: r.get("status"),
+            brief: r.get("brief"),
+            skill_domain: r.get("skill_domain"),
+            difficulty: r.get("difficulty"),
+            duration_days: r.get("duration_days"),
+            budget_eur_cents: r.get("budget_eur_cents"),
+            challenge_id: r.get("challenge_id"),
+            created_at: r.get("created_at"),
         })
         .collect();
-    Ok(Json(build_response(json!({ "requests": items }))))
+    Ok(Json(ApiResponse::new(AdminRequestsResponse {
+        requests: items,
+    })))
 }
 
-#[derive(Deserialize)]
-struct DecideBody {
-    action: String, // "approve" | "reject" | "negotiate"
-    admin_notes: Option<String>,
-}
-
-async fn admin_decide_request(
+/// Admin only: decide on a sponsorship request. `approve` unlocks the
+/// admin_link_challenge step; `reject` closes; `negotiate` keeps the
+/// thread open with the sponsor.
+#[utoipa::path(
+    post,
+    path = "/api/admin/sponsored-challenges/{id}/decide",
+    tag = "admin",
+    params(("id" = Uuid, Path, description = "Sponsorship request UUID")),
+    request_body = DecideBody,
+    responses(
+        (status = 200, description = "Decision recorded", body = ApiResponse<DecideResponse>),
+        (status = 400, description = "Invalid action", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_decide_request(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
     Json(body): Json<DecideBody>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<DecideResponse>>, AppError> {
     if auth.role != "admin" {
         return Err(AppError::Forbidden);
     }
@@ -204,26 +366,35 @@ async fn admin_decide_request(
     .bind(id)
     .execute(&state.db)
     .await?;
-    Ok(Json(build_response(
-        json!({ "id": id, "status": new_status }),
-    )))
+    Ok(Json(ApiResponse::new(DecideResponse {
+        id,
+        status: new_status.to_string(),
+    })))
 }
 
-#[derive(Deserialize)]
-struct LinkChallengeBody {
-    challenge_id: Uuid,
-    sponsor_logo_url: Option<String>,
-    sponsor_blurb: Option<String>,
-    sponsor_visible_until: chrono::DateTime<chrono::Utc>,
-    free_contact_until: chrono::DateTime<chrono::Utc>,
-}
-
-async fn admin_link_challenge(
+/// Admin only: link an approved request to an actual challenge. Sets
+/// the sponsor visibility window on the challenge and the free-contact
+/// window in `sponsor_challenge_access`. Bumps the request to `live`.
+#[utoipa::path(
+    post,
+    path = "/api/admin/sponsored-challenges/{id}/link",
+    tag = "admin",
+    params(("id" = Uuid, Path, description = "Sponsorship request UUID")),
+    request_body = LinkChallengeBody,
+    responses(
+        (status = 200, description = "Sponsorship live", body = ApiResponse<LinkChallengeResponse>),
+        (status = 400, description = "Request must be approved / negotiating first", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "Request not found", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_link_challenge(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(request_id): Path<Uuid>,
     Json(body): Json<LinkChallengeBody>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<LinkChallengeResponse>>, AppError> {
     if auth.role != "admin" {
         return Err(AppError::Forbidden);
     }
@@ -281,12 +452,25 @@ async fn admin_link_challenge(
     .await?;
     tx.commit().await?;
     metrics::counter!("skilluv_sponsored_challenges_live_total").increment(1);
-    Ok(Json(build_response(
-        json!({ "linked": true, "challenge_id": body.challenge_id }),
-    )))
+    Ok(Json(ApiResponse::new(LinkChallengeResponse {
+        linked: true,
+        challenge_id: body.challenge_id,
+    })))
 }
 
-async fn public_active(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
+/// Public: list currently-sponsored challenges (top 50 by expiring
+/// window). Used for the sponsor-page carousel.
+#[utoipa::path(
+    get,
+    path = "/api/sponsored-challenges/active",
+    tag = "challenges",
+    responses(
+        (status = 200, description = "Active sponsored challenges", body = ApiResponse<ActiveSponsoredResponse>),
+    ),
+)]
+pub async fn public_active(
+    State(state): State<AppState>,
+) -> Result<Json<ApiResponse<ActiveSponsoredResponse>>, AppError> {
     let rows: Vec<sqlx::postgres::PgRow> = sqlx::query(
         r#"
         SELECT c.id, c.title, c.skill_domain, c.difficulty, c.sponsor_logo_url, c.sponsor_blurb,
@@ -302,25 +486,44 @@ async fn public_active(State(state): State<AppState>) -> Result<Json<Value>, App
     )
     .fetch_all(&state.db)
     .await?;
-    use sqlx::Row;
-    let items: Vec<Value> = rows.iter().map(|r| json!({
-        "id": r.get::<Uuid, _>("id"),
-        "title": r.get::<String, _>("title"),
-        "skill_domain": r.get::<String, _>("skill_domain"),
-        "difficulty": r.get::<i16, _>("difficulty"),
-        "sponsor_logo_url": r.get::<Option<String>, _>("sponsor_logo_url"),
-        "sponsor_blurb": r.get::<Option<String>, _>("sponsor_blurb"),
-        "sponsor_name": r.get::<String, _>("sponsor_name"),
-        "sponsor_visible_until": r.get::<chrono::DateTime<chrono::Utc>, _>("sponsor_visible_until"),
-    })).collect();
-    Ok(Json(build_response(json!({ "active": items }))))
+    let items: Vec<ActiveSponsoredRow> = rows
+        .iter()
+        .map(|r| ActiveSponsoredRow {
+            id: r.get("id"),
+            title: r.get("title"),
+            skill_domain: r.get("skill_domain"),
+            difficulty: r.get("difficulty"),
+            sponsor_logo_url: r.get("sponsor_logo_url"),
+            sponsor_blurb: r.get("sponsor_blurb"),
+            sponsor_name: r.get("sponsor_name"),
+            sponsor_visible_until: r.get("sponsor_visible_until"),
+        })
+        .collect();
+    Ok(Json(ApiResponse::new(ActiveSponsoredResponse {
+        active: items,
+    })))
 }
 
-async fn sponsor_view_submissions(
+/// Sponsor-side: list submissions for a challenge the caller
+/// sponsored. Restricted by `sponsor_challenge_access`; also returns
+/// `free_contact_active` so the front knows whether contacting a
+/// talent is on the house.
+#[utoipa::path(
+    get,
+    path = "/api/enterprise/sponsored-challenges/{id}/submissions",
+    tag = "enterprise",
+    params(("id" = Uuid, Path, description = "Challenge UUID")),
+    responses(
+        (status = 200, description = "Successful submissions", body = ApiResponse<SponsorSubmissionsResponse>),
+        (status = 403, description = "Caller doesn't sponsor this challenge", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn sponsor_view_submissions(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(challenge_id): Path<Uuid>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<SponsorSubmissionsResponse>>, AppError> {
     let enterprise_id = current_enterprise_for(&state.db, auth.user_id).await?;
     // Confirm this enterprise has access to this challenge
     let allowed: Option<(chrono::DateTime<chrono::Utc>,)> = sqlx::query_as(
@@ -347,26 +550,23 @@ async fn sponsor_view_submissions(
     .bind(challenge_id)
     .fetch_all(&state.db)
     .await?;
-    use sqlx::Row;
-    let items: Vec<Value> = rows
+    let items: Vec<SponsorSubmissionRow> = rows
         .iter()
-        .map(|r| {
-            json!({
-                "submission_id": r.get::<Uuid, _>("submission_id"),
-                "user_id": r.get::<Uuid, _>("user_id"),
-                "username": r.get::<String, _>("username"),
-                "display_name": r.get::<String, _>("display_name"),
-                "skill_domain": r.get::<String, _>("skill_domain"),
-                "total_fragments": r.get::<i32, _>("total_fragments"),
-                "title": r.get::<String, _>("title"),
-                "fragments_earned": r.get::<i32, _>("fragments_earned"),
-                "evaluated_at": r.get::<Option<chrono::DateTime<chrono::Utc>>, _>("evaluated_at"),
-            })
+        .map(|r| SponsorSubmissionRow {
+            submission_id: r.get("submission_id"),
+            user_id: r.get("user_id"),
+            username: r.get("username"),
+            display_name: r.get("display_name"),
+            skill_domain: r.get("skill_domain"),
+            total_fragments: r.get("total_fragments"),
+            title: r.get("title"),
+            fragments_earned: r.get("fragments_earned"),
+            evaluated_at: r.get("evaluated_at"),
         })
         .collect();
-    Ok(Json(build_response(json!({
-        "submissions": items,
-        "free_contact_active": free_contact_active,
-        "free_contact_until": until,
-    }))))
+    Ok(Json(ApiResponse::new(SponsorSubmissionsResponse {
+        submissions: items,
+        free_contact_active,
+        free_contact_until: until,
+    })))
 }

@@ -6,10 +6,12 @@
 use axum::extract::State;
 use axum::routing::get;
 use axum::{Json, Router};
-use serde_json::{Value, json};
-use uuid::Uuid;
+use serde::Serialize;
+use sqlx::Row;
+use utoipa::ToSchema;
 
 use crate::AppState;
+use crate::api_response::ApiResponse;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
 
@@ -21,16 +23,6 @@ pub fn admin_dashboard_routes() -> Router<AppState> {
         .route("/admin/dashboard/health", get(ops_health))
 }
 
-fn build_response(data: Value) -> Value {
-    json!({
-        "data": data,
-        "meta": {
-            "request_id": Uuid::new_v4().to_string(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-        }
-    })
-}
-
 fn ensure_admin(auth: &AuthUser) -> Result<(), AppError> {
     if auth.role == "admin" {
         Ok(())
@@ -39,7 +31,78 @@ fn ensure_admin(auth: &AuthUser) -> Result<(), AppError> {
     }
 }
 
-async fn overview(State(state): State<AppState>, auth: AuthUser) -> Result<Json<Value>, AppError> {
+// ─── Types de réponse ────────────────────────────────────────────
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AdminOverviewResponse {
+    pub signups_today: i64,
+    pub enterprises_total: i64,
+    pub paying_enterprises: i64,
+    pub hires_this_month: i64,
+    pub mrr_eur_cents: i64,
+    /// Refund rate (%) over the last 30 days.
+    pub refund_rate_pct_30d: f64,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PurchaseBreakdownRow {
+    pub session_group: Option<String>,
+    pub purchases: i64,
+    pub credits_total: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AdminFinancialResponse {
+    pub month_revenue_ttc_cents: i64,
+    pub month_invoices_count: i64,
+    pub primary_currency: String,
+    pub purchases_breakdown: Vec<PurchaseBreakdownRow>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ModerationQueueResponse {
+    pub reports_pending: i64,
+    pub kyc_pending: i64,
+    pub sponsored_requests_pending: i64,
+    pub banned_last_30d: i64,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct DbPoolInfo {
+    pub pool_size: u32,
+    pub pool_idle: usize,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct WsInfo {
+    pub connections: usize,
+    pub rooms: usize,
+    pub users: usize,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct OpsHealthResponse {
+    pub database: DbPoolInfo,
+    pub websocket: WsInfo,
+    pub recent_error_events_30m: i64,
+}
+
+/// Admin overview KPIs: signups, enterprises, hires, MRR, refund rate.
+#[utoipa::path(
+    get,
+    path = "/api/admin/dashboard/overview",
+    tag = "admin",
+    responses(
+        (status = 200, description = "Overview KPIs", body = ApiResponse<AdminOverviewResponse>),
+        (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn overview(
+    _gate: crate::middleware::admin_gate::AdminGate,
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Json<ApiResponse<AdminOverviewResponse>>, AppError> {
     ensure_admin(&auth)?;
     let signups_today: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM users WHERE created_at >= date_trunc('day', NOW())",
@@ -88,17 +151,33 @@ async fn overview(State(state): State<AppState>, auth: AuthUser) -> Result<Json<
     } else {
         0.0
     };
-    Ok(Json(build_response(json!({
-        "signups_today": signups_today,
-        "enterprises_total": enterprises_total,
-        "paying_enterprises": paying_enterprises,
-        "hires_this_month": hires_this_month,
-        "mrr_eur_cents": mrr_cents,
-        "refund_rate_pct_30d": (refund_rate * 100.0).round() / 100.0,
-    }))))
+    Ok(Json(ApiResponse::new(AdminOverviewResponse {
+        signups_today,
+        enterprises_total,
+        paying_enterprises,
+        hires_this_month,
+        mrr_eur_cents: mrr_cents,
+        refund_rate_pct_30d: (refund_rate * 100.0).round() / 100.0,
+    })))
 }
 
-async fn financial(State(state): State<AppState>, auth: AuthUser) -> Result<Json<Value>, AppError> {
+/// Admin financial KPIs: month revenue, invoices count, breakdown per
+/// purchase session group.
+#[utoipa::path(
+    get,
+    path = "/api/admin/dashboard/financial",
+    tag = "admin",
+    responses(
+        (status = 200, description = "Financial KPIs", body = ApiResponse<AdminFinancialResponse>),
+        (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn financial(
+    _gate: crate::middleware::admin_gate::AdminGate,
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Json<ApiResponse<AdminFinancialResponse>>, AppError> {
     ensure_admin(&auth)?;
     // Revenue this month (from invoices)
     let month_revenue: (i64, i64, String) = sqlx::query_as(
@@ -127,29 +206,39 @@ async fn financial(State(state): State<AppState>, auth: AuthUser) -> Result<Json
     .fetch_all(&state.db)
     .await
     .unwrap_or_default();
-    use sqlx::Row;
-    let packs: Vec<Value> = by_pack
+    let packs: Vec<PurchaseBreakdownRow> = by_pack
         .iter()
-        .map(|r| {
-            json!({
-                "session_group": r.get::<Option<String>, _>("session_id"),
-                "purchases": r.get::<i64, _>("purchases"),
-                "credits_total": r.get::<Option<String>, _>("credits_total"),
-            })
+        .map(|r| PurchaseBreakdownRow {
+            session_group: r.get("session_id"),
+            purchases: r.get("purchases"),
+            credits_total: r.get("credits_total"),
         })
         .collect();
-    Ok(Json(build_response(json!({
-        "month_revenue_ttc_cents": month_revenue.0,
-        "month_invoices_count": month_revenue.1,
-        "primary_currency": month_revenue.2,
-        "purchases_breakdown": packs,
-    }))))
+    Ok(Json(ApiResponse::new(AdminFinancialResponse {
+        month_revenue_ttc_cents: month_revenue.0,
+        month_invoices_count: month_revenue.1,
+        primary_currency: month_revenue.2,
+        purchases_breakdown: packs,
+    })))
 }
 
-async fn moderation_queue(
+/// Moderation queue depth: pending reports, KYC pending, sponsored
+/// requests in review, bans in the last 30 days.
+#[utoipa::path(
+    get,
+    path = "/api/admin/dashboard/moderation-queue",
+    tag = "admin",
+    responses(
+        (status = 200, description = "Moderation queue snapshot", body = ApiResponse<ModerationQueueResponse>),
+        (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn moderation_queue(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<ModerationQueueResponse>>, AppError> {
     ensure_admin(&auth)?;
     let reports_pending: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM reports WHERE status = 'pending'")
@@ -175,18 +264,30 @@ async fn moderation_queue(
     .fetch_one(&state.db)
     .await
     .unwrap_or(0);
-    Ok(Json(build_response(json!({
-        "reports_pending": reports_pending,
-        "kyc_pending": kyc_pending,
-        "sponsored_requests_pending": sponsored_pending,
-        "banned_last_30d": banned_last_30d,
-    }))))
+    Ok(Json(ApiResponse::new(ModerationQueueResponse {
+        reports_pending,
+        kyc_pending,
+        sponsored_requests_pending: sponsored_pending,
+        banned_last_30d,
+    })))
 }
 
-async fn ops_health(
+/// Ops health: DB pool, WS stats, recent .failed audit events.
+#[utoipa::path(
+    get,
+    path = "/api/admin/dashboard/health",
+    tag = "admin",
+    responses(
+        (status = 200, description = "Ops health snapshot", body = ApiResponse<OpsHealthResponse>),
+        (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn ops_health(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<OpsHealthResponse>>, AppError> {
     ensure_admin(&auth)?;
     let pool_size = state.db.size();
     let pool_idle = state.db.num_idle();
@@ -197,13 +298,16 @@ async fn ops_health(
     .fetch_one(&state.db)
     .await
     .unwrap_or(0);
-    Ok(Json(build_response(json!({
-        "database": { "pool_size": pool_size, "pool_idle": pool_idle },
-        "websocket": {
-            "connections": ws_stats.0,
-            "rooms": ws_stats.1,
-            "users": ws_stats.2,
+    Ok(Json(ApiResponse::new(OpsHealthResponse {
+        database: DbPoolInfo {
+            pool_size,
+            pool_idle,
         },
-        "recent_error_events_30m": recent_errors_30m,
-    }))))
+        websocket: WsInfo {
+            connections: ws_stats.0,
+            rooms: ws_stats.1,
+            users: ws_stats.2,
+        },
+        recent_error_events_30m: recent_errors_30m,
+    })))
 }

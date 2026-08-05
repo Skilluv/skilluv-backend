@@ -53,7 +53,18 @@ fn build_response(data: Value) -> Value {
 // GET /api/deliverables/{id}
 // ═══════════════════════════════════════════════════════════════════
 
-async fn get_deliverable(
+/// Public deliverable detail (only when public + not revoked).
+#[utoipa::path(
+    get,
+    path = "/api/deliverables/{id}",
+    tag = "projects",
+    params(("id" = Uuid, Path)),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 404, body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn get_deliverable(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Value>, AppError> {
@@ -72,16 +83,31 @@ async fn get_deliverable(
 // GET /api/users/{user_id}/deliverables
 // ═══════════════════════════════════════════════════════════════════
 
-#[derive(Deserialize)]
-struct UserDeliverablesQuery {
-    limit: Option<i64>,
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
+pub struct UserDeliverablesQuery {
+    #[param(minimum = 1, maximum = 100)]
+    pub limit: Option<i64>,
 }
 
-async fn list_user_deliverables(
+/// Public portfolio: a user's public deliverables.
+#[utoipa::path(
+    get,
+    path = "/api/users/{user_id}/deliverables",
+    tag = "profile",
+    params(
+        ("user_id" = Uuid, Path),
+        UserDeliverablesQuery,
+    ),
+    responses((status = 200, body = serde_json::Value)),
+)]
+pub async fn list_user_deliverables(
     State(state): State<AppState>,
     Path(user_id): Path<Uuid>,
     Query(q): Query<UserDeliverablesQuery>,
 ) -> Result<Json<Value>, AppError> {
+    crate::validators::check_range_opt(q.limit, "limit", 1, 100)?;
     let limit = q.limit.unwrap_or(20);
     let deliverables = DeliverablesService::list_public_by_user(&state.db, user_id, limit).await?;
     Ok(Json(build_response(
@@ -93,17 +119,40 @@ async fn list_user_deliverables(
 // POST /api/webhooks/github/slices/{project_id}
 // ═══════════════════════════════════════════════════════════════════
 
-async fn github_slices_webhook(
+/// GitHub webhook: creates auto-verified deliverables from merged PRs.
+/// HMAC-signed via `GITHUB_WEBHOOK_SECRET`. Idempotent per delivery id.
+#[utoipa::path(
+    post,
+    path = "/api/webhooks/github/slices/{project_id}",
+    tag = "webhooks",
+    params(("project_id" = Uuid, Path)),
+    request_body(content = serde_json::Value, description = "GitHub pull_request event payload"),
+    responses(
+        (status = 200, description = "Processed (or ignored / duplicate)", body = serde_json::Value),
+        (status = 401, body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn github_slices_webhook(
     State(state): State<AppState>,
     Path(project_id): Path<Uuid>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<impl IntoResponse, AppError> {
     // 1. HMAC signature verification (partagée avec le webhook bounties existant)
-    let secret = std::env::var("GITHUB_WEBHOOK_SECRET")
+    // GITHUB_WEBHOOK_SECRET absent = webhook non configuré (dev/CI) : ack
+    // silencieusement 200 pour eviter les retries GitHub. Best-practice
+    // pour webhooks externes.
+    let Some(secret) = std::env::var("GITHUB_WEBHOOK_SECRET")
         .ok()
         .filter(|s| !s.is_empty())
-        .ok_or_else(|| AppError::Internal("GITHUB_WEBHOOK_SECRET not set".to_string()))?;
+    else {
+        tracing::warn!(
+            "GitHub slices webhook received but GITHUB_WEBHOOK_SECRET not set — acking silently"
+        );
+        return Ok(Json(build_response(
+            json!({ "outcome": "acked_not_configured" }),
+        )));
+    };
 
     let signature = headers
         .get("x-hub-signature-256")

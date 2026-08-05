@@ -1,13 +1,15 @@
 use axum::extract::{Path, Query, State};
 use axum::routing::get;
 use axum::{Json, Router};
-use serde::Deserialize;
-use serde_json::json;
+use serde::{Deserialize, Serialize};
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::AppState;
+use crate::api_response::{ApiResponse, MetaInfo};
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
+use crate::routes::notifications::Pagination;
 use crate::services::LeaderboardService;
 
 pub fn leaderboard_routes() -> Router<AppState> {
@@ -17,50 +19,104 @@ pub fn leaderboard_routes() -> Router<AppState> {
         .route("/leaderboards/{domain}/me", get(my_rank))
 }
 
-fn build_response(data: serde_json::Value) -> serde_json::Value {
-    json!({
-        "data": data,
-        "meta": {
-            "request_id": Uuid::new_v4().to_string(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-        }
-    })
+#[derive(Debug, Serialize, ToSchema)]
+pub struct LeaderboardMeta {
+    /// `global`, `code`, `design`, `game`, `security`.
+    pub domain: &'static str,
+    pub periods: &'static [&'static str],
 }
 
-// GET /api/leaderboards — list available leaderboards (no auth, SSR-ready)
-async fn list_leaderboards() -> Json<serde_json::Value> {
-    let domains = ["global", "code", "design", "game", "security"];
-    let periods = ["alltime", "weekly", "monthly"];
+#[derive(Debug, Serialize, ToSchema)]
+pub struct LeaderboardsIndexResponse {
+    pub leaderboards: Vec<LeaderboardMeta>,
+}
 
-    let leaderboards: Vec<serde_json::Value> = domains
+/// List the domains + periods the leaderboard service supports.
+/// Public, SSR-ready.
+#[utoipa::path(
+    get,
+    path = "/api/leaderboards",
+    tag = "profile",
+    responses(
+        (status = 200, description = "Available leaderboards", body = ApiResponse<LeaderboardsIndexResponse>),
+    ),
+)]
+pub async fn list_leaderboards() -> Json<ApiResponse<LeaderboardsIndexResponse>> {
+    let domains = ["global", "code", "design", "game", "security"];
+    let periods: &'static [&'static str] = &["alltime", "weekly", "monthly"];
+
+    let leaderboards: Vec<LeaderboardMeta> = domains
         .iter()
-        .map(|d| {
-            json!({
-                "domain": d,
-                "periods": periods,
-            })
-        })
+        .map(|d| LeaderboardMeta { domain: d, periods })
         .collect();
 
-    Json(build_response(json!({ "leaderboards": leaderboards })))
+    Json(ApiResponse::new(LeaderboardsIndexResponse { leaderboards }))
 }
 
-#[derive(Debug, Deserialize)]
-struct LeaderboardQuery {
-    period: Option<String>,
-    page: Option<i64>,
-    per_page: Option<i64>,
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
+pub struct LeaderboardQuery {
+    /// `alltime` (default), `weekly`, `monthly`.
+    #[param(pattern = r"^(alltime|weekly|monthly)$")]
+    pub period: Option<String>,
+    #[param(minimum = 1, maximum = 100000)]
+    pub page: Option<i64>,
+    #[param(minimum = 1, maximum = 50)]
+    pub per_page: Option<i64>,
 }
 
-// GET /api/leaderboards/{domain}?period=alltime&page=1&per_page=20 (no auth, SSR-ready)
-async fn get_leaderboard(
+#[derive(Debug, Serialize, ToSchema)]
+pub struct LeaderboardEntry {
+    pub rank: usize,
+    pub user_id: Uuid,
+    pub username: String,
+    pub display_name: String,
+    pub title: String,
+    pub golden_stars: i32,
+    pub country: Option<String>,
+    pub score: i64,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct LeaderboardPage {
+    pub domain: String,
+    pub period: String,
+    pub entries: Vec<LeaderboardEntry>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct LeaderboardPageResponse {
+    pub data: LeaderboardPage,
+    pub pagination: Pagination,
+    pub meta: MetaInfo,
+}
+
+/// Paginated leaderboard for a given domain + period. Public,
+/// SSR-ready. Ordered by score desc.
+#[utoipa::path(
+    get,
+    path = "/api/leaderboards/{domain}",
+    tag = "profile",
+    params(
+        ("domain" = String, Path, pattern = r"^(global|code|design|game|security)$", description = "Leaderboard domain"),
+        LeaderboardQuery,
+    ),
+    responses(
+        (status = 200, description = "Ranked entries", body = LeaderboardPageResponse),
+        (status = 400, description = "Invalid domain or period", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn get_leaderboard(
     State(state): State<AppState>,
     Path(domain): Path<String>,
     Query(query): Query<LeaderboardQuery>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<LeaderboardPageResponse>, AppError> {
     LeaderboardService::validate_domain(&domain)?;
     let period = query.period.as_deref().unwrap_or("alltime");
     LeaderboardService::validate_period(period)?;
+    crate::validators::check_range_opt(query.page, "page", 1, 100_000)?;
+    crate::validators::check_range_opt(query.per_page, "per_page", 1, 50)?;
 
     let page = query.page.unwrap_or(1).max(1);
     let per_page = query.per_page.unwrap_or(20).clamp(1, 50);
@@ -85,7 +141,7 @@ async fn get_leaderboard(
         .filter_map(|(id_str, _)| id_str.parse().ok())
         .collect();
 
-    let ranked_entries = if user_ids.is_empty() {
+    let ranked_entries: Vec<LeaderboardEntry> = if user_ids.is_empty() {
         vec![]
     } else {
         let users: Vec<(Uuid, String, String, String, i32, Option<String>)> = sqlx::query_as(
@@ -104,51 +160,76 @@ async fn get_leaderboard(
             .filter_map(|(i, (id_str, score))| {
                 let uid: Uuid = id_str.parse().ok()?;
                 let user = user_map.get(&uid)?;
-                Some(json!({
-                    "rank": offset as usize + i + 1,
-                    "user_id": uid,
-                    "username": user.1,
-                    "display_name": user.2,
-                    "title": user.3,
-                    "golden_stars": user.4,
-                    "country": user.5,
-                    "score": *score as i64,
-                }))
+                Some(LeaderboardEntry {
+                    rank: offset as usize + i + 1,
+                    user_id: uid,
+                    username: user.1.clone(),
+                    display_name: user.2.clone(),
+                    title: user.3.clone(),
+                    golden_stars: user.4,
+                    country: user.5.clone(),
+                    score: *score as i64,
+                })
             })
-            .collect::<Vec<_>>()
+            .collect()
     };
 
-    Ok(Json(json!({
-        "data": {
-            "domain": domain,
-            "period": period,
-            "entries": ranked_entries,
+    Ok(Json(LeaderboardPageResponse {
+        data: LeaderboardPage {
+            domain,
+            period: period.to_string(),
+            entries: ranked_entries,
         },
-        "pagination": {
-            "page": page,
-            "per_page": per_page,
-            "total": total,
-            "total_pages": (total as f64 / per_page as f64).ceil() as i64,
+        pagination: Pagination {
+            page,
+            per_page,
+            total,
+            total_pages: (total as f64 / per_page as f64).ceil() as i64,
         },
-        "meta": {
-            "request_id": Uuid::new_v4().to_string(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-        }
-    })))
+        meta: MetaInfo::now(),
+    }))
 }
 
-#[derive(Debug, Deserialize)]
-struct MyRankQuery {
-    period: Option<String>,
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
+pub struct MyRankQuery {
+    #[param(pattern = r"^(alltime|weekly|monthly)$")]
+    pub period: Option<String>,
 }
 
-// GET /api/leaderboards/{domain}/me — my rank (auth required)
-async fn my_rank(
+#[derive(Debug, Serialize, ToSchema)]
+pub struct MyRankResponse {
+    pub domain: String,
+    pub period: String,
+    /// `None` when the user has no score in this leaderboard.
+    pub rank: Option<i64>,
+    pub score: Option<i64>,
+    pub total_participants: i64,
+}
+
+/// Caller's rank + score for a specific leaderboard.
+#[utoipa::path(
+    get,
+    path = "/api/leaderboards/{domain}/me",
+    tag = "profile",
+    params(
+        ("domain" = String, Path, pattern = r"^(global|code|design|game|security)$", description = "Leaderboard domain"),
+        MyRankQuery,
+    ),
+    responses(
+        (status = 200, description = "Caller's rank", body = ApiResponse<MyRankResponse>),
+        (status = 400, description = "Invalid domain or period", body = crate::api_response::ErrorResponse),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn my_rank(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(domain): Path<String>,
     Query(query): Query<MyRankQuery>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<MyRankResponse>>, AppError> {
     LeaderboardService::validate_domain(&domain)?;
     let period = query.period.as_deref().unwrap_or("alltime");
     LeaderboardService::validate_period(period)?;
@@ -159,11 +240,11 @@ async fn my_rank(
     let score = LeaderboardService::get_score(&mut redis, &domain, period, auth.user_id).await?;
     let total = LeaderboardService::get_total(&mut redis, &domain, period).await?;
 
-    Ok(Json(build_response(json!({
-        "domain": domain,
-        "period": period,
-        "rank": rank,
-        "score": score.map(|s| s as i64),
-        "total_participants": total,
-    }))))
+    Ok(Json(ApiResponse::new(MyRankResponse {
+        domain,
+        period: period.to_string(),
+        rank,
+        score: score.map(|s| s as i64),
+        total_participants: total,
+    })))
 }

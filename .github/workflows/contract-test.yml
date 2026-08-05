@@ -1,0 +1,148 @@
+name: Contract test
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'Cargo.lock'
+      - 'Cargo.toml'
+      - '.github/workflows/contract-test.yml'
+  workflow_dispatch:
+
+# Least-privilege default — schemathesis only reads the repo + hits the API.
+permissions:
+  contents: read
+
+jobs:
+  schemathesis:
+    name: schemathesis fuzz OpenAPI contract
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: skilluv
+          POSTGRES_PASSWORD: skilluv_secret
+          POSTGRES_DB: skilluv
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U skilluv"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      redis:
+        image: redis:8.8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgres://skilluv:skilluv_secret@localhost:5432/skilluv
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: schemathesis_test_secret_key_must_be_32_chars_or_more
+      BASE_URL: http://localhost:3001
+      # Backend defaults to PORT=3000 ; keep the historical 3001 for BASE_URL /
+      # curl probes so the schema paths stay stable across CI checkouts.
+      PORT: "3001"
+      SKILLUV_EXPOSE_SWAGGER: "1"
+      # Schemathesis envoie 25 examples par endpoint depuis localhost.
+      # Sans whitelist, POST /api/auth/login trigger le rate-limit (5/h par
+      # IP) et retourne 429 — que schemathesis flagge en
+      # positive_data_acceptance ("valid data was rejected"). 429 est un
+      # comportement stateful legitime hors du scope contract-test.
+      # Reserve : depuis le fix extract_ip -> "" (au lieu de "unknown"), le
+      # rate-limit est deja skip naturellement quand aucun X-Forwarded-For
+      # n'est present. La whitelist ci-dessous reste pour les tests qui set
+      # explicitement 127.0.0.1 via un mock proxy.
+      SKILLUV_RATELIMIT_IP_WHITELIST: "127.0.0.1,::1"
+      RUST_LOG: warn,skilluv_backend=info
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          persist-credentials: false
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4  # stable
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32  # v2
+
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
+        with:
+          python-version: '3.12'
+
+      - name: Install schemathesis
+        run: pip install schemathesis
+
+      - name: Build backend (release)
+        run: cargo build --release --bin skilluv-backend
+
+      # GeoNames data (gitignored, ~31MB) : backend refuses to boot
+      # without it (see src/main.rs GeoService::load). Cache across runs
+      # keyed by content-invariant name so we don't re-download every PR.
+      - name: Cache GeoNames data
+        id: cache-geonames
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6
+        with:
+          path: data
+          key: geonames-cities1000-countryinfo-v1
+
+      - name: Download GeoNames data
+        if: steps.cache-geonames.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p data
+          curl -fsSL https://download.geonames.org/export/dump/cities1000.zip -o /tmp/cities1000.zip
+          unzip -o /tmp/cities1000.zip -d data
+          curl -fsSL https://download.geonames.org/export/dump/countryInfo.txt -o data/countryInfo.txt
+
+      - name: Start backend
+        # 3-min boot budget : the 116+ sqlx migrations + GeoNames load (~30s)
+        # + Sentry/PostHog init routinely takes 45-90s on cold GHA runners.
+        run: |
+          ./target/release/skilluv-backend &
+          echo $! > backend.pid
+          elapsed=0
+          for _ in $(seq 1 90); do
+            if curl -fsS http://localhost:3001/api/health > /dev/null 2>&1; then
+              echo "Backend ready after ${elapsed}s"
+              exit 0
+            fi
+            sleep 2
+            elapsed=$((elapsed + 2))
+          done
+          echo "Backend failed to become ready after 180s"
+          exit 1
+
+      - name: Smoke check /api/openapi.json
+        run: |
+          paths=$(curl -fsS http://localhost:3001/api/openapi.json | jq '.paths | length')
+          echo "OpenAPI exposes ${paths} paths"
+          if [ "${paths}" -lt 100 ]; then
+            echo "ERROR: fewer than 100 paths exposed — schema generation likely broken"
+            exit 1
+          fi
+
+      - name: Run schemathesis
+        run: |
+          schemathesis run \
+            http://localhost:3001/api/openapi.json \
+            --checks all \
+            --max-examples=25 \
+            --seed=42 \
+            --workers=4 \
+            --max-failures=10
+
+      - name: Stop backend
+        if: always()
+        run: |
+          if [ -f backend.pid ]; then
+            kill "$(cat backend.pid)" || true
+          fi

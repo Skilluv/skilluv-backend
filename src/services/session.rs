@@ -21,7 +21,7 @@ use crate::services::AuthService;
 // Type aliases pour clippy::type_complexity (rangées sqlx::query_as).
 type SessionRow107 = (Uuid, Vec<u8>, Option<Vec<u8>>, Option<DateTime<Utc>>);
 
-#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, sqlx::FromRow, utoipa::ToSchema)]
 pub struct SessionRow {
     pub id: Uuid,
     pub user_id: Uuid,

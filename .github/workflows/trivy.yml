@@ -1,0 +1,70 @@
+name: Trivy vulnerability scan
+
+# Trivy scans the repo filesystem for :
+#   - Vulnerable dependencies (Rust Cargo.lock, Python pyproject if any, etc.)
+#     — complements `cargo audit` with a different CVE DB.
+#   - Vulnerable base images referenced in Dockerfiles.
+#   - Misconfigurations in IaC files (docker-compose, GitHub Actions,
+#     Kubernetes if we ever add it).
+#   - Hardcoded secrets (belt-and-braces with gitleaks).
+#
+# Runs on PR + push to master + weekly. Uploads SARIF to GitHub Security tab
+# so findings appear alongside CodeQL results.
+
+on:
+  # Only run trivy when deps or IaC actually change. Doc / test-only PRs
+  # don't affect CVE surface — no reason to burn minutes on them.
+  pull_request:
+    branches: [master]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "docker-compose*.yml"
+      - "Dockerfile"
+      - ".github/workflows/**"
+      - ".dockerignore"
+  # Weekly cron catches newly-published CVEs against unchanged deps.
+  schedule:
+    - cron: "0 4 * * 0"  # Sunday 04:00 UTC (after CodeQL @ 03:00)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write  # to upload SARIF
+
+concurrency:
+  group: trivy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  filesystem:
+    name: Trivy FS + IaC + Secrets
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          persist-credentials: false
+      - name: Run Trivy filesystem scan
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1  # 0.35.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-results.sarif
+          # HIGH + CRITICAL only for PR gate — LOW/MEDIUM would drown the noise.
+          severity: HIGH,CRITICAL
+          # Skip warnings we can't act on immediately (dev-only Docker images
+          # etc.). Empty for now — populate as needed.
+          skip-files: ""
+          skip-dirs: "target,node_modules"
+          # Fail the job on findings so the PR gate actually blocks.
+          exit-code: 1
+          ignore-unfixed: true  # only fail on issues with a known fix
+
+      - name: Upload SARIF to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@4187e74d05793876e9989daffde9c3e66b4acd07  # v3
+        if: always()  # always upload, even on job failure
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy-fs

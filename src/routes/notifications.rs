@@ -1,11 +1,12 @@
 use axum::extract::{Path, Query, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use serde::Deserialize;
-use serde_json::json;
+use serde::{Deserialize, Serialize};
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::AppState;
+use crate::api_response::{ApiResponse, SimpleMessage};
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
 use crate::models::Notification;
@@ -19,29 +20,57 @@ pub fn notification_routes() -> Router<AppState> {
         .route("/notifications/unread-count", get(unread_count))
 }
 
-fn build_response(data: serde_json::Value) -> serde_json::Value {
-    json!({
-        "data": data,
-        "meta": {
-            "request_id": Uuid::new_v4().to_string(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-        }
-    })
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct NotificationQuery {
+    /// Filter by read state. Omit for both.
+    pub read: Option<bool>,
+    /// 1-based page number. Defaults to 1.
+    pub page: Option<i64>,
+    /// Rows per page. Clamped to `[1, 50]`. Defaults to 20.
+    pub per_page: Option<i64>,
 }
 
-#[derive(Debug, Deserialize)]
-struct NotificationQuery {
-    read: Option<bool>,
-    page: Option<i64>,
-    per_page: Option<i64>,
+#[derive(Debug, Serialize, ToSchema)]
+pub struct Pagination {
+    pub page: i64,
+    pub per_page: i64,
+    pub total: i64,
+    pub total_pages: i64,
 }
 
-// GET /api/notifications
-async fn list_notifications(
+/// Paginated notifications response. Note: this endpoint historically
+/// returned `data + pagination + meta` at the top level (not the usual
+/// `ApiResponse<T>` envelope) — kept as-is to avoid breaking the front.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct NotificationsListResponse {
+    pub data: Vec<Notification>,
+    pub pagination: Pagination,
+    pub meta: crate::api_response::MetaInfo,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct UnreadCountResponse {
+    pub unread_count: i64,
+}
+
+/// List the caller's notifications, paginated. Optional `read` filter
+/// splits inbox vs archive views.
+#[utoipa::path(
+    get,
+    path = "/api/notifications",
+    tag = "profile",
+    params(NotificationQuery),
+    responses(
+        (status = 200, description = "Paginated notifications", body = NotificationsListResponse),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_notifications(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(query): Query<NotificationQuery>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<NotificationsListResponse>, AppError> {
     let page = query.page.unwrap_or(1).max(1);
     let per_page = query.per_page.unwrap_or(20).clamp(1, 50);
     let offset = (page - 1) * per_page;
@@ -85,27 +114,37 @@ async fn list_notifications(
         (notifs, count)
     };
 
-    Ok(Json(json!({
-        "data": notifications,
-        "pagination": {
-            "page": page,
-            "per_page": per_page,
-            "total": total,
-            "total_pages": (total as f64 / per_page as f64).ceil() as i64,
+    Ok(Json(NotificationsListResponse {
+        data: notifications,
+        pagination: Pagination {
+            page,
+            per_page,
+            total,
+            total_pages: (total as f64 / per_page as f64).ceil() as i64,
         },
-        "meta": {
-            "request_id": Uuid::new_v4().to_string(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-        }
-    })))
+        meta: crate::api_response::MetaInfo::now(),
+    }))
 }
 
-// POST /api/notifications/:id/read
-async fn mark_read(
+/// Mark one notification as read. No-op when the notification is
+/// already read or belongs to another user (silently ignored via the
+/// user_id filter).
+#[utoipa::path(
+    post,
+    path = "/api/notifications/{id}/read",
+    tag = "profile",
+    params(("id" = Uuid, Path, description = "Notification UUID")),
+    responses(
+        (status = 200, description = "Marked as read", body = ApiResponse<SimpleMessage>),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn mark_read(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<SimpleMessage>>, AppError> {
     let result = sqlx::query(
         "UPDATE notifications SET read = TRUE WHERE id = $1 AND user_id = $2 AND read = FALSE",
     )
@@ -118,16 +157,27 @@ async fn mark_read(
         NotificationService::decrement_counter(&mut state.redis.clone(), auth.user_id).await?;
     }
 
-    Ok(Json(build_response(json!({
-        "message": "Notification marked as read"
-    }))))
+    Ok(Json(ApiResponse::new(SimpleMessage::new(
+        "Notification marked as read",
+    ))))
 }
 
-// POST /api/notifications/read-all
-async fn mark_all_read(
+/// Mark every unread notification for the caller as read. Also resets
+/// the Redis unread counter used by the WS badge.
+#[utoipa::path(
+    post,
+    path = "/api/notifications/read-all",
+    tag = "profile",
+    responses(
+        (status = 200, description = "All notifications marked as read", body = ApiResponse<SimpleMessage>),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn mark_all_read(
     State(state): State<AppState>,
     auth: AuthUser,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<SimpleMessage>>, AppError> {
     sqlx::query("UPDATE notifications SET read = TRUE WHERE user_id = $1 AND read = FALSE")
         .bind(auth.user_id)
         .execute(&state.db)
@@ -135,19 +185,32 @@ async fn mark_all_read(
 
     NotificationService::reset_counter(&mut state.redis.clone(), auth.user_id).await?;
 
-    Ok(Json(build_response(json!({
-        "message": "All notifications marked as read"
-    }))))
+    Ok(Json(ApiResponse::new(SimpleMessage::new(
+        "All notifications marked as read",
+    ))))
 }
 
-// GET /api/notifications/unread-count
-async fn unread_count(
+/// Cheap unread-badge counter — served from Redis with a DB fallback
+/// when the cache is cold.
+#[utoipa::path(
+    get,
+    path = "/api/notifications/unread-count",
+    tag = "profile",
+    responses(
+        (status = 200, description = "Unread notification count", body = ApiResponse<UnreadCountResponse>),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn unread_count(
     State(state): State<AppState>,
     auth: AuthUser,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<UnreadCountResponse>>, AppError> {
     let count =
         NotificationService::unread_count(&state.db, &mut state.redis.clone(), auth.user_id)
             .await?;
 
-    Ok(Json(build_response(json!({ "unread_count": count }))))
+    Ok(Json(ApiResponse::new(UnreadCountResponse {
+        unread_count: count,
+    })))
 }

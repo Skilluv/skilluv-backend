@@ -23,6 +23,13 @@ impl RateLimiter {
     /// les IPs listées (comma-separated). Utile en staging pour laisser tourner
     /// les runs Playwright depuis une IP de dev sans se manger un 429 après
     /// ~5 tentatives. À ne PAS activer en prod pour des IPs publiques.
+    ///
+    /// `identifier` : IP client (via `extract_ip`) ou user_id. Une string
+    /// vide `""` signale "pas d'IP fiable" (ex : appel direct sans reverse
+    /// proxy en dev/CI) et désactive le check pour ce call — évite un
+    /// bucket sentinel partagé qui bloquerait tout le monde après N req.
+    /// En prod, le reverse proxy DOIT set `X-Forwarded-For` (sinon aucun
+    /// rate limit ne s'applique aux requêtes non-authentifiées, à surveiller).
     pub async fn check(
         redis: &mut ConnectionManager,
         category: &str,
@@ -31,6 +38,9 @@ impl RateLimiter {
         window_secs: u64,
     ) -> Result<(), AppError> {
         if std::env::var("SKILLUV_DISABLE_RATELIMIT").as_deref() == Ok("1") {
+            return Ok(());
+        }
+        if identifier.is_empty() {
             return Ok(());
         }
         if is_whitelisted_ip(identifier) {
@@ -68,7 +78,18 @@ fn is_whitelisted_ip(identifier: &str) -> bool {
     raw.split(',').any(|ip| ip.trim() == identifier)
 }
 
-/// Extract client IP from request headers (X-Forwarded-For or peer addr).
+/// Extrait l'IP client depuis les headers set par un reverse proxy
+/// (`X-Forwarded-For` en priorité, `X-Real-IP` en fallback). Renvoie
+/// une string vide `""` quand aucun header n'est présent — ce qui
+/// signale un appel direct (dev local, tests, ou déploiement mal
+/// configuré derrière un proxy qui n'écrit pas ces headers).
+///
+/// Retourner `""` (au lieu de l'ancienne sentinel `"unknown"`) évite un
+/// bucket rate-limit partagé qui bloquerait tous les callers sans IP
+/// après N requêtes. Cf. `RateLimiter::check` qui skip naturellement
+/// quand l'identifier est vide. Pour les usages hors rate-limit
+/// (audit log, storage IP source), une string vide signale bien
+/// "IP inconnue" et se sérialise proprement.
 pub fn extract_ip(headers: &axum::http::HeaderMap) -> String {
     headers
         .get("x-forwarded-for")
@@ -81,5 +102,6 @@ pub fn extract_ip(headers: &axum::http::HeaderMap) -> String {
                 .and_then(|v| v.to_str().ok())
                 .map(|s| s.to_string())
         })
-        .unwrap_or_else(|| "unknown".to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_default()
 }

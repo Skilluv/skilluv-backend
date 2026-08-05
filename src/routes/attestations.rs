@@ -11,13 +11,15 @@
 use axum::extract::{Path, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use serde::Deserialize;
-use serde_json::{Value, json};
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::AppState;
+use crate::api_response::ApiResponse;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
+use crate::services::attestations::Attestation;
 use crate::services::{AttestationsService, CompagnonnageParams};
 
 pub fn attestation_routes() -> Router<AppState> {
@@ -28,77 +30,153 @@ pub fn attestation_routes() -> Router<AppState> {
         .route("/attestations/{id}/revoke", post(revoke_attestation))
 }
 
-fn build_response(data: Value) -> Value {
-    json!({
-        "data": data,
-        "meta": {
-            "request_id": Uuid::new_v4().to_string(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-        }
-    })
+#[derive(Debug, Serialize, ToSchema)]
+pub struct UserAttestationsResponse {
+    pub attestations: Vec<Attestation>,
+}
+
+/// Verification result — one of the three shapes an attestation
+/// lookup can produce: valid, revoked, or not-found. Discriminated on
+/// `valid` + `reason`.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AttestationVerifyResponse {
+    pub valid: bool,
+    /// Present only when `valid == false`. `"revoked"` or `"not_found"`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attestation: Option<Attestation>,
+    /// Present only when `valid == true`. Client-facing URL echoed for
+    /// convenience.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub verification_url: Option<String>,
 }
 
 // ═══════════════════════════════════════════════════════════════════
 // GET /api/users/{user_id}/attestations
 // ═══════════════════════════════════════════════════════════════════
 
-async fn list_user_attestations(
+/// Public portfolio: every non-revoked attestation the user has been
+/// awarded. Used by the profile page and the recruiter portfolio view.
+#[utoipa::path(
+    get,
+    path = "/api/users/{user_id}/attestations",
+    tag = "profile",
+    params(("user_id" = Uuid, Path, description = "User UUID")),
+    responses(
+        (status = 200, description = "User's public attestations", body = ApiResponse<UserAttestationsResponse>),
+    ),
+)]
+pub async fn list_user_attestations(
     State(state): State<AppState>,
     Path(user_id): Path<Uuid>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<UserAttestationsResponse>>, AppError> {
     let attestations = AttestationsService::list_public_by_user(&state.db, user_id).await?;
-    Ok(Json(build_response(
-        json!({ "attestations": attestations }),
-    )))
+    Ok(Json(ApiResponse::new(UserAttestationsResponse {
+        attestations,
+    })))
 }
 
 // ═══════════════════════════════════════════════════════════════════
 // GET /api/attestations/verify/{code}
 // ═══════════════════════════════════════════════════════════════════
 
-async fn verify_attestation(
+/// Public verification endpoint. Returns 200 with a discriminated
+/// `AttestationVerifyResponse` for all three outcomes (valid, revoked,
+/// not-found) so third-party verifiers can render each state without
+/// re-implementing error decoding.
+#[utoipa::path(
+    get,
+    path = "/api/attestations/verify/{code}",
+    tag = "profile",
+    params(("code" = String, Path, description = "Verification code")),
+    responses(
+        (status = 200, description = "Verification result", body = ApiResponse<AttestationVerifyResponse>),
+    ),
+)]
+pub async fn verify_attestation(
     State(state): State<AppState>,
     Path(code): Path<String>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<AttestationVerifyResponse>>, AppError> {
     let attestation = AttestationsService::verify_by_code(&state.db, &code).await?;
 
-    match attestation {
-        Some(a) if a.revoked_at.is_none() => Ok(Json(build_response(json!({
-            "valid": true,
-            "attestation": a,
-            "verification_url": format!("/attestations/verify/{}", a.verification_code),
-        })))),
-        Some(a) => Ok(Json(build_response(json!({
-            "valid": false,
-            "reason": "revoked",
-            "attestation": a,
-        })))),
-        None => Ok(Json(build_response(json!({
-            "valid": false,
-            "reason": "not_found",
-        })))),
-    }
+    let resp = match attestation {
+        Some(a) if a.revoked_at.is_none() => AttestationVerifyResponse {
+            valid: true,
+            reason: None,
+            verification_url: Some(format!("/attestations/verify/{}", a.verification_code)),
+            attestation: Some(a),
+        },
+        Some(a) => AttestationVerifyResponse {
+            valid: false,
+            reason: Some("revoked".to_string()),
+            attestation: Some(a),
+            verification_url: None,
+        },
+        None => AttestationVerifyResponse {
+            valid: false,
+            reason: Some("not_found".to_string()),
+            attestation: None,
+            verification_url: None,
+        },
+    };
+    Ok(Json(ApiResponse::new(resp)))
 }
 
 // ═══════════════════════════════════════════════════════════════════
 // POST /api/attestations/compagnonnage
 // ═══════════════════════════════════════════════════════════════════
 
-#[derive(Deserialize)]
-struct CompagnonnageBody {
-    user_id: Uuid,
-    project_id: Uuid,
-    title: String,
-    description: String,
-    linked_deliverable_ids: Vec<Uuid>,
-    linked_skill_node_ids: Vec<Uuid>,
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CompagnonnageBody {
+    pub user_id: Uuid,
+    pub project_id: Uuid,
+    #[schema(max_length = 10000)]
+    pub title: String,
+    #[schema(max_length = 10000)]
+    pub description: String,
+    pub linked_deliverable_ids: Vec<Uuid>,
+    pub linked_skill_node_ids: Vec<Uuid>,
 }
 
-async fn issue_compagnonnage(
+#[derive(Debug, Serialize, ToSchema)]
+pub struct IssueAttestationResponse {
+    pub attestation_id: Uuid,
+    pub message: String,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct RevokeBody {
+    #[schema(max_length = 10000)]
+    pub reason: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct RevokeAttestationResponse {
+    pub attestation_id: Uuid,
+    pub revoked: bool,
+}
+
+/// Steward-only: issue a compagnonnage attestation to a user for
+/// work on a project. Caller must be an active steward on the
+/// project OR an admin.
+#[utoipa::path(
+    post,
+    path = "/api/attestations/compagnonnage",
+    tag = "profile",
+    request_body = CompagnonnageBody,
+    responses(
+        (status = 200, description = "Attestation issued", body = ApiResponse<IssueAttestationResponse>),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Caller is not a steward of the project", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn issue_compagnonnage(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<CompagnonnageBody>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<IssueAttestationResponse>>, AppError> {
     // Vérifier que le user courant est bien steward du projet
     let is_steward: bool = sqlx::query_scalar(
         "SELECT EXISTS (
@@ -138,27 +216,36 @@ async fn issue_compagnonnage(
         let _ = crate::services::proof_hooks::recompute_all_for_user(&db_clone, recipient_id).await;
     });
 
-    Ok(Json(build_response(json!({
-        "attestation_id": id,
-        "message": "Compagnonnage attestation issued."
-    }))))
+    Ok(Json(ApiResponse::new(IssueAttestationResponse {
+        attestation_id: id,
+        message: "Compagnonnage attestation issued.".to_string(),
+    })))
 }
 
 // ═══════════════════════════════════════════════════════════════════
 // POST /api/attestations/{id}/revoke
 // ═══════════════════════════════════════════════════════════════════
 
-#[derive(Deserialize)]
-struct RevokeBody {
-    reason: String,
-}
-
-async fn revoke_attestation(
+/// Admin only: revoke an attestation with an audit reason.
+#[utoipa::path(
+    post,
+    path = "/api/attestations/{id}/revoke",
+    tag = "admin",
+    params(("id" = Uuid, Path, description = "Attestation UUID")),
+    request_body = RevokeBody,
+    responses(
+        (status = 200, description = "Attestation revoked", body = ApiResponse<RevokeAttestationResponse>),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn revoke_attestation(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
     Json(body): Json<RevokeBody>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<RevokeAttestationResponse>>, AppError> {
     // Réservé aux admins
     let role: String = sqlx::query_scalar("SELECT role FROM users WHERE id = $1")
         .bind(auth.user_id)
@@ -169,8 +256,8 @@ async fn revoke_attestation(
     }
 
     AttestationsService::revoke(&state.db, id, Some(auth.user_id), body.reason).await?;
-    Ok(Json(build_response(json!({
-        "attestation_id": id,
-        "revoked": true,
-    }))))
+    Ok(Json(ApiResponse::new(RevokeAttestationResponse {
+        attestation_id: id,
+        revoked: true,
+    })))
 }

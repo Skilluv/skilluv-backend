@@ -32,12 +32,26 @@ struct FeedItem {
     payload: Value,
 }
 
-#[derive(Deserialize)]
-struct FeedQuery {
-    limit: Option<i64>,
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+pub struct FeedQuery {
+    /// Max items — clamped to `[1, 100]`. Defaults to 30.
+    pub limit: Option<i64>,
 }
 
-async fn my_feed(
+/// Personal feed: caller's recent submissions + comments + received
+/// mentions, merged and sorted by time.
+#[utoipa::path(
+    get,
+    path = "/api/feed/me",
+    tag = "feed",
+    params(FeedQuery),
+    responses(
+        (status = 200, description = "Feed items", body = serde_json::Value),
+        (status = 401, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn my_feed(
     State(state): State<AppState>,
     auth: AuthUser,
     headers: HeaderMap,
@@ -167,7 +181,21 @@ async fn my_feed(
 ///
 /// Chaque item porte un `weight` et un `happened_at` ; le tri final est
 /// pondéré (score = weight × recency_penalty). Limit clampé à [1,100].
-async fn for_you_feed(
+/// P12.3 — "For you" feed: personalised mix of open slices in
+/// favourite projects, slice recommendations near a level-up, new
+/// challenges in enrolled tracks, and recent community attestations.
+#[utoipa::path(
+    get,
+    path = "/api/feed/for-you",
+    tag = "feed",
+    params(FeedQuery),
+    responses(
+        (status = 200, description = "Personalised feed", body = serde_json::Value),
+        (status = 401, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn for_you_feed(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<FeedQuery>,

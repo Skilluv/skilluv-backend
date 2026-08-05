@@ -1,10 +1,11 @@
 use axum::extract::State;
 use axum::routing::get;
 use axum::{Json, Router};
-use serde_json::json;
-use uuid::Uuid;
+use serde::Serialize;
+use utoipa::ToSchema;
 
 use crate::AppState;
+use crate::api_response::ApiResponse;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
 use crate::models::Enterprise;
@@ -13,16 +14,6 @@ pub fn enterprise_dashboard_routes() -> Router<AppState> {
     Router::new()
         .route("/enterprise/dashboard/platform-stats", get(platform_stats))
         .route("/enterprise/dashboard/my-stats", get(my_stats))
-}
-
-fn build_response(data: serde_json::Value) -> serde_json::Value {
-    json!({
-        "data": data,
-        "meta": {
-            "request_id": Uuid::new_v4().to_string(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-        }
-    })
 }
 
 async fn require_enterprise(state: &AppState, auth: &AuthUser) -> Result<Enterprise, AppError> {
@@ -46,11 +37,62 @@ struct TitleCount {
     count: i64,
 }
 
-// GET /api/enterprise/dashboard/platform-stats
-async fn platform_stats(
+#[derive(Debug, Serialize, ToSchema)]
+pub struct DomainBucket {
+    pub domain: String,
+    pub count: i64,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct TitleBucket {
+    pub title: String,
+    pub count: i64,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PlatformStatsResponse {
+    pub total_talents: i64,
+    pub by_domain: Vec<DomainBucket>,
+    pub by_title: Vec<TitleBucket>,
+    /// Rounded to nearest integer.
+    pub avg_fragments: i64,
+    pub active_last_30d: i64,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct InterestRequestsBreakdown {
+    pub total: i64,
+    pub pending: i64,
+    pub accepted: i64,
+    pub declined: i64,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct MyStatsResponse {
+    pub bookmarks: i64,
+    pub talent_lists: i64,
+    pub interest_requests: InterestRequestsBreakdown,
+    pub active_conversations: i64,
+    pub team_size: i64,
+}
+
+/// Platform-wide talent-pool aggregates visible to any enterprise.
+/// Bucketed by skill_domain and title.
+#[utoipa::path(
+    get,
+    path = "/api/enterprise/dashboard/platform-stats",
+    tag = "enterprise",
+    responses(
+        (status = 200, description = "Platform aggregates", body = ApiResponse<PlatformStatsResponse>),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Caller has no enterprise", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn platform_stats(
     State(state): State<AppState>,
     auth: AuthUser,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<PlatformStatsResponse>>, AppError> {
     let _enterprise = require_enterprise(&state, &auth).await?;
 
     let total_talents: i64 = sqlx::query_scalar(
@@ -83,20 +125,43 @@ async fn platform_stats(
     .fetch_one(&state.db)
     .await?;
 
-    Ok(Json(build_response(json!({
-        "total_talents": total_talents,
-        "by_domain": by_domain.iter().map(|d| json!({"domain": d.skill_domain, "count": d.count})).collect::<Vec<_>>(),
-        "by_title": by_title.iter().map(|t| json!({"title": t.title, "count": t.count})).collect::<Vec<_>>(),
-        "avg_fragments": avg_fragments.unwrap_or(0.0).round() as i64,
-        "active_last_30d": active_last_30d,
-    }))))
+    Ok(Json(ApiResponse::new(PlatformStatsResponse {
+        total_talents,
+        by_domain: by_domain
+            .iter()
+            .map(|d| DomainBucket {
+                domain: d.skill_domain.clone(),
+                count: d.count,
+            })
+            .collect(),
+        by_title: by_title
+            .iter()
+            .map(|t| TitleBucket {
+                title: t.title.clone(),
+                count: t.count,
+            })
+            .collect(),
+        avg_fragments: avg_fragments.unwrap_or(0.0).round() as i64,
+        active_last_30d,
+    })))
 }
 
-// GET /api/enterprise/dashboard/my-stats
-async fn my_stats(
+/// Enterprise-scoped stats: bookmarks / lists / interest-request funnel
+/// / active conversations / team size.
+#[utoipa::path(
+    get,
+    path = "/api/enterprise/dashboard/my-stats",
+    tag = "enterprise",
+    responses(
+        (status = 200, description = "Enterprise stats", body = ApiResponse<MyStatsResponse>),
+        (status = 403, description = "Caller has no enterprise", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn my_stats(
     State(state): State<AppState>,
     auth: AuthUser,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<MyStatsResponse>>, AppError> {
     let enterprise = require_enterprise(&state, &auth).await?;
 
     let bookmarks_count: i64 =
@@ -152,16 +217,16 @@ async fn my_stats(
     .fetch_one(&state.db)
     .await?;
 
-    Ok(Json(build_response(json!({
-        "bookmarks": bookmarks_count,
-        "talent_lists": lists_count,
-        "interest_requests": {
-            "total": interests_sent,
-            "pending": interests_pending,
-            "accepted": interests_accepted,
-            "declined": interests_declined,
+    Ok(Json(ApiResponse::new(MyStatsResponse {
+        bookmarks: bookmarks_count,
+        talent_lists: lists_count,
+        interest_requests: InterestRequestsBreakdown {
+            total: interests_sent,
+            pending: interests_pending,
+            accepted: interests_accepted,
+            declined: interests_declined,
         },
-        "active_conversations": active_conversations,
-        "team_size": team_size,
-    }))))
+        active_conversations,
+        team_size,
+    })))
 }

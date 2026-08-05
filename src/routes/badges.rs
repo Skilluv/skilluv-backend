@@ -13,10 +13,11 @@ use axum::extract::{Path, State};
 use axum::routing::get;
 use axum::{Json, Router};
 use serde::Serialize;
-use serde_json::{Value, json};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::AppState;
+use crate::api_response::ApiResponse;
 use crate::errors::AppError;
 
 pub fn badge_routes() -> Router<AppState> {
@@ -25,38 +26,63 @@ pub fn badge_routes() -> Router<AppState> {
         .route("/badge-rules", get(list_rules))
 }
 
-fn wrap(data: Value) -> Value {
-    json!({
-        "data": data,
-        "meta": {
-            "request_id": Uuid::new_v4().to_string(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-        }
-    })
+/// Single badge item as returned inside the polymorphic user-badges
+/// response. `output_type` is what tells the front whether this is a
+/// skill patch, medal, seal, stamp, or guild crest.
+#[derive(Debug, Clone, Serialize, sqlx::FromRow, ToSchema)]
+pub struct BadgeItem {
+    pub rule_slug: Option<String>,
+    /// `"skill_patch"`, `"medal"`, `"challenge_seal"`, `"event_stamp"`, `"guild_crest"`.
+    pub output_type: Option<String>,
+    pub output_variant: Option<String>,
+    pub display_name: Option<String>,
+    /// `"common"`, `"rare"`, `"epic"`, `"legendary"`.
+    pub rarity: String,
+    pub earned_at: chrono::DateTime<chrono::Utc>,
+    pub source_proofs_count: i64,
 }
 
-#[derive(Debug, Serialize, sqlx::FromRow)]
-struct BadgeItem {
-    rule_slug: Option<String>,
-    output_type: Option<String>,
-    output_variant: Option<String>,
-    display_name: Option<String>,
-    rarity: String,
-    earned_at: chrono::DateTime<chrono::Utc>,
-    source_proofs_count: i64,
+/// Current user rank + optional previous rank for the "promoted from"
+/// UI accent. Falls back to a stub `apprenti` row for users pre-P18.
+#[derive(Debug, Clone, Serialize, sqlx::FromRow, ToSchema)]
+pub struct RankRow {
+    /// One of `apprenti`, `compagnon`, `maitre`, `doyen`.
+    pub rank: String,
+    pub achieved_at: chrono::DateTime<chrono::Utc>,
+    pub previous_rank: Option<String>,
 }
 
-#[derive(Debug, Serialize, sqlx::FromRow)]
-struct RankRow {
-    rank: String,
-    achieved_at: chrono::DateTime<chrono::Utc>,
-    previous_rank: Option<String>,
+#[derive(Debug, Serialize, ToSchema)]
+pub struct UserBadgesResponse {
+    pub user_id: Uuid,
+    pub rank: RankRow,
+    pub skill_patches: Vec<BadgeItem>,
+    pub medals: Vec<BadgeItem>,
+    /// Aggregated count (not the full list — challenge seals can be
+    /// numerous, front pages them separately).
+    pub challenge_seals_count: usize,
+    pub event_stamps_count: usize,
+    pub guild_crests: Vec<BadgeItem>,
+    pub total_badges: usize,
 }
 
-async fn user_badges(
+/// Polymorphic badges endpoint — returns every badge family the user
+/// has earned, plus their current rank. Falls back to a stub
+/// `apprenti` rank for accounts predating the P18 auto-creation
+/// trigger so the front contract stays stable.
+#[utoipa::path(
+    get,
+    path = "/api/users/{id}/badges",
+    tag = "profile",
+    params(("id" = Uuid, Path, description = "User UUID")),
+    responses(
+        (status = 200, description = "User badges + rank snapshot", body = ApiResponse<UserBadgesResponse>),
+    ),
+)]
+pub async fn user_badges(
     State(state): State<AppState>,
     Path(user_id): Path<Uuid>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<UserBadgesResponse>>, AppError> {
     let items: Vec<BadgeItem> = sqlx::query_as(
         r#"
         SELECT
@@ -93,12 +119,13 @@ async fn user_badges(
     });
 
     // Split par output_type pour lecture frontend simple.
-    let mut skill_patches: Vec<&BadgeItem> = Vec::new();
-    let mut medals: Vec<&BadgeItem> = Vec::new();
-    let mut seals: Vec<&BadgeItem> = Vec::new();
-    let mut stamps: Vec<&BadgeItem> = Vec::new();
-    let mut crests: Vec<&BadgeItem> = Vec::new();
-    for it in &items {
+    let mut skill_patches: Vec<BadgeItem> = Vec::new();
+    let mut medals: Vec<BadgeItem> = Vec::new();
+    let mut seals: Vec<BadgeItem> = Vec::new();
+    let mut stamps: Vec<BadgeItem> = Vec::new();
+    let mut crests: Vec<BadgeItem> = Vec::new();
+    let total = items.len();
+    for it in items {
         match it.output_type.as_deref() {
             Some("skill_patch") => skill_patches.push(it),
             Some("medal") => medals.push(it),
@@ -109,31 +136,52 @@ async fn user_badges(
         }
     }
 
-    Ok(Json(wrap(json!({
-        "user_id": user_id,
-        "rank": rank,
-        "skill_patches": skill_patches,
-        "medals": medals,
-        "challenge_seals_count": seals.len(),
-        "event_stamps_count": stamps.len(),
-        "guild_crests": crests,
-        "total_badges": items.len(),
-    }))))
+    Ok(Json(ApiResponse::new(UserBadgesResponse {
+        user_id,
+        rank,
+        skill_patches,
+        medals,
+        challenge_seals_count: seals.len(),
+        event_stamps_count: stamps.len(),
+        guild_crests: crests,
+        total_badges: total,
+    })))
 }
 
-#[derive(Debug, Serialize, sqlx::FromRow)]
-struct RuleCatalogRow {
-    slug: String,
-    output_type: String,
-    output_variant: Option<String>,
-    display_name: String,
-    description: String,
-    icon_key: Option<String>,
-    rarity: String,
-    conditions: serde_json::Value,
+/// Row from the public badge-rules catalog. Conditions payload is
+/// left as free-form JSON since each `output_type` defines its own
+/// shape (see `badge_rules_engine`).
+#[derive(Debug, Serialize, sqlx::FromRow, ToSchema)]
+pub struct RuleCatalogRow {
+    pub slug: String,
+    pub output_type: String,
+    pub output_variant: Option<String>,
+    pub display_name: String,
+    pub description: String,
+    pub icon_key: Option<String>,
+    pub rarity: String,
+    /// Free-form condition payload (schema depends on output_type).
+    pub conditions: serde_json::Value,
 }
 
-async fn list_rules(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
+#[derive(Debug, Serialize, ToSchema)]
+pub struct RulesCatalogResponse {
+    pub rules: Vec<RuleCatalogRow>,
+}
+
+/// Public catalog of every non-deprecated badge rule. Front uses it
+/// for the "voici tous les badges gagnables" screen.
+#[utoipa::path(
+    get,
+    path = "/api/badge-rules",
+    tag = "profile",
+    responses(
+        (status = 200, description = "Badge rules catalog", body = ApiResponse<RulesCatalogResponse>),
+    ),
+)]
+pub async fn list_rules(
+    State(state): State<AppState>,
+) -> Result<Json<ApiResponse<RulesCatalogResponse>>, AppError> {
     let rows: Vec<RuleCatalogRow> = sqlx::query_as(
         "SELECT slug, output_type, output_variant, display_name, description,
                 icon_key, rarity, conditions
@@ -142,5 +190,5 @@ async fn list_rules(State(state): State<AppState>) -> Result<Json<Value>, AppErr
     )
     .fetch_all(&state.db)
     .await?;
-    Ok(Json(wrap(json!({ "rules": rows }))))
+    Ok(Json(ApiResponse::new(RulesCatalogResponse { rules: rows })))
 }

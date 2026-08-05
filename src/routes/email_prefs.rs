@@ -5,13 +5,15 @@ use axum::http::StatusCode;
 use axum::response::Html;
 use axum::routing::{get, post, put};
 use axum::{Json, Router};
-use serde::Deserialize;
-use serde_json::{Value, json};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use utoipa::{IntoParams, ToSchema};
 
 use crate::AppState;
+use crate::api_response::ApiResponse;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
-use crate::services::digest;
+use crate::services::digest::{self, DigestRunReport};
 
 pub fn email_prefs_routes() -> Router<AppState> {
     Router::new()
@@ -22,25 +24,44 @@ pub fn email_prefs_routes() -> Router<AppState> {
         .route("/admin/digest/run-weekly", post(admin_run_weekly_digest))
 }
 
-fn build_response(data: Value) -> Value {
-    json!({
-        "data": data,
-        "meta": {
-            "request_id": uuid::Uuid::new_v4().to_string(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-        }
-    })
+#[derive(Debug, Serialize, sqlx::FromRow, ToSchema)]
+pub struct EmailPrefs {
+    /// Opt-in to the weekly activity digest.
+    pub digest_weekly: bool,
+    /// Opt-in to the daily streak-at-risk reminder.
+    pub streak_reminder: bool,
+    /// Opt-in to marketing / product-news emails.
+    pub marketing: bool,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
 }
 
-#[derive(serde::Serialize, sqlx::FromRow)]
-struct EmailPrefs {
-    digest_weekly: bool,
-    streak_reminder: bool,
-    marketing: bool,
-    updated_at: chrono::DateTime<chrono::Utc>,
+#[derive(Debug, Serialize, ToSchema)]
+pub struct EmailPrefsResponse {
+    pub preferences: EmailPrefs,
 }
 
-async fn get_prefs(State(state): State<AppState>, auth: AuthUser) -> Result<Json<Value>, AppError> {
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AdminDigestResponse {
+    pub digest: DigestRunReport,
+}
+
+/// Read the caller's email preferences. Rows are lazily upserted with
+/// the marketing-opt-out defaults on first read — the endpoint always
+/// returns a full record.
+#[utoipa::path(
+    get,
+    path = "/api/auth/me/email-preferences",
+    tag = "auth",
+    responses(
+        (status = 200, description = "Current preferences", body = ApiResponse<EmailPrefsResponse>),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn get_prefs(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Json<ApiResponse<EmailPrefsResponse>>, AppError> {
     // Upsert defaults on first read.
     let prefs: EmailPrefs = sqlx::query_as(
         r#"
@@ -54,21 +75,36 @@ async fn get_prefs(State(state): State<AppState>, auth: AuthUser) -> Result<Json
     .fetch_one(&state.db)
     .await?;
 
-    Ok(Json(build_response(json!({ "preferences": prefs }))))
+    Ok(Json(ApiResponse::new(EmailPrefsResponse {
+        preferences: prefs,
+    })))
 }
 
-#[derive(Deserialize)]
-struct UpdatePrefsRequest {
-    digest_weekly: Option<bool>,
-    streak_reminder: Option<bool>,
-    marketing: Option<bool>,
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UpdatePrefsRequest {
+    pub digest_weekly: Option<bool>,
+    pub streak_reminder: Option<bool>,
+    pub marketing: Option<bool>,
 }
 
-async fn update_prefs(
+/// Partial update of the caller's email preferences. Any missing
+/// field keeps its current value (COALESCE-based upsert).
+#[utoipa::path(
+    put,
+    path = "/api/auth/me/email-preferences",
+    tag = "auth",
+    request_body = UpdatePrefsRequest,
+    responses(
+        (status = 200, description = "Updated preferences", body = ApiResponse<EmailPrefsResponse>),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn update_prefs(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<UpdatePrefsRequest>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<EmailPrefsResponse>>, AppError> {
     let prefs: EmailPrefs = sqlx::query_as(
         r#"
         INSERT INTO user_email_preferences (user_id, digest_weekly, streak_reminder, marketing)
@@ -88,19 +124,36 @@ async fn update_prefs(
     .fetch_one(&state.db)
     .await?;
 
-    Ok(Json(build_response(json!({ "preferences": prefs }))))
+    Ok(Json(ApiResponse::new(EmailPrefsResponse {
+        preferences: prefs,
+    })))
 }
 
-#[derive(Deserialize)]
-struct UnsubscribeQuery {
-    token: String,
-    kind: String,
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct UnsubscribeQuery {
+    /// HMAC-signed unsubscribe token embedded in the email footer.
+    pub token: String,
+    /// One of `digest_weekly`, `streak_reminder`, `marketing`.
+    pub kind: String,
 }
 
-/// One-click unsubscribe. No login required. Token is HMAC-signed; only the targeted
-/// user can land here (or admin with full secret access). Returns a plain HTML
-/// confirmation suitable for showing in a browser.
-async fn unsubscribe(
+/// One-click unsubscribe. No login required. Token is HMAC-signed;
+/// only the targeted user can land here (or admin with full secret
+/// access). Returns a plain HTML confirmation suitable for showing in
+/// a browser — **not** JSON, so this endpoint is intentionally left
+/// out of the ApiResponse envelope.
+#[utoipa::path(
+    get,
+    path = "/api/email/unsubscribe",
+    tag = "auth",
+    params(UnsubscribeQuery),
+    responses(
+        (status = 200, description = "HTML confirmation page", content_type = "text/html"),
+        (status = 400, description = "Unsupported unsubscribe kind or kind/token mismatch", body = crate::api_response::ErrorResponse),
+        (status = 401, description = "Invalid or forged token", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn unsubscribe(
     State(state): State<AppState>,
     Query(query): Query<UnsubscribeQuery>,
 ) -> Result<Html<String>, AppError> {
@@ -150,20 +203,40 @@ async fn unsubscribe(
     )))
 }
 
-#[derive(Deserialize)]
-struct BrevoWebhookQuery {
-    token: String,
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct BrevoWebhookQuery {
+    /// Shared secret matching `BREVO_WEBHOOK_TOKEN` env var.
+    pub token: String,
 }
 
 /// Brevo webhook for delivery / bounce / complaint events.
 /// Authenticated via `?token=...` matching `BREVO_WEBHOOK_TOKEN`.
-async fn brevo_webhook(
+/// Body shape is defined by Brevo (event, email, message-id, ts) and
+/// documented as a free-form JSON blob since Brevo evolves it.
+#[utoipa::path(
+    post,
+    path = "/api/webhooks/brevo",
+    tag = "webhooks",
+    params(BrevoWebhookQuery),
+    request_body(content = serde_json::Value, description = "Raw Brevo event payload"),
+    responses(
+        (status = 200, description = "Event processed (or intentionally ignored)"),
+        (status = 401, description = "Token mismatch", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn brevo_webhook(
     State(state): State<AppState>,
     Query(q): Query<BrevoWebhookQuery>,
     Json(body): Json<Value>,
 ) -> Result<StatusCode, AppError> {
-    let expected = std::env::var("BREVO_WEBHOOK_TOKEN")
-        .map_err(|_| AppError::Internal("BREVO_WEBHOOK_TOKEN not set".into()))?;
+    // BREVO_WEBHOOK_TOKEN absent (dev/CI/deployments sans Brevo) : ack
+    // silencieusement le webhook avec 200. Best-practice pour webhooks
+    // externes — un non-200 declenche des retries indefinis. On log
+    // pour observabilite.
+    let Ok(expected) = std::env::var("BREVO_WEBHOOK_TOKEN") else {
+        tracing::warn!("Brevo webhook received but BREVO_WEBHOOK_TOKEN not set — acking silently");
+        return Ok(StatusCode::OK);
+    };
     if q.token != expected {
         return Err(AppError::Unauthorized);
     }
@@ -249,10 +322,24 @@ async fn brevo_webhook(
     Ok(StatusCode::OK)
 }
 
-async fn admin_run_weekly_digest(
+/// Admin-only: manually kick off a weekly digest run. Same job the
+/// cron worker triggers automatically. Returns per-bucket counters
+/// for verification.
+#[utoipa::path(
+    post,
+    path = "/api/admin/digest/run-weekly",
+    tag = "admin",
+    responses(
+        (status = 200, description = "Digest run complete", body = ApiResponse<AdminDigestResponse>),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_run_weekly_digest(
     State(state): State<AppState>,
     auth: AuthUser,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Json<ApiResponse<AdminDigestResponse>>, AppError> {
     if auth.role != "admin" {
         return Err(AppError::Forbidden);
     }
@@ -264,7 +351,9 @@ async fn admin_run_weekly_digest(
         unsubscribe_secret: &secret,
     };
     let report = svc.run_weekly().await?;
-    Ok(Json(build_response(json!({ "digest": report }))))
+    Ok(Json(ApiResponse::new(AdminDigestResponse {
+        digest: report,
+    })))
 }
 
 /// Derive the unsubscribe-token HMAC key from JWT_SECRET. Avoids a separate secret in env.

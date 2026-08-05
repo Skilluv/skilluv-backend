@@ -44,12 +44,18 @@ pub fn slice_routes() -> Router<AppState> {
 // Query / body types
 // ═══════════════════════════════════════════════════════════════════
 
-#[derive(Debug, Deserialize)]
-struct ListQuery {
+#[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
+pub struct ListQuery {
+    #[param(pattern = r"^(code|design|game|security|ops|ai|soft_skills)$")]
     domain: Option<String>,
+    #[param(minimum = 1, maximum = 5)]
     difficulty: Option<i16>,
     project_id: Option<Uuid>,
+    #[param(minimum = 1, maximum = 100000)]
     page: Option<i64>,
+    #[param(minimum = 1, maximum = 100)]
     per_page: Option<i64>,
 }
 
@@ -83,10 +89,32 @@ fn build_response(data: serde_json::Value) -> serde_json::Value {
 ///
 /// Liste paginée des slices `status='open'`. Public (pas d'auth requise) pour que
 /// les visiteurs découvrent l'offre. Trié par difficulty ASC, created_at DESC.
-async fn list_open(
+/// Paginated open slices. Filter on domain / difficulty / project.
+/// Public — no auth required.
+#[utoipa::path(
+    get,
+    path = "/api/slices",
+    tag = "projects",
+    params(ListQuery),
+    responses((status = 200, body = serde_json::Value)),
+)]
+pub async fn list_open(
     State(state): State<AppState>,
     Query(query): Query<ListQuery>,
 ) -> Result<Json<serde_json::Value>, AppError> {
+    if let Some(d) = &query.domain
+        && !matches!(
+            d.as_str(),
+            "code" | "design" | "game" | "security" | "ops" | "ai" | "soft_skills"
+        )
+    {
+        return Err(AppError::Validation(
+            "domain must be one of: code, design, game, security, ops, ai, soft_skills".into(),
+        ));
+    }
+    crate::validators::check_range_opt(query.difficulty.map(i64::from), "difficulty", 1, 5)?;
+    crate::validators::check_range_opt(query.page, "page", 1, 100_000)?;
+    crate::validators::check_range_opt(query.per_page, "per_page", 1, 100)?;
     let filter: SlicesListFilter = query.into();
     let per_page = filter.per_page.clamp(1, 100);
     let page = filter.page.max(1);
@@ -117,7 +145,18 @@ async fn list_open(
 /// GET /api/slices/{id}
 ///
 /// Détail public d'une slice (peu importe son status — le status est dans la réponse).
-async fn get_slice(
+/// Public slice detail.
+#[utoipa::path(
+    get,
+    path = "/api/slices/{id}",
+    tag = "projects",
+    params(("id" = Uuid, Path)),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 404, body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn get_slice(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, AppError> {
@@ -128,7 +167,19 @@ async fn get_slice(
 /// POST /api/slices/{id}/claim
 ///
 /// Auth requis. Le user claim la slice pour 7 jours.
-async fn claim_slice(
+/// Claim a slice for 7 days (individual claim).
+#[utoipa::path(
+    post,
+    path = "/api/slices/{id}/claim",
+    tag = "projects",
+    params(("id" = Uuid, Path)),
+    responses(
+        (status = 201, body = serde_json::Value),
+        (status = 400, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn claim_slice(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -147,7 +198,16 @@ async fn claim_slice(
 /// POST /api/slices/{id}/unclaim
 ///
 /// Auth requis. Le user relâche sa slice (retour au pool `open`).
-async fn unclaim_slice(
+/// Release a slice back to the open pool.
+#[utoipa::path(
+    post,
+    path = "/api/slices/{id}/unclaim",
+    tag = "projects",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn unclaim_slice(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -163,7 +223,15 @@ async fn unclaim_slice(
 /// GET /api/users/me/slices
 ///
 /// Auth requis. Liste des slices claimed/in_review par le user courant.
-async fn my_slices(
+/// List slices claimed / in-review by the caller.
+#[utoipa::path(
+    get,
+    path = "/api/users/me/slices",
+    tag = "projects",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn my_slices(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<serde_json::Value>, AppError> {
@@ -176,13 +244,13 @@ async fn my_slices(
 // P10.1 : claim collectif par une team persistente
 // ═══════════════════════════════════════════════════════════════════
 
-#[derive(Debug, Deserialize)]
-struct ClaimAsTeamBody {
+#[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+pub struct ClaimAsTeamBody {
     team_id: Uuid,
 }
 
 /// Vérifie que le user est membre de la team (best-effort validation).
-async fn require_team_member(
+pub async fn require_team_member(
     db: &sqlx::PgPool,
     team_id: Uuid,
     user_id: Uuid,
@@ -202,7 +270,20 @@ async fn require_team_member(
 /// POST /api/slices/{id}/claim-as-team
 ///
 /// Auth requis + être membre de la team. Claim collectif 7 jours.
-async fn claim_slice_as_team(
+/// Team claim (7-day collective lock).
+#[utoipa::path(
+    post,
+    path = "/api/slices/{id}/claim-as-team",
+    tag = "projects",
+    params(("id" = Uuid, Path)),
+    request_body = ClaimAsTeamBody,
+    responses(
+        (status = 201, body = serde_json::Value),
+        (status = 403, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn claim_slice_as_team(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -220,7 +301,20 @@ async fn claim_slice_as_team(
 }
 
 /// POST /api/slices/{id}/unclaim-team
-async fn unclaim_slice_by_team(
+/// Team release.
+#[utoipa::path(
+    post,
+    path = "/api/slices/{id}/unclaim-team",
+    tag = "projects",
+    params(("id" = Uuid, Path)),
+    request_body = ClaimAsTeamBody,
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 403, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn unclaim_slice_by_team(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -237,7 +331,19 @@ async fn unclaim_slice_by_team(
 /// GET /api/teams/{team_id}/slices
 ///
 /// Auth requis + membre de la team. Slices actives de la team.
-async fn team_slices(
+/// Active slices claimed by a team. Requires membership.
+#[utoipa::path(
+    get,
+    path = "/api/teams/{team_id}/slices",
+    tag = "projects",
+    params(("team_id" = Uuid, Path)),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 403, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn team_slices(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(team_id): Path<Uuid>,
@@ -252,7 +358,7 @@ async fn team_slices(
 // ═══════════════════════════════════════════════════════════════════
 
 /// Vérifie que l'user est admin OU steward actif du project.
-async fn require_admin_or_steward(
+pub async fn require_admin_or_steward(
     db: &sqlx::PgPool,
     project_id: Uuid,
     user_id: Uuid,
@@ -272,7 +378,19 @@ async fn require_admin_or_steward(
 /// GET /api/stewards/{project_id}/inbox
 ///
 /// Liste des slices `status='draft'` du project qui attendent validation.
-async fn steward_inbox(
+/// Steward inbox: draft slices awaiting validation for a project.
+#[utoipa::path(
+    get,
+    path = "/api/stewards/{project_id}/inbox",
+    tag = "projects",
+    params(("project_id" = Uuid, Path)),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 403, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn steward_inbox(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(project_id): Path<Uuid>,
@@ -288,7 +406,20 @@ async fn steward_inbox(
 /// POST /api/slices/{id}/publish
 ///
 /// Steward (ou admin) valide la slice draft → status='open'.
-async fn publish_slice(
+/// Steward validates a draft slice → status=open.
+#[utoipa::path(
+    post,
+    path = "/api/slices/{id}/publish",
+    tag = "projects",
+    params(("id" = Uuid, Path)),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 403, body = crate::api_response::ErrorResponse),
+        (status = 404, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn publish_slice(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -317,7 +448,20 @@ async fn publish_slice(
 /// POST /api/slices/{id}/reject
 ///
 /// Steward refuse une slice draft (pas pertinente / hors scope) → status='closed'.
-async fn reject_slice(
+/// Steward rejects a draft slice → status=closed.
+#[utoipa::path(
+    post,
+    path = "/api/slices/{id}/reject",
+    tag = "projects",
+    params(("id" = Uuid, Path)),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 403, body = crate::api_response::ErrorResponse),
+        (status = 404, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn reject_slice(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,

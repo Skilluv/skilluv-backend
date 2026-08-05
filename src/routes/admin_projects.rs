@@ -85,7 +85,15 @@ fn default_true() -> bool {
     true
 }
 
-async fn create_project(
+/// Create a new project (admin curated OSS/enterprise project).
+#[utoipa::path(
+    post, path = "/api/admin/projects", tag = "admin",
+    request_body(content = serde_json::Value),
+    responses((status = 201, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create_project(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<CreateProjectBody>,
@@ -183,7 +191,16 @@ struct PatchProjectBody {
     skilluv_editorial_notes: Option<String>,
 }
 
-async fn patch_project(
+/// Patch a project by slug.
+#[utoipa::path(
+    patch, path = "/api/admin/projects/{slug}", tag = "admin",
+    params(("slug" = String, Path)),
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse), (status = 404, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn patch_project(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(slug): Path<String>,
@@ -254,7 +271,15 @@ async fn patch_project(
 // DELETE /admin/projects/{slug} — soft archive
 // ═══════════════════════════════════════════════════════════════════
 
-async fn archive_project(
+/// Archive a project (soft-delete).
+#[utoipa::path(
+    delete, path = "/api/admin/projects/{slug}", tag = "admin",
+    params(("slug" = String, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse), (status = 404, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn archive_project(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(slug): Path<String>,
@@ -315,7 +340,14 @@ struct ListQuery {
     per_page: Option<i64>,
 }
 
-async fn list_projects(
+/// List projects (admin view).
+#[utoipa::path(
+    get, path = "/api/admin/projects", tag = "admin",
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_projects(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<ListQuery>,
@@ -459,7 +491,15 @@ struct ProjectFullRow {
     archived_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-async fn get_project(
+/// Get a project by slug (admin view).
+#[utoipa::path(
+    get, path = "/api/admin/projects/{slug}", tag = "admin",
+    params(("slug" = String, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse), (status = 404, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn get_project(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(slug): Path<String>,

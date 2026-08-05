@@ -55,10 +55,10 @@ fn build_response_with(data: Value, extra: Value) -> Value {
     json!({ "data": data, "meta": meta })
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
 pub struct DryRunQuery {
     #[serde(default)]
-    dry_run: bool,
+    pub dry_run: bool,
 }
 
 fn validate_slug(s: &str) -> Result<(), AppError> {
@@ -142,7 +142,15 @@ struct CreateRuleBody {
     ui_metadata: Option<Value>,
 }
 
-async fn create_rule(
+/// Admin: create a new badge_rule (proof engine editor).
+#[utoipa::path(
+    post, path = "/api/admin/badge-rules", tag = "admin",
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse), (status = 400, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create_rule(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<CreateRuleBody>,
@@ -261,7 +269,16 @@ struct PatchRuleBody {
     ui_metadata: Option<Value>,
 }
 
-async fn patch_rule(
+/// Admin: edit a badge_rule (rejected if admin_editable=false or deprecated).
+#[utoipa::path(
+    patch, path = "/api/admin/badge-rules/{slug}", tag = "admin",
+    params(("slug" = String, Path), DryRunQuery),
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse), (status = 404, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn patch_rule(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(slug): Path<String>,
@@ -417,7 +434,16 @@ struct DeprecateBody {
     reason: String,
 }
 
-async fn deprecate_rule(
+/// Admin: soft-delete a badge_rule (deprecated_at = NOW).
+#[utoipa::path(
+    post, path = "/api/admin/badge-rules/{slug}/deprecate", tag = "admin",
+    params(("slug" = String, Path), DryRunQuery),
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse), (status = 404, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn deprecate_rule(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(slug): Path<String>,

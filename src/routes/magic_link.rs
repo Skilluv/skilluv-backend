@@ -17,12 +17,13 @@ use axum::http::header::SET_COOKIE;
 use axum::response::{AppendHeaders, IntoResponse};
 use axum::routing::post;
 use axum::{Json, Router};
-use serde::Deserialize;
-use serde_json::{Value, json};
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::AppState;
+use crate::api_response::ApiResponse;
 use crate::errors::AppError;
 use crate::middleware::{RateLimiter, extract_ip};
 use crate::services::{AuthService, SessionService};
@@ -44,16 +45,6 @@ pub fn magic_link_routes() -> Router<AppState> {
         .route("/auth/magic-link/consume", post(consume_link))
 }
 
-fn build_response(data: Value) -> Value {
-    json!({
-        "data": data,
-        "meta": {
-            "request_id": Uuid::new_v4().to_string(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-        }
-    })
-}
-
 fn build_cookie(name: &str, value: &str, max_age_secs: i64, path: &str) -> String {
     format!("{name}={value}; HttpOnly; Secure; SameSite=Lax; Path={path}; Max-Age={max_age_secs}")
 }
@@ -64,31 +55,70 @@ fn hash_token(token: &str) -> Vec<u8> {
     h.finalize().to_vec()
 }
 
-#[derive(Deserialize)]
-struct RequestBody {
-    email: String,
-    /// "login" | "signup". Defaults to "login" ; a signup-intent link creates the user
-    /// on consumption if no account matches the email.
-    intent: Option<String>,
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct MagicLinkRequestBody {
+    #[schema(
+        format = "email",
+        min_length = 5,
+        max_length = 255,
+        example = "user@example.com"
+    )]
+    pub email: String,
+    /// `"login"` (default) or `"signup"`. A signup-intent link creates
+    /// the user on consumption if no account matches the email.
+    #[schema(pattern = r"^(login|signup)$", example = "login")]
+    pub intent: Option<String>,
 }
 
-async fn request_link(
+#[derive(Debug, Serialize, ToSchema)]
+pub struct MagicLinkRequestResponse {
+    /// Always `true` on success — the endpoint never leaks whether the
+    /// email exists, so this flag is symbolic (200 = "we attempted").
+    pub sent: bool,
+    /// TTL of the emailed link, in minutes.
+    pub expires_in_minutes: i64,
+}
+
+/// Request a passwordless login link by email. Rate-limited to 5/min
+/// per IP. Always returns 200 (anti-enumeration) even when the email
+/// send fails silently — the front should not branch on this response
+/// beyond confirming the user to check their inbox.
+#[utoipa::path(
+    post,
+    path = "/api/auth/magic-link/request",
+    tag = "auth",
+    request_body = MagicLinkRequestBody,
+    responses(
+        (status = 200, description = "Link email attempted", body = ApiResponse<MagicLinkRequestResponse>),
+        (status = 400, description = "Invalid email", body = crate::api_response::ErrorResponse),
+        (status = 429, description = "Rate limit hit", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn request_link(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Json(body): Json<RequestBody>,
-) -> Result<Json<Value>, AppError> {
+    Json(body): Json<MagicLinkRequestBody>,
+) -> Result<Json<ApiResponse<MagicLinkRequestResponse>>, AppError> {
     let ip = extract_ip(&headers);
     RateLimiter::check(&mut state.redis.clone(), "magic_link", &ip, 5, 60).await?;
     let email = body.email.trim().to_lowercase();
     if !email.contains('@') || email.len() < 5 || email.len() > 255 {
         return Err(AppError::Validation("invalid email".into()));
     }
-    let intent = body
-        .intent
-        .as_deref()
-        .filter(|s| matches!(*s, "login" | "signup"))
-        .unwrap_or("login")
-        .to_string();
+    // Reject invalid intent explicitement — le schema declare
+    // pattern ^(login|signup)$, donc tout autre string est schema-invalide.
+    // Anciennement on faisait un fallback silencieux sur "login" mais
+    // schemathesis negative_data_rejection flaggait car un input schema-
+    // invalide doit etre rejete (4xx), pas accepte.
+    let intent = match body.intent.as_deref() {
+        None => "login".to_string(),
+        Some(s) if matches!(s, "login" | "signup") => s.to_string(),
+        Some(_) => {
+            return Err(AppError::Validation(
+                "intent must be one of: login, signup".into(),
+            ));
+        }
+    };
     // Generate a 128-bit token, base32 encoded — 26 chars, no padding.
     let raw1 = Uuid::new_v4().as_u128().to_be_bytes();
     let token = base32::encode(base32::Alphabet::Rfc4648 { padding: false }, &raw1);
@@ -128,21 +158,47 @@ async fn request_link(
         .await;
 
     metrics::counter!("skilluv_magic_link_requested_total").increment(1);
-    Ok(Json(build_response(json!({
-        "sent": true,
-        "expires_in_minutes": MAGIC_LINK_TTL_MIN,
-    }))))
+    Ok(Json(ApiResponse::new(MagicLinkRequestResponse {
+        sent: true,
+        expires_in_minutes: MAGIC_LINK_TTL_MIN,
+    })))
 }
 
-#[derive(Deserialize)]
-struct ConsumeBody {
-    token: String,
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct MagicLinkConsumeBody {
+    /// Raw 26-char base-32 token from the emailed link.
+    #[schema(min_length = 20, max_length = 40, pattern = r"^[A-Z2-7]+$")]
+    pub token: String,
 }
 
-async fn consume_link(
+#[derive(Debug, Serialize, ToSchema)]
+pub struct MagicLinkConsumeResponse {
+    pub user_id: Uuid,
+    /// Always `"magic_link"` — echoed so the front can tag the session
+    /// with the auth method without decoding the JWT.
+    pub login_method: String,
+}
+
+/// Consume a magic-link token: rotates cookies and mints a session
+/// labeled `magic_link`. Refuses accounts that have TOTP or email 2FA
+/// enabled — those must go through the classic password flow so the
+/// second factor is not bypassed. Creates the user on the fly when the
+/// original intent was `signup` and no matching account exists.
+#[utoipa::path(
+    post,
+    path = "/api/auth/magic-link/consume",
+    tag = "auth",
+    request_body = MagicLinkConsumeBody,
+    responses(
+        (status = 200, description = "Session issued via magic link", body = ApiResponse<MagicLinkConsumeResponse>),
+        (status = 400, description = "Account has 2FA — magic link refused", body = crate::api_response::ErrorResponse),
+        (status = 401, description = "Token invalid, expired, or already consumed", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn consume_link(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Json(body): Json<ConsumeBody>,
+    Json(body): Json<MagicLinkConsumeBody>,
 ) -> Result<impl IntoResponse, AppError> {
     let token_hash = hash_token(&body.token);
     let row: Option<MagicLinkRow139> = sqlx::query_as(
@@ -260,9 +316,9 @@ async fn consume_link(
     metrics::counter!("skilluv_magic_link_consumed_total").increment(1);
     Ok((
         AppendHeaders([(SET_COOKIE, cookie), (SET_COOKIE, refresh_cookie)]),
-        Json(build_response(json!({
-            "user_id": user_id,
-            "login_method": "magic_link",
-        }))),
+        Json(ApiResponse::new(MagicLinkConsumeResponse {
+            user_id,
+            login_method: "magic_link".to_string(),
+        })),
     ))
 }

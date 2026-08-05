@@ -18,7 +18,7 @@ use crate::errors::AppError;
 pub struct TracksService;
 
 /// Ligne de tracks.
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, utoipa::ToSchema)]
 pub struct Track {
     pub id: Uuid,
     pub slug: String,
@@ -33,7 +33,7 @@ pub struct Track {
 }
 
 /// Ligne de user_tracks.
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, utoipa::ToSchema)]
 pub struct UserTrack {
     pub user_id: Uuid,
     pub track_id: Uuid,
@@ -43,7 +43,7 @@ pub struct UserTrack {
 }
 
 /// Progression synthétique d'un user sur un track.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct TrackProgress {
     pub track: Track,
     pub total_challenges: i64,
@@ -54,7 +54,7 @@ pub struct TrackProgress {
 }
 
 /// Résultat d'un check d'éligibilité pour démarrer un challenge.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct EligibilityCheck {
     pub eligible: bool,
     pub missing_required_prerequisites: Vec<Uuid>,

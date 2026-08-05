@@ -8,6 +8,14 @@ pub enum AppError {
     #[error("Resource not found: {0}")]
     NotFound(String),
 
+    /// 409 Conflict — la requete est valide (payload OK) mais l'operation
+    /// est refusee parce que l'etat courant du serveur l'interdit. Usage
+    /// typique : duplicate email/username au register, tentative de
+    /// creer une resource qui existe deja, tentative de modifier une
+    /// resource dans un etat incompatible.
+    #[error("Conflict: {0}")]
+    Conflict(String),
+
     #[error("Invalid credentials")]
     InvalidCredentials,
 
@@ -88,6 +96,7 @@ impl AppError {
     fn status_code(&self) -> StatusCode {
         match self {
             Self::NotFound(_) => StatusCode::NOT_FOUND,
+            Self::Conflict(_) => StatusCode::CONFLICT,
             Self::InvalidCredentials => StatusCode::UNAUTHORIZED,
             Self::Unauthorized => StatusCode::UNAUTHORIZED,
             Self::Forbidden => StatusCode::FORBIDDEN,
@@ -117,6 +126,7 @@ impl AppError {
     fn error_code(&self) -> &'static str {
         match self {
             Self::NotFound(_) => "RESOURCE_NOT_FOUND",
+            Self::Conflict(_) => "CONFLICT",
             Self::InvalidCredentials => "AUTH_INVALID_CREDENTIALS",
             Self::Unauthorized => "AUTH_UNAUTHORIZED",
             Self::Forbidden => "AUTH_FORBIDDEN",

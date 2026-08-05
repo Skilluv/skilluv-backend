@@ -66,15 +66,24 @@ fn build_response(data: Value) -> Value {
 
 // ─── Comments ─────────────────────────────────────────────────────
 
-#[derive(Deserialize)]
-struct CreateCommentBody {
-    target_type: String,
-    target_id: Uuid,
-    body: String,
-    parent_id: Option<Uuid>,
+#[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+pub struct CreateCommentBody {
+    #[schema(max_length = 10000)]
+    pub target_type: String,
+    pub target_id: Uuid,
+    #[schema(max_length = 10000)]
+    pub body: String,
+    pub parent_id: Option<Uuid>,
 }
 
-async fn create_comment(
+/// Create a comment on a target (or reply to another comment via parent_id).
+#[utoipa::path(
+    post, path = "/api/social/comments", tag = "social",
+    request_body = CreateCommentBody,
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create_comment(
     State(state): State<AppState>,
     auth: AuthUserComplete,
     headers: HeaderMap,
@@ -218,29 +227,54 @@ async fn create_comment(
     }))))
 }
 
-#[derive(Deserialize)]
-struct ListCommentsQuery {
-    page: Option<i64>,
-    per_page: Option<i64>,
+#[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
+pub struct ListCommentsQuery {
+    #[param(minimum = 1, maximum = 100000)]
+    pub page: Option<i64>,
+    #[param(minimum = 1, maximum = 200)]
+    pub per_page: Option<i64>,
 }
 
-async fn list_comments(
+/// List comments on a target (paginated).
+#[utoipa::path(
+    get, path = "/api/social/comments/{target_type}/{target_id}", tag = "social",
+    params(
+        ("target_type" = String, Path, pattern = r"^(challenge|submission|post|question|answer|project|profile|guild|comment|repo)$"),
+        ("target_id" = Uuid, Path),
+        ListCommentsQuery,
+    ),
+    responses((status = 200, body = serde_json::Value)),
+)]
+pub async fn list_comments(
     State(state): State<AppState>,
     Path((target_type, target_id)): Path<(String, Uuid)>,
     Query(q): Query<ListCommentsQuery>,
 ) -> Result<Json<Value>, AppError> {
+    crate::validators::check_range_opt(q.page, "page", 1, 100_000)?;
+    crate::validators::check_range_opt(q.per_page, "per_page", 1, 200)?;
     let per_page = q.per_page.unwrap_or(50).clamp(1, 200);
     let offset = (q.page.unwrap_or(1).max(1) - 1) * per_page;
     let rows = social::list_comments(&state.db, &target_type, target_id, per_page, offset).await?;
     Ok(Json(build_response(json!({ "comments": rows }))))
 }
 
-#[derive(Deserialize)]
-struct EditCommentBody {
-    body: String,
+#[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+pub struct EditCommentBody {
+    #[schema(max_length = 10000)]
+    pub body: String,
 }
 
-async fn edit_comment(
+/// Edit a comment (author or moderator+).
+#[utoipa::path(
+    put, path = "/api/social/comments/{id}", tag = "social",
+    params(("id" = Uuid, Path)),
+    request_body = EditCommentBody,
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn edit_comment(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -250,7 +284,14 @@ async fn edit_comment(
     Ok(Json(build_response(json!({ "comment": updated }))))
 }
 
-async fn delete_comment(
+/// Delete a comment (author or moderator+).
+#[utoipa::path(
+    delete, path = "/api/social/comments/{id}", tag = "social",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn delete_comment(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -261,14 +302,23 @@ async fn delete_comment(
 
 // ─── Reactions ────────────────────────────────────────────────────
 
-#[derive(Deserialize)]
-struct ToggleReactionBody {
-    target_type: String,
-    target_id: Uuid,
-    kind: String,
+#[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+pub struct ToggleReactionBody {
+    #[schema(max_length = 10000)]
+    pub target_type: String,
+    pub target_id: Uuid,
+    #[schema(max_length = 10000)]
+    pub kind: String,
 }
 
-async fn toggle_reaction(
+/// Toggle a reaction on a target. Returns `{ active }`.
+#[utoipa::path(
+    post, path = "/api/social/reactions", tag = "social",
+    request_body = ToggleReactionBody,
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn toggle_reaction(
     State(state): State<AppState>,
     auth: AuthUser,
     headers: HeaderMap,
@@ -303,7 +353,16 @@ async fn toggle_reaction(
     Ok(Json(build_response(json!({ "active": active }))))
 }
 
-async fn reaction_summary(
+/// Reaction summary for a target (counts per kind).
+#[utoipa::path(
+    get, path = "/api/social/reactions/{target_type}/{target_id}/summary", tag = "social",
+    params(
+        ("target_type" = String, Path, pattern = r"^(challenge|submission|post|question|answer|project|profile|guild|comment|repo)$"),
+        ("target_id" = Uuid, Path),
+    ),
+    responses((status = 200, body = serde_json::Value)),
+)]
+pub async fn reaction_summary(
     State(state): State<AppState>,
     Path((target_type, target_id)): Path<(String, Uuid)>,
     OptionalAuth(auth): OptionalAuth,
@@ -322,13 +381,20 @@ async fn reaction_summary(
 
 // ─── Mentions ─────────────────────────────────────────────────────
 
-#[derive(Deserialize)]
-struct PaginationQuery {
-    page: Option<i64>,
-    per_page: Option<i64>,
+#[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+pub struct PaginationQuery {
+    pub page: Option<i64>,
+    pub per_page: Option<i64>,
 }
 
-async fn my_mentions(
+/// List mentions received by the caller (paginated).
+#[utoipa::path(
+    get, path = "/api/social/mentions/me", tag = "social",
+    params(PaginationQuery),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn my_mentions(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<PaginationQuery>,
@@ -341,12 +407,19 @@ async fn my_mentions(
 
 // ─── Tags ─────────────────────────────────────────────────────────
 
-#[derive(Deserialize)]
-struct ListTagsQuery {
-    category: Option<String>,
+#[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+pub struct ListTagsQuery {
+    #[schema(max_length = 10000)]
+    pub category: Option<String>,
 }
 
-async fn list_tags(
+/// Public tag list (optionally filter by category).
+#[utoipa::path(
+    get, path = "/api/tags", tag = "social",
+    params(ListTagsQuery),
+    responses((status = 200, body = serde_json::Value)),
+)]
+pub async fn list_tags(
     State(state): State<AppState>,
     Query(q): Query<ListTagsQuery>,
 ) -> Result<Json<Value>, AppError> {
@@ -354,7 +427,16 @@ async fn list_tags(
     Ok(Json(build_response(json!({ "tags": rows }))))
 }
 
-async fn list_target_tags(
+/// Tags attached to a specific target.
+#[utoipa::path(
+    get, path = "/api/social/tag-map/{target_type}/{target_id}", tag = "social",
+    params(
+        ("target_type" = String, Path, pattern = r"^(challenge|submission|post|question|answer|project|profile|guild|comment|repo)$"),
+        ("target_id" = Uuid, Path),
+    ),
+    responses((status = 200, body = serde_json::Value)),
+)]
+pub async fn list_target_tags(
     State(state): State<AppState>,
     Path((target_type, target_id)): Path<(String, Uuid)>,
 ) -> Result<Json<Value>, AppError> {
@@ -362,14 +444,22 @@ async fn list_target_tags(
     Ok(Json(build_response(json!({ "tags": rows }))))
 }
 
-#[derive(Deserialize)]
-struct TagMapBody {
-    tag_id: Uuid,
-    target_type: String,
-    target_id: Uuid,
+#[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+pub struct TagMapBody {
+    pub tag_id: Uuid,
+    #[schema(max_length = 10000)]
+    pub target_type: String,
+    pub target_id: Uuid,
 }
 
-async fn attach_tag(
+/// Attach a tag to a target (rate-limited).
+#[utoipa::path(
+    post, path = "/api/social/tag-map", tag = "social",
+    request_body = TagMapBody,
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn attach_tag(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<TagMapBody>,
@@ -385,7 +475,14 @@ async fn attach_tag(
     Ok(Json(build_response(json!({ "attached": true }))))
 }
 
-async fn detach_tag(
+/// Detach a tag from a target.
+#[utoipa::path(
+    delete, path = "/api/social/tag-map", tag = "social",
+    request_body = TagMapBody,
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn detach_tag(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<TagMapBody>,
@@ -397,7 +494,14 @@ async fn detach_tag(
     Ok(Json(build_response(json!({ "detached": true }))))
 }
 
-async fn admin_create_tag(
+/// Admin: create a new tag.
+#[utoipa::path(
+    post, path = "/api/admin/tags", tag = "admin",
+    request_body(content = serde_json::Value, description = "CreateTagInput"),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_create_tag(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(input): Json<social::CreateTagInput>,

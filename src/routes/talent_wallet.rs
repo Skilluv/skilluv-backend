@@ -51,12 +51,27 @@ struct TxQuery {
     limit: Option<i64>,
 }
 
-async fn my_wallet(State(state): State<AppState>, auth: AuthUser) -> Result<Json<Value>, AppError> {
+/// Get the caller's talent wallet.
+#[utoipa::path(
+    get, path = "/api/users/me/wallet", tag = "wallet",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn my_wallet(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Json<Value>, AppError> {
     let wallet = talent_wallet::get_or_init_wallet(&state.db, auth.user_id).await?;
     Ok(Json(build_response(json!({ "wallet": wallet }))))
 }
 
-async fn my_wallet_transactions(
+/// List my wallet transactions.
+#[utoipa::path(
+    get, path = "/api/users/me/wallet/transactions", tag = "wallet",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn my_wallet_transactions(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<TxQuery>,
@@ -71,7 +86,14 @@ struct ResidencyBody {
     country: String,
 }
 
-async fn set_my_residency(
+/// Set residency country for wallet payouts.
+#[utoipa::path(
+    post, path = "/api/users/me/wallet/residency", tag = "wallet",
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn set_my_residency(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<ResidencyBody>,
@@ -97,7 +119,14 @@ struct StripeOnboardBody {
 /// hébergée. Le user complète KYC côté Stripe, on capture l'account_id.
 /// Le webhook `account.updated` (endpoint plus bas) met à jour le statut KYC
 /// dès que Stripe confirme la vérification.
-async fn stripe_onboard(
+/// Start Stripe Connect Express onboarding for talent payouts.
+#[utoipa::path(
+    post, path = "/api/users/me/wallet/stripe/onboard", tag = "wallet",
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn stripe_onboard(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<StripeOnboardBody>,
@@ -184,7 +213,14 @@ fn default_eur() -> String {
 ///
 /// Débite le wallet + crée un Stripe Transfer vers le compte Connect du user.
 /// Nécessite que `stripe_kyc_status = 'verified'` (le webhook a confirmé).
-async fn stripe_withdraw(
+/// Withdraw wallet funds to Stripe Connect account.
+#[utoipa::path(
+    post, path = "/api/users/me/wallet/withdraw/stripe", tag = "wallet",
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn stripe_withdraw(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<StripeWithdrawBody>,
@@ -315,13 +351,25 @@ async fn stripe_withdraw(
 ///
 /// Reçoit `account.updated` de Stripe. Vérifie la signature HMAC, extrait
 /// `charges_enabled` et `payouts_enabled` pour marquer le KYC verified.
-async fn stripe_connect_webhook(
+/// Stripe Connect webhook receiver (account.updated).
+#[utoipa::path(
+    post, path = "/api/webhooks/stripe-connect", tag = "wallet",
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value)),
+)]
+pub async fn stripe_connect_webhook(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
     body: axum::body::Bytes,
 ) -> Result<Json<Value>, AppError> {
-    let cfg = crate::services::stripe::StripeConfig::from_env()
-        .ok_or_else(|| AppError::Internal("Stripe is not configured".into()))?;
+    // Stripe pas configuré (dev/CI/deployments sans Stripe) : ack
+    // silencieusement 200. Best-practice pour webhooks externes.
+    let Some(cfg) = crate::services::stripe::StripeConfig::from_env() else {
+        tracing::warn!(
+            "Stripe Connect webhook received but STRIPE_* env not configured — acking silently"
+        );
+        return Ok(Json(json!({ "status": "acked_not_configured" })));
+    };
     let signature = headers
         .get("stripe-signature")
         .and_then(|v| v.to_str().ok())
@@ -428,7 +476,13 @@ async fn enforce_limit(
 /// GET /api/users/me/wallet/statement.csv
 ///
 /// Export CSV du ledger complet du user — obligation fiscale + audit personnel.
-async fn wallet_statement_csv(
+/// Export the wallet ledger as CSV.
+#[utoipa::path(
+    get, path = "/api/users/me/wallet/statement.csv", tag = "wallet",
+    responses((status = 200, description = "CSV export")),
+    security(("cookie_auth" = [])),
+)]
+pub async fn wallet_statement_csv(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<axum::response::Response, AppError> {
@@ -478,7 +532,14 @@ fn default_true() -> bool {
 ///
 /// Enregistre / met à jour le téléphone Mobile Money du user. `verified=true`
 /// débloque les payouts < seuil KYC lite. Idempotent.
-async fn register_momo_phone(
+/// Register a Mobile Money phone number.
+#[utoipa::path(
+    post, path = "/api/users/me/wallet/momo/phone", tag = "wallet",
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn register_momo_phone(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<RegisterMomoBody>,
@@ -534,7 +595,14 @@ fn default_xof() -> String {
 const KYC_LITE_LIMIT_XOF: i64 = 100_000;
 
 /// POST /api/users/me/wallet/withdraw/momo
-async fn momo_withdraw(
+/// Withdraw wallet funds via Mobile Money.
+#[utoipa::path(
+    post, path = "/api/users/me/wallet/withdraw/momo", tag = "wallet",
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn momo_withdraw(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<MomoWithdrawBody>,

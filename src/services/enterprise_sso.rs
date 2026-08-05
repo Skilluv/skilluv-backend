@@ -1,3 +1,6 @@
+// BE-P1-CONTRACT — silence pre-existing deprecation warnings from the
+// `elliptic-curve` crate (generic-array 0.14). Upgrade path deferred.
+#![allow(deprecated)]
 //! Enterprise B2B SSO — OIDC config storage, encryption, discovery cache.
 //!
 //! The IdP client_secret is stored encrypted at-rest in AES-256-GCM with a

@@ -1,11 +1,13 @@
 use axum::extract::{Path, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::AppState;
+use crate::api_response::ApiResponse;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
 use crate::models::ChallengeTemplate;
@@ -18,31 +20,60 @@ pub fn admin_community_routes() -> Router<AppState> {
         .route("/admin/community/{id}/reject", post(reject_challenge))
 }
 
-fn build_response(data: serde_json::Value) -> serde_json::Value {
-    json!({
-        "data": data,
-        "meta": {
-            "request_id": Uuid::new_v4().to_string(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-        }
-    })
-}
-
 // P21.1 : délègue à user_capabilities (source de vérité canonique).
 async fn require_admin(state: &AppState, auth: &AuthUser) -> Result<(), AppError> {
     crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await
 }
 
-#[derive(Debug, Deserialize)]
-struct RejectRequest {
-    feedback: String,
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct RejectRequest {
+    /// Feedback shown to the creator and stored in `review_feedback`.
+    #[schema(max_length = 10000)]
+    pub feedback: String,
 }
 
-// GET /api/admin/community/review — challenges awaiting review
-async fn pending_review(
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CreatorSummary {
+    pub username: String,
+    pub display_name: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct EnrichedChallenge {
+    pub challenge: ChallengeTemplate,
+    /// Present when the challenge has a `created_by` row.
+    pub creator: Option<CreatorSummary>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PendingReviewResponse {
+    pub challenges: Vec<EnrichedChallenge>,
+    pub total: usize,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AdminChallengeDecisionResponse {
+    pub challenge: ChallengeTemplate,
+    pub message: String,
+}
+
+/// Community challenges awaiting admin review. Creator info is joined
+/// so the admin panel doesn't need N+1 lookups.
+#[utoipa::path(
+    get,
+    path = "/api/admin/community/review",
+    tag = "admin",
+    responses(
+        (status = 200, description = "Pending review", body = ApiResponse<PendingReviewResponse>),
+        (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn pending_review(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<PendingReviewResponse>>, AppError> {
     require_admin(&state, &auth).await?;
 
     let challenges: Vec<ChallengeTemplate> = sqlx::query_as(
@@ -64,32 +95,50 @@ async fn pending_review(
     let creator_map: std::collections::HashMap<Uuid, _> =
         creators.into_iter().map(|c| (c.0, c)).collect();
 
-    let enriched: Vec<serde_json::Value> = challenges
-        .iter()
+    let enriched: Vec<EnrichedChallenge> = challenges
+        .into_iter()
         .map(|c| {
-            let creator = c.created_by.and_then(|id| creator_map.get(&id));
-            json!({
-                "challenge": c,
-                "creator": creator.map(|cr| json!({
-                    "username": cr.1,
-                    "display_name": cr.2,
-                })),
-            })
+            let creator =
+                c.created_by
+                    .and_then(|id| creator_map.get(&id))
+                    .map(|cr| CreatorSummary {
+                        username: cr.1.clone(),
+                        display_name: cr.2.clone(),
+                    });
+            EnrichedChallenge {
+                challenge: c,
+                creator,
+            }
         })
         .collect();
 
-    Ok(Json(build_response(json!({
-        "challenges": enriched,
-        "total": enriched.len(),
-    }))))
+    let total = enriched.len();
+    Ok(Json(ApiResponse::new(PendingReviewResponse {
+        challenges: enriched,
+        total,
+    })))
 }
 
-// POST /api/admin/community/:id/approve
-async fn approve_challenge(
+/// Approve a community challenge: bumps status to `published`, notifies
+/// the creator, audit-logs the decision.
+#[utoipa::path(
+    post,
+    path = "/api/admin/community/{id}/approve",
+    tag = "admin",
+    params(("id" = Uuid, Path, description = "Challenge UUID")),
+    responses(
+        (status = 200, description = "Approved and published", body = ApiResponse<AdminChallengeDecisionResponse>),
+        (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "Challenge not in review", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn approve_challenge(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<AdminChallengeDecisionResponse>>, AppError> {
     require_admin(&state, &auth).await?;
 
     // Trello hVImXbUS — pré-check business avant UPDATE.
@@ -175,19 +224,34 @@ async fn approve_challenge(
     )
     .await;
 
-    Ok(Json(build_response(json!({
-        "challenge": challenge,
-        "message": "Challenge approved and published"
-    }))))
+    Ok(Json(ApiResponse::new(AdminChallengeDecisionResponse {
+        challenge,
+        message: "Challenge approved and published".to_string(),
+    })))
 }
 
-// POST /api/admin/community/:id/reject
-async fn reject_challenge(
+/// Reject a community challenge with feedback. Notifies creator +
+/// audit-logs the decision.
+#[utoipa::path(
+    post,
+    path = "/api/admin/community/{id}/reject",
+    tag = "admin",
+    params(("id" = Uuid, Path, description = "Challenge UUID")),
+    request_body = RejectRequest,
+    responses(
+        (status = 200, description = "Rejected", body = ApiResponse<AdminChallengeDecisionResponse>),
+        (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "Challenge not in review", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn reject_challenge(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
     Json(body): Json<RejectRequest>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Json<ApiResponse<AdminChallengeDecisionResponse>>, AppError> {
     require_admin(&state, &auth).await?;
 
     let challenge: ChallengeTemplate = sqlx::query_as(
@@ -243,8 +307,8 @@ async fn reject_challenge(
     )
     .await;
 
-    Ok(Json(build_response(json!({
-        "challenge": challenge,
-        "message": "Challenge rejected"
-    }))))
+    Ok(Json(ApiResponse::new(AdminChallengeDecisionResponse {
+        challenge,
+        message: "Challenge rejected".to_string(),
+    })))
 }

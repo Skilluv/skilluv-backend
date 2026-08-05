@@ -67,7 +67,7 @@ fn build_response(data: Value) -> Value {
 // P21.1 : délègue à user_capabilities (source de vérité canonique).
 // Note: signature devient async, tous les call sites `require_admin(&state, &auth).await?`
 // ont été mis à jour en `require_admin(&state, &auth).await?`.
-async fn require_admin(state: &AppState, auth: &AuthUser) -> Result<(), AppError> {
+pub async fn require_admin(state: &AppState, auth: &AuthUser) -> Result<(), AppError> {
     crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await
 }
 
@@ -81,7 +81,14 @@ struct QueueQuery {
     limit: Option<i64>,
 }
 
-async fn fraud_queue(
+/// Admin: fraud review queue.
+#[utoipa::path(
+    get, path = "/api/admin/fraud/queue", tag = "admin",
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn fraud_queue(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<QueueQuery>,
@@ -128,7 +135,16 @@ async fn fraud_queue(
 // POST /admin/fraud/deliverables/{id}/mark-valid
 // ═══════════════════════════════════════════════════════════════════
 
-async fn mark_deliverable_valid(
+/// Admin: mark a flagged deliverable as legitimate.
+#[utoipa::path(
+    post, path = "/api/admin/fraud/deliverables/{id}/mark-valid", tag = "admin",
+    params(("id" = Uuid, Path)),
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn mark_deliverable_valid(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -160,7 +176,16 @@ struct RevokeBody {
     reason: Option<String>,
 }
 
-async fn revoke_deliverable(
+/// Admin: revoke a fraudulent deliverable.
+#[utoipa::path(
+    post, path = "/api/admin/fraud/deliverables/{id}/revoke", tag = "admin",
+    params(("id" = Uuid, Path)),
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn revoke_deliverable(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -188,7 +213,16 @@ async fn revoke_deliverable(
 // POST /admin/fraud/users/{id}/mark-valid
 // ═══════════════════════════════════════════════════════════════════
 
-async fn mark_user_valid(
+/// Admin: mark a flagged user as legitimate.
+#[utoipa::path(
+    post, path = "/api/admin/fraud/users/{id}/mark-valid", tag = "admin",
+    params(("id" = Uuid, Path)),
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn mark_user_valid(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -219,7 +253,15 @@ struct ScanQuery {
     window_days: Option<i32>,
 }
 
-async fn scan_deliverable_endpoint(
+/// Admin: run cosine plagiarism scan on a deliverable.
+#[utoipa::path(
+    post, path = "/api/admin/fraud/scan-deliverable/{id}", tag = "admin",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn scan_deliverable_endpoint(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -241,7 +283,7 @@ async fn scan_deliverable_endpoint(
 // POST /admin/fraud/detect-multi-accounts
 // ═══════════════════════════════════════════════════════════════════
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 struct DetectBody {
     #[serde(default)]
     window_hours: Option<i32>,
@@ -249,7 +291,14 @@ struct DetectBody {
     min_group_size: Option<i32>,
 }
 
-async fn detect_multi_accounts_endpoint(
+/// Admin: run multi-account fingerprint detection sweep.
+#[utoipa::path(
+    post, path = "/api/admin/fraud/detect-multi-accounts", tag = "admin",
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn detect_multi_accounts_endpoint(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<DetectBody>,
@@ -273,7 +322,15 @@ async fn detect_multi_accounts_endpoint(
 // POST /admin/fraud/llm-evaluate/{id} — P15.2 déclenche évaluation LLM
 // ═══════════════════════════════════════════════════════════════════
 
-async fn llm_evaluate_endpoint(
+/// Admin: LLM evaluation of a deliverable (fraud/quality).
+#[utoipa::path(
+    post, path = "/api/admin/fraud/llm-evaluate/{id}", tag = "admin",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn llm_evaluate_endpoint(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -314,7 +371,15 @@ struct DeepScanQuery {
     pool_cap: Option<i64>,
 }
 
-async fn deep_plagiarism_scan_endpoint(
+/// Admin: deep plagiarism scan (LLM-assisted AST + embeddings via skilluv-ia).
+#[utoipa::path(
+    post, path = "/api/admin/fraud/deep-scan/{id}", tag = "admin",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn deep_plagiarism_scan_endpoint(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,

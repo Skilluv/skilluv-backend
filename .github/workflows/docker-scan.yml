@@ -1,0 +1,103 @@
+name: Docker image scan + SBOM
+
+# Builds the production Docker image on PR + push, then :
+#   - Trivy image scan (CVE in the base image + system packages)
+#   - SBOM generation (CycloneDX) for supply-chain traceability
+#   - Both results uploaded to the GitHub Security tab + as artifacts
+#
+# Does NOT push the image — publishing to GHCR is the job of the `publish`
+# workflow (see PR #33). We build locally with buildx cache-from GHA so we
+# don't pay the full Rust compile twice.
+
+on:
+  # Push-master trigger removed — image is already scanned on the PR that
+  # merged, no value in re-scanning the identical build. Weekly cron picks
+  # up new CVEs against unchanged deps.
+  pull_request:
+    branches: [master]
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "src/**"
+      - "migrations/**"
+      - ".github/workflows/docker-scan.yml"
+  schedule:
+    - cron: "0 5 * * 0"  # Sunday 05:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+concurrency:
+  group: docker-scan-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-scan:
+    name: Build image + Trivy + SBOM
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
+
+      - name: Build image (local load, no push)
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
+        with:
+          context: .
+          load: true
+          # Fixed local tag ; not published.
+          tags: skilluv-backend:scan
+          # Reuse the buildx cache from the publish workflow so the Rust
+          # compile is warm across runs.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1  # 0.35.0
+        with:
+          image-ref: skilluv-backend:scan
+          format: sarif
+          output: trivy-image.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: 1  # fail the PR on any HIGH/CRITICAL with a fix
+
+      - name: Upload Trivy SARIF
+        uses: github/codeql-action/upload-sarif@4187e74d05793876e9989daffde9c3e66b4acd07  # v3
+        if: always()
+        with:
+          sarif_file: trivy-image.sarif
+          category: trivy-image
+
+      - name: Generate SBOM (CycloneDX)
+        uses: anchore/sbom-action@fc46e51fd3cb168ffb36c6d1915723c47db58abb  # v0.17.7
+        with:
+          image: skilluv-backend:scan
+          format: cyclonedx-json
+          output-file: sbom-cyclonedx.json
+
+      - name: Generate SBOM (SPDX for GitHub Dependency Graph)
+        uses: anchore/sbom-action@fc46e51fd3cb168ffb36c6d1915723c47db58abb  # v0.17.7
+        with:
+          image: skilluv-backend:scan
+          format: spdx-json
+          output-file: sbom-spdx.json
+
+      - name: Upload SBOMs as artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        if: always()
+        with:
+          name: sbom-${{ github.sha }}
+          path: |
+            sbom-cyclonedx.json
+            sbom-spdx.json
+          retention-days: 90

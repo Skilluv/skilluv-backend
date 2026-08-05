@@ -63,15 +63,24 @@ fn wrap(data: Value) -> Value {
 // POST /admin/proof-hooks/sweep?within_days=7
 // ═══════════════════════════════════════════════════════════════════
 
-#[derive(Debug, Deserialize)]
-struct SweepQuery {
+#[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+pub struct SweepQuery {
     #[serde(default)]
-    within_days: Option<i32>,
+    pub within_days: Option<i32>,
     #[serde(default)]
-    dry_run: bool,
+    pub dry_run: bool,
 }
 
-async fn admin_sweep_proof_hooks(
+/// Admin: sweep proof-hooks recompute for every user active in the
+/// last N days. Supports dry-run.
+#[utoipa::path(
+    post, path = "/api/admin/proof-hooks/sweep", tag = "admin",
+    params(SweepQuery),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_sweep_proof_hooks(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<SweepQuery>,
@@ -135,13 +144,23 @@ async fn admin_sweep_proof_hooks(
 // POST /admin/users/{id}/gdpr-export
 // ═══════════════════════════════════════════════════════════════════
 
-#[derive(Debug, Deserialize)]
-struct GdprExportBody {
+#[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+pub struct GdprExportBody {
     /// Raison obligatoire (audit trail).
-    reason: String,
+    #[schema(max_length = 10000)]
+    pub reason: String,
 }
 
-async fn admin_trigger_gdpr_export(
+/// Admin: trigger a GDPR archive export for a target user.
+#[utoipa::path(
+    post, path = "/api/admin/users/{id}/gdpr-export", tag = "admin",
+    params(("id" = Uuid, Path)),
+    request_body = GdprExportBody,
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_trigger_gdpr_export(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(target_id): Path<Uuid>,
@@ -213,7 +232,15 @@ async fn admin_trigger_gdpr_export(
 // POST /admin/users/{id}/recompute-capabilities
 // ═══════════════════════════════════════════════════════════════════
 
-async fn admin_recompute_capabilities(
+/// Admin: recompute capabilities only (narrower scope than proof-hooks).
+#[utoipa::path(
+    post, path = "/api/admin/users/{id}/recompute-capabilities", tag = "admin",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_recompute_capabilities(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Path(target_id): Path<Uuid>,
@@ -274,19 +301,27 @@ async fn admin_recompute_capabilities(
 // GET /admin/badge-events — liste paginée (filtres is_active + is_partner).
 // ═══════════════════════════════════════════════════════════════════
 
-#[derive(Debug, Deserialize)]
-struct ListEventsQuery {
+#[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+pub struct ListEventsQuery {
     #[serde(default)]
-    is_active: Option<bool>,
+    pub is_active: Option<bool>,
     #[serde(default)]
-    is_partner: Option<bool>,
+    pub is_partner: Option<bool>,
     #[serde(default)]
-    page: Option<i64>,
+    pub page: Option<i64>,
     #[serde(default)]
-    per_page: Option<i64>,
+    pub per_page: Option<i64>,
 }
 
-async fn admin_list_badge_events(
+/// Admin: list badge events (Hacktoberfest, Skilluv Fest, ...).
+#[utoipa::path(
+    get, path = "/api/admin/badge-events", tag = "admin",
+    params(ListEventsQuery),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_list_badge_events(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<ListEventsQuery>,
@@ -360,22 +395,33 @@ async fn admin_list_badge_events(
 // POST /admin/badge-events — création d'un event (mig 0093).
 // ═══════════════════════════════════════════════════════════════════
 
-#[derive(Debug, Deserialize)]
-struct CreateEventBody {
-    slug: String,
-    name: String,
+#[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+pub struct CreateEventBody {
+    #[schema(max_length = 10000)]
+    pub slug: String,
+    #[schema(max_length = 10000)]
+    pub name: String,
     #[serde(default)]
-    description: Option<String>,
-    starts_at: chrono::DateTime<chrono::Utc>,
+    #[schema(max_length = 10000)]
+    pub description: Option<String>,
+    pub starts_at: chrono::DateTime<chrono::Utc>,
     #[serde(default)]
-    ends_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub ends_at: Option<chrono::DateTime<chrono::Utc>>,
     #[serde(default)]
-    visual_theme: Option<Value>,
+    pub visual_theme: Option<Value>,
     #[serde(default)]
-    is_partner: Option<bool>,
+    pub is_partner: Option<bool>,
 }
 
-async fn admin_create_badge_event(
+/// Admin: create a new badge event.
+#[utoipa::path(
+    post, path = "/api/admin/badge-events", tag = "admin",
+    request_body = CreateEventBody,
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_create_badge_event(
+    _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<CreateEventBody>,

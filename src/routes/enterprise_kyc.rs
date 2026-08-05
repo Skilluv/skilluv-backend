@@ -55,7 +55,13 @@ async fn current_enterprise_for(db: &sqlx::PgPool, user_id: Uuid) -> Result<Uuid
     row.map(|(id,)| id).ok_or(AppError::Forbidden)
 }
 
-async fn get_status(
+/// Get KYC status for the current enterprise.
+#[utoipa::path(
+    get, path = "/api/enterprise/kyc", tag = "enterprise",
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn get_status(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
@@ -112,7 +118,14 @@ async fn get_status(
     }))))
 }
 
-async fn upload_document(
+/// Upload a KYC document (multipart).
+#[utoipa::path(
+    post, path = "/api/enterprise/kyc/documents", tag = "enterprise",
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn upload_document(
     State(state): State<AppState>,
     auth: AuthUser,
     mut multipart: Multipart,
@@ -197,7 +210,13 @@ async fn upload_document(
     Ok(Json(build_response(json!({ "document_id": doc_id }))))
 }
 
-async fn admin_list(
+/// Admin: list enterprise KYC submissions.
+#[utoipa::path(
+    get, path = "/api/admin/enterprise-kyc", tag = "enterprise",
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_list(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
@@ -242,7 +261,15 @@ struct DecideBody {
     reason: Option<String>, // rejection reason
 }
 
-async fn admin_decide(
+/// Admin: approve or reject an enterprise KYC.
+#[utoipa::path(
+    post, path = "/api/admin/enterprise-kyc/{enterprise_id}/decide", tag = "enterprise",
+    params(("enterprise_id" = Uuid, Path)),
+    request_body(content = serde_json::Value),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_decide(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(enterprise_id): Path<Uuid>,

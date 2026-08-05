@@ -9,6 +9,7 @@ use axum::routing::get;
 use axum::{Json, Router};
 use serde::Deserialize;
 use serde_json::{Value, json};
+use utoipa::IntoParams;
 use uuid::Uuid;
 
 use crate::AppState;
@@ -19,34 +20,131 @@ pub fn talent_search_v2_routes() -> Router<AppState> {
     Router::new().route("/talents/search/v2", get(search_v2))
 }
 
-#[derive(Debug, Deserialize)]
-struct SearchQuery {
-    q: Option<String>,
-    skill_domain: Option<String>,
-    title: Option<String>,
-    country: Option<String>,
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
+pub struct SearchQuery {
+    #[param(max_length = 200)]
+    pub q: Option<String>,
+    #[param(pattern = r"^(code|design|game|security)$")]
+    pub skill_domain: Option<String>,
+    #[param(max_length = 100)]
+    pub title: Option<String>,
+    #[param(max_length = 3)]
+    pub country: Option<String>,
     /// ISO2 (Phase 3.3). Falls back to legacy `country` (ISO3) if not provided.
-    country_iso2: Option<String>,
-    min_fragments: Option<i32>,
-    min_streak: Option<i32>,
-    tag: Option<String>,         // tag slug — multiple joins if repeated
-    badge: Option<String>,       // badge slug
-    looking_for: Option<String>, // cdi | cdd | freelance | internship | contract
-    available_only: Option<bool>,
-    language_spoken: Option<String>, // 2-letter ISO code (min B2)
-    has_projects: Option<bool>,
-    min_github_repos: Option<i32>,
-    sort_by: Option<String>, // fragments | recent | most_active_recently | top_in_domain
-    page: Option<i64>,
-    per_page: Option<i64>,
+    #[param(pattern = r"^[A-Z]{2}$")]
+    pub country_iso2: Option<String>,
+    #[param(minimum = 0, maximum = 1000000)]
+    pub min_fragments: Option<i32>,
+    #[param(minimum = 0, maximum = 10000)]
+    pub min_streak: Option<i32>,
+    /// Tag slug — repeatable.
+    #[param(max_length = 100)]
+    pub tag: Option<String>,
+    /// Badge slug.
+    #[param(max_length = 100)]
+    pub badge: Option<String>,
+    /// `cdi`, `cdd`, `freelance`, `internship`, `contract`.
+    #[param(pattern = r"^(cdi|cdd|freelance|internship|contract)$")]
+    pub looking_for: Option<String>,
+    pub available_only: Option<bool>,
+    /// 2-letter ISO code (matches min B2 proficiency).
+    #[param(pattern = r"^[a-zA-Z]{2}$")]
+    pub language_spoken: Option<String>,
+    pub has_projects: Option<bool>,
+    #[param(minimum = 0, maximum = 10000)]
+    pub min_github_repos: Option<i32>,
+    /// `fragments`, `recent`, `most_active_recently`, `top_in_domain`.
+    #[param(pattern = r"^(fragments|recent|most_active_recently|top_in_domain)$")]
+    pub sort_by: Option<String>,
+    #[param(minimum = 1, maximum = 100000)]
+    pub page: Option<i64>,
+    #[param(minimum = 1, maximum = 100)]
+    pub per_page: Option<i64>,
 }
 
-async fn search_v2(
+/// Advanced talent search — v2 endpoint with 8 additional filters.
+/// Returns an enriched shape (top_skills, badge_count, project_count,
+/// last_activity_at, optional is_bookmarked for enterprise callers).
+/// Response is kept as free-form JSON because the shape has multiple
+/// optional fields depending on auth + tenant context.
+#[utoipa::path(
+    get,
+    path = "/api/talents/search/v2",
+    tag = "enterprise",
+    params(SearchQuery),
+    responses(
+        (status = 200, description = "Paginated talents", body = serde_json::Value),
+    ),
+)]
+pub async fn search_v2(
     State(state): State<AppState>,
     OptionalAuth(auth): OptionalAuth,
     tenant: crate::middleware::TenantContext,
     Query(q): Query<SearchQuery>,
 ) -> Result<Json<Value>, AppError> {
+    crate::validators::check_max_len_opt(&q.q, "q", 200)?;
+    crate::validators::check_max_len_opt(&q.title, "title", 100)?;
+    crate::validators::check_max_len_opt(&q.country, "country", 3)?;
+    crate::validators::check_max_len_opt(&q.tag, "tag", 100)?;
+    crate::validators::check_max_len_opt(&q.badge, "badge", 100)?;
+    crate::validators::check_range_opt(
+        q.min_fragments.map(i64::from),
+        "min_fragments",
+        0,
+        1_000_000,
+    )?;
+    crate::validators::check_range_opt(q.min_streak.map(i64::from), "min_streak", 0, 10_000)?;
+    crate::validators::check_range_opt(
+        q.min_github_repos.map(i64::from),
+        "min_github_repos",
+        0,
+        10_000,
+    )?;
+    crate::validators::check_range_opt(q.page, "page", 1, 100_000)?;
+    crate::validators::check_range_opt(q.per_page, "per_page", 1, 100)?;
+    if let Some(s) = &q.sort_by
+        && !matches!(
+            s.as_str(),
+            "fragments" | "recent" | "most_active_recently" | "top_in_domain"
+        )
+    {
+        return Err(AppError::Validation(
+            "sort_by must be one of: fragments, recent, most_active_recently, top_in_domain".into(),
+        ));
+    }
+    if let Some(d) = &q.skill_domain
+        && !matches!(d.as_str(), "code" | "design" | "game" | "security")
+    {
+        return Err(AppError::Validation(
+            "skill_domain must be one of: code, design, game, security".into(),
+        ));
+    }
+    if let Some(c) = &q.country_iso2
+        && !(c.len() == 2 && c.chars().all(|c| c.is_ascii_uppercase()))
+    {
+        return Err(AppError::Validation(
+            "country_iso2 must be ISO 3166-1 alpha-2".into(),
+        ));
+    }
+    if let Some(l) = &q.looking_for
+        && !matches!(
+            l.as_str(),
+            "cdi" | "cdd" | "freelance" | "internship" | "contract"
+        )
+    {
+        return Err(AppError::Validation(
+            "looking_for must be one of: cdi, cdd, freelance, internship, contract".into(),
+        ));
+    }
+    if let Some(l) = &q.language_spoken
+        && !(l.len() == 2 && l.chars().all(|c| c.is_ascii_alphabetic()))
+    {
+        return Err(AppError::Validation(
+            "language_spoken must be a 2-letter ISO code".into(),
+        ));
+    }
     let per_page = q.per_page.unwrap_or(20).clamp(1, 50);
     let page = q.page.unwrap_or(1).max(1);
     let offset = (page - 1) * per_page;

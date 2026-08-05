@@ -26,7 +26,7 @@ pub const SENIOR_REVIEWER_REPUTATION_THRESHOLD: f64 = 0.7;
 pub struct AttestationsService;
 
 /// Ligne attestations (calquée sur le schéma SQL).
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, utoipa::ToSchema)]
 pub struct Attestation {
     pub id: Uuid,
     pub user_id: Uuid,

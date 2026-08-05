@@ -59,7 +59,20 @@ fn build_response(data: Value) -> Value {
     })
 }
 
-async fn create_project(
+/// Create a new project. Owner is either the caller (user) or a guild
+/// they administer. Request body typed by services::projects.
+#[utoipa::path(
+    post,
+    path = "/api/projects",
+    tag = "projects",
+    request_body(content = serde_json::Value, description = "CreateProjectInput"),
+    responses(
+        (status = 200, description = "Project created", body = serde_json::Value),
+        (status = 401, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create_project(
     State(state): State<AppState>,
     auth: AuthUser,
     headers: HeaderMap,
@@ -84,28 +97,60 @@ async fn create_project(
     Ok(Json(build_response(json!({ "project": project }))))
 }
 
-#[derive(Deserialize)]
-struct LimitQuery {
+#[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
+pub struct LimitQuery {
+    #[param(minimum = 1, maximum = 200)]
     limit: Option<i64>,
 }
 
-async fn list_looking(
+/// List projects looking for contributors. Public.
+#[utoipa::path(
+    get,
+    path = "/api/projects/looking-for-contributors",
+    tag = "projects",
+    params(LimitQuery),
+    responses((status = 200, body = serde_json::Value)),
+)]
+pub async fn list_looking(
     State(state): State<AppState>,
     Query(q): Query<LimitQuery>,
 ) -> Result<Json<Value>, AppError> {
+    crate::validators::check_range_opt(q.limit, "limit", 1, 200)?;
     let rows = projects::list_looking_for_contributors(&state.db, q.limit.unwrap_or(50)).await?;
     Ok(Json(build_response(json!({ "projects": rows }))))
 }
 
-async fn list_curated(
+/// List curated projects (admin-picked showcase). Public.
+#[utoipa::path(
+    get,
+    path = "/api/projects/curated",
+    tag = "projects",
+    params(LimitQuery),
+    responses((status = 200, body = serde_json::Value)),
+)]
+pub async fn list_curated(
     State(state): State<AppState>,
     Query(q): Query<LimitQuery>,
 ) -> Result<Json<Value>, AppError> {
+    crate::validators::check_range_opt(q.limit, "limit", 1, 200)?;
     let rows = projects::list_curated(&state.db, q.limit.unwrap_or(50)).await?;
     Ok(Json(build_response(json!({ "projects": rows }))))
 }
 
-async fn by_slug(
+/// Get a project by slug. Public.
+#[utoipa::path(
+    get,
+    path = "/api/projects/{slug}",
+    tag = "projects",
+    params(("slug" = String, Path)),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 404, body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn by_slug(
     State(state): State<AppState>,
     Path(slug): Path<String>,
 ) -> Result<Json<Value>, AppError> {
@@ -113,7 +158,18 @@ async fn by_slug(
     Ok(Json(build_response(json!({ "project": p }))))
 }
 
-async fn by_user(
+/// List projects owned by a specific user (by username). Public.
+#[utoipa::path(
+    get,
+    path = "/api/u/{username}/projects",
+    tag = "projects",
+    params(("username" = String, Path)),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 404, body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn by_user(
     State(state): State<AppState>,
     Path(username): Path<String>,
 ) -> Result<Json<Value>, AppError> {
@@ -128,7 +184,18 @@ async fn by_user(
     Ok(Json(build_response(json!({ "projects": rows }))))
 }
 
-async fn by_guild_slug(
+/// List projects owned by a specific guild (by slug). Public.
+#[utoipa::path(
+    get,
+    path = "/api/guilds/{slug}/projects",
+    tag = "guilds",
+    params(("slug" = String, Path)),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 404, body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn by_guild_slug(
     State(state): State<AppState>,
     Path(slug): Path<String>,
 ) -> Result<Json<Value>, AppError> {
@@ -142,7 +209,15 @@ async fn by_guild_slug(
     Ok(Json(build_response(json!({ "projects": rows }))))
 }
 
-async fn list_contributors(
+/// List contributors on a project.
+#[utoipa::path(
+    get,
+    path = "/api/projects/{slug}/contributors",
+    tag = "projects",
+    params(("slug" = String, Path)),
+    responses((status = 200, body = serde_json::Value)),
+)]
+pub async fn list_contributors(
     State(state): State<AppState>,
     Path(slug): Path<String>,
 ) -> Result<Json<Value>, AppError> {
@@ -151,13 +226,26 @@ async fn list_contributors(
     Ok(Json(build_response(json!({ "contributors": rows }))))
 }
 
-#[derive(Deserialize)]
-struct AddContributorBody {
+#[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+pub struct AddContributorBody {
     user_id: Uuid,
     role: Option<String>,
 }
 
-async fn add_contributor(
+/// Add a contributor to a project (owner or admin).
+#[utoipa::path(
+    post,
+    path = "/api/projects/{slug}/contributors",
+    tag = "projects",
+    params(("slug" = String, Path)),
+    request_body = AddContributorBody,
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 403, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn add_contributor(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(slug): Path<String>,
@@ -176,7 +264,22 @@ async fn add_contributor(
     Ok(Json(build_response(json!({ "added": true }))))
 }
 
-async fn remove_contributor(
+/// Remove a contributor from a project.
+#[utoipa::path(
+    delete,
+    path = "/api/projects/{slug}/contributors/{user_id}",
+    tag = "projects",
+    params(
+        ("slug" = String, Path),
+        ("user_id" = Uuid, Path),
+    ),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 403, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn remove_contributor(
     State(state): State<AppState>,
     auth: AuthUser,
     Path((slug, user_id)): Path<(String, Uuid)>,
@@ -186,7 +289,19 @@ async fn remove_contributor(
     Ok(Json(build_response(json!({ "removed": true }))))
 }
 
-async fn archive(
+/// Archive a project (soft-delete). Owner or admin only.
+#[utoipa::path(
+    post,
+    path = "/api/projects/{slug}/archive",
+    tag = "projects",
+    params(("slug" = String, Path)),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 403, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn archive(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(slug): Path<String>,
@@ -196,12 +311,25 @@ async fn archive(
     Ok(Json(build_response(json!({ "archived": true }))))
 }
 
-#[derive(Deserialize)]
-struct SetCuratedBody {
+#[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+pub struct SetCuratedBody {
     curated: bool,
 }
 
-async fn admin_set_curated(
+/// Admin only: mark a project as curated (or un-curated).
+#[utoipa::path(
+    post,
+    path = "/api/admin/projects/{slug}/curated",
+    tag = "admin",
+    params(("slug" = String, Path)),
+    request_body = SetCuratedBody,
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 403, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_set_curated(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(slug): Path<String>,
@@ -219,16 +347,28 @@ async fn admin_set_curated(
 // P12.1 — Recommandations projets
 // ═══════════════════════════════════════════════════════════════════
 
-#[derive(Debug, Deserialize)]
-struct RecoQuery {
-    limit: Option<i64>,
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+pub struct RecoQuery {
+    pub limit: Option<i64>,
 }
 
 /// GET /api/users/me/recommendations/projects?limit=10
 ///
 /// Retourne les projets qui matchent les skills prouvés du user, exclut ceux
 /// où il a déjà un deliverable verified, triés par match_score DESC.
-async fn my_project_recommendations(
+/// Personalised project recommendations for the caller.
+#[utoipa::path(
+    get,
+    path = "/api/users/me/recommendations/projects",
+    tag = "projects",
+    params(RecoQuery),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 401, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn my_project_recommendations(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<RecoQuery>,
@@ -245,16 +385,28 @@ async fn my_project_recommendations(
 // P12.2 — Marque d'intérêt user → project
 // ═══════════════════════════════════════════════════════════════════
 
-#[derive(Debug, Deserialize)]
-struct MarkInterestedBody {
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct MarkInterestedBody {
     /// Batch d'IDs projets (onboarding : le user coche les projets qui l'intéressent).
-    project_ids: Vec<Uuid>,
+    pub project_ids: Vec<Uuid>,
 }
 
 /// POST /api/users/me/interests/projects
 ///
 /// Marque plusieurs projets comme intéressants. Score par défaut 50.
-async fn mark_projects_interested(
+/// Batch-mark projects as interesting (onboarding step).
+#[utoipa::path(
+    post,
+    path = "/api/users/me/interests/projects",
+    tag = "projects",
+    request_body = MarkInterestedBody,
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 400, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn mark_projects_interested(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<MarkInterestedBody>,
@@ -275,7 +427,18 @@ async fn mark_projects_interested(
 /// GET /api/users/me/interests/projects
 ///
 /// Liste mes projets d'intérêt (score > 0), triés par score DESC.
-async fn list_my_project_interests(
+/// List the caller's project interests.
+#[utoipa::path(
+    get,
+    path = "/api/users/me/interests/projects",
+    tag = "projects",
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 401, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_my_project_interests(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
@@ -288,7 +451,16 @@ async fn list_my_project_interests(
 /// DELETE /api/users/me/interests/projects/{project_id}
 ///
 /// Retire un projet de mes intérêts (score → 0).
-async fn unmark_project_interested(
+/// Remove a project from the caller's interest list.
+#[utoipa::path(
+    delete,
+    path = "/api/users/me/interests/projects/{project_id}",
+    tag = "projects",
+    params(("project_id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn unmark_project_interested(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(project_id): Path<Uuid>,

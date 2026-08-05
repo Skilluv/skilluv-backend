@@ -1,0 +1,26 @@
+# GitHub CODEOWNERS — required reviewers per path.
+# https://docs.github.com/en/repositories/managing-your-repositories-settings-and-security/customizing-your-repository/about-code-owners
+#
+# For now : @jeremiezitti owns everything (solo founder). Split by area as
+# the team grows — the pattern-match order is last-wins.
+
+* @jeremiezitti
+
+# CI / security infra — keep any change reviewed by whoever wears the
+# security hat (once that person exists, replace the @jeremiezitti below).
+/.github/                    @jeremiezitti
+/deny.toml                   @jeremiezitti
+/.gitleaks.toml              @jeremiezitti
+/Dockerfile                  @jeremiezitti
+/scripts/                    @jeremiezitti
+
+# Anything that touches auth or crypto goes through explicit security
+# review — never merge without a second pair of eyes.
+/src/routes/auth.rs          @jeremiezitti
+/src/services/session.rs     @jeremiezitti
+/src/services/oauth.rs       @jeremiezitti
+/src/services/webauthn.rs    @jeremiezitti
+/src/middleware/             @jeremiezitti
+
+# Migrations = data model changes. Any drift here can wreck prod.
+/migrations/                 @jeremiezitti

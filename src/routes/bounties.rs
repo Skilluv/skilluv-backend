@@ -52,7 +52,7 @@ fn build_response(data: Value) -> Value {
     })
 }
 
-async fn current_enterprise_for(db: &sqlx::PgPool, user_id: Uuid) -> Result<Uuid, AppError> {
+pub async fn current_enterprise_for(db: &sqlx::PgPool, user_id: Uuid) -> Result<Uuid, AppError> {
     let row: Option<(Uuid,)> = sqlx::query_as(
         "SELECT enterprise_id FROM enterprise_members WHERE user_id = $1 AND status = 'active' LIMIT 1",
     )
@@ -67,7 +67,7 @@ async fn current_enterprise_for(db: &sqlx::PgPool, user_id: Uuid) -> Result<Uuid
 /// user posteur (owner_type='user'), qui pourra être re-attribué à un guild par
 /// un steward plus tard. Simplifie la création B2B : plus besoin de créer un
 /// project au préalable via l'admin UI.
-async fn resolve_or_create_project(
+pub async fn resolve_or_create_project(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     repo_owner: &str,
     repo_name: &str,
@@ -141,19 +141,52 @@ fn meta_array(meta: &Value, key: &str) -> Vec<String> {
 
 // ─── Listing ─────────────────────────────────────────────────────
 
-#[derive(Deserialize)]
-struct ListQuery {
-    status: Option<String>,
-    skill: Option<String>,
-    tag: Option<String>,
-    page: Option<i64>,
-    per_page: Option<i64>,
+#[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
+pub struct ListQuery {
+    // Contraintes declarees ET enforcees cote handler (validate_list_query).
+    // Les #[param(...)] vivent dans le schema OpenAPI + servent aussi de
+    // reference pour les checks handler — les 2 doivent rester en sync.
+    //
+    // deny_unknown_fields : rejette 400 les params inconnus. Aligne sur
+    // schemathesis qui flag les 'object with unexpected properties'.
+    // Contrainte deliberee : les integrations front ne doivent pas mixer
+    // utm/tracking params avec les params API — utiliser un canal
+    // telemetrie separe.
+    #[param(max_length = 50)]
+    pub status: Option<String>,
+    #[param(max_length = 100)]
+    pub skill: Option<String>,
+    #[param(max_length = 100)]
+    pub tag: Option<String>,
+    #[param(minimum = 1, maximum = 100000)]
+    pub page: Option<i64>,
+    #[param(minimum = 1, maximum = 100)]
+    pub per_page: Option<i64>,
 }
 
-async fn list_bounties(
+/// Public: paginated list of open bounties (skill / tag filters).
+#[utoipa::path(
+    get, path = "/api/bounties", tag = "wallet",
+    params(ListQuery),
+    responses((status = 200, body = serde_json::Value)),
+)]
+pub async fn list_bounties(
     State(state): State<AppState>,
     Query(q): Query<ListQuery>,
 ) -> Result<Json<Value>, AppError> {
+    // Validation cote handler des contraintes declarees dans le schema
+    // OpenAPI (#[param(...)] sur ListQuery). axum Query n'enforce rien
+    // post-deserialisation, donc doit etre fait manuellement pour que
+    // le contrat schema soit respecte cote serveur (schemathesis
+    // negative_data_rejection).
+    crate::validators::check_max_len_opt(&q.status, "status", 50)?;
+    crate::validators::check_max_len_opt(&q.skill, "skill", 100)?;
+    crate::validators::check_max_len_opt(&q.tag, "tag", 100)?;
+    crate::validators::check_range_opt(q.page, "page", 1, 100_000)?;
+    crate::validators::check_range_opt(q.per_page, "per_page", 1, 100)?;
+
     let per_page = q.per_page.unwrap_or(20).clamp(1, 100);
     let page = q.page.unwrap_or(1).max(1);
     let offset = (page - 1) * per_page;
@@ -245,7 +278,13 @@ fn bounty_status_from_slice(slice_status: &str) -> String {
     }
 }
 
-async fn get_bounty(
+/// Public: bounty detail.
+#[utoipa::path(
+    get, path = "/api/bounties/{id}", tag = "wallet",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 404, body = crate::api_response::ErrorResponse)),
+)]
+pub async fn get_bounty(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Value>, AppError> {
@@ -294,23 +333,40 @@ async fn get_bounty(
 
 // ─── Création (enterprise) ───────────────────────────────────────
 
-#[derive(Deserialize)]
-struct CreateBountyBody {
-    repo_owner: String,
-    repo_name: String,
-    issue_number: i32,
-    issue_url: String,
-    title: String,
-    description: String,
-    reward_credits: String,
-    fragments_bonus: Option<i32>,
-    required_skills: Option<Vec<String>>,
-    difficulty: Option<i32>,
-    tags: Option<Vec<String>>,
-    expires_in_days: Option<i32>,
+#[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+pub struct CreateBountyBody {
+    #[schema(max_length = 10000)]
+    pub repo_owner: String,
+    #[schema(max_length = 10000)]
+    pub repo_name: String,
+    pub issue_number: i32,
+    #[schema(max_length = 10000)]
+    pub issue_url: String,
+    #[schema(max_length = 10000)]
+    pub title: String,
+    #[schema(max_length = 10000)]
+    pub description: String,
+    #[schema(max_length = 10000)]
+    pub reward_credits: String,
+    pub fragments_bonus: Option<i32>,
+    pub required_skills: Option<Vec<String>>,
+    pub difficulty: Option<i32>,
+    pub tags: Option<Vec<String>>,
+    pub expires_in_days: Option<i32>,
 }
 
-async fn create_bounty(
+/// Enterprise: create an OSS bounty (credits held in escrow).
+#[utoipa::path(
+    post, path = "/api/bounties", tag = "wallet",
+    request_body = CreateBountyBody,
+    responses(
+        (status = 201, body = serde_json::Value),
+        (status = 400, body = crate::api_response::ErrorResponse),
+        (status = 403, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create_bounty(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<CreateBountyBody>,
@@ -396,7 +452,14 @@ async fn create_bounty(
 
 // ─── Claim + submit PR (talent) ──────────────────────────────────
 
-async fn claim_bounty(
+/// Talent: claim an open bounty.
+#[utoipa::path(
+    post, path = "/api/bounties/{id}/claim", tag = "wallet",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn claim_bounty(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -437,13 +500,22 @@ async fn claim_bounty(
     Ok(Json(build_response(json!({ "claim_id": id }))))
 }
 
-#[derive(Deserialize)]
-struct SubmitPrBody {
-    pull_request_url: String,
-    pull_request_number: i32,
+#[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+pub struct SubmitPrBody {
+    #[schema(max_length = 10000)]
+    pub pull_request_url: String,
+    pub pull_request_number: i32,
 }
 
-async fn submit_pr(
+/// Talent: submit the PR URL for a claimed bounty.
+#[utoipa::path(
+    post, path = "/api/bounties/{id}/pr", tag = "wallet",
+    params(("id" = Uuid, Path)),
+    request_body = SubmitPrBody,
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn submit_pr(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -471,7 +543,14 @@ async fn submit_pr(
     Ok(Json(build_response(json!({ "attached": true }))))
 }
 
-async fn cancel_bounty(
+/// Enterprise: cancel a bounty and refund the escrow.
+#[utoipa::path(
+    post, path = "/api/bounties/{id}/cancel", tag = "wallet",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn cancel_bounty(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -516,15 +595,32 @@ async fn cancel_bounty(
 
 // ─── Webhook GitHub (payout automatique) ─────────────────────────
 
-async fn github_webhook(
+/// GitHub webhook: bounty PR merged → payout auto. HMAC-signed.
+#[utoipa::path(
+    post, path = "/api/webhooks/github", tag = "webhooks",
+    request_body(content = serde_json::Value, description = "GitHub webhook payload (issues / pull_request events)"),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 401, body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn github_webhook(
     State(state): State<AppState>,
     headers: HeaderMap,
     body: axum::body::Bytes,
 ) -> Result<Json<Value>, AppError> {
-    let secret = std::env::var("GITHUB_WEBHOOK_SECRET")
+    // GITHUB_WEBHOOK_SECRET absent = webhook non configuré (dev/CI) :
+    // ack silencieusement pour eviter les retries GitHub. Return empty
+    // JSON object comme les autres branches success du handler.
+    let Some(secret) = std::env::var("GITHUB_WEBHOOK_SECRET")
         .ok()
         .filter(|s| !s.is_empty())
-        .ok_or(AppError::Internal("GITHUB_WEBHOOK_SECRET not set".into()))?;
+    else {
+        tracing::warn!(
+            "GitHub bounties webhook received but GITHUB_WEBHOOK_SECRET not set — acking silently"
+        );
+        return Ok(Json(json!({ "status": "acked_not_configured" })));
+    };
     let signature = headers
         .get("x-hub-signature-256")
         .and_then(|v| v.to_str().ok())
@@ -585,7 +681,7 @@ async fn github_webhook(
 /// label curé (ex: 'good-first-issue') à une issue, on crée immédiatement une
 /// slice draft (curator_review) ou open (auto) sans attendre le prochain cycle
 /// de polling.
-async fn handle_issues_event(state: &AppState, payload: &Value) -> Result<(), AppError> {
+pub async fn handle_issues_event(state: &AppState, payload: &Value) -> Result<(), AppError> {
     let action = payload.get("action").and_then(|v| v.as_str()).unwrap_or("");
     if action != "labeled" {
         return Ok(());
@@ -725,7 +821,7 @@ fn truncate(s: &str, max: usize) -> String {
     }
 }
 
-async fn handle_pull_request_event(state: &AppState, payload: &Value) -> Result<(), AppError> {
+pub async fn handle_pull_request_event(state: &AppState, payload: &Value) -> Result<(), AppError> {
     let action = payload.get("action").and_then(|v| v.as_str()).unwrap_or("");
 
     // Bonjour Skilluv onboarding: react to pull_request.opened on tracked

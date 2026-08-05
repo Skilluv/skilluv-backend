@@ -57,16 +57,29 @@ fn build_response(data: Value) -> Value {
 }
 
 fn github_oauth_env() -> Result<(String, String, String), AppError> {
+    // OAuth non configure = endpoint non disponible pour ce deployment.
+    // 404 NotFound plutot que 500 : c'est un cas de configuration
+    // attendu (dev/CI/deployments qui n'exposent pas GitHub OAuth), pas
+    // un bug serveur. Aligne sur schemathesis not_a_server_error.
     let client_id = std::env::var("GITHUB_CLIENT_ID")
-        .map_err(|_| AppError::Internal("GITHUB_CLIENT_ID not set".into()))?;
+        .map_err(|_| AppError::NotFound("GitHub OAuth not enabled on this deployment".into()))?;
     let client_secret = std::env::var("GITHUB_CLIENT_SECRET")
-        .map_err(|_| AppError::Internal("GITHUB_CLIENT_SECRET not set".into()))?;
+        .map_err(|_| AppError::NotFound("GitHub OAuth not enabled on this deployment".into()))?;
     let redirect = std::env::var("GITHUB_REDIRECT_URI")
-        .map_err(|_| AppError::Internal("GITHUB_REDIRECT_URI not set".into()))?;
+        .map_err(|_| AppError::NotFound("GitHub OAuth not enabled on this deployment".into()))?;
     Ok((client_id, client_secret, redirect))
 }
 
-async fn start(State(state): State<AppState>, auth: AuthUser) -> Result<Redirect, AppError> {
+/// Kick off GitHub OAuth authorize dance. Returns a 302 redirect.
+#[utoipa::path(
+    get, path = "/api/auth/github/start", tag = "auth",
+    responses(
+        (status = 302, description = "Redirect to GitHub authorize URL"),
+        (status = 401, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn start(State(state): State<AppState>, auth: AuthUser) -> Result<Redirect, AppError> {
     let (client_id, _, redirect_uri) = github_oauth_env()?;
     // State token bound to the user, 15-min TTL in Redis.
     let state_token = format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple());
@@ -80,13 +93,22 @@ async fn start(State(state): State<AppState>, auth: AuthUser) -> Result<Redirect
     Ok(Redirect::to(&url))
 }
 
-#[derive(Deserialize)]
-struct CallbackQuery {
-    code: String,
-    state: String,
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+pub struct CallbackQuery {
+    pub code: String,
+    pub state: String,
 }
 
-async fn callback(
+/// OAuth callback — exchanges code for token, kicks off first sync.
+#[utoipa::path(
+    get, path = "/api/auth/github/callback", tag = "auth",
+    params(CallbackQuery),
+    responses(
+        (status = 302, description = "Redirect back to skilluv.com"),
+        (status = 400, body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn callback(
     State(state): State<AppState>,
     headers: HeaderMap,
     Query(q): Query<CallbackQuery>,
@@ -149,7 +171,13 @@ async fn callback(
     }))))
 }
 
-async fn disconnect(
+/// Disconnect the caller's GitHub account (revokes token, keeps history).
+#[utoipa::path(
+    post, path = "/api/auth/github/disconnect", tag = "auth",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn disconnect(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
@@ -157,12 +185,28 @@ async fn disconnect(
     Ok(Json(build_response(json!({ "disconnected": true }))))
 }
 
-async fn sync_now(State(state): State<AppState>, auth: AuthUser) -> Result<Json<Value>, AppError> {
+/// Manually trigger a repo sync (rate-limited).
+#[utoipa::path(
+    post, path = "/api/auth/github/sync", tag = "auth",
+    responses((status = 200, body = serde_json::Value), (status = 429, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn sync_now(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Json<Value>, AppError> {
     let report = github::sync_repos_for(&state.db, &state.config.jwt_secret, auth.user_id).await?;
     Ok(Json(build_response(json!({ "sync": report }))))
 }
 
-async fn admin_sync(
+/// Admin: force sync of a specific user's GitHub repos.
+#[utoipa::path(
+    post, path = "/api/admin/github/sync/{user_id}", tag = "admin",
+    params(("user_id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_sync(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(user_id): Path<Uuid>,
@@ -174,16 +218,26 @@ async fn admin_sync(
     Ok(Json(build_response(json!({ "sync": report }))))
 }
 
-#[derive(Deserialize)]
-struct ReposQuery {
-    limit: Option<i64>,
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
+pub struct ReposQuery {
+    #[param(minimum = 1, maximum = 100)]
+    pub limit: Option<i64>,
 }
 
-async fn public_repos(
+/// Public: list a user's synced GitHub repos.
+#[utoipa::path(
+    get, path = "/api/u/{username}/repos", tag = "profile",
+    params(("username" = String, Path), ReposQuery),
+    responses((status = 200, body = serde_json::Value)),
+)]
+pub async fn public_repos(
     State(state): State<AppState>,
     Path(username): Path<String>,
     Query(q): Query<ReposQuery>,
 ) -> Result<Json<Value>, AppError> {
+    crate::validators::check_range_opt(q.limit, "limit", 1, 100)?;
     let row: Option<(Uuid,)> = sqlx::query_as(
         "SELECT id FROM users WHERE username = $1 AND profile_active = TRUE AND is_banned = FALSE",
     )
@@ -195,7 +249,16 @@ async fn public_repos(
     Ok(Json(build_response(json!({ "repos": repos }))))
 }
 
-async fn cv_html(
+/// Public HTML CV page for a user (not JSON — served as text/html).
+#[utoipa::path(
+    get, path = "/api/u/{username}/cv", tag = "profile",
+    params(("username" = String, Path)),
+    responses(
+        (status = 200, description = "HTML CV", content_type = "text/html"),
+        (status = 404, body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn cv_html(
     State(state): State<AppState>,
     Path(username): Path<String>,
     headers: HeaderMap,

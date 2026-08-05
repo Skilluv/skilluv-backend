@@ -20,11 +20,13 @@ use crate::routes::enterprise::attach_recruiter_to_enterprise;
 use crate::services::oauth::{self, OAuthProfile, OAuthState, google as gp, linkedin as lp};
 use crate::services::{AuthService, SessionService};
 
-#[derive(Deserialize, Default)]
+#[derive(Deserialize, Default, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
 struct StartQuery {
     /// Optional enterprise recruiter invite token. When present, the OAuth
     /// callback consumes the invite and attaches the user to the enterprise
     /// (rejecting the flow if the provider email doesn't match the invited email).
+    #[param(max_length = 128)]
     invite_token: Option<String>,
 }
 
@@ -66,7 +68,13 @@ fn build_cookie(name: &str, value: &str, max_age_secs: i64, path: &str) -> Strin
 
 // ─── Provider listing / unlinking ────────────────────────────────
 
-async fn list_my_providers(
+/// List OAuth providers linked to the current account.
+#[utoipa::path(
+    get, path = "/api/auth/me/oauth-providers", tag = "auth",
+    responses((status = 200, body = serde_json::Value), (status = 401, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_my_providers(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
@@ -74,7 +82,14 @@ async fn list_my_providers(
     Ok(Json(build_response(json!({ "providers": list }))))
 }
 
-async fn unlink_provider(
+/// Unlink an OAuth provider from the current account.
+#[utoipa::path(
+    delete, path = "/api/auth/me/oauth-providers/{provider}", tag = "auth",
+    params(("provider" = String, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 401, body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn unlink_provider(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(provider): Path<String>,
@@ -90,32 +105,56 @@ async fn unlink_provider(
 
 // ─── Google ──────────────────────────────────────────────────────
 
-async fn google_start(
+/// Start Google OAuth login flow (redirects to Google).
+#[utoipa::path(
+    get, path = "/api/auth/google/start", tag = "auth",
+    params(StartQuery),
+    responses((status = 302, description = "Redirect to Google")),
+)]
+pub async fn google_start(
     State(state): State<AppState>,
     Query(q): Query<StartQuery>,
 ) -> Result<Redirect, AppError> {
     start_flow(&state, "google", None, q.invite_token).await
 }
 
-async fn google_link_start(
+/// Link Google to an existing account (redirects to Google).
+#[utoipa::path(
+    get, path = "/api/auth/google/link", tag = "auth",
+    params(StartQuery),
+    responses((status = 302, description = "Redirect to Google")),
+    security(("cookie_auth" = [])),
+)]
+pub async fn google_link_start(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Redirect, AppError> {
     start_flow(&state, "google", Some(auth.user_id), None).await
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
 struct CallbackQuery {
+    /// OAuth authorization code returned by the provider.
+    #[param(min_length = 1, max_length = 2048)]
     code: String,
+    /// Opaque state token used to prevent CSRF and carry the flow context.
+    #[param(min_length = 1, max_length = 128)]
     state: String,
 }
 
-async fn google_callback(
+/// Google OAuth callback (session cookie or link).
+#[utoipa::path(
+    get, path = "/api/auth/google/callback", tag = "auth",
+    params(CallbackQuery),
+    responses((status = 200, body = serde_json::Value), (status = 400, body = crate::api_response::ErrorResponse)),
+)]
+pub async fn google_callback(
     State(state): State<AppState>,
     Query(q): Query<CallbackQuery>,
 ) -> Result<impl IntoResponse, AppError> {
-    let cfg =
-        gp::Config::from_env().ok_or(AppError::Internal("Google OAuth not configured".into()))?;
+    let cfg = gp::Config::from_env()
+        .ok_or_else(|| AppError::NotFound("Google OAuth not enabled on this deployment".into()))?;
     handle_callback(
         &state,
         "google",
@@ -128,26 +167,46 @@ async fn google_callback(
 
 // ─── LinkedIn ────────────────────────────────────────────────────
 
-async fn linkedin_start(
+/// Start LinkedIn OAuth login flow (redirects to LinkedIn).
+#[utoipa::path(
+    get, path = "/api/auth/linkedin/start", tag = "auth",
+    params(StartQuery),
+    responses((status = 302, description = "Redirect to LinkedIn")),
+)]
+pub async fn linkedin_start(
     State(state): State<AppState>,
     Query(q): Query<StartQuery>,
 ) -> Result<Redirect, AppError> {
     start_flow(&state, "linkedin", None, q.invite_token).await
 }
 
-async fn linkedin_link_start(
+/// Link LinkedIn to an existing account.
+#[utoipa::path(
+    get, path = "/api/auth/linkedin/link", tag = "auth",
+    params(StartQuery),
+    responses((status = 302, description = "Redirect to LinkedIn")),
+    security(("cookie_auth" = [])),
+)]
+pub async fn linkedin_link_start(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Redirect, AppError> {
     start_flow(&state, "linkedin", Some(auth.user_id), None).await
 }
 
-async fn linkedin_callback(
+/// LinkedIn OAuth callback.
+#[utoipa::path(
+    get, path = "/api/auth/linkedin/callback", tag = "auth",
+    params(CallbackQuery),
+    responses((status = 200, body = serde_json::Value), (status = 400, body = crate::api_response::ErrorResponse)),
+)]
+pub async fn linkedin_callback(
     State(state): State<AppState>,
     Query(q): Query<CallbackQuery>,
 ) -> Result<impl IntoResponse, AppError> {
-    let cfg =
-        lp::Config::from_env().ok_or(AppError::Internal("LinkedIn OAuth not configured".into()))?;
+    let cfg = lp::Config::from_env().ok_or_else(|| {
+        AppError::NotFound("LinkedIn OAuth not enabled on this deployment".into())
+    })?;
     handle_callback(
         &state,
         "linkedin",
@@ -160,15 +219,21 @@ async fn linkedin_callback(
 
 // ─── GitHub login (distinct from Sprint 5 repo-sync flow) ────────
 
-async fn github_login_start(
+/// Start GitHub OAuth login flow (distinct from repo-sync flow).
+#[utoipa::path(
+    get, path = "/api/auth/github/login", tag = "auth",
+    params(StartQuery),
+    responses((status = 302, description = "Redirect to GitHub")),
+)]
+pub async fn github_login_start(
     State(state): State<AppState>,
     Query(q): Query<StartQuery>,
 ) -> Result<Redirect, AppError> {
     let client_id = std::env::var("GITHUB_CLIENT_ID")
-        .map_err(|_| AppError::Internal("GITHUB_CLIENT_ID not set".into()))?;
+        .map_err(|_| AppError::NotFound("GitHub OAuth not enabled on this deployment".into()))?;
     let redirect_uri = std::env::var("GITHUB_LOGIN_REDIRECT_URI")
         .or_else(|_| std::env::var("GITHUB_REDIRECT_URI"))
-        .map_err(|_| AppError::Internal("GITHUB_LOGIN_REDIRECT_URI not set".into()))?;
+        .map_err(|_| AppError::NotFound("GitHub OAuth not enabled on this deployment".into()))?;
     let mut redis = state.redis.clone();
     let token = oauth::store_state(
         &mut redis,
@@ -185,17 +250,23 @@ async fn github_login_start(
     Ok(Redirect::to(&url))
 }
 
-async fn github_login_callback(
+/// GitHub OAuth login callback.
+#[utoipa::path(
+    get, path = "/api/auth/github/login/callback", tag = "auth",
+    params(CallbackQuery),
+    responses((status = 200, body = serde_json::Value), (status = 400, body = crate::api_response::ErrorResponse)),
+)]
+pub async fn github_login_callback(
     State(state): State<AppState>,
     Query(q): Query<CallbackQuery>,
 ) -> Result<impl IntoResponse, AppError> {
     let client_id = std::env::var("GITHUB_CLIENT_ID")
-        .map_err(|_| AppError::Internal("GITHUB_CLIENT_ID not set".into()))?;
+        .map_err(|_| AppError::NotFound("GitHub OAuth not enabled on this deployment".into()))?;
     let client_secret = std::env::var("GITHUB_CLIENT_SECRET")
-        .map_err(|_| AppError::Internal("GITHUB_CLIENT_SECRET not set".into()))?;
+        .map_err(|_| AppError::NotFound("GitHub OAuth not enabled on this deployment".into()))?;
     let redirect_uri = std::env::var("GITHUB_LOGIN_REDIRECT_URI")
         .or_else(|_| std::env::var("GITHUB_REDIRECT_URI"))
-        .map_err(|_| AppError::Internal("GITHUB_LOGIN_REDIRECT_URI not set".into()))?;
+        .map_err(|_| AppError::NotFound("GitHub OAuth not enabled on this deployment".into()))?;
 
     let mut redis = state.redis.clone();
     let oauth_state = oauth::consume_state(&mut redis, &q.state).await?;
@@ -242,13 +313,15 @@ async fn start_flow(
     .await?;
     let url = match provider {
         "google" => {
-            let cfg = gp::Config::from_env()
-                .ok_or(AppError::Internal("Google OAuth not configured".into()))?;
+            let cfg = gp::Config::from_env().ok_or_else(|| {
+                AppError::NotFound("Google OAuth not enabled on this deployment".into())
+            })?;
             gp::authorize_url(&cfg, &token)
         }
         "linkedin" => {
-            let cfg = lp::Config::from_env()
-                .ok_or(AppError::Internal("LinkedIn OAuth not configured".into()))?;
+            let cfg = lp::Config::from_env().ok_or_else(|| {
+                AppError::NotFound("LinkedIn OAuth not enabled on this deployment".into())
+            })?;
             lp::authorize_url(&cfg, &token)
         }
         _ => return Err(AppError::Validation("unsupported provider".into())),

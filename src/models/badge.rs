@@ -22,7 +22,7 @@ pub struct UserBadge {
     pub earned_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, sqlx::FromRow, utoipa::ToSchema)]
 pub struct BadgeWithEarnedAt {
     pub slug: String,
     pub name: String,

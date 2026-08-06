@@ -86,6 +86,42 @@ pub async fn require_any_capability(
     Ok(())
 }
 
+/// P26 v2 (SKI-80): convenience helper for the challenge-validator capability
+/// family. Given a domain (`code`, `design`, `game`, `security`, `ops`, `ai`,
+/// `soft_skills`), builds the capability string `challenge_validator:{domain}`
+/// and delegates to `require_capability`.
+///
+/// Used by the validation pick-up / approve / reject endpoints (SKI-83/84/85)
+/// to ensure only users authorized on this domain can validate PRs in it.
+///
+/// Returns `AppError::Validation` if the domain is unknown (clearer error
+/// surface than a silent capability mismatch), or `AppError::Forbidden` if
+/// the user does not hold the capability.
+pub async fn require_challenge_validator_for(
+    db: &PgPool,
+    user_id: Uuid,
+    domain: &str,
+) -> Result<(), AppError> {
+    // Guard against unknown domains rather than delegating a malformed
+    // capability string that would never match.
+    const VALID_DOMAINS: &[&str] = &[
+        "code",
+        "design",
+        "game",
+        "security",
+        "ops",
+        "ai",
+        "soft_skills",
+    ];
+    if !VALID_DOMAINS.contains(&domain) {
+        return Err(AppError::Validation(format!(
+            "unknown challenge validator domain: {domain}"
+        )));
+    }
+    let capability = format!("challenge_validator:{domain}");
+    require_capability(db, user_id, &capability).await
+}
+
 /// Retourne toutes les capabilities actives d'un user (utile pour /me/capabilities).
 pub async fn list_active_capabilities(db: &PgPool, user_id: Uuid) -> Result<Vec<String>, AppError> {
     let rows: Vec<String> = sqlx::query_scalar(

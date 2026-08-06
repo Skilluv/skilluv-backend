@@ -179,6 +179,9 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::tenant_routes())
         .nest("/api", routes::ai_job_routes())
         .nest("/api", routes::enterprise_subscription_routes())
+        // SKI-72 — internal-tracker → GitHub Issue webhook receiver.
+        // Mounted OUTSIDE `/api` so external senders don't hit API rate-limits.
+        .merge(routes::linear_webhook_routes().with_state(state.clone()))
         .merge(routes::well_known_routes().with_state(state.clone()))
         .merge(routes::metrics_routes().with_state(state.clone()))
         .merge(websocket::ws_routes().with_state(state.clone()));

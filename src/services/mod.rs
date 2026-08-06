@@ -26,6 +26,7 @@ pub mod guild;
 pub mod hello_wall_mirror;
 pub mod invoices;
 pub mod leaderboard;
+pub mod linear_sync;
 pub mod llm_verifier;
 pub mod mobile_money;
 pub mod mobile_push;

@@ -290,9 +290,10 @@ pub async fn claim_slice_as_team(
     Json(body): Json<ClaimAsTeamBody>,
 ) -> Result<impl IntoResponse, AppError> {
     require_team_member(&state.db, body.team_id, auth.user_id).await?;
-    // P26 v2 SKI-79: the requester (as team member) must clear the
-    // orientation gate on the slice — same rule as solo claim.
+    // P26 v2 SKI-79 / SKI-78: the requester (as team member) must clear
+    // the orientation and rank gates on the slice — same rule as solo claim.
     SlicesService::assert_orientation_access(&state.db, id, auth.user_id).await?;
+    SlicesService::assert_rank_access(&state.db, id, auth.user_id).await?;
     let slice = SlicesService::claim_as_team(&state.db, id, body.team_id).await?;
     Ok((
         StatusCode::CREATED,

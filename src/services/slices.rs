@@ -18,6 +18,39 @@ use crate::models::ProjectSlice;
 /// Durée pendant laquelle un claim est exclusif (7 jours, aligné pattern bounties).
 pub const CLAIM_DURATION_DAYS: i64 = 7;
 
+/// P26 v2 SKI-78 — total order over the 5 P17 ranks. Any unknown value
+/// returns 0 (apprenti) to fail closed on user data corruption rather than
+/// spuriously grant access.
+fn rank_ordinal(rank: &str) -> u8 {
+    match rank {
+        "ranger" => 1,
+        "artisan" => 2,
+        "maitre" => 3,
+        "doyen" => 4,
+        _ => 0, // apprenti + unknown
+    }
+}
+
+#[cfg(test)]
+mod rank_tests {
+    use super::rank_ordinal;
+
+    #[test]
+    fn ordinal_matches_progression() {
+        assert!(rank_ordinal("apprenti") < rank_ordinal("ranger"));
+        assert!(rank_ordinal("ranger") < rank_ordinal("artisan"));
+        assert!(rank_ordinal("artisan") < rank_ordinal("maitre"));
+        assert!(rank_ordinal("maitre") < rank_ordinal("doyen"));
+    }
+
+    #[test]
+    fn unknown_rank_treated_as_lowest() {
+        // Fail-closed: junk data must not silently grant elevated access.
+        assert_eq!(rank_ordinal("god-mode"), 0);
+        assert_eq!(rank_ordinal(""), 0);
+    }
+}
+
 /// Service métier pour les slices.
 ///
 /// N'a pas d'état côté Rust — c'est un namespace de fonctions qui opèrent sur
@@ -138,6 +171,7 @@ impl SlicesService {
         user_id: Uuid,
     ) -> Result<ProjectSlice, AppError> {
         Self::assert_orientation_access(db, slice_id, user_id).await?;
+        Self::assert_rank_access(db, slice_id, user_id).await?;
 
         let expires_at = Utc::now() + Duration::days(CLAIM_DURATION_DAYS);
 
@@ -217,6 +251,38 @@ impl SlicesService {
             return Err(AppError::Forbidden);
         }
         Ok(())
+    }
+
+    /// P26 v2 SKI-78 — minimum-rank gate. Returns `Ok(())` when the slice
+    /// has no `min_rank` set or when the user's current rank is at or
+    /// above it. Ordering: apprenti(0) < ranger(1) < artisan(2) < maitre(3)
+    /// < doyen(4). A user with no `user_ranks` row is treated as apprenti(0).
+    pub async fn assert_rank_access(
+        db: &PgPool,
+        slice_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<(), AppError> {
+        let gate: Option<(Option<String>,)> =
+            sqlx::query_as("SELECT min_rank FROM project_slices WHERE id = $1")
+                .bind(slice_id)
+                .fetch_optional(db)
+                .await?;
+        let Some((Some(required),)) = gate else {
+            return Ok(()); // slice absent → the UPDATE surfaces the real error / no gate set
+        };
+
+        let current: Option<(String,)> =
+            sqlx::query_as("SELECT rank FROM user_ranks WHERE user_id = $1")
+                .bind(user_id)
+                .fetch_optional(db)
+                .await?;
+        let current_rank = current.map(|(r,)| r).unwrap_or_else(|| "apprenti".into());
+
+        if rank_ordinal(&current_rank) >= rank_ordinal(&required) {
+            Ok(())
+        } else {
+            Err(AppError::Forbidden)
+        }
     }
 
     /// Un user relâche sa slice. Elle retourne au pool `open`.

@@ -71,6 +71,11 @@ pub struct ProjectSlice {
     #[serde(default)]
     pub required_orientation_slugs: Vec<String>,
 
+    /// P26 v2 SKI-78: minimum rank required to claim, or NULL for no floor.
+    /// Ordinal comparison: apprenti < ranger < artisan < maitre < doyen.
+    #[serde(default)]
+    pub min_rank: Option<String>,
+
     pub created_by_user_id: Option<Uuid>,
     pub ingested_from: String,
 

@@ -186,6 +186,12 @@ pub async fn claim_slice(
 ) -> Result<impl IntoResponse, AppError> {
     let slice = SlicesService::claim(&state.db, id, auth.user_id).await?;
 
+    // P26 v2 SKI-75 — best-effort auto-fork. Runs after the claim so a fork
+    // failure never blocks the claim itself. Any error is logged as warn
+    // and the slice is returned with `fork_repo_url = NULL`; the user can
+    // then declare their fork manually via submit-pr (SKI-76).
+    let slice = try_auto_fork(&state, &slice, auth.user_id).await.unwrap_or(slice);
+
     Ok((
         StatusCode::CREATED,
         Json(build_response(json!({
@@ -193,6 +199,72 @@ pub async fn claim_slice(
             "message": "Slice claimed. You have 7 days to complete it."
         }))),
     ))
+}
+
+/// Attempt to fork the target GitHub repo to the user's account and record
+/// the URL on the slice. Returns `None` on any failure (missing GH
+/// connection, unknown target repo, upstream error) — the caller keeps the
+/// original slice and the user completes the flow manually.
+async fn try_auto_fork(
+    state: &AppState,
+    slice: &crate::models::ProjectSlice,
+    user_id: Uuid,
+) -> Option<crate::models::ProjectSlice> {
+    if slice.slice_type != "github_issue" {
+        return None;
+    }
+    let target: Option<(Option<String>, Option<String>)> = sqlx::query_as(
+        "SELECT github_repo_owner, github_repo_name FROM projects WHERE id = $1",
+    )
+    .bind(slice.project_id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+    let (Some(owner), Some(repo)) = target
+        .map(|(o, r)| (o, r))
+        .unwrap_or((None, None))
+    else {
+        return None;
+    };
+
+    let token = match crate::services::github::load_token(
+        &state.db,
+        &state.config.jwt_secret,
+        user_id,
+    )
+    .await
+    {
+        Ok(Some(t)) => t,
+        _ => return None, // user hasn't connected GitHub — silent no-op
+    };
+
+    match crate::services::github::fork_repo_for_user(&token, &owner, &repo).await {
+        Ok(fork_url) => {
+            let updated = sqlx::query_as::<_, crate::models::ProjectSlice>(
+                r#"
+                UPDATE project_slices
+                   SET fork_repo_url = $2, fork_created_at = NOW(), updated_at = NOW()
+                 WHERE id = $1
+             RETURNING *
+                "#,
+            )
+            .bind(slice.id)
+            .bind(&fork_url)
+            .fetch_optional(&state.db)
+            .await
+            .ok()
+            .flatten();
+            updated
+        }
+        Err(e) => {
+            tracing::warn!(
+                slice_id = %slice.id, user_id = %user_id, error = %e,
+                "SKI-75 auto-fork failed — user will need to fork manually"
+            );
+            None
+        }
+    }
 }
 
 /// POST /api/slices/{id}/unclaim

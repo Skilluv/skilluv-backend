@@ -76,6 +76,15 @@ pub struct ProjectSlice {
     #[serde(default)]
     pub min_rank: Option<String>,
 
+    /// P26 v2 SKI-75: HTML URL of the challenger's fork of the target repo,
+    /// populated best-effort on claim when the user has connected GitHub.
+    #[serde(default)]
+    pub fork_repo_url: Option<String>,
+    /// P26 v2 SKI-75: when the fork was recorded. Set/unset in lockstep
+    /// with `fork_repo_url` (CHECK-enforced at the DB level).
+    #[serde(default)]
+    pub fork_created_at: Option<DateTime<Utc>>,
+
     pub created_by_user_id: Option<Uuid>,
     pub ingested_from: String,
 

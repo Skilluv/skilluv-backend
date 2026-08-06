@@ -29,11 +29,11 @@ pub struct PublicUserSnapshot {
     pub total_fragments: i32,
     pub golden_stars: i32,
     pub streak_current: i32,
-    pub profile_active: bool,
+    pub profile_hidden: bool,
 }
 
 impl PortfolioService {
-    /// Récupère le user public par username. Retourne 404 si profile_active=FALSE.
+    /// Récupère le user public par username. Retourne 404 si profile_hidden=TRUE.
     pub async fn get_user_by_username(
         db: &PgPool,
         username: &str,
@@ -41,10 +41,10 @@ impl PortfolioService {
         let snapshot = sqlx::query_as::<_, PublicUserSnapshot>(
             r#"
             SELECT id, username, display_name, first_name, last_name,
-                   title, total_fragments, golden_stars, streak_current, profile_active
+                   title, total_fragments, golden_stars, streak_current, profile_hidden
             FROM users
             WHERE username = $1
-              AND profile_active = TRUE
+              AND profile_hidden = FALSE
             "#,
         )
         .bind(username)

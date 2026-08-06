@@ -103,7 +103,7 @@ struct ProfileUser {
     linkedin: Option<String>,
     website: Option<String>,
     twitter: Option<String>,
-    profile_active: bool,
+    profile_hidden: bool,
     is_banned: bool,
     created_at: chrono::DateTime<chrono::Utc>,
 }
@@ -127,14 +127,17 @@ pub async fn public_profile(
     Path(username): Path<String>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let user: ProfileUser = sqlx::query_as(
-        "SELECT id, username, display_name, skill_domain, title, golden_stars, total_fragments, streak_current, country, city, bio, avatar_url, github, linkedin, website, twitter, profile_active, is_banned, created_at FROM users WHERE username = $1",
+        "SELECT id, username, display_name, skill_domain, title, golden_stars, total_fragments, streak_current, country, city, bio, avatar_url, github, linkedin, website, twitter, profile_hidden, is_banned, created_at FROM users WHERE username = $1",
     )
     .bind(&username)
     .fetch_optional(&state.db)
     .await?
     .ok_or(AppError::NotFound("User not found".to_string()))?;
 
-    if !user.profile_active || user.is_banned {
+    // Visibility is `profile_hidden`, not `profile_active`: the latter only says
+    // whether onboarding was cleared, and gating on it hid every account that had
+    // signed up but not yet completed a challenge (SKI-70).
+    if user.profile_hidden || user.is_banned {
         return Err(AppError::NotFound("User not found".to_string()));
     }
 

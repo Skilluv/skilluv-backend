@@ -43,7 +43,7 @@
 
 | Method | Path | Response |
 |--------|------|----------|
-| GET | `/profile/{username}` | `{ user: { username, display_name, title, golden_stars, skill_domain, country, bio, avatar_url, github, linkedin, website, twitter, member_since }, stats, skill_tree?, heatmap_summary?, badges? }` — respecte privacy settings |
+| GET | `/profile/{username}` | `{ user: { username, display_name, title, golden_stars, skill_domain, country, bio, avatar_url, github, linkedin, website, twitter, member_since }, stats, skill_tree?, heatmap_summary?, badges? }` — respecte privacy settings. 404 si le compte est banni ou `profile_hidden = true`. Visible dès l'inscription : `profile_active` ne gate que les surfaces de listing (talent search, leaderboard, digest). |
 
 ### Authenticated
 
@@ -52,8 +52,8 @@
 | PUT | `/profile/me` | `{ bio?, github?, linkedin?, website?, twitter?, country? }` | `{ user: UserPrivate }` |
 | POST | `/profile/me/avatar` | multipart `avatar` (JPEG/PNG/WebP, max 2MB) | `{ avatar_url, message }` |
 | DELETE | `/profile/me/avatar` | — | `{ message }` |
-| GET | `/profile/me/privacy` | — | `{ privacy: { show_email, show_heatmap, show_skill_tree, show_badges, show_streak, allow_interest_requests } }` |
-| PUT | `/profile/me/privacy` | `{ show_email?, show_heatmap?, show_skill_tree?, show_badges?, show_streak?, allow_interest_requests? }` | `{ privacy }` |
+| GET | `/profile/me/privacy` | — | `{ privacy: { show_email, show_heatmap, show_skill_tree, show_badges, show_streak, allow_interest_requests, hide_profile } }` |
+| PUT | `/profile/me/privacy` | `{ show_email?, show_heatmap?, show_skill_tree?, show_badges?, show_streak?, allow_interest_requests?, hide_profile? }` | `{ privacy }` |
 | PUT | `/auth/me/display-name` | `{ display_name }` | `{ display_name, message }` |
 | PUT | `/auth/me/skill-domain` | `{ skill_domain }` | `{ skill_domain, message }` |
 
@@ -453,6 +453,7 @@ Servies par `forum_moderator` OU `admin`.
   "totp_enabled": false,
   "email_2fa_enabled": false,
   "profile_active": false,
+  "profile_hidden": false,
   "created_at": "ISO8601"
 }
 ```

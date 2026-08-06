@@ -90,6 +90,11 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::sandbox_routes())
         .nest("/api", routes::slice_routes())
         .nest("/api", routes::slice_validation_routes())
+        .nest("/api", routes::validator_application_routes())
+        .nest(
+            "/api",
+            admin_gate(routes::admin_validator_application_routes()),
+        )
         .nest("/api", routes::deliverable_routes())
         .nest("/api", routes::review_queue_routes())
         .nest("/api", routes::track_routes())

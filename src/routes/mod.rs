@@ -88,6 +88,7 @@ pub mod tenants;
 pub mod tournament;
 pub mod tracks;
 pub mod user_profile;
+pub mod validator_applications;
 pub mod webauthn;
 
 pub use admin::admin_routes;
@@ -179,4 +180,7 @@ pub use tenants::{ROOT_TENANT_ID, is_root_tenant, resolve_tenant_from_headers, t
 pub use tournament::{admin_tournament_routes, tournament_routes};
 pub use tracks::track_routes;
 pub use user_profile::user_profile_routes;
+pub use validator_applications::{
+    admin_validator_application_routes, validator_application_routes,
+};
 pub use webauthn::webauthn_routes;

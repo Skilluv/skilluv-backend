@@ -31,6 +31,12 @@ fn rank_ordinal(rank: &str) -> u8 {
     }
 }
 
+/// Re-export of `rank_ordinal` for use by other services that need the
+/// same total order (e.g. validator eligibility, SKI-81).
+pub fn rank_ordinal_public(rank: &str) -> u8 {
+    rank_ordinal(rank)
+}
+
 /// P26 v2 SKI-76 — accept only the canonical `https://github.com/{o}/{r}/pull/{n}`
 /// shape. Stricter than URL parsing on purpose: gh.io / api.github.com /
 /// enterprise hosts are rejected until we explicitly support them, so a

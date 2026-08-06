@@ -64,6 +64,7 @@ pub mod talent_wallet;
 pub mod team_roles;
 pub mod tournament;
 pub mod tracks;
+pub mod validator_applications;
 pub mod webauthn;
 pub mod webhook;
 

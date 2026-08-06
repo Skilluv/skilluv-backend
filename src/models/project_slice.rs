@@ -9,13 +9,29 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
 
-/// Une slice = un scope de travail claim-able exclusivement.
+/// A slice = a scope of work claim-able exclusively.
 ///
-/// Généralise le pattern éprouvé de `oss_bounties` (voir migration 0042). La bounty
-/// n'est plus qu'un type de slice avec `credits_reward > 0`.
+/// Generalizes the pattern established by `oss_bounties` (see migration 0042). A
+/// bounty is now just a slice with `credits_reward > 0`.
 ///
-/// Workflow : `draft` → `open` → `claimed` (par un user, 7j exclusif) → `in_review`
-/// → `merged` (via webhook GitHub ou review humaine) ou `expired` (retour au pool).
+/// Workflow (P26 v2, decision 2026-08-06 — see migration 0119):
+///
+/// ```text
+/// draft → open → claimed → in_progress → submitted → ci_green
+///                                                        ↓
+///                                                pending_validation
+///                                                    ↙       ↘
+///                                            validated       claimed (reject)
+///                                                ↓
+///                                            merged (bonus)
+/// ```
+///
+/// **Challenge success status** = `validated` (fragments distributed +
+/// attestation issued). The transition to `merged` is an independent **bonus**
+/// (upstream maintainer merged the PR) that adds extra fragments but is NOT
+/// required for the challenge to count as a success.
+///
+/// Terminal statuses: `merged`, `closed`, `expired`.
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct ProjectSlice {
     pub id: Uuid,
@@ -41,6 +57,12 @@ pub struct ProjectSlice {
     pub claimed_by_team_id: Option<Uuid>,
     pub claimed_at: Option<DateTime<Utc>>,
     pub claim_expires_at: Option<DateTime<Utc>>,
+
+    /// P26 v2 SKI-77: timestamp of the challenge success (Skilluv validation).
+    /// Distinct from `merged_at` (upstream bonus).
+    pub validated_at: Option<DateTime<Utc>>,
+    /// P26 v2 SKI-77: the Skilluv validator who approved the PR.
+    pub validated_by_user_id: Option<Uuid>,
 
     pub created_by_user_id: Option<Uuid>,
     pub ingested_from: String,

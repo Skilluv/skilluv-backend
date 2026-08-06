@@ -19,12 +19,43 @@
 //!   the last reason is enough for the frontend to render feedback; a
 //!   fuller audit table would be over-engineering for Phase 1 dogfooding.
 
+use hmac::{Hmac, KeyInit, Mac};
+use sha2::Sha256;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::errors::AppError;
 use crate::middleware::capabilities::require_challenge_validator_for;
 use crate::models::ProjectSlice;
+
+type HmacSha256 = Hmac<Sha256>;
+
+/// SKI-90 — SHA-256-HMAC over the approval tuple. `JWT_SECRET`-keyed so
+/// the hash cannot be forged from DB read-only access.
+///
+/// Kept pure (no I/O) for easy unit-testing. `validated_at` is the
+/// timestamp the caller decided on (usually `Utc::now()` inside
+/// `approve`) — the same input must be persisted alongside the hash to
+/// keep verification deterministic later.
+pub fn compute_attestation_hash(
+    jwt_secret: &str,
+    slice_id: Uuid,
+    submitted_pr_url: &str,
+    validated_at: chrono::DateTime<chrono::Utc>,
+    validator_id: Uuid,
+) -> String {
+    let mut mac = <HmacSha256 as KeyInit>::new_from_slice(jwt_secret.as_bytes())
+        .expect("hmac accepts any key");
+    mac.update(b"skilluv-attestation-v1|");
+    mac.update(slice_id.as_bytes());
+    mac.update(b"|");
+    mac.update(submitted_pr_url.as_bytes());
+    mac.update(b"|");
+    mac.update(validated_at.timestamp_micros().to_be_bytes().as_slice());
+    mac.update(b"|");
+    mac.update(validator_id.as_bytes());
+    hex::encode(mac.finalize().into_bytes())
+}
 
 /// Pick up a submitted slice for validation. Requires the caller to hold
 /// `challenge_validator:{slice.primary_domain}` and forbids self-review.
@@ -80,19 +111,40 @@ pub async fn pickup(
     Ok(slice)
 }
 
-/// Approve the PR: advance to `validated`, stamp validator + timestamp.
+/// Approve the PR: advance to `validated`, stamp validator + timestamp,
+/// compute the SKI-90 attestation hash, and fire the SKI-91 proof hooks
+/// so ranks / badges / stats catch the new success on the same request.
 /// The caller must be the current pickup holder.
 pub async fn approve(
     db: &PgPool,
+    jwt_secret: &str,
     slice_id: Uuid,
     validator_id: Uuid,
 ) -> Result<ProjectSlice, AppError> {
+    // Compute now() ONCE so the hash matches the row's validated_at.
+    let now = chrono::Utc::now();
+
+    // Load the URL first — the hash needs it and we want to fail early
+    // if the slice is not in a shape we can attest.
+    let existing: Option<(Option<String>,)> =
+        sqlx::query_as("SELECT submitted_pr_url FROM project_slices WHERE id = $1")
+            .bind(slice_id)
+            .fetch_optional(db)
+            .await?;
+    let submitted_pr_url = existing
+        .and_then(|(u,)| u)
+        .ok_or_else(|| AppError::Validation("Slice has no submitted_pr_url on file.".into()))?;
+
+    let attestation_hash =
+        compute_attestation_hash(jwt_secret, slice_id, &submitted_pr_url, now, validator_id);
+
     let slice = sqlx::query_as::<_, ProjectSlice>(
         r#"
         UPDATE project_slices
            SET status = 'validated',
-               validated_at = NOW(),
+               validated_at = $3,
                validated_by_user_id = $2,
+               attestation_hash = $4,
                updated_at = NOW()
          WHERE id = $1
            AND status = 'pending_validation'
@@ -102,6 +154,8 @@ pub async fn approve(
     )
     .bind(slice_id)
     .bind(validator_id)
+    .bind(now)
+    .bind(&attestation_hash)
     .fetch_optional(db)
     .await?
     .ok_or_else(|| {
@@ -110,6 +164,25 @@ pub async fn approve(
                 .into(),
         )
     })?;
+
+    // SKI-91 — trigger the proof engine for the challenger so ranks,
+    // capabilities, and badges recompute against the freshly validated
+    // challenge. Best-effort: a hook failure must not roll back the
+    // approval itself (the challenger's success is already persisted).
+    if let Some(claimer) = slice.claimed_by_user_id {
+        let db_clone = db.clone();
+        tokio::spawn(async move {
+            if let Err(e) =
+                crate::services::proof_hooks::recompute_all_for_user(&db_clone, claimer).await
+            {
+                tracing::warn!(
+                    user_id = %claimer, error = %e,
+                    "SKI-91 proof recompute after validation failed"
+                );
+            }
+        });
+    }
+
     Ok(slice)
 }
 
@@ -169,4 +242,62 @@ pub async fn my_queue(db: &PgPool, validator_id: Uuid) -> Result<Vec<ProjectSlic
     .fetch_all(db)
     .await?;
     Ok(rows)
+}
+
+#[cfg(test)]
+mod hash_tests {
+    use super::compute_attestation_hash;
+    use chrono::TimeZone;
+    use uuid::Uuid;
+
+    fn fixed_time() -> chrono::DateTime<chrono::Utc> {
+        chrono::Utc.timestamp_opt(1_700_000_000, 0).unwrap()
+    }
+
+    #[test]
+    fn hash_is_64_hex_chars() {
+        let h = compute_attestation_hash(
+            "s3cret",
+            Uuid::nil(),
+            "https://github.com/x/y/pull/1",
+            fixed_time(),
+            Uuid::nil(),
+        );
+        assert_eq!(h.len(), 64);
+        assert!(
+            h.chars()
+                .all(|c| c.is_ascii_hexdigit() && !c.is_uppercase())
+        );
+    }
+
+    #[test]
+    fn hash_changes_with_any_field() {
+        let base = compute_attestation_hash(
+            "s3cret",
+            Uuid::nil(),
+            "https://github.com/x/y/pull/1",
+            fixed_time(),
+            Uuid::nil(),
+        );
+        assert_ne!(
+            base,
+            compute_attestation_hash(
+                "OTHER-secret",
+                Uuid::nil(),
+                "https://github.com/x/y/pull/1",
+                fixed_time(),
+                Uuid::nil(),
+            )
+        );
+        assert_ne!(
+            base,
+            compute_attestation_hash(
+                "s3cret",
+                Uuid::nil(),
+                "https://github.com/x/y/pull/2",
+                fixed_time(),
+                Uuid::nil(),
+            )
+        );
+    }
 }

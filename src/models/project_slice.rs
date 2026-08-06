@@ -106,6 +106,11 @@ pub struct ProjectSlice {
     #[serde(default)]
     pub validation_reject_reason: Option<String>,
 
+    /// P26 v2 SKI-90: 64-char lowercase hex SHA-256 hash bound to the
+    /// approval moment. Stable identifier for the attestation.
+    #[serde(default)]
+    pub attestation_hash: Option<String>,
+
     pub created_by_user_id: Option<Uuid>,
     pub ingested_from: String,
 

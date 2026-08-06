@@ -53,7 +53,8 @@ pub async fn approve(
     auth: AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse, AppError> {
-    let slice = slice_validation::approve(&state.db, id, auth.user_id).await?;
+    let slice =
+        slice_validation::approve(&state.db, &state.config.jwt_secret, id, auth.user_id).await?;
     Ok((StatusCode::OK, Json(wrap(json!({ "slice": slice })))))
 }
 

@@ -64,6 +64,13 @@ pub struct ProjectSlice {
     /// P26 v2 SKI-77: the Skilluv validator who approved the PR.
     pub validated_by_user_id: Option<Uuid>,
 
+    /// P26 v2 SKI-79: if non-empty, only users with an active user_orientation
+    /// matching one of these slugs may claim. Empty = no restriction. Slug
+    /// shape validated at insert time by the service (no FK, so orientation
+    /// renames don't orphan slices).
+    #[serde(default)]
+    pub required_orientation_slugs: Vec<String>,
+
     pub created_by_user_id: Option<Uuid>,
     pub ingested_from: String,
 

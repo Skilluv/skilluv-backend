@@ -128,6 +128,8 @@ impl SlicesService {
     /// - `NotFound` si la slice n'existe pas ou n'est pas `open`
     /// - `Validation` si le user a déjà `max_concurrent_claims` slices actives
     ///   (Phase P1 : pas de limite. À réintroduire si besoin en Phase P3+)
+    /// - `Forbidden` si la slice porte un gate (P26 v2 SKI-79 orientations)
+    ///   que le user ne satisfait pas.
     ///
     /// Retourne la slice mise à jour avec `claim_expires_at` calculé.
     pub async fn claim(
@@ -135,6 +137,8 @@ impl SlicesService {
         slice_id: Uuid,
         user_id: Uuid,
     ) -> Result<ProjectSlice, AppError> {
+        Self::assert_orientation_access(db, slice_id, user_id).await?;
+
         let expires_at = Utc::now() + Duration::days(CLAIM_DURATION_DAYS);
 
         let slice = sqlx::query_as::<_, ProjectSlice>(
@@ -163,6 +167,56 @@ impl SlicesService {
         })?;
 
         Ok(slice)
+    }
+
+    /// P26 v2 SKI-79 — orientation gate. Returns `Ok(())` when either:
+    ///   - the slice's `required_orientation_slugs` is empty (no restriction), or
+    ///   - the user holds an active (`ended_at IS NULL`) user_orientation
+    ///     whose orientation.slug matches one of the required slugs.
+    ///
+    /// Returns `AppError::Forbidden` otherwise. The message deliberately does
+    /// NOT enumerate the allowed orientations — that hint would let a curious
+    /// user reverse-engineer the sensitivity policy. The slice detail view
+    /// exposes the required slugs to the user as a first-class field so they
+    /// can decide whether to add the orientation before retrying.
+    pub async fn assert_orientation_access(
+        db: &PgPool,
+        slice_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<(), AppError> {
+        let gate: Option<(Vec<String>,)> = sqlx::query_as(
+            "SELECT required_orientation_slugs FROM project_slices WHERE id = $1",
+        )
+        .bind(slice_id)
+        .fetch_optional(db)
+        .await?;
+        let Some((required,)) = gate else {
+            return Ok(()); // Slice not found → the UPDATE below will surface a clearer error.
+        };
+        if required.is_empty() {
+            return Ok(());
+        }
+
+        let has_match: bool = sqlx::query_scalar(
+            r#"
+            SELECT EXISTS (
+                SELECT 1
+                FROM user_orientations uo
+                JOIN orientations o ON o.id = uo.orientation_id
+                WHERE uo.user_id = $1
+                  AND uo.ended_at IS NULL
+                  AND o.slug = ANY($2)
+            )
+            "#,
+        )
+        .bind(user_id)
+        .bind(&required)
+        .fetch_one(db)
+        .await?;
+        if !has_match {
+            return Err(AppError::Forbidden);
+        }
+        Ok(())
     }
 
     /// Un user relâche sa slice. Elle retourne au pool `open`.

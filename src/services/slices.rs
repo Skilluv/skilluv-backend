@@ -31,6 +31,21 @@ fn rank_ordinal(rank: &str) -> u8 {
     }
 }
 
+/// P26 v2 SKI-76 — accept only the canonical `https://github.com/{o}/{r}/pull/{n}`
+/// shape. Stricter than URL parsing on purpose: gh.io / api.github.com /
+/// enterprise hosts are rejected until we explicitly support them, so a
+/// typo can never silently associate a challenge with the wrong repo.
+fn is_valid_github_pr_url(url: &str) -> bool {
+    let Some(rest) = url.strip_prefix("https://github.com/") else {
+        return false;
+    };
+    let parts: Vec<&str> = rest.split('/').collect();
+    if parts.len() != 4 || parts[2] != "pull" {
+        return false;
+    }
+    !parts[0].is_empty() && !parts[1].is_empty() && parts[3].parse::<u64>().is_ok_and(|n| n > 0)
+}
+
 #[cfg(test)]
 mod rank_tests {
     use super::rank_ordinal;
@@ -48,6 +63,44 @@ mod rank_tests {
         // Fail-closed: junk data must not silently grant elevated access.
         assert_eq!(rank_ordinal("god-mode"), 0);
         assert_eq!(rank_ordinal(""), 0);
+    }
+}
+
+#[cfg(test)]
+mod pr_url_tests {
+    use super::is_valid_github_pr_url;
+
+    #[test]
+    fn accepts_canonical_shape() {
+        assert!(is_valid_github_pr_url(
+            "https://github.com/skilluv/skilluv-backend/pull/42"
+        ));
+    }
+
+    #[test]
+    fn rejects_non_github_hosts() {
+        assert!(!is_valid_github_pr_url(
+            "https://gitlab.com/skilluv/skilluv-backend/pull/42"
+        ));
+        assert!(!is_valid_github_pr_url(
+            "https://api.github.com/repos/skilluv/x/pulls/42"
+        ));
+    }
+
+    #[test]
+    fn rejects_missing_segments() {
+        assert!(!is_valid_github_pr_url(
+            "https://github.com/skilluv/pull/42"
+        ));
+        assert!(!is_valid_github_pr_url(
+            "https://github.com/skilluv/x/issues/42"
+        ));
+        assert!(!is_valid_github_pr_url(
+            "https://github.com/skilluv/x/pull/not-a-number"
+        ));
+        assert!(!is_valid_github_pr_url(
+            "https://github.com/skilluv/x/pull/0"
+        ));
     }
 }
 
@@ -203,6 +256,54 @@ impl SlicesService {
         Ok(slice)
     }
 
+    /// P26 v2 SKI-76 — challenger declares the PR they've opened against
+    /// the target repo. Advances status from `claimed`/`in_progress` to
+    /// `submitted`, stores the URL, and stamps `submitted_at`.
+    ///
+    /// Errors:
+    /// - `Validation` if the PR URL is not a well-formed GitHub PR URL
+    ///   (shape `https://github.com/{owner}/{repo}/pull/{n}`).
+    /// - `Validation` if the slice is not currently claimed by this user
+    ///   (or is in a status that can't accept a submission).
+    pub async fn submit_pr(
+        db: &PgPool,
+        slice_id: Uuid,
+        user_id: Uuid,
+        pr_url: &str,
+    ) -> Result<ProjectSlice, AppError> {
+        if !is_valid_github_pr_url(pr_url) {
+            return Err(AppError::Validation(
+                "pr_url must look like https://github.com/{owner}/{repo}/pull/{n}".into(),
+            ));
+        }
+
+        let slice = sqlx::query_as::<_, ProjectSlice>(
+            r#"
+            UPDATE project_slices
+               SET status = 'submitted',
+                   submitted_pr_url = $3,
+                   submitted_at = NOW(),
+                   updated_at = NOW()
+             WHERE id = $1
+               AND claimed_by_user_id = $2
+               AND status IN ('claimed', 'in_progress')
+         RETURNING *
+            "#,
+        )
+        .bind(slice_id)
+        .bind(user_id)
+        .bind(pr_url)
+        .fetch_optional(db)
+        .await?
+        .ok_or_else(|| {
+            AppError::Validation(
+                "Slice cannot be submitted (not found, not your claim, or wrong status).".into(),
+            )
+        })?;
+
+        Ok(slice)
+    }
+
     /// P26 v2 SKI-79 — orientation gate. Returns `Ok(())` when either:
     ///   - the slice's `required_orientation_slugs` is empty (no restriction), or
     ///   - the user holds an active (`ended_at IS NULL`) user_orientation
@@ -218,12 +319,11 @@ impl SlicesService {
         slice_id: Uuid,
         user_id: Uuid,
     ) -> Result<(), AppError> {
-        let gate: Option<(Vec<String>,)> = sqlx::query_as(
-            "SELECT required_orientation_slugs FROM project_slices WHERE id = $1",
-        )
-        .bind(slice_id)
-        .fetch_optional(db)
-        .await?;
+        let gate: Option<(Vec<String>,)> =
+            sqlx::query_as("SELECT required_orientation_slugs FROM project_slices WHERE id = $1")
+                .bind(slice_id)
+                .fetch_optional(db)
+                .await?;
         let Some((required,)) = gate else {
             return Ok(()); // Slice not found → the UPDATE below will surface a clearer error.
         };

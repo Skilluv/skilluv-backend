@@ -85,6 +85,15 @@ pub struct ProjectSlice {
     #[serde(default)]
     pub fork_created_at: Option<DateTime<Utc>>,
 
+    /// P26 v2 SKI-76: the PR URL the challenger declared. Set on the
+    /// `submitted` transition; drives the CI signal correlation later.
+    #[serde(default)]
+    pub submitted_pr_url: Option<String>,
+    /// P26 v2 SKI-76: when the PR was declared. In lockstep with
+    /// `submitted_pr_url` (CHECK-enforced).
+    #[serde(default)]
+    pub submitted_at: Option<DateTime<Utc>>,
+
     pub created_by_user_id: Option<Uuid>,
     pub ingested_from: String,
 

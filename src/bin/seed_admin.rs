@@ -5,31 +5,33 @@
 //! erroring on the unique constraint. Safe to re-run from `docker compose up`,
 //! CI provisioning, or a one-off manual command.
 //!
+//! Password is MANDATORY (via CLI arg or SEED_ADMIN_PASSWORD env). Minimum
+//! 12 characters — the binary refuses to run without one. No auto-generated
+//! passwords: an operator must consciously choose a secret.
+//!
 //! Usage:
-//!   cargo run --bin skilluv-seed-admin
-//!       # falls back to env vars, then to safe dev defaults
-//!   cargo run --bin skilluv-seed-admin -- --email admin@example.com \
-//!       --password 'S3cure!Pass123' --username admin
+//!   SEED_ADMIN_PASSWORD='S3cure!Pass123' cargo run --bin skilluv-seed-admin
+//!   cargo run --bin skilluv-seed-admin -- \
+//!       --email admin@skill-uv.com --password 'S3cure!Pass123'
 //!
 //! Env vars (used only when the matching CLI arg is missing):
-//!   SEED_ADMIN_EMAIL       default: admin@skilluv.local
-//!   SEED_ADMIN_PASSWORD    default: a random 20-char password logged to stdout
+//!   SEED_ADMIN_EMAIL       default: admin@skill-uv.com
+//!   SEED_ADMIN_PASSWORD    REQUIRED — no default (must be ≥12 chars)
 //!   SEED_ADMIN_USERNAME    default: admin
 //!   SEED_ADMIN_FIRST_NAME  default: Admin
 //!   SEED_ADMIN_LAST_NAME   default: Skilluv
 //!   DATABASE_URL           standard sqlx connection string
 //!
-//! The generated password (when none is supplied) is printed to stdout ONCE
-//! at the end of the run — save it somewhere safe, we don't store it in
-//! plaintext anywhere. Re-running the seed with a different password rotates
-//! it in place.
+//! After upsert, `recompute_capabilities_for_user` is called defensively to
+//! ensure the account has the correct capability set derived from its role /
+//! rank / activity (baseline for a fresh admin account).
 
 use anyhow::{Context, Result};
 use clap::Parser;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use skilluv_backend::services::AuthService;
+use skilluv_backend::services::{AuthService, capabilities_engine};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -53,20 +55,26 @@ struct Cli {
     last_name: Option<String>,
 }
 
-fn generate_password() -> String {
-    // Compose two UUIDv4 hex bodies (~32 chars each) to source ~40 random
-    // chars, then decorate with a leading `!` + an embedded uppercase to
-    // satisfy the API's password policy (12+ chars, upper, digit, special).
-    // Not cryptographically-audited randomness, but it's plenty for a
-    // dev/bootstrap password the user is meant to rotate.
-    let a = Uuid::new_v4().simple().to_string();
-    let b = Uuid::new_v4().simple().to_string();
-    format!("!Sk{a}{b}").chars().take(24).collect()
-}
+const MIN_PASSWORD_LEN: usize = 12;
 
 fn resolve(cli: Option<String>, env_name: &str, fallback: &str) -> String {
     cli.or_else(|| std::env::var(env_name).ok())
         .unwrap_or_else(|| fallback.to_string())
+}
+
+fn resolve_password_or_fail(cli_password: Option<String>) -> Result<String> {
+    let password = cli_password.or_else(|| std::env::var("SEED_ADMIN_PASSWORD").ok());
+    match password {
+        None => anyhow::bail!(
+            "SEED_ADMIN_PASSWORD is required. Provide it via --password CLI arg \
+             or SEED_ADMIN_PASSWORD env var. Minimum {MIN_PASSWORD_LEN} characters."
+        ),
+        Some(p) if p.chars().count() < MIN_PASSWORD_LEN => anyhow::bail!(
+            "SEED_ADMIN_PASSWORD too short: {} chars, minimum {MIN_PASSWORD_LEN} required.",
+            p.chars().count()
+        ),
+        Some(p) => Ok(p),
+    }
 }
 
 #[tokio::main]
@@ -81,21 +89,14 @@ async fn main() -> Result<()> {
 
     let cli = Cli::parse();
 
-    let email = resolve(cli.email, "SEED_ADMIN_EMAIL", "admin@skilluv.local").to_lowercase();
+    let email = resolve(cli.email, "SEED_ADMIN_EMAIL", "admin@skill-uv.com").to_lowercase();
     let username = resolve(cli.username, "SEED_ADMIN_USERNAME", "admin").to_lowercase();
     let first_name = resolve(cli.first_name, "SEED_ADMIN_FIRST_NAME", "Admin");
     let last_name = resolve(cli.last_name, "SEED_ADMIN_LAST_NAME", "Skilluv");
 
-    // Password: CLI > env > freshly-generated. When we generate, we surface
-    // the plaintext once at the end — the caller MUST capture it, we never
-    // print it a second time.
-    let (password, generated) = match cli
-        .password
-        .or_else(|| std::env::var("SEED_ADMIN_PASSWORD").ok())
-    {
-        Some(p) => (p, false),
-        None => (generate_password(), true),
-    };
+    // Password is MANDATORY — no auto-generation. Force operators to
+    // consciously choose a secret they will store.
+    let password = resolve_password_or_fail(cli.password)?;
 
     let display_name = format!("{} {}", first_name.trim(), last_name.trim());
     let password_hash = AuthService::hash_password(&password)
@@ -144,6 +145,24 @@ async fn main() -> Result<()> {
         "admin account seeded"
     );
 
+    // Ensure derived capabilities are recomputed post-upsert. Defensive: for a
+    // fresh admin account this typically results in the baseline capability
+    // set (role=admin drives access via AdminGate middleware; caps engine adds
+    // any rank/activity-derived caps that a re-run of the seed should refresh).
+    match capabilities_engine::recompute_capabilities_for_user(&db, user_id).await {
+        Ok(report) => tracing::info!(
+            %user_id,
+            granted = ?report.granted,
+            already_active = ?report.already_active,
+            "capabilities recomputed"
+        ),
+        Err(e) => tracing::warn!(
+            %user_id,
+            error = %e,
+            "recompute_capabilities_for_user failed — role=admin still applied via UPSERT, panel remains accessible"
+        ),
+    }
+
     println!();
     println!("═══════════════════════════════════════════════════════════");
     println!(
@@ -153,14 +172,7 @@ async fn main() -> Result<()> {
     println!("═══════════════════════════════════════════════════════════");
     println!("  Email:    {email}");
     println!("  Username: {username}");
-    if generated {
-        println!("  Password: {password}");
-        println!();
-        println!("  ⚠  This password was auto-generated and will not be shown");
-        println!("     again. Save it in your password manager NOW.");
-    } else {
-        println!("  Password: (provided by caller — not echoed)");
-    }
+    println!("  Password: (provided by caller — not echoed)");
     println!("═══════════════════════════════════════════════════════════");
 
     Ok(())

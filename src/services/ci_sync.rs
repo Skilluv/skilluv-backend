@@ -128,6 +128,74 @@ async fn advance_to_ci_green_by_url(db: &PgPool, pr_url: &str) -> Result<bool, A
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// SKI-89 — pull_request merged bonus
+// ═══════════════════════════════════════════════════════════════════
+
+/// Minimal shape of the GitHub `pull_request` event. Only the `closed`
+/// action with `merged=true` is acted on: the challenge advances from
+/// `validated` to `merged` as a **bonus** (upstream maintainer merged
+/// the PR). If the slice never reached `validated`, the merge is a
+/// side-effect of the upstream project and is not treated as Skilluv
+/// success (silent no-op via the scoped UPDATE).
+#[derive(Debug, Deserialize)]
+pub struct PullRequestEvent {
+    pub action: String,
+    pub pull_request: PullRequestPayload,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PullRequestPayload {
+    pub html_url: String,
+    #[serde(default)]
+    pub merged: bool,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum MergeBonusDecision {
+    /// Not the `closed` action.
+    NotClosed,
+    /// Closed without merging (declined).
+    ClosedWithoutMerge,
+    /// Merged but no `validated` slice matched the PR URL.
+    NoValidatedSlice,
+    /// Advanced one slice `validated → merged`.
+    Awarded { pr_url: String },
+}
+
+/// SKI-89 — handle a `pull_request` webhook payload.
+pub async fn handle_pull_request_event(
+    db: &PgPool,
+    event: PullRequestEvent,
+) -> Result<MergeBonusDecision, AppError> {
+    if event.action != "closed" {
+        return Ok(MergeBonusDecision::NotClosed);
+    }
+    if !event.pull_request.merged {
+        return Ok(MergeBonusDecision::ClosedWithoutMerge);
+    }
+    let updated: Option<(Uuid,)> = sqlx::query_as(
+        r#"
+        UPDATE project_slices
+           SET status = 'merged',
+               updated_at = NOW()
+         WHERE submitted_pr_url = $1
+           AND status = 'validated'
+     RETURNING id
+        "#,
+    )
+    .bind(&event.pull_request.html_url)
+    .fetch_optional(db)
+    .await?;
+    if updated.is_some() {
+        Ok(MergeBonusDecision::Awarded {
+            pr_url: event.pull_request.html_url,
+        })
+    } else {
+        Ok(MergeBonusDecision::NoValidatedSlice)
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // SKI-88 — poll fallback
 // ═══════════════════════════════════════════════════════════════════
 

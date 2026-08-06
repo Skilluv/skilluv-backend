@@ -20,7 +20,9 @@ use serde_json::json;
 
 use crate::AppState;
 use crate::errors::AppError;
-use crate::services::ci_sync::{self, CheckRunEvent, CiWebhookDecision};
+use crate::services::ci_sync::{
+    self, CheckRunEvent, CiWebhookDecision, MergeBonusDecision, PullRequestEvent,
+};
 use crate::services::linear_sync::{self, GithubIssueEvent, ReverseSyncDecision};
 
 pub fn github_webhook_routes() -> Router<AppState> {
@@ -89,6 +91,22 @@ async fn receive(
             if let CiWebhookDecision::Advanced { slice_count } = &decision {
                 metrics::counter!("skilluv_ci_webhook_advanced_total")
                     .increment(*slice_count as u64);
+            }
+            Ok((
+                StatusCode::ACCEPTED,
+                Json(json!({"decision": format!("{decision:?}") })),
+            ))
+        }
+        "pull_request" => {
+            // SKI-89 — validated → merged bonus when the upstream maintainer
+            // merges the PR. Silent no-op for slices that never reached
+            // `validated` (upstream can merge without Skilluv validating).
+            let event: PullRequestEvent = serde_json::from_slice(&body).map_err(|e| {
+                AppError::Validation(format!("pull_request payload parse failed: {e}"))
+            })?;
+            let decision = ci_sync::handle_pull_request_event(&state.db, event).await?;
+            if matches!(decision, MergeBonusDecision::Awarded { .. }) {
+                metrics::counter!("skilluv_merge_bonus_awarded_total").increment(1);
             }
             Ok((
                 StatusCode::ACCEPTED,

@@ -53,6 +53,7 @@ pub mod seasons;
 pub mod session;
 pub mod skills;
 pub mod slice_ingestion;
+pub mod slice_validation;
 pub mod slices;
 pub mod social;
 pub mod stewards;

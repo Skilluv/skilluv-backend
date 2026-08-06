@@ -94,6 +94,18 @@ pub struct ProjectSlice {
     #[serde(default)]
     pub submitted_at: Option<DateTime<Utc>>,
 
+    /// P26 v2 SKI-83: validator currently holding this slice for review.
+    /// Exclusive: at most one validator per slice at a time.
+    #[serde(default)]
+    pub picked_by_validator_id: Option<Uuid>,
+    /// P26 v2 SKI-83: when the validator picked the slice up. In lockstep
+    /// with `picked_by_validator_id` (CHECK-enforced).
+    #[serde(default)]
+    pub picked_at: Option<DateTime<Utc>>,
+    /// P26 v2 SKI-85: last rejection reason surfaced to the challenger.
+    #[serde(default)]
+    pub validation_reject_reason: Option<String>,
+
     pub created_by_user_id: Option<Uuid>,
     pub ingested_from: String,
 

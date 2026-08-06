@@ -9,6 +9,7 @@ pub mod backup;
 pub mod badge_engine;
 pub mod cache;
 pub mod capabilities_engine;
+pub mod ci_sync;
 pub mod credits;
 pub mod data_export;
 pub mod deliverables;

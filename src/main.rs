@@ -92,6 +92,10 @@ async fn async_main(config: AppConfig) {
     // Activation via SKILLUV_PROOF_SWEEP_ENABLED=1.
     skilluv_backend::services::proof_hooks::start_proof_sweep_task(db.clone());
 
+    // P26 v2 SKI-88 — fallback poller that catches missed CI webhooks.
+    // Silently no-ops when SKILLUV_BOT_GITHUB_TOKEN is unset.
+    skilluv_backend::services::ci_sync::start_ci_poll_task(db.clone());
+
     // Connect to AI service (optional — backend works without it)
     let ai = if let Some(ref grpc_url) = config.grpc_ai_url {
         tracing::info!("Connecting to AI service at {grpc_url}...");

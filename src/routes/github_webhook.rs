@@ -20,20 +20,24 @@ use serde_json::json;
 
 use crate::AppState;
 use crate::errors::AppError;
+use crate::services::ci_sync::{self, CheckRunEvent, CiWebhookDecision};
 use crate::services::linear_sync::{self, GithubIssueEvent, ReverseSyncDecision};
 
 pub fn github_webhook_routes() -> Router<AppState> {
     Router::new().route("/webhooks/github", post(receive))
 }
 
-fn required_env() -> Result<(String, String, String), AppError> {
-    let secret = std::env::var("GITHUB_WEBHOOK_SECRET")
-        .map_err(|_| AppError::ServiceUnavailable("GITHUB_WEBHOOK_SECRET not configured".into()))?;
+fn required_secret() -> Result<String, AppError> {
+    std::env::var("GITHUB_WEBHOOK_SECRET")
+        .map_err(|_| AppError::ServiceUnavailable("GITHUB_WEBHOOK_SECRET not configured".into()))
+}
+
+fn required_linear_env() -> Result<(String, String), AppError> {
     let api_key = std::env::var("LINEAR_API_KEY")
         .map_err(|_| AppError::ServiceUnavailable("LINEAR_API_KEY not configured".into()))?;
     let done_state = std::env::var("LINEAR_DONE_STATE_ID")
         .map_err(|_| AppError::ServiceUnavailable("LINEAR_DONE_STATE_ID not configured".into()))?;
-    Ok((secret, api_key, done_state))
+    Ok((api_key, done_state))
 }
 
 async fn receive(
@@ -41,7 +45,7 @@ async fn receive(
     headers: HeaderMap,
     body: axum::body::Bytes,
 ) -> Result<impl IntoResponse, AppError> {
-    let (secret, api_key, done_state) = required_env()?;
+    let secret = required_secret()?;
 
     let signature = headers
         .get("x-hub-signature-256")
@@ -57,23 +61,44 @@ async fn receive(
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
 
-    if event_type != "issues" {
-        // Politely 202 anything else — GitHub disables endpoints that
-        // return non-2xx repeatedly. `ping` (delivery test) lands here too.
-        return Ok((StatusCode::ACCEPTED, Json(json!({"decision": "Skipped"}))));
+    match event_type {
+        "issues" => {
+            // Only the issues path needs the Linear write credentials.
+            let (api_key, done_state) = required_linear_env()?;
+            let event: GithubIssueEvent = serde_json::from_slice(&body).map_err(|e| {
+                AppError::Validation(format!("github webhook payload parse failed: {e}"))
+            })?;
+            let decision =
+                linear_sync::handle_github_issue_event(&state.db, &api_key, &done_state, event)
+                    .await?;
+            let moved = matches!(decision, ReverseSyncDecision::MovedToDone { .. });
+            metrics::counter!("skilluv_github_reverse_sync_moved_total")
+                .increment(u64::from(moved));
+            Ok((
+                StatusCode::ACCEPTED,
+                Json(json!({"decision": format!("{decision:?}") })),
+            ))
+        }
+        "check_run" => {
+            // SKI-87 — advance submitted → ci_green on successful CI. LINEAR_*
+            // secrets are not used on this path; only the shared HMAC secret.
+            let event: CheckRunEvent = serde_json::from_slice(&body).map_err(|e| {
+                AppError::Validation(format!("check_run payload parse failed: {e}"))
+            })?;
+            let decision = ci_sync::handle_check_run_event(&state.db, event).await?;
+            if let CiWebhookDecision::Advanced { slice_count } = &decision {
+                metrics::counter!("skilluv_ci_webhook_advanced_total")
+                    .increment(*slice_count as u64);
+            }
+            Ok((
+                StatusCode::ACCEPTED,
+                Json(json!({"decision": format!("{decision:?}") })),
+            ))
+        }
+        _ => {
+            // Politely 202 anything else — GitHub disables endpoints that
+            // return non-2xx repeatedly. `ping` (delivery test) lands here too.
+            Ok((StatusCode::ACCEPTED, Json(json!({"decision": "Skipped"}))))
+        }
     }
-
-    let event: GithubIssueEvent = serde_json::from_slice(&body)
-        .map_err(|e| AppError::Validation(format!("github webhook payload parse failed: {e}")))?;
-
-    let decision =
-        linear_sync::handle_github_issue_event(&state.db, &api_key, &done_state, event).await?;
-
-    let moved = matches!(decision, ReverseSyncDecision::MovedToDone { .. });
-    metrics::counter!("skilluv_github_reverse_sync_moved_total").increment(u64::from(moved));
-
-    Ok((
-        StatusCode::ACCEPTED,
-        Json(json!({"decision": format!("{decision:?}") })),
-    ))
 }

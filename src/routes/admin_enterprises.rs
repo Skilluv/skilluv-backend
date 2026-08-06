@@ -398,9 +398,12 @@ pub async fn get_type_config(
 // ═══════════════════════════════════════════════════════════════════
 
 /// Admin: list agency clients for a staffing_agency enterprise (empty otherwise).
+///
+/// **Payload shape**: standard admin listing convention
+/// `{data: [...], pagination: {...}, meta: {...}}`.
 #[utoipa::path(
     get, path = "/api/admin/enterprises/{id}/agency-clients", tag = "admin",
-    params(("id" = Uuid, Path)),
+    params(("id" = Uuid, Path), AgencyClientsQuery),
     responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
@@ -409,6 +412,7 @@ pub async fn list_agency_clients(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
+    Query(q): Query<AgencyClientsQuery>,
 ) -> Result<Json<Value>, AppError> {
     crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
 
@@ -421,14 +425,27 @@ pub async fn list_agency_clients(
         return Err(AppError::NotFound(format!("enterprise {id} not found")));
     }
 
+    let page = q.page.unwrap_or(1).max(1);
+    let per_page = q.per_page.unwrap_or(50).clamp(1, 200);
+    let offset = (page - 1) * per_page;
+
     let rows: Vec<AdminEnterprisesRow370> = sqlx::query_as(
         r#"SELECT id, client_name, client_contact_email, notes, active, created_at
                FROM agency_clients WHERE enterprise_id = $1
-               ORDER BY created_at DESC"#,
+               ORDER BY created_at DESC
+               LIMIT $2 OFFSET $3"#,
     )
     .bind(id)
+    .bind(per_page)
+    .bind(offset)
     .fetch_all(&state.db)
     .await?;
+
+    let total: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM agency_clients WHERE enterprise_id = $1")
+            .bind(id)
+            .fetch_one(&state.db)
+            .await?;
 
     let clients: Vec<Value> = rows
         .into_iter()
@@ -440,5 +457,25 @@ pub async fn list_agency_clients(
         })
         .collect();
 
-    Ok(Json(build_response(json!({ "clients": clients }))))
+    Ok(Json(json!({
+        "data": clients,
+        "pagination": {
+            "page": page, "per_page": per_page, "total": total,
+            "total_pages": if per_page > 0 { (total + per_page - 1) / per_page } else { 0 },
+        },
+        "meta": {
+            "request_id": Uuid::new_v4().to_string(),
+            "timestamp": chrono::Utc::now().to_rfc3339(),
+        }
+    })))
+}
+
+#[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
+pub struct AgencyClientsQuery {
+    #[param(minimum = 1, maximum = 100000)]
+    pub page: Option<i64>,
+    #[param(minimum = 1, maximum = 200)]
+    pub per_page: Option<i64>,
 }

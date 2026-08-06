@@ -1,6 +1,6 @@
 //! Sponsored challenges workflow — Phase 3.12.
 
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
@@ -108,9 +108,14 @@ pub struct AdminSponsorshipRow {
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
-pub struct AdminRequestsResponse {
-    pub requests: Vec<AdminSponsorshipRow>,
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
+pub struct AdminRequestsQuery {
+    #[param(minimum = 1, maximum = 100000)]
+    pub page: Option<i64>,
+    #[param(minimum = 1, maximum = 200)]
+    pub per_page: Option<i64>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -282,13 +287,17 @@ pub async fn list_my_requests(
     })))
 }
 
-/// Admin only: list the last 200 sponsorship requests, all statuses.
+/// Admin only: paginated list of sponsorship requests, all statuses.
+///
+/// **Payload shape**: standard admin listing convention
+/// `{data: [AdminSponsorshipRow], pagination: {...}, meta: {...}}`.
 #[utoipa::path(
     get,
     path = "/api/admin/sponsored-challenges",
     tag = "admin",
+    params(AdminRequestsQuery),
     responses(
-        (status = 200, description = "Requests list", body = ApiResponse<AdminRequestsResponse>),
+        (status = 200, description = "Requests list (paginated)", body = serde_json::Value),
         (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
@@ -296,15 +305,27 @@ pub async fn list_my_requests(
 pub async fn admin_list_requests(
     State(state): State<AppState>,
     auth: AuthUser,
-) -> Result<Json<ApiResponse<AdminRequestsResponse>>, AppError> {
+    Query(q): Query<AdminRequestsQuery>,
+) -> Result<Json<serde_json::Value>, AppError> {
     if auth.role != "admin" {
         return Err(AppError::Forbidden);
     }
+    let page = q.page.unwrap_or(1).max(1);
+    let per_page = q.per_page.unwrap_or(50).clamp(1, 200);
+    let offset = (page - 1) * per_page;
+
     let rows: Vec<sqlx::postgres::PgRow> = sqlx::query(
-        "SELECT id, enterprise_id, proposed_title, status, brief, skill_domain, difficulty, duration_days, budget_eur_cents, challenge_id, created_at FROM sponsored_challenge_requests ORDER BY created_at DESC LIMIT 200",
+        "SELECT id, enterprise_id, proposed_title, status, brief, skill_domain, difficulty, duration_days, budget_eur_cents, challenge_id, created_at FROM sponsored_challenge_requests ORDER BY created_at DESC LIMIT $1 OFFSET $2",
     )
+    .bind(per_page)
+    .bind(offset)
     .fetch_all(&state.db)
     .await?;
+
+    let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sponsored_challenge_requests")
+        .fetch_one(&state.db)
+        .await?;
+
     let items: Vec<AdminSponsorshipRow> = rows
         .iter()
         .map(|r| AdminSponsorshipRow {
@@ -321,8 +342,16 @@ pub async fn admin_list_requests(
             created_at: r.get("created_at"),
         })
         .collect();
-    Ok(Json(ApiResponse::new(AdminRequestsResponse {
-        requests: items,
+    Ok(Json(serde_json::json!({
+        "data": items,
+        "pagination": {
+            "page": page, "per_page": per_page, "total": total,
+            "total_pages": if per_page > 0 { (total + per_page - 1) / per_page } else { 0 },
+        },
+        "meta": {
+            "request_id": Uuid::new_v4().to_string(),
+            "timestamp": chrono::Utc::now().to_rfc3339(),
+        }
     })))
 }
 

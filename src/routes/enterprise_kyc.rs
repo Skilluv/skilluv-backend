@@ -8,7 +8,7 @@
 //! When an enterprise exceeds the current level's threshold, the next Stripe/PSP
 //! checkout is refused with a 402-style error pointing to the upload flow.
 
-use axum::extract::{Multipart, Path, State};
+use axum::extract::{Multipart, Path, Query, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::Deserialize;
@@ -211,18 +211,27 @@ pub async fn upload_document(
 }
 
 /// Admin: list enterprise KYC submissions.
+///
+/// **Payload shape**: standard admin listing convention
+/// `{data: [...], pagination: {...}, meta: {...}}`.
 #[utoipa::path(
     get, path = "/api/admin/enterprise-kyc", tag = "enterprise",
+    params(AdminKycListQuery),
     responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
 pub async fn admin_list(
     State(state): State<AppState>,
     auth: AuthUser,
+    Query(q): Query<AdminKycListQuery>,
 ) -> Result<Json<Value>, AppError> {
     if auth.role != "admin" {
         return Err(AppError::Forbidden);
     }
+    let page = q.page.unwrap_or(1).max(1);
+    let per_page = q.per_page.unwrap_or(50).clamp(1, 200);
+    let offset = (page - 1) * per_page;
+
     let rows: Vec<sqlx::postgres::PgRow> = sqlx::query(
         r#"
         SELECT k.enterprise_id, e.company_name, k.level, k.status, k.monthly_spend_eur_cents, k.updated_at,
@@ -231,11 +240,18 @@ pub async fn admin_list(
         JOIN enterprises e ON e.id = k.enterprise_id
         WHERE k.status = 'pending'
         ORDER BY k.updated_at ASC
-        LIMIT 200
+        LIMIT $1 OFFSET $2
         "#,
     )
+    .bind(per_page)
+    .bind(offset)
     .fetch_all(&state.db)
     .await?;
+
+    let total: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM enterprise_kyc WHERE status = 'pending'")
+            .fetch_one(&state.db)
+            .await?;
     use sqlx::Row;
     let items: Vec<Value> = rows
         .iter()
@@ -251,7 +267,27 @@ pub async fn admin_list(
             })
         })
         .collect();
-    Ok(Json(build_response(json!({ "queue": items }))))
+    Ok(Json(json!({
+        "data": items,
+        "pagination": {
+            "page": page, "per_page": per_page, "total": total,
+            "total_pages": if per_page > 0 { (total + per_page - 1) / per_page } else { 0 },
+        },
+        "meta": {
+            "request_id": Uuid::new_v4().to_string(),
+            "timestamp": chrono::Utc::now().to_rfc3339(),
+        }
+    })))
+}
+
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
+pub struct AdminKycListQuery {
+    #[param(minimum = 1, maximum = 100000)]
+    pub page: Option<i64>,
+    #[param(minimum = 1, maximum = 200)]
+    pub per_page: Option<i64>,
 }
 
 #[derive(Deserialize)]

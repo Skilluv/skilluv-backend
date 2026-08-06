@@ -150,5 +150,6 @@ async fn agency_clients_returns_empty_for_direct_hire() {
     .await;
     assert_eq!(resp.status().as_u16(), 200);
     let body: serde_json::Value = resp.json().await.unwrap();
-    assert_eq!(body["data"]["clients"].as_array().unwrap().len(), 0);
+    assert_eq!(body["data"].as_array().unwrap().len(), 0);
+    assert_eq!(body["pagination"]["total"], 0);
 }

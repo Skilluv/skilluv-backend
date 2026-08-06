@@ -364,6 +364,171 @@ async fn close_github_issue(
     Ok(())
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// SKI-73 (P26 v2 B-02) — reverse sync: GitHub Issue closed → tracker Done
+// ═══════════════════════════════════════════════════════════════════
+
+const LINEAR_GRAPHQL: &str = "https://api.linear.app/graphql";
+
+/// Minimal shape of the GitHub `issues` webhook event we act on.
+#[derive(Debug, Deserialize)]
+pub struct GithubIssueEvent {
+    pub action: String,
+    pub issue: GithubIssue,
+    pub repository: GithubRepository,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GithubIssue {
+    pub number: i32,
+    #[serde(default)]
+    pub labels: Vec<Label>,
+    /// `open` or `closed`. GitHub uses "closed" for both merged PRs
+    /// (referenced from `closed via #N` in an issue) and manual close.
+    #[serde(default)]
+    pub state: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GithubRepository {
+    pub name: String,
+    pub owner: RepoOwner,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RepoOwner {
+    pub login: String,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum ReverseSyncDecision {
+    /// Event is not `issues.closed`.
+    NotAClose,
+    /// Issue does not carry the `skilluv-challenge` label — not one of ours.
+    NotOurs,
+    /// No matching row in `linear_challenge_sync` — the issue predates the
+    /// bot or was created out-of-band.
+    Untracked,
+    /// Tracker state successfully advanced to Done.
+    MovedToDone { linear_issue_id: String },
+    /// Row already marked closed — no tracker call issued.
+    AlreadyClosed { linear_issue_id: String },
+}
+
+/// Verify the GitHub-style HMAC signature (`X-Hub-Signature-256: sha256=...`).
+/// Distinct from `verify_signature` only to keep the header name in the log
+/// clear; the crypto is the same.
+pub fn verify_github_signature(secret: &str, body: &[u8], signature: &str) -> Result<(), AppError> {
+    verify_signature(secret, body, signature)
+}
+
+/// Handle a GitHub `issues` event. Only acts on `closed` with our target
+/// label; other events are cheap no-ops so the caller can pass every
+/// delivery through without pre-filtering.
+pub async fn handle_github_issue_event(
+    db: &PgPool,
+    linear_api_key: &str,
+    linear_done_state_id: &str,
+    event: GithubIssueEvent,
+) -> Result<ReverseSyncDecision, AppError> {
+    if event.action != "closed" {
+        return Ok(ReverseSyncDecision::NotAClose);
+    }
+    let carries_target = event
+        .issue
+        .labels
+        .iter()
+        .any(|l| l.name == GITHUB_TARGET_LABEL);
+    if !carries_target {
+        return Ok(ReverseSyncDecision::NotOurs);
+    }
+
+    let row: Option<(String, String)> = sqlx::query_as(
+        r#"
+        SELECT linear_issue_id, last_status
+        FROM linear_challenge_sync
+        WHERE github_owner = $1 AND github_repo = $2 AND github_issue_number = $3
+        "#,
+    )
+    .bind(&event.repository.owner.login)
+    .bind(&event.repository.name)
+    .bind(event.issue.number)
+    .fetch_optional(db)
+    .await?;
+
+    let Some((linear_issue_id, last_status)) = row else {
+        return Ok(ReverseSyncDecision::Untracked);
+    };
+
+    if last_status == "closed" {
+        return Ok(ReverseSyncDecision::AlreadyClosed { linear_issue_id });
+    }
+
+    move_linear_ticket_to_done(linear_api_key, linear_done_state_id, &linear_issue_id).await?;
+
+    sqlx::query(
+        r#"
+        UPDATE linear_challenge_sync
+           SET last_status = 'closed', updated_at = NOW()
+         WHERE linear_issue_id = $1
+        "#,
+    )
+    .bind(&linear_issue_id)
+    .execute(db)
+    .await?;
+
+    Ok(ReverseSyncDecision::MovedToDone { linear_issue_id })
+}
+
+#[derive(Debug, Serialize)]
+struct LinearGqlRequest<'a> {
+    query: &'a str,
+    variables: serde_json::Value,
+}
+
+async fn move_linear_ticket_to_done(
+    api_key: &str,
+    done_state_id: &str,
+    issue_identifier: &str,
+) -> Result<(), AppError> {
+    // Two-step: identifier ("SKI-72") is human-friendly but Linear's
+    // issueUpdate takes the UUID id. Resolve via `issue(id: "SKI-72")`
+    // which accepts either — returns the UUID.
+    let query = r#"
+        mutation UpdateByIdentifier($id: String!, $stateId: String!) {
+          issueUpdate(id: $id, input: { stateId: $stateId }) { success }
+        }
+    "#;
+    let req = LinearGqlRequest {
+        query,
+        variables: serde_json::json!({ "id": issue_identifier, "stateId": done_state_id }),
+    };
+
+    let resp = reqwest::Client::new()
+        .post(LINEAR_GRAPHQL)
+        .header("Authorization", api_key)
+        .header("Content-Type", "application/json")
+        .json(&req)
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("linear graphql call failed: {e}")))?;
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let text = resp.text().await.unwrap_or_default();
+        return Err(AppError::Internal(format!(
+            "linear graphql {status}: {text}"
+        )));
+    }
+    let body: serde_json::Value = resp
+        .json()
+        .await
+        .map_err(|e| AppError::Internal(format!("linear graphql decode: {e}")))?;
+    if body.get("errors").is_some() {
+        return Err(AppError::Internal(format!("linear graphql errors: {body}")));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -433,6 +598,42 @@ mod tests {
         );
         assert!(body.contains("SKI-72"));
         assert!(body.contains("Do the thing."));
+    }
+
+    #[test]
+    fn github_signature_shares_hmac_with_tracker_verifier() {
+        // Same secret, same body → same signature. Guards against a future
+        // fork where the two verifiers accidentally use different domains.
+        let secret = "gh-secret";
+        let body = br#"{"action":"closed"}"#;
+        let mut mac = <HmacSha256 as KeyInit>::new_from_slice(secret.as_bytes()).unwrap();
+        mac.update(body);
+        let sig = hex::encode(mac.finalize().into_bytes());
+        assert!(verify_github_signature(secret, body, &format!("sha256={sig}")).is_ok());
+    }
+
+    #[test]
+    fn github_event_parses_minimal_shape() {
+        // Sanity check that #[serde(default)] on `labels`/`state` lets the
+        // deserializer accept the real GitHub payload (which is huge — we
+        // only pull the 4 fields we care about, so `deny_unknown_fields`
+        // is deliberately NOT used).
+        let raw = serde_json::json!({
+            "action": "closed",
+            "issue": {
+                "number": 42,
+                "labels": [{"name": "skilluv-challenge"}],
+                "state": "closed"
+            },
+            "repository": {
+                "name": "skilluv-backend",
+                "owner": {"login": "skilluv"}
+            }
+        });
+        let ev: GithubIssueEvent = serde_json::from_value(raw).unwrap();
+        assert_eq!(ev.issue.number, 42);
+        assert_eq!(ev.repository.owner.login, "skilluv");
+        assert_eq!(ev.issue.labels[0].name, "skilluv-challenge");
     }
 
     #[test]

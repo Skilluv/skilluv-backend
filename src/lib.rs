@@ -179,9 +179,11 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::tenant_routes())
         .nest("/api", routes::ai_job_routes())
         .nest("/api", routes::enterprise_subscription_routes())
-        // SKI-72 — internal-tracker → GitHub Issue webhook receiver.
-        // Mounted OUTSIDE `/api` so external senders don't hit API rate-limits.
+        // SKI-72 / SKI-73 — inbound webhook receivers for tracker⇄GitHub
+        // sync. Mounted OUTSIDE `/api` so external senders don't hit API
+        // rate-limits and signature verification is not conflated with JWT.
         .merge(routes::linear_webhook_routes().with_state(state.clone()))
+        .merge(routes::github_webhook_routes().with_state(state.clone()))
         .merge(routes::well_known_routes().with_state(state.clone()))
         .merge(routes::metrics_routes().with_state(state.clone()))
         .merge(websocket::ws_routes().with_state(state.clone()));

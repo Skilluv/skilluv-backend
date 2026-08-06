@@ -499,7 +499,7 @@ pub async fn register_enterprise(
             &user.email,
             &user.display_name,
             &verify_token,
-            &state.config.base_url,
+            &state.config.frontend_url,
         )
         .await
     {
@@ -838,7 +838,7 @@ pub async fn invite_recruiter(
             &email,
             &enterprise.company_name,
             &invite_token,
-            &state.config.base_url,
+            &state.config.frontend_url,
         )
         .await?;
 

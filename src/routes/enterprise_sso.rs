@@ -505,7 +505,7 @@ pub async fn callback(
 
     // Redirect back to the frontend home (or a post-login destination). The SPA
     // sees the cookies and knows the user is authenticated.
-    let target = format!("{}/", state.config.base_url);
+    let target = format!("{}/", state.config.frontend_url);
     Ok((
         AppendHeaders([
             (SET_COOKIE, access_cookie),

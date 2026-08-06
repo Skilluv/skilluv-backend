@@ -347,7 +347,7 @@ pub async fn admin_run_weekly_digest(
     let svc = digest::DigestService {
         db: &state.db,
         email: &state.email,
-        base_url: &state.config.base_url,
+        base_url: &state.config.frontend_url,
         unsubscribe_secret: &secret,
     };
     let report = svc.run_weekly().await?;

@@ -165,6 +165,7 @@ async fn async_main(config: AppConfig) {
         config: AppStateConfig {
             jwt_secret: config.jwt_secret,
             base_url: config.base_url,
+            frontend_url: config.frontend_url,
             sso_encryption_key: config.sso_encryption_key,
             pdf_renderer_url: config.pdf_renderer_url,
         },

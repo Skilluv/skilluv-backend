@@ -812,7 +812,7 @@ pub async fn register(
             &user.email,
             &user.display_name,
             &verify_token,
-            &state.config.base_url,
+            &state.config.frontend_url,
         )
         .await?;
 
@@ -1534,7 +1534,7 @@ pub async fn resend_verification(
             &user.email,
             &user.display_name,
             &verify_token,
-            &state.config.base_url,
+            &state.config.frontend_url,
         )
         .await?;
 
@@ -1591,7 +1591,7 @@ pub async fn forgot_password(
                 &user.email,
                 &user.display_name,
                 &token,
-                &state.config.base_url,
+                &state.config.frontend_url,
             )
             .await?;
     }
@@ -2361,7 +2361,7 @@ pub async fn request_email_change(
 
     let link = format!(
         "{}/auth/change-email/confirm?token={}",
-        state.config.base_url, token
+        state.config.frontend_url, token
     );
     state
         .email

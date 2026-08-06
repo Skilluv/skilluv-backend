@@ -57,7 +57,10 @@ pub struct AppState {
 #[derive(Clone)]
 pub struct AppStateConfig {
     pub jwt_secret: String,
+    /// API origin — machine-facing callbacks (SSO `redirect_uri`, WebAuthn).
     pub base_url: String,
+    /// Frontend origin — every link a human clicks. See `AppConfig::frontend_url`.
+    pub frontend_url: String,
     /// 32-byte AES-256-GCM key for enterprise SSO client_secret at-rest encryption.
     /// `None` in dev when the env var is unset ; SSO endpoints error out cleanly.
     pub sso_encryption_key: Option<[u8; 32]>,

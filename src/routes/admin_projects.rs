@@ -974,7 +974,10 @@ pub async fn trigger_ingest(
             "project has no github_repo_owner / github_repo_name — set them via PATCH /admin/projects/{slug} first".into(),
         ));
     };
-    let mode = row.slice_ingestion_mode.as_deref().unwrap_or("curator_review");
+    let mode = row
+        .slice_ingestion_mode
+        .as_deref()
+        .unwrap_or("curator_review");
     if mode == "manual_only" {
         return Err(AppError::Validation(
             "project runs in slice_ingestion_mode='manual_only' — the ingestor is intentionally disabled for it".into(),
@@ -1004,7 +1007,8 @@ pub async fn trigger_ingest(
     .await?;
     if recent.is_some() {
         return Err(AppError::ServiceUnavailable(
-            "project.ingest.manual rate-limited to 1 call / minute / project — retry shortly".into(),
+            "project.ingest.manual rate-limited to 1 call / minute / project — retry shortly"
+                .into(),
         ));
     }
 

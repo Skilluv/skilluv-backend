@@ -165,6 +165,21 @@ pub async fn approve(
         )
     })?;
 
+    // SKI-114 (M-08) — append-only decision journal. Enables exact
+    // approve/reject counts and per-decision latency without relying on
+    // the mutable pickup fields on the slice.
+    let _ = sqlx::query(
+        r#"
+        INSERT INTO slice_validation_decisions (slice_id, validator_id, decision, picked_at)
+        VALUES ($1, $2, 'approve', $3)
+        "#,
+    )
+    .bind(slice_id)
+    .bind(validator_id)
+    .bind(slice.picked_at)
+    .execute(db)
+    .await;
+
     // SKI-91 — trigger the proof engine for the challenger so ranks,
     // capabilities, and badges recompute against the freshly validated
     // challenge. Best-effort: a hook failure must not roll back the
@@ -200,6 +215,17 @@ pub async fn reject(
             "reject reason must be non-empty and at most 2000 characters".into(),
         ));
     }
+    // Snapshot picked_at BEFORE the UPDATE clears it, so the decision
+    // journal can carry an exact pickup->decision latency.
+    let picked_at: Option<chrono::DateTime<chrono::Utc>> = sqlx::query_scalar(
+        "SELECT picked_at FROM project_slices WHERE id = $1 AND picked_by_validator_id = $2",
+    )
+    .bind(slice_id)
+    .bind(validator_id)
+    .fetch_optional(db)
+    .await?
+    .flatten();
+
     let slice = sqlx::query_as::<_, ProjectSlice>(
         r#"
         UPDATE project_slices
@@ -225,6 +251,21 @@ pub async fn reject(
                 .into(),
         )
     })?;
+
+    // SKI-114 (M-08) — journal the reject with the reason.
+    let _ = sqlx::query(
+        r#"
+        INSERT INTO slice_validation_decisions (slice_id, validator_id, decision, reason, picked_at)
+        VALUES ($1, $2, 'reject', $3, $4)
+        "#,
+    )
+    .bind(slice_id)
+    .bind(validator_id)
+    .bind(trimmed)
+    .bind(picked_at)
+    .execute(db)
+    .await;
+
     Ok(slice)
 }
 

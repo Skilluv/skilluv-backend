@@ -44,9 +44,23 @@ fn wrap(data: Value) -> Value {
 struct WindowQuery {
     #[serde(default)]
     window_days: Option<i32>,
+    // SKI-115 (M-09) — pagination replaces the silent LIMIT 500.
+    #[serde(default)]
+    page: Option<i64>,
+    #[serde(default)]
+    per_page: Option<i64>,
 }
 
 /// SKI-108 endpoint 1 — activity per validator.
+///
+/// SKI-114: approve_count / reject_count now come from the exact
+/// slice_validation_decisions journal (no more double-counting on
+/// re-pickups). Field renamed from `reject_count_approx` to
+/// `reject_count`.
+///
+/// SKI-115: pagination replaces the silent `LIMIT 500`. `active_domains`
+/// is now an array of `{domain, granted_at}` objects so the admin roster
+/// screen no longer needs an N+1 GET /users/{id}/capabilities per row.
 #[utoipa::path(
     get, path = "/api/admin/validators/stats", tag = "admin",
     responses(
@@ -63,22 +77,21 @@ pub async fn validator_stats(
 ) -> Result<Json<Value>, AppError> {
     crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     let window_days = q.window_days.unwrap_or(90).clamp(1, 730);
+    let per_page = q.per_page.unwrap_or(50).clamp(1, 200);
+    let page = q.page.unwrap_or(1).max(1);
+    let offset = (page - 1) * per_page;
 
-    // For every user who has EVER been picked_by_validator_id or set
-    // validated_by_user_id in the window, aggregate:
-    //   - validations_count = count where they set validated_by
-    //   - approve_count = validations_count (approve is the ONLY path to `validated`)
-    //   - reject_count = derived from rejection audit — we detect it as
-    //     "was picked_by_validator_id but slice is now `claimed` with
-    //     `validation_reject_reason IS NOT NULL`". Not perfect (a re-pickup
-    //     would double-count) but good enough for Phase 1 dogfooding.
-    //   - avg pickup→decision hours = avg(validated_at - picked_at) filtered on validated
+    // Aggregates come from the append-only slice_validation_decisions
+    // journal (SKI-114). approve_count / reject_count are exact even
+    // when a slice is rejected → re-picked → validated. The avg latency
+    // is computed on the journal's `picked_at` snapshot rather than the
+    // slice's live column (which reject() clears).
     type StatsRow = (
         Uuid,           // user_id
         Option<String>, // username
         Option<String>, // display_name
-        i64,            // validations_count (approve)
-        i64,            // reject_count_approx
+        i64,            // approve_count
+        i64,            // reject_count
         Option<f64>,    // avg_hours
     );
     let rows: Vec<StatsRow> = sqlx::query_as(
@@ -86,19 +99,19 @@ pub async fn validator_stats(
         SELECT u.id,
                u.username,
                u.display_name,
-               (SELECT COUNT(*)::bigint FROM project_slices s
-                 WHERE s.validated_by_user_id = u.id
-                   AND s.validated_at > NOW() - ($2 || ' days')::interval),
-               (SELECT COUNT(*)::bigint FROM project_slices s
-                 WHERE s.picked_by_validator_id = u.id
-                   AND s.validation_reject_reason IS NOT NULL
-                   AND s.updated_at > NOW() - ($2 || ' days')::interval),
-               (SELECT AVG(EXTRACT(EPOCH FROM (s.validated_at - s.picked_at)) / 3600.0)
-                  FROM project_slices s
-                 WHERE s.validated_by_user_id = u.id
-                   AND s.validated_at IS NOT NULL
-                   AND s.picked_at IS NOT NULL
-                   AND s.validated_at > NOW() - ($2 || ' days')::interval)
+               (SELECT COUNT(*)::bigint FROM slice_validation_decisions d
+                 WHERE d.validator_id = u.id
+                   AND d.decision = 'approve'
+                   AND d.decided_at > NOW() - ($3 || ' days')::interval),
+               (SELECT COUNT(*)::bigint FROM slice_validation_decisions d
+                 WHERE d.validator_id = u.id
+                   AND d.decision = 'reject'
+                   AND d.decided_at > NOW() - ($3 || ' days')::interval),
+               (SELECT AVG(EXTRACT(EPOCH FROM (d.decided_at - d.picked_at)) / 3600.0)
+                  FROM slice_validation_decisions d
+                 WHERE d.validator_id = u.id
+                   AND d.picked_at IS NOT NULL
+                   AND d.decided_at > NOW() - ($3 || ' days')::interval)
           FROM users u
          WHERE u.id IN (
              SELECT DISTINCT user_id
@@ -107,41 +120,58 @@ pub async fn validator_stats(
                 AND revoked_at IS NULL
          )
          ORDER BY u.username
-         LIMIT $1
+         LIMIT $1 OFFSET $2
         "#,
     )
-    .bind(500i64)
+    .bind(per_page)
+    .bind(offset)
     .bind(window_days.to_string())
     .fetch_all(&state.db)
     .await?;
 
-    // Domain caps live in user_capabilities — one query batched by user.
-    let caps: Vec<(Uuid, String)> = sqlx::query_as(
+    let total: i64 = sqlx::query_scalar(
         r#"
-        SELECT user_id, capability FROM user_capabilities
+        SELECT COUNT(DISTINCT user_id)::bigint
+          FROM user_capabilities
          WHERE capability LIKE 'challenge_validator:%'
            AND revoked_at IS NULL
         "#,
     )
+    .fetch_one(&state.db)
+    .await?;
+
+    // Domain caps live in user_capabilities — one query batched by user.
+    // SKI-115: carry granted_at per domain so the admin roster stops
+    // making an N+1 GET /users/{id}/capabilities.
+    let caps: Vec<(Uuid, String, chrono::DateTime<chrono::Utc>)> = sqlx::query_as(
+        r#"
+        SELECT user_id, capability, granted_at
+          FROM user_capabilities
+         WHERE capability LIKE 'challenge_validator:%'
+           AND revoked_at IS NULL
+         ORDER BY granted_at ASC
+        "#,
+    )
     .fetch_all(&state.db)
     .await?;
-    let mut by_user: std::collections::HashMap<Uuid, Vec<String>> =
-        std::collections::HashMap::new();
-    for (uid, cap) in caps {
-        // strip `challenge_validator:` prefix so the payload is compact
+    let mut by_user: std::collections::HashMap<Uuid, Vec<Value>> = std::collections::HashMap::new();
+    for (uid, cap, granted_at) in caps {
         let domain = cap
             .strip_prefix("challenge_validator:")
             .unwrap_or(&cap)
             .to_string();
-        by_user.entry(uid).or_default().push(domain);
+        by_user.entry(uid).or_default().push(json!({
+            "domain": domain,
+            "granted_at": granted_at.to_rfc3339(),
+        }));
     }
 
     let items: Vec<Value> = rows
         .into_iter()
         .map(|(uid, username, display, approve, reject, avg_h)| {
-            let total = approve + reject;
-            let approve_ratio = if total > 0 {
-                approve as f64 / total as f64
+            let total_decisions = approve + reject;
+            let approve_ratio = if total_decisions > 0 {
+                approve as f64 / total_decisions as f64
             } else {
                 0.0
             };
@@ -151,9 +181,9 @@ pub async fn validator_stats(
                     "username": username,
                     "display_name": display,
                 },
-                "validations_count": approve + reject,
+                "validations_count": total_decisions,
                 "approve_count": approve,
-                "reject_count_approx": reject,
+                "reject_count": reject,
                 "approve_ratio": approve_ratio,
                 "avg_pickup_to_decision_hours": avg_h,
                 "active_domains": by_user.remove(&uid).unwrap_or_default(),
@@ -161,9 +191,17 @@ pub async fn validator_stats(
         })
         .collect();
 
+    let total_pages = ((total as f64) / (per_page as f64)).ceil() as i64;
+
     Ok(Json(wrap(json!({
         "window_days": window_days,
         "validators": items,
+        "pagination": {
+            "page": page,
+            "per_page": per_page,
+            "total": total,
+            "total_pages": total_pages,
+        },
     }))))
 }
 

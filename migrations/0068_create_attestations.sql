@@ -1,4 +1,4 @@
--- Phase P5 — Attestations * LAUNCH FEATURE.
+-- Phase P5 — Attestations ⭐ LAUNCH FEATURE.
 -- Migration 0068 : table `attestations` (killer feature de Skilluv).
 --
 -- Rationale (voir docs/challenges-target-model-and-roadmap.md sections B.12,

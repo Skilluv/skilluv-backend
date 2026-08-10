@@ -1,4 +1,4 @@
-//! Routes HTTP pour les attestations (Phase P5 ⭐ LAUNCH).
+//! Routes HTTP pour les attestations (Phase P5 * LAUNCH).
 //!
 //! Endpoints :
 //!   GET  /api/users/{user_id}/attestations       — portfolio public (public)

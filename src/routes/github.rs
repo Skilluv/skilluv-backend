@@ -456,7 +456,7 @@ fn render_cv_html(c: CvContext) -> String {
         .iter()
         .map(|r| {
             format!(
-                "<div class=\"proj\"><h4><a href=\"{url}\">{name}</a> <span class=\"meta\">★ {stars}</span></h4><p>{desc}</p><p class=\"meta\">{lang}</p></div>",
+                "<div class=\"proj\"><h4><a href=\"{url}\">{name}</a> <span class=\"meta\">* {stars}</span></h4><p>{desc}</p><p class=\"meta\">{lang}</p></div>",
                 url = esc(&r.html_url),
                 name = esc(&r.full_name),
                 stars = r.stargazers_count,
@@ -496,7 +496,7 @@ fn render_cv_html(c: CvContext) -> String {
   <div>
     <h1>{display}</h1>
     <p class="meta">@{username} · {domain} · {location}</p>
-    <p class="meta">{title} · {frags} fragments · 🔥 streak {streak} · ⭐ {gstars}</p>
+    <p class="meta">{title} · {frags} fragments ·  streak {streak} · * {gstars}</p>
   </div>
 </header>
 

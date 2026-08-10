@@ -253,7 +253,7 @@ impl PortfolioService {
         };
 
         let value = if user.golden_stars > 0 {
-            format!("{title_display} ★{}", user.golden_stars)
+            format!("{title_display} *{}", user.golden_stars)
         } else {
             format!("{title_display} · {} frags", user.total_fragments)
         };

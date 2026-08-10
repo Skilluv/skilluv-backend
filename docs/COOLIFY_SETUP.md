@@ -35,10 +35,10 @@ bash <(curl -sSL https://raw.githubusercontent.com/skilluv/skilluv-backend/maste
 
 | Scénario | Comportement pre-deploy |
 |---|---|
-| Image poussée par notre CI (signée cosign + SBOM + SLSA) | Exit 0 → deploy continue ✅ |
+| Image poussée par notre CI (signée cosign + SBOM + SLSA) | Exit 0 → deploy continue OK |
 | Image signée mais SBOM/SLSA absents | Warn dans log, exit 0 → deploy continue (les checks optionnels sont warn-only par design) |
-| Image sans signature cosign | Exit 1 → deploy refusé ❌ |
-| Image tag inexistant sur GHCR | `cosign verify` retourne erreur → exit 1 ❌ |
+| Image sans signature cosign | Exit 1 → deploy refusé FAIL |
+| Image tag inexistant sur GHCR | `cosign verify` retourne erreur → exit 1 FAIL |
 
 ### Test de non-régression manuel
 

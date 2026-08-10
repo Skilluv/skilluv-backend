@@ -51,7 +51,7 @@ jobs:
         if: steps.meta.outputs.update-type == 'version-update:semver-major'
         run: |
           gh pr comment "$PR_URL" --body "$(cat <<'EOF'
-          🚧 **Major version bump detected** — this PR was NOT auto-merged.
+           **Major version bump detected** — this PR was NOT auto-merged.
 
           Someone needs to review the breaking changes in the changelog
           before we upgrade. Once reviewed, close if incompatible or

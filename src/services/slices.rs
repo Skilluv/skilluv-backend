@@ -177,7 +177,7 @@ async fn try_announce_on_pr(
         return Ok(()); // parsed already in submit_pr; defensive.
     };
 
-    let body = "🤝 This PR is part of a Skilluv community challenge. \
+    let body = " This PR is part of a Skilluv community challenge. \
                 Learn more: https://skill-uv.com";
     let url = format!("https://api.github.com/repos/{owner}/{repo}/issues/{number}/comments");
     let resp = reqwest::Client::new()

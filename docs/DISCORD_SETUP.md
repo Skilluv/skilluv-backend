@@ -6,7 +6,7 @@ validated PRs) to Discord channels via a background notifier binary
 
 ## What this covers (v1)
 
-- **Notification queue → Discord webhooks** ✅ (livré PR #67)
+- **Notification queue → Discord webhooks** OK (livré PR #67)
 - Backend event hooks push to `discord_notifications_queue`
 - Notifier binary polls every 15s, posts to Discord via channel webhooks
 - 4 event types: `rank_promotion`, `badge_earned`, `attestation_new`, `slice_validated`
@@ -81,7 +81,7 @@ VALUES (
 ```
 
 Within 15s, `#promotions` should receive :
-> 🎉 **jeremie** just reached rank **artisan** on Skilluv !
+>  **jeremie** just reached rank **artisan** on Skilluv !
 
 ## Backend integration — how to enqueue
 

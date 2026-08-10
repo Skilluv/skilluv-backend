@@ -1,4 +1,4 @@
-//! Tests d'intégration Phase P5 : attestations ⭐ LAUNCH FEATURE.
+//! Tests d'intégration Phase P5 : attestations * LAUNCH FEATURE.
 //!
 //! Couvre :
 //! - Migration 0068 (contraintes CHECK sur type + skill arrays, UNIQUE index)

@@ -235,7 +235,7 @@ async fn badge_svg_returns_well_formed_svg() {
     assert!(svg.starts_with("<svg"));
     assert!(svg.contains("Skilluv"));
     assert!(svg.contains("Légende"));
-    assert!(svg.contains("★10"));
+    assert!(svg.contains("*10"));
     // Gold color pour legende
     assert!(svg.contains("#f39c12"));
 
@@ -275,8 +275,8 @@ async fn badge_svg_escapes_xml_special_chars_from_title() {
 
     // No raw <, > or & from label injection
     let label_content = svg.split("<title>").nth(1).unwrap();
-    // Should only contain: Skilluv: Légende ★5
-    assert!(label_content.starts_with("Skilluv: Légende ★5"));
+    // Should only contain: Skilluv: Légende *5
+    assert!(label_content.starts_with("Skilluv: Légende *5"));
 
     db.close().await;
     cleanup_test_db(&db_name).await;

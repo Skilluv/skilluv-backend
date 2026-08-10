@@ -368,7 +368,7 @@ Suivre cet ordre pour :
 
 | Phase | Fichiers | Effort | Priorité |
 |---|---|---|---|
-| 1 | `src/routes/auth.rs` (25 handlers, 19 en Json<Value>) | 4-5h | 🔥 critique |
+| 1 | `src/routes/auth.rs` (25 handlers, 19 en Json<Value>) | 4-5h |  critique |
 | 2 | `src/errors/codes.rs` — ajouter `ErrorResponse` réutilisable | 30min | bloquant |
 | 3 | `src/routes/webauthn.rs`, `magic_link.rs`, `oauth.rs` (auth suite) | 3h | élevée |
 | 4 | `src/routes/profile.rs`, `user_profile.rs`, `profile_extras.rs` | 3h | élevée |
@@ -484,13 +484,13 @@ schemathesis run http://localhost:3001/api/openapi.json --checks all --hypothesi
 
 ## 9. Anti-patterns à éviter
 
-- ❌ Annoter un handler qui renvoie `Json<serde_json::Value>` **sans refactor typé** — utoipa documentera `type: object` (any) et schemathesis ne pourra rien vérifier. Aucune valeur.
-- ❌ Créer une struct de réponse générique `type Response = serde_json::Value` — même problème.
-- ❌ Utiliser `ToSchema` sur un enum sans configurer explicitement les variants — utoipa ne devine pas la sérialisation serde. Toujours `#[schema(as = ...)]` ou `#[schema(example = ...)]`.
-- ❌ Oublier d'ajouter le handler à `paths(...)` dans `src/openapi.rs` — le handler compile mais n'apparaîtra pas dans le schéma.
-- ❌ Copier-coller les mêmes descriptions partout — utoipa exige `description` explicite sur chaque réponse. Prendre le temps de rédiger des messages qui documentent vraiment.
-- ❌ Toucher aux middlewares axum (`admin_gate`, `ensure_admin_2fa`, etc.) — hors scope.
-- ❌ Regrouper trop de handlers dans un seul commit — voir §10.
+- FAIL Annoter un handler qui renvoie `Json<serde_json::Value>` **sans refactor typé** — utoipa documentera `type: object` (any) et schemathesis ne pourra rien vérifier. Aucune valeur.
+- FAIL Créer une struct de réponse générique `type Response = serde_json::Value` — même problème.
+- FAIL Utiliser `ToSchema` sur un enum sans configurer explicitement les variants — utoipa ne devine pas la sérialisation serde. Toujours `#[schema(as = ...)]` ou `#[schema(example = ...)]`.
+- FAIL Oublier d'ajouter le handler à `paths(...)` dans `src/openapi.rs` — le handler compile mais n'apparaîtra pas dans le schéma.
+- FAIL Copier-coller les mêmes descriptions partout — utoipa exige `description` explicite sur chaque réponse. Prendre le temps de rédiger des messages qui documentent vraiment.
+- FAIL Toucher aux middlewares axum (`admin_gate`, `ensure_admin_2fa`, etc.) — hors scope.
+- FAIL Regrouper trop de handlers dans un seul commit — voir §10.
 
 ---
 
@@ -600,10 +600,10 @@ Docs utiles :
 - [ ] `ErrorResponse` utilisé partout où non-2xx est possible
 - [ ] Security schemes `cookie_auth` + `bearer_auth` définis
 - [ ] `.github/workflows/contract-test.yml` créé et testé localement (au moins un `--dry-run`)
-- [ ] `cargo check --all-targets` ✓
-- [ ] `cargo clippy --all-targets --all-features -- -D warnings` ✓
-- [ ] `cargo fmt --check` ✓
-- [ ] `cargo test --lib` ✓ (les tests unitaires — les tests d'intégration Postgres ne sont pas cassés)
+- [ ] `cargo check --all-targets` OK
+- [ ] `cargo clippy --all-targets --all-features -- -D warnings` OK
+- [ ] `cargo fmt --check` OK
+- [ ] `cargo test --lib` OK (les tests unitaires — les tests d'intégration Postgres ne sont pas cassés)
 - [ ] `curl /api/openapi.json | jq '.paths | length' >= 590`
 - [ ] `curl /api/openapi.json | jq '.components.schemas | length' >= 250` (estimation basse)
 - [ ] Smoke local schemathesis : `schemathesis run ... --hypothesis-max-examples=3` passe sans erreur fatale

@@ -29,7 +29,7 @@ utilisateur peut faire X et le système démontre Y".
 
 ### 1.1 Bookmarks / favoris
 
-**Effort** : 2-3 jours. **Valeur** : ⭐⭐⭐
+**Effort** : 2-3 jours. **Valeur** : ***
 
 **Contract** : un user peut sauvegarder challenges, projets, users
 (mentors), teams, deliverables inspirants — accès via `/api/users/me/bookmarks`.
@@ -50,7 +50,7 @@ il n'y revient pas. Bookmarks = rétention.
 
 ### 1.2 Notes privées sur artefacts vus
 
-**Effort** : 1-2 jours. **Valeur** : ⭐⭐
+**Effort** : 1-2 jours. **Valeur** : **
 
 **Contract** : sur n'importe quel deliverable public consulté, un user
 peut ajouter une note privée ("j'ai aimé cette approche", "revoir plus
@@ -71,7 +71,7 @@ implicitement les deliverables bien faits.
 
 ### 1.3 Objectifs personnels trackés
 
-**Effort** : 3-4 jours. **Valeur** : ⭐⭐⭐
+**Effort** : 3-4 jours. **Valeur** : ***
 
 **Contract** : un user peut se fixer des objectifs mesurables
 ("atteindre Ranger d'ici 3 mois", "prouver React à niveau 4",
@@ -95,7 +95,7 @@ plateformes similaires (Duolingo streak-goals, Strava challenges).
 
 ### 1.4 Historique d'apprentissage — timeline visuelle
 
-**Effort** : 2-3 jours (backend), + design frontend. **Valeur** : ⭐⭐
+**Effort** : 2-3 jours (backend), + design frontend. **Valeur** : **
 
 **Contract** : sur son profil, un user voit sa timeline chronologique :
 "2024-03 : rejoint Skilluv → 2024-06 : premier deliverable verified →
@@ -121,7 +121,7 @@ lisible au portfolio statique.
 
 ### 2.1 Cohorts / groupes d'étude temporaires
 
-**Effort** : 6-8 jours. **Valeur** : ⭐⭐⭐⭐
+**Effort** : 6-8 jours. **Valeur** : ****
 
 **Contract** : un user peut créer ou rejoindre une **cohort** (temporaire,
 5-30 personnes) autour d'un thème ("Rust bootcamp Q3 2026", "Reconversion
@@ -154,7 +154,7 @@ cohort. Fait exploser la valeur perçue vs plateformes isolées.
 
 ### 2.2 Coaching pair-à-pair structuré
 
-**Effort** : 5-7 jours. **Valeur** : ⭐⭐⭐
+**Effort** : 5-7 jours. **Valeur** : ***
 
 **Contract** : deux users du même rang / orientation similaire peuvent
 se pair-programmer 1 session/semaine avec check-in structuré (semi-formal,
@@ -183,7 +183,7 @@ Learning / Coursera qui sont isolés.
 
 ### 2.3 Réputation cross-plateforme (import contrôlé)
 
-**Effort** : 8-10 jours. **Valeur** : ⭐⭐⭐ (avec risque)
+**Effort** : 8-10 jours. **Valeur** : *** (avec risque)
 
 **Contract** : un user peut lier son GitHub / Medium / talks passés à
 son profil Skilluv comme **signaux externes** — visibles mais
@@ -216,7 +216,7 @@ l'onboarding sans diluer la vérifiabilité des preuves Skilluv.
 
 ### 2.4 Notifications interactives sur promotion
 
-**Effort** : 3-4 jours. **Valeur** : ⭐⭐⭐
+**Effort** : 3-4 jours. **Valeur** : ***
 
 **Contract** : quand un user est promu (rank, capability, badge), il
 reçoit une notif riche avec CTA. Ex : "Tu viens d'être promu Ranger !
@@ -242,7 +242,7 @@ savoir → pas de célébration = pas d'attachement.
 
 ### 3.1 IA compagnon d'apprentissage disclosed
 
-**Effort** : 3-4 semaines. **Valeur** : ⭐⭐⭐⭐ mais risqué
+**Effort** : 3-4 semaines. **Valeur** : **** mais risqué
 
 **Contract** : un user peut demander à l'IA Skilluv (via
 `skilluv-ia` gRPC) : "explique-moi cette PR review", "génère 3
@@ -276,7 +276,7 @@ Autant l'intégrer proprement.
 
 ### 3.2 Marketplace inversé — talents proposent leur temps
 
-**Effort** : 2-3 semaines. **Valeur** : ⭐⭐⭐
+**Effort** : 2-3 semaines. **Valeur** : ***
 
 **Contract** : un talent (rank ≥ Artisan) peut afficher "je propose
 2h/semaine pour du pair-programming Rust senior" — visible aux users
@@ -300,7 +300,7 @@ du revenu passif pour les Artisans+.
 
 ### 3.3 Reputation staking / vouching
 
-**Effort** : 3-4 semaines. **Valeur** : ⭐⭐
+**Effort** : 3-4 semaines. **Valeur** : **
 
 **Contract** : un user Doyen peut "vouch" pour un junior — mettre sa
 propre rank en jeu ("si ce user commet une fraude dans les 6 mois, je
@@ -326,7 +326,7 @@ un senior met sa peau au jeu. Signal fort pour recruteurs.
 
 ### 3.4 Skill tree / dependency graph visuel
 
-**Effort** : 2-3 semaines (backend + frontend heavy). **Valeur** : ⭐⭐
+**Effort** : 2-3 semaines (backend + frontend heavy). **Valeur** : **
 
 **Contract** : le user voit un **arbre visuel de ses skills**, avec
 dépendances (`react` requires `javascript`, `godot-3d` requires

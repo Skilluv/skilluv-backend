@@ -844,10 +844,10 @@ pub async fn notify(cfg: &BackupConfig, level: NotifyLevel, message: &str) -> Re
         .build()?;
     let body = match cfg.notify_webhook_kind {
         WebhookKind::Slack => serde_json::json!({
-            "text": format!("{} skilluv-backup: {message}", level.emoji()),
+            "text": format!("{} skilluv-backup: {message}", level.tag()),
         }),
         WebhookKind::Discord => serde_json::json!({
-            "content": format!("{} skilluv-backup: {message}", level.emoji()),
+            "content": format!("{} skilluv-backup: {message}", level.tag()),
         }),
         WebhookKind::Generic => serde_json::json!({
             "level": level.as_str(),
@@ -882,11 +882,11 @@ impl NotifyLevel {
         }
     }
 
-    fn emoji(self) -> &'static str {
+    fn tag(self) -> &'static str {
         match self {
-            Self::Success => "✅",
-            Self::Warning => "⚠️",
-            Self::Failure => "🚨",
+            Self::Success => "OK",
+            Self::Warning => "WARN",
+            Self::Failure => "ALERT",
         }
     }
 }

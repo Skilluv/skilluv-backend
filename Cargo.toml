@@ -28,6 +28,14 @@ ignored = [
     "utoipa-axum",
 ]
 
+[features]
+default = []
+# SKI-116 — pulls in serenity for the Discord gateway bot binary.
+# Not linked by the HTTP backend, the auxiliary binaries or the
+# integration tests, so `cargo test` and the smaller CI jobs stay
+# under the GitHub Actions linker memory budget.
+discord-bot = ["dep:serenity"]
+
 [dependencies]
 # Web framework
 axum = { version = "0.8", features = ["macros", "ws", "multipart"] }
@@ -135,7 +143,12 @@ elliptic-curve = { version = "0.14", features = ["sec1"] }
 # welcome DM, account linking. Used only by src/bin/discord_bot.rs
 # (the main HTTP backend never touches it). rustls_backend keeps us
 # off OpenSSL to match the rest of the workspace.
-serenity = { version = "0.12", default-features = false, features = ["client", "gateway", "rustls_backend", "model"] }
+#
+# Optional + feature-gated: pulling serenity into every test binary
+# blew the linker past the GitHub Actions runner's memory (Bus error
+# on ld). The bot binary opts in via `required-features` below; the
+# HTTP backend and the integration tests link a smaller graph.
+serenity = { version = "0.12", default-features = false, features = ["client", "gateway", "rustls_backend", "model"], optional = true }
 
 # OpenAPI generation + contract testing (BE-P1-CONTRACT).
 # utoipa builds a rustc-verified OpenAPI 3.1 schema from #[utoipa::path]
@@ -176,6 +189,7 @@ path = "src/bin/discord_notifier.rs"
 [[bin]]
 name = "skilluv-discord-bot"
 path = "src/bin/discord_bot.rs"
+required-features = ["discord-bot"]
 
 [build-dependencies]
 tonic-build = "0.14"

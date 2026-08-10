@@ -29,7 +29,9 @@ COPY src/ src/
 COPY migrations/ migrations/
 
 # Touch to force cargo to rebuild the (now real) sources.
-RUN touch src/main.rs src/lib.rs && cargo build --release
+# --features discord-bot pulls serenity in so the discord_bot binary
+# is included in the image (feature-gated to keep test builds lean).
+RUN touch src/main.rs src/lib.rs && cargo build --release --features discord-bot
 
 # ═══════════════════════════════════════════════════════════════════
 # Stage 2 : Runtime
@@ -49,33 +51,48 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Main binary + migrations, ownership set to non-root user.
-COPY --from=builder --chown=skilluv:skilluv /app/target/release/skilluv-backend ./skilluv-backend
+# Long-running binaries — one per Coolify app. All shipped in /usr/local/bin
+# so they're on PATH and `docker exec` works. Kept root-owned there (system
+# location, non-writable by the app user by design).
+#   skilluv-backend         — HTTP API (main)
+#   skilluv-discord-bot     — SKI-116 gateway bot v2 (long-running)
+#   skilluv-discord-notifier — SKI-34 webhook notifier v1 (kept for fallback)
+COPY --from=builder /app/target/release/skilluv-backend          /usr/local/bin/skilluv-backend
+COPY --from=builder /app/target/release/skilluv-discord-bot      /usr/local/bin/skilluv-discord-bot
+COPY --from=builder /app/target/release/skilluv-discord-notifier /usr/local/bin/skilluv-discord-notifier
+
+# Migrations bundled with the image so any long-running binary that
+# runs sqlx::migrate! at boot finds them at /app/migrations.
 COPY --from=builder --chown=skilluv:skilluv /app/migrations/ ./migrations/
 
-# Auxiliary binaries — seed catalog data, provision admin, dump DB, ingest GitHub.
-# Shipped in the same image so ops can `docker exec` any of them without
-# rebuilding. Kept in /usr/local/bin so they're on PATH. Owned by root there
-# (system location, non-writable by app user, as it should be).
-COPY --from=builder /app/target/release/skilluv-seed         /usr/local/bin/skilluv-seed
-COPY --from=builder /app/target/release/skilluv-seed-admin   /usr/local/bin/skilluv-seed-admin
-COPY --from=builder /app/target/release/skilluv-backup       /usr/local/bin/skilluv-backup
+# Auxiliary one-shot binaries — seed catalog data, provision admin,
+# dump DB, ingest GitHub. Run via `docker exec` or a Coolify one-shot job.
+COPY --from=builder /app/target/release/skilluv-seed          /usr/local/bin/skilluv-seed
+COPY --from=builder /app/target/release/skilluv-seed-admin    /usr/local/bin/skilluv-seed-admin
+COPY --from=builder /app/target/release/skilluv-seed-projects /usr/local/bin/skilluv-seed-projects
+COPY --from=builder /app/target/release/skilluv-backup        /usr/local/bin/skilluv-backup
 COPY --from=builder /app/target/release/skilluv-github-ingest /usr/local/bin/skilluv-github-ingest
 
 USER skilluv:skilluv
 
 EXPOSE 3001
 
+# SKILLUV_BINARY picks which long-running binary this container runs.
+# Defaults to the HTTP backend so the existing Coolify app keeps its
+# behavior. A second Coolify app pulling the same image only has to set
+# SKILLUV_BINARY=skilluv-discord-bot to run the Discord bot instead.
 ENV HOST=0.0.0.0 \
     PORT=3001 \
-    RUST_LOG=skilluv_backend=info,tower_http=info
+    RUST_LOG=skilluv_backend=info,tower_http=info \
+    SKILLUV_BINARY=skilluv-backend
 
 # tini reaps zombies + forwards SIGTERM cleanly (axum shuts down gracefully
 # only if it actually receives the signal — bash shell PIDs swallow them).
-ENTRYPOINT ["/usr/bin/tini", "--"]
+# `exec` chains the binary so it inherits PID 1's signal handling from tini.
+ENTRYPOINT ["/usr/bin/tini", "--", "/bin/sh", "-c", "exec /usr/local/bin/${SKILLUV_BINARY}"]
 
-# Container-level healthcheck. Coolify / k8s / docker compose all honor it.
-# `wget` is not installed to keep the image small ; curl is already there.
+# Container-level healthcheck — only meaningful for the HTTP backend.
+# The Discord bot ignores it (returns non-zero, Coolify healthcheck disabled).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -fsS http://127.0.0.1:3001/api/health || exit 1
 

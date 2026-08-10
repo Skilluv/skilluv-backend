@@ -29,6 +29,8 @@ pub fn admin_project_routes() -> Router<AppState> {
         .route("/admin/projects/{slug}", get(get_project))
         .route("/admin/projects/{slug}", patch(patch_project))
         .route("/admin/projects/{slug}", delete(archive_project))
+        // P26 v2 SKI-124 — per-repo challenge stats (workflow health).
+        .route("/admin/projects/{slug}/stats", get(project_stats))
 }
 
 fn wrap(data: Value) -> Value {
@@ -733,6 +735,148 @@ fn warn_ingest_will_no_op(mode: Option<&str>, curated_labels: Option<&[String]>,
              the ingestor will not pick up any issues"
         );
     }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// P26 v2 SKI-124 — per-repo challenge stats
+// ═══════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Deserialize)]
+struct StatsQuery {
+    /// Rolling window in days for time-to-* averages. Default 90,
+    /// clamped 7..365 to keep the query cheap.
+    #[serde(default)]
+    window_days: Option<i32>,
+}
+
+/// GET /api/admin/projects/{slug}/stats?window_days=90
+///
+/// Returns aggregate workflow-health metrics on a project. Distinct
+/// from the P17 badges dashboard (per-user) and the SKI-122 public
+/// endpoint (community pulse): this is the admin operator's view of
+/// how the workflow is performing on THIS repo.
+pub async fn project_stats(
+    _gate: crate::middleware::admin_gate::AdminGate,
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(slug): Path<String>,
+    Query(q): Query<StatsQuery>,
+) -> Result<Json<Value>, AppError> {
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
+    validate_slug(&slug)?;
+    let window_days = q.window_days.unwrap_or(90).clamp(7, 365);
+
+    let project_id: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM projects WHERE slug = $1")
+        .bind(&slug)
+        .fetch_optional(&state.db)
+        .await?;
+    let project_id = project_id
+        .ok_or_else(|| AppError::NotFound(format!("project {slug} not found")))?
+        .0;
+
+    // Slice count breakdown by status — single aggregate for cheapness.
+    type StatusCounts = (i64, i64, i64, i64, i64, i64, i64, i64, i64, i64);
+    let counts: StatusCounts = sqlx::query_as(
+        r#"
+        SELECT
+          COUNT(*) FILTER (WHERE status = 'draft')::bigint,
+          COUNT(*) FILTER (WHERE status = 'open')::bigint,
+          COUNT(*) FILTER (WHERE status = 'claimed')::bigint,
+          COUNT(*) FILTER (WHERE status = 'in_progress')::bigint,
+          COUNT(*) FILTER (WHERE status = 'submitted')::bigint,
+          COUNT(*) FILTER (WHERE status = 'ci_green')::bigint,
+          COUNT(*) FILTER (WHERE status = 'pending_validation')::bigint,
+          COUNT(*) FILTER (WHERE status = 'validated')::bigint,
+          COUNT(*) FILTER (WHERE status = 'merged')::bigint,
+          COUNT(*) FILTER (WHERE status = 'closed')::bigint
+        FROM project_slices WHERE project_id = $1
+        "#,
+    )
+    .bind(project_id)
+    .fetch_one(&state.db)
+    .await?;
+
+    // Time-to-* averages (hours), restricted to slices that HIT the target
+    // state within the window. Postgres EXTRACT(EPOCH FROM interval)/3600.
+    type Averages = (Option<f64>, Option<f64>, Option<f64>);
+    let (avg_submit_h, avg_validate_h, avg_merge_h): Averages = sqlx::query_as(
+        r#"
+        SELECT
+          AVG(EXTRACT(EPOCH FROM (submitted_at - claimed_at)) / 3600.0)
+            FILTER (WHERE submitted_at IS NOT NULL AND claimed_at IS NOT NULL
+                      AND submitted_at > NOW() - ($2 || ' days')::interval),
+          AVG(EXTRACT(EPOCH FROM (validated_at - submitted_at)) / 3600.0)
+            FILTER (WHERE validated_at IS NOT NULL AND submitted_at IS NOT NULL
+                      AND validated_at > NOW() - ($2 || ' days')::interval),
+          AVG(EXTRACT(EPOCH FROM (updated_at - validated_at)) / 3600.0)
+            FILTER (WHERE status = 'merged' AND validated_at IS NOT NULL
+                      AND updated_at > NOW() - ($2 || ' days')::interval)
+          FROM project_slices WHERE project_id = $1
+        "#,
+    )
+    .bind(project_id)
+    .bind(window_days.to_string())
+    .fetch_one(&state.db)
+    .await?;
+
+    // "How aligned are our validations with upstream merges?"
+    // Numerator = merged (bonus tier). Denominator = validated + merged
+    // (both are Skilluv successes; only merged also got the upstream nod).
+    let (validated_count, merged_count): (i64, i64) = sqlx::query_as(
+        r#"
+        SELECT
+          COUNT(*) FILTER (WHERE status = 'validated' AND validated_at > NOW() - ($2 || ' days')::interval)::bigint,
+          COUNT(*) FILTER (WHERE status = 'merged' AND updated_at > NOW() - ($2 || ' days')::interval)::bigint
+          FROM project_slices WHERE project_id = $1
+        "#,
+    )
+    .bind(project_id)
+    .bind(window_days.to_string())
+    .fetch_one(&state.db)
+    .await?;
+    let validated_to_merged_ratio = if validated_count + merged_count > 0 {
+        merged_count as f64 / (validated_count + merged_count) as f64
+    } else {
+        0.0
+    };
+
+    // Adoption of the SKI-101 label-based enrichment. Reads the
+    // JSONB field written by the ingestor.
+    let (from_label, from_default): (i64, i64) = sqlx::query_as(
+        r#"
+        SELECT
+          COUNT(*) FILTER (WHERE external_metadata->'enrichment'->>'domain_source' = 'label')::bigint,
+          COUNT(*) FILTER (WHERE external_metadata->'enrichment'->>'domain_source' = 'project_default')::bigint
+          FROM project_slices WHERE project_id = $1
+        "#,
+    )
+    .bind(project_id)
+    .fetch_one(&state.db)
+    .await?;
+
+    Ok(Json(wrap(json!({
+        "window_days": window_days,
+        "slices": {
+            "draft":              counts.0,
+            "open":               counts.1,
+            "claimed":            counts.2,
+            "in_progress":        counts.3,
+            "submitted":          counts.4,
+            "ci_green":           counts.5,
+            "pending_validation": counts.6,
+            "validated":          counts.7,
+            "merged":             counts.8,
+            "closed":             counts.9,
+        },
+        "avg_time_to_submit_hours":   avg_submit_h,
+        "avg_time_to_validate_hours": avg_validate_h,
+        "avg_time_to_merge_hours":    avg_merge_h,
+        "validated_to_merged_ratio":  validated_to_merged_ratio,
+        "domain_source_distribution": {
+            "label":           from_label,
+            "project_default": from_default,
+        },
+    }))))
 }
 
 #[cfg(test)]

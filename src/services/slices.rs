@@ -147,6 +147,72 @@ async fn assert_pr_authored_by_user(
     Ok(())
 }
 
+/// P26 v2 SKI-119 — post a Skilluv attribution comment on the PR as the
+/// challenger. Uses the user's own OAuth token (scope `public_repo`
+/// already grants `issues:write` on public repos — no re-consent needed).
+///
+/// Idempotent: won't re-post if `announced_at` is already set (checked
+/// atomically as part of the UPDATE). Silent no-op when the user hasn't
+/// connected GitHub OAuth — no announcement is better than none.
+async fn try_announce_on_pr(
+    db: &PgPool,
+    jwt_secret: &str,
+    slice_id: Uuid,
+    user_id: Uuid,
+    pr_url: &str,
+) -> Result<(), AppError> {
+    // Load user's decrypted token via the existing github service helper.
+    let token = match crate::services::github::load_token(db, jwt_secret, user_id).await {
+        Ok(Some(t)) => t,
+        _ => {
+            tracing::info!(
+                user_id = %user_id,
+                "SKI-119 skipped: user has no GitHub OAuth connection"
+            );
+            return Ok(());
+        }
+    };
+
+    let Some((owner, repo, number)) = parse_github_pr_url_parts(pr_url) else {
+        return Ok(()); // parsed already in submit_pr; defensive.
+    };
+
+    let body = "🤝 This PR is part of a Skilluv community challenge. \
+                Learn more: https://skill-uv.com";
+    let url = format!("https://api.github.com/repos/{owner}/{repo}/issues/{number}/comments");
+    let resp = reqwest::Client::new()
+        .post(&url)
+        .bearer_auth(&token)
+        .header("User-Agent", "skilluv-backend/ski-119")
+        .header("Accept", "application/vnd.github+json")
+        .json(&serde_json::json!({ "body": body }))
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("SKI-119 POST failed: {e}")))?;
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let text = resp.text().await.unwrap_or_default();
+        return Err(AppError::Internal(format!(
+            "SKI-119 POST returned {status}: {text}"
+        )));
+    }
+
+    // Stamp announced_at — this UPDATE races safely with any concurrent
+    // duplicate call because the condition `announced_at IS NULL` filters
+    // the second one out.
+    sqlx::query(
+        r#"
+        UPDATE project_slices
+           SET announced_at = NOW(), updated_at = NOW()
+         WHERE id = $1 AND announced_at IS NULL
+        "#,
+    )
+    .bind(slice_id)
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
 fn parse_github_pr_url_parts(url: &str) -> Option<(String, String, i32)> {
     let rest = url.strip_prefix("https://github.com/")?;
     let parts: Vec<&str> = rest.split('/').collect();
@@ -393,9 +459,11 @@ impl SlicesService {
     ///   (or is in a status that can't accept a submission).
     pub async fn submit_pr(
         db: &PgPool,
+        jwt_secret: &str,
         slice_id: Uuid,
         user_id: Uuid,
         pr_url: &str,
+        announce_publicly: bool,
     ) -> Result<ProjectSlice, AppError> {
         if !is_valid_github_pr_url(pr_url) {
             return Err(AppError::Validation(
@@ -450,6 +518,34 @@ impl SlicesService {
                 "Slice cannot be submitted (not found, not your claim, or wrong status).".into(),
             )
         })?;
+
+        // SKI-119 — opt-in public announcement. Fire-and-forget best-effort:
+        // any failure logs a warn but does NOT roll back the submission (the
+        // challenger's claim of a PR is the primary outcome). Idempotent
+        // via the `announced_at IS NULL` guard inside the spawned task.
+        if announce_publicly && slice.announced_at.is_none() {
+            let db_clone = db.clone();
+            let secret_clone = jwt_secret.to_string();
+            let pr_url_clone = pr_url.to_string();
+            let slice_id_clone = slice.id;
+            tokio::spawn(async move {
+                if let Err(e) = try_announce_on_pr(
+                    &db_clone,
+                    &secret_clone,
+                    slice_id_clone,
+                    user_id,
+                    &pr_url_clone,
+                )
+                .await
+                {
+                    tracing::warn!(
+                        slice_id = %slice_id_clone,
+                        error = %e,
+                        "SKI-119 announcement failed — slice already submitted, no rollback"
+                    );
+                }
+            });
+        }
 
         Ok(slice)
     }

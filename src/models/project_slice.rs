@@ -111,6 +111,12 @@ pub struct ProjectSlice {
     #[serde(default)]
     pub attestation_hash: Option<String>,
 
+    /// P26 v2 SKI-119: when the challenger opted-in public announcement
+    /// of the PR (comment posted). Idempotent: the second submit-pr call
+    /// on the same slice does not re-post.
+    #[serde(default)]
+    pub announced_at: Option<DateTime<Utc>>,
+
     pub created_by_user_id: Option<Uuid>,
     pub ingested_from: String,
 

@@ -170,6 +170,12 @@ pub async fn get_slice(
 pub struct SubmitPrBody {
     /// Canonical GitHub PR URL — validated by the service layer.
     pub pr_url: String,
+    /// P26 v2 SKI-119 — when true and the user has connected GitHub OAuth,
+    /// posts a Skilluv attribution comment on the PR (as the user, not
+    /// the bot). Best-effort: a POST failure does not roll back the
+    /// submission itself. Default false — opt-in on purpose.
+    #[serde(default)]
+    pub announce_publicly: bool,
 }
 
 /// POST /api/slices/{id}/submit-pr
@@ -193,7 +199,15 @@ pub async fn submit_pr(
     Path(id): Path<Uuid>,
     Json(body): Json<SubmitPrBody>,
 ) -> Result<impl IntoResponse, AppError> {
-    let slice = SlicesService::submit_pr(&state.db, id, auth.user_id, &body.pr_url).await?;
+    let slice = SlicesService::submit_pr(
+        &state.db,
+        &state.config.jwt_secret,
+        id,
+        auth.user_id,
+        &body.pr_url,
+        body.announce_publicly,
+    )
+    .await?;
     Ok((
         StatusCode::OK,
         Json(build_response(json!({

@@ -36,6 +36,7 @@ pub struct User {
     pub website: Option<String>,
     pub twitter: Option<String>,
     pub profile_active: bool,
+    pub profile_hidden: bool,
     pub is_banned: bool,
     pub ban_reason: Option<String>,
     pub banned_at: Option<DateTime<Utc>>,
@@ -140,7 +141,12 @@ pub struct UserPrivate {
     pub email_verified: bool,
     pub totp_enabled: bool,
     pub email_2fa_enabled: bool,
+    /// True once the user has cleared onboarding (first successful challenge).
+    /// Gates the listing surfaces — talent search, leaderboard, digest.
     pub profile_active: bool,
+    /// True when the user has opted out of their public profile page.
+    /// Independent of `profile_active`.
+    pub profile_hidden: bool,
     pub created_at: DateTime<Utc>,
 }
 
@@ -174,6 +180,7 @@ impl From<User> for UserPrivate {
             totp_enabled: u.totp_enabled,
             email_2fa_enabled: u.email_2fa_enabled,
             profile_active: u.profile_active,
+            profile_hidden: u.profile_hidden,
             created_at: u.created_at,
         }
     }

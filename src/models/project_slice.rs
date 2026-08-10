@@ -9,13 +9,29 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
 
-/// Une slice = un scope de travail claim-able exclusivement.
+/// A slice = a scope of work claim-able exclusively.
 ///
-/// Généralise le pattern éprouvé de `oss_bounties` (voir migration 0042). La bounty
-/// n'est plus qu'un type de slice avec `credits_reward > 0`.
+/// Generalizes the pattern established by `oss_bounties` (see migration 0042). A
+/// bounty is now just a slice with `credits_reward > 0`.
 ///
-/// Workflow : `draft` → `open` → `claimed` (par un user, 7j exclusif) → `in_review`
-/// → `merged` (via webhook GitHub ou review humaine) ou `expired` (retour au pool).
+/// Workflow (P26 v2, decision 2026-08-06 — see migration 0119):
+///
+/// ```text
+/// draft → open → claimed → in_progress → submitted → ci_green
+///                                                        ↓
+///                                                pending_validation
+///                                                    ↙       ↘
+///                                            validated       claimed (reject)
+///                                                ↓
+///                                            merged (bonus)
+/// ```
+///
+/// **Challenge success status** = `validated` (fragments distributed +
+/// attestation issued). The transition to `merged` is an independent **bonus**
+/// (upstream maintainer merged the PR) that adds extra fragments but is NOT
+/// required for the challenge to count as a success.
+///
+/// Terminal statuses: `merged`, `closed`, `expired`.
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct ProjectSlice {
     pub id: Uuid,
@@ -41,6 +57,65 @@ pub struct ProjectSlice {
     pub claimed_by_team_id: Option<Uuid>,
     pub claimed_at: Option<DateTime<Utc>>,
     pub claim_expires_at: Option<DateTime<Utc>>,
+
+    /// P26 v2 SKI-77: timestamp of the challenge success (Skilluv validation).
+    /// Distinct from `merged_at` (upstream bonus).
+    pub validated_at: Option<DateTime<Utc>>,
+    /// P26 v2 SKI-77: the Skilluv validator who approved the PR.
+    pub validated_by_user_id: Option<Uuid>,
+
+    /// P26 v2 SKI-79: if non-empty, only users with an active user_orientation
+    /// matching one of these slugs may claim. Empty = no restriction. Slug
+    /// shape validated at insert time by the service (no FK, so orientation
+    /// renames don't orphan slices).
+    #[serde(default)]
+    pub required_orientation_slugs: Vec<String>,
+
+    /// P26 v2 SKI-78: minimum rank required to claim, or NULL for no floor.
+    /// Ordinal comparison: apprenti < ranger < artisan < maitre < doyen.
+    #[serde(default)]
+    pub min_rank: Option<String>,
+
+    /// P26 v2 SKI-75: HTML URL of the challenger's fork of the target repo,
+    /// populated best-effort on claim when the user has connected GitHub.
+    #[serde(default)]
+    pub fork_repo_url: Option<String>,
+    /// P26 v2 SKI-75: when the fork was recorded. Set/unset in lockstep
+    /// with `fork_repo_url` (CHECK-enforced at the DB level).
+    #[serde(default)]
+    pub fork_created_at: Option<DateTime<Utc>>,
+
+    /// P26 v2 SKI-76: the PR URL the challenger declared. Set on the
+    /// `submitted` transition; drives the CI signal correlation later.
+    #[serde(default)]
+    pub submitted_pr_url: Option<String>,
+    /// P26 v2 SKI-76: when the PR was declared. In lockstep with
+    /// `submitted_pr_url` (CHECK-enforced).
+    #[serde(default)]
+    pub submitted_at: Option<DateTime<Utc>>,
+
+    /// P26 v2 SKI-83: validator currently holding this slice for review.
+    /// Exclusive: at most one validator per slice at a time.
+    #[serde(default)]
+    pub picked_by_validator_id: Option<Uuid>,
+    /// P26 v2 SKI-83: when the validator picked the slice up. In lockstep
+    /// with `picked_by_validator_id` (CHECK-enforced).
+    #[serde(default)]
+    pub picked_at: Option<DateTime<Utc>>,
+    /// P26 v2 SKI-85: last rejection reason surfaced to the challenger.
+    #[serde(default)]
+    pub validation_reject_reason: Option<String>,
+
+    /// P26 v2 SKI-90: 64-char lowercase hex SHA-256 hash bound to the
+    /// approval moment. Stable identifier for the attestation.
+    #[serde(default)]
+    pub attestation_hash: Option<String>,
+
+    /// P26 v2 SKI-119: when the challenger opted-in public announcement
+    /// of the PR (comment posted). Idempotent: the second submit-pr call
+    /// on the same slice does not re-post.
+    #[serde(default)]
+    pub announced_at: Option<DateTime<Utc>>,
 
     pub created_by_user_id: Option<Uuid>,
     pub ingested_from: String,

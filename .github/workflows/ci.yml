@@ -430,3 +430,43 @@ jobs:
             echo "::error::Coolify webhook returned HTTP $status"
             exit 1
           fi
+
+      - name: Wait for deploy + smoke test
+        # SKI-28 (Hygiène pré-prod HYG-01) — after Coolify triggers a
+        # redeploy, wait a bit for the new container to boot then hit
+        # scripts/smoke.sh against the live URL. Fails the workflow if
+        # the new deploy is silently broken.
+        # Skips when SKILLUV_SMOKE_URL is unset (e.g. fork PRs).
+        env:
+          SKILLUV_SMOKE_URL: ${{ secrets.SKILLUV_SMOKE_URL }}
+        if: env.SKILLUV_SMOKE_URL != ''
+        run: |
+          echo "Waiting 60s for Coolify to swap the image..."
+          sleep 60
+          chmod +x scripts/smoke.sh
+          bash scripts/smoke.sh "$SKILLUV_SMOKE_URL"
+
+      - name: Notify Discord on failure
+        # SKI-32 (Hygiène pré-prod HYG-05) — post the failure to Discord
+        # #ops-alerts channel via webhook. Fires on any prior step failing
+        # in this job (Docker publish, Coolify webhook, or smoke test).
+        # Skips silently when DISCORD_ALERT_WEBHOOK_URL is unset.
+        if: failure() && env.DISCORD_ALERT_WEBHOOK_URL != ''
+        env:
+          DISCORD_ALERT_WEBHOOK_URL: ${{ secrets.DISCORD_ALERT_WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COMMIT_SHA: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          # Build JSON payload with jq to avoid shell interpolation of
+          # attacker-controllable context values (github.actor). zizmor E2.
+          payload=$(jq -n \
+            --arg sha "$COMMIT_SHA" \
+            --arg actor "$ACTOR" \
+            --arg url "$RUN_URL" \
+            '{content: ("**CI publish/deploy failed on master** — commit `" + $sha + "` by " + $actor + "\n" + $url)}')
+          curl --silent --show-error --max-time 15 \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -d "$payload" \
+            "$DISCORD_ALERT_WEBHOOK_URL" || echo "Discord notify failed — not blocking"

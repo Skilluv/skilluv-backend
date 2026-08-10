@@ -43,7 +43,7 @@ if command -v cargo-machete > /dev/null 2>&1; then
   echo "▶ cargo machete --with-metadata  (unused deps)"
   cargo machete --with-metadata
 else
-  echo "⚠  cargo-machete not installed — skipping unused-deps check"
+  echo "WARN  cargo-machete not installed — skipping unused-deps check"
   echo "   Install: cargo install cargo-machete --locked"
 fi
 
@@ -57,7 +57,7 @@ elif command -v cargo-audit > /dev/null 2>&1; then
   echo "▶ cargo audit --deny warnings  (cargo-deny not installed, using audit only)"
   cargo audit --deny warnings
 else
-  echo "⚠  cargo-deny/cargo-audit not installed — skipping CVE + license scan"
+  echo "WARN  cargo-deny/cargo-audit not installed — skipping CVE + license scan"
   echo "   Install: cargo install cargo-deny --locked"
 fi
 
@@ -65,13 +65,13 @@ if command -v gitleaks > /dev/null 2>&1; then
   echo "▶ gitleaks detect --source . --no-git"
   gitleaks detect --source . --no-git --config .gitleaks.toml
 else
-  echo "⚠  gitleaks not installed — skipping secret scan"
+  echo "WARN  gitleaks not installed — skipping secret scan"
   echo "   Install: https://github.com/gitleaks/gitleaks#installing"
 fi
 
 # Allow --check to stop right here for a quick pre-push sanity pass.
 if [ "${1:-}" = "--check" ]; then
-  echo "✅ fmt + clippy + deny/audit + gitleaks clean (skipping tests)"
+  echo "OK fmt + clippy + deny/audit + gitleaks clean (skipping tests)"
   exit 0
 fi
 
@@ -84,7 +84,7 @@ for svc in skilluv-postgres skilluv-redis skilluv-minio skilluv-mailpit; do
 done
 
 if [ ${#missing[@]} -gt 0 ]; then
-  echo "❌ Missing containers: ${missing[*]}"
+  echo "FAIL Missing containers: ${missing[*]}"
   echo "   Run: docker compose up -d postgres redis minio mailpit"
   exit 1
 fi

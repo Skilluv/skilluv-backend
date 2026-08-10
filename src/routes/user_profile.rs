@@ -72,6 +72,9 @@ pub struct UpdatePrivacyRequest {
     pub show_badges: Option<bool>,
     pub show_streak: Option<bool>,
     pub allow_interest_requests: Option<bool>,
+    /// Hides the public profile page (`/api/profile/{username}`, portfolio,
+    /// public repos). Stored on `users`, not `user_privacy`.
+    pub hide_profile: Option<bool>,
 }
 
 #[derive(Debug, serde::Serialize, sqlx::FromRow, utoipa::ToSchema)]
@@ -83,6 +86,8 @@ pub struct PrivacySettings {
     pub show_streak: bool,
     pub allow_interest_requests: bool,
     pub updated_at: chrono::DateTime<chrono::Utc>,
+    #[sqlx(default)]
+    pub hide_profile: bool,
 }
 
 // ─── Routes ─────────────────────────────────────────────────────
@@ -309,7 +314,7 @@ pub async fn get_privacy(
     auth: AuthUser,
 ) -> Result<Json<serde_json::Value>, AppError> {
     // Upsert default privacy settings
-    let privacy: PrivacySettings = sqlx::query_as(
+    let mut privacy: PrivacySettings = sqlx::query_as(
         r#"
         INSERT INTO user_privacy (user_id)
         VALUES ($1)
@@ -320,6 +325,11 @@ pub async fn get_privacy(
     .bind(auth.user_id)
     .fetch_one(&state.db)
     .await?;
+
+    privacy.hide_profile = sqlx::query_scalar("SELECT profile_hidden FROM users WHERE id = $1")
+        .bind(auth.user_id)
+        .fetch_one(&state.db)
+        .await?;
 
     Ok(Json(build_response(json!({ "privacy": privacy }))))
 }
@@ -337,7 +347,7 @@ pub async fn update_privacy(
     auth: AuthUser,
     Json(body): Json<UpdatePrivacyRequest>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let privacy: PrivacySettings = sqlx::query_as(
+    let mut privacy: PrivacySettings = sqlx::query_as(
         r#"
         INSERT INTO user_privacy (user_id, show_email, show_heatmap, show_skill_tree, show_badges, show_streak, allow_interest_requests)
         VALUES ($1, COALESCE($2, FALSE), COALESCE($3, TRUE), COALESCE($4, TRUE), COALESCE($5, TRUE), COALESCE($6, TRUE), COALESCE($7, TRUE))
@@ -359,6 +369,15 @@ pub async fn update_privacy(
     .bind(body.show_badges)
     .bind(body.show_streak)
     .bind(body.allow_interest_requests)
+    .fetch_one(&state.db)
+    .await?;
+
+    privacy.hide_profile = sqlx::query_scalar(
+        "UPDATE users SET profile_hidden = COALESCE($1, profile_hidden), updated_at = NOW()
+         WHERE id = $2 RETURNING profile_hidden",
+    )
+    .bind(body.hide_profile)
+    .bind(auth.user_id)
     .fetch_one(&state.db)
     .await?;
 

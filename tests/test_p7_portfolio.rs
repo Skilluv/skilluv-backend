@@ -115,13 +115,22 @@ async fn portfolio_json_returns_schema_org_person() {
 }
 
 #[tokio::test]
-async fn portfolio_rejects_inactive_profile() {
+async fn portfolio_rejects_hidden_profile() {
+    // SKI-70 (migration 0133) split profile_active into two concepts.
+    // Portfolio visibility now follows profile_hidden (the "user hid the
+    // public profile page" bit), not profile_active (the "user cleared
+    // onboarding" bit). Seed profile_hidden=true so the service refuses.
     let (db, db_name) = setup_test_db().await;
     let user_id = Uuid::new_v4();
-    insert_test_user(&db, user_id, "inactive-user", false, Some("apprenti"), 0, 0).await;
+    insert_test_user(&db, user_id, "hidden-user", true, Some("apprenti"), 0, 0).await;
+    sqlx::query("UPDATE users SET profile_hidden = TRUE WHERE id = $1")
+        .bind(user_id)
+        .execute(&db)
+        .await
+        .unwrap();
 
     let res =
-        PortfolioService::build_portfolio_json(&db, "inactive-user", "https://skilluv.com").await;
+        PortfolioService::build_portfolio_json(&db, "hidden-user", "https://skilluv.com").await;
     assert!(res.is_err());
 
     db.close().await;
@@ -235,7 +244,7 @@ async fn badge_svg_returns_well_formed_svg() {
     assert!(svg.starts_with("<svg"));
     assert!(svg.contains("Skilluv"));
     assert!(svg.contains("Légende"));
-    assert!(svg.contains("★10"));
+    assert!(svg.contains("*10"));
     // Gold color pour legende
     assert!(svg.contains("#f39c12"));
 
@@ -275,8 +284,8 @@ async fn badge_svg_escapes_xml_special_chars_from_title() {
 
     // No raw <, > or & from label injection
     let label_content = svg.split("<title>").nth(1).unwrap();
-    // Should only contain: Skilluv: Légende ★5
-    assert!(label_content.starts_with("Skilluv: Légende ★5"));
+    // Should only contain: Skilluv: Légende *5
+    assert!(label_content.starts_with("Skilluv: Légende *5"));
 
     db.close().await;
     cleanup_test_db(&db_name).await;

@@ -28,6 +28,14 @@ ignored = [
     "utoipa-axum",
 ]
 
+[features]
+default = []
+# SKI-116 — pulls in serenity for the Discord gateway bot binary.
+# Not linked by the HTTP backend, the auxiliary binaries or the
+# integration tests, so `cargo test` and the smaller CI jobs stay
+# under the GitHub Actions linker memory budget.
+discord-bot = ["dep:serenity"]
+
 [dependencies]
 # Web framework
 axum = { version = "0.8", features = ["macros", "ws", "multipart"] }
@@ -110,7 +118,11 @@ sentry-tower = { version = "0.49", features = ["http"] }
 sentry-tracing = "0.49"
 
 # ZIP for GDPR data export
-zip = { version = "2", default-features = false, features = ["deflate"] }
+zip = { version = "3", default-features = false, features = ["deflate"] }
+
+# QR code generation for SKI-118 PDF attestations. Pure-Rust, no external
+# service call — the QR is embedded as inline SVG in the PDF's HTML.
+qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 
 # i18n (FR/EN bundled)
 rust-i18n = "4"
@@ -126,6 +138,17 @@ hkdf = "0.13"
 # OIDC B2B SSO (enterprise) — discovery, PKCE, JWKS rotation, ID token verify.
 openidconnect = "4"
 elliptic-curve = { version = "0.14", features = ["sec1"] }
+
+# SKI-116 Discord bot v2 — gateway connection, slash commands,
+# welcome DM, account linking. Used only by src/bin/discord_bot.rs
+# (the main HTTP backend never touches it). rustls_backend keeps us
+# off OpenSSL to match the rest of the workspace.
+#
+# Optional + feature-gated: pulling serenity into every test binary
+# blew the linker past the GitHub Actions runner's memory (Bus error
+# on ld). The bot binary opts in via `required-features` below; the
+# HTTP backend and the integration tests link a smaller graph.
+serenity = { version = "0.12", default-features = false, features = ["client", "gateway", "rustls_backend", "model"], optional = true }
 
 # OpenAPI generation + contract testing (BE-P1-CONTRACT).
 # utoipa builds a rustc-verified OpenAPI 3.1 schema from #[utoipa::path]
@@ -154,6 +177,19 @@ path = "src/bin/seed_admin.rs"
 [[bin]]
 name = "skilluv-github-ingest"
 path = "src/bin/github_ingest.rs"
+
+[[bin]]
+name = "skilluv-seed-projects"
+path = "src/bin/seed_projects.rs"
+
+[[bin]]
+name = "skilluv-discord-notifier"
+path = "src/bin/discord_notifier.rs"
+
+[[bin]]
+name = "skilluv-discord-bot"
+path = "src/bin/discord_bot.rs"
+required-features = ["discord-bot"]
 
 [build-dependencies]
 tonic-build = "0.14"

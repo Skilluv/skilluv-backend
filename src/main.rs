@@ -92,6 +92,23 @@ async fn async_main(config: AppConfig) {
     // Activation via SKILLUV_PROOF_SWEEP_ENABLED=1.
     skilluv_backend::services::proof_hooks::start_proof_sweep_task(db.clone());
 
+    // P26 v2 SKI-88 — fallback poller that catches missed CI webhooks.
+    // Silently no-ops when SKILLUV_BOT_GITHUB_TOKEN is unset.
+    skilluv_backend::services::ci_sync::start_ci_poll_task(db.clone());
+
+    // P26 v2 SKI-111 — external repo refresh poller.
+    // Detects upstream issue edits, closures, and PR merge/close on
+    // repos where we can't install a webhook. No-op if bot token unset.
+    skilluv_backend::services::external_refresh::start_external_refresh_task(db.clone());
+
+    // P26 v2 SKI-120 — maintainer digest weekly task. Every hour scans
+    // for confirmed subscriptions due (last_digest_at > 7d) and emails.
+    skilluv_backend::services::maintainer_digest::start_maintainer_digest_task(
+        db.clone(),
+        email.clone(),
+        config.base_url.clone(),
+    );
+
     // Connect to AI service (optional — backend works without it)
     let ai = if let Some(ref grpc_url) = config.grpc_ai_url {
         tracing::info!("Connecting to AI service at {grpc_url}...");
@@ -148,6 +165,7 @@ async fn async_main(config: AppConfig) {
         config: AppStateConfig {
             jwt_secret: config.jwt_secret,
             base_url: config.base_url,
+            frontend_url: config.frontend_url,
             sso_encryption_key: config.sso_encryption_key,
             pdf_renderer_url: config.pdf_renderer_url,
         },

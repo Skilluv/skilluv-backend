@@ -852,7 +852,6 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
             crate::routes::sponsored_challenges::SponsorshipRequestRow,
             crate::routes::sponsored_challenges::MyRequestsResponse,
             crate::routes::sponsored_challenges::AdminSponsorshipRow,
-            crate::routes::sponsored_challenges::AdminRequestsResponse,
             crate::routes::sponsored_challenges::DecideBody,
             crate::routes::sponsored_challenges::DecideResponse,
             crate::routes::sponsored_challenges::LinkChallengeBody,
@@ -891,7 +890,6 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
             crate::routes::tenants::PublicTenant,
             crate::routes::tenants::AdminTenant,
             crate::routes::tenants::AdminTenantSummary,
-            crate::routes::tenants::TenantsListResponse,
             crate::routes::tenants::CreateTenantBody,
             crate::routes::tenants::TenantCreatedResponse,
             crate::routes::tenants::UpdateTenantBody,
@@ -1187,17 +1185,29 @@ impl Modify for SecurityAddon {
 
 /// Attach the OpenAPI JSON endpoint + Swagger UI to a router.
 ///
-/// The Swagger UI is exposed unconditionally in debug builds; in release
-/// it's gated behind `SKILLUV_EXPOSE_SWAGGER=1` — set by the deployer for
-/// staging, unset in prod so the schema doesn't leak the full route
-/// surface to random scanners.
+/// SKI-57 (2026-08-10): default changed from "hidden in release" to
+/// "exposed by default, hide-out via `SKILLUV_HIDE_SWAGGER=1`". Skilluv
+/// wants a documented public API surface — external integrators land on
+/// `/api/docs` and read the schema. The old behaviour (hidden by default
+/// in release) meant no human could reach the UI in prod without an
+/// env-var change, which defeats the purpose of shipping utoipa.
+///
+/// Historic behaviour preserved via env opt-out: set
+/// `SKILLUV_HIDE_SWAGGER=1` to hide the UI (spec JSON still served at
+/// `/api/openapi.json` for schemathesis / integrators using the raw file).
 pub fn attach<S>(router: Router<S>) -> Router<S>
 where
     S: Clone + Send + Sync + 'static,
 {
-    let expose_swagger = std::env::var("SKILLUV_EXPOSE_SWAGGER")
+    let hide_swagger = std::env::var("SKILLUV_HIDE_SWAGGER")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-        .unwrap_or(cfg!(debug_assertions));
+        .unwrap_or(false);
+    // Back-compat: old `SKILLUV_EXPOSE_SWAGGER=0` also hides. Silent
+    // migration — no deployer needs to change their env.
+    let legacy_hide = std::env::var("SKILLUV_EXPOSE_SWAGGER")
+        .map(|v| v == "0" || v.eq_ignore_ascii_case("false"))
+        .unwrap_or(false);
+    let expose_swagger = !(hide_swagger || legacy_hide);
 
     // Only ONE of the two branches registers /api/openapi.json — either via
     // SwaggerUi.url() (which serves both the UI and the spec) OR via a manual

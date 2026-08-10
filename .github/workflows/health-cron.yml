@@ -1,0 +1,46 @@
+# SKI-32 (Hygiène pré-prod HYG-05) — periodic health probe.
+#
+# Cron-runs scripts/smoke.sh every 15 min against the prod URL. On
+# failure, posts to Discord #ops-alerts (webhook). Cheap early warning
+# for "prod is down but nobody noticed".
+name: Health cron
+
+on:
+  schedule:
+    # Every 15 min
+    - cron: "*/15 * * * *"
+  # Allow manual trigger from the Actions tab
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v5.0.0
+        with:
+          persist-credentials: false
+
+      - name: Smoke test against prod
+        env:
+          SKILLUV_SMOKE_URL: ${{ secrets.SKILLUV_SMOKE_URL }}
+        if: env.SKILLUV_SMOKE_URL != ''
+        run: |
+          chmod +x scripts/smoke.sh
+          bash scripts/smoke.sh "$SKILLUV_SMOKE_URL"
+
+      - name: Notify Discord on failure
+        if: failure() && env.DISCORD_ALERT_WEBHOOK_URL != ''
+        env:
+          DISCORD_ALERT_WEBHOOK_URL: ${{ secrets.DISCORD_ALERT_WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          curl --silent --show-error --max-time 15 \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"content\": \"**Prod health probe failed** — one or more endpoints down.\nRun: ${RUN_URL}\"
+            }" \
+            "$DISCORD_ALERT_WEBHOOK_URL" || echo "Discord notify failed — not blocking"

@@ -30,6 +30,31 @@ ignore = [
     # for rust-s3 to update or migrate to a maintained fork.
     "RUSTSEC-2026-0194",
     "RUSTSEC-2026-0195",
+    # RUSTSEC-2026-0049 / 0098 / 0099 / 0104 — four CRL/name-constraint
+    # advisories on rustls-webpki 0.102.8. Transitive via
+    # serenity 0.12.5 → tokio-tungstenite 0.21 → tokio-rustls 0.25 →
+    # rustls 0.22 → rustls-webpki 0.102.8. Serenity 0.12 is the latest
+    # published release and it pins tokio-tungstenite 0.21 ; upgrading
+    # to a newer webpki requires a rustls 0.23 chain that serenity has
+    # not yet adopted (tracked upstream).
+    #
+    # Attack vector analysis for the Skilluv Discord bot :
+    # - 0049 / 0098 / 0099 are CRL / name-constraint issues on
+    #   certificate validation. The bot's only TLS peer is
+    #   gateway.discord.gg, whose cert is issued by DigiCert and
+    #   validated against a well-formed CA chain. None of the affected
+    #   code paths (CRL fetching, custom name constraints) is exercised
+    #   by the bot's WebSocket handshake.
+    # - 0104 is a DoS panic on a malformed CRL BIT STRING. Requires an
+    #   attacker to feed the process a malformed CRL. The bot never
+    #   fetches CRLs — Discord's cert doesn't advertise a CRL DP that
+    #   rustls-webpki would follow.
+    #
+    # Drop once serenity ships a release on the rustls 0.23 chain.
+    "RUSTSEC-2026-0049",
+    "RUSTSEC-2026-0098",
+    "RUSTSEC-2026-0099",
+    "RUSTSEC-2026-0104",
 ]
 # YANKED = crate.io yanked crates. Warn only ; a yanked dep still works but
 # should be updated at the next Dependabot cycle.

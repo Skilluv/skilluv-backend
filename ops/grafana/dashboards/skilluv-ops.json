@@ -1,0 +1,51 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "panels": [
+    {
+      "type": "graph",
+      "title": "AI calls latency (ms)",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "targets": [{"expr": "histogram_quantile(0.95, sum(rate(skilluv_ai_call_latency_ms_bucket[5m])) by (le))", "legendFormat": "p95"}]
+    },
+    {
+      "type": "graph",
+      "title": "AI jobs enqueued / min",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "targets": [{"expr": "sum(rate(skilluv_ai_jobs_enqueued_total[1m]))"}]
+    },
+    {
+      "type": "stat",
+      "title": "Admin 2FA resets (24h)",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 8},
+      "targets": [{"expr": "sum(increase(skilluv_admin_2fa_resets_total[24h]))"}]
+    },
+    {
+      "type": "stat",
+      "title": "Fraud deliverables revoked (24h)",
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 8},
+      "targets": [{"expr": "sum(increase(skilluv_fraud_deliverables_revoked_total[24h]))"}]
+    },
+    {
+      "type": "stat",
+      "title": "Deep plagiarism scans (24h)",
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 8},
+      "targets": [{"expr": "sum(increase(skilluv_deep_plagiarism_scans_total[24h]))"}]
+    },
+    {
+      "type": "stat",
+      "title": "Subscription checkouts (24h)",
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 8},
+      "targets": [{"expr": "sum(increase(skilluv_subscriptions_checkout_created_total[24h]))"}]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["skilluv", "ops"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "timezone": "browser",
+  "title": "Skilluv — Ops",
+  "uid": "skilluv-ops",
+  "version": 1
+}

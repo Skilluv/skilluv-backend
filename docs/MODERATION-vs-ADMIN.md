@@ -95,7 +95,7 @@ Svelte peut ensuite :
 
 ```svelte
 {#if $me.capabilities.includes('forum_moderator') || $me.capabilities.includes('admin')}
-  <button on:click={openModerationDrawer}>🛡️ Modérer</button>
+  <button on:click={openModerationDrawer}> Modérer</button>
 {/if}
 ```
 

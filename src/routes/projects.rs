@@ -30,6 +30,9 @@ pub fn project_routes() -> Router<AppState> {
             delete(remove_contributor),
         )
         .route("/projects/{slug}/archive", post(archive))
+        // P26 v2 SKI-122 — public: how many Skilluvers are active on this
+        // repo in the last N days (default 30).
+        .route("/projects/{slug}/active-skilluvers", get(active_skilluvers))
         .route("/u/{username}/projects", get(by_user))
         .route("/guilds/{slug}/projects", get(by_guild_slug))
         .route("/admin/projects/{slug}/curated", post(admin_set_curated))
@@ -467,4 +470,99 @@ pub async fn unmark_project_interested(
 ) -> Result<Json<Value>, AppError> {
     let affected = projects::unmark_interested(&state.db, auth.user_id, project_id).await?;
     Ok(Json(build_response(json!({ "removed": affected > 0 }))))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// P26 v2 SKI-122 — active Skilluvers on a project
+// ═══════════════════════════════════════════════════════════════════
+
+#[derive(Debug, serde::Deserialize)]
+pub struct ActiveWindowQuery {
+    /// Rolling window in days (default 30, capped 180 to keep query cheap).
+    #[serde(default)]
+    days: Option<i32>,
+}
+
+/// GET /api/projects/{slug}/active-skilluvers?days=30
+///
+/// Public — anyone can see the "community pulse" on a repo. Returns:
+///   { count: N, users: [{username, avatar, last_activity}] }
+///
+/// A user is "active" if in the window they either claimed a slice on
+/// this project, submitted a PR, or had one validated. Distinct users;
+/// the payload is capped at 20 users to keep the response bounded.
+async fn active_skilluvers(
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+    axum::extract::Query(q): axum::extract::Query<ActiveWindowQuery>,
+) -> Result<Json<Value>, AppError> {
+    let days = q.days.unwrap_or(30).clamp(1, 180);
+
+    // Total distinct actives count first (uncapped), then the top-20
+    // detail list. Two queries so the header count is accurate.
+    let count: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(DISTINCT s.claimed_by_user_id)::bigint
+          FROM project_slices s
+          JOIN projects p ON p.id = s.project_id
+         WHERE p.slug = $1
+           AND s.claimed_by_user_id IS NOT NULL
+           AND GREATEST(
+                 COALESCE(s.claimed_at,      TIMESTAMP 'epoch'),
+                 COALESCE(s.submitted_at,    TIMESTAMP 'epoch'),
+                 COALESCE(s.validated_at,    TIMESTAMP 'epoch')
+               ) > NOW() - ($2 || ' days')::interval
+        "#,
+    )
+    .bind(&slug)
+    .bind(days.to_string())
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(0);
+
+    let rows: Vec<(String, Option<String>, chrono::DateTime<chrono::Utc>)> = sqlx::query_as(
+        r#"
+        SELECT u.username, u.avatar_url,
+               MAX(GREATEST(
+                 COALESCE(s.claimed_at,      TIMESTAMP 'epoch'),
+                 COALESCE(s.submitted_at,    TIMESTAMP 'epoch'),
+                 COALESCE(s.validated_at,    TIMESTAMP 'epoch')
+               )) AS last_activity
+          FROM project_slices s
+          JOIN projects p ON p.id = s.project_id
+          JOIN users u    ON u.id = s.claimed_by_user_id
+         WHERE p.slug = $1
+           AND s.claimed_by_user_id IS NOT NULL
+           AND GREATEST(
+                 COALESCE(s.claimed_at,      TIMESTAMP 'epoch'),
+                 COALESCE(s.submitted_at,    TIMESTAMP 'epoch'),
+                 COALESCE(s.validated_at,    TIMESTAMP 'epoch')
+               ) > NOW() - ($2 || ' days')::interval
+         GROUP BY u.username, u.avatar_url
+         ORDER BY last_activity DESC
+         LIMIT 20
+        "#,
+    )
+    .bind(&slug)
+    .bind(days.to_string())
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let users: Vec<Value> = rows
+        .into_iter()
+        .map(|(username, avatar, last)| {
+            json!({
+                "username": username,
+                "avatar_url": avatar,
+                "last_activity": last.to_rfc3339(),
+            })
+        })
+        .collect();
+
+    Ok(Json(build_response(json!({
+        "count": count,
+        "users": users,
+        "window_days": days,
+    }))))
 }

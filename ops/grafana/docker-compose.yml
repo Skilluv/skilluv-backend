@@ -1,0 +1,48 @@
+# SKI-31 (Hygiène pré-prod HYG-04) — Grafana + Prometheus stack for
+# Skilluv observability. Deploy on Coolify as a separate app.
+#
+# Usage :
+#   docker compose -f ops/grafana/docker-compose.yml up -d
+#
+# Env vars (see .env.example.grafana) :
+#   GRAFANA_ADMIN_PASSWORD  — set on first boot only (change via UI after)
+#   SKILLUV_BACKEND_URL     — where Prometheus scrapes /metrics
+#   METRICS_TOKEN           — bearer token that gates /metrics (see backend
+#                             AppConfig). Prometheus scrape config uses it.
+services:
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: skilluv-prometheus
+    volumes:
+      - ./provisioning/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=90d'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: skilluv-grafana
+    depends_on:
+      - prometheus
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./dashboards:/var/lib/grafana/dashboards:ro
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-changeme}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+    ports:
+      - "3005:3000"
+    restart: unless-stopped
+
+volumes:
+  prometheus_data:
+  grafana_data:

@@ -27,6 +27,11 @@ const USER_AGENT: &str = "skilluv-backend/1.0";
 #[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct IngestReport {
     pub project_id: Uuid,
+    /// Total issues fetched from the source (post-filter, incl. PRs skipped).
+    /// SKI-110 exposes this on the manual-trigger endpoint so an admin can
+    /// tell "config wrong, 0 issues match" apart from "config right, everything
+    /// already ingested".
+    pub issues_seen: u32,
     pub slices_created: u32,
     pub slices_skipped_duplicate: u32,
     pub errors: u32,
@@ -70,12 +75,19 @@ struct GithubLabel {
 }
 
 /// Charge les colonnes projet nécessaires à l'ingestion GitHub.
+///
+/// P26 v2 SKI-101: `skill_domains` is the ordered list of the project's
+/// primary domains (e.g. `['code','ops']` for skilluv-backend). The first
+/// entry is used as the fallback `primary_domain` when an incoming issue
+/// carries no explicit `domain:*` label.
 #[derive(Debug, sqlx::FromRow)]
 struct ProjectIngestRow {
     github_repo_owner: Option<String>,
     github_repo_name: Option<String>,
     curated_labels: Vec<String>,
     slice_ingestion_mode: String,
+    #[allow(dead_code)] // used indirectly via `default_domain` picking below.
+    skill_domains: Vec<String>,
 }
 
 #[async_trait]
@@ -96,7 +108,8 @@ impl SliceIngestor for GitHubIngestor {
 
         let project: ProjectIngestRow = sqlx::query_as(
             r#"
-            SELECT github_repo_owner, github_repo_name, curated_labels, slice_ingestion_mode
+            SELECT github_repo_owner, github_repo_name, curated_labels,
+                   slice_ingestion_mode, skill_domains
             FROM projects
             WHERE id = $1
             "#,
@@ -129,12 +142,25 @@ impl SliceIngestor for GitHubIngestor {
         };
 
         let issues = fetch_open_issues(owner, name, &project.curated_labels).await?;
+        report.issues_seen = issues.len() as u32;
+
+        // P26 v2 SKI-101: pick the project's first skill_domain as the
+        // fallback domain for issues that don't carry a `domain:*` label.
+        // Empty → "code" (matches pre-SKI-101 hardcoded behaviour so
+        // legacy projects without skill_domains still ingest identically).
+        let default_domain = project
+            .skill_domains
+            .first()
+            .cloned()
+            .unwrap_or_else(|| "code".to_string());
 
         for issue in issues {
             if issue.pull_request.is_some() {
                 continue; // GitHub renvoie les PR via /issues, on skip.
             }
-            match insert_slice_from_issue(db, project_id, default_status, &issue).await {
+            match insert_slice_from_issue(db, project_id, default_status, &default_domain, &issue)
+                .await
+            {
                 Ok(true) => report.slices_created += 1,
                 Ok(false) => report.slices_skipped_duplicate += 1,
                 Err(e) => {
@@ -189,33 +215,69 @@ async fn fetch_open_issues(
 }
 
 /// INSERT ON CONFLICT : true si nouveau, false si duplicate.
+///
+/// P26 v2 SKI-101 — `default_domain` is the project's fallback (usually
+/// `projects.skill_domains[0]`). The enricher parses labels and body to
+/// derive `primary_domain`, `difficulty` and `acceptance_criteria`; only
+/// values it cannot infer fall back to the defaults.
+///
+/// `fragments_reward` scales with the derived difficulty: 30/40/50/70/100
+/// for difficulties 1..5. Rationale: harder challenges deserve more
+/// reward without being disproportionate to the mid-tier baseline (kept
+/// at 50 for difficulty=3, matching pre-SKI-101 behaviour).
 async fn insert_slice_from_issue(
     db: &PgPool,
     project_id: Uuid,
     default_status: &str,
+    default_domain: &str,
     issue: &GithubIssue,
 ) -> Result<bool, AppError> {
     let title = truncate(&issue.title, 300);
     let description = truncate(issue.body.as_deref().unwrap_or("(no description)"), 4000);
     let labels: Vec<String> = issue.labels.iter().map(|l| l.name.clone()).collect();
+
+    let enriched = crate::services::slice_enrichment::enrich_from_issue(
+        &labels,
+        issue.body.as_deref(),
+        default_domain,
+    );
+    let fragments_reward: i32 = match enriched.difficulty {
+        1 => 30,
+        2 => 40,
+        3 => 50,
+        4 => 70,
+        5 => 100,
+        _ => 50,
+    };
+
     let metadata = serde_json::json!({
         "source": "github_polling",
         "issue_url": issue.html_url,
         "issue_number": issue.number,
         "labels": labels,
+        "enrichment": {
+            "domain_source": if labels
+                .iter()
+                .any(|l| l.to_lowercase().starts_with("domain:"))
+            {
+                "label"
+            } else {
+                "project_default"
+            },
+        },
     });
 
     let inserted: Option<Uuid> = sqlx::query_scalar(
         r#"
         INSERT INTO project_slices
             (project_id, slice_type, external_ref, external_metadata,
-             title, description,
+             title, description, acceptance_criteria,
              primary_domain, difficulty, fragments_reward,
              status, ingested_from)
         VALUES ($1, 'github_issue', $2, $3,
-                $4, $5,
-                'code', 3, 50,
-                $6, 'github_webhook')
+                $4, $5, $6,
+                $7, $8, $9,
+                $10, 'github_webhook')
         ON CONFLICT (project_id, external_ref)
             WHERE slice_type = 'github_issue' AND external_ref IS NOT NULL
             DO NOTHING
@@ -227,6 +289,10 @@ async fn insert_slice_from_issue(
     .bind(&metadata)
     .bind(&title)
     .bind(&description)
+    .bind(&enriched.acceptance_criteria)
+    .bind(&enriched.primary_domain)
+    .bind(enriched.difficulty)
+    .bind(fragments_reward)
     .bind(default_status)
     .fetch_optional(db)
     .await?;

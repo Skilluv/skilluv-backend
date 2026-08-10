@@ -742,7 +742,11 @@ pub async fn register(
     Json(body): Json<RegisterRequest>,
 ) -> Result<impl IntoResponse, AppError> {
     let ip = extract_ip(&headers);
-    RateLimiter::check(&mut state.redis.clone(), "auth:register", &ip, 5, 3600).await?;
+    // SKI-30 (2026-08-10): bumped 5/h → 20/h. The 5/h cap was calibrated
+    // for anti-abuse but real signup flows (typos, "sign up with wrong
+    // email then correct it") legitimately consumed 3-4 attempts. See
+    // docs/RATE_LIMITS.md for the full audit + rationale.
+    RateLimiter::check(&mut state.redis.clone(), "auth:register", &ip, 20, 3600).await?;
 
     if !body.terms_accepted {
         return Err(AppError::Validation(
@@ -812,7 +816,7 @@ pub async fn register(
             &user.email,
             &user.display_name,
             &verify_token,
-            &state.config.base_url,
+            &state.config.frontend_url,
         )
         .await?;
 
@@ -1534,7 +1538,7 @@ pub async fn resend_verification(
             &user.email,
             &user.display_name,
             &verify_token,
-            &state.config.base_url,
+            &state.config.frontend_url,
         )
         .await?;
 
@@ -1591,7 +1595,7 @@ pub async fn forgot_password(
                 &user.email,
                 &user.display_name,
                 &token,
-                &state.config.base_url,
+                &state.config.frontend_url,
             )
             .await?;
     }
@@ -2361,7 +2365,7 @@ pub async fn request_email_change(
 
     let link = format!(
         "{}/auth/change-email/confirm?token={}",
-        state.config.base_url, token
+        state.config.frontend_url, token
     );
     state
         .email

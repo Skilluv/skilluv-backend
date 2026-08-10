@@ -239,7 +239,7 @@ pub async fn public_repos(
 ) -> Result<Json<Value>, AppError> {
     crate::validators::check_range_opt(q.limit, "limit", 1, 100)?;
     let row: Option<(Uuid,)> = sqlx::query_as(
-        "SELECT id FROM users WHERE username = $1 AND profile_active = TRUE AND is_banned = FALSE",
+        "SELECT id FROM users WHERE username = $1 AND profile_hidden = FALSE AND is_banned = FALSE",
     )
     .bind(&username)
     .fetch_optional(&state.db)
@@ -269,7 +269,7 @@ pub async fn cv_html(
             r#"
             SELECT id, username, display_name, skill_domain, country, city, bio, avatar_url, total_fragments, title, golden_stars, streak_current, created_at
             FROM users
-            WHERE username = $1 AND profile_active = TRUE AND is_banned = FALSE
+            WHERE username = $1 AND profile_hidden = FALSE AND is_banned = FALSE
             "#,
         )
         .bind(&username)
@@ -456,7 +456,7 @@ fn render_cv_html(c: CvContext) -> String {
         .iter()
         .map(|r| {
             format!(
-                "<div class=\"proj\"><h4><a href=\"{url}\">{name}</a> <span class=\"meta\">★ {stars}</span></h4><p>{desc}</p><p class=\"meta\">{lang}</p></div>",
+                "<div class=\"proj\"><h4><a href=\"{url}\">{name}</a> <span class=\"meta\">* {stars}</span></h4><p>{desc}</p><p class=\"meta\">{lang}</p></div>",
                 url = esc(&r.html_url),
                 name = esc(&r.full_name),
                 stars = r.stargazers_count,
@@ -496,7 +496,7 @@ fn render_cv_html(c: CvContext) -> String {
   <div>
     <h1>{display}</h1>
     <p class="meta">@{username} · {domain} · {location}</p>
-    <p class="meta">{title} · {frags} fragments · 🔥 streak {streak} · ⭐ {gstars}</p>
+    <p class="meta">{title} · {frags} fragments ·  streak {streak} · * {gstars}</p>
   </div>
 </header>
 

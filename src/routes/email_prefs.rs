@@ -195,7 +195,7 @@ pub async fn unsubscribe(
 <html lang="fr"><head><meta charset="utf-8"><title>Désinscrit·e — Skilluv</title>
 <style>body{{font-family:system-ui;max-width:540px;margin:80px auto;padding:0 24px;color:#1a1a2e}}h1{{color:#6c5ce7}}</style>
 </head><body>
-<h1>C'est fait ✓</h1>
+<h1>C'est fait OK</h1>
 <p>Tu ne recevras plus d'emails de type <strong>{kind}</strong> de Skilluv.</p>
 <p>Si tu changes d'avis, tu peux réactiver depuis <a href="https://skilluv.com/settings/notifications">tes paramètres</a>.</p>
 </body></html>"#,
@@ -347,7 +347,7 @@ pub async fn admin_run_weekly_digest(
     let svc = digest::DigestService {
         db: &state.db,
         email: &state.email,
-        base_url: &state.config.base_url,
+        base_url: &state.config.frontend_url,
         unsubscribe_secret: &secret,
     };
     let report = svc.run_weekly().await?;

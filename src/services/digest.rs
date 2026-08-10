@@ -203,7 +203,7 @@ fn render_digest_html(target: &DigestTarget, stats: &WeeklyStats, unsub_url: &st
                 </tr>
                 <tr style="background:#f4f4f9;">
                     <td><strong>Streak actuel</strong></td>
-                    <td style="text-align:right; font-size:20px;">🔥 {streak} jour(s)</td>
+                    <td style="text-align:right; font-size:20px;"> {streak} jour(s)</td>
                 </tr>
                 <tr>
                     <td><strong>Titre</strong></td>

@@ -57,7 +57,10 @@ pub struct AppState {
 #[derive(Clone)]
 pub struct AppStateConfig {
     pub jwt_secret: String,
+    /// API origin — machine-facing callbacks (SSO `redirect_uri`, WebAuthn).
     pub base_url: String,
+    /// Frontend origin — every link a human clicks. See `AppConfig::frontend_url`.
+    pub frontend_url: String,
     /// 32-byte AES-256-GCM key for enterprise SSO client_secret at-rest encryption.
     /// `None` in dev when the env var is unset ; SSO endpoints error out cleanly.
     pub sso_encryption_key: Option<[u8; 32]>,
@@ -89,6 +92,14 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::challenge_routes())
         .nest("/api", routes::sandbox_routes())
         .nest("/api", routes::slice_routes())
+        .nest("/api", routes::slice_validation_routes())
+        .nest("/api", routes::slice_diary_routes())
+        .nest("/api", routes::challenge_feed_routes())
+        .nest("/api", routes::validator_application_routes())
+        .nest(
+            "/api",
+            admin_gate(routes::admin_validator_application_routes()),
+        )
         .nest("/api", routes::deliverable_routes())
         .nest("/api", routes::review_queue_routes())
         .nest("/api", routes::track_routes())
@@ -164,6 +175,12 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", admin_gate(routes::admin_dashboard_routes()))
         .nest("/api", admin_gate(routes::admin_fraud_routes()))
         .nest("/api", admin_gate(routes::admin_project_routes()))
+        .nest("/api", admin_gate(routes::admin_slice_routes()))
+        .nest(
+            "/api",
+            admin_gate(routes::admin_validator_analytics_routes()),
+        )
+        .nest("/api", admin_gate(routes::admin_feature_flag_routes()))
         .nest("/api", admin_gate(routes::admin_content_ops_routes()))
         // Trello vx5q6jW4 — admin_tournament_routes (seasons + tournaments
         // admin) était mixé dans tournament_routes sans admin_gate. Split
@@ -179,6 +196,21 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::tenant_routes())
         .nest("/api", routes::ai_job_routes())
         .nest("/api", routes::enterprise_subscription_routes())
+        // SKI-72 / SKI-73 — inbound webhook receivers for tracker⇄GitHub
+        // sync. Mounted OUTSIDE `/api` so external senders don't hit API
+        // rate-limits and signature verification is not conflated with JWT.
+        .merge(routes::linear_webhook_routes().with_state(state.clone()))
+        .merge(routes::github_webhook_routes().with_state(state.clone()))
+        // SKI-115 — public, unauthenticated attestation verification.
+        // Also outside /api on purpose: a recruiter reading a CV
+        // shouldn't need to know Skilluv's internal API surface.
+        .merge(routes::attestations_public_routes().with_state(state.clone()))
+        // SKI-116 / SKI-117 — public SVG badges for user profiles and
+        // repo READMEs. Same "outside /api" rationale.
+        .merge(routes::badge_svg_routes().with_state(state.clone()))
+        // SKI-120 — maintainer digest subscribe/confirm/unsubscribe.
+        // Public (self-serve), outside /api, double opt-in.
+        .merge(routes::maintainer_digest_routes().with_state(state.clone()))
         .merge(routes::well_known_routes().with_state(state.clone()))
         .merge(routes::metrics_routes().with_state(state.clone()))
         .merge(websocket::ws_routes().with_state(state.clone()));

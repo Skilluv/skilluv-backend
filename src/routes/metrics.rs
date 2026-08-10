@@ -156,19 +156,28 @@ pub struct MetricsSummary {
 }
 
 /// JSON summary of the same counters exposed via Prometheus, for
-/// internal dashboards that speak JSON. Public today — plan is to
-/// gate behind admin auth once the admin UI consumes it.
+/// internal dashboards that speak JSON.
+///
+/// SKI-31 (2026-08-10) — was public per TODO, now gated behind the
+/// `admin` capability. Metabase / Grafana / any internal dashboard
+/// consumer must authenticate as an admin. Public Prometheus scrape
+/// keeps working via `/metrics` (still text/plain, gated by
+/// `METRICS_TOKEN` env-var).
 #[utoipa::path(
     get,
     path = "/api/metrics/summary",
     tag = "admin",
     responses(
         (status = 200, description = "Business metrics snapshot", body = ApiResponse<MetricsSummary>),
+        (status = 403, body = crate::api_response::ErrorResponse),
     ),
+    security(("cookie_auth" = [])),
 )]
 pub async fn metrics_summary(
     axum::extract::State(state): axum::extract::State<AppState>,
+    auth: crate::middleware::AuthUser,
 ) -> Result<Json<ApiResponse<MetricsSummary>>, crate::errors::AppError> {
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     // DB stats
     let total_users: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users")
         .fetch_one(&state.db)

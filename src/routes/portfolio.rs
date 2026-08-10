@@ -39,7 +39,7 @@ pub async fn portfolio_json(
     Path(username): Path<String>,
 ) -> Result<Json<Value>, AppError> {
     let portfolio =
-        PortfolioService::build_portfolio_json(&state.db, &username, &state.config.base_url)
+        PortfolioService::build_portfolio_json(&state.db, &username, &state.config.frontend_url)
             .await?;
     Ok(Json(portfolio))
 }

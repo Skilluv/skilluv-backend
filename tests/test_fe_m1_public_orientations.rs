@@ -49,9 +49,19 @@ async fn public_orientations_returns_active_ones_for_public_profile() {
 }
 
 #[tokio::test]
-async fn public_orientations_returns_empty_when_profile_inactive() {
+async fn public_orientations_returns_empty_when_profile_hidden() {
+    // SKI-70 (migration 0133) split profile_active into two concepts:
+    //   - profile_active — "user cleared onboarding" (listing surfaces)
+    //   - profile_hidden — "user hid the public profile page"
+    // The public orientations endpoint follows the *profile visibility*
+    // signal, so this test seeds profile_hidden = true.
     let app = TestApp::spawn().await;
-    let uid = seed_user(&app, "hidden_a", false).await;
+    let uid = seed_user(&app, "hidden_a", true).await;
+    sqlx::query("UPDATE users SET profile_hidden = TRUE WHERE id = $1")
+        .bind(uid)
+        .execute(&app.db)
+        .await
+        .unwrap();
     attach_orientation(&app, uid, "dev-backend", true).await;
 
     let resp = app.get(&format!("/api/users/{uid}/orientations")).await;
@@ -61,7 +71,7 @@ async fn public_orientations_returns_empty_when_profile_inactive() {
     assert_eq!(
         list.len(),
         0,
-        "profile inactive → empty (pas 403 pour éviter énumération)"
+        "profile hidden -> empty (not 403, to avoid enumeration)"
     );
 }
 

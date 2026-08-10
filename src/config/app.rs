@@ -6,7 +6,12 @@ pub struct AppConfig {
     pub jwt_secret: String,
     pub database_url: String,
     pub redis_url: String,
+    /// API origin — machine-facing callbacks (SSO `redirect_uri`, WebAuthn RP).
     pub base_url: String,
+    /// Frontend origin — every link a human clicks (emails, post-SSO redirect).
+    /// Split from `base_url`, which points at the API subdomain in staging/prod.
+    /// Falls back to `base_url` so single-origin deployments keep working.
+    pub frontend_url: String,
     pub judge0_url: String,
     pub minio_endpoint: String,
     pub minio_access_key: String,
@@ -38,6 +43,8 @@ pub struct AppConfig {
 
 impl AppConfig {
     pub fn from_env() -> Self {
+        let base_url = env::var("BASE_URL").unwrap_or_else(|_| "http://localhost:3001".to_string());
+        let frontend_url = Self::resolve_frontend_url(env::var("FRONTEND_URL").ok(), &base_url);
         Self {
             host: env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string()),
             port: env::var("PORT")
@@ -48,7 +55,8 @@ impl AppConfig {
             database_url: env::var("DATABASE_URL").expect("DATABASE_URL must be set"),
             redis_url: env::var("REDIS_URL")
                 .unwrap_or_else(|_| "redis://localhost:6379".to_string()),
-            base_url: env::var("BASE_URL").unwrap_or_else(|_| "http://localhost:3001".to_string()),
+            base_url,
+            frontend_url,
             judge0_url: env::var("JUDGE0_URL")
                 .unwrap_or_else(|_| "http://localhost:2358".to_string()),
             minio_endpoint: env::var("MINIO_ENDPOINT")
@@ -97,6 +105,16 @@ impl AppConfig {
     /// Call from `main` after `from_env`. Logs warnings for staging.
     pub fn assert_production_secrets(&self) {
         let is_prod = self.environment == "prod" || self.environment == "production";
+        // Warn rather than panic: serving both origins behind one reverse proxy
+        // is legitimate, so this heuristic must not be able to block a boot.
+        if self.frontend_url == self.base_url && Self::looks_like_api_host(&self.base_url) {
+            tracing::error!(
+                base_url = %self.base_url,
+                "FRONTEND_URL is unset and BASE_URL points at an API host — \
+                 emailed links (verify-email, reset-password, invites) will 404. \
+                 Set FRONTEND_URL to the user-facing origin."
+            );
+        }
         let issues = self.audit_secrets();
         if issues.is_empty() {
             return;
@@ -113,6 +131,18 @@ impl AppConfig {
         for issue in &issues {
             tracing::warn!(issue, "secret hygiene warning (non-prod)");
         }
+    }
+
+    fn resolve_frontend_url(raw: Option<String>, base_url: &str) -> String {
+        raw.map(|s| s.trim_end_matches('/').to_string())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| base_url.to_string())
+    }
+
+    /// `https://api.example.com` → true, `https://example.com` → false.
+    /// Narrow on purpose: only the conventional `api.` prefix counts.
+    fn looks_like_api_host(url: &str) -> bool {
+        url.split("://").nth(1).unwrap_or(url).starts_with("api.")
     }
 
     fn audit_secrets(&self) -> Vec<String> {
@@ -146,5 +176,39 @@ impl AppConfig {
             );
         }
         issues
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AppConfig;
+
+    #[test]
+    fn frontend_url_falls_back_to_base_url_when_unset_or_blank() {
+        let base = "http://localhost:3001";
+        assert_eq!(AppConfig::resolve_frontend_url(None, base), base);
+        assert_eq!(
+            AppConfig::resolve_frontend_url(Some(String::new()), base),
+            base
+        );
+    }
+
+    #[test]
+    fn frontend_url_wins_over_base_url_and_drops_trailing_slash() {
+        // Trailing slashes would produce `https://skill-uv.com//auth/reset-password`.
+        assert_eq!(
+            AppConfig::resolve_frontend_url(
+                Some("https://skill-uv.com/".to_string()),
+                "https://api.skill-uv.com"
+            ),
+            "https://skill-uv.com"
+        );
+    }
+
+    #[test]
+    fn api_host_heuristic_only_matches_the_api_subdomain() {
+        assert!(AppConfig::looks_like_api_host("https://api.skill-uv.com"));
+        assert!(!AppConfig::looks_like_api_host("https://skill-uv.com"));
+        assert!(!AppConfig::looks_like_api_host("http://localhost:3001"));
     }
 }

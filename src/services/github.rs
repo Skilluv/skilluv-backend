@@ -195,6 +195,45 @@ pub struct GitHubRepo {
     created_at: Option<DateTime<Utc>>,
 }
 
+/// P26 v2 SKI-75 — fork `{owner}/{repo}` to the authenticated user's account.
+/// Idempotent on GitHub's side: forking a repo the user already forked
+/// returns the existing fork (HTTP 202). Returns the HTML URL of the fork.
+pub async fn fork_repo_for_user(
+    access_token: &str,
+    owner: &str,
+    repo: &str,
+) -> Result<String, AppError> {
+    #[derive(serde::Deserialize)]
+    struct ForkResp {
+        html_url: String,
+    }
+    let url = format!("{GITHUB_API}/repos/{owner}/{repo}/forks");
+    let resp = reqwest::Client::new()
+        .post(&url)
+        .bearer_auth(access_token)
+        .header("User-Agent", USER_AGENT)
+        .header("Accept", "application/vnd.github+json")
+        // Empty JSON body; GitHub accepts optional fork-org / default-branch
+        // parameters but we deliberately take the defaults so an existing
+        // fork on the user account is returned as-is.
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("github fork call failed: {e}")))?;
+    let status = resp.status();
+    if !status.is_success() {
+        let text = resp.text().await.unwrap_or_default();
+        return Err(AppError::Internal(format!(
+            "github fork {owner}/{repo} returned {status}: {text}"
+        )));
+    }
+    let parsed: ForkResp = resp
+        .json()
+        .await
+        .map_err(|e| AppError::Internal(format!("github fork decode failed: {e}")))?;
+    Ok(parsed.html_url)
+}
+
 pub async fn fetch_public_repos(
     access_token: &str,
     github_login: &str,

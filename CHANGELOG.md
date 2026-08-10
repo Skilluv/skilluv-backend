@@ -459,7 +459,7 @@ Foundations of the target model:
 - `GET /api/skills/{slug}/talents` — recruiter search by skill + level
 - `GET /api/users/me/recommendations/slices` — slice recos near a level-up
 
-### P5 — Attestations ⭐ LAUNCH (`2bacfd1`)
+### P5 — Attestations * LAUNCH (`2bacfd1`)
 
 **Killer feature.** Gesture / skill / compagnonnage attestations:
 - Auto-issue on skill level-up (idempotent via UNIQUE index)

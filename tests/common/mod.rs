@@ -119,6 +119,7 @@ impl TestApp {
             database_url: db_url,
             redis_url: redis_url.clone(),
             base_url: "http://localhost:3001".to_string(),
+            frontend_url: "http://localhost:5173".to_string(),
             judge0_url: "http://localhost:2358".to_string(),
             minio_endpoint: "http://localhost:9004".to_string(),
             minio_access_key: "skilluv".to_string(),
@@ -165,6 +166,7 @@ impl TestApp {
             config: AppStateConfig {
                 jwt_secret: "test-secret-key-for-testing".to_string(),
                 base_url: addr.clone(),
+                frontend_url: "http://localhost:5173".to_string(),
                 sso_encryption_key: Some([42u8; 32]),
                 pdf_renderer_url: None,
             },

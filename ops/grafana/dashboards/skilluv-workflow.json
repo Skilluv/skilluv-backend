@@ -1,0 +1,53 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "graphTooltip": 0,
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Slices ingested (label vs project default)",
+      "gridPos": {"h": 6, "w": 12, "x": 0, "y": 0},
+      "targets": [
+        {"expr": "sum by (source) (rate(skilluv_ingest_domain_source_total[24h]))", "legendFormat": "{{source}}"}
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "External refresh transitions (per 5 min)",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 6},
+      "targets": [
+        {"expr": "sum(rate(skilluv_external_refresh_body_updated_total[5m]))", "legendFormat": "body updated"},
+        {"expr": "sum(rate(skilluv_external_refresh_issue_closed_total[5m]))", "legendFormat": "issue closed"},
+        {"expr": "sum(rate(skilluv_external_refresh_merge_awarded_total[5m]))", "legendFormat": "merge awarded"},
+        {"expr": "sum(rate(skilluv_external_refresh_pr_rejected_total[5m]))", "legendFormat": "PR rejected"}
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "CI webhook advances (24h)",
+      "gridPos": {"h": 6, "w": 8, "x": 0, "y": 14},
+      "targets": [{"expr": "sum(increase(skilluv_ci_webhook_advanced_total[24h]))"}]
+    },
+    {
+      "type": "stat",
+      "title": "CI poll advances (24h)",
+      "gridPos": {"h": 6, "w": 8, "x": 8, "y": 14},
+      "targets": [{"expr": "sum(increase(skilluv_ci_poll_advanced_total[24h]))"}]
+    },
+    {
+      "type": "stat",
+      "title": "Merge bonus awarded (24h)",
+      "gridPos": {"h": 6, "w": 8, "x": 16, "y": 14},
+      "targets": [{"expr": "sum(increase(skilluv_merge_bonus_awarded_total[24h]))"}]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["skilluv", "workflow"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "timezone": "browser",
+  "title": "Skilluv — Workflow challenge (P26 v2)",
+  "uid": "skilluv-workflow",
+  "version": 1
+}

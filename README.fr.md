@@ -104,6 +104,7 @@ HOST=0.0.0.0
 PORT=3001
 JWT_SECRET=dev-secret-change-in-production
 BASE_URL=http://localhost:3001
+FRONTEND_URL=http://localhost:5173
 JUDGE0_URL=http://localhost:2358
 MINIO_ENDPOINT=http://localhost:9004
 MINIO_ACCESS_KEY=skilluv

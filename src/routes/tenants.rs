@@ -6,7 +6,7 @@
 //! (NULL = public), les users un `primary_tenant_id`, et la table
 //! `tenant_memberships` gère l'appartenance multi-tenant.
 
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::HeaderMap;
 use axum::routing::get;
 use axum::{Json, Router};
@@ -148,9 +148,14 @@ pub struct AdminTenantSummary {
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
-pub struct TenantsListResponse {
-    pub tenants: Vec<AdminTenantSummary>,
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
+pub struct TenantsListQuery {
+    #[param(minimum = 1, maximum = 100000)]
+    pub page: Option<i64>,
+    #[param(minimum = 1, maximum = 200)]
+    pub per_page: Option<i64>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -306,12 +311,16 @@ pub async fn get_current_tenant(
 }
 
 /// Admin only: list every tenant with member counts.
+///
+/// **Payload shape**: standard admin listing convention
+/// `{data: [AdminTenantSummary], pagination: {...}, meta: {...}}`.
 #[utoipa::path(
     get,
     path = "/api/admin/tenants",
     tag = "admin",
+    params(TenantsListQuery),
     responses(
-        (status = 200, description = "Tenants list", body = ApiResponse<TenantsListResponse>),
+        (status = 200, description = "Tenants list (paginated)", body = serde_json::Value),
         (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
@@ -319,20 +328,32 @@ pub async fn get_current_tenant(
 pub async fn list_tenants(
     State(state): State<AppState>,
     auth: AuthUser,
-) -> Result<Json<ApiResponse<TenantsListResponse>>, AppError> {
+    Query(q): Query<TenantsListQuery>,
+) -> Result<Json<serde_json::Value>, AppError> {
     if auth.role != "admin" {
         return Err(AppError::Forbidden);
     }
+    let page = q.page.unwrap_or(1).max(1);
+    let per_page = q.per_page.unwrap_or(50).clamp(1, 200);
+    let offset = (page - 1) * per_page;
+
     let rows = sqlx::query(
         r#"
         SELECT t.id, t.slug, t.name, t.subdomain, t.plan, t.max_users, t.active,
                t.created_at,
                (SELECT COUNT(*)::BIGINT FROM tenant_memberships m WHERE m.tenant_id = t.id) AS members_count
         FROM tenants t ORDER BY t.created_at DESC
+        LIMIT $1 OFFSET $2
         "#,
     )
+    .bind(per_page)
+    .bind(offset)
     .fetch_all(&state.db)
     .await?;
+
+    let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM tenants")
+        .fetch_one(&state.db)
+        .await?;
     let items: Vec<AdminTenantSummary> = rows
         .iter()
         .map(|r| AdminTenantSummary {
@@ -347,8 +368,16 @@ pub async fn list_tenants(
             created_at: r.get("created_at"),
         })
         .collect();
-    Ok(Json(ApiResponse::new(TenantsListResponse {
-        tenants: items,
+    Ok(Json(serde_json::json!({
+        "data": items,
+        "pagination": {
+            "page": page, "per_page": per_page, "total": total,
+            "total_pages": if per_page > 0 { (total + per_page - 1) / per_page } else { 0 },
+        },
+        "meta": {
+            "request_id": Uuid::new_v4().to_string(),
+            "timestamp": chrono::Utc::now().to_rfc3339(),
+        }
     })))
 }
 

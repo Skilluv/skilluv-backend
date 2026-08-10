@@ -27,6 +27,11 @@ const USER_AGENT: &str = "skilluv-backend/1.0";
 #[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct IngestReport {
     pub project_id: Uuid,
+    /// Total issues fetched from the source (post-filter, incl. PRs skipped).
+    /// SKI-110 exposes this on the manual-trigger endpoint so an admin can
+    /// tell "config wrong, 0 issues match" apart from "config right, everything
+    /// already ingested".
+    pub issues_seen: u32,
     pub slices_created: u32,
     pub slices_skipped_duplicate: u32,
     pub errors: u32,
@@ -137,6 +142,7 @@ impl SliceIngestor for GitHubIngestor {
         };
 
         let issues = fetch_open_issues(owner, name, &project.curated_labels).await?;
+        report.issues_seen = issues.len() as u32;
 
         // P26 v2 SKI-101: pick the project's first skill_domain as the
         // fallback domain for issues that don't carry a `domain:*` label.

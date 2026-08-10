@@ -31,6 +31,8 @@ pub fn admin_project_routes() -> Router<AppState> {
         .route("/admin/projects/{slug}", delete(archive_project))
         // P26 v2 SKI-124 — per-repo challenge stats (workflow health).
         .route("/admin/projects/{slug}/stats", get(project_stats))
+        // SKI-110 (M-05) — manual ingestion trigger for a single project.
+        .route("/admin/projects/{slug}/ingest", post(trigger_ingest))
 }
 
 fn wrap(data: Value) -> Value {
@@ -564,6 +566,15 @@ struct ProjectFullRow {
     flagship_steward_user_id: Option<Uuid>,
     skilluv_partnership_level: Option<i16>,
     skilluv_editorial_notes: Option<String>,
+    // SKI-109 (M-04): P26 v2 fields, needed by admin UI so the edit
+    // form can pre-fill the ingestion config it was allowed to write via
+    // POST/PATCH (SKI-110). Arrays default to [] via COALESCE so the
+    // front never sees null.
+    github_repo_owner: Option<String>,
+    github_repo_name: Option<String>,
+    curated_labels: Vec<String>,
+    slice_ingestion_mode: Option<String>,
+    skill_domains: Vec<String>,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
     archived_at: Option<chrono::DateTime<chrono::Utc>>,
@@ -590,7 +601,12 @@ pub async fn get_project(
         SELECT id, slug, name, description, repo_url, demo_url, tech_stack,
                is_oss, looking_for_contributors, owner_type, owner_id, curated_by_admin,
                is_flagship, flagship_steward_user_id, skilluv_partnership_level,
-               skilluv_editorial_notes, created_at, updated_at, archived_at
+               skilluv_editorial_notes,
+               github_repo_owner, github_repo_name,
+               COALESCE(curated_labels, ARRAY[]::text[]) AS curated_labels,
+               slice_ingestion_mode,
+               COALESCE(skill_domains, ARRAY[]::text[]) AS skill_domains,
+               created_at, updated_at, archived_at
         FROM projects WHERE slug = $1
         "#,
     )
@@ -619,6 +635,11 @@ pub async fn get_project(
         "flagship_steward_user_id": r.flagship_steward_user_id,
         "skilluv_partnership_level": r.skilluv_partnership_level,
         "skilluv_editorial_notes": r.skilluv_editorial_notes,
+        "github_repo_owner": r.github_repo_owner,
+        "github_repo_name": r.github_repo_name,
+        "curated_labels": r.curated_labels,
+        "slice_ingestion_mode": r.slice_ingestion_mode,
+        "skill_domains": r.skill_domains,
         "created_at": r.created_at.to_rfc3339(),
         "updated_at": r.updated_at.to_rfc3339(),
         "archived_at": r.archived_at.map(|d| d.to_rfc3339()),
@@ -876,6 +897,160 @@ pub async fn project_stats(
             "label":           from_label,
             "project_default": from_default,
         },
+    }))))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// POST /admin/projects/{slug}/ingest — SKI-110 (M-05)
+// ═══════════════════════════════════════════════════════════════════
+
+/// Manually trigger a single ingestion pass on one project.
+///
+/// The P11 GitHubIngestor otherwise runs on an hourly cron; when tuning
+/// a freshly-wired project (repo + curated labels + ingestion mode), the
+/// hour-long feedback loop is what an admin hits first. This endpoint
+/// runs a synchronous pass on ONE project and returns a detailed report
+/// so the admin can tell "config wrong, 0 issues match" apart from
+/// "config right, nothing new to ingest".
+///
+/// Rate-limited to 1 call / minute / project via a recent-audit-log
+/// check — cheap protection against a spammed button burning the
+/// unauthenticated GitHub API quota (60/h/IP).
+///
+/// Returns 400 when the project has no GitHub repo pair configured OR
+/// runs `slice_ingestion_mode = 'manual_only'` (both would be silent
+/// no-ops in the ingestor loop, which is exactly the confusion this
+/// endpoint exists to avoid).
+#[utoipa::path(
+    post, path = "/api/admin/projects/{slug}/ingest", tag = "admin",
+    params(("slug" = String, Path)),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 400, body = crate::api_response::ErrorResponse),
+        (status = 403, body = crate::api_response::ErrorResponse),
+        (status = 404, body = crate::api_response::ErrorResponse),
+        (status = 429, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn trigger_ingest(
+    _gate: crate::middleware::admin_gate::AdminGate,
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(slug): Path<String>,
+) -> Result<Json<Value>, AppError> {
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
+    validate_slug(&slug)?;
+
+    // Load the project + ingestion config in a single query so 404 fires
+    // before we do any validation work.
+    #[derive(sqlx::FromRow)]
+    struct Row {
+        id: Uuid,
+        github_repo_owner: Option<String>,
+        github_repo_name: Option<String>,
+        curated_labels: Option<Vec<String>>,
+        slice_ingestion_mode: Option<String>,
+    }
+    let row: Option<Row> = sqlx::query_as(
+        r#"
+        SELECT id, github_repo_owner, github_repo_name,
+               curated_labels, slice_ingestion_mode
+        FROM projects WHERE slug = $1
+        "#,
+    )
+    .bind(&slug)
+    .fetch_optional(&state.db)
+    .await?;
+    let row = row.ok_or_else(|| AppError::NotFound(format!("project {slug} not found")))?;
+
+    // Fail loudly when the caller's about to trigger a no-op — the whole
+    // point of this endpoint is to give the admin a real signal.
+    let (Some(owner), Some(name)) = (
+        row.github_repo_owner.as_deref(),
+        row.github_repo_name.as_deref(),
+    ) else {
+        return Err(AppError::Validation(
+            "project has no github_repo_owner / github_repo_name — set them via PATCH /admin/projects/{slug} first".into(),
+        ));
+    };
+    let mode = row.slice_ingestion_mode.as_deref().unwrap_or("curator_review");
+    if mode == "manual_only" {
+        return Err(AppError::Validation(
+            "project runs in slice_ingestion_mode='manual_only' — the ingestor is intentionally disabled for it".into(),
+        ));
+    }
+    let labels_matched: Vec<String> = row.curated_labels.clone().unwrap_or_default();
+    if labels_matched.is_empty() {
+        return Err(AppError::Validation(
+            "project has no curated_labels — set at least one label to filter GitHub issues".into(),
+        ));
+    }
+
+    // 1/minute/project via audit_log lookback. Durable across restarts,
+    // no extra table, no in-process state.
+    let recent: Option<(i64,)> = sqlx::query_as(
+        r#"
+        SELECT 1::bigint
+          FROM audit_log
+         WHERE action = 'project.ingest.manual'
+           AND target_id = $1
+           AND created_at > NOW() - INTERVAL '60 seconds'
+         LIMIT 1
+        "#,
+    )
+    .bind(row.id)
+    .fetch_optional(&state.db)
+    .await?;
+    if recent.is_some() {
+        return Err(AppError::ServiceUnavailable(
+            "project.ingest.manual rate-limited to 1 call / minute / project — retry shortly".into(),
+        ));
+    }
+
+    // Actually run the ingestion pass. Errors bubble as 500.
+    let ingestor = crate::services::slice_ingestion::GitHubIngestor;
+    let report = crate::services::slice_ingestion::SliceIngestor::ingest_for_project(
+        &ingestor, &state.db, row.id,
+    )
+    .await?;
+
+    tracing::info!(
+        slug = %slug, owner = %owner, name = %name, mode = %mode,
+        issues_seen = report.issues_seen,
+        slices_created = report.slices_created,
+        slices_skipped = report.slices_skipped_duplicate,
+        "manual ingest completed"
+    );
+
+    crate::services::audit::record(
+        &state.db,
+        crate::services::audit::AuditEntry {
+            actor_type: crate::services::audit::ActorType::Admin,
+            actor_id: Some(auth.user_id),
+            action: "project.ingest.manual",
+            target_type: Some("project"),
+            target_id: Some(row.id),
+            metadata: Some(json!({
+                "slug": slug,
+                "mode": mode,
+                "issues_seen": report.issues_seen,
+                "slices_created": report.slices_created,
+                "slices_skipped_existing": report.slices_skipped_duplicate,
+                "errors": report.errors,
+            })),
+            headers: None,
+        },
+    )
+    .await;
+
+    Ok(Json(wrap(json!({
+        "issues_seen": report.issues_seen,
+        "slices_created": report.slices_created,
+        "slices_skipped_existing": report.slices_skipped_duplicate,
+        "errors": report.errors,
+        "mode": mode,
+        "labels_matched": labels_matched,
     }))))
 }
 

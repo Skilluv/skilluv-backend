@@ -18,6 +18,7 @@ pub mod dm;
 pub mod drip;
 mod email;
 pub mod enterprise_sso;
+pub mod external_refresh;
 pub mod fingerprint;
 pub mod forum;
 pub mod fx;

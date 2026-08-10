@@ -455,11 +455,18 @@ jobs:
         env:
           DISCORD_ALERT_WEBHOOK_URL: ${{ secrets.DISCORD_ALERT_WEBHOOK_URL }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COMMIT_SHA: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
         run: |
+          # Build JSON payload with jq to avoid shell interpolation of
+          # attacker-controllable context values (github.actor). zizmor E2.
+          payload=$(jq -n \
+            --arg sha "$COMMIT_SHA" \
+            --arg actor "$ACTOR" \
+            --arg url "$RUN_URL" \
+            '{content: ("🚨 **CI publish/deploy failed on master** — commit `" + $sha + "` by " + $actor + "\n" + $url)}')
           curl --silent --show-error --max-time 15 \
             -X POST \
             -H "Content-Type: application/json" \
-            -d "{
-              \"content\": \"🚨 **CI publish/deploy failed on master** — commit \`${{ github.sha }}\` by ${{ github.actor }}\n${RUN_URL}\"
-            }" \
+            -d "$payload" \
             "$DISCORD_ALERT_WEBHOOK_URL" || echo "Discord notify failed — not blocking"

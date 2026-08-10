@@ -1,0 +1,19 @@
+# Trivy ignore file — mirrors deny.toml [advisories.ignore] with a written
+# rationale. Trivy scans Cargo.lock directly and reports GHSA IDs, so we
+# list the GHSAs here (deny.toml uses RUSTSEC IDs for the same vulns).
+#
+# Format : one advisory ID per line ; blank lines and `#` comments allowed.
+
+# ─── rustls-webpki 0.102.8 (transitive via serenity 0.12) ───────
+# See deny.toml for the full rationale. Summary : CRL / name-constraint
+# advisories on rustls-webpki 0.102.8, pulled via
+# serenity 0.12 -> tokio-tungstenite 0.21 -> tokio-rustls 0.25 ->
+# rustls 0.22 -> rustls-webpki 0.102.8. The Skilluv Discord bot's only
+# TLS peer is gateway.discord.gg, whose cert doesn't exercise the
+# affected CRL / custom-name-constraint code paths, so the impact
+# reduces to zero for our deployment. Drop these once serenity ships
+# a release on the rustls 0.23 chain.
+GHSA-82j2-j2ch-gfr8
+GHSA-pwjx-qhcg-rvj4
+GHSA-965h-392x-2mh5
+GHSA-xgp8-3hg3-c2mh

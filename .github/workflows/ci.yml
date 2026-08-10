@@ -445,3 +445,21 @@ jobs:
           sleep 60
           chmod +x scripts/smoke.sh
           bash scripts/smoke.sh "$SKILLUV_SMOKE_URL"
+
+      - name: Notify Discord on failure
+        # SKI-32 (Hygiène pré-prod HYG-05) — post the failure to Discord
+        # #ops-alerts channel via webhook. Fires on any prior step failing
+        # in this job (Docker publish, Coolify webhook, or smoke test).
+        # Skips silently when DISCORD_ALERT_WEBHOOK_URL is unset.
+        if: failure() && env.DISCORD_ALERT_WEBHOOK_URL != ''
+        env:
+          DISCORD_ALERT_WEBHOOK_URL: ${{ secrets.DISCORD_ALERT_WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          curl --silent --show-error --max-time 15 \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"content\": \"🚨 **CI publish/deploy failed on master** — commit \`${{ github.sha }}\` by ${{ github.actor }}\n${RUN_URL}\"
+            }" \
+            "$DISCORD_ALERT_WEBHOOK_URL" || echo "Discord notify failed — not blocking"

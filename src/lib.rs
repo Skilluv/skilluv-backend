@@ -190,6 +190,10 @@ pub fn build_router(state: AppState) -> Router {
         // rate-limits and signature verification is not conflated with JWT.
         .merge(routes::linear_webhook_routes().with_state(state.clone()))
         .merge(routes::github_webhook_routes().with_state(state.clone()))
+        // SKI-115 — public, unauthenticated attestation verification.
+        // Also outside /api on purpose: a recruiter reading a CV
+        // shouldn't need to know Skilluv's internal API surface.
+        .merge(routes::attestations_public_routes().with_state(state.clone()))
         .merge(routes::well_known_routes().with_state(state.clone()))
         .merge(routes::metrics_routes().with_state(state.clone()))
         .merge(websocket::ws_routes().with_state(state.clone()));

@@ -464,7 +464,7 @@ jobs:
             --arg sha "$COMMIT_SHA" \
             --arg actor "$ACTOR" \
             --arg url "$RUN_URL" \
-            '{content: ("🚨 **CI publish/deploy failed on master** — commit `" + $sha + "` by " + $actor + "\n" + $url)}')
+            '{content: ("**CI publish/deploy failed on master** — commit `" + $sha + "` by " + $actor + "\n" + $url)}')
           curl --silent --show-error --max-time 15 \
             -X POST \
             -H "Content-Type: application/json" \

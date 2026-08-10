@@ -53,7 +53,7 @@ echo "$payout_response"
 
 transaction_id=$(echo "$payout_response" | python3 -c "import sys,json; print(json.load(sys.stdin)['data'].get('transaction_id',''))")
 if [[ -z "$transaction_id" ]]; then
-    echo "  ❌ No transaction_id returned" >&2
+    echo "  FAIL No transaction_id returned" >&2
     exit 1
 fi
 
@@ -65,21 +65,21 @@ for i in $(seq 1 12); do
         | python3 -c "import sys,json; print(json.load(sys.stdin)['data'].get('status',''))")
     echo "  poll $i/12: status=$tx_status"
     if [[ "$tx_status" == "succeeded" ]]; then
-        echo "  ✓ transaction succeeded"
+        echo "  OK transaction succeeded"
         break
     fi
     if [[ "$tx_status" == "failed" ]]; then
         error=$(curl -sS -b "$COOKIE_JAR" \
             "$SKILLUV_BASE_URL/api/talent-wallet/transactions/$transaction_id" \
             | python3 -c "import sys,json; print(json.load(sys.stdin)['data'].get('error_code','no code'))")
-        echo "  ❌ transaction failed — error: $error" >&2
+        echo "  FAIL transaction failed — error: $error" >&2
         exit 1
     fi
     sleep 5
 done
 
 echo "═══════════════════════════════════════════════════════════"
-echo "  ✓ Momo payout test complete — run_id: $TEST_RUN_ID"
+echo "  OK Momo payout test complete — run_id: $TEST_RUN_ID"
 echo "═══════════════════════════════════════════════════════════"
 echo ""
 echo "Cleanup: DELETE FROM talent_wallet_transactions WHERE description LIKE '%$TEST_RUN_ID%';"

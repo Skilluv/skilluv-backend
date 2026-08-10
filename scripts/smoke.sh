@@ -42,7 +42,7 @@ retry_curl() {
             sleep "$wait_sec"
         fi
     done
-    echo "  ❌ $url → got HTTP $status, expected $expected_status" >&2
+    echo "  FAIL $url → got HTTP $status, expected $expected_status" >&2
     return 1
 }
 
@@ -56,7 +56,7 @@ check_json_key() {
     local actual
     actual=$(echo "$body" | jq -r "$jq_path" 2>/dev/null || echo "")
     if [[ "$actual" != "$expected" ]]; then
-        echo "  ❌ $url → $jq_path = '$actual', expected '$expected'" >&2
+        echo "  FAIL $url → $jq_path = '$actual', expected '$expected'" >&2
         return 1
     fi
     return 0
@@ -83,7 +83,7 @@ echo "• /metrics (observability up)"
 metrics_status=$(curl -sS -o /dev/null -w "%{http_code}" \
     --max-time 10 "$BASE_URL/metrics" || echo "000")
 if [[ "$metrics_status" != "200" ]] && [[ "$metrics_status" != "401" ]]; then
-    echo "  ❌ /metrics → HTTP $metrics_status (expected 200 or 401)" >&2
+    echo "  FAIL /metrics → HTTP $metrics_status (expected 200 or 401)" >&2
     FAILED=$((FAILED + 1))
 fi
 
@@ -93,7 +93,7 @@ register_status=$(curl -sS -o /dev/null -w "%{http_code}" \
     --max-time 10 "$BASE_URL/api/auth/register" || echo "000")
 # 400 = validation working, 429 = rate-limited (also fine — proves middleware alive)
 if [[ "$register_status" != "400" ]] && [[ "$register_status" != "429" ]]; then
-    echo "  ❌ POST /api/auth/register → HTTP $register_status (expected 400 or 429)" >&2
+    echo "  FAIL POST /api/auth/register → HTTP $register_status (expected 400 or 429)" >&2
     FAILED=$((FAILED + 1))
 fi
 
@@ -105,11 +105,11 @@ retry_curl "$BASE_URL/api/challenges" "200" || FAILED=$((FAILED + 1))
 
 echo "═══════════════════════════════════════════════════════════"
 if [[ "$FAILED" -eq 0 ]]; then
-    echo "  ✓ all checks passed"
+    echo "  OK all checks passed"
     echo "═══════════════════════════════════════════════════════════"
     exit 0
 else
-    echo "  ✗ $FAILED check(s) failed"
+    echo "  FAIL $FAILED check(s) failed"
     echo "═══════════════════════════════════════════════════════════"
     exit 1
 fi

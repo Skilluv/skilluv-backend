@@ -155,25 +155,25 @@ fn render_message(event_type: &str, payload: &Value) -> String {
         "rank_promotion" => {
             let username = payload["username"].as_str().unwrap_or("someone");
             let rank = payload["new_rank"].as_str().unwrap_or("");
-            format!("🎉 **{username}** just reached rank **{rank}** on Skilluv !")
+            format!("**{username}** just reached rank **{rank}** on Skilluv.")
         }
         "badge_earned" => {
             let username = payload["username"].as_str().unwrap_or("someone");
             let badge = payload["badge_name"].as_str().unwrap_or("a new badge");
-            format!("🏅 **{username}** earned the **{badge}** badge.")
+            format!("**{username}** earned the **{badge}** badge.")
         }
         "attestation_new" => {
             let username = payload["username"].as_str().unwrap_or("someone");
             let title = payload["challenge_title"].as_str().unwrap_or("a challenge");
             let hash = payload["attestation_hash"].as_str().unwrap_or("");
             format!(
-                "✅ **{username}** just validated **{title}** — verify: https://skill-uv.com/verify/{hash}"
+                "**{username}** just validated **{title}** — verify: https://skill-uv.com/verify/{hash}"
             )
         }
         "slice_validated" => {
             let username = payload["username"].as_str().unwrap_or("someone");
             let repo = payload["repo"].as_str().unwrap_or("a repo");
-            format!("🤝 **{username}** shipped a validated PR on **{repo}**.")
+            format!("**{username}** shipped a validated PR on **{repo}**.")
         }
         _ => format!("Skilluv event: {event_type}"),
     }

@@ -56,7 +56,7 @@ transaction_id=$(echo "$payout_response" | python3 -c "import sys,json; print(js
 stripe_transfer_id=$(echo "$payout_response" | python3 -c "import sys,json; print(json.load(sys.stdin)['data'].get('stripe_transfer_id',''))")
 
 if [[ -z "$transaction_id" ]]; then
-    echo "  ❌ No transaction_id returned — payout failed" >&2
+    echo "  FAIL No transaction_id returned — payout failed" >&2
     exit 1
 fi
 
@@ -67,10 +67,10 @@ if [[ -n "$stripe_transfer_id" ]]; then
         "https://api.stripe.com/v1/transfers/$stripe_transfer_id" \
         | python3 -c "import sys,json; print(json.load(sys.stdin).get('object','unknown'))")
     if [[ "$stripe_status" != "transfer" ]]; then
-        echo "  ❌ Stripe API didn't return a transfer object" >&2
+        echo "  FAIL Stripe API didn't return a transfer object" >&2
         exit 1
     fi
-    echo "  ✓ Stripe confirms transfer exists"
+    echo "  OK Stripe confirms transfer exists"
 fi
 
 # 4. Poll our backend for status update
@@ -81,18 +81,18 @@ for i in $(seq 1 12); do
         | python3 -c "import sys,json; print(json.load(sys.stdin)['data'].get('status',''))")
     echo "  poll $i/12: status=$tx_status"
     if [[ "$tx_status" == "succeeded" ]]; then
-        echo "  ✓ transaction succeeded"
+        echo "  OK transaction succeeded"
         break
     fi
     if [[ "$tx_status" == "failed" ]]; then
-        echo "  ❌ transaction failed" >&2
+        echo "  FAIL transaction failed" >&2
         exit 1
     fi
     sleep 5
 done
 
 echo "═══════════════════════════════════════════════════════════"
-echo "  ✓ Stripe payout test complete — run_id: $TEST_RUN_ID"
+echo "  OK Stripe payout test complete — run_id: $TEST_RUN_ID"
 echo "═══════════════════════════════════════════════════════════"
 echo ""
 echo "Cleanup: DELETE FROM talent_wallet_transactions WHERE description LIKE '%$TEST_RUN_ID%';"

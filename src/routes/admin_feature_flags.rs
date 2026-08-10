@@ -6,7 +6,7 @@
 //!   DELETE /api/admin/feature-flags/{key} delete one
 
 use axum::extract::{Path, State};
-use axum::routing::{delete, get, post};
+use axum::routing::{delete, get};
 use axum::{Json, Router};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -33,7 +33,16 @@ fn wrap(data: Value) -> Value {
     })
 }
 
-async fn list(
+/// SKI-33 admin — list all feature flags.
+#[utoipa::path(
+    get, path = "/api/admin/feature-flags", tag = "admin",
+    responses(
+        (status = 200, description = "list feature flags", body = serde_json::Value),
+        (status = 403, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list(
     _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
@@ -58,7 +67,18 @@ fn default_rollout() -> i16 {
     100
 }
 
-async fn upsert(
+/// SKI-33 admin — create or update a flag (idempotent upsert).
+#[utoipa::path(
+    post, path = "/api/admin/feature-flags", tag = "admin",
+    request_body(content = serde_json::Value),
+    responses(
+        (status = 200, description = "flag upserted", body = serde_json::Value),
+        (status = 400, body = crate::api_response::ErrorResponse),
+        (status = 403, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn upsert(
     _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
@@ -77,7 +97,17 @@ async fn upsert(
     Ok(Json(wrap(json!({ "flag": flag }))))
 }
 
-async fn remove(
+/// SKI-33 admin — delete a flag.
+#[utoipa::path(
+    delete, path = "/api/admin/feature-flags/{key}", tag = "admin",
+    params(("key" = String, Path)),
+    responses(
+        (status = 200, description = "flag removed", body = serde_json::Value),
+        (status = 403, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn remove(
     _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,

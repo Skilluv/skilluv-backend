@@ -106,7 +106,19 @@ fn validate_orientation_slugs(slugs: &Option<Vec<String>>) -> Result<(), AppErro
     Ok(())
 }
 
-async fn patch_slice_config(
+/// SKI-106 admin — override sensibilité/rank sur une slice individuelle.
+#[utoipa::path(
+    patch, path = "/api/admin/slices/{id}/config", tag = "admin",
+    params(("id" = Uuid, Path)),
+    request_body(content = serde_json::Value),
+    responses(
+        (status = 200, description = "slice config updated", body = serde_json::Value),
+        (status = 400, body = crate::api_response::ErrorResponse),
+        (status = 404, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn patch_slice_config(
     _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,

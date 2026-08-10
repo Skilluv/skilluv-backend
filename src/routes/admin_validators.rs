@@ -47,7 +47,15 @@ struct WindowQuery {
 }
 
 /// SKI-108 endpoint 1 — activity per validator.
-async fn validator_stats(
+#[utoipa::path(
+    get, path = "/api/admin/validators/stats", tag = "admin",
+    responses(
+        (status = 200, description = "per-validator activity stats", body = serde_json::Value),
+        (status = 403, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn validator_stats(
     _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
@@ -168,7 +176,15 @@ struct CollusionQuery {
 }
 
 /// SKI-108 endpoint 2 — validator × claimant matrix.
-async fn collusion_matrix(
+#[utoipa::path(
+    get, path = "/api/admin/validators/collusion-matrix", tag = "admin",
+    responses(
+        (status = 200, description = "validator x claimant collusion matrix", body = serde_json::Value),
+        (status = 403, body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn collusion_matrix(
     _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,

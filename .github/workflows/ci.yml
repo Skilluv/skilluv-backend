@@ -102,7 +102,7 @@ jobs:
         run: cargo clippy -- -D warnings -A dead_code -A unused_imports
 
       - name: Install cargo-machete
-        uses: taiki-e/install-action@18b1216eba7f8039b0f8d131d5473787f0edce68  # v2
+        uses: taiki-e/install-action@6c6fd71fe4fb72c3697d269963d0e15df8adedad  # v2
         with:
           tool: cargo-machete
 
@@ -126,7 +126,7 @@ jobs:
         # cargo-deny supersets cargo-audit : same RustSec advisory DB PLUS
         # license compliance PLUS banned/duplicate crate detection. Config
         # in `deny.toml` at repo root.
-        uses: taiki-e/install-action@18b1216eba7f8039b0f8d131d5473787f0edce68  # v2
+        uses: taiki-e/install-action@6c6fd71fe4fb72c3697d269963d0e15df8adedad  # v2
         with:
           tool: cargo-deny
       - name: Run cargo deny
@@ -316,7 +316,7 @@ jobs:
           restore-keys: ${{ runner.os }}-cargo-test-
 
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@18b1216eba7f8039b0f8d131d5473787f0edce68  # v2
+        uses: taiki-e/install-action@6c6fd71fe4fb72c3697d269963d0e15df8adedad  # v2
         with:
           tool: cargo-nextest
 

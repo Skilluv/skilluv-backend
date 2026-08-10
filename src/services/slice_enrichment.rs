@@ -70,6 +70,21 @@ pub fn enrich_from_issue(
     default_domain: &str,
 ) -> EnrichedFields {
     let lower_labels: Vec<String> = labels.iter().map(|l| l.to_lowercase()).collect();
+
+    // SKI-125 — track which source drove the domain choice. Feeds the
+    // "% of external repos with a `domain:*` label" adoption metric
+    // (see also SKI-124 domain_source_distribution in the admin stats).
+    let domain_source = if lower_labels.iter().any(|l| l.starts_with("domain:")) {
+        "label"
+    } else {
+        "project_default"
+    };
+    metrics::counter!(
+        "skilluv_ingest_domain_source_total",
+        "source" => domain_source,
+    )
+    .increment(1);
+
     EnrichedFields {
         primary_domain: infer_domain(&lower_labels, default_domain),
         difficulty: infer_difficulty(&lower_labels),

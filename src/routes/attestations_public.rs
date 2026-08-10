@@ -37,9 +37,12 @@ use crate::errors::AppError;
 pub fn attestations_public_routes() -> Router<AppState> {
     Router::new()
         .route("/verify/{hash}", get(verify))
-        // SKI-118 — same route, `.pdf` suffix. Distinct handler because
-        // the response contract is completely different (bytes vs JSON).
-        .route("/verify/{hash}.pdf", get(verify_pdf))
+        // SKI-118 — separate segment for the PDF form. axum/matchit
+        // requires exactly one parameter per path segment, so
+        // `/verify/{hash}.pdf` panics at Router::new() time. Adding
+        // `/pdf` as its own segment sidesteps that limitation with a
+        // clean, browser-friendly URL.
+        .route("/verify/{hash}/pdf", get(verify_pdf))
 }
 
 /// Shape check — must be 64 lowercase hex chars (SHA-256 output).

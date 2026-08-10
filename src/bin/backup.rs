@@ -38,6 +38,12 @@ enum Cmd {
     },
     /// Mirror MinIO source bucket (avatars) to R2 incrementally.
     MinioMirror,
+    /// SKI-29 drill: run a fresh backup, then immediately restore-test it,
+    /// and produce a signed JSON report ready to archive as evidence.
+    /// Meant to be run monthly (cron / manual) to prove the backup chain
+    /// is actually restorable — a backup nobody has ever restored is not
+    /// a backup.
+    DrillReport,
 }
 
 #[tokio::main]
@@ -61,6 +67,7 @@ async fn main() -> Result<()> {
             target_db,
         } => cmd_restore(&cfg, backup_key, target_db).await,
         Cmd::MinioMirror => cmd_minio_mirror(&cfg).await,
+        Cmd::DrillReport => cmd_drill_report(&cfg).await,
     };
 
     if let Err(ref err) = result {
@@ -116,6 +123,42 @@ async fn cmd_restore(cfg: &BackupConfig, backup_key: &str, target_db: &str) -> R
     println!("{}", serde_json::to_string_pretty(&report)?);
     let message = format!("manual restore ok: {} → {}", backup_key, target_db);
     backup::notify(cfg, NotifyLevel::Warning, &message).await?;
+    Ok(())
+}
+
+/// SKI-29 — end-to-end backup drill.
+///
+/// Runs a fresh backup, then a restore-test immediately after, and
+/// serialises both reports into a single JSON that operators archive
+/// as proof of the restore chain being alive. Emit a Success/Failure
+/// notification via the standard `backup::notify` webhook.
+async fn cmd_drill_report(cfg: &BackupConfig) -> Result<()> {
+    let started_at = chrono::Utc::now();
+    tracing::info!("drill: step 1/2 backup");
+    let backup_report = backup::run_backup(cfg).await?;
+    tracing::info!(key = %backup_report.key, "drill: step 2/2 restore-test");
+    let restore_report = backup::restore_test(cfg).await?;
+    let ended_at = chrono::Utc::now();
+
+    let drill_report = serde_json::json!({
+        "ran_at": started_at.to_rfc3339(),
+        "duration_seconds": (ended_at - started_at).num_seconds(),
+        "backup": backup_report,
+        "restore_test": restore_report,
+        "verdict": "restore_chain_alive",
+    });
+    let pretty = serde_json::to_string_pretty(&drill_report)?;
+    println!("{pretty}");
+
+    let message = format!(
+        "backup drill OK: backup {} restored + verified (users={}, challenges={}, submissions={}) — {}s total",
+        restore_report.backup_key,
+        restore_report.counts.users,
+        restore_report.counts.challenges,
+        restore_report.counts.submissions,
+        (ended_at - started_at).num_seconds(),
+    );
+    backup::notify(cfg, NotifyLevel::Success, &message).await?;
     Ok(())
 }
 

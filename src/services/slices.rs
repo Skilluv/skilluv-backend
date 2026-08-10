@@ -37,6 +37,126 @@ pub fn rank_ordinal_public(rank: &str) -> u8 {
     rank_ordinal(rank)
 }
 
+/// P26 v2 SKI-113 — guard against submitting someone else's PR.
+///
+/// Fetches the PR from GitHub with our bot token and checks that:
+///   1. `pr.user.login` matches the challenger's `github_login`.
+///   2. `pr.head.repo.full_name` starts with the challenger's login
+///      (i.e. the PR comes from *their* fork, not from a co-authored
+///      branch on the base repo).
+///
+/// Silent no-op when either:
+///   - The user has no `github_connections` row → pre-P26 v2 flow.
+///     A warning is logged so operators can spot users skipping
+///     verification, but the flow proceeds.
+///   - `SKILLUV_BOT_GITHUB_TOKEN` is unset → dev/staging.
+///
+/// Returns `AppError::Forbidden` on mismatch — deliberately the same
+/// discriminant as the rank/orientation gates, so the API response
+/// shape is consistent across all pre-flight refusals.
+async fn assert_pr_authored_by_user(
+    db: &PgPool,
+    user_id: Uuid,
+    pr_url: &str,
+) -> Result<(), AppError> {
+    let gh_login: Option<(String,)> =
+        sqlx::query_as("SELECT github_login FROM github_connections WHERE user_id = $1")
+            .bind(user_id)
+            .fetch_optional(db)
+            .await?;
+    let Some((login,)) = gh_login else {
+        tracing::warn!(
+            user_id = %user_id,
+            "SKI-113: user has no github_connections; skipping PR-author check"
+        );
+        return Ok(());
+    };
+
+    let Ok(bot_token) = std::env::var("SKILLUV_BOT_GITHUB_TOKEN") else {
+        tracing::info!("SKI-113 skipped: SKILLUV_BOT_GITHUB_TOKEN unset (dev mode)");
+        return Ok(());
+    };
+
+    let Some((owner, repo, number)) = parse_github_pr_url_parts(pr_url) else {
+        // Already validated by is_valid_github_pr_url, but be defensive.
+        return Ok(());
+    };
+
+    #[derive(serde::Deserialize)]
+    struct GhPrLite {
+        user: GhUser,
+        head: GhHead,
+    }
+    #[derive(serde::Deserialize)]
+    struct GhUser {
+        login: String,
+    }
+    #[derive(serde::Deserialize)]
+    struct GhHead {
+        repo: Option<GhHeadRepo>,
+    }
+    #[derive(serde::Deserialize)]
+    struct GhHeadRepo {
+        full_name: String,
+    }
+
+    let url = format!("https://api.github.com/repos/{owner}/{repo}/pulls/{number}");
+    let pr: GhPrLite = reqwest::Client::new()
+        .get(&url)
+        .bearer_auth(&bot_token)
+        .header("User-Agent", "skilluv-backend/ski-113")
+        .header("Accept", "application/vnd.github+json")
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("PR author check fetch failed: {e}")))?
+        .error_for_status()
+        .map_err(|e| AppError::Internal(format!("PR author check status: {e}")))?
+        .json()
+        .await
+        .map_err(|e| AppError::Internal(format!("PR author check decode: {e}")))?;
+
+    if !login.eq_ignore_ascii_case(&pr.user.login) {
+        tracing::warn!(
+            user_id = %user_id,
+            expected = %login,
+            actual = %pr.user.login,
+            "SKI-113 refused: PR author mismatch"
+        );
+        return Err(AppError::Forbidden);
+    }
+
+    // Head repo check: the PR must come from a fork owned by the
+    // challenger. Some maintainer flows push a branch to the base repo
+    // directly; that's not the Skilluv path — external contributors work
+    // on their own fork.
+    if let Some(head_repo) = pr.head.repo {
+        let expected_prefix = format!("{}/", login.to_lowercase());
+        if !head_repo
+            .full_name
+            .to_lowercase()
+            .starts_with(&expected_prefix)
+        {
+            tracing::warn!(
+                user_id = %user_id,
+                head_repo = %head_repo.full_name,
+                "SKI-113 refused: PR head is not the challenger's fork"
+            );
+            return Err(AppError::Forbidden);
+        }
+    }
+    Ok(())
+}
+
+fn parse_github_pr_url_parts(url: &str) -> Option<(String, String, i32)> {
+    let rest = url.strip_prefix("https://github.com/")?;
+    let parts: Vec<&str> = rest.split('/').collect();
+    if parts.len() != 4 || parts[2] != "pull" {
+        return None;
+    }
+    let n: i32 = parts[3].parse().ok()?;
+    Some((parts[0].to_string(), parts[1].to_string(), n))
+}
+
 /// P26 v2 SKI-76 — accept only the canonical `https://github.com/{o}/{r}/pull/{n}`
 /// shape. Stricter than URL parsing on purpose: gh.io / api.github.com /
 /// enterprise hosts are rejected until we explicitly support them, so a
@@ -283,6 +403,15 @@ impl SlicesService {
             ));
         }
 
+        // P26 v2 SKI-113 — verify the PR was actually opened by this
+        // challenger. Prevents submitting someone else's PR to earn a
+        // challenge. No-op silently when:
+        //   - user has not connected GitHub OAuth (pre-P26 v2 flow,
+        //     don't break existing tests / dev environments)
+        //   - bot token is unset (dev / staging where verification isn't
+        //     wired yet — we log so operators see it in prod audits)
+        assert_pr_authored_by_user(db, user_id, pr_url).await?;
+
         let slice = sqlx::query_as::<_, ProjectSlice>(
             r#"
             UPDATE project_slices
@@ -300,7 +429,22 @@ impl SlicesService {
         .bind(user_id)
         .bind(pr_url)
         .fetch_optional(db)
-        .await?
+        .await
+        .map_err(|e| {
+            // SKI-114 — partial UNIQUE `uq_slices_submitted_pr_url_active`
+            // fires when the same PR URL is submitted to a second active
+            // slice. Return a stable 409 with an actionable message.
+            if let sqlx::Error::Database(dbe) = &e
+                && dbe
+                    .constraint()
+                    .is_some_and(|c| c == "uq_slices_submitted_pr_url_active")
+            {
+                return AppError::Conflict(
+                    "This PR URL is already attached to another active challenge.".into(),
+                );
+            }
+            AppError::Database(e)
+        })?
         .ok_or_else(|| {
             AppError::Validation(
                 "Slice cannot be submitted (not found, not your claim, or wrong status).".into(),

@@ -79,6 +79,24 @@ struct CreateProjectBody {
 
     #[serde(default)]
     skilluv_editorial_notes: Option<String>,
+
+    // P26 v2 SKI-110 — GitHub ingestion wiring. All optional so the admin
+    // route stays backward-compatible; enforced pairwise below.
+    #[serde(default)]
+    github_repo_owner: Option<String>,
+    #[serde(default)]
+    github_repo_name: Option<String>,
+    #[serde(default)]
+    curated_labels: Option<Vec<String>>,
+    /// One of "auto", "curator_review", "manual_only".
+    /// See migration 0055 for semantics.
+    #[serde(default)]
+    slice_ingestion_mode: Option<String>,
+    /// Ordered list of the project's primary skill domains. First entry
+    /// is the fallback for `primary_domain` when an ingested issue does
+    /// not carry a `domain:*` label (SKI-101 enricher).
+    #[serde(default)]
+    skill_domains: Option<Vec<String>>,
 }
 
 fn default_true() -> bool {
@@ -104,6 +122,19 @@ pub async fn create_project(
     validate_owner_type(&body.owner_type)?;
     validate_flagship(&body)?;
     validate_partnership_level(body.skilluv_partnership_level)?;
+    validate_github_pair(
+        body.github_repo_owner.as_deref(),
+        body.github_repo_name.as_deref(),
+    )?;
+    validate_ingestion_mode(body.slice_ingestion_mode.as_deref())?;
+    validate_skill_domains(body.skill_domains.as_deref())?;
+
+    // SKI-110 — warn (don't fail) when the combination would ingest nothing.
+    warn_ingest_will_no_op(
+        body.slice_ingestion_mode.as_deref(),
+        body.curated_labels.as_deref(),
+        &body.slug,
+    );
 
     let inserted: (Uuid, String) = sqlx::query_as(
         r#"
@@ -111,9 +142,13 @@ pub async fn create_project(
             slug, name, description, repo_url, demo_url, tech_stack,
             is_oss, looking_for_contributors, owner_type, owner_id, curated_by_admin,
             is_flagship, flagship_steward_user_id, skilluv_partnership_level,
-            skilluv_editorial_notes
+            skilluv_editorial_notes,
+            github_repo_owner, github_repo_name, curated_labels,
+            slice_ingestion_mode, skill_domains
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
+                $16, $17, COALESCE($18, '{}'::text[]),
+                COALESCE($19, 'curator_review'), COALESCE($20, '{}'::text[]))
         RETURNING id, slug
         "#,
     )
@@ -132,6 +167,11 @@ pub async fn create_project(
     .bind(body.flagship_steward_user_id)
     .bind(body.skilluv_partnership_level)
     .bind(&body.skilluv_editorial_notes)
+    .bind(&body.github_repo_owner)
+    .bind(&body.github_repo_name)
+    .bind(&body.curated_labels)
+    .bind(&body.slice_ingestion_mode)
+    .bind(&body.skill_domains)
     .fetch_one(&state.db)
     .await?;
 
@@ -189,6 +229,18 @@ struct PatchProjectBody {
     skilluv_partnership_level: Option<i16>,
     #[serde(default)]
     skilluv_editorial_notes: Option<String>,
+
+    // P26 v2 SKI-110 — same fields as create, all optional.
+    #[serde(default)]
+    github_repo_owner: Option<String>,
+    #[serde(default)]
+    github_repo_name: Option<String>,
+    #[serde(default)]
+    curated_labels: Option<Vec<String>>,
+    #[serde(default)]
+    slice_ingestion_mode: Option<String>,
+    #[serde(default)]
+    skill_domains: Option<Vec<String>>,
 }
 
 /// Patch a project by slug.
@@ -209,6 +261,20 @@ pub async fn patch_project(
     crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     validate_slug(&slug)?;
     validate_partnership_level(body.skilluv_partnership_level)?;
+    // Pairwise github validation only when at least one field is present:
+    // PATCH can legitimately update only owner if the other was already set,
+    // so we only reject explicit half-clears (one=Some("") means "clear").
+    validate_github_pair(
+        body.github_repo_owner.as_deref(),
+        body.github_repo_name.as_deref(),
+    )?;
+    validate_ingestion_mode(body.slice_ingestion_mode.as_deref())?;
+    validate_skill_domains(body.skill_domains.as_deref())?;
+    warn_ingest_will_no_op(
+        body.slice_ingestion_mode.as_deref(),
+        body.curated_labels.as_deref(),
+        &slug,
+    );
 
     let updated: Option<(Uuid,)> = sqlx::query_as(
         r#"
@@ -225,6 +291,11 @@ pub async fn patch_project(
             flagship_steward_user_id = COALESCE($10, flagship_steward_user_id),
             skilluv_partnership_level = COALESCE($11, skilluv_partnership_level),
             skilluv_editorial_notes = COALESCE($12, skilluv_editorial_notes),
+            github_repo_owner = COALESCE($14, github_repo_owner),
+            github_repo_name = COALESCE($15, github_repo_name),
+            curated_labels = COALESCE($16, curated_labels),
+            slice_ingestion_mode = COALESCE($17, slice_ingestion_mode),
+            skill_domains = COALESCE($18, skill_domains),
             updated_at = NOW()
         WHERE slug = $13 AND archived_at IS NULL
         RETURNING id
@@ -243,6 +314,11 @@ pub async fn patch_project(
     .bind(body.skilluv_partnership_level)
     .bind(&body.skilluv_editorial_notes)
     .bind(&slug)
+    .bind(&body.github_repo_owner)
+    .bind(&body.github_repo_name)
+    .bind(&body.curated_labels)
+    .bind(&body.slice_ingestion_mode)
+    .bind(&body.skill_domains)
     .fetch_optional(&state.db)
     .await?;
 
@@ -594,6 +670,71 @@ fn validate_partnership_level(level: Option<i16>) -> Result<(), AppError> {
     Ok(())
 }
 
+// ─── P26 v2 SKI-110 validators ───────────────────────────────────
+
+/// Reject when exactly one of (owner, name) is set — always a mistake.
+/// Also refuse empty strings on either side (would insert broken data).
+fn validate_github_pair(owner: Option<&str>, name: Option<&str>) -> Result<(), AppError> {
+    let owner_present = owner.is_some_and(|s| !s.is_empty());
+    let name_present = name.is_some_and(|s| !s.is_empty());
+    if owner_present != name_present {
+        return Err(AppError::Validation(
+            "github_repo_owner and github_repo_name must be set together (or both omitted)".into(),
+        ));
+    }
+    // Neither empty-string counts as "clear" from a PATCH; a real caller
+    // wanting to clear should send explicit NULL (which serde translates
+    // as Option::None → we do nothing, keeping the existing value).
+    for (label, value) in [("github_repo_owner", owner), ("github_repo_name", name)] {
+        if let Some(v) = value
+            && v.is_empty()
+        {
+            return Err(AppError::Validation(format!(
+                "{label} cannot be an empty string"
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn validate_ingestion_mode(mode: Option<&str>) -> Result<(), AppError> {
+    if let Some(m) = mode
+        && !matches!(m, "auto" | "curator_review" | "manual_only")
+    {
+        return Err(AppError::Validation(
+            "slice_ingestion_mode must be one of: auto, curator_review, manual_only".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_skill_domains(domains: Option<&[String]>) -> Result<(), AppError> {
+    let Some(list) = domains else {
+        return Ok(());
+    };
+    for d in list {
+        if !crate::services::validator_applications::VALID_DOMAINS.contains(&d.as_str()) {
+            return Err(AppError::Validation(format!(
+                "unknown skill_domain: {d}; allowed: {:?}",
+                crate::services::validator_applications::VALID_DOMAINS
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// Log a warning (no failure) when the combination of mode + labels
+/// would silently no-op the ingest — operators usually don't intend this.
+fn warn_ingest_will_no_op(mode: Option<&str>, curated_labels: Option<&[String]>, slug: &str) {
+    if mode == Some("auto") && curated_labels.is_some_and(|l| l.is_empty()) {
+        tracing::warn!(
+            slug,
+            "project set to slice_ingestion_mode='auto' but curated_labels is empty — \
+             the ingestor will not pick up any issues"
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -628,5 +769,47 @@ mod tests {
         assert!(validate_partnership_level(Some(3)).is_ok());
         assert!(validate_partnership_level(Some(0)).is_err());
         assert!(validate_partnership_level(Some(4)).is_err());
+    }
+
+    // ─── SKI-110 tests ─────────────────────────────────────────────
+
+    #[test]
+    fn github_pair_both_or_neither() {
+        assert!(validate_github_pair(None, None).is_ok());
+        assert!(validate_github_pair(Some("launchbadge"), Some("sqlx")).is_ok());
+        assert!(validate_github_pair(Some("launchbadge"), None).is_err());
+        assert!(validate_github_pair(None, Some("sqlx")).is_err());
+    }
+
+    #[test]
+    fn github_pair_rejects_empty_strings() {
+        // Empty is not the same as absent — refuse to insert broken data.
+        assert!(validate_github_pair(Some(""), Some("sqlx")).is_err());
+        assert!(validate_github_pair(Some("launchbadge"), Some("")).is_err());
+    }
+
+    #[test]
+    fn ingestion_mode_allowed_values() {
+        assert!(validate_ingestion_mode(None).is_ok());
+        assert!(validate_ingestion_mode(Some("auto")).is_ok());
+        assert!(validate_ingestion_mode(Some("curator_review")).is_ok());
+        assert!(validate_ingestion_mode(Some("manual_only")).is_ok());
+        assert!(validate_ingestion_mode(Some("automatic")).is_err());
+        assert!(validate_ingestion_mode(Some("")).is_err());
+    }
+
+    #[test]
+    fn skill_domains_all_must_be_valid() {
+        let ok: Vec<String> = ["code", "ops"].iter().map(|s| s.to_string()).collect();
+        assert!(validate_skill_domains(Some(&ok)).is_ok());
+        let empty: Vec<String> = vec![];
+        assert!(validate_skill_domains(Some(&empty)).is_ok());
+        assert!(validate_skill_domains(None).is_ok());
+
+        let bad: Vec<String> = ["code", "blockchain"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert!(validate_skill_domains(Some(&bad)).is_err());
     }
 }

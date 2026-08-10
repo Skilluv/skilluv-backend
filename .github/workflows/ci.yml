@@ -430,3 +430,18 @@ jobs:
             echo "::error::Coolify webhook returned HTTP $status"
             exit 1
           fi
+
+      - name: Wait for deploy + smoke test
+        # SKI-28 (Hygiène pré-prod HYG-01) — after Coolify triggers a
+        # redeploy, wait a bit for the new container to boot then hit
+        # scripts/smoke.sh against the live URL. Fails the workflow if
+        # the new deploy is silently broken.
+        # Skips when SKILLUV_SMOKE_URL is unset (e.g. fork PRs).
+        env:
+          SKILLUV_SMOKE_URL: ${{ secrets.SKILLUV_SMOKE_URL }}
+        if: env.SKILLUV_SMOKE_URL != ''
+        run: |
+          echo "Waiting 60s for Coolify to swap the image..."
+          sleep 60
+          chmod +x scripts/smoke.sh
+          bash scripts/smoke.sh "$SKILLUV_SMOKE_URL"

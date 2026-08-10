@@ -112,6 +112,10 @@ sentry-tracing = "0.49"
 # ZIP for GDPR data export
 zip = { version = "2", default-features = false, features = ["deflate"] }
 
+# QR code generation for SKI-118 PDF attestations. Pure-Rust, no external
+# service call — the QR is embedded as inline SVG in the PDF's HTML.
+qrcode = { version = "0.14", default-features = false, features = ["svg"] }
+
 # i18n (FR/EN bundled)
 rust-i18n = "4"
 

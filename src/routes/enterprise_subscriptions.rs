@@ -32,16 +32,6 @@ pub fn enterprise_subscription_routes() -> Router<AppState> {
         )
 }
 
-async fn current_enterprise_for(db: &sqlx::PgPool, user_id: Uuid) -> Result<Uuid, AppError> {
-    let row: Option<(Uuid,)> = sqlx::query_as(
-        "SELECT enterprise_id FROM enterprise_members WHERE user_id = $1 AND status = 'active' LIMIT 1",
-    )
-    .bind(user_id)
-    .fetch_optional(db)
-    .await?;
-    row.map(|(id,)| id).ok_or(AppError::Forbidden)
-}
-
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct SubscribeBody {
     /// Slug of the subscription pack (see `packs` table where
@@ -113,7 +103,15 @@ pub async fn subscribe_to_pipeline(
     auth: AuthUser,
     Json(body): Json<SubscribeBody>,
 ) -> Result<Json<ApiResponse<SubscribeResponse>>, AppError> {
-    let enterprise_id = current_enterprise_for(&state.db, auth.user_id).await?;
+    // SKI-66 — owner-only gate. Was previously `current_enterprise_for`
+    // which admitted any enterprise MEMBER; that caused non-owner
+    // enterprise members to hit these endpoints, get a 401 downstream,
+    // and see the front redirect them to /auth/login instead of a clean
+    // 403. The gate below enforces owner status + returns Forbidden with
+    // a stable shape so the front can distinguish "not signed in" from
+    // "signed in but not authorised".
+    let enterprise = crate::routes::enterprise::require_enterprise_owner_pub(&state, &auth).await?;
+    let enterprise_id = enterprise.id;
     // Vérifier qu'il n'y a pas déjà un abo actif.
     let existing = crate::services::subscriptions::active_for(&state.db, enterprise_id).await?;
     if let Some(sub) = existing {
@@ -180,7 +178,15 @@ pub async fn current_subscription(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<ApiResponse<CurrentSubscriptionResponse>>, AppError> {
-    let enterprise_id = current_enterprise_for(&state.db, auth.user_id).await?;
+    // SKI-66 — owner-only gate. Was previously `current_enterprise_for`
+    // which admitted any enterprise MEMBER; that caused non-owner
+    // enterprise members to hit these endpoints, get a 401 downstream,
+    // and see the front redirect them to /auth/login instead of a clean
+    // 403. The gate below enforces owner status + returns Forbidden with
+    // a stable shape so the front can distinguish "not signed in" from
+    // "signed in but not authorised".
+    let enterprise = crate::routes::enterprise::require_enterprise_owner_pub(&state, &auth).await?;
+    let enterprise_id = enterprise.id;
     let sub = crate::services::subscriptions::active_for(&state.db, enterprise_id).await?;
     let Some(sub) = sub else {
         return Ok(Json(ApiResponse::new(CurrentSubscriptionResponse {
@@ -218,7 +224,15 @@ pub async fn cancel_subscription(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<ApiResponse<CancelSubscriptionResponse>>, AppError> {
-    let enterprise_id = current_enterprise_for(&state.db, auth.user_id).await?;
+    // SKI-66 — owner-only gate. Was previously `current_enterprise_for`
+    // which admitted any enterprise MEMBER; that caused non-owner
+    // enterprise members to hit these endpoints, get a 401 downstream,
+    // and see the front redirect them to /auth/login instead of a clean
+    // 403. The gate below enforces owner status + returns Forbidden with
+    // a stable shape so the front can distinguish "not signed in" from
+    // "signed in but not authorised".
+    let enterprise = crate::routes::enterprise::require_enterprise_owner_pub(&state, &auth).await?;
+    let enterprise_id = enterprise.id;
     let sub = crate::services::subscriptions::active_for(&state.db, enterprise_id).await?;
     let Some(sub) = sub else {
         return Err(AppError::NotFound("no active subscription".into()));

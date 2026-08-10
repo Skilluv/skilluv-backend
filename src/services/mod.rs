@@ -53,6 +53,7 @@ pub mod scim;
 pub mod seasons;
 pub mod session;
 pub mod skills;
+pub mod slice_enrichment;
 pub mod slice_ingestion;
 pub mod slice_validation;
 pub mod slices;

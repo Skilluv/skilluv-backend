@@ -732,9 +732,10 @@ pub async fn handle_issues_event(state: &AppState, payload: &Value) -> Result<()
     };
 
     // Trouver un project Skilluv qui match le repo ET qui liste ce label.
-    let project_row: Option<(Uuid, String)> = sqlx::query_as(
+    // P26 v2 SKI-101: also load `skill_domains` for the enricher fallback.
+    let project_row: Option<(Uuid, String, Vec<String>)> = sqlx::query_as(
         r#"
-        SELECT id, slice_ingestion_mode
+        SELECT id, slice_ingestion_mode, skill_domains
         FROM projects
         WHERE github_repo_owner = $1
           AND github_repo_name = $2
@@ -750,7 +751,7 @@ pub async fn handle_issues_event(state: &AppState, payload: &Value) -> Result<()
     .fetch_optional(&state.db)
     .await?;
 
-    let Some((project_id, mode)) = project_row else {
+    let Some((project_id, mode, skill_domains)) = project_row else {
         return Ok(()); // Ce label n'est pas curé pour ce projet.
     };
 
@@ -765,23 +766,54 @@ pub async fn handle_issues_event(state: &AppState, payload: &Value) -> Result<()
         })
         .unwrap_or_default();
 
+    // P26 v2 SKI-101 — enrich from labels + body (see services::slice_enrichment).
+    let default_domain = skill_domains
+        .first()
+        .cloned()
+        .unwrap_or_else(|| "code".to_string());
+    let enriched = crate::services::slice_enrichment::enrich_from_issue(
+        &existing_labels,
+        Some(body_text.as_str()),
+        &default_domain,
+    );
+    let fragments_reward: i32 = match enriched.difficulty {
+        1 => 30,
+        2 => 40,
+        3 => 50,
+        4 => 70,
+        5 => 100,
+        _ => 50,
+    };
+
     let metadata = json!({
         "source": "github_webhook_issues_labeled",
         "issue_url": issue_url,
         "issue_number": issue_number,
         "labels": existing_labels,
         "trigger_label": added_label,
+        "enrichment": {
+            "domain_source": if existing_labels
+                .iter()
+                .any(|l| l.to_lowercase().starts_with("domain:"))
+            {
+                "label"
+            } else {
+                "project_default"
+            },
+        },
     });
 
     let inserted: Option<Uuid> = sqlx::query_scalar(
         r#"
         INSERT INTO project_slices
             (project_id, slice_type, external_ref, external_metadata,
-             title, description, primary_domain, difficulty, fragments_reward,
+             title, description, acceptance_criteria,
+             primary_domain, difficulty, fragments_reward,
              status, ingested_from)
         VALUES ($1, 'github_issue', $2, $3,
-                $4, $5, 'code', 3, 50,
-                $6, 'github_webhook')
+                $4, $5, $6,
+                $7, $8, $9,
+                $10, 'github_webhook')
         ON CONFLICT (project_id, external_ref)
             WHERE slice_type = 'github_issue' AND external_ref IS NOT NULL
             DO NOTHING
@@ -793,6 +825,10 @@ pub async fn handle_issues_event(state: &AppState, payload: &Value) -> Result<()
     .bind(&metadata)
     .bind(truncate(&title, 300))
     .bind(truncate(&body_text, 4000))
+    .bind(&enriched.acceptance_criteria)
+    .bind(&enriched.primary_domain)
+    .bind(enriched.difficulty)
+    .bind(fragments_reward)
     .bind(default_status)
     .fetch_optional(&state.db)
     .await?;

@@ -1,0 +1,104 @@
+name: Skilluv Challenge
+description: |
+  Propose a scoped, claimable task for the Skilluv community. Once
+  labelled `skilluv-challenge`, the Skilluv backend ingests this
+  issue as a `project_slice` and it becomes claimable at
+  skill-uv.com/slices/{...}.
+title: "[Challenge] <one-sentence outcome>"
+labels: ["skilluv-challenge"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for proposing a challenge. Fill each section — the
+        Skilluv ingestor parses the body to populate the slice
+        (acceptance criteria, difficulty, domain).
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: One paragraph explaining why this matters and what a claimer needs to know before starting. Link to relevant files / prior discussions.
+      placeholder: |
+        The `EmailService` currently only supports Brevo. To ship the
+        AWS SES fallback (see #142), the transport must be behind a
+        trait so we can dependency-inject either provider based on
+        environment.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance criteria
+      description: |
+        Checklist a reviewer will use to approve/reject. Use `- [ ]`
+        items. The parser stops at the next `##` heading, so keep this
+        section focused.
+      value: |
+        - [ ]
+        - [ ]
+        - [ ] Tests cover the happy path and one failure mode
+    validations:
+      required: true
+
+  - type: dropdown
+    id: difficulty
+    attributes:
+      label: Difficulty
+      description: |
+        The Skilluv rank gate uses this. Choose the option that matches
+        the label the maintainer will add. Explicit `difficulty:N` labels
+        override community aliases.
+      options:
+        - "difficulty:1 (beginner)"
+        - "difficulty:2"
+        - "difficulty:3 (intermediate — default)"
+        - "difficulty:4"
+        - "difficulty:5 (advanced)"
+      default: 2
+    validations:
+      required: true
+
+  - type: dropdown
+    id: domain
+    attributes:
+      label: Primary domain
+      description: |
+        Determines who can claim (challenge_validator gate) and where
+        the slice appears in listings. Add the matching `domain:*`
+        label after opening.
+      options:
+        - "domain:code"
+        - "domain:design"
+        - "domain:game"
+        - "domain:security"
+        - "domain:ops"
+        - "domain:ai"
+        - "domain:soft_skills"
+      default: 0
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: |
+        Anything else — links to related PRs, screenshots, references.
+        This section is NOT parsed for acceptance criteria (heading
+        boundary `##` stops the parser).
+      placeholder: |
+        Related: #142
+        Design doc: https://...
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        **After opening this issue**, apply the labels selected above
+        (`difficulty:N` and `domain:*`). The `skilluv-challenge` label
+        is added automatically; without it the Skilluv ingestor
+        ignores the issue.

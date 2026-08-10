@@ -43,6 +43,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libssl3 \
         curl \
         tini \
+        procps \
     && rm -rf /var/lib/apt/lists/* \
     # Create a non-root user to run the app under. UID/GID pinned so
     # bind-mounted volumes have predictable ownership.
@@ -91,10 +92,18 @@ ENV HOST=0.0.0.0 \
 # `exec` chains the binary so it inherits PID 1's signal handling from tini.
 ENTRYPOINT ["/usr/bin/tini", "--", "/bin/sh", "-c", "exec /usr/local/bin/${SKILLUV_BINARY}"]
 
-# Container-level healthcheck — only meaningful for the HTTP backend.
-# The Discord bot ignores it (returns non-zero, Coolify healthcheck disabled).
+# Container-level healthcheck — conditional on which binary this
+# container runs. The HTTP backend serves /api/health on port 3001 ;
+# every other binary (skilluv-discord-bot, skilluv-discord-notifier,
+# skilluv-github-ingest as a long-running worker) has no HTTP surface.
+# `pgrep` returns 0 as long as the target process is running, which is
+# what we actually want to know for a non-HTTP container.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -fsS http://127.0.0.1:3001/api/health || exit 1
+    CMD if [ "$SKILLUV_BINARY" = "skilluv-backend" ]; then \
+            curl -fsS http://127.0.0.1:3001/api/health || exit 1 ; \
+        else \
+            pgrep -f "$SKILLUV_BINARY" > /dev/null || exit 1 ; \
+        fi
 
 # OCI labels for image provenance (SBOM tools + registries pick these up).
 LABEL org.opencontainers.image.source="https://github.com/Skilluv/skilluv-backend" \

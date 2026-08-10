@@ -30,6 +30,7 @@ pub mod invoices;
 pub mod leaderboard;
 pub mod linear_sync;
 pub mod llm_verifier;
+pub mod maintainer_digest;
 pub mod mobile_money;
 pub mod mobile_push;
 pub mod notification;

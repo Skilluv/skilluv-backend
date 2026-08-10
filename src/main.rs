@@ -101,6 +101,14 @@ async fn async_main(config: AppConfig) {
     // repos where we can't install a webhook. No-op if bot token unset.
     skilluv_backend::services::external_refresh::start_external_refresh_task(db.clone());
 
+    // P26 v2 SKI-120 — maintainer digest weekly task. Every hour scans
+    // for confirmed subscriptions due (last_digest_at > 7d) and emails.
+    skilluv_backend::services::maintainer_digest::start_maintainer_digest_task(
+        db.clone(),
+        email.clone(),
+        config.base_url.clone(),
+    );
+
     // Connect to AI service (optional — backend works without it)
     let ai = if let Some(ref grpc_url) = config.grpc_ai_url {
         tracing::info!("Connecting to AI service at {grpc_url}...");

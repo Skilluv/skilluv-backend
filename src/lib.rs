@@ -199,6 +199,9 @@ pub fn build_router(state: AppState) -> Router {
         // SKI-116 / SKI-117 — public SVG badges for user profiles and
         // repo READMEs. Same "outside /api" rationale.
         .merge(routes::badge_svg_routes().with_state(state.clone()))
+        // SKI-120 — maintainer digest subscribe/confirm/unsubscribe.
+        // Public (self-serve), outside /api, double opt-in.
+        .merge(routes::maintainer_digest_routes().with_state(state.clone()))
         .merge(routes::well_known_routes().with_state(state.clone()))
         .merge(routes::metrics_routes().with_state(state.clone()))
         .merge(websocket::ws_routes().with_state(state.clone()));

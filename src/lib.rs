@@ -180,6 +180,7 @@ pub fn build_router(state: AppState) -> Router {
             "/api",
             admin_gate(routes::admin_validator_analytics_routes()),
         )
+        .nest("/api", admin_gate(routes::admin_feature_flag_routes()))
         .nest("/api", admin_gate(routes::admin_content_ops_routes()))
         // Trello vx5q6jW4 — admin_tournament_routes (seasons + tournaments
         // admin) était mixé dans tournament_routes sans admin_gate. Split

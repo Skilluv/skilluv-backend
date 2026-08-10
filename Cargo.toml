@@ -163,6 +163,10 @@ path = "src/bin/github_ingest.rs"
 name = "skilluv-seed-projects"
 path = "src/bin/seed_projects.rs"
 
+[[bin]]
+name = "skilluv-discord-notifier"
+path = "src/bin/discord_notifier.rs"
+
 [build-dependencies]
 tonic-build = "0.14"
 tonic-prost-build = "0.14"

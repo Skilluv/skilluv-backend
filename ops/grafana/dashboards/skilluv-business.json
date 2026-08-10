@@ -1,0 +1,54 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Users total",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+      "targets": [{"expr": "skilluv_users_total"}]
+    },
+    {
+      "type": "stat",
+      "title": "Users active 24h",
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+      "targets": [{"expr": "skilluv_users_active_24h"}]
+    },
+    {
+      "type": "stat",
+      "title": "Challenges in progress",
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+      "targets": [{"expr": "skilluv_challenges_in_progress"}]
+    },
+    {
+      "type": "stat",
+      "title": "Enterprises total",
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+      "targets": [{"expr": "skilluv_enterprises_total"}]
+    },
+    {
+      "type": "graph",
+      "title": "Users total trend",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+      "targets": [{"expr": "skilluv_users_total"}]
+    },
+    {
+      "type": "graph",
+      "title": "Reports pending / Conversations active",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+      "targets": [
+        {"expr": "skilluv_reports_pending", "legendFormat": "reports pending"},
+        {"expr": "skilluv_conversations_active", "legendFormat": "conversations active"}
+      ]
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "tags": ["skilluv", "business"],
+  "templating": {"list": []},
+  "time": {"from": "now-24h", "to": "now"},
+  "timezone": "browser",
+  "title": "Skilluv — Business overview",
+  "uid": "skilluv-business",
+  "version": 1
+}

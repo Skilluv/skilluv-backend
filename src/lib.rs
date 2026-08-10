@@ -194,6 +194,9 @@ pub fn build_router(state: AppState) -> Router {
         // Also outside /api on purpose: a recruiter reading a CV
         // shouldn't need to know Skilluv's internal API surface.
         .merge(routes::attestations_public_routes().with_state(state.clone()))
+        // SKI-116 / SKI-117 — public SVG badges for user profiles and
+        // repo READMEs. Same "outside /api" rationale.
+        .merge(routes::badge_svg_routes().with_state(state.clone()))
         .merge(routes::well_known_routes().with_state(state.clone()))
         .merge(routes::metrics_routes().with_state(state.clone()))
         .merge(websocket::ws_routes().with_state(state.clone()));

@@ -143,6 +143,22 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::enterprise_dashboard_routes())
         .nest("/api", routes::user_profile_routes())
         .nest("/api", routes::profile_extras_routes())
+        // Post-MVP T1 — personal retention surfaces (bookmarks, notes).
+        .nest("/api", routes::bookmark_routes())
+        .nest("/api", routes::user_note_routes())
+        .nest("/api", routes::goal_routes())
+        .nest("/api", routes::timeline_routes())
+        // Post-MVP T2 — product moats (cohorts, peer coaching).
+        .nest("/api", routes::cohort_routes())
+        .nest("/api", routes::peer_matching_routes())
+        .nest("/api", routes::external_signal_routes())
+        // Post-MVP T3 — ambitious surfaces (skill tree, offers, vouching, AI).
+        .nest("/api", routes::skill_tree_routes())
+        .nest("/api", admin_gate(routes::admin_skill_tree_routes()))
+        .nest("/api", routes::talent_offer_routes())
+        .nest("/api", routes::vouching_routes())
+        .nest("/api", routes::ai_companion_routes())
+        .nest("/api", admin_gate(routes::admin_timeline_routes()))
         .nest("/api", routes::oauth_routes())
         .nest("/api", routes::report_routes())
         .nest("/api", admin_gate(routes::admin_moderation_routes()))

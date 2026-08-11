@@ -40,9 +40,41 @@ pub struct ProofRecomputeReport {
     pub errors: Vec<String>,
 }
 
+/// SKI-43 — recompute, then notify through the durable channel only.
+///
+/// This is the signature every existing caller uses, and most of them are
+/// service-layer functions holding nothing but a `PgPool`. The resulting
+/// notifications are written to the `notifications` table, so the user
+/// sees them on their next poll; the real-time push is skipped. Callers
+/// that do have `AppState` should prefer
+/// [`recompute_all_for_user_live`] to also light up WebSocket and mobile.
 pub async fn recompute_all_for_user(
     db: &PgPool,
     user_id: Uuid,
+) -> Result<ProofRecomputeReport, AppError> {
+    recompute_inner(db, user_id, None).await
+}
+
+/// SKI-43 — recompute and notify through every channel.
+///
+/// Identical to [`recompute_all_for_user`] plus live delivery (Redis
+/// unread counter, WebSocket, mobile push). Live delivery is best-effort:
+/// its failures are logged, never propagated, so notification plumbing can
+/// never fail a promotion that genuinely happened.
+pub async fn recompute_all_for_user_live(
+    db: &PgPool,
+    redis: &mut redis::aio::ConnectionManager,
+    ws: &crate::websocket::WsManager,
+    user_id: Uuid,
+) -> Result<ProofRecomputeReport, AppError> {
+    let channel = crate::services::promotion_notify::LiveChannel { redis, ws };
+    recompute_inner(db, user_id, Some(channel)).await
+}
+
+async fn recompute_inner(
+    db: &PgPool,
+    user_id: Uuid,
+    live: Option<crate::services::promotion_notify::LiveChannel<'_>>,
 ) -> Result<ProofRecomputeReport, AppError> {
     let mut errors = Vec::new();
 
@@ -119,7 +151,7 @@ pub async fn recompute_all_for_user(
         .increment(1);
     }
 
-    Ok(ProofRecomputeReport {
+    let report = ProofRecomputeReport {
         user_id,
         capabilities_granted: caps.granted,
         capabilities_already_active: caps.already_active,
@@ -130,7 +162,18 @@ pub async fn recompute_all_for_user(
         rank_computed: rank_new,
         rank_promoted,
         errors,
-    })
+    };
+
+    // SKI-43 — celebrate at the psychological moment. Best-effort like
+    // every other step here: a notification failure is logged into the
+    // report's errors and never masks the promotion itself.
+    let mut report = report;
+    if let Err(e) = crate::services::promotion_notify::notify_from_report(db, &report, live).await {
+        tracing::warn!(user_id = %user_id, error = %e, "SKI-43: promotion notifications failed");
+        report.errors.push(format!("notifications: {e}"));
+    }
+
+    Ok(report)
 }
 
 /// P19.3 — Sweep : recompute pour tous les users ayant eu de l'activité

@@ -92,6 +92,12 @@ pub struct TalentRow {
     /// Cumulative weighted_proven_count over the matched skills.
     pub matched_wpc_total: i64,
     pub working_languages: Vec<String>,
+    /// SKI-46 — how many Doyens currently stake their own rank on this
+    /// talent. Reported as its own field rather than folded into
+    /// `matched_wpc_total`: a vouching is a human endorsement, not a
+    /// proof, and merging the two would let social capital masquerade as
+    /// verified work.
+    pub vouched_by_count: i64,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -211,16 +217,27 @@ pub async fn search_v3(
             JOIN skill_nodes sn ON sn.id = us.skill_id
             WHERE ($2::TEXT[] IS NULL OR sn.slug = ANY($2))
             GROUP BY us.user_id
+        ),
+        -- SKI-46 — live vouchings per talent. Broken and expired ones are
+        -- excluded here rather than filtered later, so a withdrawn
+        -- endorsement stops boosting immediately.
+        vouched AS (
+            SELECT vouched_id, COUNT(*)::BIGINT AS live_count
+            FROM vouchings
+            WHERE broken_at IS NULL AND active_until > NOW()
+            GROUP BY vouched_id
         )
         SELECT u.id AS user_id, u.username, u.display_name,
                o.slug AS orientation_slug, uo.mode AS orientation_mode,
                uo.is_primary, uo.working_languages,
                COALESCE(m.matched_count, 0) AS matched_skills_count,
-               COALESCE(m.matched_wpc, 0)   AS matched_wpc_total
+               COALESCE(m.matched_wpc, 0)   AS matched_wpc_total,
+               COALESCE(v.live_count, 0)    AS vouched_by_count
         FROM user_orientations uo
         JOIN orientations o ON o.id = uo.orientation_id
         JOIN users u        ON u.id = uo.user_id
         LEFT JOIN matched m ON m.user_id = u.id
+        LEFT JOIN vouched v ON v.vouched_id = u.id
         WHERE uo.ended_at IS NULL
           AND ($1::VARCHAR IS NULL OR o.slug = $1)
           AND ($3::VARCHAR IS NULL OR uo.mode = $3)
@@ -235,6 +252,11 @@ pub async fn search_v3(
             uo.is_primary DESC,
             matched_wpc_total DESC,
             matched_skills_count DESC,
+            -- SKI-46 — vouchings break ties, they do not create them.
+            -- Ranked BELOW every proof-derived signal on purpose: an
+            -- endorsement should surface a talent whose proven work is
+            -- already comparable, never outrank someone with more of it.
+            vouched_by_count DESC,
             u.username
         LIMIT $7 OFFSET $8
         "#,

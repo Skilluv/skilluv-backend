@@ -769,9 +769,19 @@ pub async fn mark_completed(
     // P20.2 — Best-effort recompute proof engines pour le mentor : la 3ᵉ
     // session complétée peut débloquer la capability `mentor`
     // (capabilities_engine seuil).
+    // SKI-43 — live variant: AppState is available here, so the mentor is
+    // notified in real time as well as durably.
     let db_clone = state.db.clone();
+    let mut redis_clone = state.redis.clone();
+    let ws_clone = state.ws.clone();
     tokio::spawn(async move {
-        let _ = crate::services::proof_hooks::recompute_all_for_user(&db_clone, mentor_id).await;
+        let _ = crate::services::proof_hooks::recompute_all_for_user_live(
+            &db_clone,
+            &mut redis_clone,
+            &ws_clone,
+            mentor_id,
+        )
+        .await;
     });
 
     Ok(Json(build_response(json!({

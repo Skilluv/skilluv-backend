@@ -22,12 +22,15 @@ use super::proto::{
     CheckPlagiarismResponse,
     CodeReviewRequest,
     CodeReviewResponse,
+    CompanionRequest,
+    CompanionResponse,
     GenerateChallengeRequest,
     GenerateChallengeResponse,
     GenerateVariantRequest,
     // Service clients
     challenge_generation_service_client::ChallengeGenerationServiceClient,
     code_review_service_client::CodeReviewServiceClient,
+    learning_companion_service_client::LearningCompanionServiceClient,
     plagiarism_service_client::PlagiarismServiceClient,
     talent_detection_service_client::TalentDetectionServiceClient,
 };
@@ -135,5 +138,20 @@ impl AiClient {
     ) -> Result<CheckPlagiarismResponse, tonic::Status> {
         let mut client = PlagiarismServiceClient::new(self.channel.clone());
         Ok(client.check_plagiarism(req).await?.into_inner())
+    }
+
+    // ─── LearningCompanionService ──────────────────────────────────
+
+    /// SKI-44 — ask the learning companion.
+    ///
+    /// One RPC for all four interaction types; see the proto for why.
+    /// A worker that has not implemented it yet answers `Unimplemented`,
+    /// which the route surfaces as a clean 503 rather than a 500.
+    pub async fn companion_ask(
+        &self,
+        req: CompanionRequest,
+    ) -> Result<CompanionResponse, tonic::Status> {
+        let mut client = LearningCompanionServiceClient::new(self.channel.clone());
+        Ok(client.ask(req).await?.into_inner())
     }
 }

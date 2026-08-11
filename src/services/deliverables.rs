@@ -157,6 +157,31 @@ impl DeliverablesService {
 
         tx.commit().await?;
 
+        // SKI-44 — attach undisclosed AI companion interactions to the new
+        // artifact. Covers both freshly-created outcomes: a PR held for
+        // manual review still had AI help behind it, and the reviewer is
+        // precisely who needs to know.
+        let new_deliverable_id = match outcome {
+            PrMergedOutcome::Verified { deliverable_id }
+            | PrMergedOutcome::PendingManualReview { deliverable_id } => Some(deliverable_id),
+            // AlreadyProcessed is idempotent replay — the disclosure ran on
+            // the first pass.
+            _ => None,
+        };
+        if let Some(deliverable_id) = new_deliverable_id
+            && let Err(e) = crate::services::ai_companion::disclose_on_deliverable(
+                db,
+                author_user_id,
+                deliverable_id,
+            )
+            .await
+        {
+            tracing::warn!(
+                user_id = %author_user_id, %deliverable_id, error = %e,
+                "SKI-44: AI disclosure sweep failed"
+            );
+        }
+
         // P19.2 — Best-effort recompute proof engines si le deliverable est
         // devenu verified via cet event (author_match). Le hook est async pour
         // ne pas bloquer le webhook GitHub.
@@ -649,6 +674,20 @@ impl DeliverablesService {
         .await?;
 
         if let Some(id) = inserted {
+            // SKI-44 — attach any undisclosed AI companion interactions from
+            // the preceding window to this artifact. Done inline rather than
+            // in the spawned task below: an undisclosed interaction is the
+            // one thing this feature exists to prevent, so it must not be
+            // lost to a task that never got scheduled.
+            if let Err(e) =
+                crate::services::ai_companion::disclose_on_deliverable(db, user_id, id).await
+            {
+                tracing::warn!(
+                    user_id = %user_id, deliverable_id = %id, error = %e,
+                    "SKI-44: AI disclosure sweep failed"
+                );
+            }
+
             // P19.2 — Best-effort recompute proof engines pour ce user.
             let db_clone = db.clone();
             tokio::spawn(async move {

@@ -32,6 +32,67 @@ const ORDER: &[&str] = &[
     RANK_DOYEN,
 ];
 
+/// Ranks in promotion order, lowest first. Exposed so callers that reason
+/// about progression (SKI-38 goals) don't have to redeclare the ladder.
+pub fn rank_order() -> &'static [&'static str] {
+    ORDER
+}
+
+/// Position of `rank` in the ladder, or `None` if it isn't a known rank.
+/// Distinct from the private `rank_index`, which folds unknown values to 0
+/// because a promotion comparison must never accidentally demote.
+pub fn rank_position(rank: &str) -> Option<usize> {
+    ORDER.iter().position(|r| *r == rank)
+}
+
+/// What a given rank costs, in the same units `compute_rank` checks.
+///
+/// SKI-38 needs these to turn "reach Ranger" into a percentage rather than
+/// a boolean. Keeping them here — next to `compute_rank`, which is the
+/// only other place that knows the numbers — means the two cannot drift.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RankThresholds {
+    pub deliverables: i64,
+    pub attestations: i64,
+    /// `doyen` additionally requires the `mentor` capability.
+    pub requires_mentor: bool,
+}
+
+/// Thresholds for `rank`, or `None` for an unknown rank.
+///
+/// `apprenti` is granted at signup, hence all-zero.
+pub fn thresholds_for(rank: &str) -> Option<RankThresholds> {
+    let t = match rank {
+        RANK_APPRENTI => RankThresholds {
+            deliverables: 0,
+            attestations: 0,
+            requires_mentor: false,
+        },
+        RANK_RANGER => RankThresholds {
+            deliverables: 4,
+            attestations: 0,
+            requires_mentor: false,
+        },
+        RANK_ARTISAN => RankThresholds {
+            deliverables: 11,
+            attestations: 1,
+            requires_mentor: false,
+        },
+        RANK_MAITRE => RankThresholds {
+            deliverables: 26,
+            attestations: 3,
+            requires_mentor: false,
+        },
+        RANK_DOYEN => RankThresholds {
+            deliverables: 50,
+            attestations: 5,
+            requires_mentor: true,
+        },
+        _ => return None,
+    };
+    Some(t)
+}
+
 /// Retourne (rank_courant, rank_calculé, promoted?).
 pub async fn recompute_rank_for_user(
     db: &PgPool,
@@ -115,6 +176,46 @@ pub async fn recompute_rank_for_user(
     Ok((current, computed, false))
 }
 
+/// A user's rank as the outside world should see it.
+///
+/// SKI-46 — `user_ranks.rank` answers "what do the proofs say", and it is
+/// unidirectional by design. A broken vouching needs to answer a different
+/// question: "what does this person currently get to trade on". That is
+/// this function.
+///
+/// While `penalty_until` is in the future, the effective rank is one step
+/// below the derived one (never below `apprenti`). The window expires on
+/// its own, so no job has to remember to lift the penalty.
+///
+/// Public surfaces (profile, talent search, offer eligibility) should read
+/// this; the proof engine keeps reading the raw column.
+pub async fn effective_rank(db: &PgPool, user_id: Uuid) -> Result<String, AppError> {
+    let row: Option<(String, Option<chrono::DateTime<chrono::Utc>>)> =
+        sqlx::query_as("SELECT rank, penalty_until FROM user_ranks WHERE user_id = $1")
+            .bind(user_id)
+            .fetch_optional(db)
+            .await?;
+
+    let Some((rank, penalty_until)) = row else {
+        return Ok(RANK_APPRENTI.to_string());
+    };
+
+    let penalised = penalty_until.is_some_and(|until| until > chrono::Utc::now());
+    if !penalised {
+        return Ok(rank);
+    }
+
+    Ok(demote_one(&rank).to_string())
+}
+
+/// One step down the ladder, floored at `apprenti`.
+fn demote_one(rank: &str) -> &str {
+    match rank_position(rank) {
+        Some(0) | None => RANK_APPRENTI,
+        Some(i) => ORDER[i - 1],
+    }
+}
+
 fn compute_rank(deliverables: i64, attestations: i64, is_mentor: bool) -> String {
     if deliverables >= 50 && attestations >= 5 && is_mentor {
         RANK_DOYEN.into()
@@ -151,5 +252,41 @@ mod unit {
         assert_eq!(compute_rank(26, 3, false), RANK_MAITRE);
         assert_eq!(compute_rank(50, 5, false), RANK_MAITRE, "mentor manquant");
         assert_eq!(compute_rank(50, 5, true), RANK_DOYEN);
+    }
+
+    /// SKI-38 reads `thresholds_for` to compute goal progress. If it ever
+    /// drifts from `compute_rank`, a user would be shown 100% on a goal
+    /// that has not actually been reached. Pin the two together: meeting a
+    /// rank's thresholds exactly must yield that rank.
+    #[test]
+    fn thresholds_match_compute_rank() {
+        for rank in rank_order() {
+            let t = thresholds_for(rank).expect("every ordered rank has thresholds");
+            assert_eq!(
+                compute_rank(t.deliverables, t.attestations, t.requires_mentor),
+                *rank,
+                "thresholds_for({rank}) does not reproduce {rank}"
+            );
+        }
+        assert!(thresholds_for("legende").is_none());
+    }
+
+    #[test]
+    fn demotion_walks_down_one_step_and_floors_at_apprenti() {
+        assert_eq!(demote_one(RANK_DOYEN), RANK_MAITRE);
+        assert_eq!(demote_one(RANK_MAITRE), RANK_ARTISAN);
+        assert_eq!(demote_one(RANK_ARTISAN), RANK_RANGER);
+        assert_eq!(demote_one(RANK_RANGER), RANK_APPRENTI);
+        // Already at the bottom — a penalty cannot dig below it.
+        assert_eq!(demote_one(RANK_APPRENTI), RANK_APPRENTI);
+        // Unknown values floor rather than panic on live data.
+        assert_eq!(demote_one("legende"), RANK_APPRENTI);
+    }
+
+    #[test]
+    fn rank_position_rejects_unknown() {
+        assert_eq!(rank_position(RANK_APPRENTI), Some(0));
+        assert_eq!(rank_position(RANK_DOYEN), Some(4));
+        assert_eq!(rank_position("legende"), None);
     }
 }

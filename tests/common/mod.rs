@@ -27,6 +27,24 @@ fn init_test_tracing() {
     });
 }
 
+/// Base connection string for the test database server, without a database
+/// name. Override with `TEST_DATABASE_BASE_URL`.
+///
+/// Configurable rather than hardcoded because the default port is easy to
+/// shadow: anything else bound to `127.0.0.1:5433` — most plausibly an SSH
+/// tunnel to a remote database — silently wins over the Docker container,
+/// and this harness issues `CREATE DATABASE` / `DROP DATABASE` on whatever
+/// answers. Pointing the suite somewhere explicit must not require editing
+/// source.
+const DEFAULT_TEST_DB_BASE: &str = "postgres://skilluv:skilluv_secret@localhost:5433";
+
+/// Connection string for `db_name` on the test server.
+pub fn test_db_url(db_name: &str) -> String {
+    let base = std::env::var("TEST_DATABASE_BASE_URL")
+        .unwrap_or_else(|_| DEFAULT_TEST_DB_BASE.to_string());
+    format!("{}/{db_name}", base.trim_end_matches('/'))
+}
+
 /// A test application instance with isolated database.
 pub struct TestApp {
     pub addr: String,
@@ -62,7 +80,7 @@ impl TestApp {
         // Connect to default DB to create test DB
         let admin_pool = PgPoolOptions::new()
             .max_connections(2)
-            .connect("postgres://skilluv:skilluv_secret@localhost:5433/skilluv")
+            .connect(&test_db_url("skilluv"))
             .await
             .expect("Failed to connect to admin DB");
 
@@ -76,7 +94,7 @@ impl TestApp {
         admin_pool.close().await;
 
         // Connect to test DB
-        let db_url = format!("postgres://skilluv:skilluv_secret@localhost:5433/{db_name}");
+        let db_url = test_db_url(&db_name);
         let db = PgPoolOptions::new()
             .max_connections(5)
             .connect(&db_url)
@@ -569,7 +587,7 @@ impl Drop for TestApp {
             rt.block_on(async {
                 let pool = PgPoolOptions::new()
                     .max_connections(2)
-                    .connect("postgres://skilluv:skilluv_secret@localhost:5433/skilluv")
+                    .connect(&test_db_url("skilluv"))
                     .await
                     .ok();
 

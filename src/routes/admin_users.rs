@@ -139,7 +139,13 @@ pub async fn admin_recompute_proofs(
         .fetch_one(&mut *tx)
         .await?;
 
-    let report = crate::services::proof_hooks::recompute_all_for_user(&state.db, target_id).await?;
+    // SKI-43 — live variant so an admin-triggered recompute reaches the
+    // user in real time, same as an organic promotion would.
+    let mut redis = state.redis.clone();
+    let report = crate::services::proof_hooks::recompute_all_for_user_live(
+        &state.db, &mut redis, &state.ws, target_id,
+    )
+    .await?;
     tx.commit().await?;
 
     crate::services::audit::record(

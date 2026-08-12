@@ -176,12 +176,18 @@ jobs:
     needs: [check, audit, secrets]
     # Skip drafts to save quota — devs can mark PR ready when they want CI.
     if: github.event.pull_request.draft == false
-    # 25 min budget : cold cache = ~6-7 min compile (dev profile, hyper-timeout
+    # 35 min budget : cold cache = ~6-7 min compile (dev profile, hyper-timeout
     # + prost + tonic-prost + skilluv-backend) + ~8 min test run. All 4 shards
     # run in parallel with independent sccache caches, so the first PR after a
     # Cargo.lock bump is uniformly cold. Shards 1&2 hit the 15 min ceiling on
-    # #40's cold run; shards 3&4 finished at ~13-14 min. 25 = check job budget.
-    timeout-minutes: 25
+    # #40's cold run; shards 3&4 finished at ~13-14 min.
+    #
+    # Raised from 25 after the merge of #69: the suite had grown to the point
+    # where the slowest shard ran 20 min of tests and was then cancelled
+    # mid-upload while saving the cache. Shard 1 now carries that upload
+    # alone (see the cache steps below), so it needs headroom the others do
+    # not — one budget for the matrix keeps it readable.
+    timeout-minutes: 35
     permissions:
       contents: read
       # sccache-action needs the GHA cache API (mozilla-actions/sccache-action).
@@ -305,8 +311,27 @@ jobs:
           curl -fsSL https://download.geonames.org/export/dump/countryInfo.txt -o data/countryInfo.txt
           ls -lh data/
 
-      - name: Cache cargo registry & build
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6
+      # Restore on every shard, save from shard 1 only.
+      #
+      # The four shards share one cache key, so on a cold key all four try
+      # to upload the same ~9 GB `target/` at once. Only one upload can win;
+      # the others compress and transfer for minutes before losing the race.
+      # That is what cancelled shard 2 on 1d12b2e8 — its tests had already
+      # passed, and the job hit its budget inside the cache save.
+      #
+      # Cache entries are branch-scoped, so the first run on master after a
+      # merge always starts from a partial restore no matter how warm the
+      # pull request was. This is therefore a merge-day failure, not a rare
+      # one.
+      #
+      # `target/` stays in the cache here, unlike the check job, which
+      # dropped it (see its own comment). That job builds one binary; this
+      # one links ~65 test binaries, and sccache caches compile units but
+      # not linking, so dropping `target/` would trade upload time for link
+      # time on every shard.
+      - name: Restore cargo registry & build cache
+        id: cargo-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6
         with:
           path: |
             ~/.cargo/registry
@@ -337,6 +362,20 @@ jobs:
         # avoid duplicating the same run across 4 jobs.
         if: matrix.shard == 1
         run: cargo test --doc
+
+      # One writer for the shared key. Runs even when the tests fail —
+      # a populated `target/` is worth caching either way, and paying the
+      # upload only to discard it on red would make every failing run
+      # slower for nothing.
+      - name: Save cargo registry & build cache
+        if: always() && matrix.shard == 1 && steps.cargo-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-test-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Cleanup MinIO container
         if: always()

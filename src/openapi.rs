@@ -544,6 +544,8 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::admin_projects::get_project,
         crate::routes::admin_projects::patch_project,
         crate::routes::admin_projects::archive_project,
+        // SKI-111 — was absent from the spec entirely.
+        crate::routes::admin_projects::project_stats,
         // ─── contact (interest + conversations) ──────────────────
         crate::routes::contact::send_interest,
         crate::routes::contact::sent_requests,
@@ -635,6 +637,10 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::guild::kick_member,
         crate::routes::guild::leave_guild,
         crate::routes::guild::list_applications,
+        // SKI-289 — revocation was absent from the document entirely, which
+        // is why the front reported it as a missing endpoint.
+        crate::routes::guild::revoke_invitation,
+        crate::routes::guild::revoke_guild_invitation,
         crate::routes::guild::list_for_leaderboard,
         crate::routes::guild::list_invitations,
         crate::routes::guild::list_members,

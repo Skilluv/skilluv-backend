@@ -75,12 +75,128 @@ struct Reset2faBody {
     reason: String,
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// SKI-111 — response schemas
+// ═══════════════════════════════════════════════════════════════════
+
+/// Payload of `POST /admin/users/{id}/reset-2fa`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct Reset2faData {
+    pub reset: bool,
+    pub user_id: Uuid,
+    pub message: String,
+}
+
+/// One entry of the generic audit log.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct GenericAuditEntry {
+    pub id: Uuid,
+    pub actor_type: String,
+    pub actor_id: Option<Uuid>,
+    pub action: String,
+    pub target_type: Option<String>,
+    pub target_id: Option<Uuid>,
+    pub metadata: Option<serde_json::Value>,
+    pub ip: Option<String>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Pagination of the generic audit log — reports what came back rather
+/// than a total, because the underlying query is unbounded.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct AuditLogPagination {
+    pub page: i64,
+    pub per_page: i64,
+    pub returned: usize,
+}
+
+/// Response of `GET /admin/audit-log/generic`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct GenericAuditLogResponse {
+    pub data: Vec<GenericAuditEntry>,
+    pub pagination: AuditLogPagination,
+    pub meta: crate::api_response::MetaInfo,
+}
+
+/// Payload of the challenge create / update / publish / archive routes.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct ChallengeData {
+    pub challenge: crate::models::ChallengeTemplate,
+}
+
+/// Total-only pagination for the unfiltered challenge listing.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct TotalOnlyPagination {
+    pub total: i64,
+}
+
+/// Response of `GET /admin/challenges`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct ChallengeListResponse {
+    pub data: Vec<crate::models::ChallengeTemplate>,
+    pub pagination: TotalOnlyPagination,
+    pub meta: crate::api_response::MetaInfo,
+}
+
+/// User counters in the admin dashboard.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct AdminUserStats {
+    pub total: i64,
+    pub active: i64,
+}
+
+/// Challenge counters in the admin dashboard.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct AdminChallengeStats {
+    pub total: i64,
+    pub published: i64,
+}
+
+/// Submission counters in the admin dashboard.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct AdminSubmissionStats {
+    pub total: i64,
+}
+
+/// Live WebSocket counters.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct AdminWebsocketStats {
+    pub connections: usize,
+    pub rooms: usize,
+    pub users: usize,
+}
+
+/// Payload of `GET /admin/stats`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct AdminStatsData {
+    pub users: AdminUserStats,
+    pub challenges: AdminChallengeStats,
+    pub submissions: AdminSubmissionStats,
+    pub websocket: AdminWebsocketStats,
+}
+
+/// Payload of `POST /admin/sso/sessions/{id}/revoke`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct RevokedSessionData {
+    pub revoked: bool,
+}
+
+/// Payload of `POST /admin/challenges/{id}/variant`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct GeneratedVariantData {
+    pub new_challenge_id: Uuid,
+    pub original_challenge_id: Uuid,
+    pub variant_type: String,
+    pub status: String,
+    pub message: String,
+}
+
 /// Admin reset a user's 2FA (TOTP + WebAuthn wiped).
 #[utoipa::path(
     post, path = "/api/admin/users/{id}/reset-2fa", tag = "admin",
     params(("id" = Uuid, Path)),
     request_body(content = serde_json::Value),
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses((status = 200, body = crate::api_response::ApiResponse<Reset2faData>), (status = 403, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
 pub async fn admin_reset_2fa(
@@ -207,7 +323,7 @@ struct AuditLogQuery {
 /// List generic audit log entries (Phase 1.18 table).
 #[utoipa::path(
     get, path = "/api/admin/audit-log/generic", tag = "admin",
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses((status = 200, body = GenericAuditLogResponse), (status = 403, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
 pub async fn list_audit_log(
@@ -374,7 +490,7 @@ pub async fn require_admin(state: &AppState, auth: &AuthUser) -> Result<(), AppE
 #[utoipa::path(
     post, path = "/api/admin/challenges", tag = "admin",
     request_body(content = serde_json::Value),
-    responses((status = 201, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses((status = 201, body = crate::api_response::ApiResponse<ChallengeData>), (status = 403, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
 pub async fn create_challenge(
@@ -467,7 +583,7 @@ pub async fn create_challenge(
 /// List all challenges (any status).
 #[utoipa::path(
     get, path = "/api/admin/challenges", tag = "admin",
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses((status = 200, body = ChallengeListResponse), (status = 403, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
 pub async fn list_all_challenges(
@@ -501,7 +617,7 @@ pub async fn list_all_challenges(
     put, path = "/api/admin/challenges/{id}", tag = "admin",
     params(("id" = Uuid, Path)),
     request_body(content = serde_json::Value),
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse), (status = 404, body = crate::api_response::ErrorResponse)),
+    responses((status = 200, body = crate::api_response::ApiResponse<ChallengeData>), (status = 403, body = crate::api_response::ErrorResponse), (status = 404, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
 pub async fn update_challenge(
@@ -582,7 +698,7 @@ pub async fn update_challenge(
 #[utoipa::path(
     post, path = "/api/admin/challenges/{id}/publish", tag = "admin",
     params(("id" = Uuid, Path)),
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse), (status = 404, body = crate::api_response::ErrorResponse)),
+    responses((status = 200, body = crate::api_response::ApiResponse<ChallengeData>), (status = 403, body = crate::api_response::ErrorResponse), (status = 404, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
 pub async fn publish_challenge(
@@ -624,7 +740,7 @@ pub async fn publish_challenge(
 #[utoipa::path(
     post, path = "/api/admin/challenges/{id}/archive", tag = "admin",
     params(("id" = Uuid, Path)),
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse), (status = 404, body = crate::api_response::ErrorResponse)),
+    responses((status = 200, body = crate::api_response::ApiResponse<ChallengeData>), (status = 403, body = crate::api_response::ErrorResponse), (status = 404, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
 pub async fn archive_challenge(
@@ -649,7 +765,7 @@ pub async fn archive_challenge(
 /// Admin platform stats snapshot.
 #[utoipa::path(
     get, path = "/api/admin/stats", tag = "admin",
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses((status = 200, body = crate::api_response::ApiResponse<AdminStatsData>), (status = 403, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
 pub async fn admin_stats(
@@ -690,7 +806,7 @@ pub async fn admin_stats(
 /// Rebuild Redis leaderboards from the DB.
 #[utoipa::path(
     post, path = "/api/admin/leaderboards/rebuild", tag = "admin",
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses((status = 200, body = crate::api_response::ApiResponse<crate::api_response::SimpleMessage>), (status = 403, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
 pub async fn rebuild_leaderboards(
@@ -709,11 +825,55 @@ pub async fn rebuild_leaderboards(
 
 // ─── Enterprise SSO admin visibility ─────────────────────────────
 
-#[derive(Debug, Deserialize)]
-struct SsoSessionsQuery {
-    enterprise_id: Option<Uuid>,
-    page: Option<i64>,
-    per_page: Option<i64>,
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+pub struct SsoSessionsQuery {
+    pub enterprise_id: Option<Uuid>,
+    pub page: Option<i64>,
+    pub per_page: Option<i64>,
+}
+
+/// One active SSO session, as returned by `GET /admin/sso/sessions`.
+///
+/// SKI-111 — typed because this endpoint is the reason the ticket exists:
+/// it once answered `{data: {sessions: […]}}` instead of `{data: […]}` and
+/// broke the admin table silently (SKI-58). An empty `serde_json::Value`
+/// schema cannot catch that; this struct can.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct AdminSsoSession {
+    pub session_id: Uuid,
+    pub user_id: Uuid,
+    pub user_email: String,
+    pub user_username: String,
+    /// `None` when the user belongs to no active enterprise.
+    pub enterprise_id: Option<Uuid>,
+    pub enterprise_slug: Option<String>,
+    pub company_name: Option<String>,
+    pub ip: Option<String>,
+    pub user_agent: Option<String>,
+    /// RFC 3339.
+    pub created_at: String,
+    pub last_used_at: String,
+}
+
+/// Pagination block shared by the admin list endpoints.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct AdminPagination {
+    pub page: i64,
+    pub per_page: i64,
+    pub total: i64,
+}
+
+/// The canonical admin list envelope for SSO sessions:
+/// `{data, pagination, meta}`.
+///
+/// Concrete rather than generic: utoipa needs a named schema per
+/// instantiation anyway, and a one-off alias reads better than a generic
+/// plus an alias attribute.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct AdminSsoSessionList {
+    pub data: Vec<AdminSsoSession>,
+    pub pagination: AdminPagination,
+    pub meta: crate::api_response::MetaInfo,
 }
 
 /// GET /api/admin/sso/sessions — list active SSO-authenticated sessions.
@@ -723,7 +883,11 @@ struct SsoSessionsQuery {
 /// which enterprise, and revoke sessions on demand.
 #[utoipa::path(
     get, path = "/api/admin/sso/sessions", tag = "admin",
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    params(SsoSessionsQuery),
+    responses(
+        (status = 200, description = "Active SSO sessions", body = AdminSsoSessionList),
+        (status = 403, body = crate::api_response::ErrorResponse),
+    ),
     security(("cookie_auth" = [])),
 )]
 pub async fn list_sso_sessions(
@@ -832,7 +996,7 @@ pub async fn list_sso_sessions(
 #[utoipa::path(
     post, path = "/api/admin/sso/sessions/{id}/revoke", tag = "admin",
     params(("id" = Uuid, Path)),
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse), (status = 404, body = crate::api_response::ErrorResponse)),
+    responses((status = 200, body = crate::api_response::ApiResponse<RevokedSessionData>), (status = 403, body = crate::api_response::ErrorResponse), (status = 404, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
 pub async fn revoke_sso_session(
@@ -901,7 +1065,7 @@ struct GenerateVariantBody {
     post, path = "/api/admin/challenges/{id}/variant", tag = "admin",
     params(("id" = Uuid, Path)),
     request_body(content = serde_json::Value),
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses((status = 200, body = crate::api_response::ApiResponse<GeneratedVariantData>), (status = 403, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
 pub async fn admin_generate_variant(

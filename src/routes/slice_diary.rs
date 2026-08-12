@@ -132,6 +132,18 @@ async fn create(
     .fetch_one(&state.db)
     .await?;
 
+    // SKI-286 — @username mentions. Private entries record their mentions
+    // too, but the inbox only surfaces them to the author, so a mention in
+    // a private diary never reaches the person named.
+    crate::services::mentions::record_and_notify(
+        &state.db,
+        auth.user_id,
+        crate::services::mentions::SOURCE_SLICE_DIARY,
+        entry.id,
+        &entry.body_markdown,
+    )
+    .await;
+
     Ok((StatusCode::CREATED, Json(wrap(json!({ "entry": entry })))))
 }
 

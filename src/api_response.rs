@@ -88,6 +88,49 @@ impl MetaInfo {
     }
 }
 
+/// SKI-111 — pagination block shared by every admin list endpoint.
+///
+/// The admin surface agreed on `{data, pagination, meta}` long ago (see
+/// `docs/OPENAPI_TYPING.md`); this is that block as a real schema, so the
+/// spec stops describing it as an empty object.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct Pagination {
+    #[schema(example = 1)]
+    pub page: i64,
+    #[schema(example = 20)]
+    pub per_page: i64,
+    #[schema(example = 123)]
+    pub total: i64,
+    /// Absent on the handful of endpoints that do not compute it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 7)]
+    pub total_pages: Option<i64>,
+}
+
+/// SKI-111 — result of an admin action that changes state without
+/// returning a resource (publish, archive, revoke, rebuild…).
+///
+/// Deliberately permissive: these handlers historically answered a small
+/// grab-bag of confirmation keys, and the point of typing them is to
+/// describe that reality, not to force a rewrite of every call site.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AdminActionResult {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<uuid::Uuid>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub slug: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ok: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub updated: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub archived: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub deleted: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+}
+
 /// Reusable payload for endpoints whose only success signal is a
 /// human-readable confirmation string (email sent, action queued, …).
 /// Wrap it in `ApiResponse<SimpleMessage>` and reference from

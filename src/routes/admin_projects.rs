@@ -107,11 +107,104 @@ fn default_true() -> bool {
     true
 }
 
+/// Payload of `POST /admin/projects`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct CreatedProject {
+    pub id: Uuid,
+    pub slug: String,
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SKI-111 — response schemas
+// ═══════════════════════════════════════════════════════════════════
+
+/// One row of `GET /admin/projects`. Narrower than the detail view: the
+/// listing deliberately omits the ingestion wiring.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct AdminProjectRow {
+    pub id: Uuid,
+    pub slug: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub repo_url: Option<String>,
+    pub is_flagship: bool,
+    pub curated_by_admin: bool,
+    pub skilluv_partnership_level: Option<i16>,
+    pub flagship_steward_user_id: Option<Uuid>,
+    /// RFC 3339.
+    pub created_at: String,
+    pub archived_at: Option<String>,
+}
+
+/// Response of `GET /admin/projects`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct AdminProjectListResponse {
+    pub data: Vec<AdminProjectRow>,
+    pub pagination: crate::api_response::Pagination,
+    pub meta: crate::api_response::MetaInfo,
+}
+
+/// Payload of `GET /admin/projects/{slug}` — the full record, including
+/// the GitHub ingestion wiring an operator needs to debug a project.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct AdminProjectDetail {
+    pub id: Uuid,
+    pub slug: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub repo_url: Option<String>,
+    pub demo_url: Option<String>,
+    pub tech_stack: Vec<String>,
+    pub is_oss: bool,
+    pub looking_for_contributors: bool,
+    pub owner_type: String,
+    pub owner_id: Uuid,
+    pub curated_by_admin: bool,
+    pub is_flagship: bool,
+    pub flagship_steward_user_id: Option<Uuid>,
+    pub skilluv_partnership_level: Option<i16>,
+    pub skilluv_editorial_notes: Option<String>,
+    /// `None` once the repo is detached (SKI-269).
+    pub github_repo_owner: Option<String>,
+    pub github_repo_name: Option<String>,
+    pub curated_labels: Vec<String>,
+    pub slice_ingestion_mode: String,
+    pub skill_domains: Vec<String>,
+    /// RFC 3339.
+    pub created_at: String,
+    pub updated_at: String,
+    pub archived_at: Option<String>,
+}
+
+/// Payload of `POST /admin/projects/{slug}/ingest` — one manual pass of
+/// the GitHub ingestor.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct IngestRunReport {
+    pub issues_seen: u32,
+    pub slices_created: u32,
+    /// Issues that already had a slice, so nothing was created.
+    pub slices_skipped_existing: u32,
+    pub errors: u32,
+    /// `auto` or `curator_review` — `manual_only` is refused upstream.
+    pub mode: String,
+    /// Curated labels that actually matched during this run. Empty means
+    /// the label filter let nothing through.
+    pub labels_matched: Vec<String>,
+}
+
 /// Create a new project (admin curated OSS/enterprise project).
+// SKI-111 — the annotation claimed 201; the handler returns `Json<Value>`,
+// which axum serves as 200. Corrected to describe what actually happens
+// rather than changing a live status code as a side effect of a typing
+// pass.
 #[utoipa::path(
     post, path = "/api/admin/projects", tag = "admin",
     request_body(content = serde_json::Value),
-    responses((status = 201, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses(
+        (status = 200, description = "Project created", body = crate::api_response::ApiResponse<CreatedProject>),
+        (status = 400, body = crate::api_response::ErrorResponse),
+        (status = 403, body = crate::api_response::ErrorResponse),
+    ),
     security(("cookie_auth" = [])),
 )]
 pub async fn create_project(
@@ -235,10 +328,21 @@ struct PatchProjectBody {
     skilluv_editorial_notes: Option<String>,
 
     // P26 v2 SKI-110 — same fields as create, all optional.
-    #[serde(default)]
-    github_repo_owner: Option<String>,
-    #[serde(default)]
-    github_repo_name: Option<String>,
+    //
+    // SKI-269 — the GitHub pair is a double Option so that `null` can mean
+    // "unwire this repo". With a plain Option, serde maps both an absent
+    // field and an explicit `null` to `None`, `COALESCE` treats that as
+    // "leave alone", and there is no value an admin can send to detach a
+    // repo — the PATCH answered 200 while changing nothing. The arrays
+    // escape this because `[]` is not `null`.
+    //
+    //   absent      -> leave unchanged
+    //   null        -> set to NULL (both fields together)
+    //   "value"     -> write
+    #[serde(default, deserialize_with = "deserialize_double_option")]
+    github_repo_owner: Option<Option<String>>,
+    #[serde(default, deserialize_with = "deserialize_double_option")]
+    github_repo_name: Option<Option<String>>,
     #[serde(default)]
     curated_labels: Option<Vec<String>>,
     #[serde(default)]
@@ -247,12 +351,58 @@ struct PatchProjectBody {
     skill_domains: Option<Vec<String>>,
 }
 
+/// Serde helper: missing field → `None`, JSON `null` → `Some(None)`,
+/// value → `Some(Some(v))`. Same trick as `routes::admin_slices`.
+fn deserialize_double_option<'de, T, D>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+where
+    T: serde::Deserialize<'de>,
+    D: serde::Deserializer<'de>,
+{
+    Ok(Some(Option::<T>::deserialize(deserializer)?))
+}
+
+/// Resolve the GitHub pair of a PATCH into a single decision.
+///
+/// Returns `(should_write, owner, name)`. `should_write == false` means the
+/// caller omitted both fields and the columns must be left untouched.
+///
+/// Both fields move together: a repo is identified by owner *and* name, so
+/// clearing or setting one alone would leave the project in a state that
+/// cannot be acted upon. Mixing the two intents (one `null`, one value) is
+/// rejected rather than guessed at.
+fn resolve_github_patch(
+    owner: &Option<Option<String>>,
+    name: &Option<Option<String>>,
+) -> Result<(bool, Option<String>, Option<String>), AppError> {
+    match (owner, name) {
+        // Neither mentioned: nothing to do.
+        (None, None) => Ok((false, None, None)),
+
+        // Both explicitly null: detach the repo.
+        (Some(None), Some(None)) => Ok((true, None, None)),
+
+        // Both given: validate as a pair, then write.
+        (Some(Some(o)), Some(Some(n))) => {
+            validate_github_pair(Some(o.as_str()), Some(n.as_str()))?;
+            Ok((true, Some(o.clone()), Some(n.clone())))
+        }
+
+        // Anything else is a half-specified change: one field mentioned
+        // without the other, or a null paired with a value.
+        _ => Err(AppError::Validation(
+            "github_repo_owner and github_repo_name must be changed together — \
+             send both as strings to wire a repo, or both as null to detach it"
+                .into(),
+        )),
+    }
+}
+
 /// Patch a project by slug.
 #[utoipa::path(
     patch, path = "/api/admin/projects/{slug}", tag = "admin",
     params(("slug" = String, Path)),
     request_body(content = serde_json::Value),
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse), (status = 404, body = crate::api_response::ErrorResponse)),
+    responses((status = 200, body = crate::api_response::ApiResponse<crate::api_response::AdminActionResult>), (status = 403, body = crate::api_response::ErrorResponse), (status = 404, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
 pub async fn patch_project(
@@ -265,13 +415,9 @@ pub async fn patch_project(
     crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     validate_slug(&slug)?;
     validate_partnership_level(body.skilluv_partnership_level)?;
-    // Pairwise github validation only when at least one field is present:
-    // PATCH can legitimately update only owner if the other was already set,
-    // so we only reject explicit half-clears (one=Some("") means "clear").
-    validate_github_pair(
-        body.github_repo_owner.as_deref(),
-        body.github_repo_name.as_deref(),
-    )?;
+    // SKI-269 — resolve the GitHub pair into "touch or not, and to what".
+    let (write_github, github_owner, github_name) =
+        resolve_github_patch(&body.github_repo_owner, &body.github_repo_name)?;
     validate_ingestion_mode(body.slice_ingestion_mode.as_deref())?;
     validate_skill_domains(body.skill_domains.as_deref())?;
     warn_ingest_will_no_op(
@@ -295,8 +441,10 @@ pub async fn patch_project(
             flagship_steward_user_id = COALESCE($10, flagship_steward_user_id),
             skilluv_partnership_level = COALESCE($11, skilluv_partnership_level),
             skilluv_editorial_notes = COALESCE($12, skilluv_editorial_notes),
-            github_repo_owner = COALESCE($14, github_repo_owner),
-            github_repo_name = COALESCE($15, github_repo_name),
+            -- SKI-269 — COALESCE cannot express "set to NULL", so the
+            -- GitHub pair is gated on an explicit flag instead.
+            github_repo_owner = CASE WHEN $19 THEN $14 ELSE github_repo_owner END,
+            github_repo_name  = CASE WHEN $19 THEN $15 ELSE github_repo_name END,
             curated_labels = COALESCE($16, curated_labels),
             slice_ingestion_mode = COALESCE($17, slice_ingestion_mode),
             skill_domains = COALESCE($18, skill_domains),
@@ -318,11 +466,12 @@ pub async fn patch_project(
     .bind(body.skilluv_partnership_level)
     .bind(&body.skilluv_editorial_notes)
     .bind(&slug)
-    .bind(&body.github_repo_owner)
-    .bind(&body.github_repo_name)
+    .bind(&github_owner)
+    .bind(&github_name)
     .bind(&body.curated_labels)
     .bind(&body.slice_ingestion_mode)
     .bind(&body.skill_domains)
+    .bind(write_github)
     .fetch_optional(&state.db)
     .await?;
 
@@ -355,7 +504,7 @@ pub async fn patch_project(
 #[utoipa::path(
     delete, path = "/api/admin/projects/{slug}", tag = "admin",
     params(("slug" = String, Path)),
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse), (status = 404, body = crate::api_response::ErrorResponse)),
+    responses((status = 200, body = crate::api_response::ApiResponse<crate::api_response::AdminActionResult>), (status = 403, body = crate::api_response::ErrorResponse), (status = 404, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
 pub async fn archive_project(
@@ -423,7 +572,7 @@ struct ListQuery {
 /// List projects (admin view).
 #[utoipa::path(
     get, path = "/api/admin/projects", tag = "admin",
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses((status = 200, body = AdminProjectListResponse), (status = 403, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
 pub async fn list_projects(
@@ -584,7 +733,7 @@ struct ProjectFullRow {
 #[utoipa::path(
     get, path = "/api/admin/projects/{slug}", tag = "admin",
     params(("slug" = String, Path)),
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse), (status = 404, body = crate::api_response::ErrorResponse)),
+    responses((status = 200, body = crate::api_response::ApiResponse<AdminProjectDetail>), (status = 403, body = crate::api_response::ErrorResponse), (status = 404, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
 pub async fn get_project(
@@ -762,12 +911,50 @@ fn warn_ingest_will_no_op(mode: Option<&str>, curated_labels: Option<&[String]>,
 // P26 v2 SKI-124 — per-repo challenge stats
 // ═══════════════════════════════════════════════════════════════════
 
-#[derive(Debug, Deserialize)]
-struct StatsQuery {
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+pub struct StatsQuery {
     /// Rolling window in days for time-to-* averages. Default 90,
     /// clamped 7..365 to keep the query cheap.
     #[serde(default)]
     window_days: Option<i32>,
+}
+
+/// Slice counts by workflow status.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct SliceStatusCounts {
+    pub draft: i64,
+    pub open: i64,
+    pub claimed: i64,
+    pub in_progress: i64,
+    pub submitted: i64,
+    pub ci_green: i64,
+    pub pending_validation: i64,
+    pub validated: i64,
+    pub merged: i64,
+    pub closed: i64,
+}
+
+/// How slices got their domain: from a curated label, or from the
+/// project's default (SKI-101 enrichment adoption).
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct DomainSourceDistribution {
+    pub label: i64,
+    pub project_default: i64,
+}
+
+/// Workflow-health metrics for one project.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct ProjectStats {
+    pub window_days: i32,
+    pub slices: SliceStatusCounts,
+    /// Averages in hours over the window. `None` when no slice reached
+    /// the corresponding state, which is different from zero.
+    pub avg_time_to_submit_hours: Option<f64>,
+    pub avg_time_to_validate_hours: Option<f64>,
+    pub avg_time_to_merge_hours: Option<f64>,
+    /// Share of validated-or-merged slices that actually merged, 0..=1.
+    pub validated_to_merged_ratio: f64,
+    pub domain_source_distribution: DomainSourceDistribution,
 }
 
 /// GET /api/admin/projects/{slug}/stats?window_days=90
@@ -776,6 +963,24 @@ struct StatsQuery {
 /// from the P17 badges dashboard (per-user) and the SKI-122 public
 /// endpoint (community pulse): this is the admin operator's view of
 /// how the workflow is performing on THIS repo.
+// SKI-111 — this was the one admin handler with no utoipa annotation at
+// all, so it did not appear in the spec and schemathesis never exercised
+// it.
+#[utoipa::path(
+    get,
+    path = "/api/admin/projects/{slug}/stats",
+    tag = "admin",
+    params(
+        ("slug" = String, Path, description = "Project slug"),
+        StatsQuery,
+    ),
+    responses(
+        (status = 200, description = "Workflow-health metrics", body = crate::api_response::ApiResponse<ProjectStats>),
+        (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "Unknown project", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
 pub async fn project_stats(
     _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
@@ -925,7 +1130,7 @@ pub async fn project_stats(
     post, path = "/api/admin/projects/{slug}/ingest", tag = "admin",
     params(("slug" = String, Path)),
     responses(
-        (status = 200, body = serde_json::Value),
+        (status = 200, body = crate::api_response::ApiResponse<IngestRunReport>),
         (status = 400, body = crate::api_response::ErrorResponse),
         (status = 403, body = crate::api_response::ErrorResponse),
         (status = 404, body = crate::api_response::ErrorResponse),
@@ -1134,5 +1339,59 @@ mod tests {
             .map(|s| s.to_string())
             .collect();
         assert!(validate_skill_domains(Some(&bad)).is_err());
+    }
+
+    // ─── SKI-269 — GitHub pair patch semantics ─────────────────────
+
+    fn some(v: &str) -> Option<Option<String>> {
+        Some(Some(v.to_string()))
+    }
+    const NULLED: Option<Option<String>> = Some(None);
+    const ABSENT: Option<Option<String>> = None;
+
+    #[test]
+    fn omitting_both_github_fields_leaves_them_untouched() {
+        let (write, owner, name) = resolve_github_patch(&ABSENT, &ABSENT).unwrap();
+        assert!(!write, "the columns must not be written at all");
+        assert!(owner.is_none() && name.is_none());
+    }
+
+    #[test]
+    fn explicit_null_on_both_detaches_the_repo() {
+        let (write, owner, name) = resolve_github_patch(&NULLED, &NULLED).unwrap();
+        assert!(write, "this is the case the old COALESCE could not express");
+        assert!(
+            owner.is_none() && name.is_none(),
+            "both columns are written as NULL"
+        );
+    }
+
+    #[test]
+    fn both_values_wire_the_repo() {
+        let (write, owner, name) =
+            resolve_github_patch(&some("launchbadge"), &some("sqlx")).unwrap();
+        assert!(write);
+        assert_eq!(owner.as_deref(), Some("launchbadge"));
+        assert_eq!(name.as_deref(), Some("sqlx"));
+    }
+
+    #[test]
+    fn half_specified_changes_are_refused_rather_than_guessed() {
+        // One field mentioned without the other.
+        assert!(resolve_github_patch(&some("launchbadge"), &ABSENT).is_err());
+        assert!(resolve_github_patch(&ABSENT, &some("sqlx")).is_err());
+        assert!(resolve_github_patch(&NULLED, &ABSENT).is_err());
+        assert!(resolve_github_patch(&ABSENT, &NULLED).is_err());
+        // Mixed intent: detach one side, set the other.
+        assert!(resolve_github_patch(&NULLED, &some("sqlx")).is_err());
+        assert!(resolve_github_patch(&some("launchbadge"), &NULLED).is_err());
+    }
+
+    #[test]
+    fn empty_strings_are_still_refused() {
+        // Clearing is `null`, not `""` — otherwise a form submitting blank
+        // inputs would silently detach a repo.
+        assert!(resolve_github_patch(&some(""), &some("")).is_err());
+        assert!(resolve_github_patch(&some("launchbadge"), &some("")).is_err());
     }
 }

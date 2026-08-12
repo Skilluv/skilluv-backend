@@ -265,3 +265,62 @@ message MatchedRange {
   int32 target_end_line = 4;
   double confidence = 5;
 }
+
+// ===========================================================================
+// 5. LearningCompanionService — SKI-44 (Post-MVP T3-01)
+// ===========================================================================
+//
+// A single `Ask` RPC typed by `interaction_type`, rather than four narrow
+// RPCs. The four interactions differ only in the prompt the worker
+// selects: same inputs (a question, optionally some code and context),
+// same output (an answer plus optional structured items). Four RPCs would
+// mean four near-identical messages and a proto change — coordinated
+// across two repositories — every time an interaction is added.
+//
+// Every response carries `disclosure_label`. The backend stores it in
+// `ai_interactions` and copies it onto the next submitted deliverable's
+// `verification_signal`. AI assistance on Skilluv is disclosed, not
+// forbidden; the label is what makes that true in the data rather than
+// only in the policy document.
+service LearningCompanionService {
+  rpc Ask (CompanionRequest) returns (CompanionResponse);
+}
+
+message CompanionRequest {
+  string user_id = 1;
+  // 'explain' | 'generate_exercises' | 'pre_review' | 'debug_help'
+  string interaction_type = 2;
+  // The learner's question or instruction.
+  string prompt = 3;
+  // Optional code the question is about (pre_review, debug_help).
+  string code = 4;
+  string language = 5;
+  // Optional skill slug, so exercises can target a specific skill.
+  string skill_slug = 6;
+  // Caller's rank, so the worker can pitch the answer at the right level.
+  string user_rank = 7;
+  // Preferred answer language ('fr' | 'en' | ...).
+  string locale = 8;
+}
+
+message CompanionResponse {
+  string answer_markdown = 1;
+  // Structured follow-ups: exercises for generate_exercises, findings for
+  // pre_review, next steps for explain and debug_help.
+  repeated CompanionItem items = 2;
+  // Human-readable disclosure to attach to any work derived from this
+  // exchange.
+  string disclosure_label = 3;
+  string model_version = 4;
+  // Worker-reported token usage, for cost tracking.
+  int32  tokens_used = 5;
+}
+
+message CompanionItem {
+  string title = 1;
+  string body_markdown = 2;
+  // 'exercise' | 'finding' | 'next_step' | 'reference'
+  string kind = 3;
+  // 1 (highest) .. 5. Zero when the worker does not rank items.
+  int32  priority = 4;
+}

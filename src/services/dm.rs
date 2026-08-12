@@ -169,6 +169,18 @@ pub async fn send_message(
     .fetch_one(db)
     .await?;
 
+    // SKI-286 — @username mentions. The row is recorded whoever is named,
+    // but the inbox query only surfaces it to the two participants, so
+    // naming a third party here never leaks the conversation to them.
+    crate::services::mentions::record_and_notify(
+        db,
+        sender_id,
+        crate::services::mentions::SOURCE_MESSAGE,
+        message.id,
+        &message.body,
+    )
+    .await;
+
     sqlx::query("UPDATE dm_conversations SET last_message_at = NOW() WHERE id = $1")
         .bind(conversation_id)
         .execute(db)

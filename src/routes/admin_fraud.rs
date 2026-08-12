@@ -81,10 +81,103 @@ struct QueueQuery {
     limit: Option<i64>,
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// SKI-111 — response schemas
+// ═══════════════════════════════════════════════════════════════════
+
+/// A deliverable the plagiarism pass flagged.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct FlaggedDeliverable {
+    pub deliverable_id: Uuid,
+    /// 0..=1 similarity against the closest other submission.
+    pub plagiarism_score: Option<f64>,
+    pub similar_to: Option<Uuid>,
+}
+
+/// A user flagged by the anti-fraud heuristics.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct SuspectedUser {
+    pub user_id: Uuid,
+    pub flagged_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub reason: Option<String>,
+}
+
+/// Payload of `GET /admin/fraud/queue`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct FraudQueueData {
+    pub flagged_deliverables: Vec<FlaggedDeliverable>,
+    pub suspected_users: Vec<SuspectedUser>,
+}
+
+/// Payload of the "this is fine" actions.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct MarkedValidData {
+    pub marked_valid: bool,
+}
+
+/// Payload of `POST /admin/fraud/deliverables/{id}/revoke`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct RevokedData {
+    pub revoked: bool,
+}
+
+/// Payload of the single-deliverable similarity scan.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct PlagiarismScanData {
+    pub deliverable_id: Uuid,
+    pub best_match_id: Option<Uuid>,
+    /// 0..=1.
+    pub best_score: f64,
+    pub compared_count: usize,
+}
+
+/// A set of accounts sharing an IP and user-agent.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct SuspectGroupView {
+    pub shared_ip: String,
+    pub shared_ua: String,
+    pub user_ids: Vec<Uuid>,
+}
+
+/// Payload of the multi-account detection run.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct MultiAccountData {
+    pub groups_detected: usize,
+    pub users_flagged: usize,
+    pub groups: Vec<SuspectGroupView>,
+}
+
+/// Payload of the LLM evaluation run. Mirrors
+/// `services::llm_verifier::LlmEvaluationOutcome`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct LlmEvaluationData {
+    pub deliverable_id: Uuid,
+    pub new_status: String,
+    pub score: Option<f64>,
+    /// False when the AI worker was unreachable — the deliverable then
+    /// falls back to human review rather than being judged.
+    pub llm_reachable: bool,
+    pub notes: Option<String>,
+}
+
+/// Payload of the deep (AST + embeddings) plagiarism scan.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct DeepPlagiarismData {
+    pub deliverable_id: Uuid,
+    pub similarity_score: f64,
+    pub similar_submission_id: String,
+    pub ast_similarity: f64,
+    pub embedding_similarity: f64,
+    pub is_plagiarism: bool,
+    /// How many prior submissions were compared against.
+    pub pool_size: usize,
+    pub model_version: String,
+}
+
 /// Admin: fraud review queue.
 #[utoipa::path(
     get, path = "/api/admin/fraud/queue", tag = "admin",
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses((status = 200, body = crate::api_response::ApiResponse<FraudQueueData>), (status = 403, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
 pub async fn fraud_queue(
@@ -140,7 +233,7 @@ pub async fn fraud_queue(
     post, path = "/api/admin/fraud/deliverables/{id}/mark-valid", tag = "admin",
     params(("id" = Uuid, Path)),
     request_body(content = serde_json::Value),
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses((status = 200, body = crate::api_response::ApiResponse<MarkedValidData>), (status = 403, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
 pub async fn mark_deliverable_valid(
@@ -181,7 +274,7 @@ struct RevokeBody {
     post, path = "/api/admin/fraud/deliverables/{id}/revoke", tag = "admin",
     params(("id" = Uuid, Path)),
     request_body(content = serde_json::Value),
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses((status = 200, body = crate::api_response::ApiResponse<RevokedData>), (status = 403, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
 pub async fn revoke_deliverable(
@@ -218,7 +311,7 @@ pub async fn revoke_deliverable(
     post, path = "/api/admin/fraud/users/{id}/mark-valid", tag = "admin",
     params(("id" = Uuid, Path)),
     request_body(content = serde_json::Value),
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses((status = 200, body = crate::api_response::ApiResponse<MarkedValidData>), (status = 403, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
 pub async fn mark_user_valid(
@@ -257,7 +350,7 @@ struct ScanQuery {
 #[utoipa::path(
     post, path = "/api/admin/fraud/scan-deliverable/{id}", tag = "admin",
     params(("id" = Uuid, Path)),
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses((status = 200, body = crate::api_response::ApiResponse<PlagiarismScanData>), (status = 403, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
 pub async fn scan_deliverable_endpoint(
@@ -294,7 +387,7 @@ struct DetectBody {
 /// Admin: run multi-account fingerprint detection sweep.
 #[utoipa::path(
     post, path = "/api/admin/fraud/detect-multi-accounts", tag = "admin",
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses((status = 200, body = crate::api_response::ApiResponse<MultiAccountData>), (status = 403, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
 pub async fn detect_multi_accounts_endpoint(
@@ -326,7 +419,7 @@ pub async fn detect_multi_accounts_endpoint(
 #[utoipa::path(
     post, path = "/api/admin/fraud/llm-evaluate/{id}", tag = "admin",
     params(("id" = Uuid, Path)),
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses((status = 200, body = crate::api_response::ApiResponse<LlmEvaluationData>), (status = 403, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
 pub async fn llm_evaluate_endpoint(
@@ -375,7 +468,7 @@ struct DeepScanQuery {
 #[utoipa::path(
     post, path = "/api/admin/fraud/deep-scan/{id}", tag = "admin",
     params(("id" = Uuid, Path)),
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses((status = 200, body = crate::api_response::ApiResponse<DeepPlagiarismData>), (status = 403, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
 pub async fn deep_plagiarism_scan_endpoint(

@@ -183,6 +183,16 @@ pub async fn create_post(
     .fetch_one(db)
     .await?;
 
+    // SKI-286 — @username mentions in the body.
+    crate::services::mentions::record_and_notify(
+        db,
+        input.author_id,
+        crate::services::mentions::SOURCE_FORUM_POST,
+        post.id,
+        &post.body,
+    )
+    .await;
+
     Ok(post)
 }
 
@@ -223,36 +233,47 @@ pub async fn list_posts(
     db: &PgPool,
     filters: ListPostsFilters<'_>,
 ) -> Result<Vec<PostListItem>, AppError> {
+    // Ordering runs on the wrapper below, so every clause addresses the
+    // sub-select's output columns.
+    //
+    // `hot` used to be `ORDER BY (upvotes - downvotes)` directly on the
+    // main query. Postgres accepts a bare output alias in ORDER BY, but not
+    // one inside an expression — there it resolves names against the input
+    // relations and fails with `column "upvotes" does not exist`. The sort
+    // returned 500 on every call. Wrapping the query makes the aliases real
+    // columns, so the arithmetic is legal.
     let order = match filters.sort {
-        PostSort::Recent => "p.pinned DESC, p.created_at DESC",
-        PostSort::Hot => "p.pinned DESC, (upvotes - downvotes) DESC, p.created_at DESC",
-        PostSort::TopBounty => "p.bounty_fragments DESC, p.created_at DESC",
+        PostSort::Recent => "t.pinned DESC, t.created_at DESC",
+        PostSort::Hot => "t.pinned DESC, (t.upvotes - t.downvotes) DESC, t.created_at DESC",
+        PostSort::TopBounty => "t.bounty_fragments DESC, t.created_at DESC",
     };
 
     let sql = format!(
         r#"
-        SELECT
-            p.id,
-            c.slug AS category_slug,
-            p.author_id,
-            u.username AS author_username,
-            p.kind,
-            p.title,
-            p.bounty_fragments,
-            (p.accepted_answer_id IS NOT NULL) AS has_accepted_answer,
-            p.pinned,
-            p.locked,
-            p.view_count,
-            COALESCE((SELECT COUNT(*) FROM comments WHERE target_type = 'post' AND target_id = p.id AND deleted_at IS NULL), 0)::BIGINT AS reply_count,
-            COALESCE((SELECT COUNT(*) FROM reactions WHERE target_type = 'post' AND target_id = p.id AND kind = 'upvote'), 0)::BIGINT AS upvotes,
-            COALESCE((SELECT COUNT(*) FROM reactions WHERE target_type = 'post' AND target_id = p.id AND kind = 'downvote'), 0)::BIGINT AS downvotes,
-            p.created_at
-        FROM posts p
-        JOIN forum_categories c ON c.id = p.category_id
-        JOIN users u ON u.id = p.author_id
-        WHERE p.deleted_at IS NULL
-          AND ($1::text IS NULL OR c.slug = $1)
-          AND ($2::text IS NULL OR p.kind = $2)
+        SELECT * FROM (
+            SELECT
+                p.id,
+                c.slug AS category_slug,
+                p.author_id,
+                u.username AS author_username,
+                p.kind,
+                p.title,
+                p.bounty_fragments,
+                (p.accepted_answer_id IS NOT NULL) AS has_accepted_answer,
+                p.pinned,
+                p.locked,
+                p.view_count,
+                COALESCE((SELECT COUNT(*) FROM comments WHERE target_type = 'post' AND target_id = p.id AND deleted_at IS NULL), 0)::BIGINT AS reply_count,
+                COALESCE((SELECT COUNT(*) FROM reactions WHERE target_type = 'post' AND target_id = p.id AND kind = 'upvote'), 0)::BIGINT AS upvotes,
+                COALESCE((SELECT COUNT(*) FROM reactions WHERE target_type = 'post' AND target_id = p.id AND kind = 'downvote'), 0)::BIGINT AS downvotes,
+                p.created_at
+            FROM posts p
+            JOIN forum_categories c ON c.id = p.category_id
+            JOIN users u ON u.id = p.author_id
+            WHERE p.deleted_at IS NULL
+              AND ($1::text IS NULL OR c.slug = $1)
+              AND ($2::text IS NULL OR p.kind = $2)
+        ) t
         ORDER BY {order}
         LIMIT $3 OFFSET $4
         "#
@@ -343,6 +364,21 @@ pub async fn edit_post(
     .bind(post_id)
     .fetch_one(db)
     .await?;
+
+    // SKI-286 — an edit that adds a new @username mentions only that
+    // person: `record_and_notify` is idempotent per (target, source,
+    // author), so the handles already recorded are skipped. Attributed to
+    // the post's author even when a moderator did the edit, so the
+    // notification names who wrote the text.
+    crate::services::mentions::record_and_notify(
+        db,
+        updated.author_id,
+        crate::services::mentions::SOURCE_FORUM_POST,
+        updated.id,
+        &updated.body,
+    )
+    .await;
+
     Ok(updated)
 }
 

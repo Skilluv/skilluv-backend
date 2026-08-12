@@ -61,18 +61,26 @@ pub struct PendingReviewQuery {
     pub per_page: Option<i64>,
 }
 
+/// Response of `GET /admin/community/review`.
+///
+/// SKI-111 — `EnrichedChallenge` already existed and derives `ToSchema`;
+/// only the envelope was missing.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct PendingReviewResponse {
+    pub data: Vec<EnrichedChallenge>,
+    pub pagination: crate::api_response::Pagination,
+    pub meta: crate::api_response::MetaInfo,
+}
+
 /// Community challenges awaiting admin review. Creator info is joined
 /// so the admin panel doesn't need N+1 lookups.
-///
-/// **Payload shape**: standard admin listing convention
-/// `{data: [EnrichedChallenge], pagination: {...}, meta: {...}}`.
 #[utoipa::path(
     get,
     path = "/api/admin/community/review",
     tag = "admin",
     params(PendingReviewQuery),
     responses(
-        (status = 200, description = "Pending review (paginated)", body = serde_json::Value),
+        (status = 200, description = "Pending review (paginated)", body = PendingReviewResponse),
         (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),

@@ -33,11 +33,46 @@ fn wrap(data: Value) -> Value {
     })
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// SKI-111 — response schemas
+// ═══════════════════════════════════════════════════════════════════
+
+/// A feature flag. Mirrors `services::feature_flags::FeatureFlag`, which
+/// is not itself a `ToSchema` type.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct FeatureFlagView {
+    pub key: String,
+    pub enabled: bool,
+    pub rollout_percent: i16,
+    pub description: Option<String>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+    pub updated_by: Option<Uuid>,
+}
+
+/// Payload of `GET /admin/feature-flags`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct FeatureFlagList {
+    pub flags: Vec<FeatureFlagView>,
+}
+
+/// Payload of the upsert route.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct FeatureFlagUpserted {
+    pub flag: FeatureFlagView,
+}
+
+/// Payload of the delete route.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct FeatureFlagRemoved {
+    pub removed: bool,
+    pub key: String,
+}
+
 /// SKI-33 admin — list all feature flags.
 #[utoipa::path(
     get, path = "/api/admin/feature-flags", tag = "admin",
     responses(
-        (status = 200, description = "list feature flags", body = serde_json::Value),
+        (status = 200, description = "list feature flags", body = crate::api_response::ApiResponse<FeatureFlagList>),
         (status = 403, body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
@@ -72,7 +107,7 @@ fn default_rollout() -> i16 {
     post, path = "/api/admin/feature-flags", tag = "admin",
     request_body(content = serde_json::Value),
     responses(
-        (status = 200, description = "flag upserted", body = serde_json::Value),
+        (status = 200, description = "flag upserted", body = crate::api_response::ApiResponse<FeatureFlagUpserted>),
         (status = 400, body = crate::api_response::ErrorResponse),
         (status = 403, body = crate::api_response::ErrorResponse),
     ),
@@ -102,7 +137,7 @@ pub async fn upsert(
     delete, path = "/api/admin/feature-flags/{key}", tag = "admin",
     params(("key" = String, Path)),
     responses(
-        (status = 200, description = "flag removed", body = serde_json::Value),
+        (status = 200, description = "flag removed", body = crate::api_response::ApiResponse<FeatureFlagRemoved>),
         (status = 403, body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),

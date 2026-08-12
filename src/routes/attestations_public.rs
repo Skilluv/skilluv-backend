@@ -11,11 +11,18 @@
 //! ─── Response shape ───────────────────────────────────────────────
 //!
 //! 200 OK — { valid: true, ...metadata }
-//! 404    — { valid: false, reason: "unknown attestation hash" }
+//! 200 OK — { valid: false, reason: "unknown attestation hash" }
 //!
 //! We deliberately return **200 with `valid:false`** in ambiguous cases
 //! (bad shape, unknown hash) so the client can render a stable UI. Only
 //! internal errors bubble as 5xx.
+//!
+//! SKI-288 — this paragraph described the intent from the start, but the
+//! code answered 404 on those two branches. That is a meaningful
+//! difference for the caller: "this hash is not a valid attestation" is a
+//! successful answer to the question asked, and an HTTP client that treats
+//! 4xx as a transport failure (ours does) cannot tell it apart from an
+//! outage. The branches now match the documented contract.
 //!
 //! ─── Rate limiting ────────────────────────────────────────────────
 //!
@@ -42,6 +49,21 @@ pub fn attestations_public_routes() -> Router<AppState> {
         // `/verify/{hash}.pdf` panics at Router::new() time. Adding
         // `/pdf` as its own segment sidesteps that limitation with a
         // clean, browser-friendly URL.
+        .route("/verify/{hash}/pdf", get(verify_pdf))
+}
+
+/// SKI-288 — the same handlers under `/api`, mounted by `build_router`.
+///
+/// The root-level route above cannot serve the front end: the SvelteKit app
+/// owns `/verify/{hash}` on its own origin, so a browser asking for that
+/// path gets the HTML page, never this JSON. The client therefore failed to
+/// parse the response and rendered every attestation as invalid.
+///
+/// Both mounts share one set of handlers, so the shapes cannot drift. The
+/// root route stays for external consumers who already use it.
+pub fn attestations_public_api_routes() -> Router<AppState> {
+    Router::new()
+        .route("/verify/{hash}", get(verify))
         .route("/verify/{hash}/pdf", get(verify_pdf))
 }
 
@@ -78,7 +100,7 @@ async fn verify(
 ) -> Result<impl IntoResponse, AppError> {
     if !is_valid_hash_shape(&hash) {
         return Ok((
-            StatusCode::NOT_FOUND,
+            StatusCode::OK,
             Json(json!({ "valid": false, "reason": "malformed attestation hash" })),
         ));
     }
@@ -118,7 +140,7 @@ async fn verify(
     )) = row
     else {
         return Ok((
-            StatusCode::NOT_FOUND,
+            StatusCode::OK,
             Json(json!({ "valid": false, "reason": "unknown attestation hash" })),
         ));
     };
@@ -128,7 +150,7 @@ async fn verify(
     // returning half-signed data.
     let Some(validated_at) = validated_at else {
         return Ok((
-            StatusCode::NOT_FOUND,
+            StatusCode::OK,
             Json(json!({ "valid": false, "reason": "unknown attestation hash" })),
         ));
     };

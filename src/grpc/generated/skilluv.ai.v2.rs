@@ -387,6 +387,62 @@ pub struct MatchedRange {
     #[prost(double, tag = "5")]
     pub confidence: f64,
 }
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct CompanionRequest {
+    #[prost(string, tag = "1")]
+    pub user_id: ::prost::alloc::string::String,
+    /// 'explain' | 'generate_exercises' | 'pre_review' | 'debug_help'
+    #[prost(string, tag = "2")]
+    pub interaction_type: ::prost::alloc::string::String,
+    /// The learner's question or instruction.
+    #[prost(string, tag = "3")]
+    pub prompt: ::prost::alloc::string::String,
+    /// Optional code the question is about (pre_review, debug_help).
+    #[prost(string, tag = "4")]
+    pub code: ::prost::alloc::string::String,
+    #[prost(string, tag = "5")]
+    pub language: ::prost::alloc::string::String,
+    /// Optional skill slug, so exercises can target a specific skill.
+    #[prost(string, tag = "6")]
+    pub skill_slug: ::prost::alloc::string::String,
+    /// Caller's rank, so the worker can pitch the answer at the right level.
+    #[prost(string, tag = "7")]
+    pub user_rank: ::prost::alloc::string::String,
+    /// Preferred answer language ('fr' | 'en' | ...).
+    #[prost(string, tag = "8")]
+    pub locale: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct CompanionResponse {
+    #[prost(string, tag = "1")]
+    pub answer_markdown: ::prost::alloc::string::String,
+    /// Structured follow-ups: exercises for generate_exercises, findings for
+    /// pre_review, next steps for explain and debug_help.
+    #[prost(message, repeated, tag = "2")]
+    pub items: ::prost::alloc::vec::Vec<CompanionItem>,
+    /// Human-readable disclosure to attach to any work derived from this
+    /// exchange.
+    #[prost(string, tag = "3")]
+    pub disclosure_label: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub model_version: ::prost::alloc::string::String,
+    /// Worker-reported token usage, for cost tracking.
+    #[prost(int32, tag = "5")]
+    pub tokens_used: i32,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct CompanionItem {
+    #[prost(string, tag = "1")]
+    pub title: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub body_markdown: ::prost::alloc::string::String,
+    /// 'exercise' | 'finding' | 'next_step' | 'reference'
+    #[prost(string, tag = "3")]
+    pub kind: ::prost::alloc::string::String,
+    /// 1 (highest) .. 5. Zero when the worker does not rank items.
+    #[prost(int32, tag = "4")]
+    pub priority: i32,
+}
 /// Generated client implementations.
 pub mod code_review_service_client {
     #![allow(
@@ -936,6 +992,142 @@ pub mod plagiarism_service_client {
             req.extensions_mut()
                 .insert(
                     GrpcMethod::new("skilluv.ai.v2.PlagiarismService", "CheckPlagiarism"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+    }
+}
+/// Generated client implementations.
+pub mod learning_companion_service_client {
+    #![allow(
+        unused_variables,
+        dead_code,
+        missing_docs,
+        clippy::wildcard_imports,
+        clippy::let_unit_value,
+    )]
+    use tonic::codegen::*;
+    use tonic::codegen::http::Uri;
+    /// # ===========================================================================
+    /// 5. LearningCompanionService — SKI-44 (Post-MVP T3-01)
+    ///
+    /// A single `Ask` RPC typed by `interaction_type`, rather than four narrow
+    /// RPCs. The four interactions differ only in the prompt the worker
+    /// selects: same inputs (a question, optionally some code and context),
+    /// same output (an answer plus optional structured items). Four RPCs would
+    /// mean four near-identical messages and a proto change — coordinated
+    /// across two repositories — every time an interaction is added.
+    ///
+    /// Every response carries `disclosure_label`. The backend stores it in
+    /// `ai_interactions` and copies it onto the next submitted deliverable's
+    /// `verification_signal`. AI assistance on Skilluv is disclosed, not
+    /// forbidden; the label is what makes that true in the data rather than
+    /// only in the policy document.
+    #[derive(Debug, Clone)]
+    pub struct LearningCompanionServiceClient<T> {
+        inner: tonic::client::Grpc<T>,
+    }
+    impl LearningCompanionServiceClient<tonic::transport::Channel> {
+        /// Attempt to create a new client by connecting to a given endpoint.
+        pub async fn connect<D>(dst: D) -> Result<Self, tonic::transport::Error>
+        where
+            D: TryInto<tonic::transport::Endpoint>,
+            D::Error: Into<StdError>,
+        {
+            let conn = tonic::transport::Endpoint::new(dst)?.connect().await?;
+            Ok(Self::new(conn))
+        }
+    }
+    impl<T> LearningCompanionServiceClient<T>
+    where
+        T: tonic::client::GrpcService<tonic::body::Body>,
+        T::Error: Into<StdError>,
+        T::ResponseBody: Body<Data = Bytes> + std::marker::Send + 'static,
+        <T::ResponseBody as Body>::Error: Into<StdError> + std::marker::Send,
+    {
+        pub fn new(inner: T) -> Self {
+            let inner = tonic::client::Grpc::new(inner);
+            Self { inner }
+        }
+        pub fn with_origin(inner: T, origin: Uri) -> Self {
+            let inner = tonic::client::Grpc::with_origin(inner, origin);
+            Self { inner }
+        }
+        pub fn with_interceptor<F>(
+            inner: T,
+            interceptor: F,
+        ) -> LearningCompanionServiceClient<InterceptedService<T, F>>
+        where
+            F: tonic::service::Interceptor,
+            T::ResponseBody: Default,
+            T: tonic::codegen::Service<
+                http::Request<tonic::body::Body>,
+                Response = http::Response<
+                    <T as tonic::client::GrpcService<tonic::body::Body>>::ResponseBody,
+                >,
+            >,
+            <T as tonic::codegen::Service<
+                http::Request<tonic::body::Body>,
+            >>::Error: Into<StdError> + std::marker::Send + std::marker::Sync,
+        {
+            LearningCompanionServiceClient::new(
+                InterceptedService::new(inner, interceptor),
+            )
+        }
+        /// Compress requests with the given encoding.
+        ///
+        /// This requires the server to support it otherwise it might respond with an
+        /// error.
+        #[must_use]
+        pub fn send_compressed(mut self, encoding: CompressionEncoding) -> Self {
+            self.inner = self.inner.send_compressed(encoding);
+            self
+        }
+        /// Enable decompressing responses.
+        #[must_use]
+        pub fn accept_compressed(mut self, encoding: CompressionEncoding) -> Self {
+            self.inner = self.inner.accept_compressed(encoding);
+            self
+        }
+        /// Limits the maximum size of a decoded message.
+        ///
+        /// Default: `4MB`
+        #[must_use]
+        pub fn max_decoding_message_size(mut self, limit: usize) -> Self {
+            self.inner = self.inner.max_decoding_message_size(limit);
+            self
+        }
+        /// Limits the maximum size of an encoded message.
+        ///
+        /// Default: `usize::MAX`
+        #[must_use]
+        pub fn max_encoding_message_size(mut self, limit: usize) -> Self {
+            self.inner = self.inner.max_encoding_message_size(limit);
+            self
+        }
+        pub async fn ask(
+            &mut self,
+            request: impl tonic::IntoRequest<super::CompanionRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::CompanionResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/skilluv.ai.v2.LearningCompanionService/Ask",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("skilluv.ai.v2.LearningCompanionService", "Ask"),
                 );
             self.inner.unary(req, path, codec).await
         }

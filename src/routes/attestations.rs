@@ -211,9 +211,19 @@ pub async fn issue_compagnonnage(
     // P20.1 — Best-effort recompute proof engines pour le récipiendaire.
     // Attestation reçue peut débloquer capability mentor (5 attestations) et
     // les rangs artisan/maitre/doyen (seuils attestations reçues).
+    // SKI-43 — live variant: this path has AppState, so the recipient gets
+    // the WebSocket / mobile push as well as the persisted notification.
     let db_clone = state.db.clone();
+    let mut redis_clone = state.redis.clone();
+    let ws_clone = state.ws.clone();
     tokio::spawn(async move {
-        let _ = crate::services::proof_hooks::recompute_all_for_user(&db_clone, recipient_id).await;
+        let _ = crate::services::proof_hooks::recompute_all_for_user_live(
+            &db_clone,
+            &mut redis_clone,
+            &ws_clone,
+            recipient_id,
+        )
+        .await;
     });
 
     Ok(Json(ApiResponse::new(IssueAttestationResponse {

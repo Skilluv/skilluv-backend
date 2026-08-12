@@ -92,6 +92,10 @@ async fn async_main(config: AppConfig) {
     // Activation via SKILLUV_PROOF_SWEEP_ENABLED=1.
     skilluv_backend::services::proof_hooks::start_proof_sweep_task(db.clone());
 
+    // SKI-38 — weekly sweep stamping achieved goals and archiving settled
+    // ones. Env-gated (SKILLUV_GOAL_ARCHIVAL_ENABLED=1), off by default.
+    skilluv_backend::services::goals::start_goal_archival_task(db.clone());
+
     // P26 v2 SKI-88 — fallback poller that catches missed CI webhooks.
     // Silently no-ops when SKILLUV_BOT_GITHUB_TOKEN is unset.
     skilluv_backend::services::ci_sync::start_ci_poll_task(db.clone());

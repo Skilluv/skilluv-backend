@@ -1,5 +1,7 @@
 //! Tests P19.1 : orchestrateur proof_hooks::recompute_all_for_user.
 
+mod testdb;
+
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use uuid::Uuid;
 
@@ -12,7 +14,7 @@ async fn setup_test_db() -> (PgPool, String) {
     );
     let admin_pool = PgPoolOptions::new()
         .max_connections(2)
-        .connect("postgres://skilluv:skilluv_secret@localhost:5433/skilluv")
+        .connect(&testdb::admin_url())
         .await
         .expect("admin");
     sqlx::query(sqlx::AssertSqlSafe(format!(
@@ -23,7 +25,7 @@ async fn setup_test_db() -> (PgPool, String) {
     .expect("create");
     admin_pool.close().await;
 
-    let db_url = format!("postgres://skilluv:skilluv_secret@localhost:5433/{db_name}");
+    let db_url = testdb::url(&db_name);
     let db = PgPoolOptions::new()
         .max_connections(5)
         .connect(&db_url)
@@ -39,7 +41,7 @@ async fn setup_test_db() -> (PgPool, String) {
 async fn cleanup_test_db(db_name: &str) {
     let admin_pool = PgPoolOptions::new()
         .max_connections(2)
-        .connect("postgres://skilluv:skilluv_secret@localhost:5433/skilluv")
+        .connect(&testdb::admin_url())
         .await
         .expect("admin");
     let _ = sqlx::query(sqlx::AssertSqlSafe(format!(

@@ -109,13 +109,31 @@ fn validate_orientation_slugs(slugs: &Option<Vec<String>>) -> Result<(), AppErro
     Ok(())
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// SKI-111 — response schemas
+// ═══════════════════════════════════════════════════════════════════
+
+/// Payload of `PATCH /admin/slices/{id}/config`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct SliceConfigData {
+    pub slice: crate::models::ProjectSlice,
+}
+
+/// Response of `GET /admin/slices`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct AdminSliceListResponse {
+    pub data: Vec<crate::models::ProjectSlice>,
+    pub pagination: crate::api_response::Pagination,
+    pub meta: crate::api_response::MetaInfo,
+}
+
 /// SKI-106 admin — override sensibilité/rank sur une slice individuelle.
 #[utoipa::path(
     patch, path = "/api/admin/slices/{id}/config", tag = "admin",
     params(("id" = Uuid, Path)),
     request_body(content = serde_json::Value),
     responses(
-        (status = 200, description = "slice config updated", body = serde_json::Value),
+        (status = 200, description = "slice config updated", body = crate::api_response::ApiResponse<SliceConfigData>),
         (status = 400, body = crate::api_response::ErrorResponse),
         (status = 404, body = crate::api_response::ErrorResponse),
     ),
@@ -294,7 +312,7 @@ fn validate_q(q: &Option<String>) -> Result<Option<String>, AppError> {
         ("per_page" = Option<i64>, Query),
     ),
     responses(
-        (status = 200, description = "paginated slice list", body = serde_json::Value),
+        (status = 200, description = "paginated slice list", body = AdminSliceListResponse),
         (status = 400, body = crate::api_response::ErrorResponse),
         (status = 403, body = crate::api_response::ErrorResponse),
     ),

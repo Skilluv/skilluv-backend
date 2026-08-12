@@ -9,6 +9,8 @@
 //!
 //! Voir docs/challenges-target-model-and-roadmap.md pour le rationale.
 
+mod testdb;
+
 use sqlx::Row;
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use uuid::Uuid;
@@ -22,7 +24,7 @@ async fn setup_test_db() -> (PgPool, String) {
 
     let admin_pool = PgPoolOptions::new()
         .max_connections(2)
-        .connect("postgres://skilluv:skilluv_secret@localhost:5433/skilluv")
+        .connect(&testdb::admin_url())
         .await
         .expect("Failed to connect to admin DB");
 
@@ -35,7 +37,7 @@ async fn setup_test_db() -> (PgPool, String) {
 
     admin_pool.close().await;
 
-    let db_url = format!("postgres://skilluv:skilluv_secret@localhost:5433/{db_name}");
+    let db_url = testdb::url(&db_name);
     let db = PgPoolOptions::new()
         .max_connections(5)
         .connect(&db_url)
@@ -74,7 +76,7 @@ async fn insert_test_user(db: &PgPool, user_id: Uuid) {
 async fn cleanup_test_db(db_name: &str) {
     let admin_pool = PgPoolOptions::new()
         .max_connections(2)
-        .connect("postgres://skilluv:skilluv_secret@localhost:5433/skilluv")
+        .connect(&testdb::admin_url())
         .await
         .expect("Failed to connect to admin DB");
 

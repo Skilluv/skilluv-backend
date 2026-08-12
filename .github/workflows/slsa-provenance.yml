@@ -52,10 +52,20 @@ jobs:
         # prevent template-injection via a malicious ref pushed to master.
         env:
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-          IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/skilluv-backend
+          # Lowercase literal, not `github.repository_owner` (`Skilluv`):
+          # Docker rejects an uppercase repository name, so the inspect
+          # below returned nothing and the generator was handed an empty
+          # digest. Matches what the CI publish step pushes (see ci.yml).
+          IMAGE_REPO: ghcr.io/skilluv/skilluv-backend
         run: |
           DIGEST=$(docker buildx imagetools inspect "${IMAGE_REPO}:master-${HEAD_SHA}" \
             --format '{{json .Manifest}}' | jq -r .digest)
+          # Fail here rather than hand the generator an empty digest, which
+          # it reports as a generic exit 27 several jobs later.
+          if [ -z "${DIGEST}" ] || [ "${DIGEST}" = "null" ]; then
+            echo "::error::no digest for ${IMAGE_REPO}:master-${HEAD_SHA} - is the image published?"
+            exit 1
+          fi
           {
             echo "digest=${DIGEST}"
             echo "image=${IMAGE_REPO}"

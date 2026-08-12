@@ -32,7 +32,12 @@ jobs:
     timeout-minutes: 15
 
     env:
-      IMAGE: ghcr.io/${{ github.repository_owner }}/skilluv-backend
+      # Spelled out in lowercase rather than derived from
+      # `github.repository_owner`, which is `Skilluv`: Docker rejects an
+      # uppercase repository name, so every cosign call failed on a
+      # reference the publishing job never produces. This is the exact
+      # string the CI publish step pushes to (see ci.yml).
+      IMAGE: ghcr.io/skilluv/skilluv-backend
       SHA: ${{ github.event.workflow_run.head_sha }}
 
     steps:
@@ -54,11 +59,21 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Sign the image (keyless)
+        # Each digest is resolved into a variable and checked before use.
+        # Inlined in the cosign argument, a failed inspect substitutes an
+        # empty string and cosign reports a malformed reference
+        # (`:master@` with nothing after it) instead of the lookup that
+        # actually failed.
         run: |
-          cosign sign --yes \
-            "${IMAGE}:master@$(docker buildx imagetools inspect "${IMAGE}:master" --format '{{json .Manifest}}' | jq -r .digest)"
-          cosign sign --yes \
-            "${IMAGE}:master-${SHA}@$(docker buildx imagetools inspect "${IMAGE}:master-${SHA}" --format '{{json .Manifest}}' | jq -r .digest)"
+          for TAG in "master" "master-${SHA}"; do
+            DIGEST=$(docker buildx imagetools inspect "${IMAGE}:${TAG}" \
+              --format '{{json .Manifest}}' | jq -r .digest)
+            if [ -z "${DIGEST}" ] || [ "${DIGEST}" = "null" ]; then
+              echo "::error::no digest for ${IMAGE}:${TAG} - is the image published?"
+              exit 1
+            fi
+            cosign sign --yes "${IMAGE}:${TAG}@${DIGEST}"
+          done
 
       - name: Generate SBOM
         run: |

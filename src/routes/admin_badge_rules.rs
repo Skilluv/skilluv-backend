@@ -143,10 +143,50 @@ struct CreateRuleBody {
 }
 
 /// Admin: create a new badge_rule (proof engine editor).
+/// A badge rule as echoed by create and patch.
+///
+/// SKI-111 — both handlers build this shape independently (one in Rust,
+/// one via `jsonb_build_object`), so a single schema is also the only
+/// thing keeping them describable as the same resource.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct BadgeRuleView {
+    pub id: Uuid,
+    pub slug: String,
+    pub output_type: String,
+    pub output_variant: Option<String>,
+    pub display_name: String,
+    pub description: String,
+    pub icon_key: Option<String>,
+    /// Free-form rule conditions (JSONB).
+    pub conditions: serde_json::Value,
+    pub rarity: String,
+    pub admin_editable: bool,
+    pub ui_metadata: Option<serde_json::Value>,
+}
+
+/// Payload of create / patch.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct BadgeRuleData {
+    pub rule: BadgeRuleView,
+}
+
+/// Payload of deprecate.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct BadgeRuleDeprecated {
+    pub deprecated: bool,
+    pub slug: String,
+    /// RFC 3339.
+    pub deprecated_at: String,
+}
+
 #[utoipa::path(
     post, path = "/api/admin/badge-rules", tag = "admin",
     request_body(content = serde_json::Value),
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse), (status = 400, body = crate::api_response::ErrorResponse)),
+    responses(
+        (status = 200, description = "Created rule", body = crate::api_response::ApiResponse<BadgeRuleData>),
+        (status = 403, body = crate::api_response::ErrorResponse),
+        (status = 400, body = crate::api_response::ErrorResponse),
+    ),
     security(("cookie_auth" = [])),
 )]
 pub async fn create_rule(
@@ -274,7 +314,11 @@ struct PatchRuleBody {
     patch, path = "/api/admin/badge-rules/{slug}", tag = "admin",
     params(("slug" = String, Path), DryRunQuery),
     request_body(content = serde_json::Value),
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse), (status = 404, body = crate::api_response::ErrorResponse)),
+    responses(
+        (status = 200, description = "Updated rule", body = crate::api_response::ApiResponse<BadgeRuleData>),
+        (status = 403, body = crate::api_response::ErrorResponse),
+        (status = 404, body = crate::api_response::ErrorResponse),
+    ),
     security(("cookie_auth" = [])),
 )]
 pub async fn patch_rule(
@@ -439,7 +483,11 @@ struct DeprecateBody {
     post, path = "/api/admin/badge-rules/{slug}/deprecate", tag = "admin",
     params(("slug" = String, Path), DryRunQuery),
     request_body(content = serde_json::Value),
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse), (status = 404, body = crate::api_response::ErrorResponse)),
+    responses(
+        (status = 200, description = "Rule deprecated", body = crate::api_response::ApiResponse<BadgeRuleDeprecated>),
+        (status = 403, body = crate::api_response::ErrorResponse),
+        (status = 404, body = crate::api_response::ErrorResponse),
+    ),
     security(("cookie_auth" = [])),
 )]
 pub async fn deprecate_rule(

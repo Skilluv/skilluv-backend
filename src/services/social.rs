@@ -117,6 +117,16 @@ pub async fn create_comment(
     .fetch_one(db)
     .await?;
 
+    // SKI-286 — @username mentions in the body.
+    crate::services::mentions::record_and_notify(
+        db,
+        author_id,
+        crate::services::mentions::SOURCE_COMMENT,
+        comment.id,
+        &comment.body,
+    )
+    .await;
+
     Ok(comment)
 }
 

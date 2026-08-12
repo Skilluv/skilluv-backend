@@ -86,10 +86,85 @@ struct ListQuery {
     per_page: Option<i64>,
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// SKI-111 — response schemas
+// ═══════════════════════════════════════════════════════════════════
+
+/// An enterprise as listed and fetched by the admin surface.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct AdminEnterpriseView {
+    pub id: Uuid,
+    pub company_name: String,
+    pub slug: String,
+    pub industry: Option<String>,
+    pub verified: bool,
+    /// `direct_hire` | `staffing_agency` | `remote_international`.
+    pub enterprise_type: String,
+    /// Per-type configuration blob (P24).
+    pub type_config: Option<serde_json::Value>,
+    /// RFC 3339.
+    pub created_at: String,
+}
+
+/// Response of `GET /admin/enterprises`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct AdminEnterpriseListResponse {
+    pub data: Vec<AdminEnterpriseView>,
+    pub pagination: crate::api_response::Pagination,
+    pub meta: crate::api_response::MetaInfo,
+}
+
+/// Payload of `GET /admin/enterprises/{id}`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct AdminEnterpriseData {
+    pub enterprise: AdminEnterpriseView,
+}
+
+/// The trimmed enterprise echoed after a type change.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct EnterpriseTypeView {
+    pub id: Uuid,
+    pub enterprise_type: String,
+    pub type_config: Option<serde_json::Value>,
+}
+
+/// Payload of `PATCH /admin/enterprises/{id}/type`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct EnterpriseTypeData {
+    pub enterprise: EnterpriseTypeView,
+}
+
+/// Payload of `GET /admin/enterprises/{id}/type-config`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct EnterpriseTypeConfigData {
+    pub enterprise_type: String,
+    pub type_config: Option<serde_json::Value>,
+}
+
+/// One client of a staffing agency.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct AgencyClientView {
+    pub id: Uuid,
+    pub client_name: String,
+    pub client_contact_email: Option<String>,
+    pub notes: Option<String>,
+    pub active: bool,
+    /// RFC 3339.
+    pub created_at: String,
+}
+
+/// Response of `GET /admin/enterprises/{id}/clients`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct AgencyClientListResponse {
+    pub data: Vec<AgencyClientView>,
+    pub pagination: crate::api_response::Pagination,
+    pub meta: crate::api_response::MetaInfo,
+}
+
 /// Admin: paginated list of enterprises (filter by type / verified).
 #[utoipa::path(
     get, path = "/api/admin/enterprises", tag = "admin",
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses((status = 200, body = AdminEnterpriseListResponse), (status = 403, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
 pub async fn list_enterprises(
@@ -181,7 +256,7 @@ pub async fn list_enterprises(
 #[utoipa::path(
     get, path = "/api/admin/enterprises/{id}", tag = "admin",
     params(("id" = Uuid, Path)),
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse), (status = 404, body = crate::api_response::ErrorResponse)),
+    responses((status = 200, body = crate::api_response::ApiResponse<AdminEnterpriseData>), (status = 403, body = crate::api_response::ErrorResponse), (status = 404, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
 pub async fn get_enterprise(
@@ -234,7 +309,7 @@ struct DryRunQuery {
     patch, path = "/api/admin/enterprises/{id}/type", tag = "admin",
     params(("id" = Uuid, Path)),
     request_body(content = serde_json::Value),
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses((status = 200, body = crate::api_response::ApiResponse<EnterpriseTypeData>), (status = 403, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
 pub async fn patch_type(
@@ -368,7 +443,7 @@ pub async fn patch_type(
 #[utoipa::path(
     get, path = "/api/admin/enterprises/{id}/type-config", tag = "admin",
     params(("id" = Uuid, Path)),
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses((status = 200, body = crate::api_response::ApiResponse<EnterpriseTypeConfigData>), (status = 403, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
 pub async fn get_type_config(
@@ -404,7 +479,7 @@ pub async fn get_type_config(
 #[utoipa::path(
     get, path = "/api/admin/enterprises/{id}/agency-clients", tag = "admin",
     params(("id" = Uuid, Path), AgencyClientsQuery),
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses((status = 200, body = AgencyClientListResponse), (status = 403, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
 pub async fn list_agency_clients(

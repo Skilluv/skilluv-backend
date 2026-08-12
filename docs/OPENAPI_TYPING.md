@@ -6,12 +6,29 @@ they hit the front.
 
 ## Current state
 
-| Périmètre | Réponses 2xx typées (as of 2026-08-10) |
+| Périmètre | Réponses 2xx typées |
 |---|---|
-| Toutes routes | 188/519 → 36% |
-| Routes `/admin/*` | 26/95 → 27% |
+| Routes `/admin/*` | **72/72 → 100%** (SKI-111, 2026-08-12) |
 
-After this commit + follow-ups, target: **100% admin, > 60% total**.
+SKI-111 closed the admin gap. Every `/admin/*` handler now declares a real
+schema; none is left on `body = serde_json::Value`.
+
+Two things that pass came out of the audit and are worth knowing before
+extending this to the rest of the API:
+
+- **`serde_json::Value` is not "typed"**. It renders as an empty schema, so
+  schemathesis validates nothing against it. The 61 endpoints that carried
+  it were annotated but unchecked — which looked like coverage in a grep
+  and was not. Count `body = serde_json::Value` separately from missing
+  annotations when measuring.
+- **The spec drifted from the code in ways only typing surfaced**:
+  `POST /admin/projects` advertised 201 while returning 200, and
+  `GET /admin/projects/{slug}/stats` was absent from the document
+  altogether. Both are fixed.
+
+`AdminItemResponse` / `AdminListResponse`, referenced in an earlier draft
+of this document, never existed. The real shared types are
+`crate::api_response::{ApiResponse, Pagination, AdminActionResult}`.
 
 ## Why it matters
 

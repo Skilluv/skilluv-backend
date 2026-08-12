@@ -71,12 +71,85 @@ pub struct SweepQuery {
     pub dry_run: bool,
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// SKI-111 — response schemas
+// ═══════════════════════════════════════════════════════════════════
+
+/// Payload of `POST /admin/ops/sweep-proof-hooks`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct ProofSweepResult {
+    pub within_days: i32,
+    pub processed_count: usize,
+    pub user_ids: Vec<Uuid>,
+}
+
+/// Payload of `POST /admin/users/{id}/gdpr-export`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct GdprExportQueued {
+    pub status: String,
+    pub target_user_id: Uuid,
+    pub message: String,
+}
+
+/// Payload of `POST /admin/users/{id}/recompute-capabilities`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct CapabilityRecomputeResult {
+    pub granted: Vec<String>,
+    pub already_active: Vec<String>,
+}
+
+/// One row of `GET /admin/badge-events`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct BadgeEventRow {
+    pub id: Uuid,
+    pub slug: String,
+    pub name: String,
+    pub description: Option<String>,
+    /// RFC 3339.
+    pub starts_at: String,
+    pub ends_at: Option<String>,
+    pub visual_theme: Option<serde_json::Value>,
+    pub is_partner: bool,
+    pub is_active: bool,
+    pub created_at: String,
+}
+
+/// Response of `GET /admin/badge-events`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct BadgeEventListResponse {
+    pub data: Vec<BadgeEventRow>,
+    pub pagination: crate::api_response::Pagination,
+    pub meta: crate::api_response::MetaInfo,
+}
+
+/// The event echoed by `POST /admin/badge-events`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct CreatedBadgeEvent {
+    pub id: Uuid,
+    pub slug: String,
+    pub name: String,
+    pub starts_at: String,
+    pub ends_at: Option<String>,
+    pub visual_theme: Option<serde_json::Value>,
+    pub is_partner: bool,
+}
+
+/// Payload of `POST /admin/badge-events`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct CreateBadgeEventData {
+    pub event: CreatedBadgeEvent,
+}
+
 /// Admin: sweep proof-hooks recompute for every user active in the
 /// last N days. Supports dry-run.
 #[utoipa::path(
     post, path = "/api/admin/proof-hooks/sweep", tag = "admin",
     params(SweepQuery),
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses(
+        (status = 200, body = crate::api_response::ApiResponse<ProofSweepResult>),
+        (status = 400, body = crate::api_response::ErrorResponse),
+        (status = 403, body = crate::api_response::ErrorResponse),
+    ),
     security(("cookie_auth" = [])),
 )]
 pub async fn admin_sweep_proof_hooks(
@@ -156,7 +229,11 @@ pub struct GdprExportBody {
     post, path = "/api/admin/users/{id}/gdpr-export", tag = "admin",
     params(("id" = Uuid, Path)),
     request_body = GdprExportBody,
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses(
+        (status = 200, body = crate::api_response::ApiResponse<GdprExportQueued>),
+        (status = 400, body = crate::api_response::ErrorResponse),
+        (status = 403, body = crate::api_response::ErrorResponse),
+    ),
     security(("cookie_auth" = [])),
 )]
 pub async fn admin_trigger_gdpr_export(
@@ -236,7 +313,11 @@ pub async fn admin_trigger_gdpr_export(
 #[utoipa::path(
     post, path = "/api/admin/users/{id}/recompute-capabilities", tag = "admin",
     params(("id" = Uuid, Path)),
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses(
+        (status = 200, body = crate::api_response::ApiResponse<CapabilityRecomputeResult>),
+        (status = 400, body = crate::api_response::ErrorResponse),
+        (status = 403, body = crate::api_response::ErrorResponse),
+    ),
     security(("cookie_auth" = [])),
 )]
 pub async fn admin_recompute_capabilities(
@@ -317,7 +398,11 @@ pub struct ListEventsQuery {
 #[utoipa::path(
     get, path = "/api/admin/badge-events", tag = "admin",
     params(ListEventsQuery),
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses(
+        (status = 200, body = BadgeEventListResponse),
+        (status = 400, body = crate::api_response::ErrorResponse),
+        (status = 403, body = crate::api_response::ErrorResponse),
+    ),
     security(("cookie_auth" = [])),
 )]
 pub async fn admin_list_badge_events(
@@ -417,7 +502,11 @@ pub struct CreateEventBody {
 #[utoipa::path(
     post, path = "/api/admin/badge-events", tag = "admin",
     request_body = CreateEventBody,
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses(
+        (status = 200, body = crate::api_response::ApiResponse<CreateBadgeEventData>),
+        (status = 400, body = crate::api_response::ErrorResponse),
+        (status = 403, body = crate::api_response::ErrorResponse),
+    ),
     security(("cookie_auth" = [])),
 )]
 pub async fn admin_create_badge_event(

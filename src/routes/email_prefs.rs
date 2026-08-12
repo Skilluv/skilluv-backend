@@ -17,12 +17,29 @@ use crate::services::digest::{self, DigestRunReport};
 
 pub fn email_prefs_routes() -> Router<AppState> {
     Router::new()
+        // SKI-287 — the contract the front end consumes. Flat `data`, and a
+        // PUT that replaces all three flags at once.
+        .route(
+            "/users/me/email-preferences",
+            get(get_prefs_v2).put(replace_prefs),
+        )
+        // One-click unsubscribe with the token in the path (RFC 8058 style).
+        .route("/email/unsubscribe/{token}", get(unsubscribe_by_path))
+        // Pre-SKI-287 surface, kept so existing callers and already-sent
+        // email footers keep working. Different response shape (`data.
+        // preferences`) and partial-update semantics; new clients should
+        // use the `/users/me` routes above.
         .route("/auth/me/email-preferences", get(get_prefs))
         .route("/auth/me/email-preferences", put(update_prefs))
         .route("/email/unsubscribe", get(unsubscribe))
         .route("/webhooks/brevo", post(brevo_webhook))
         .route("/admin/digest/run-weekly", post(admin_run_weekly_digest))
 }
+
+/// The three opt-out categories. Transactional mail (email verification,
+/// password reset, security alerts, payment receipts) is never listed here
+/// and cannot be disabled.
+pub const EMAIL_CATEGORIES: &[&str] = &["digest_weekly", "streak_reminder", "marketing"];
 
 #[derive(Debug, Serialize, sqlx::FromRow, ToSchema)]
 pub struct EmailPrefs {
@@ -78,6 +95,235 @@ pub async fn get_prefs(
     Ok(Json(ApiResponse::new(EmailPrefsResponse {
         preferences: prefs,
     })))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SKI-287 — /users/me/email-preferences
+// ═══════════════════════════════════════════════════════════════════
+
+/// Read the caller's email preferences.
+///
+/// A user who has never touched their settings gets the documented
+/// defaults, not a 404: the absence of a row means "never customised",
+/// which is a perfectly good answer to "what are my preferences".
+///
+/// Unlike [`get_prefs`], the payload is the preference object itself
+/// rather than `{ preferences: … }`.
+#[utoipa::path(
+    get,
+    path = "/api/users/me/email-preferences",
+    tag = "profile",
+    responses(
+        (status = 200, description = "Current preferences", body = ApiResponse<EmailPrefs>),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn get_prefs_v2(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Json<ApiResponse<EmailPrefs>>, AppError> {
+    // Read-only: a GET must not create a row. The defaults below mirror
+    // the column defaults in migration 0021.
+    let prefs: Option<EmailPrefs> = sqlx::query_as(
+        "SELECT digest_weekly, streak_reminder, marketing, updated_at
+           FROM user_email_preferences WHERE user_id = $1",
+    )
+    .bind(auth.user_id)
+    .fetch_optional(&state.db)
+    .await?;
+
+    let prefs = prefs.unwrap_or_else(|| EmailPrefs {
+        digest_weekly: true,
+        streak_reminder: true,
+        marketing: false,
+        updated_at: chrono::Utc::now(),
+    });
+
+    Ok(Json(ApiResponse::new(prefs)))
+}
+
+/// Full replacement of the caller's email preferences.
+///
+/// All three flags are required. A partial payload is rejected rather than
+/// merged: with an opt-in category like `marketing`, "field absent" is
+/// ambiguous between "leave it" and "set it false", and guessing wrong on
+/// a GDPR consent flag is not acceptable in either direction.
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ReplacePrefsRequest {
+    pub digest_weekly: bool,
+    pub streak_reminder: bool,
+    pub marketing: bool,
+}
+
+/// Validate a full-replacement payload, naming the offending field.
+///
+/// Every category must be present and boolean. Reported as
+/// `AppError::Validation` (400) rather than letting serde produce a 422:
+/// the screen shows this message to a human.
+fn parse_replace_prefs(raw: &serde_json::Value) -> Result<ReplacePrefsRequest, AppError> {
+    let obj = raw
+        .as_object()
+        .ok_or_else(|| AppError::Validation("body must be a JSON object".into()))?;
+
+    let read = |key: &str| -> Result<bool, AppError> {
+        match obj.get(key) {
+            Some(serde_json::Value::Bool(b)) => Ok(*b),
+            Some(_) => Err(AppError::Validation(format!("{key} must be a boolean"))),
+            None => Err(AppError::Validation(format!(
+                "{key} is required — this endpoint replaces all three \
+                 categories at once"
+            ))),
+        }
+    };
+
+    let digest_weekly = read("digest_weekly")?;
+    let streak_reminder = read("streak_reminder")?;
+    let marketing = read("marketing")?;
+
+    if let Some(unknown) = obj.keys().find(|k| !EMAIL_CATEGORIES.contains(&k.as_str())) {
+        return Err(AppError::Validation(format!(
+            "unknown field '{unknown}' — expected exactly: {}",
+            EMAIL_CATEGORIES.join(", ")
+        )));
+    }
+
+    Ok(ReplacePrefsRequest {
+        digest_weekly,
+        streak_reminder,
+        marketing,
+    })
+}
+
+#[utoipa::path(
+    put,
+    path = "/api/users/me/email-preferences",
+    tag = "profile",
+    request_body = ReplacePrefsRequest,
+    responses(
+        (status = 200, description = "Updated preferences", body = ApiResponse<EmailPrefs>),
+        (status = 400, description = "Missing or non-boolean field", body = crate::api_response::ErrorResponse),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn replace_prefs(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    // Taken as a raw value rather than `Json<ReplacePrefsRequest>` so a
+    // missing or mistyped field is a 400 VALIDATION_ERROR, as the contract
+    // specifies. Axum's own `Json` rejection is a 422 with a serde message,
+    // which is neither the documented status nor a useful sentence for the
+    // settings screen to display.
+    Json(raw): Json<serde_json::Value>,
+) -> Result<Json<ApiResponse<EmailPrefs>>, AppError> {
+    let body = parse_replace_prefs(&raw)?;
+
+    let prefs: EmailPrefs = sqlx::query_as(
+        r#"
+        INSERT INTO user_email_preferences (user_id, digest_weekly, streak_reminder, marketing)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (user_id) DO UPDATE SET
+            digest_weekly   = EXCLUDED.digest_weekly,
+            streak_reminder = EXCLUDED.streak_reminder,
+            marketing       = EXCLUDED.marketing,
+            updated_at      = NOW()
+        RETURNING digest_weekly, streak_reminder, marketing, updated_at
+        "#,
+    )
+    .bind(auth.user_id)
+    .bind(body.digest_weekly)
+    .bind(body.streak_reminder)
+    .bind(body.marketing)
+    .fetch_one(&state.db)
+    .await?;
+
+    Ok(Json(ApiResponse::new(prefs)))
+}
+
+/// One-click unsubscribe with the token in the path.
+///
+/// The category is read from the signed token rather than from a separate
+/// parameter: a mail client prefetching the link must not be able to
+/// unsubscribe a different category by editing the URL, and RFC 8058
+/// one-click flows send no parameters of their own.
+///
+/// Deliberately no expiry. A footer link in a two-year-old email must
+/// still work — a dead unsubscribe link is what turns into a spam
+/// complaint, which is the outcome this endpoint exists to prevent.
+/// Revocation, if ever needed, is a secret rotation.
+#[utoipa::path(
+    get,
+    path = "/api/email/unsubscribe/{token}",
+    tag = "auth",
+    params(("token" = String, Path, description = "HMAC-signed token carrying user and category")),
+    responses(
+        (status = 200, description = "HTML confirmation page", content_type = "text/html"),
+        (status = 400, description = "Unsupported category", body = crate::api_response::ErrorResponse),
+        (status = 401, description = "Invalid or forged token", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn unsubscribe_by_path(
+    State(state): State<AppState>,
+    axum::extract::Path(token): axum::extract::Path<String>,
+) -> Result<Html<String>, AppError> {
+    let secret = unsub_secret(&state.config.jwt_secret);
+    let (user_id, kind) =
+        digest::verify_unsubscribe_token(&token, &secret).ok_or(AppError::Unauthorized)?;
+    apply_unsubscribe(&state, user_id, &kind).await
+}
+
+/// Turn one category off for one user. Idempotent — unsubscribing twice
+/// is a normal consequence of a mail client prefetching the link.
+async fn apply_unsubscribe(
+    state: &AppState,
+    user_id: uuid::Uuid,
+    kind: &str,
+) -> Result<Html<String>, AppError> {
+    if !EMAIL_CATEGORIES.contains(&kind) {
+        return Err(AppError::Validation(format!(
+            "Unsupported unsubscribe kind: {kind}"
+        )));
+    }
+    // `kind` is checked against the allowlist above, so interpolating it as
+    // a column name cannot inject.
+    let sql = format!(
+        r#"
+        INSERT INTO user_email_preferences (user_id, {kind})
+        VALUES ($1, FALSE)
+        ON CONFLICT (user_id) DO UPDATE SET {kind} = FALSE, updated_at = NOW()
+        "#
+    );
+    sqlx::query(sqlx::AssertSqlSafe(sql))
+        .bind(user_id)
+        .execute(&state.db)
+        .await?;
+
+    Ok(Html(unsubscribe_confirmation_html(kind)))
+}
+
+/// Confirmation page shown in the browser after a one-click unsubscribe.
+/// Self-contained (inline styles, no assets): it is opened by mail clients
+/// and proxies with unpredictable capabilities.
+fn unsubscribe_confirmation_html(kind: &str) -> String {
+    let label = match kind {
+        "digest_weekly" => "résumé hebdomadaire",
+        "streak_reminder" => "rappel de série",
+        "marketing" => "annonces produit",
+        other => other,
+    };
+    format!(
+        r#"<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><title>Désinscrit·e — Skilluv</title>
+<style>body{{font-family:system-ui;max-width:540px;margin:80px auto;padding:0 24px;color:#1a1a2e}}h1{{color:#6c5ce7}}</style>
+</head><body>
+<h1>C'est fait</h1>
+<p>Tu ne recevras plus d'emails de type <strong>{label}</strong> de Skilluv.</p>
+<p>Les emails liés à ton compte (vérification, sécurité, reçus) continuent d'arriver.</p>
+<p>Si tu changes d'avis, tu peux réactiver depuis <a href="https://skilluv.com/settings/notifications">tes paramètres</a>.</p>
+</body></html>"#
+    )
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -160,47 +406,17 @@ pub async fn unsubscribe(
     let secret = unsub_secret(&state.config.jwt_secret);
     let (user_id, token_kind) =
         digest::verify_unsubscribe_token(&query.token, &secret).ok_or(AppError::Unauthorized)?;
+    // This form carries the category twice: once signed inside the token,
+    // once as a query parameter. They must agree, or the link has been
+    // tampered with. The path form added by SKI-287 avoids the question
+    // entirely by trusting only the token.
     if token_kind != query.kind {
         return Err(AppError::Validation("Token kind mismatch".into()));
     }
 
-    let column = match query.kind.as_str() {
-        "digest_weekly" => "digest_weekly",
-        "streak_reminder" => "streak_reminder",
-        "marketing" => "marketing",
-        _ => {
-            return Err(AppError::Validation(format!(
-                "Unsupported unsubscribe kind: {}",
-                query.kind
-            )));
-        }
-    };
-    let sql = format!(
-        r#"
-        INSERT INTO user_email_preferences (user_id, {col})
-        VALUES ($1, FALSE)
-        ON CONFLICT (user_id) DO UPDATE SET {col} = FALSE, updated_at = NOW()
-        "#,
-        col = column
-    );
-    sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
-        .bind(user_id)
-        .execute(&state.db)
-        .await?;
-
+    let page = apply_unsubscribe(&state, user_id, &query.kind).await?;
     tracing::info!(user_id = %user_id, kind = %query.kind, "user unsubscribed");
-
-    Ok(Html(format!(
-        r#"<!doctype html>
-<html lang="fr"><head><meta charset="utf-8"><title>Désinscrit·e — Skilluv</title>
-<style>body{{font-family:system-ui;max-width:540px;margin:80px auto;padding:0 24px;color:#1a1a2e}}h1{{color:#6c5ce7}}</style>
-</head><body>
-<h1>C'est fait OK</h1>
-<p>Tu ne recevras plus d'emails de type <strong>{kind}</strong> de Skilluv.</p>
-<p>Si tu changes d'avis, tu peux réactiver depuis <a href="https://skilluv.com/settings/notifications">tes paramètres</a>.</p>
-</body></html>"#,
-        kind = query.kind
-    )))
+    Ok(page)
 }
 
 #[derive(Debug, Deserialize, IntoParams)]
@@ -357,7 +573,10 @@ pub async fn admin_run_weekly_digest(
 }
 
 /// Derive the unsubscribe-token HMAC key from JWT_SECRET. Avoids a separate secret in env.
-fn unsub_secret(jwt_secret: &str) -> Vec<u8> {
+///
+/// Public so integration tests can mint the same token an email footer
+/// carries, rather than reimplementing the derivation and drifting from it.
+pub fn unsub_secret(jwt_secret: &str) -> Vec<u8> {
     use hmac::{Hmac, KeyInit, Mac};
     type HmacSha256 = Hmac<sha2::Sha256>;
     let mut mac =

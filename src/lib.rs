@@ -158,6 +158,12 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::talent_offer_routes())
         .nest("/api", routes::vouching_routes())
         .nest("/api", routes::ai_companion_routes())
+        // SKI-288 — attestation verification under /api as well. The front
+        // end owns /verify/{hash} on its own origin, so the root-level
+        // route below is unreachable from the browser app.
+        .nest("/api", routes::attestations_public_api_routes())
+        // SKI-286 — mention inbox.
+        .nest("/api", routes::mention_routes())
         .nest("/api", admin_gate(routes::admin_timeline_routes()))
         .nest("/api", routes::oauth_routes())
         .nest("/api", routes::report_routes())

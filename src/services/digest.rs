@@ -96,7 +96,10 @@ impl<'a> DigestService<'a> {
         let unsub_token =
             build_unsubscribe_token(target.id, "digest_weekly", self.unsubscribe_secret);
         let unsub_url = format!(
-            "{}/api/email/unsubscribe?token={}&kind=digest_weekly",
+            // SKI-287 — token in the path. The category travels signed
+            // inside the token, so a prefetching mail client cannot
+            // unsubscribe a different one by editing the URL.
+            "{}/api/email/unsubscribe/{}",
             self.base_url, unsub_token
         );
         let html = render_digest_html(target, &stats, &unsub_url);

@@ -63,8 +63,8 @@ async fn write_audit_log(
 
 // ─── Request types ──────────────────────────────────────────────
 
-#[derive(Debug, Deserialize)]
-struct ListUsersQuery {
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+pub struct ListUsersQuery {
     role: Option<String>,
     banned: Option<bool>,
     q: Option<String>,
@@ -129,10 +129,159 @@ struct AuditEntry {
 
 // ─── Routes ─────────────────────────────────────────────────────
 
+/// One row of `GET /admin/users`.
+///
+/// SKI-111 — lifted out of the handler body and given `ToSchema` so the
+/// spec describes the row instead of an empty object. The field the ticket
+/// calls out is `is_banned`: the admin table read `banned` at one point,
+/// and nothing in an untyped schema could catch the mismatch.
+#[derive(Debug, serde::Serialize, sqlx::FromRow, utoipa::ToSchema)]
+pub struct UserSummary {
+    pub id: Uuid,
+    pub username: String,
+    pub display_name: String,
+    pub email: String,
+    pub role: String,
+    pub title: String,
+    pub total_fragments: i32,
+    pub is_banned: bool,
+    pub profile_active: bool,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Pagination block for `GET /admin/users`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct UsersPagination {
+    pub page: i64,
+    pub per_page: i64,
+    pub total: i64,
+    pub total_pages: i64,
+}
+
+/// Response envelope for `GET /admin/users`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct AdminUserListResponse {
+    pub data: Vec<UserSummary>,
+    pub pagination: UsersPagination,
+    pub meta: crate::api_response::MetaInfo,
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SKI-111 — response schemas
+// ═══════════════════════════════════════════════════════════════════
+
+/// Who filed a report.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct ReporterRef {
+    pub id: Uuid,
+    pub username: Option<String>,
+    pub display_name: Option<String>,
+}
+
+/// One report, with its reporter resolved.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct ReportView {
+    pub id: Uuid,
+    pub reporter: ReporterRef,
+    pub target_type: String,
+    pub target_id: Uuid,
+    pub reason: String,
+    pub details: Option<String>,
+    pub status: String,
+    pub admin_note: Option<String>,
+    /// RFC 3339.
+    pub handled_at: Option<String>,
+    pub created_at: String,
+}
+
+/// Response of `GET /admin/reports`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct ReportListResponse {
+    pub data: Vec<ReportView>,
+    pub pagination: UsersPagination,
+    pub meta: crate::api_response::MetaInfo,
+}
+
+/// The raw report row echoed after handling one.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct HandledReport {
+    pub id: Uuid,
+    pub reporter_id: Uuid,
+    pub target_type: String,
+    pub target_id: Uuid,
+    pub reason: String,
+    pub details: Option<String>,
+    pub status: String,
+    pub admin_note: Option<String>,
+    pub handled_by: Option<Uuid>,
+    pub handled_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Payload of `POST /admin/reports/{id}/handle`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct HandleReportData {
+    pub report: HandledReport,
+    pub message: String,
+}
+
+/// Payload of the ban / unban routes.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct ModerationActionData {
+    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+/// One admin audit-log entry.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct AuditEntryView {
+    pub id: Uuid,
+    pub admin_id: Uuid,
+    pub action: String,
+    pub target_type: Option<String>,
+    pub target_id: Option<Uuid>,
+    pub details: Option<serde_json::Value>,
+    pub ip_address: Option<String>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Response of `GET /admin/audit-log`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct AuditLogResponse {
+    pub data: Vec<AuditEntryView>,
+    pub pagination: UsersPagination,
+    pub meta: crate::api_response::MetaInfo,
+}
+
+/// Report counts by status.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct ReportCounts {
+    pub pending: i64,
+    pub resolved: i64,
+    pub dismissed: i64,
+    pub total: i64,
+}
+
+/// Payload of `GET /admin/moderation/dashboard`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct ModerationDashboard {
+    pub banned_users: i64,
+    pub reports: ReportCounts,
+    pub recent_bans_30d: i64,
+    pub admin_actions_today: i64,
+}
+
+// ─── Routes ─────────────────────────────────────────────────────
+
 /// List users with moderation filters.
 #[utoipa::path(
     get, path = "/api/admin/users", tag = "admin",
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    params(ListUsersQuery),
+    responses(
+        (status = 200, description = "Paginated users", body = AdminUserListResponse),
+        (status = 403, body = crate::api_response::ErrorResponse),
+    ),
     security(("cookie_auth" = [])),
 )]
 pub async fn list_users(
@@ -176,20 +325,6 @@ pub async fn list_users(
     );
     let count_sql = format!("SELECT COUNT(*) FROM users {where_str}");
 
-    #[derive(Debug, serde::Serialize, sqlx::FromRow)]
-    struct UserSummary {
-        id: Uuid,
-        username: String,
-        display_name: String,
-        email: String,
-        role: String,
-        title: String,
-        total_fragments: i32,
-        is_banned: bool,
-        profile_active: bool,
-        created_at: chrono::DateTime<chrono::Utc>,
-    }
-
     let mut db_query = sqlx::query_as::<_, UserSummary>(sqlx::AssertSqlSafe(sql.as_str()));
     let mut cnt_query = sqlx::query_scalar::<_, i64>(sqlx::AssertSqlSafe(count_sql.as_str()));
 
@@ -225,11 +360,52 @@ pub async fn list_users(
     })))
 }
 
+/// Moderation view of one account.
+///
+/// SKI-111 — the security posture fields (`totp_enabled`,
+/// `email_2fa_enabled`, `webauthn_credentials_count`) were missing from
+/// the response at one point and nothing caught it, because the schema was
+/// an empty object. They are part of the type now.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct AdminUserDetail {
+    pub id: Uuid,
+    pub email: String,
+    pub username: String,
+    pub display_name: String,
+    pub skill_domain: Option<String>,
+    pub role: String,
+    pub title: String,
+    pub total_fragments: i32,
+    pub streak_current: i32,
+    pub trust_score: i32,
+    pub country: Option<String>,
+    pub email_verified: bool,
+    pub profile_active: bool,
+    pub is_banned: bool,
+    /// RFC 3339.
+    pub created_at: String,
+    pub totp_enabled: bool,
+    pub email_2fa_enabled: bool,
+    pub webauthn_credentials_count: i64,
+}
+
+/// Payload of `GET /admin/users/{id}`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct AdminUserDetailData {
+    pub user: AdminUserDetail,
+    pub reports_against: i64,
+    pub total_submissions: i64,
+}
+
 /// Get user detail for moderation.
 #[utoipa::path(
     get, path = "/api/admin/users/{id}", tag = "admin",
     params(("id" = Uuid, Path)),
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse), (status = 404, body = crate::api_response::ErrorResponse)),
+    responses(
+        (status = 200, description = "User detail", body = crate::api_response::ApiResponse<AdminUserDetailData>),
+        (status = 403, body = crate::api_response::ErrorResponse),
+        (status = 404, body = crate::api_response::ErrorResponse),
+    ),
     security(("cookie_auth" = [])),
 )]
 pub async fn get_user(
@@ -298,7 +474,7 @@ pub async fn get_user(
     post, path = "/api/admin/users/{id}/ban", tag = "admin",
     params(("id" = Uuid, Path)),
     request_body(content = serde_json::Value),
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses((status = 200, body = crate::api_response::ApiResponse<ModerationActionData>), (status = 403, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
 pub async fn ban_user(
@@ -407,7 +583,7 @@ pub async fn ban_user(
 #[utoipa::path(
     post, path = "/api/admin/users/{id}/unban", tag = "admin",
     params(("id" = Uuid, Path)),
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses((status = 200, body = crate::api_response::ApiResponse<ModerationActionData>), (status = 403, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
 pub async fn unban_user(
@@ -476,7 +652,7 @@ pub async fn unban_user(
 /// List moderation reports.
 #[utoipa::path(
     get, path = "/api/admin/reports", tag = "admin",
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses((status = 200, body = ReportListResponse), (status = 403, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
 pub async fn list_reports(
@@ -583,7 +759,7 @@ pub async fn list_reports(
     put, path = "/api/admin/reports/{id}", tag = "admin",
     params(("id" = Uuid, Path)),
     request_body(content = serde_json::Value),
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse), (status = 404, body = crate::api_response::ErrorResponse)),
+    responses((status = 200, body = crate::api_response::ApiResponse<HandleReportData>), (status = 403, body = crate::api_response::ErrorResponse), (status = 404, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
 pub async fn handle_report(
@@ -645,7 +821,7 @@ pub async fn handle_report(
 /// Legacy admin audit log listing.
 #[utoipa::path(
     get, path = "/api/admin/audit-log", tag = "admin",
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses((status = 200, body = AuditLogResponse), (status = 403, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
 pub async fn audit_log(
@@ -711,7 +887,7 @@ pub async fn audit_log(
 /// Moderation dashboard KPIs.
 #[utoipa::path(
     get, path = "/api/admin/dashboard/moderation", tag = "admin",
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses((status = 200, body = crate::api_response::ApiResponse<ModerationDashboard>), (status = 403, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
 pub async fn moderation_dashboard(

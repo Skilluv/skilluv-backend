@@ -51,6 +51,70 @@ struct WindowQuery {
     per_page: Option<i64>,
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// SKI-111 — response schemas
+// ═══════════════════════════════════════════════════════════════════
+
+/// Minimal user identity embedded in the analytics payloads.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct ValidatorUserRef {
+    pub id: Uuid,
+    pub username: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+}
+
+/// One validator's activity over the window.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct ValidatorStatsRow {
+    pub user: ValidatorUserRef,
+    pub validations_count: i64,
+    pub approve_count: i64,
+    pub reject_count: i64,
+    /// 0..=1. Zero when the validator made no decision.
+    pub approve_ratio: f64,
+    /// `None` when no decision has a measurable pickup delay.
+    pub avg_pickup_to_decision_hours: Option<f64>,
+    pub active_domains: Vec<String>,
+}
+
+/// Payload of `GET /admin/validators/stats`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct ValidatorStatsData {
+    pub window_days: i64,
+    pub validators: Vec<ValidatorStatsRow>,
+    pub pagination: crate::api_response::Pagination,
+}
+
+/// One claimant a validator decided on repeatedly.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct CollusionTarget {
+    pub claimant_id: Uuid,
+    pub claimant_username: String,
+    pub count: i64,
+    /// Share of this validator's decisions aimed at this claimant, 0..=1.
+    pub ratio: f64,
+    /// True past the flagging threshold — a signal to look, not a verdict.
+    pub flagged: bool,
+}
+
+/// One row of the collusion report.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct CollusionRow {
+    pub validator: ValidatorUserRef,
+    pub top_targets: Vec<CollusionTarget>,
+}
+
+/// Payload of the collusion endpoint.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct CollusionData {
+    pub window_days: i64,
+    pub min_count: i64,
+    pub flag_ratio_threshold: f64,
+    pub note: String,
+    pub matrix: Vec<CollusionRow>,
+}
+
 /// SKI-108 endpoint 1 — activity per validator.
 ///
 /// SKI-114: approve_count / reject_count now come from the exact
@@ -64,7 +128,7 @@ struct WindowQuery {
 #[utoipa::path(
     get, path = "/api/admin/validators/stats", tag = "admin",
     responses(
-        (status = 200, description = "per-validator activity stats", body = serde_json::Value),
+        (status = 200, description = "per-validator activity stats", body = crate::api_response::ApiResponse<ValidatorStatsData>),
         (status = 403, body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
@@ -217,7 +281,7 @@ struct CollusionQuery {
 #[utoipa::path(
     get, path = "/api/admin/validators/collusion-matrix", tag = "admin",
     responses(
-        (status = 200, description = "validator x claimant collusion matrix", body = serde_json::Value),
+        (status = 200, description = "validator x claimant collusion matrix", body = crate::api_response::ApiResponse<CollusionData>),
         (status = 403, body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),

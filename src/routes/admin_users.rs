@@ -61,6 +61,39 @@ pub struct RecomputeBody {
     pub reason: Option<String>,
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// SKI-111 — response schemas
+// ═══════════════════════════════════════════════════════════════════
+
+/// What a proof recompute changed for one user.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct RecomputedProofs {
+    pub capabilities_added: Vec<String>,
+    /// Always empty: the engines never revoke a capability automatically.
+    pub capabilities_removed: Vec<String>,
+    pub badges_added: Vec<String>,
+    pub badges_removed: Vec<String>,
+    pub rank_before: String,
+    pub rank_after: String,
+    /// Per-engine failures. Non-empty means the recompute was partial.
+    pub errors: Vec<String>,
+}
+
+/// Payload of `POST /admin/users/{id}/recompute-proofs`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct RecomputeProofsData {
+    pub recomputed: RecomputedProofs,
+}
+
+/// Payload of `POST /admin/users/{id}/rank-override`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct RankOverrideData {
+    pub user_id: Uuid,
+    pub old_rank: String,
+    pub new_rank: String,
+    pub override_id: Uuid,
+}
+
 /// Admin only: force a full proof-engine recompute for a user
 /// (capabilities + badges + rank). Supports dry-run mode returning the
 /// current state without side effects.
@@ -74,7 +107,7 @@ pub struct RecomputeBody {
     ),
     request_body = RecomputeBody,
     responses(
-        (status = 200, description = "Recompute report", body = serde_json::Value),
+        (status = 200, description = "Recompute report", body = crate::api_response::ApiResponse<RecomputeProofsData>),
         (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
         (status = 404, description = "User not found", body = crate::api_response::ErrorResponse),
     ),
@@ -210,7 +243,7 @@ pub struct RankOverrideBody {
     ),
     request_body = RankOverrideBody,
     responses(
-        (status = 200, description = "Rank overridden", body = serde_json::Value),
+        (status = 200, description = "Rank overridden", body = crate::api_response::ApiResponse<RankOverrideData>),
         (status = 400, description = "Invalid rank or reason too short", body = crate::api_response::ErrorResponse),
         (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
     ),

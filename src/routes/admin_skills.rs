@@ -71,8 +71,8 @@ fn validate_slug(s: &str) -> Result<(), AppError> {
 // GET /admin/skills?domain=code&parent_id=UUID&page=1&per_page=50
 // ═══════════════════════════════════════════════════════════════════
 
-#[derive(Debug, Deserialize)]
-struct ListQuery {
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+pub struct ListQuery {
     #[serde(default)]
     domain: Option<String>,
     #[serde(default)]
@@ -88,9 +88,52 @@ struct ListQuery {
 }
 
 /// Admin: paginated list of skill_nodes (filter by domain / parent_id).
+/// One row of `GET /admin/skills`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct AdminSkillRow {
+    pub id: Uuid,
+    pub slug: String,
+    pub display_name: String,
+    pub description: Option<String>,
+    pub domain: String,
+    pub parent_id: Option<Uuid>,
+    pub is_skilluv_specific: bool,
+}
+
+/// Response of `GET /admin/skills`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct AdminSkillListResponse {
+    pub data: Vec<AdminSkillRow>,
+    pub pagination: crate::api_response::Pagination,
+    pub meta: crate::api_response::MetaInfo,
+}
+
+/// The skill echoed back by `POST /admin/skills`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct CreatedSkill {
+    pub id: Uuid,
+    pub slug: String,
+    pub display_name: String,
+    pub domain: String,
+    pub parent_id: Option<Uuid>,
+    pub aliases: Vec<String>,
+    pub external_refs: Option<serde_json::Value>,
+    pub is_skilluv_specific: bool,
+}
+
+/// Payload of `POST /admin/skills`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct CreateSkillData {
+    pub skill: CreatedSkill,
+}
+
 #[utoipa::path(
     get, path = "/api/admin/skills", tag = "admin",
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    params(ListQuery),
+    responses(
+        (status = 200, description = "Paginated skill nodes", body = AdminSkillListResponse),
+        (status = 403, body = crate::api_response::ErrorResponse),
+    ),
     security(("cookie_auth" = [])),
 )]
 pub async fn list_skills(
@@ -200,7 +243,11 @@ struct CreateSkillBody {
 #[utoipa::path(
     post, path = "/api/admin/skills", tag = "admin",
     request_body(content = serde_json::Value, description = "SkillNode payload"),
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses(
+        (status = 200, description = "Created skill", body = crate::api_response::ApiResponse<CreateSkillData>),
+        (status = 400, body = crate::api_response::ErrorResponse),
+        (status = 403, body = crate::api_response::ErrorResponse),
+    ),
     security(("cookie_auth" = [])),
 )]
 pub async fn create_skill(
@@ -311,7 +358,12 @@ struct UpdateSkillBody {
     put, path = "/api/admin/skills/{id}", tag = "admin",
     params(("id" = Uuid, Path)),
     request_body(content = serde_json::Value, description = "SkillNode partial payload"),
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses(
+        (status = 200, description = "Skill updated", body = crate::api_response::ApiResponse<crate::api_response::AdminActionResult>),
+        (status = 400, body = crate::api_response::ErrorResponse),
+        (status = 403, body = crate::api_response::ErrorResponse),
+        (status = 404, body = crate::api_response::ErrorResponse),
+    ),
     security(("cookie_auth" = [])),
 )]
 pub async fn update_skill(

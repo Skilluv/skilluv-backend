@@ -89,10 +89,49 @@ struct CreateOrientationBody {
 }
 
 /// Admin: create an orientation entry.
+
+/// An orientation as echoed by create and patch.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct OrientationView {
+    pub id: Uuid,
+    pub slug: String,
+    pub name: String,
+    pub description: String,
+    pub primary_domain: String,
+    pub secondary_domains: Vec<String>,
+    pub tags: Vec<String>,
+    pub is_curated: bool,
+    pub is_archived: bool,
+}
+
+/// Payload of create / patch.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct OrientationData {
+    pub orientation: OrientationView,
+}
+
+/// Payload of `POST /admin/orientations/{slug}/skills`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct SkillAttached {
+    pub attached: bool,
+    pub orientation_slug: String,
+    pub skill_id: Uuid,
+}
+
+/// Payload of `DELETE /admin/orientations/{slug}/skills/{skill_id}`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct SkillDetached {
+    pub detached: bool,
+}
+
 #[utoipa::path(
     post, path = "/api/admin/orientations", tag = "admin",
     request_body(content = serde_json::Value, description = "Orientation payload"),
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses(
+        (status = 200, description = "Created orientation", body = crate::api_response::ApiResponse<OrientationData>),
+        (status = 400, body = crate::api_response::ErrorResponse),
+        (status = 403, body = crate::api_response::ErrorResponse),
+    ),
     security(("cookie_auth" = [])),
 )]
 pub async fn create_orientation(
@@ -200,7 +239,11 @@ struct PatchOrientationBody {
     patch, path = "/api/admin/orientations/{slug}", tag = "admin",
     params(("slug" = String, Path)),
     request_body(content = serde_json::Value, description = "Orientation partial payload"),
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses(
+        (status = 200, description = "Updated orientation", body = crate::api_response::ApiResponse<OrientationData>),
+        (status = 403, body = crate::api_response::ErrorResponse),
+        (status = 404, body = crate::api_response::ErrorResponse),
+    ),
     security(("cookie_auth" = [])),
 )]
 pub async fn patch_orientation(
@@ -327,7 +370,11 @@ struct AttachSkillBody {
     post, path = "/api/admin/orientations/{slug}/skills", tag = "admin",
     params(("slug" = String, Path)),
     request_body(content = serde_json::Value),
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses(
+        (status = 200, description = "Skill attached", body = crate::api_response::ApiResponse<SkillAttached>),
+        (status = 403, body = crate::api_response::ErrorResponse),
+        (status = 404, body = crate::api_response::ErrorResponse),
+    ),
     security(("cookie_auth" = [])),
 )]
 pub async fn attach_skill(
@@ -417,7 +464,11 @@ pub async fn attach_skill(
 #[utoipa::path(
     delete, path = "/api/admin/orientations/{slug}/skills/{skill_id}", tag = "admin",
     params(("slug" = String, Path), ("skill_id" = Uuid, Path)),
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
+    responses(
+        (status = 200, description = "Skill detached", body = crate::api_response::ApiResponse<SkillDetached>),
+        (status = 403, body = crate::api_response::ErrorResponse),
+        (status = 404, body = crate::api_response::ErrorResponse),
+    ),
     security(("cookie_auth" = [])),
 )]
 pub async fn detach_skill(

@@ -544,6 +544,8 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::admin_projects::get_project,
         crate::routes::admin_projects::patch_project,
         crate::routes::admin_projects::archive_project,
+        // SKI-111 — was absent from the spec entirely.
+        crate::routes::admin_projects::project_stats,
         // ─── contact (interest + conversations) ──────────────────
         crate::routes::contact::send_interest,
         crate::routes::contact::sent_requests,

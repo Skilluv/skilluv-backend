@@ -183,6 +183,16 @@ pub async fn create_post(
     .fetch_one(db)
     .await?;
 
+    // SKI-286 — @username mentions in the body.
+    crate::services::mentions::record_and_notify(
+        db,
+        input.author_id,
+        crate::services::mentions::SOURCE_FORUM_POST,
+        post.id,
+        &post.body,
+    )
+    .await;
+
     Ok(post)
 }
 
@@ -343,6 +353,21 @@ pub async fn edit_post(
     .bind(post_id)
     .fetch_one(db)
     .await?;
+
+    // SKI-286 — an edit that adds a new @username mentions only that
+    // person: `record_and_notify` is idempotent per (target, source,
+    // author), so the handles already recorded are skipped. Attributed to
+    // the post's author even when a moderator did the edit, so the
+    // notification names who wrote the text.
+    crate::services::mentions::record_and_notify(
+        db,
+        updated.author_id,
+        crate::services::mentions::SOURCE_FORUM_POST,
+        updated.id,
+        &updated.body,
+    )
+    .await;
+
     Ok(updated)
 }
 

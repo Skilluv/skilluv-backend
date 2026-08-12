@@ -32,7 +32,11 @@ use uuid::Uuid;
 /// required for the challenge to count as a success.
 ///
 /// Terminal statuses: `merged`, `closed`, `expired`.
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+// SKI-111 — `ToSchema` so the admin slice endpoints can describe what they
+// return instead of an empty object. `credits_reward` is a `BigDecimal`,
+// which utoipa has no built-in mapping for; it serialises as a JSON number,
+// so that is what the schema declares.
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow, utoipa::ToSchema)]
 pub struct ProjectSlice {
     pub id: Uuid,
     pub project_id: Uuid,
@@ -49,6 +53,7 @@ pub struct ProjectSlice {
     pub difficulty: i16,
     pub estimated_hours: Option<i32>,
     pub fragments_reward: i32,
+    #[schema(value_type = f64)]
     pub credits_reward: BigDecimal,
 
     pub status: String,

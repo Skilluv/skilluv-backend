@@ -88,8 +88,6 @@ struct CreateOrientationBody {
     is_curated: Option<bool>,
 }
 
-/// Admin: create an orientation entry.
-
 /// An orientation as echoed by create and patch.
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct OrientationView {
@@ -124,6 +122,7 @@ pub struct SkillDetached {
     pub detached: bool,
 }
 
+/// Admin: create an orientation entry.
 #[utoipa::path(
     post, path = "/api/admin/orientations", tag = "admin",
     request_body(content = serde_json::Value, description = "Orientation payload"),

@@ -61,12 +61,6 @@ pub struct PendingReviewQuery {
     pub per_page: Option<i64>,
 }
 
-/// Community challenges awaiting admin review. Creator info is joined
-/// so the admin panel doesn't need N+1 lookups.
-///
-/// **Payload shape**: standard admin listing convention
-/// `{data: [EnrichedChallenge], pagination: {...}, meta: {...}}`.
-
 /// Response of `GET /admin/community/review`.
 ///
 /// SKI-111 — `EnrichedChallenge` already existed and derives `ToSchema`;
@@ -78,6 +72,8 @@ pub struct PendingReviewResponse {
     pub meta: crate::api_response::MetaInfo,
 }
 
+/// Community challenges awaiting admin review. Creator info is joined
+/// so the admin panel doesn't need N+1 lookups.
 #[utoipa::path(
     get,
     path = "/api/admin/community/review",

@@ -637,6 +637,10 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::guild::kick_member,
         crate::routes::guild::leave_guild,
         crate::routes::guild::list_applications,
+        // SKI-289 — revocation was absent from the document entirely, which
+        // is why the front reported it as a missing endpoint.
+        crate::routes::guild::revoke_invitation,
+        crate::routes::guild::revoke_guild_invitation,
         crate::routes::guild::list_for_leaderboard,
         crate::routes::guild::list_invitations,
         crate::routes::guild::list_members,

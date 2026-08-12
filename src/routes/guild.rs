@@ -53,6 +53,11 @@ pub fn guild_routes() -> Router<AppState> {
         .route("/guild-invitations/{id}/accept", post(accept_invite))
         // Trello BE-P0-41 — owner/officer révoque une invitation avant expires_at.
         .route("/guild-invitations/{id}", delete(revoke_invitation))
+        // SKI-289 — guild-scoped spelling, which is what the front calls.
+        .route(
+            "/guilds/{id}/invitations/{invitation_id}",
+            delete(revoke_guild_invitation),
+        )
         .route("/guilds/join-by-token", post(join_by_token))
         // Applications
         .route(
@@ -413,14 +418,63 @@ pub async fn accept_invite(
     Ok(Json(build_response(json!({ "joined_guild_id": guild_id }))))
 }
 
+/// Payload of the invitation-revocation routes.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct RevokedInvitation {
+    /// Always true on success. Revoking an already-revoked invitation is a
+    /// success too — see `services::guild::revoke_invitation`.
+    pub revoked: bool,
+    pub invitation_id: Uuid,
+}
+
 /// DELETE /api/guild-invitations/{id} — owner/officer révoque une invitation
 /// direct ou un lien token avant `expires_at`. Trello BE-P0-41.
-async fn revoke_invitation(
+#[utoipa::path(
+    delete, path = "/api/guild-invitations/{id}", tag = "guilds",
+    params(("id" = uuid::Uuid, Path, description = "Invitation id")),
+    responses(
+        (status = 200, description = "Invitation revoked", body = crate::api_response::ApiResponse<RevokedInvitation>),
+        (status = 403, description = "Not an officer of the guild", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "Unknown invitation", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn revoke_invitation(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(invitation_id): Path<Uuid>,
 ) -> Result<Json<Value>, AppError> {
     guild::revoke_invitation(&state.db, invitation_id, auth.user_id).await?;
+    Ok(Json(build_response(json!({
+        "revoked": true,
+        "invitation_id": invitation_id,
+    }))))
+}
+
+/// SKI-289 — the guild-scoped spelling the front end calls.
+///
+/// Same behaviour as the flat route above, plus a check that the
+/// invitation belongs to the guild in the path. Both are kept: the flat
+/// one is already in use, and an id is enough to identify an invitation.
+#[utoipa::path(
+    delete, path = "/api/guilds/{id}/invitations/{invitation_id}", tag = "guilds",
+    params(
+        ("id" = uuid::Uuid, Path, description = "Guild id"),
+        ("invitation_id" = uuid::Uuid, Path, description = "Invitation id"),
+    ),
+    responses(
+        (status = 200, description = "Invitation revoked", body = crate::api_response::ApiResponse<RevokedInvitation>),
+        (status = 403, description = "Not an officer of the guild", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "Unknown invitation, or not in this guild", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn revoke_guild_invitation(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path((guild_id, invitation_id)): Path<(Uuid, Uuid)>,
+) -> Result<Json<Value>, AppError> {
+    guild::revoke_invitation_in_guild(&state.db, guild_id, invitation_id, auth.user_id).await?;
     Ok(Json(build_response(json!({
         "revoked": true,
         "invitation_id": invitation_id,
@@ -490,14 +544,72 @@ pub async fn apply(
     Ok(Json(build_response(json!({ "application": app }))))
 }
 
+/// A user named in an invitation or an application.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct GuildUserRef {
+    pub id: Uuid,
+    pub username: Option<String>,
+    pub display_name: Option<String>,
+}
+
+/// The shareable token of a link invitation.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct InvitationToken {
+    pub value: String,
+}
+
+/// One pending invitation.
+///
+/// SKI-289 — typed because the front could otherwise only guess this
+/// shape, and guessing a contract is what produced the empty-page bugs
+/// this ticket cites. Exactly one of `invitee` / `token` is set: a direct
+/// invitation names a user, a link invitation carries a token.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct GuildInvitationView {
+    pub id: Uuid,
+    /// Set for a direct invitation, `null` for a shareable link.
+    pub invitee: Option<GuildUserRef>,
+    /// Set for a shareable link, `null` for a direct invitation.
+    pub token: Option<InvitationToken>,
+    /// RFC 3339.
+    pub expires_at: String,
+    pub sent_at: String,
+}
+
+/// Payload of `GET /api/guilds/{id}/invitations`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct GuildInvitationsData {
+    pub invitations: Vec<GuildInvitationView>,
+}
+
+/// One pending application to join a guild.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct GuildApplicationView {
+    pub id: Uuid,
+    pub applicant: GuildUserRef,
+    pub message: Option<String>,
+    /// Always `pending` on this endpoint — decided applications drop out.
+    pub status: String,
+    /// RFC 3339.
+    pub applied_at: String,
+}
+
+/// Payload of `GET /api/guilds/{id}/applications`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct GuildApplicationsData {
+    pub applications: Vec<GuildApplicationView>,
+}
+
 /// BE-P0-40 : list pending invitations for a guild (owner/officer only).
 /// Missing endpoint made the front's "Invitations" tab a black hole for
 /// duplicate detection / revocation.
-/// List pending guild invitations (officer/owner only).
 #[utoipa::path(
     get, path = "/api/guilds/{id}/invitations", tag = "guilds",
     params(("id" = uuid::Uuid, Path)),
-    responses((status = 200, body = serde_json::Value)),
+    responses(
+        (status = 200, description = "Pending invitations", body = crate::api_response::ApiResponse<GuildInvitationsData>),
+        (status = 403, description = "Not an officer of the guild", body = crate::api_response::ErrorResponse),
+    ),
     security(("cookie_auth" = [])),
 )]
 pub async fn list_invitations(
@@ -557,11 +669,13 @@ pub async fn list_invitations(
 /// Missing endpoint was making the "Applications" tab in the guild page
 /// forever empty on the front (the ID needed by `/decide` was never
 /// discoverable).
-/// List pending guild applications (officer/owner only).
 #[utoipa::path(
     get, path = "/api/guilds/{id}/applications", tag = "guilds",
     params(("id" = uuid::Uuid, Path)),
-    responses((status = 200, body = serde_json::Value)),
+    responses(
+        (status = 200, description = "Pending applications", body = crate::api_response::ApiResponse<GuildApplicationsData>),
+        (status = 403, description = "Not an officer of the guild", body = crate::api_response::ErrorResponse),
+    ),
     security(("cookie_auth" = [])),
 )]
 pub async fn list_applications(

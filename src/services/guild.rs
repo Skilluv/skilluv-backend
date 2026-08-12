@@ -770,15 +770,8 @@ pub async fn revoke_invitation(
             .await?;
     let invite = invite.ok_or(AppError::NotFound("Invitation not found".into()))?;
 
-    if invite.accepted_at.is_some() {
-        return Err(AppError::Validation(
-            "Invitation already accepted, cannot revoke".into(),
-        ));
-    }
-    if invite.revoked_at.is_some() {
-        return Err(AppError::Validation("Invitation already revoked".into()));
-    }
-
+    // Authorization before any state check: whether the invitation is
+    // already gone is not something a non-officer should be able to probe.
     let role = role_of(db, invite.guild_id, caller_id)
         .await?
         .ok_or(AppError::Forbidden)?;
@@ -786,11 +779,54 @@ pub async fn revoke_invitation(
         return Err(AppError::Forbidden);
     }
 
+    // An accepted invitation is a member, not a pending offer — revoking it
+    // would silently do nothing while reading as success.
+    if invite.accepted_at.is_some() {
+        return Err(AppError::Validation(
+            "Invitation already accepted, cannot revoke".into(),
+        ));
+    }
+
+    // SKI-289 — idempotent: revoking twice is the normal outcome of a
+    // double-click or a retried request, and the caller's intent ("this
+    // invitation must not be usable") is already satisfied. Only the first
+    // call writes, so `revoked_at` keeps recording when it actually
+    // happened.
+    if invite.revoked_at.is_some() {
+        return Ok(());
+    }
+
     sqlx::query("UPDATE guild_invitations SET revoked_at = NOW() WHERE id = $1")
         .bind(invitation_id)
         .execute(db)
         .await?;
     Ok(())
+}
+
+/// Same as [`revoke_invitation`], scoped to a guild.
+///
+/// SKI-289 — the front end addresses invitations under their guild
+/// (`/guilds/{id}/invitations/{invitation_id}`). Checking that the
+/// invitation really belongs to `guild_id` means a mistyped guild cannot
+/// silently revoke someone else's invitation on the strength of the id
+/// alone.
+pub async fn revoke_invitation_in_guild(
+    db: &PgPool,
+    guild_id: Uuid,
+    invitation_id: Uuid,
+    caller_id: Uuid,
+) -> Result<(), AppError> {
+    let belongs: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM guild_invitations WHERE id = $1 AND guild_id = $2)",
+    )
+    .bind(invitation_id)
+    .bind(guild_id)
+    .fetch_one(db)
+    .await?;
+    if !belongs {
+        return Err(AppError::NotFound("Invitation not found".into()));
+    }
+    revoke_invitation(db, invitation_id, caller_id).await
 }
 
 pub async fn accept_direct_invitation(

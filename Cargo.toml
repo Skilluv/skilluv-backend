@@ -187,6 +187,10 @@ name = "skilluv-timeline-backfill"
 path = "src/bin/timeline_backfill.rs"
 
 [[bin]]
+name = "skilluv-seed-guild"
+path = "src/bin/seed_guild.rs"
+
+[[bin]]
 name = "skilluv-discord-notifier"
 path = "src/bin/discord_notifier.rs"
 

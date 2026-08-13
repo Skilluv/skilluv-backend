@@ -96,6 +96,7 @@ INSERT INTO notification_kinds
     ('capability.granted',     'learning', TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, FALSE),
     ('badge.awarded',          'learning', TRUE, TRUE, FALSE, TRUE, FALSE, FALSE, FALSE),
     ('deliverable.first_verified', 'learning', TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, FALSE),
+    ('goal.reached',           'learning', TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, FALSE),
     ('tournament.podium',      'learning', TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, FALSE),
 
     -- ── Operators ──────────────────────────────────────────────────
@@ -129,6 +130,7 @@ UPDATE notifications SET kind = 'rank.promoted'           WHERE notification_typ
 UPDATE notifications SET kind = 'capability.granted'      WHERE notification_type = 'capability_granted';
 UPDATE notifications SET kind = 'badge.awarded'           WHERE notification_type = 'badge_awarded';
 UPDATE notifications SET kind = 'deliverable.first_verified' WHERE notification_type = 'first_verified_deliverable';
+UPDATE notifications SET kind = 'goal.reached'            WHERE notification_type = 'milestone_reached';
 UPDATE notifications SET kind = notification_type
  WHERE kind IS NULL
    AND notification_type IN (SELECT kind FROM notification_kinds);

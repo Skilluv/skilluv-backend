@@ -13,7 +13,7 @@ use crate::errors::AppError;
 use crate::middleware::AuthUser;
 use crate::routes::analytics_consent;
 use crate::services::analytics::{events, props};
-use crate::services::{NotificationService, guild};
+use crate::services::guild;
 
 // Type aliases pour clippy::type_complexity (rows sqlx::query_as des handlers
 // BE-P0-39/40 qui joignent applications/invitations avec users).
@@ -128,20 +128,15 @@ pub async fn create_guild(
 
     // Notify co-founders
     for uid in &created.cofounders_added {
-        let _ = NotificationService::send(
-            &state.db,
-            &mut state.redis.clone(),
-            &state.ws,
-            crate::services::notification::NotificationPayload {
-                user_id: *uid,
-                notification_type: "guild.cofounder_added",
-                title: "Tu as co-fondé une guilde",
-                body: Some(&format!("[{}] {}", created.guild.tag, created.guild.name)),
-                data: Some(
-                    json!({ "guild_id": created.guild.id, "guild_slug": created.guild.slug }),
-                ),
-            },
+        let _ = crate::services::notify::send(
+            &state,
+            crate::services::notify::Recipient::User(*uid),
+            "guild.cofounder_added",
         )
+        .arg("tag", created.guild.tag.clone())
+        .arg("guild", created.guild.name.clone())
+        .payload(json!({ "guild_id": created.guild.id, "guild_slug": created.guild.slug }))
+        .execute()
         .await;
     }
 
@@ -239,18 +234,24 @@ pub async fn promote_member(
     Json(body): Json<PromoteBody>,
 ) -> Result<Json<Value>, AppError> {
     guild::promote(&state.db, guild_id, auth.user_id, target_id, &body.role).await?;
-    let _ = NotificationService::send(
-        &state.db,
-        &mut state.redis.clone(),
-        &state.ws,
-        crate::services::notification::NotificationPayload {
-            user_id: target_id,
-            notification_type: "guild.role_changed",
-            title: "Ton rôle dans la guilde a changé",
-            body: Some(&format!("nouveau rôle : {}", body.role)),
-            data: Some(json!({ "guild_id": guild_id, "new_role": body.role })),
-        },
+    let guild_slug: Option<String> = sqlx::query_scalar("SELECT slug FROM guilds WHERE id = $1")
+        .bind(guild_id)
+        .fetch_optional(&state.db)
+        .await
+        .ok()
+        .flatten();
+    let _ = crate::services::notify::send(
+        &state,
+        crate::services::notify::Recipient::User(target_id),
+        "guild.role_changed",
     )
+    .arg("role", body.role.clone())
+    .payload(json!({
+        "guild_id": guild_id,
+        "new_role": body.role,
+        "guild_slug": guild_slug,
+    }))
+    .execute()
     .await;
     if analytics_consent(&headers) {
         state.analytics.track(
@@ -279,18 +280,23 @@ pub async fn kick_member(
     Path((guild_id, target_id)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<Value>, AppError> {
     guild::kick_member(&state.db, guild_id, auth.user_id, target_id).await?;
-    let _ = NotificationService::send(
-        &state.db,
-        &mut state.redis.clone(),
-        &state.ws,
-        crate::services::notification::NotificationPayload {
-            user_id: target_id,
-            notification_type: "guild.kicked",
-            title: "Tu as été retiré·e de la guilde",
-            body: None,
-            data: Some(json!({ "guild_id": guild_id })),
-        },
+    let guild_name: String = sqlx::query_scalar("SELECT name FROM guilds WHERE id = $1")
+        .bind(guild_id)
+        .fetch_optional(&state.db)
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+    // No button on this one: there is nothing to click, and one would be a
+    // taunt. See migration 0161.
+    let _ = crate::services::notify::send(
+        &state,
+        crate::services::notify::Recipient::User(target_id),
+        "guild.kicked",
     )
+    .arg("guild", guild_name)
+    .payload(json!({ "guild_id": guild_id }))
+    .execute()
     .await;
     Ok(Json(build_response(json!({ "kicked": true }))))
 }
@@ -343,18 +349,26 @@ pub async fn invite_direct(
     let invite =
         guild::invite_direct(&state.db, auth.user_id, guild_id, body.invited_user_id).await?;
     let g = guild::by_id(&state.db, guild_id).await?;
-    let _ = NotificationService::send(
-        &state.db,
-        &mut state.redis.clone(),
-        &state.ws,
-        crate::services::notification::NotificationPayload {
-            user_id: body.invited_user_id,
-            notification_type: "guild.invitation",
-            title: "Tu as reçu une invitation de guilde",
-            body: Some(&format!("[{}] {}", g.tag, g.name)),
-            data: Some(json!({ "guild_id": guild_id, "invitation_id": invite.id })),
-        },
+    let inviter_name: String = sqlx::query_scalar("SELECT display_name FROM users WHERE id = $1")
+        .bind(auth.user_id)
+        .fetch_optional(&state.db)
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+    let _ = crate::services::notify::send(
+        &state,
+        crate::services::notify::Recipient::User(body.invited_user_id),
+        "guild.invitation",
     )
+    .arg("guild", g.name.clone())
+    .arg("inviter", inviter_name)
+    .payload(json!({
+        "guild_id": guild_id,
+        "guild_slug": g.slug,
+        "invitation_id": invite.id,
+    }))
+    .execute()
     .await;
     if analytics_consent(&headers) {
         state.analytics.track(
@@ -780,22 +794,39 @@ pub async fn decide_application(
 ) -> Result<Json<Value>, AppError> {
     let app =
         guild::decide_application(&state.db, application_id, auth.user_id, body.accept).await?;
-    let _ = NotificationService::send(
-        &state.db,
-        &mut state.redis.clone(),
-        &state.ws,
-        crate::services::notification::NotificationPayload {
-            user_id: app.applicant_id,
-            notification_type: "guild.application_decision",
-            title: if body.accept {
-                "Ta candidature a été acceptée"
-            } else {
-                "Ta candidature a été refusée"
-            },
-            body: None,
-            data: Some(json!({ "guild_id": app.guild_id, "accepted": body.accept })),
+    let (decided_guild_name, decided_guild_slug): (String, String) =
+        sqlx::query_as("SELECT name, slug FROM guilds WHERE id = $1")
+            .bind(app.guild_id)
+            .fetch_optional(&state.db)
+            .await
+            .ok()
+            .flatten()
+            .unwrap_or_default();
+
+    // The outcome is a translated word rather than two titles: a
+    // translator reading `notification.guild.application_decided.body` sees
+    // one sentence with a placeholder, not a branch to keep in sync.
+    let decision_word = crate::services::i18n::t(
+        "fr",
+        if body.accept {
+            "guild.decision.accepted"
+        } else {
+            "guild.decision.rejected"
         },
+    );
+    let _ = crate::services::notify::send(
+        &state,
+        crate::services::notify::Recipient::User(app.applicant_id),
+        "guild.application_decided",
     )
+    .arg("guild", decided_guild_name.clone())
+    .arg("decision", decision_word)
+    .payload(json!({
+        "guild_id": app.guild_id,
+        "guild_slug": decided_guild_slug,
+        "accepted": body.accept,
+    }))
+    .execute()
     .await;
     if analytics_consent(&headers) {
         state.analytics.track(
@@ -847,23 +878,41 @@ pub async fn propose_war(
     .bind(body.defender_guild_id)
     .fetch_all(&state.db)
     .await?;
+    let (challenger_name, defender_name, defender_slug) = {
+        let names: Vec<(Uuid, String, String)> =
+            sqlx::query_as("SELECT id, name, slug FROM guilds WHERE id = ANY($1)")
+                .bind(vec![body.challenger_guild_id, body.defender_guild_id])
+                .fetch_all(&state.db)
+                .await
+                .unwrap_or_default();
+        let pick = |id: Uuid| {
+            names
+                .iter()
+                .find(|(gid, _, _)| *gid == id)
+                .map(|(_, n, s)| (n.clone(), s.clone()))
+                .unwrap_or_default()
+        };
+        let (cname, _) = pick(body.challenger_guild_id);
+        let (dname, dslug) = pick(body.defender_guild_id);
+        (cname, dname, dslug)
+    };
+
     for (uid,) in &officers {
-        let _ = NotificationService::send(
-            &state.db,
-            &mut state.redis.clone(),
-            &state.ws,
-            crate::services::notification::NotificationPayload {
-                user_id: *uid,
-                notification_type: "guild_war.proposed",
-                title: "Une guilde te défie",
-                body: None,
-                data: Some(json!({
-                    "war_id": war.id,
-                    "challenger_guild_id": body.challenger_guild_id,
-                    "stake_gp": body.stake_gp,
-                })),
-            },
+        let _ = crate::services::notify::send(
+            &state,
+            crate::services::notify::Recipient::User(*uid),
+            "guild.war_proposed",
         )
+        .arg("challenger", challenger_name.clone())
+        .arg("defender", defender_name.clone())
+        .arg("stake", body.stake_gp.to_string())
+        .payload(json!({
+            "war_id": war.id,
+            "challenger_guild_id": body.challenger_guild_id,
+            "stake_gp": body.stake_gp,
+            "guild_slug": defender_slug,
+        }))
+        .execute()
         .await;
     }
     if analytics_consent(&headers) {

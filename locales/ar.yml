@@ -209,8 +209,29 @@ notification:
       title: "حصلت على شارة: {badge}"
       body: "أصبحت ظاهرة في ملفك العام."
       cta: "عرض ملفي"
+  goal:
+    reached:
+      title: "تم بلوغ الهدف"
+      body: "كان هدفك أن {goal}. لقد تحقق."
+      cta: "حدد هدفاً جديداً"
   deliverable:
     first_verified:
       title: "تم التحقق من أول مساهمة لك"
-      body: "تم اعتماد {title}. أصبحت ظاهرة في ملفك."
+      body: "أصبحت دليلاً معتمداً وتظهر في ملفك العام."
       cta: "عرض مساهمتي"
+
+# Vocabulary reused inside notification bodies, so a translator writes
+# one sentence with a placeholder rather than two parallel titles.
+guild:
+  decision:
+    accepted: "مقبولاً"
+    rejected: "مرفوضاً"
+
+# Fragments of the "goal reached" sentence. Half a sentence, so it lives
+# next to the sentence it lands in rather than in a Rust match.
+goal:
+  target:
+    rank: "تبلغ رتبة {rank}"
+    skill_level: "تبلغ المستوى {level} في مهارة"
+    capability: "تفتح دور {capability}"
+    artifact_count: "تنشر {count} مساهمة موثقة"

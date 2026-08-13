@@ -68,6 +68,8 @@ UPDATE notification_kinds SET cta_path = CASE kind
     WHEN 'capability.granted'     THEN '/profile'
     WHEN 'badge.awarded'          THEN '/profile'
     WHEN 'deliverable.first_verified' THEN '/profile'
+    -- The point of reaching a goal is to set the next one.
+    WHEN 'goal.reached'           THEN '/profile/goals'
     WHEN 'tournament.podium'      THEN '/tournaments'
 
     -- Operator queues. The point of these is to open the queue.

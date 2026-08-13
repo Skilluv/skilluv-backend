@@ -44,7 +44,6 @@ pub mod maintainer_digest;
 pub mod mentions;
 pub mod mobile_money;
 pub mod mobile_push;
-pub mod notification;
 pub mod notify;
 pub mod oauth;
 pub mod og_card;
@@ -104,7 +103,6 @@ pub use dm::DmConversation;
 pub use email::EmailService;
 pub use geo::GeoService;
 pub use leaderboard::LeaderboardService;
-pub use notification::NotificationService;
 pub use portfolio::{PortfolioService, PublicUserSnapshot};
 pub use queue::QueueService;
 pub use review_queue::{

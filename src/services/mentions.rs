@@ -241,9 +241,9 @@ pub async fn record(
 ///
 /// The writing surfaces (`forum`, `social`, `dm`, slice diary) are
 /// service-layer functions holding only a `PgPool`, so this writes the
-/// notification row directly rather than going through
-/// `NotificationService::send`, which additionally needs Redis and the
-/// WebSocket manager. The durable row is what
+/// notification row directly rather than going through a full
+/// [`crate::services::notify`] context, which additionally carries Redis and
+/// the WebSocket manager. The durable row is what
 /// `GET /api/notifications` reads, so nothing is lost — only the real-time
 /// push, which a mention does not need to be useful.
 ///

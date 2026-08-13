@@ -13,7 +13,7 @@ use crate::errors::AppError;
 use crate::middleware::AuthUser;
 use crate::routes::analytics_consent;
 use crate::services::analytics::props;
-use crate::services::{NotificationService, tournament};
+use crate::services::tournament;
 
 pub fn tournament_routes() -> Router<AppState> {
     Router::new()
@@ -344,23 +344,20 @@ pub async fn admin_conclude(
     let tname = tname_row.map(|(n,)| n).unwrap_or_else(|| "Tournoi".into());
     for (ptype, pid, rank, frags, gp) in &top {
         if ptype == "user" {
-            let _ = NotificationService::send(
-                &state.db,
-                &mut state.redis.clone(),
-                &state.ws,
-                crate::services::notification::NotificationPayload {
-                    user_id: *pid,
-                    notification_type: "tournament.podium",
-                    title: "Podium d'un tournoi !",
-                    body: Some(&format!("{tname} — rang #{rank} (+{frags} fragments)")),
-                    data: Some(json!({
-                        "tournament_id": id,
-                        "rank": rank,
-                        "fragments": frags,
-                        "gp": gp,
-                    })),
-                },
+            let _ = crate::services::notify::send(
+                &state,
+                crate::services::notify::Recipient::User(*pid),
+                "tournament.podium",
             )
+            .arg("place", rank.to_string())
+            .arg("tournament", tname.clone())
+            .payload(json!({
+                "tournament_id": id,
+                "rank": rank,
+                "fragments": frags,
+                "gp": gp,
+            }))
+            .execute()
             .await;
         }
     }

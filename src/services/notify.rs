@@ -1,7 +1,7 @@
 //! One way to notify someone, across every channel.
 //!
-//! Before this, a caller wrote a French title by hand, called
-//! `NotificationService::send`, and got in-app plus WebSocket plus a mobile
+//! Before this, a caller wrote a French title by hand, called a service that
+//! only knew how to insert a row, and got in-app plus WebSocket plus a mobile
 //! push whether or not the recipient wanted them. Email lived somewhere else
 //! entirely, with its own three-category preference table that answers "may
 //! we send the digest" and never "does this person want to know, and how".
@@ -559,7 +559,7 @@ async fn wants(db: &PgPool, user_id: Uuid, kind: &str, channel: Channel, row: &K
 }
 
 /// The language this person reads, falling back to the default.
-async fn user_locale(db: &PgPool, user_id: Uuid) -> String {
+pub(crate) async fn user_locale(db: &PgPool, user_id: Uuid) -> String {
     let stored: Option<String> =
         sqlx::query_scalar("SELECT preferred_language FROM users WHERE id = $1")
             .bind(user_id)
@@ -571,4 +571,61 @@ async fn user_locale(db: &PgPool, user_id: Uuid) -> String {
     // No request to read: a notification often originates from a background
     // job, which is exactly why the preference lives on the account.
     i18n::resolve(stored.as_deref(), None)
+}
+
+/// The Redis key holding someone's unread count.
+///
+/// The writer in [`Builder::execute`] and the readers below go through the
+/// same helper, so the two can no longer drift apart.
+fn unread_key(user_id: Uuid) -> String {
+    format!("notifications:unread:{user_id}")
+}
+
+/// Unread count, from Redis when warm and from the table otherwise.
+///
+/// A miss reseeds the key rather than leaving it cold: without that, the
+/// counter never recovers from a Redis restart.
+pub async fn unread_count(
+    db: &PgPool,
+    redis: &mut redis::aio::ConnectionManager,
+    user_id: Uuid,
+) -> Result<i64, AppError> {
+    let key = unread_key(user_id);
+    if let Some(count) = redis::AsyncCommands::get::<_, Option<i64>>(redis, &key).await? {
+        return Ok(count);
+    }
+
+    let count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM notifications WHERE user_id = $1 AND read = FALSE",
+    )
+    .bind(user_id)
+    .fetch_one(db)
+    .await?;
+    let () = redis::AsyncCommands::set(redis, &key, count).await?;
+    Ok(count)
+}
+
+/// Zero the counter, after everything has been marked read.
+pub async fn reset_counter(
+    redis: &mut redis::aio::ConnectionManager,
+    user_id: Uuid,
+) -> Result<(), AppError> {
+    let () = redis::AsyncCommands::set(redis, unread_key(user_id), 0i64).await?;
+    Ok(())
+}
+
+/// Take one off the counter, after a single notification was marked read.
+///
+/// Floors at zero: a cold key reads as 0, and decrementing it would leave a
+/// negative badge that never heals.
+pub async fn decrement_counter(
+    redis: &mut redis::aio::ConnectionManager,
+    user_id: Uuid,
+) -> Result<(), AppError> {
+    let key = unread_key(user_id);
+    let current: i64 = redis::AsyncCommands::get(redis, &key).await.unwrap_or(0);
+    if current > 0 {
+        let _: i64 = redis::AsyncCommands::decr(redis, &key, 1).await?;
+    }
+    Ok(())
 }

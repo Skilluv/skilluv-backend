@@ -4,17 +4,17 @@
 //! turns each proof-engine outcome into a notification carrying a concrete
 //! next step: what the promotion unlocked, and where to go next.
 //!
-//! ## Why this is not a plain `NotificationService::send` call
+//! ## Why the delivery context is optional here
 //!
-//! `NotificationService::send` needs `db + redis + ws`. The proof engine
-//! entry point, `proof_hooks::recompute_all_for_user`, only has `db` — and
-//! most of its callers (`services::deliverables`, `services::reviews`,
-//! `services::slice_validation`) are service-layer functions with no
-//! access to `AppState` at all. Threading `AppState` down into them to
-//! deliver a notification would invert the dependency between the service
-//! and the HTTP layers.
+//! The proof engine entry point, `proof_hooks::recompute_all_for_user`,
+//! only has `db` — and most of its callers (`services::deliverables`,
+//! `services::reviews`, `services::slice_validation`) are service-layer
+//! functions with no access to `AppState` at all. Threading `AppState` down
+//! into them to deliver a notification would invert the dependency between
+//! the service and the HTTP layers.
 //!
-//! Instead the delivery degrades explicitly:
+//! So this builds a [`crate::services::notify::Ctx`] from whatever the
+//! caller has, and the delivery degrades explicitly:
 //!
 //! * The **database row is always written** — that is the durable channel,
 //!   the one `GET /api/notifications` reads, and it works with `db` alone.
@@ -26,7 +26,6 @@
 //! up on next poll; a promotion from a request that carries `AppState`
 //! additionally lights up in real time. Nothing is ever silently lost.
 
-use redis::AsyncCommands;
 use redis::aio::ConnectionManager;
 use serde_json::json;
 use sqlx::PgPool;
@@ -35,16 +34,7 @@ use uuid::Uuid;
 use crate::errors::AppError;
 use crate::services::proof_hooks::ProofRecomputeReport;
 use crate::services::ranks;
-use crate::websocket::{WsManager, WsMessage};
-
-/// Typed notification kinds emitted by this module. Stored verbatim in
-/// `notifications.notification_type`, which the front end switches on to
-/// pick an icon and a CTA target.
-pub const TYPE_RANK_PROMOTION: &str = "rank_promotion";
-pub const TYPE_CAPABILITY_GRANTED: &str = "capability_granted";
-pub const TYPE_BADGE_AWARDED: &str = "badge_awarded";
-pub const TYPE_FIRST_VERIFIED_DELIVERABLE: &str = "first_verified_deliverable";
-pub const TYPE_MILESTONE_REACHED: &str = "milestone_reached";
+use crate::websocket::WsManager;
 
 /// How many unlocked slices to name in a rank-promotion notification.
 const UNLOCK_SAMPLE_SIZE: i64 = 3;
@@ -60,79 +50,84 @@ pub struct LiveChannel<'a> {
 
 /// One notification, before delivery.
 struct Draft {
-    notification_type: &'static str,
-    title: String,
-    body: String,
+    kind: &'static str,
+    /// Substituted into the translated title and body.
+    args: Vec<(String, String)>,
     data: serde_json::Value,
 }
 
-/// Persist a notification and, when a live channel is available, push it.
+/// Deliver one draft through the single notification entry point.
 ///
-/// The DB insert is the only fallible step that matters: live delivery is
-/// best-effort and its failures are logged, never propagated, so a Redis
-/// blip cannot fail the proof recompute that triggered it.
-async fn deliver(
+/// This used to insert the row, bump the Redis counter, push over the
+/// WebSocket and call the mobile pusher itself — a third copy of the same
+/// sequence, with its text written in French at the call site. `notify`
+/// owns all of that now, including the recipient's language, their channel
+/// preferences and the email nobody was sending.
+///
+/// The live channel becomes a fuller context when present: without it the
+/// durable row is still written, which is what `GET /api/notifications`
+/// reads.
+async fn emit_draft(
     db: &PgPool,
     user_id: Uuid,
     draft: &Draft,
     live: &mut Option<LiveChannel<'_>>,
-) -> Result<Uuid, AppError> {
-    let notification_id: Uuid = sqlx::query_scalar(
-        r#"
-        INSERT INTO notifications (user_id, notification_type, title, body, data)
-        VALUES ($1, $2, $3, $4, $5)
-        RETURNING id
-        "#,
+) -> Result<(), AppError> {
+    let ctx = match live.as_ref() {
+        Some(channel) => crate::services::notify::Ctx {
+            db,
+            redis: Some(channel.redis),
+            ws: Some(channel.ws),
+            email: None,
+            frontend_url: None,
+            jwt_secret: None,
+        },
+        None => crate::services::notify::Ctx::db_only(db),
+    };
+
+    let mut builder = crate::services::notify::send(
+        ctx,
+        crate::services::notify::Recipient::User(user_id),
+        draft.kind,
     )
-    .bind(user_id)
-    .bind(draft.notification_type)
-    .bind(&draft.title)
-    .bind(&draft.body)
-    .bind(&draft.data)
-    .fetch_one(db)
-    .await?;
-
-    if let Some(channel) = live.as_mut() {
-        let counter_key = format!("notifications:unread:{user_id}");
-        if let Err(e) = channel.redis.incr::<_, _, i64>(&counter_key, 1).await {
-            tracing::debug!(error = %e, user_id = %user_id, "SKI-43: unread counter bump failed");
-        }
-
-        channel
-            .ws
-            .send_to_user(
-                user_id,
-                WsMessage {
-                    event: "notification".to_string(),
-                    room: None,
-                    payload: json!({
-                        "id": notification_id,
-                        "type": draft.notification_type,
-                        "title": draft.title,
-                        "body": draft.body,
-                        "data": draft.data,
-                    }),
-                },
-            )
-            .await;
-
-        let msg = crate::services::mobile_push::MobilePushMessage {
-            title: &draft.title,
-            body: &draft.body,
-            data: Some(draft.data.clone()),
-        };
-        if let Err(e) = crate::services::mobile_push::push_to_user_mobile(db, user_id, msg).await {
-            tracing::debug!(error = %e, user_id = %user_id, "SKI-43: mobile push failed");
-        }
+    .payload(draft.data.clone());
+    for (name, value) in &draft.args {
+        builder = builder.arg(name, value.clone());
     }
+    builder.execute().await?;
 
     metrics::counter!(
         "skilluv_promotion_notifications_total",
-        "type" => draft.notification_type,
+        "type" => draft.kind,
     )
     .increment(1);
 
-    Ok(notification_id)
+    Ok(())
+}
+
+/// The kind the catalogue gives the "your first contribution is verified"
+/// notification. Named because the dedup check below reads it back.
+const KIND_FIRST_VERIFIED: &str = "deliverable.first_verified";
+
+/// How a goal reads inside the body of `goal.reached`.
+///
+/// Translated rather than formatted in Rust: it is half a sentence, and a
+/// translator needs to see it next to the sentence it lands in.
+fn goal_label(kind: &str, target: &str, locale: &str) -> String {
+    use crate::services::i18n;
+    match kind {
+        "rank" => i18n::t_with(locale, "goal.target.rank", &[("rank", rank_label(target))]),
+        "skill_level" => i18n::t_with(locale, "goal.target.skill_level", &[("level", target)]),
+        "capability" => i18n::t_with(
+            locale,
+            "goal.target.capability",
+            &[("capability", capability_label(target))],
+        ),
+        "artifact_count" => {
+            i18n::t_with(locale, "goal.target.artifact_count", &[("count", target)])
+        }
+        other => other.to_string(),
+    }
 }
 
 /// Human-readable rank name for notification copy.
@@ -206,14 +201,14 @@ async fn unlocked_slices(
 
 /// Emit notifications for everything a proof recompute changed.
 ///
-/// Returns the ids of the notifications written. Called by
+/// Returns the kinds delivered. Called by
 /// `proof_hooks::recompute_all_for_user`, so it must stay cheap when
 /// nothing changed: a report with no promotions issues zero queries.
 pub async fn notify_from_report(
     db: &PgPool,
     report: &ProofRecomputeReport,
     mut live: Option<LiveChannel<'_>>,
-) -> Result<Vec<Uuid>, AppError> {
+) -> Result<Vec<String>, AppError> {
     let mut drafts: Vec<Draft> = Vec::new();
 
     if report.rank_promoted {
@@ -221,31 +216,18 @@ pub async fn notify_from_report(
         let (unlocked_count, sample) = unlocked_slices(db, rank).await?;
         let label = rank_label(rank);
 
-        let body = if unlocked_count > 0 {
-            format!(
-                "Tu viens d'être promu {label}. {unlocked_count} slice(s) sont désormais à ta portée."
-            )
-        } else {
-            format!(
-                "Tu viens d'être promu {label}. Ton profil affiche désormais ce rang aux recruteurs."
-            )
-        };
-
         drafts.push(Draft {
-            notification_type: TYPE_RANK_PROMOTION,
-            title: format!("Nouveau rang : {label}"),
-            body,
+            kind: "rank.promoted",
+            args: vec![("rank".to_string(), label.to_string())],
             data: json!({
                 "from_rank": report.rank_previous,
                 "to_rank": rank,
-                // Enriched template fields the front end renders as a CTA.
+                // What the rank actually bought, for the client to render
+                // under the message. The button itself comes from the
+                // catalogue, so it needs no label here.
                 "unlock_hint": {
                     "unlocked_slices_count": unlocked_count,
                     "sample": sample,
-                },
-                "next_step_cta": {
-                    "label": "Voir les slices débloquées",
-                    "href": format!("/slices?min_rank={rank}"),
                 },
             }),
         });
@@ -254,32 +236,20 @@ pub async fn notify_from_report(
     for slug in &report.capabilities_granted {
         let label = capability_label(slug);
         drafts.push(Draft {
-            notification_type: TYPE_CAPABILITY_GRANTED,
-            title: format!("Nouveau rôle débloqué : {label}"),
-            body: format!(
-                "Tes preuves t'ouvrent le rôle {label}. Il est actif immédiatement sur ton compte."
-            ),
+            kind: "capability.granted",
+            args: vec![("capability".to_string(), label.to_string())],
             data: json!({
                 "capability": slug,
-                "next_step_cta": {
-                    "label": "Découvrir ce rôle",
-                    "href": format!("/capabilities/{slug}"),
-                },
             }),
         });
     }
 
     for slug in &report.badges_awarded {
         drafts.push(Draft {
-            notification_type: TYPE_BADGE_AWARDED,
-            title: "Nouveau badge obtenu".to_string(),
-            body: format!("Le badge « {slug} » vient d'être ajouté à ton profil."),
+            kind: "badge.awarded",
+            args: vec![("badge".to_string(), slug.to_string())],
             data: json!({
                 "badge_slug": slug,
-                "next_step_cta": {
-                    "label": "Voir mes badges",
-                    "href": "/profile/badges",
-                },
             }),
         });
     }
@@ -294,21 +264,21 @@ pub async fn notify_from_report(
     // Goals (SKI-38) that just crossed 100%.
     drafts.extend(milestone_drafts(db, report.user_id).await?);
 
-    let mut ids = Vec::with_capacity(drafts.len());
+    let mut delivered = Vec::with_capacity(drafts.len());
     for draft in &drafts {
-        match deliver(db, report.user_id, draft, &mut live).await {
-            Ok(id) => ids.push(id),
+        match emit_draft(db, report.user_id, draft, &mut live).await {
+            Ok(()) => delivered.push(draft.kind.to_string()),
             // Best-effort, consistent with the rest of the proof pipeline:
             // a failed notification must not roll back a real promotion.
             Err(e) => tracing::warn!(
                 user_id = %report.user_id,
-                notification_type = draft.notification_type,
+                kind = draft.kind,
                 error = %e,
-                "SKI-43: notification delivery failed"
+                "notification delivery failed"
             ),
         }
     }
-    Ok(ids)
+    Ok(delivered)
 }
 
 /// Draft for the very first verified deliverable, or `None`.
@@ -336,7 +306,7 @@ async fn first_deliverable_draft(db: &PgPool, user_id: Uuid) -> Result<Option<Dr
          )",
     )
     .bind(user_id)
-    .bind(TYPE_FIRST_VERIFIED_DELIVERABLE)
+    .bind(KIND_FIRST_VERIFIED)
     .fetch_one(db)
     .await?;
     if already_told {
@@ -344,18 +314,9 @@ async fn first_deliverable_draft(db: &PgPool, user_id: Uuid) -> Result<Option<Dr
     }
 
     Ok(Some(Draft {
-        notification_type: TYPE_FIRST_VERIFIED_DELIVERABLE,
-        title: "Ta première preuve est vérifiée".to_string(),
-        body: "Elle est désormais opposable et visible sur ton profil public. \
-               Trois de plus et tu passes Ranger."
-            .to_string(),
-        data: json!({
-            "verified_count": verified,
-            "next_step_cta": {
-                "label": "Voir mon profil public",
-                "href": "/profile",
-            },
-        }),
+        kind: KIND_FIRST_VERIFIED,
+        args: Vec::new(),
+        data: json!({ "verified_count": verified }),
     }))
 }
 
@@ -370,6 +331,10 @@ async fn milestone_drafts(db: &PgPool, user_id: Uuid) -> Result<Vec<Draft>, AppE
         return Ok(Vec::new());
     }
 
+    // The goal's wording is a fragment of the body, so it has to be
+    // resolved in the recipient's language before it becomes an argument.
+    let locale = crate::services::notify::user_locale(db, user_id).await;
+
     let goals: Vec<(Uuid, String, String)> =
         sqlx::query_as("SELECT id, kind, target_value FROM user_goals WHERE id = ANY($1)")
             .bind(&achieved)
@@ -379,25 +344,14 @@ async fn milestone_drafts(db: &PgPool, user_id: Uuid) -> Result<Vec<Draft>, AppE
     Ok(goals
         .into_iter()
         .map(|(id, kind, target)| {
-            let what = match kind.as_str() {
-                "rank" => format!("atteindre le rang {}", rank_label(&target)),
-                "skill_level" => format!("atteindre le niveau {target} sur une compétence"),
-                "capability" => format!("débloquer le rôle {}", capability_label(&target)),
-                "artifact_count" => format!("publier {target} preuves vérifiées"),
-                other => other.to_string(),
-            };
+            let what = goal_label(&kind, &target, &locale);
             Draft {
-                notification_type: TYPE_MILESTONE_REACHED,
-                title: "Objectif atteint".to_string(),
-                body: format!("Tu t'étais fixé de {what}. C'est fait."),
+                kind: "goal.reached",
+                args: vec![("goal".to_string(), what)],
                 data: json!({
                     "goal_id": id,
-                    "kind": kind,
+                    "goal_kind": kind,
                     "target_value": target,
-                    "next_step_cta": {
-                        "label": "Fixer un nouvel objectif",
-                        "href": "/profile/goals",
-                    },
                 }),
             }
         })
@@ -424,20 +378,57 @@ mod unit {
         assert_eq!(capability_label("brand_new_cap"), "brand_new_cap");
     }
 
+    /// Every kind this module emits. The catalogue check below reads it.
+    const EMITTED: [&str; 5] = [
+        "rank.promoted",
+        "capability.granted",
+        "badge.awarded",
+        KIND_FIRST_VERIFIED,
+        "goal.reached",
+    ];
+
     #[test]
-    fn notification_types_are_distinct() {
-        let all = [
-            TYPE_RANK_PROMOTION,
-            TYPE_CAPABILITY_GRANTED,
-            TYPE_BADGE_AWARDED,
-            TYPE_FIRST_VERIFIED_DELIVERABLE,
-            TYPE_MILESTONE_REACHED,
-        ];
-        let unique: std::collections::HashSet<_> = all.iter().collect();
-        assert_eq!(unique.len(), all.len());
-        // notifications.notification_type is VARCHAR(50).
-        for t in all {
-            assert!(t.len() <= 50, "{t} exceeds the column width");
+    fn every_emitted_kind_has_copy_in_every_locale() {
+        use crate::services::i18n;
+        for locale in ["fr", "en", "ar"] {
+            for kind in EMITTED {
+                for part in ["title", "body"] {
+                    let key = format!("notification.{kind}.{part}");
+                    // `t` returns the key itself when nothing matches, which
+                    // is exactly the notification titled `notification.goal.
+                    // reached.title` that this test exists to prevent.
+                    assert_ne!(i18n::t(locale, &key), key, "{locale} has no copy for {key}");
+                }
+            }
         }
+    }
+
+    #[test]
+    fn kinds_fit_the_column_and_are_distinct() {
+        let unique: std::collections::HashSet<_> = EMITTED.iter().collect();
+        assert_eq!(unique.len(), EMITTED.len());
+        // notifications.notification_type is VARCHAR(50).
+        for kind in EMITTED {
+            assert!(kind.len() <= 50, "{kind} exceeds the column width");
+        }
+    }
+
+    #[test]
+    fn goal_labels_are_translated_not_keys() {
+        for (kind, target) in [
+            ("rank", "ranger"),
+            ("skill_level", "3"),
+            ("capability", "mentor"),
+            ("artifact_count", "10"),
+        ] {
+            let label = goal_label(kind, target, "en");
+            assert!(
+                !label.starts_with("goal.target"),
+                "{kind} falls through to the raw key"
+            );
+            assert!(!label.contains('{'), "{kind} leaves a placeholder unfilled");
+        }
+        // An unknown kind passes through rather than panicking on live data.
+        assert_eq!(goal_label("brand_new_goal", "x", "en"), "brand_new_goal");
     }
 }

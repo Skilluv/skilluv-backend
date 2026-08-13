@@ -214,8 +214,29 @@ notification:
       title: "Badge earned: {badge}"
       body: "It is now visible on your public profile."
       cta: "See my profile"
+  goal:
+    reached:
+      title: "Goal reached"
+      body: "You set out to {goal}. Done."
+      cta: "Set a new goal"
   deliverable:
     first_verified:
       title: "Your first contribution is verified"
-      body: "{title} is validated. It now appears on your profile."
+      body: "It now stands as proof and shows on your public profile."
       cta: "See my contribution"
+
+# Vocabulary reused inside notification bodies, so a translator writes
+# one sentence with a placeholder rather than two parallel titles.
+guild:
+  decision:
+    accepted: "accepted"
+    rejected: "rejected"
+
+# Fragments of the "goal reached" sentence. Half a sentence, so it lives
+# next to the sentence it lands in rather than in a Rust match.
+goal:
+  target:
+    rank: "reach the rank of {rank}"
+    skill_level: "reach level {level} on a skill"
+    capability: "unlock the {capability} role"
+    artifact_count: "publish {count} verified contributions"

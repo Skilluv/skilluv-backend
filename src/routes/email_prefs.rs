@@ -3,7 +3,7 @@
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::Html;
-use axum::routing::{get, post, put};
+use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -25,12 +25,15 @@ pub fn email_prefs_routes() -> Router<AppState> {
         )
         // One-click unsubscribe with the token in the path (RFC 8058 style).
         .route("/email/unsubscribe/{token}", get(unsubscribe_by_path))
-        // Pre-SKI-287 surface, kept so existing callers and already-sent
-        // email footers keep working. Different response shape (`data.
-        // preferences`) and partial-update semantics; new clients should
-        // use the `/users/me` routes above.
-        .route("/auth/me/email-preferences", get(get_prefs))
-        .route("/auth/me/email-preferences", put(update_prefs))
+        // SKI-293 — `/auth/me/email-preferences` removed. It answered the
+        // same question as the `/users/me` pair above with a different shape
+        // (`data.preferences` versus flat `data`) and partial-update
+        // semantics, and it was the one the OpenAPI document advertised. No
+        // caller was left: checked across the front and admin repos and the
+        // test suite.
+        //
+        // `/email/unsubscribe` stays: its link is printed in emails already
+        // delivered, and those cannot be revised.
         .route("/email/unsubscribe", get(unsubscribe))
         .route("/webhooks/brevo", post(brevo_webhook))
         .route("/admin/digest/run-weekly", post(admin_run_weekly_digest))
@@ -53,48 +56,8 @@ pub struct EmailPrefs {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
-pub struct EmailPrefsResponse {
-    pub preferences: EmailPrefs,
-}
-
-#[derive(Debug, Serialize, ToSchema)]
 pub struct AdminDigestResponse {
     pub digest: DigestRunReport,
-}
-
-/// Read the caller's email preferences. Rows are lazily upserted with
-/// the marketing-opt-out defaults on first read — the endpoint always
-/// returns a full record.
-#[utoipa::path(
-    get,
-    path = "/api/auth/me/email-preferences",
-    tag = "auth",
-    responses(
-        (status = 200, description = "Current preferences", body = ApiResponse<EmailPrefsResponse>),
-        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
-    ),
-    security(("cookie_auth" = [])),
-)]
-pub async fn get_prefs(
-    State(state): State<AppState>,
-    auth: AuthUser,
-) -> Result<Json<ApiResponse<EmailPrefsResponse>>, AppError> {
-    // Upsert defaults on first read.
-    let prefs: EmailPrefs = sqlx::query_as(
-        r#"
-        INSERT INTO user_email_preferences (user_id)
-        VALUES ($1)
-        ON CONFLICT (user_id) DO UPDATE SET user_id = user_email_preferences.user_id
-        RETURNING digest_weekly, streak_reminder, marketing, updated_at
-        "#,
-    )
-    .bind(auth.user_id)
-    .fetch_one(&state.db)
-    .await?;
-
-    Ok(Json(ApiResponse::new(EmailPrefsResponse {
-        preferences: prefs,
-    })))
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -107,8 +70,8 @@ pub async fn get_prefs(
 /// defaults, not a 404: the absence of a row means "never customised",
 /// which is a perfectly good answer to "what are my preferences".
 ///
-/// Unlike [`get_prefs`], the payload is the preference object itself
-/// rather than `{ preferences: … }`.
+/// The payload is the preference object itself rather than
+/// `{ preferences: … }` — the shape the settings screen consumes.
 #[utoipa::path(
     get,
     path = "/api/users/me/email-preferences",
@@ -324,55 +287,6 @@ fn unsubscribe_confirmation_html(kind: &str) -> String {
 <p>Si tu changes d'avis, tu peux réactiver depuis <a href="https://skilluv.com/settings/notifications">tes paramètres</a>.</p>
 </body></html>"#
     )
-}
-
-#[derive(Debug, Deserialize, ToSchema)]
-pub struct UpdatePrefsRequest {
-    pub digest_weekly: Option<bool>,
-    pub streak_reminder: Option<bool>,
-    pub marketing: Option<bool>,
-}
-
-/// Partial update of the caller's email preferences. Any missing
-/// field keeps its current value (COALESCE-based upsert).
-#[utoipa::path(
-    put,
-    path = "/api/auth/me/email-preferences",
-    tag = "auth",
-    request_body = UpdatePrefsRequest,
-    responses(
-        (status = 200, description = "Updated preferences", body = ApiResponse<EmailPrefsResponse>),
-        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
-    ),
-    security(("cookie_auth" = [])),
-)]
-pub async fn update_prefs(
-    State(state): State<AppState>,
-    auth: AuthUser,
-    Json(body): Json<UpdatePrefsRequest>,
-) -> Result<Json<ApiResponse<EmailPrefsResponse>>, AppError> {
-    let prefs: EmailPrefs = sqlx::query_as(
-        r#"
-        INSERT INTO user_email_preferences (user_id, digest_weekly, streak_reminder, marketing)
-        VALUES ($1, COALESCE($2, TRUE), COALESCE($3, TRUE), COALESCE($4, FALSE))
-        ON CONFLICT (user_id) DO UPDATE SET
-            digest_weekly = COALESCE($2, user_email_preferences.digest_weekly),
-            streak_reminder = COALESCE($3, user_email_preferences.streak_reminder),
-            marketing = COALESCE($4, user_email_preferences.marketing),
-            updated_at = NOW()
-        RETURNING digest_weekly, streak_reminder, marketing, updated_at
-        "#,
-    )
-    .bind(auth.user_id)
-    .bind(body.digest_weekly)
-    .bind(body.streak_reminder)
-    .bind(body.marketing)
-    .fetch_one(&state.db)
-    .await?;
-
-    Ok(Json(ApiResponse::new(EmailPrefsResponse {
-        preferences: prefs,
-    })))
 }
 
 #[derive(Debug, Deserialize, IntoParams)]

@@ -732,17 +732,43 @@ pub async fn list_applications(
     Ok(Json(build_response(json!({ "applications": items }))))
 }
 
-#[derive(Deserialize)]
-struct DecideBody {
-    accept: bool,
+/// Body of `POST /guild-applications/{id}/decide`.
+///
+/// SKI-293 — the request body was published as an untyped blob, so the only
+/// way to learn the field name was to probe the API until it stopped
+/// answering `missing field 'accept'`. A plausible guess like
+/// `{"decision": "accept"}` compiles, passes a test written against the same
+/// guess, and fails on first real use.
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DecideBody {
+    /// `true` accepts the applicant into the guild, `false` rejects it.
+    pub accept: bool,
 }
 
-/// Decide (accept/reject) a guild application.
+/// Envelope returned once the application is decided.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct DecidedApplicationData {
+    pub application: crate::services::guild::GuildApplication,
+}
+
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct DecidedApplicationResponse {
+    pub data: DecidedApplicationData,
+    pub meta: crate::api_response::MetaInfo,
+}
+
+/// Decide (accept/reject) a guild application. Officers only.
 #[utoipa::path(
     post, path = "/api/guild-applications/{id}/decide", tag = "guilds",
-    params(("id" = uuid::Uuid, Path)),
-    request_body(content = serde_json::Value),
-    responses((status = 200, body = serde_json::Value)),
+    params(("id" = uuid::Uuid, Path, description = "Application UUID")),
+    request_body = DecideBody,
+    responses(
+        (status = 200, description = "Application decided", body = DecidedApplicationResponse),
+        (status = 400, description = "Application already decided", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Caller is not an officer of that guild", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "No such application", body = crate::api_response::ErrorResponse),
+    ),
     security(("cookie_auth" = [])),
 )]
 pub async fn decide_application(

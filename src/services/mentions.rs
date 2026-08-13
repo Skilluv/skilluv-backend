@@ -48,7 +48,7 @@ pub const SOURCE_TYPES: &[&str] = &[
 pub const EXCERPT_CHARS: usize = 160;
 
 /// One mention, resolved for display.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct Mention {
     pub id: Uuid,
     pub source_type: String,
@@ -63,7 +63,7 @@ pub struct Mention {
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct MentionAuthor {
     pub user_id: Uuid,
     pub username: String,

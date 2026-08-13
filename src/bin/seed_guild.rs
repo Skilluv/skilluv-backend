@@ -62,6 +62,37 @@ fn assert_seedable(db_url: &str) -> Result<()> {
     Ok(())
 }
 
+/// Fetch or create one of the two throwaway accounts that make the owner
+/// views non-empty.
+///
+/// The password hash is deliberately not a valid hash: these accounts exist
+/// to be listed, never to sign in. `email_verified` is set so they do not
+/// show up in any "unverified account" sweep.
+async fn ensure_counterpart(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    username: &str,
+    first_name: &str,
+    last_name: &str,
+) -> Result<Uuid> {
+    let id: Uuid = sqlx::query_scalar(
+        r#"
+        INSERT INTO users (username, email, password_hash, display_name,
+                           first_name, last_name, email_verified)
+        VALUES ($1, $1 || '@seed.invalid', '!', $2, $3, $4, TRUE)
+        ON CONFLICT (username) DO UPDATE SET display_name = EXCLUDED.display_name
+        RETURNING id
+        "#,
+    )
+    .bind(username)
+    .bind(format!("{first_name} {last_name}"))
+    .bind(first_name)
+    .bind(last_name)
+    .fetch_one(&mut **tx)
+    .await
+    .with_context(|| format!("failed to provision the {username} account"))?;
+    Ok(id)
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
@@ -152,9 +183,76 @@ async fn main() -> Result<()> {
     .execute(&mut *tx)
     .await?;
 
+    // SKI-293 — an owner with an empty guild exercises nothing. The
+    // Applications and Invitations tabs, and revocation, all need a pending
+    // row to act on. Two throwaway accounts carry them.
+    let applicant_id = ensure_counterpart(&mut tx, "e2e_applicant", "Ada", "Applicant").await?;
+    let invitee_id = ensure_counterpart(&mut tx, "e2e_invitee", "Ivan", "Invitee").await?;
+
+    // `UNIQUE (guild_id, applicant_id, status)` is DEFERRABLE, and Postgres
+    // refuses a deferrable constraint as an ON CONFLICT arbiter. Guard with
+    // an existence check instead, inside the same transaction.
+    let has_application: bool = sqlx::query_scalar(
+        r#"
+        SELECT EXISTS(
+            SELECT 1 FROM guild_applications
+            WHERE guild_id = $1 AND applicant_id = $2 AND status = 'pending'
+        )
+        "#,
+    )
+    .bind(guild_id)
+    .bind(applicant_id)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    if !has_application {
+        sqlx::query(
+            r#"
+            INSERT INTO guild_applications (guild_id, applicant_id, message, status)
+            VALUES ($1, $2, 'Seeded application, pending a decision.', 'pending')
+            "#,
+        )
+        .bind(guild_id)
+        .bind(applicant_id)
+        .execute(&mut *tx)
+        .await
+        .context("failed to seed the pending application")?;
+    }
+
+    // Invitations carry no unique constraint, so guard on the pending
+    // partial index instead: one live invitation per invitee is enough.
+    let has_invite: bool = sqlx::query_scalar(
+        r#"
+        SELECT EXISTS(
+            SELECT 1 FROM guild_invitations
+            WHERE guild_id = $1 AND invited_user_id = $2
+              AND accepted_at IS NULL AND revoked_at IS NULL
+        )
+        "#,
+    )
+    .bind(guild_id)
+    .bind(invitee_id)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    if !has_invite {
+        sqlx::query(
+            r#"
+            INSERT INTO guild_invitations (guild_id, inviter_id, invited_user_id, expires_at)
+            VALUES ($1, $2, $3, NOW() + INTERVAL '30 days')
+            "#,
+        )
+        .bind(guild_id)
+        .bind(founder_id)
+        .bind(invitee_id)
+        .execute(&mut *tx)
+        .await
+        .context("failed to seed the pending invitation")?;
+    }
+
     tx.commit().await?;
 
-    tracing::info!(%guild_id, %slug, %email, "guild seeded with founder");
+    tracing::info!(%guild_id, %slug, %email, "guild seeded with founder, application and invitation");
     println!(
         "{}",
         serde_json::to_string_pretty(&serde_json::json!({
@@ -163,6 +261,8 @@ async fn main() -> Result<()> {
             "tag": tag,
             "founder_email": email,
             "founder_id": founder_id,
+            "pending_application_from": applicant_id,
+            "pending_invitation_to": invitee_id,
         }))?
     );
 

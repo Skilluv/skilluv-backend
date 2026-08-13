@@ -43,7 +43,10 @@ pub fn social_routes() -> Router<AppState> {
             "/social/reactions/{target_type}/{target_id}/summary",
             get(reaction_summary),
         )
-        .route("/social/mentions/me", get(my_mentions))
+        // SKI-293 — `/social/mentions/me` removed. It served the same data as
+        // `GET /api/users/me/mentions` with a different shape and an empty
+        // OpenAPI schema, so the documented route was not the one anyone used.
+        // No client called it: checked across the front and admin repos.
         .route("/tags", get(list_tags))
         .route(
             "/social/tag-map/{target_type}/{target_id}",

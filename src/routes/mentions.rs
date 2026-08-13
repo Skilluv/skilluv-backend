@@ -39,17 +39,71 @@ fn meta() -> serde_json::Value {
     })
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct ListMentionsQuery {
     #[serde(default)]
+    #[param(minimum = 1, maximum = 100000)]
     pub page: Option<i64>,
     #[serde(default)]
+    #[param(minimum = 1, maximum = 100)]
     pub per_page: Option<i64>,
+    /// Restrict to mentions the caller has not opened yet.
     #[serde(default)]
     pub unread_only: bool,
 }
 
-async fn list_mine(
+/// Paginated mention inbox.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct MentionListResponse {
+    pub data: Vec<mentions::Mention>,
+    pub pagination: crate::api_response::Pagination,
+    pub meta: crate::api_response::MetaInfo,
+}
+
+/// Result of marking one mention read.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct MentionRead {
+    pub id: Uuid,
+    /// When it was first opened. Unchanged on a repeated call — marking read
+    /// is idempotent.
+    pub read_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct MentionReadResponse {
+    pub data: MentionRead,
+    pub meta: crate::api_response::MetaInfo,
+}
+
+/// Number of mentions transitioned from unread to read.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct MentionsMarked {
+    pub marked: u64,
+}
+
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct MentionsMarkedResponse {
+    pub data: MentionsMarked,
+    pub meta: crate::api_response::MetaInfo,
+}
+
+/// Mentions addressed to the caller, newest first.
+///
+/// SKI-293 — this route replaces `GET /api/social/mentions/me`, which was
+/// documented with an empty schema while this one carried the real contract.
+#[utoipa::path(
+    get,
+    path = "/api/users/me/mentions",
+    tag = "mentions",
+    params(ListMentionsQuery),
+    responses(
+        (status = 200, description = "Mention inbox (paginated)", body = MentionListResponse),
+        (status = 401, description = "Not authenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_mine(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<ListMentionsQuery>,
@@ -84,7 +138,21 @@ async fn list_mine(
     })))
 }
 
-async fn read_one(
+/// Mark one mention as read. Idempotent: a second call keeps the first
+/// timestamp.
+#[utoipa::path(
+    post,
+    path = "/api/users/me/mentions/{id}/read",
+    tag = "mentions",
+    params(("id" = Uuid, Path, description = "Mention UUID")),
+    responses(
+        (status = 200, description = "Marked read", body = MentionReadResponse),
+        (status = 401, description = "Not authenticated", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "No such mention for this caller", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn read_one(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -96,7 +164,18 @@ async fn read_one(
     })))
 }
 
-async fn read_all(
+/// Mark every unread mention as read.
+#[utoipa::path(
+    post,
+    path = "/api/users/me/mentions/read-all",
+    tag = "mentions",
+    responses(
+        (status = 200, description = "Count of mentions transitioned to read", body = MentionsMarkedResponse),
+        (status = 401, description = "Not authenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn read_all(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<impl IntoResponse, AppError> {

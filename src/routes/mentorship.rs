@@ -4,12 +4,13 @@ use axum::extract::{Path, Query, State};
 use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use bigdecimal::BigDecimal;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sqlx::Row;
 use uuid::Uuid;
 
 use crate::AppState;
+use crate::api_response::ApiResponse;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
 
@@ -36,6 +37,10 @@ pub fn mentorship_routes() -> Router<AppState> {
         )
         .route("/mentorship/sessions/{id}/cancel", post(cancel_session))
         .route("/mentorship/sessions/{id}/complete", post(mark_completed))
+        // The student's side of the same event. The mentor says "done", the
+        // student says "yes, it happened" — and that second word is what
+        // pays them without waiting out the week.
+        .route("/mentorship/sessions/{id}/confirm", post(confirm_session))
         .route("/mentorship/sessions/{id}/review", post(submit_review))
 }
 
@@ -677,6 +682,91 @@ pub async fn connect_status(
     }))))
 }
 
+/// Record what a completed session owes, and hold it.
+///
+/// Split out of the handler so the arithmetic has one home. Getting an
+/// amount wrong here is the kind of mistake that is only noticed by the
+/// person who was underpaid.
+///
+/// ## Minor units
+///
+/// `price_*_cents` is a hundredth of the currency, which is right for EUR and
+/// meaningless for XOF — the franc CFA has no subdivision. Dividing an XOF
+/// price by a hundred would pay a mentor one percent of what they earned, so
+/// the conversion is explicit per currency rather than a blanket `/ 100`.
+async fn capture_session_funds(
+    state: &AppState,
+    session_id: Uuid,
+    mentor_id: Uuid,
+    mentor_cents: i64,
+    platform_cents: i64,
+    currency_str: &str,
+) -> Result<(), AppError> {
+    use crate::services::ledger::{self, Currency};
+    use crate::services::release;
+
+    let currency: Currency = currency_str.parse()?;
+    let to_amount = |minor: i64| -> BigDecimal {
+        match currency {
+            Currency::Eur => BigDecimal::from(minor) / BigDecimal::from(100),
+            // Already whole francs: the column name is a misnomer here.
+            Currency::Xof => BigDecimal::from(minor),
+        }
+    };
+
+    let mentor_share = to_amount(mentor_cents);
+    let platform_share = to_amount(platform_cents);
+    let gross = mentor_share.clone() + platform_share.clone();
+
+    // The student paid at booking, so the money is already at the provider.
+    // This records whose it is.
+    let posted = ledger::capture_for_recipient(
+        &state.db,
+        "stripe",
+        format!("mentorship_session:{session_id}"),
+        mentor_id,
+        gross,
+        platform_share,
+        currency,
+        "mentorship_session",
+        session_id,
+    )
+    .await?;
+
+    // Nothing more to do on a replay: the hold already exists, and creating
+    // a second would hold the same money twice.
+    if posted.was_replay() {
+        return Ok(());
+    }
+
+    let window = release::window_for(&state.db, "mentorship_session").await?;
+    let mut tx = state.db.begin().await?;
+    let release_at = release::hold(
+        &mut tx,
+        release::Hold {
+            ledger_transaction_id: posted.transaction_id(),
+            beneficiary_id: mentor_id,
+            subject_type: "mentorship_session",
+            subject_id: session_id,
+            amount: &mentor_share,
+            currency,
+            hold_hours: window.hold_hours,
+        },
+    )
+    .await?;
+    tx.commit().await?;
+
+    tracing::info!(
+        session_id = %session_id,
+        mentor = %mentor_id,
+        amount = %mentor_share,
+        currency = currency.as_str(),
+        release_at = %release_at,
+        "mentor share held pending release"
+    );
+    Ok(())
+}
+
 /// Mark a mentorship session complete (mentor).
 #[utoipa::path(
     post, path = "/api/mentorship/sessions/{id}/complete", tag = "challenges",
@@ -704,13 +794,21 @@ pub async fn mark_completed(
             "session in state '{status}' cannot be completed"
         )));
     }
-    // Transfer 80% part mentor vers son compte Connect si configuré.
+    // Record what the mentor is owed and hold it. No money is wired here.
+    //
+    // It used to be: complete the session, wire the mentor immediately. That
+    // paid people before the student had any chance to say the session never
+    // happened, and it only worked for mentors Stripe can reach — everyone
+    // else silently got nothing at all.
+    //
+    // Now the amount lands in the mentor's `pending` account and waits out
+    // the window from `release_windows` (seven days for a session, sooner if
+    // the student confirms). Withdrawing is a separate act, over whichever
+    // rail reaches them.
     let details = sqlx::query(
         r#"
-        SELECT s.price_mentor_cents, s.currency, s.stripe_payment_intent_id,
-               m.stripe_connect_account_id
+        SELECT s.price_mentor_cents, s.price_platform_cents, s.currency
         FROM mentorship_sessions s
-        JOIN mentor_profiles m ON m.user_id = s.mentor_user_id
         WHERE s.id = $1
         "#,
     )
@@ -718,72 +816,41 @@ pub async fn mark_completed(
     .fetch_optional(&state.db)
     .await?;
 
-    // The session is completed either way — the mentoring happened, and
-    // refusing to record it because our payment provider hiccuped would
-    // punish the wrong person. What must not happen is stamping it as paid
-    // when no money moved: that is what made failed payouts invisible.
-    let mut transfer_id: Option<String> = None;
-    let mut payout_status = "pending";
+    let mut payout_status = "held";
     let mut payout_error: Option<String> = None;
 
     if let Some(row) = details {
         let mentor_cents: i64 = row.get("price_mentor_cents");
-        let currency: String = row.get("currency");
-        let connect_id: Option<String> = row.get("stripe_connect_account_id");
+        let platform_cents: i64 = row.get("price_platform_cents");
+        let currency_str: String = row.get("currency");
 
-        match (connect_id, mentor_cents > 0) {
-            // Nothing owed: a free session settles as paid, there is no debt
-            // left hanging.
-            (_, false) => payout_status = "paid",
-            // The common case outside Stripe's coverage. Silently doing
-            // nothing here is how a mentor ends up never paid with no trace.
-            (None, true) => {
-                payout_status = "no_account";
-                metrics::counter!("skilluv_mentorship_payout_no_account_total").increment(1);
+        if mentor_cents > 0 {
+            if let Err(e) = capture_session_funds(
+                &state,
+                id,
+                mentor_id,
+                mentor_cents,
+                platform_cents,
+                &currency_str,
+            )
+            .await
+            {
+                // The session still completes: the mentoring happened, and
+                // refusing to record it because our books hiccuped punishes
+                // the wrong person. But it is not marked held, so it surfaces
+                // as owed and unrecorded rather than disappearing.
+                payout_status = "failed";
+                payout_error = Some(e.to_string());
+                metrics::counter!("skilluv_mentorship_capture_failed_total").increment(1);
                 tracing::error!(
-                    session_id = %id, mentor = %mentor_id, amount_cents = mentor_cents,
-                    "mentor has no payout account — session completed, money owed and unsent"
+                    session_id = %id, mentor = %mentor_id, error = %e,
+                    "failed to record what the mentor is owed - session completed, nothing held"
                 );
             }
-            (Some(connect_id), true) => match crate::services::stripe::StripeConfig::from_env() {
-                None => {
-                    payout_status = "failed";
-                    payout_error = Some("Stripe is not configured on this deployment".into());
-                    tracing::error!(
-                        session_id = %id,
-                        "mentorship payout skipped: Stripe not configured"
-                    );
-                }
-                Some(cfg) => {
-                    match crate::services::stripe::create_transfer(
-                        &cfg,
-                        &connect_id,
-                        mentor_cents,
-                        &currency,
-                        &format!("mentorship_session:{id}"),
-                    )
-                    .await
-                    {
-                        Ok(v) => {
-                            transfer_id = v.get("id").and_then(|x| x.as_str()).map(String::from);
-                            payout_status = "paid";
-                            metrics::counter!("skilluv_stripe_connect_transfers_total")
-                                .increment(1);
-                        }
-                        Err(e) => {
-                            payout_status = "failed";
-                            payout_error = Some(e.to_string());
-                            metrics::counter!("skilluv_mentorship_payout_failed_total")
-                                .increment(1);
-                            tracing::error!(
-                                session_id = %id, mentor = %mentor_id,
-                                amount_cents = mentor_cents, error = %e,
-                                "mentorship payout failed — session completed, money owed"
-                            );
-                        }
-                    }
-                }
-            },
+        } else {
+            // A free session owes nobody anything, so there is no debt to
+            // hold and nothing to release later.
+            payout_status = "released";
         }
     }
 
@@ -793,16 +860,15 @@ pub async fn mark_completed(
         SET status = 'completed',
             payout_status = $2,
             payout_error = $3,
-            payout_reference = $4,
-            -- Only stamped when the money actually left.
-            payout_released_at = CASE WHEN $2 = 'paid' THEN NOW() ELSE NULL END
+            -- Stamped when the money becomes withdrawable, which is the
+            -- release, not the completion.
+            payout_released_at = CASE WHEN $2 = 'released' THEN NOW() ELSE NULL END
         WHERE id = $1
         "#,
     )
     .bind(id)
     .bind(payout_status)
     .bind(payout_error.as_deref())
-    .bind(transfer_id.as_deref())
     .execute(&state.db)
     .await?;
     sqlx::query(
@@ -830,9 +896,110 @@ pub async fn mark_completed(
         .await;
     });
 
+    // `stripe_transfer_id` is gone: completing a session no longer wires
+    // anything. What the caller wants to know now is whether the money is
+    // held and when it frees up.
     Ok(Json(build_response(json!({
         "completed": true,
-        "stripe_transfer_id": transfer_id,
+        "payout_status": payout_status,
+    }))))
+}
+
+/// Payload of `POST /mentorship/sessions/{id}/confirm`.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct SessionConfirmed {
+    pub confirmed: bool,
+    /// True when this confirmation released the mentor's money immediately.
+    pub funds_released: bool,
+}
+
+/// The student confirms the session took place, paying the mentor now.
+///
+/// Without this, the mentor waits out the full window even when both people
+/// agree it went well. That wait exists to protect the student; a student who
+/// says they do not need it should be able to waive it.
+///
+/// Only the student can call this. A mentor confirming their own session
+/// would be the mentor releasing their own money, which is the thing the
+/// window exists to prevent.
+#[utoipa::path(
+    post,
+    path = "/api/mentorship/sessions/{id}/confirm",
+    tag = "mentorship",
+    params(("id" = Uuid, Path, description = "Session UUID")),
+    responses(
+        (status = 200, description = "Confirmed, funds released if they were held", body = ApiResponse<SessionConfirmed>),
+        (status = 400, description = "Session not completed yet, or disputed", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Only the student can confirm", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "No such session", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn confirm_session(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<Value>, AppError> {
+    let row = sqlx::query(
+        "SELECT mentee_user_id, mentor_user_id, status, payout_status,
+                confirmed_by_mentee_at
+           FROM mentorship_sessions WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or(AppError::NotFound("session not found".into()))?;
+
+    let mentee_id: Uuid = row.get("mentee_user_id");
+    if auth.user_id != mentee_id {
+        return Err(AppError::Forbidden);
+    }
+
+    let status: String = row.get("status");
+    if status != "completed" {
+        return Err(AppError::Validation(format!(
+            "session is '{status}' — there is nothing to confirm until the \
+             mentor marks it complete"
+        )));
+    }
+
+    let already: Option<chrono::DateTime<chrono::Utc>> = row.get("confirmed_by_mentee_at");
+    if already.is_some() {
+        // Idempotent: a second click is the same intent, already satisfied.
+        return Ok(Json(build_response(json!({
+            "confirmed": true,
+            "funds_released": false,
+        }))));
+    }
+
+    sqlx::query("UPDATE mentorship_sessions SET confirmed_by_mentee_at = NOW() WHERE id = $1")
+        .bind(id)
+        .execute(&state.db)
+        .await?;
+
+    let released =
+        crate::services::release::release_early(&state.db, "mentorship_session", id).await?;
+
+    if released {
+        sqlx::query("UPDATE mentorship_sessions SET payout_status = 'released', payout_released_at = NOW() WHERE id = $1")
+            .bind(id)
+            .execute(&state.db)
+            .await?;
+
+        let mentor_id: Uuid = row.get("mentor_user_id");
+        let _ = crate::services::notify::send(
+            &state,
+            crate::services::notify::Recipient::User(mentor_id),
+            "funds.released",
+        )
+        .payload(json!({ "session_id": id }))
+        .execute()
+        .await;
+    }
+
+    Ok(Json(build_response(json!({
+        "confirmed": true,
+        "funds_released": released,
     }))))
 }
 

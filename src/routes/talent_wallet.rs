@@ -27,11 +27,10 @@ pub fn talent_wallet_routes() -> Router<AppState> {
         .route("/users/me/wallet/residency", post(set_my_residency))
         // P13.2 — Stripe Connect
         .route("/users/me/wallet/stripe/onboard", post(stripe_onboard))
-        .route("/users/me/wallet/withdraw/stripe", post(stripe_withdraw))
+        .route("/users/me/wallet/withdraw", post(withdraw))
         .route("/webhooks/stripe-connect", post(stripe_connect_webhook))
         // P13.3 — Mobile Money (Orange, MTN, Wave)
         .route("/users/me/wallet/momo/phone", post(register_momo_phone))
-        .route("/users/me/wallet/withdraw/momo", post(momo_withdraw))
         // P13.5 — Compliance : limites journalières/mensuelles + statement CSV
         .route("/users/me/wallet/statement.csv", get(wallet_statement_csv))
 }
@@ -62,7 +61,13 @@ pub async fn my_wallet(
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
     let wallet = talent_wallet::get_or_init_wallet(&state.db, auth.user_id).await?;
-    Ok(Json(build_response(json!({ "wallet": wallet }))))
+    // Balances are derived from the ledger on every read rather than stored
+    // on the row: a cached balance that can drift from the books is exactly
+    // what migration 0158 removed.
+    let balances = talent_wallet::balances(&state.db, auth.user_id).await?;
+    Ok(Json(build_response(
+        json!({ "wallet": wallet, "balances": balances }),
+    )))
 }
 
 /// List my wallet transactions.
@@ -76,9 +81,9 @@ pub async fn my_wallet_transactions(
     auth: AuthUser,
     Query(q): Query<TxQuery>,
 ) -> Result<Json<Value>, AppError> {
-    let txs =
-        talent_wallet::list_transactions(&state.db, auth.user_id, q.limit.unwrap_or(20)).await?;
-    Ok(Json(build_response(json!({ "transactions": txs }))))
+    let movements =
+        talent_wallet::list_movements(&state.db, auth.user_id, q.limit.unwrap_or(20)).await?;
+    Ok(Json(build_response(json!({ "transactions": movements }))))
 }
 
 #[derive(Debug, Deserialize)]
@@ -196,157 +201,6 @@ pub async fn stripe_onboard(
     }))))
 }
 
-#[derive(Debug, Deserialize)]
-struct StripeWithdrawBody {
-    /// Montant en devise (pas cents). Ex: "12.50" EUR.
-    amount: String,
-    /// EUR uniquement pour Stripe. XOF est traité par Momo (P13.3).
-    #[serde(default = "default_eur")]
-    currency: String,
-}
-
-fn default_eur() -> String {
-    "EUR".to_string()
-}
-
-/// POST /api/users/me/wallet/withdraw/stripe
-///
-/// Débite le wallet + crée un Stripe Transfer vers le compte Connect du user.
-/// Nécessite que `stripe_kyc_status = 'verified'` (le webhook a confirmé).
-/// Withdraw wallet funds to Stripe Connect account.
-#[utoipa::path(
-    post, path = "/api/users/me/wallet/withdraw/stripe", tag = "wallet",
-    request_body(content = serde_json::Value),
-    responses((status = 200, body = serde_json::Value)),
-    security(("cookie_auth" = [])),
-)]
-pub async fn stripe_withdraw(
-    State(state): State<AppState>,
-    auth: AuthUser,
-    Json(body): Json<StripeWithdrawBody>,
-) -> Result<Json<Value>, AppError> {
-    let cfg = crate::services::stripe::StripeConfig::from_env()
-        .ok_or_else(|| AppError::Internal("Stripe is not configured on this deployment".into()))?;
-    if body.currency.to_uppercase() != "EUR" {
-        return Err(AppError::Validation(
-            "Stripe withdraw only supports EUR currently".into(),
-        ));
-    }
-    let amount = bigdecimal::BigDecimal::from_str(&body.amount)
-        .map_err(|_| AppError::Validation("invalid amount".into()))?;
-
-    // Verifie KYC + charge account_id
-    let row: Option<(Option<String>, String)> = sqlx::query_as(
-        "SELECT stripe_account_id, stripe_kyc_status
-         FROM talent_wallets WHERE user_id = $1",
-    )
-    .bind(auth.user_id)
-    .fetch_optional(&state.db)
-    .await?;
-    let (account_id, kyc_status) = row.ok_or_else(|| {
-        AppError::Validation("Wallet not initialized — call onboard first".into())
-    })?;
-    let account_id = account_id.ok_or_else(|| {
-        AppError::Validation("Stripe Connect not linked — call onboard first".into())
-    })?;
-    if kyc_status != "verified" {
-        return Err(AppError::Validation(format!(
-            "KYC status is '{kyc_status}', payout not allowed"
-        )));
-    }
-
-    // P13.5 : enforce limites journalière + mensuelle (via env).
-    enforce_limit(
-        &state.db,
-        auth.user_id,
-        talent_wallet::Currency::Eur,
-        &amount,
-        "WALLET_DAILY_LIMIT_EUR",
-        24,
-        "daily",
-    )
-    .await?;
-    enforce_limit(
-        &state.db,
-        auth.user_id,
-        talent_wallet::Currency::Eur,
-        &amount,
-        "WALLET_MONTHLY_LIMIT_EUR",
-        30 * 24,
-        "monthly",
-    )
-    .await?;
-
-    // Debit d'abord (guardé par balance) puis transfer.
-    let debit_entry = talent_wallet::LedgerEntry {
-        user_id: auth.user_id,
-        delta: &amount,
-        currency: talent_wallet::Currency::Eur,
-        reason: "withdraw_stripe",
-        related_slice_id: None,
-        related_provider_txn_id: None,
-        notes: None,
-    };
-    let debit_row = talent_wallet::debit(&state.db, debit_entry).await?;
-
-    // Convertit en cents. BigDecimal * 100 → i64.
-    let amount_cents: i64 = {
-        use num_traits::ToPrimitive;
-        let cents = &amount * bigdecimal::BigDecimal::from(100);
-        cents
-            .to_i64()
-            .ok_or_else(|| AppError::Validation("amount too large".into()))?
-    };
-
-    let transfer_res = crate::services::stripe::create_transfer(
-        &cfg,
-        &account_id,
-        amount_cents,
-        "eur",
-        &format!("skilluv-payout:{}", debit_row.id),
-    )
-    .await;
-
-    match transfer_res {
-        Ok(transfer_json) => {
-            let stripe_txn_id = transfer_json
-                .get("id")
-                .and_then(|v| v.as_str())
-                .unwrap_or_default()
-                .to_string();
-            // Enregistre l'id Stripe sur la ligne de tx (traçabilité).
-            sqlx::query(
-                "UPDATE talent_transactions SET related_provider_txn_id = $1 WHERE id = $2",
-            )
-            .bind(&stripe_txn_id)
-            .bind(debit_row.id)
-            .execute(&state.db)
-            .await?;
-
-            metrics::counter!("skilluv_stripe_payouts_total").increment(1);
-            Ok(Json(build_response(json!({
-                "transaction_id": debit_row.id,
-                "stripe_transfer_id": stripe_txn_id,
-                "amount_cents": amount_cents,
-            }))))
-        }
-        Err(e) => {
-            // Rollback logique : ré-crédite le wallet si Stripe refuse.
-            let refund_entry = talent_wallet::LedgerEntry {
-                user_id: auth.user_id,
-                delta: &amount,
-                currency: talent_wallet::Currency::Eur,
-                reason: "withdraw_stripe_refund",
-                related_slice_id: None,
-                related_provider_txn_id: None,
-                notes: Some("stripe transfer failed"),
-            };
-            let _ = talent_wallet::credit(&state.db, refund_entry).await;
-            Err(e)
-        }
-    }
-}
-
 /// POST /api/webhooks/stripe-connect
 ///
 /// Reçoit `account.updated` de Stripe. Vérifie la signature HMAC, extrait
@@ -447,7 +301,7 @@ pub async fn stripe_connect_webhook(
 async fn enforce_limit(
     db: &sqlx::PgPool,
     user_id: uuid::Uuid,
-    currency: talent_wallet::Currency,
+    currency: crate::services::ledger::Currency,
     proposed: &bigdecimal::BigDecimal,
     env_key: &str,
     hours: i32,
@@ -459,7 +313,7 @@ async fn enforce_limit(
     let Some(limit) = limit else {
         return Ok(()); // Limite non configurée = pas de gate.
     };
-    let already = talent_wallet::debits_within(db, user_id, currency, hours).await?;
+    let already = talent_wallet::withdrawn_within(db, user_id, currency, hours).await?;
     let projected = &already + proposed;
     if projected > limit {
         return Err(AppError::Validation(format!(
@@ -593,86 +447,155 @@ pub async fn register_momo_phone(
     }))))
 }
 
-#[derive(Debug, Deserialize)]
-struct MomoWithdrawBody {
-    /// `orange` | `mtn` | `wave`. Optional: when omitted, the operator
-    /// recorded with the wallet's phone number is used.
-    ///
-    /// This was required and had no default, while the client sends only
-    /// `{ amount, currency }` — so every Mobile Money withdrawal failed with
-    /// `missing field 'provider'`. The operator belongs to the number, not to
-    /// the transaction (migration 0151).
-    #[serde(default)]
-    provider: Option<String>,
-    /// Montant en devise (XOF ex: "5000").
-    amount: String,
-    /// XOF par défaut.
-    #[serde(default = "default_xof")]
-    currency: String,
-}
-
-fn default_xof() -> String {
-    "XOF".into()
-}
-
-/// KYC lite : au-delà de 100 000 XOF (~150 EUR) on refuse tant que le user
-/// n'a pas complété un KYC full (à implémenter en P14).
+/// KYC-lite ceiling. Above this, a full identity check is required before
+/// money can leave.
 const KYC_LITE_LIMIT_XOF: i64 = 100_000;
 
-/// POST /api/users/me/wallet/withdraw/momo
-/// Withdraw wallet funds via Mobile Money.
+#[derive(Debug, Deserialize)]
+struct WithdrawBody {
+    /// Amount in currency units, not minor units: "12.50" EUR, "5000" XOF.
+    amount: String,
+    /// EUR or XOF. Inferred from the recipient's country when absent.
+    currency: Option<String>,
+    /// Force a rail. Normally inferred from the currency and what the
+    /// recipient has on file.
+    rail: Option<String>,
+}
+
+/// Withdraw available funds.
+///
+/// One endpoint for every rail. There used to be two — `/withdraw/stripe`
+/// and `/withdraw/momo` — each with its own idea of what happens when a
+/// provider refuses, and each carrying a copy of the limit checks. Which
+/// rail reaches a recipient is a routing question answered by
+/// `payout_routes`, not something a client should know or a URL encode.
+///
+/// The amount leaves the `available` balance, which only holds money whose
+/// release window has closed. Held funds are not withdrawable, and that is
+/// the point of holding them.
 #[utoipa::path(
-    post, path = "/api/users/me/wallet/withdraw/momo", tag = "wallet",
+    post, path = "/api/users/me/wallet/withdraw", tag = "wallet",
     request_body(content = serde_json::Value),
-    responses((status = 200, body = serde_json::Value)),
+    responses(
+        (status = 200, description = "Accepted by the provider", body = serde_json::Value),
+        (status = 400, description = "Insufficient available balance, over the KYC-lite limit, or no destination on file", body = crate::api_response::ErrorResponse),
+        (status = 401, description = "Not authenticated", body = crate::api_response::ErrorResponse),
+    ),
     security(("cookie_auth" = [])),
 )]
-pub async fn momo_withdraw(
+pub async fn withdraw(
     State(state): State<AppState>,
     auth: AuthUser,
-    Json(body): Json<MomoWithdrawBody>,
+    Json(body): Json<WithdrawBody>,
 ) -> Result<Json<Value>, AppError> {
-    if body.currency.to_uppercase() != "XOF" {
-        return Err(AppError::Validation(
-            "Mobile Money currently supports XOF only".into(),
-        ));
-    }
+    use crate::services::ledger::{self, Currency, State as FundState};
+    use crate::services::payout::{PayoutRequest, Rail};
+    use sqlx::Row;
+
+    let wallet = sqlx::query(
+        "SELECT residency_country, momo_phone, momo_phone_verified,
+                stripe_account_id, stripe_kyc_status
+           FROM talent_wallets WHERE user_id = $1",
+    )
+    .bind(auth.user_id)
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or_else(|| AppError::Validation("Wallet not initialized".into()))?;
+
+    let residency: Option<String> = wallet.get("residency_country");
+    let momo_phone: Option<String> = wallet.get("momo_phone");
+    let momo_verified: bool = wallet.get("momo_phone_verified");
+    let connect_id: Option<String> = wallet.get("stripe_account_id");
+    let kyc: String = wallet.get("stripe_kyc_status");
+
+    let currency: Currency = match body.currency.as_deref() {
+        Some(c) => c.parse()?,
+        None => {
+            if matches!(
+                residency.as_deref(),
+                Some("CI" | "SN" | "BJ" | "TG" | "ML" | "BF" | "NE" | "GW")
+            ) {
+                Currency::Xof
+            } else {
+                Currency::Eur
+            }
+        }
+    };
+
     let amount = bigdecimal::BigDecimal::from_str(&body.amount)
         .map_err(|_| AppError::Validation("invalid amount".into()))?;
-
-    let (phone, phone_verified, stored_provider): (Option<String>, bool, Option<String>) =
-        sqlx::query_as(
-            "SELECT momo_phone, momo_phone_verified, momo_provider
-               FROM talent_wallets WHERE user_id = $1",
-        )
-        .bind(auth.user_id)
-        .fetch_optional(&state.db)
-        .await?
-        .ok_or_else(|| AppError::Validation("Wallet not initialized".into()))?;
-    let phone = phone
-        .ok_or_else(|| AppError::Validation("Register your mobile money phone first".into()))?;
-    if !phone_verified {
-        return Err(AppError::Validation(
-            "Phone not verified — complete the SMS OTP first".into(),
-        ));
+    if amount.sign() != bigdecimal::num_bigint::Sign::Plus {
+        return Err(AppError::Validation("amount must be positive".into()));
     }
 
-    // KYC lite gate
-    use num_traits::ToPrimitive;
-    let amount_i64 = amount.to_i64().unwrap_or(0);
-    if amount_i64 > KYC_LITE_LIMIT_XOF {
+    // Only released money can leave. Including held funds here would let
+    // someone withdraw money the payer can still reclaim.
+    let available =
+        ledger::user_balance(&state.db, auth.user_id, FundState::Available, currency).await?;
+    if amount > available {
         return Err(AppError::Validation(format!(
-            "Amount exceeds KYC-lite limit ({KYC_LITE_LIMIT_XOF} XOF). Complete full KYC first."
+            "insufficient available balance: {available} {}. Funds inside their \
+             release window cannot be withdrawn yet.",
+            currency.as_str()
         )));
     }
 
-    // P13.5 : limites journalière + mensuelle en XOF.
+    let (rail, destination) = match body.rail.as_deref() {
+        Some("mobile_money") => (Rail::MobileMoney, momo_phone.clone()),
+        Some("bank_account") => (Rail::BankAccount, connect_id.clone()),
+        Some(other) => {
+            return Err(AppError::Validation(format!(
+                "unknown rail '{other}' (mobile_money or bank_account)"
+            )));
+        }
+        None => match currency {
+            Currency::Xof => (Rail::MobileMoney, momo_phone.clone()),
+            Currency::Eur => (Rail::BankAccount, connect_id.clone()),
+        },
+    };
+
+    let destination = destination.ok_or_else(|| {
+        AppError::Validation(
+            "no destination on file for this rail — register a Mobile Money \
+             number or complete Stripe onboarding first"
+                .into(),
+        )
+    })?;
+
+    match rail {
+        Rail::MobileMoney => {
+            if !momo_verified {
+                return Err(AppError::Validation(
+                    "Phone not verified — complete the SMS OTP first".into(),
+                ));
+            }
+            use num_traits::ToPrimitive;
+            if amount.to_i64().unwrap_or(0) > KYC_LITE_LIMIT_XOF {
+                return Err(AppError::Validation(format!(
+                    "Amount exceeds KYC-lite limit ({KYC_LITE_LIMIT_XOF} XOF). \
+                     Complete full KYC first."
+                )));
+            }
+        }
+        Rail::BankAccount => {
+            if kyc != "verified" {
+                return Err(AppError::Validation(
+                    "Complete Stripe onboarding before withdrawing".into(),
+                ));
+            }
+        }
+    }
+
+    let (daily_var, monthly_var) = match currency {
+        Currency::Eur => ("WALLET_DAILY_LIMIT_EUR", "WALLET_MONTHLY_LIMIT_EUR"),
+        Currency::Xof => ("WALLET_DAILY_LIMIT_XOF", "WALLET_MONTHLY_LIMIT_XOF"),
+    };
     enforce_limit(
         &state.db,
         auth.user_id,
-        talent_wallet::Currency::Xof,
+        currency,
         &amount,
-        "WALLET_DAILY_LIMIT_XOF",
+        daily_var,
         24,
         "daily",
     )
@@ -680,89 +603,56 @@ pub async fn momo_withdraw(
     enforce_limit(
         &state.db,
         auth.user_id,
-        talent_wallet::Currency::Xof,
+        currency,
         &amount,
-        "WALLET_MONTHLY_LIMIT_XOF",
+        monthly_var,
         30 * 24,
         "monthly",
     )
     .await?;
 
-    // Explicit provider wins; otherwise fall back to the one recorded with
-    // the phone number. Wallets registered before migration 0151 have none,
-    // and are told what to do rather than handed a serde rejection.
-    let provider_str = body
-        .provider
-        .as_deref()
-        .or(stored_provider.as_deref())
-        .ok_or_else(|| {
-            AppError::Validation(
-                "No Mobile Money operator on file for this wallet. Send \
-                 `provider` (orange, mtn or wave), or register it once via \
-                 POST /users/me/wallet/momo/phone."
-                    .into(),
-            )
-        })?;
-    let provider_name = crate::services::mobile_money::ProviderName::from_str(provider_str)?;
-    let provider = crate::services::mobile_money::get_provider(provider_name);
+    let registry = crate::services::payout_adapters::registry_from_env();
+    let provider = registry
+        .resolve(&state.db, residency.as_deref(), currency, rail)
+        .await?;
 
-    // Débit d'abord, puis payout provider — rollback si le provider refuse.
-    let debit_entry = talent_wallet::LedgerEntry {
-        user_id: auth.user_id,
-        delta: &amount,
-        currency: talent_wallet::Currency::Xof,
-        reason: "withdraw_momo",
-        related_slice_id: None,
-        related_provider_txn_id: None,
-        notes: Some(&format!(
-            "{provider_name} withdraw",
-            provider_name = provider_name.as_str()
-        )),
-    };
-    let debit_row = talent_wallet::debit(&state.db, debit_entry).await?;
+    let idempotency_key = format!(
+        "withdraw:{}:{}:{}",
+        auth.user_id,
+        amount,
+        chrono::Utc::now().timestamp()
+    );
 
-    let payout_params = crate::services::mobile_money::PayoutParams {
-        user_id: auth.user_id,
-        phone: &phone,
-        currency: "XOF",
-        amount: &amount,
-        note: "skilluv talent payout",
-    };
-    match provider.initiate_payout(&payout_params).await {
-        Ok(result) => {
-            sqlx::query(
-                "UPDATE talent_transactions SET related_provider_txn_id = $1 WHERE id = $2",
-            )
-            .bind(&result.provider_txn_id)
-            .bind(debit_row.id)
-            .execute(&state.db)
-            .await?;
-            metrics::counter!(
-                "skilluv_momo_payouts_total",
-                "provider" => provider_name.as_str().to_string()
-            )
-            .increment(1);
-            Ok(Json(build_response(json!({
-                "transaction_id": debit_row.id,
-                "provider": provider_name.as_str(),
-                "provider_txn_id": result.provider_txn_id,
-                "status": result.status,
-                "message": result.message,
-            }))))
-        }
-        Err(e) => {
-            // Rollback : ré-crédite le user.
-            let refund_entry = talent_wallet::LedgerEntry {
-                user_id: auth.user_id,
-                delta: &amount,
-                currency: talent_wallet::Currency::Xof,
-                reason: "withdraw_momo_refund",
-                related_slice_id: None,
-                related_provider_txn_id: None,
-                notes: Some("momo provider rejected"),
-            };
-            let _ = talent_wallet::credit(&state.db, refund_entry).await;
-            Err(e)
-        }
-    }
+    let receipt = crate::services::payout::send(
+        &state.db,
+        provider.as_ref(),
+        PayoutRequest {
+            user_id: auth.user_id,
+            amount: &amount,
+            currency,
+            destination: &destination,
+            note: "Skilluv withdrawal",
+            idempotency_key: &idempotency_key,
+        },
+    )
+    .await?;
+
+    let _ = crate::services::notify::send(
+        &state,
+        crate::services::notify::Recipient::User(auth.user_id),
+        "payout.sent",
+    )
+    .arg("amount", format!("{} {}", amount, currency.as_str()))
+    .arg("destination", provider.name())
+    .payload(json!({ "reference": receipt.reference }))
+    .execute()
+    .await;
+
+    Ok(Json(build_response(json!({
+        "amount": amount.to_string(),
+        "currency": currency.as_str(),
+        "provider": receipt.provider,
+        "reference": receipt.reference,
+        "status": receipt.status,
+    }))))
 }

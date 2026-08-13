@@ -189,6 +189,7 @@ async fn async_main(config: AppConfig) {
     //   SKILLUV_PROFILE_README_SYNC_ENABLED=1
     // Sans le flag, la tache spawn quand meme mais log un no-op.
     spawn_hello_wall_mirror_worker(state.clone());
+    spawn_release_sweep_worker(state.clone());
     spawn_profile_readme_sync_worker(state.clone());
 
     let app = build_router(state);
@@ -207,6 +208,57 @@ async fn async_main(config: AppConfig) {
 /// Requiert `SKILLUV_HELLO_WALL_MIRROR_ENABLED=1` + `SKILLUV_BOT_GITHUB_TOKEN`.
 /// Sans le token, la tache log un warning au demarrage puis dort — permet
 /// d'ajouter le token plus tard sans redemarrer.
+/// Releases money whose hold has expired.
+///
+/// Not behind a feature flag, unlike the other workers. Every other job here
+/// enriches something; this one is the difference between a mentor being paid
+/// and a mentor waiting forever. A deployment that forgets to enable it would
+/// look healthy and quietly stop paying people.
+///
+/// Runs every ten minutes. The precision that matters is hours — nobody
+/// notices their money arriving at 14:07 instead of 14:00 — and a short
+/// interval keeps the backlog small enough that one failing hold cannot bury
+/// the rest.
+fn spawn_release_sweep_worker(state: skilluv_backend::AppState) {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(10 * 60));
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+            match skilluv_backend::services::release::sweep(&state.db).await {
+                Ok(report) => {
+                    if !report.failed.is_empty() {
+                        tracing::error!(
+                            failed = report.failed.len(),
+                            examined = report.examined,
+                            details = ?report.failed,
+                            "release sweep could not release every due hold -                              people are owed money they cannot reach"
+                        );
+                    }
+                }
+                Err(e) => tracing::error!(
+                    error = %e,
+                    "release sweep failed entirely - no funds were released this cycle"
+                ),
+            }
+
+            // Anything still late an hour after its window closed means the
+            // sweep is not doing its job. Surfaced separately from a failed
+            // cycle: a sweep can succeed every time and still leave a hold
+            // stuck behind a dispute nobody resolved.
+            if let Ok(late) = skilluv_backend::services::release::overdue(&state.db).await
+                && !late.is_empty()
+            {
+                metrics::gauge!("skilluv_release_overdue_holds").set(late.len() as f64);
+                tracing::warn!(
+                    count = late.len(),
+                    "holds are past their release window and still unreleased"
+                );
+            }
+        }
+    });
+}
+
 fn spawn_hello_wall_mirror_worker(state: skilluv_backend::AppState) {
     tokio::spawn(async move {
         if std::env::var("SKILLUV_HELLO_WALL_MIRROR_ENABLED").as_deref() != Ok("1") {

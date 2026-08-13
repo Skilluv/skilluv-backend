@@ -94,11 +94,11 @@ async fn stripe_onboard_fails_without_config() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// stripe_withdraw refuse si KYC pas verified
+// Withdrawing over a bank rail refuses until Stripe has verified KYC
 // ═══════════════════════════════════════════════════════════════════
 
 #[tokio::test]
-async fn stripe_withdraw_refuses_when_kyc_not_verified() {
+async fn withdraw_refuses_when_kyc_not_verified() {
     let _env_guard = ENV_MUTEX.lock().await;
     set_stripe_env();
     let app = TestApp::spawn().await;
@@ -122,7 +122,7 @@ async fn stripe_withdraw_refuses_when_kyc_not_verified() {
 
     let resp = app
         .post(
-            "/api/users/me/wallet/withdraw/stripe",
+            "/api/users/me/wallet/withdraw",
             &json!({ "amount": "10.00", "currency": "EUR" }),
         )
         .await;
@@ -132,7 +132,7 @@ async fn stripe_withdraw_refuses_when_kyc_not_verified() {
         body["error"]["message"]
             .as_str()
             .unwrap()
-            .contains("KYC status is 'pending'")
+            .contains("Complete Stripe onboarding")
     );
 
     drop(app);

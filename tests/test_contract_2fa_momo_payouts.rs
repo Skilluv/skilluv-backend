@@ -227,7 +227,7 @@ async fn a_second_registration_keeps_a_known_operator() {
 }
 
 #[tokio::test]
-async fn withdrawing_without_a_provider_no_longer_422s() {
+async fn withdrawing_takes_no_provider_and_no_rail() {
     let app = TestApp::spawn().await;
     let uid = wallet_owner(&app, "momo_wd").await;
 
@@ -236,56 +236,101 @@ async fn withdrawing_without_a_provider_no_longer_422s() {
         &json!({ "phone": "+22997000000", "provider": "mtn" }),
     )
     .await;
-    sqlx::query("UPDATE talent_wallets SET balance_xof = 5000 WHERE user_id = $1")
+    sqlx::query("UPDATE talent_wallets SET residency_country = 'BJ' WHERE user_id = $1")
         .bind(uid)
         .execute(&app.db)
         .await
         .unwrap();
 
-    // Exactly what the client sends.
+    // Exactly what a client sends. Which rail reaches Benin is a routing
+    // question the server answers, not something a URL should encode.
     let resp = app
         .post(
-            "/api/users/me/wallet/withdraw/momo",
+            "/api/users/me/wallet/withdraw",
             &json!({ "amount": "1000", "currency": "XOF" }),
         )
         .await;
     let status = resp.status().as_u16();
     let body = resp.text().await.unwrap_or_default();
-    assert_ne!(
-        status, 422,
-        "the missing-field rejection is the bug being fixed: {body}"
-    );
+    assert_ne!(status, 422, "no field may be missing: {body}");
     assert!(
         !body.contains("missing field"),
-        "no field may be missing once the operator is on file: {body}"
+        "the client should not have to name a provider: {body}"
     );
 }
 
 #[tokio::test]
-async fn withdrawing_with_no_operator_anywhere_says_what_to_do() {
-    let app = TestApp::spawn().await;
-    let uid = wallet_owner(&app, "momo_none").await;
+async fn held_funds_cannot_be_withdrawn() {
+    use skilluv_backend::services::ledger::{self, Currency};
+    use std::str::FromStr;
 
-    // A wallet from before migration 0151: phone, no operator.
+    let app = TestApp::spawn().await;
+    let uid = wallet_owner(&app, "momo_held").await;
     sqlx::query(
         "UPDATE talent_wallets
-         SET momo_phone = '+22997000000', momo_phone_verified = TRUE, balance_xof = 5000
-         WHERE user_id = $1",
+            SET residency_country = 'BJ', momo_phone = '+22997000000',
+                momo_phone_verified = TRUE
+          WHERE user_id = $1",
     )
     .bind(uid)
     .execute(&app.db)
     .await
     .unwrap();
 
+    // Captured, so it exists — but still inside its release window.
+    ledger::capture_for_recipient(
+        &app.db,
+        "mtn",
+        "mm_held",
+        uid,
+        bigdecimal::BigDecimal::from_str("5000").unwrap(),
+        bigdecimal::BigDecimal::from_str("0").unwrap(),
+        Currency::Xof,
+        "bounty_slice",
+        Uuid::new_v4(),
+    )
+    .await
+    .unwrap();
+
     let resp = app
         .post(
-            "/api/users/me/wallet/withdraw/momo",
+            "/api/users/me/wallet/withdraw",
+            &json!({ "amount": "1000", "currency": "XOF" }),
+        )
+        .await;
+    assert_eq!(
+        resp.status().as_u16(),
+        400,
+        "money the payer can still reclaim must not be withdrawable"
+    );
+    let body = resp.text().await.unwrap_or_default();
+    assert!(
+        body.contains("insufficient available balance"),
+        "the answer should say why, got: {body}"
+    );
+}
+
+#[tokio::test]
+async fn withdrawing_without_a_destination_says_what_to_do() {
+    let app = TestApp::spawn().await;
+    let uid = wallet_owner(&app, "momo_none").await;
+
+    // A wallet with a country and nothing to pay into.
+    sqlx::query("UPDATE talent_wallets SET residency_country = 'BJ' WHERE user_id = $1")
+        .bind(uid)
+        .execute(&app.db)
+        .await
+        .unwrap();
+
+    let resp = app
+        .post(
+            "/api/users/me/wallet/withdraw",
             &json!({ "amount": "1000", "currency": "XOF" }),
         )
         .await;
     let body = resp.text().await.unwrap_or_default();
     assert!(
-        body.contains("provider") || body.contains("operator"),
+        body.contains("destination") || body.contains("Mobile Money"),
         "the answer must name the remedy, got: {body}"
     );
 }

@@ -677,14 +677,13 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::mentorship::submit_review,
         crate::routes::mentorship::upsert_my_mentor_profile,
         // ─── talent wallet ───────────────────────────────────────
-        crate::routes::talent_wallet::momo_withdraw,
         crate::routes::talent_wallet::my_wallet,
         crate::routes::talent_wallet::my_wallet_transactions,
         crate::routes::talent_wallet::register_momo_phone,
         crate::routes::talent_wallet::set_my_residency,
         crate::routes::talent_wallet::stripe_connect_webhook,
         crate::routes::talent_wallet::stripe_onboard,
-        crate::routes::talent_wallet::stripe_withdraw,
+        crate::routes::talent_wallet::withdraw,
         crate::routes::talent_wallet::wallet_statement_csv,
     ),
     components(

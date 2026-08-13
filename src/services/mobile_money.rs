@@ -12,7 +12,7 @@
 //! Compliance / KYC :
 //! - Pour < 100 000 XOF (~150 EUR), un téléphone vérifié SMS suffit (mode
 //!   "KYC lite"). Au-delà, on requiert un KYC full à ajouter en P14+.
-//! - Chaque payout est logué dans `talent_transactions` avec
+//! - Chaque payout est enregistré dans le ledger (migration 0153) avec
 //!   `related_provider_txn_id` pour rapprochement.
 
 use std::str::FromStr;
@@ -58,7 +58,7 @@ impl FromStr for ProviderName {
 }
 
 /// Résultat d'un payout : l'id retourné par le provider (à stocker dans
-/// `talent_transactions.related_provider_txn_id`) + statut.
+/// `ledger_transactions.provider_reference`) + statut.
 #[derive(Debug, Clone, Serialize)]
 pub struct PayoutResult {
     pub provider: ProviderName,

@@ -89,6 +89,7 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::health_routes())
         .nest("/api", routes::auth_routes())
         .nest("/api", routes::email_prefs_routes())
+        .nest("/api", routes::notification_preferences_routes())
         .nest("/api", routes::challenge_routes())
         .nest("/api", routes::sandbox_routes())
         .nest("/api", routes::slice_routes())

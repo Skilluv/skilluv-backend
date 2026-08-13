@@ -39,3 +39,110 @@ system:
   internal_error: "حدث خطأ ما. يرجى المحاولة مرة أخرى."
   service_unavailable: "الخدمة غير متوفرة مؤقتًا"
   insufficient_credits: "أرصدة غير كافية لإجراء هذه العملية"
+
+# ─── إطار البريد الإلكتروني ──────────────────────────────────────
+email:
+  greeting: "مرحبًا {name}،"
+  footer_note: "تصلك هذه الرسالة لأن لديك حسابًا على Skilluv."
+  unsubscribe: "إدارة الإشعارات"
+
+# ─── الإشعارات ───────────────────────────────────────────────────
+notification:
+  payout:
+    sent:
+      title: "تم إرسال دفعتك"
+      body: "تم إرسال {amount} إلى {destination}. قد يستغرق الوصول من دقائق إلى أيام حسب القناة."
+    failed:
+      title: "تعذّر إرسال دفعتك"
+      body: "فشل إرسال {amount}. المبلغ ما زال في رصيدك ويمكنك المحاولة مجددًا."
+  payment:
+    received:
+      title: "تم استلام الدفعة"
+      body: "تم دفع {amount} مقابل {subject}."
+    refunded:
+      title: "تم استرداد الدفعة"
+      body: "تم استرداد {amount} مقابل {subject}."
+  funds:
+    released:
+      title: "أموالك متاحة الآن"
+      body: "تم تحرير {amount}. يمكنك سحبها متى شئت."
+    disputed:
+      title: "هناك دفعة متنازع عليها"
+      body: "تم تجميد {amount} ريثما نراجع الشكوى بخصوص {subject}."
+  security:
+    new_login:
+      title: "تسجيل دخول جديد إلى حسابك"
+      body: "تم تسجيل الدخول من {location}. إن لم تكن أنت، غيّر كلمة المرور."
+    password_changed:
+      title: "تم تغيير كلمة المرور"
+      body: "إن لم تكن أنت من قام بذلك، تواصل معنا فورًا."
+  account:
+    capability_granted:
+      title: "صلاحية جديدة"
+      body: "يمكنك الآن {capability} على Skilluv."
+  challenge:
+    reviewed:
+      title: "تمت مراجعة مساهمتك"
+      body: "ترك {reviewer} ملاحظات على {subject}."
+    validated:
+      title: "تم اعتماد المساهمة"
+      body: "تم اعتماد {subject}. الشهادة المقابلة متاحة."
+  attestation:
+    issued:
+      title: "شهادة جديدة"
+      body: "شهادتك عن {subject} جاهزة، ويمكن التحقق منها علنًا."
+  rank:
+    promoted:
+      title: "أصبحت الآن {rank}"
+      body: "عملك على المنصة رفعك إلى رتبة {rank}."
+  badge:
+    earned:
+      title: "حصلت على شارة: {badge}"
+      body: "أصبحت ظاهرة في ملفك العام."
+  mentorship:
+    booked:
+      title: "تم حجز جلسة"
+      body: "حجز {other} جلسة بتاريخ {date}."
+    reminder:
+      title: "جلسة غدًا"
+      body: "جلستك مع {other} بتاريخ {date}."
+    cancelled:
+      title: "تم إلغاء الجلسة"
+      body: "أُلغيت جلسة {date} مع {other}."
+  social:
+    mention:
+      title: "أشار إليك {author}"
+      body: "{excerpt}"
+    reply:
+      title: "ردّ عليك {author}"
+      body: "{excerpt}"
+  guild:
+    invitation:
+      title: "دعوة للانضمام إلى {guild}"
+      body: "يدعوك {inviter} للانضمام إلى نقابة {guild}."
+    application:
+      title: "طلب انضمام جديد"
+      body: "يريد {applicant} الانضمام إلى {guild}."
+  enterprise:
+    credits_low:
+      title: "الرصيد على وشك النفاد"
+      body: "تبقّى لديك {credits} رصيدًا. أعد الشحن كي لا تتوقف عمليات البحث."
+    invoice_ready:
+      title: "الفاتورة متاحة"
+      body: "فاتورتك {reference} جاهزة للتنزيل."
+    talent_replied:
+      title: "ردّ {talent}"
+      body: "ردّ على رسالتك."
+  admin:
+    review_queued:
+      title: "{count} عنصر بانتظار المراجعة"
+      body: "قائمة الإشراف تحتاج إلى تدخل."
+    fraud_flagged:
+      title: "بلاغ احتيال"
+      body: "تم الإبلاغ عن {subject} تلقائيًا وينتظر قرارًا."
+    payout_needs_replay:
+      title: "دفعة تحتاج إعادة إرسال"
+      body: "{count} دفعة مستحقة لم تُنفّذ. لم يتم إرسالها."
+    reconciliation_drift:
+      title: "فارق في التسوية"
+      body: "تختلف الدفاتر الداخلية عن كشف {provider} بمقدار {amount}."

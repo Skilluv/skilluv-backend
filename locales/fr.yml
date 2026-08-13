@@ -38,3 +38,115 @@ system:
   internal_error: "Une erreur est survenue. Réessaie."
   service_unavailable: "Service temporairement indisponible"
   insufficient_credits: "Crédits insuffisants pour cette action"
+
+# ─── Cadre des emails ────────────────────────────────────────────
+# Le squelette est unique (src/services/email_template.rs) ; seul le texte
+# change d'une langue à l'autre.
+email:
+  greeting: "Bonjour {name},"
+  footer_note: "Tu reçois ce message parce que tu as un compte Skilluv."
+  unsubscribe: "Gérer mes notifications"
+
+# ─── Notifications ───────────────────────────────────────────────
+# Une clé par entrée de notification_kinds. `title` sert aussi d'objet
+# d'email et de titre de push : trois formulations pour la même chose
+# divergeraient au premier changement.
+notification:
+  payout:
+    sent:
+      title: "Ton paiement est parti"
+      body: "{amount} ont été envoyés vers {destination}. Compte quelques minutes à quelques jours selon le canal."
+    failed:
+      title: "Ton paiement n'a pas pu partir"
+      body: "L'envoi de {amount} a échoué. L'argent est toujours sur ton solde, tu peux réessayer."
+  payment:
+    received:
+      title: "Paiement reçu"
+      body: "{amount} ont été réglés pour {subject}."
+    refunded:
+      title: "Paiement remboursé"
+      body: "{amount} ont été remboursés pour {subject}."
+  funds:
+    released:
+      title: "Ton argent est disponible"
+      body: "{amount} viennent d'être débloqués. Tu peux les retirer quand tu veux."
+    disputed:
+      title: "Un paiement est contesté"
+      body: "{amount} sont gelés le temps qu'on examine la réclamation sur {subject}."
+  security:
+    new_login:
+      title: "Nouvelle connexion à ton compte"
+      body: "Une connexion vient d'avoir lieu depuis {location}. Si ce n'est pas toi, change ton mot de passe."
+    password_changed:
+      title: "Ton mot de passe a changé"
+      body: "Si tu n'es pas à l'origine de ce changement, contacte-nous immédiatement."
+  account:
+    capability_granted:
+      title: "Nouvelle capacité débloquée"
+      body: "Tu peux désormais {capability} sur Skilluv."
+  challenge:
+    reviewed:
+      title: "Ta contribution a été relue"
+      body: "{reviewer} a laissé un retour sur {subject}."
+    validated:
+      title: "Contribution validée"
+      body: "{subject} est validée. L'attestation correspondante est disponible."
+  attestation:
+    issued:
+      title: "Nouvelle attestation"
+      body: "Ton attestation pour {subject} est prête, et vérifiable publiquement."
+  rank:
+    promoted:
+      title: "Tu passes {rank}"
+      body: "Ton travail sur la plateforme t'a fait passer au rang de {rank}."
+  badge:
+    earned:
+      title: "Badge obtenu : {badge}"
+      body: "Il est visible sur ton profil public."
+  mentorship:
+    booked:
+      title: "Séance réservée"
+      body: "{other} a réservé une séance le {date}."
+    reminder:
+      title: "Séance demain"
+      body: "Ta séance avec {other} a lieu le {date}."
+    cancelled:
+      title: "Séance annulée"
+      body: "La séance du {date} avec {other} est annulée."
+  social:
+    mention:
+      title: "{author} t'a mentionné"
+      body: "{excerpt}"
+    reply:
+      title: "{author} t'a répondu"
+      body: "{excerpt}"
+  guild:
+    invitation:
+      title: "Invitation à rejoindre {guild}"
+      body: "{inviter} t'invite à rejoindre la guilde {guild}."
+    application:
+      title: "Nouvelle candidature"
+      body: "{applicant} souhaite rejoindre {guild}."
+  enterprise:
+    credits_low:
+      title: "Crédits bientôt épuisés"
+      body: "Il te reste {credits} crédits. Pense à recharger pour ne pas interrompre tes recherches."
+    invoice_ready:
+      title: "Facture disponible"
+      body: "Ta facture {reference} est prête au téléchargement."
+    talent_replied:
+      title: "{talent} a répondu"
+      body: "Réponse à ta prise de contact."
+  admin:
+    review_queued:
+      title: "{count} élément(s) en attente de relecture"
+      body: "La file de modération demande une intervention."
+    fraud_flagged:
+      title: "Signalement de fraude"
+      body: "{subject} a été signalé automatiquement et attend une décision."
+    payout_needs_replay:
+      title: "Paiement à rejouer"
+      body: "{count} paiement(s) sont dus et n'ont pas abouti. Ils n'ont pas été envoyés."
+    reconciliation_drift:
+      title: "Écart de réconciliation"
+      body: "Les comptes internes et le relevé de {provider} divergent de {amount}."

@@ -103,6 +103,10 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::email_prefs::unsubscribe_by_path,
         crate::routes::email_prefs::brevo_webhook,
         crate::routes::email_prefs::admin_run_weekly_digest,
+        // Notification settings across all three channels.
+        crate::routes::notification_preferences::list_preferences,
+        crate::routes::notification_preferences::update_preferences,
+        crate::routes::notification_preferences::reset_preferences,
         // ─── mentions (SKI-286) ───────────────────────────────────
         crate::routes::mentions::list_mine,
         crate::routes::mentions::read_one,
@@ -697,6 +701,13 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
             crate::routes::projects::UserProjectsResponse,
             // SKI-293 — the decide contract was untyped, so the only way to
             // find the field name was to probe the running API.
+            crate::routes::notification_preferences::KindPreference,
+            crate::routes::notification_preferences::PreferencesData,
+            crate::routes::notification_preferences::PreferencesResponse,
+            crate::routes::notification_preferences::PreferenceUpdate,
+            crate::routes::notification_preferences::UpdatePreferencesRequest,
+            crate::routes::notification_preferences::UpdateResult,
+            crate::routes::notification_preferences::ResetResult,
             crate::routes::guild::DecideBody,
             crate::routes::guild::DecidedApplicationData,
             crate::routes::guild::DecidedApplicationResponse,

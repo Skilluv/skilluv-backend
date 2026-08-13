@@ -90,7 +90,10 @@ struct ProfileUser {
     id: Uuid,
     username: String,
     display_name: String,
-    skill_domain: String,
+    /// Nullable since migration 0049 — a user who has not picked a domain yet
+    /// has none. Declaring it `String` here made the public profile answer 500
+    /// for every such account.
+    skill_domain: Option<String>,
     title: String,
     golden_stars: i32,
     total_fragments: i32,
@@ -284,8 +287,13 @@ pub async fn public_profile(
     let mut redis = state.redis.clone();
     let global_rank =
         LeaderboardService::get_rank(&mut redis, "global", "alltime", user.id).await?;
-    let domain_rank =
-        LeaderboardService::get_rank(&mut redis, &user.skill_domain, "alltime", user.id).await?;
+    // No domain means no domain leaderboard to rank against — not rank zero.
+    let domain_rank = match user.skill_domain.as_deref() {
+        Some(domain) => {
+            LeaderboardService::get_rank(&mut redis, domain, "alltime", user.id).await?
+        }
+        None => None,
+    };
 
     let heatmap_days_active = heatmap_result.len();
     let heatmap_data: Vec<serde_json::Value> = heatmap_result

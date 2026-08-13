@@ -27,7 +27,9 @@ async fn require_enterprise(state: &AppState, auth: &AuthUser) -> Result<Enterpr
 
 #[derive(Debug, sqlx::FromRow)]
 struct DomainCount {
-    skill_domain: String,
+    /// `GROUP BY skill_domain` yields a NULL bucket for users who have not
+    /// picked a domain. Nullable since migration 0049.
+    skill_domain: Option<String>,
     count: i64,
 }
 
@@ -127,11 +129,16 @@ pub async fn platform_stats(
 
     Ok(Json(ApiResponse::new(PlatformStatsResponse {
         total_talents,
+        // The NULL bucket is dropped rather than surfaced: these talents
+        // belong to no domain, and `total_talents` already counts them.
+        // Keeping the wire shape non-nullable avoids changing the contract.
         by_domain: by_domain
             .iter()
-            .map(|d| DomainBucket {
-                domain: d.skill_domain.clone(),
-                count: d.count,
+            .filter_map(|d| {
+                d.skill_domain.clone().map(|domain| DomainBucket {
+                    domain,
+                    count: d.count,
+                })
             })
             .collect(),
         by_title: by_title

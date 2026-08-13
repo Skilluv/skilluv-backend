@@ -16,7 +16,9 @@ use num_traits::ToPrimitive;
 use crate::errors::AppError;
 use crate::services::ledger::Currency;
 use crate::services::mobile_money::{self, PayoutParams, PayoutStatus, ProviderName};
-use crate::services::payout::{PayoutProvider, PayoutReceipt, PayoutRequest, PayoutState, Rail};
+use crate::services::payout::{
+    PayoutProvider, PayoutReceipt, PayoutRequest, PayoutState, Rail, Recipient,
+};
 
 /// Stripe Connect transfers, for recipients in a country Stripe serves.
 pub struct StripePayout {
@@ -41,7 +43,13 @@ impl PayoutProvider for StripePayout {
         matches!(currency, Currency::Eur)
     }
 
-    async fn pay(&self, request: &PayoutRequest<'_>) -> Result<PayoutReceipt, AppError> {
+    async fn pay(
+        &self,
+        request: &PayoutRequest<'_>,
+        // Stripe names the recipient from the connected account it already
+        // holds, so nothing here is needed.
+        _recipient: &Recipient,
+    ) -> Result<PayoutReceipt, AppError> {
         let cents = to_minor_units(request.amount, request.currency)?;
 
         let response = crate::services::stripe::create_transfer(
@@ -50,6 +58,7 @@ impl PayoutProvider for StripePayout {
             cents,
             &request.currency.as_str().to_lowercase(),
             request.note,
+            request.idempotency_key,
         )
         .await?;
 
@@ -89,7 +98,12 @@ impl PayoutProvider for MomoPayout {
         matches!(currency, Currency::Xof)
     }
 
-    async fn pay(&self, request: &PayoutRequest<'_>) -> Result<PayoutReceipt, AppError> {
+    async fn pay(
+        &self,
+        request: &PayoutRequest<'_>,
+        // The operator identifies the wallet by its number alone.
+        _recipient: &Recipient,
+    ) -> Result<PayoutReceipt, AppError> {
         let provider = mobile_money::get_provider(self.operator);
         let result = provider
             .initiate_payout(&PayoutParams {
@@ -112,6 +126,74 @@ impl PayoutProvider for MomoPayout {
                 PayoutStatus::Rejected => PayoutState::Rejected,
             },
             message: result.message,
+        })
+    }
+}
+
+/// FedaPay, reaching Mobile Money across West Africa on one credential.
+///
+/// This struct is the entire cost of adding a provider, and it is here to
+/// prove that. What it took: this impl, one line in [`registry_from_env`],
+/// and rows in `payout_routes` saying where it applies. No caller changed,
+/// no branch was added anywhere, and the ledger never heard of it.
+pub struct FedaPayPayout {
+    pub cfg: crate::services::fedapay::FedaPayConfig,
+}
+
+#[async_trait]
+impl PayoutProvider for FedaPayPayout {
+    fn name(&self) -> &'static str {
+        "fedapay"
+    }
+
+    fn rail(&self) -> Rail {
+        Rail::MobileMoney
+    }
+
+    fn supports(&self, currency: Currency) -> bool {
+        matches!(currency, Currency::Xof)
+    }
+
+    async fn pay(
+        &self,
+        request: &PayoutRequest<'_>,
+        recipient: &Recipient,
+    ) -> Result<PayoutReceipt, AppError> {
+        // The country decides which operator FedaPay hands the number to, so
+        // an absent one is a refusal we can explain rather than a transfer
+        // sent into the wrong network.
+        let country = recipient.country.as_deref().ok_or_else(|| {
+            AppError::Validation(
+                "a country of residence is required before withdrawing to Mobile Money".into(),
+            )
+        })?;
+
+        let amount = to_minor_units(request.amount, request.currency)?;
+        let payout = crate::services::fedapay::send_payout(
+            &self.cfg,
+            &crate::services::fedapay::Transfer {
+                amount,
+                currency_iso: request.currency.as_str(),
+                phone: request.destination,
+                country,
+                recipient_name: &recipient.name,
+                recipient_email: recipient.email.as_deref(),
+                description: request.note,
+                idempotency_key: request.idempotency_key,
+            },
+        )
+        .await?;
+
+        Ok(PayoutReceipt {
+            provider: "fedapay".to_string(),
+            reference: payout.id.to_string(),
+            status: match payout.status.as_str() {
+                "sent" => PayoutState::Completed,
+                "failed" => PayoutState::Rejected,
+                // `pending`, `started`, `processing` — accepted, settling.
+                _ => PayoutState::Pending,
+            },
+            message: payout.message,
         })
     }
 }
@@ -150,6 +232,10 @@ pub fn registry_from_env() -> crate::services::payout::PayoutRegistry {
 
     if let Some(cfg) = crate::services::stripe::StripeConfig::from_env() {
         registry.register(Arc::new(StripePayout { cfg }));
+    }
+
+    if let Some(cfg) = crate::services::fedapay::FedaPayConfig::from_env() {
+        registry.register(Arc::new(FedaPayPayout { cfg }));
     }
 
     // The Mobile Money implementations read their own credentials when

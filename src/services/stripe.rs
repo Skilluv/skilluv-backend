@@ -412,6 +412,7 @@ pub async fn create_transfer(
     amount_cents: i64,
     currency: &str,
     description: &str,
+    idempotency_key: &str,
 ) -> Result<serde_json::Value, AppError> {
     let client = reqwest::Client::new();
     let form = [
@@ -423,6 +424,9 @@ pub async fn create_transfer(
     let resp = client
         .post(format!("{STRIPE_API}/transfers"))
         .basic_auth(&cfg.secret_key, Some(""))
+        // Without this, a transfer whose response was lost in flight cannot
+        // be retried without risking paying twice.
+        .header("Idempotency-Key", idempotency_key)
         .form(&form)
         .send()
         .await

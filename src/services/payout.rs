@@ -62,6 +62,21 @@ pub struct PayoutRequest<'a> {
     pub idempotency_key: &'a str,
 }
 
+/// Who the money is for, as a rail needs to name them.
+///
+/// Resolved once by [`send`] rather than carried in [`PayoutRequest`]: the
+/// caller has a `user_id` and no reason to know that FedaPay wants a name
+/// split in two while Stripe wants neither. A provider that does not care
+/// ignores it.
+#[derive(Debug, Clone)]
+pub struct Recipient {
+    /// Display name, or the username where there is none. Never empty.
+    pub name: String,
+    pub email: Option<String>,
+    /// ISO 3166-1 alpha-2, from the account's declared residency.
+    pub country: Option<String>,
+}
+
 /// What the provider answered.
 #[derive(Debug, Clone, Serialize)]
 pub struct PayoutReceipt {
@@ -100,7 +115,11 @@ pub trait PayoutProvider: Send + Sync {
 
     fn supports(&self, currency: Currency) -> bool;
 
-    async fn pay(&self, request: &PayoutRequest<'_>) -> Result<PayoutReceipt, AppError>;
+    async fn pay(
+        &self,
+        request: &PayoutRequest<'_>,
+        recipient: &Recipient,
+    ) -> Result<PayoutReceipt, AppError>;
 }
 
 /// A rule saying which provider serves a destination.
@@ -235,6 +254,8 @@ pub async fn send(
     provider: &dyn PayoutProvider,
     request: PayoutRequest<'_>,
 ) -> Result<PayoutReceipt, AppError> {
+    let recipient = recipient_of(db, request.user_id).await?;
+
     let posted = ledger::withdraw(
         db,
         request.user_id,
@@ -257,7 +278,7 @@ pub async fn send(
         });
     }
 
-    match provider.pay(&request).await {
+    match provider.pay(&request, &recipient).await {
         Ok(receipt) if receipt.status != PayoutState::Rejected => {
             sqlx::query("UPDATE ledger_transactions SET provider_reference = $2 WHERE id = $1")
                 .bind(posted.transaction_id())
@@ -275,6 +296,47 @@ pub async fn send(
             Err(e)
         }
     }
+}
+
+/// Who this payout is for, as the rails need to name them.
+///
+/// The residency country is preferred over the profile country: it is the
+/// one the person declared for payment purposes, and the one the routing
+/// already used to pick this provider.
+async fn recipient_of(db: &PgPool, user_id: Uuid) -> Result<Recipient, AppError> {
+    #[derive(sqlx::FromRow)]
+    struct Row {
+        display_name: Option<String>,
+        username: String,
+        email: Option<String>,
+        country_iso2: Option<String>,
+        residency_country: Option<String>,
+    }
+
+    let row: Option<Row> = sqlx::query_as(
+        "SELECT u.display_name, u.username, u.email, u.country_iso2, w.residency_country
+           FROM users u
+           LEFT JOIN talent_wallets w ON w.user_id = u.id
+          WHERE u.id = $1",
+    )
+    .bind(user_id)
+    .fetch_optional(db)
+    .await?;
+
+    let Some(row) = row else {
+        return Err(AppError::NotFound("user".into()));
+    };
+    let (profile_country, residency) = (row.country_iso2, row.residency_country);
+
+    Ok(Recipient {
+        // A rail that must print a name gets one either way.
+        name: row
+            .display_name
+            .filter(|n| !n.trim().is_empty())
+            .unwrap_or(row.username),
+        email: row.email,
+        country: residency.or(profile_country),
+    })
 }
 
 /// Put the money back after a refusal, and say so loudly.

@@ -190,6 +190,7 @@ async fn async_main(config: AppConfig) {
     // Sans le flag, la tache spawn quand meme mais log un no-op.
     spawn_hello_wall_mirror_worker(state.clone());
     spawn_release_sweep_worker(state.clone());
+    spawn_payout_reconciliation_worker(state.clone());
     spawn_profile_readme_sync_worker(state.clone());
 
     let app = build_router(state);
@@ -254,6 +255,45 @@ fn spawn_release_sweep_worker(state: skilluv_backend::AppState) {
                     count = late.len(),
                     "holds are past their release window and still unreleased"
                 );
+            }
+        }
+    });
+}
+
+/// Chases payouts whose provider never called back.
+///
+/// Not behind a feature flag, for the same reason as the release sweep: a
+/// deployment that forgets to enable it looks healthy while holding payouts
+/// that are `pending` forever — the recipient's balance debited, the money
+/// somewhere nobody can name.
+///
+/// Every fifteen minutes. The sweep only looks at payouts older than its own
+/// quiet period, so running often costs a cheap indexed query and keeps the
+/// backlog from arriving all at once.
+fn spawn_payout_reconciliation_worker(state: skilluv_backend::AppState) {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(15 * 60));
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+            let registry = skilluv_backend::services::payout_adapters::registry_from_env();
+            match skilluv_backend::services::reconciliation::sweep(&state.db, &registry).await {
+                Ok(report) => {
+                    if report.checked > 0 || report.replayed_events > 0 {
+                        tracing::info!(
+                            checked = report.checked,
+                            settled = report.settled,
+                            failed = report.failed,
+                            escalated = report.escalated,
+                            replayed = report.replayed_events,
+                            "payout reconciliation cycle"
+                        );
+                    }
+                }
+                Err(e) => tracing::error!(
+                    error = %e,
+                    "payout reconciliation failed entirely - unconfirmed payouts stayed unconfirmed"
+                ),
             }
         }
     });

@@ -685,6 +685,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::talent_wallet::stripe_onboard,
         crate::routes::talent_wallet::withdraw,
         crate::routes::talent_wallet::wallet_statement_csv,
+        crate::routes::payment_webhooks::receive,
     ),
     components(
         schemas(

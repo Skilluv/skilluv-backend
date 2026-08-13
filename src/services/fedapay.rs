@@ -156,6 +156,28 @@ pub async fn send_payout(
     })
 }
 
+/// Read back what became of a payout.
+///
+/// The reconciliation sweep calls this for payouts whose callback never
+/// arrived, which is the majority of the ones it looks at.
+pub async fn payout_status(cfg: &FedaPayConfig, id: &str) -> Result<String, AppError> {
+    let client = reqwest::Client::new();
+    let resp = client
+        .get(format!("{}/payouts/{id}", cfg.base()))
+        .bearer_auth(&cfg.secret_key)
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("fedapay payout {id}: {e}")))?;
+    let body = decode(resp, "/payouts/{id}").await?;
+    let payout = unwrap_payout(&body)
+        .ok_or_else(|| AppError::Internal(format!("fedapay: unexpected payout body: {body}")))?;
+    Ok(payout
+        .get("status")
+        .and_then(Value::as_str)
+        .unwrap_or("pending")
+        .to_string())
+}
+
 /// FedaPay wraps its objects under a versioned key, and lists under the
 /// plural of it. Both shapes reach here, from create and from start.
 fn unwrap_payout(body: &Value) -> Option<&Value> {

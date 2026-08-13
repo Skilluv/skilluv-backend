@@ -120,6 +120,43 @@ pub trait PayoutProvider: Send + Sync {
         request: &PayoutRequest<'_>,
         recipient: &Recipient,
     ) -> Result<PayoutReceipt, AppError>;
+
+    /// Ask the provider what became of a payout it accepted earlier.
+    ///
+    /// `Ok(None)` means this rail cannot be polled and only ever answers
+    /// over a callback — the Mobile Money operators, today. That is not a
+    /// failure, but it does mean an unconfirmed payout there can only be
+    /// escalated to a human, never resolved automatically, which is why
+    /// [`crate::services::reconciliation`] treats the two differently.
+    ///
+    /// The default is `Ok(None)`, so a new adapter that has not thought
+    /// about reconciliation cannot silently claim a payout succeeded.
+    async fn status(&self, _reference: &str) -> Result<Option<PayoutState>, AppError> {
+        Ok(None)
+    }
+}
+
+/// Every provider name that may become a ledger account.
+///
+/// The ledger takes `&'static str` for an account segment on purpose: an
+/// account code assembled from runtime data is one a typo or a hostile
+/// webhook can create, and a ledger with accounts nobody meant to open is
+/// a ledger that no longer balances against anything.
+///
+/// A provider string arriving from a webhook or from a database row is
+/// matched back to this list before it can move money.
+const KNOWN_PROVIDERS: [&str; 5] = ["stripe", "fedapay", "orange", "mtn", "wave"];
+
+/// Turn a runtime provider name into one the ledger will accept.
+///
+/// `None` for anything unknown, which the callers report rather than
+/// guessing at — a payout attributed to the wrong provider account is a
+/// reconciliation that never balances again.
+pub fn canonical_provider(name: &str) -> Option<&'static str> {
+    KNOWN_PROVIDERS
+        .iter()
+        .find(|known| **known == name)
+        .copied()
 }
 
 /// A rule saying which provider serves a destination.
@@ -278,6 +315,31 @@ pub async fn send(
         });
     }
 
+    // The lifecycle row goes in before the provider is asked, for the same
+    // reason the ledger movement does: a process that dies mid-call must
+    // leave something for the sweep to find. A payout nobody recorded is
+    // one nobody will ever chase.
+    let payout_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO payouts
+            (user_id, ledger_transaction_id, provider, rail, amount, currency,
+             destination_masked, idempotency_key)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING id",
+    )
+    .bind(request.user_id)
+    .bind(posted.transaction_id())
+    .bind(provider.name())
+    .bind(match provider.rail() {
+        Rail::BankAccount => "bank_account",
+        Rail::MobileMoney => "mobile_money",
+    })
+    .bind(request.amount)
+    .bind(request.currency.as_str())
+    .bind(mask_destination(request.destination))
+    .bind(request.idempotency_key)
+    .fetch_one(db)
+    .await?;
+
     match provider.pay(&request, &recipient).await {
         Ok(receipt) if receipt.status != PayoutState::Rejected => {
             sqlx::query("UPDATE ledger_transactions SET provider_reference = $2 WHERE id = $1")
@@ -285,17 +347,68 @@ pub async fn send(
                 .bind(&receipt.reference)
                 .execute(db)
                 .await?;
+
+            // `Completed` here means the provider settled synchronously.
+            // Most rails answer `Pending` and confirm over a webhook, which
+            // is what the sweep and the webhook handler exist for.
+            let settled = receipt.status == PayoutState::Completed;
+            sqlx::query(
+                "UPDATE payouts
+                    SET provider_reference = $2,
+                        status = CASE WHEN $3 THEN 'sent' ELSE 'pending' END,
+                        settled_at = CASE WHEN $3 THEN NOW() ELSE NULL END
+                  WHERE id = $1",
+            )
+            .bind(payout_id)
+            .bind(&receipt.reference)
+            .bind(settled)
+            .execute(db)
+            .await?;
+
             Ok(receipt)
         }
         Ok(receipt) => {
             reverse(db, provider, &request, receipt.message.as_deref()).await?;
+            fail_payout(db, payout_id, receipt.message.as_deref()).await?;
             Ok(receipt)
         }
         Err(e) => {
             reverse(db, provider, &request, Some(&e.to_string())).await?;
+            fail_payout(db, payout_id, Some(&e.to_string())).await?;
             Err(e)
         }
     }
+}
+
+/// Mark a payout failed, with the provider's own words.
+async fn fail_payout(db: &PgPool, payout_id: Uuid, reason: Option<&str>) -> Result<(), AppError> {
+    sqlx::query(
+        "UPDATE payouts
+            SET status = 'failed', settled_at = NOW(), failure_reason = $2
+          WHERE id = $1",
+    )
+    .bind(payout_id)
+    // The column is NOT NULL when the status is `failed`, and a refusal
+    // without a message is common enough that a placeholder beats a
+    // constraint violation swallowing the whole failure path.
+    .bind(reason.unwrap_or("the provider refused without giving a reason"))
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+/// Keep enough of a destination to recognise it, not enough to use it.
+///
+/// A phone number or an account id in a table an operator browses is a
+/// privacy problem waiting to become a data-protection one. The last four
+/// characters are what a person recognises as their own.
+fn mask_destination(destination: &str) -> String {
+    let chars: Vec<char> = destination.chars().collect();
+    if chars.len() <= 4 {
+        return "•".repeat(chars.len());
+    }
+    let tail: String = chars[chars.len() - 4..].iter().collect();
+    format!("{}{tail}", "•".repeat(chars.len().min(20) - 4))
 }
 
 /// Who this payout is for, as the rails need to name them.

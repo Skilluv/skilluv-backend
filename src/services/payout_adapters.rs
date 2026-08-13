@@ -77,6 +77,22 @@ impl PayoutProvider for StripePayout {
             message: None,
         })
     }
+
+    async fn status(&self, reference: &str) -> Result<Option<PayoutState>, AppError> {
+        let transfer = crate::services::stripe::retrieve_transfer(&self.cfg, reference).await?;
+        // A transfer between balances has no failing state of its own; the
+        // only way it stops being final is being reversed. An actual bank
+        // rejection arrives later, as a `payout.failed` webhook.
+        let reversed = transfer
+            .get("reversed")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false);
+        Ok(Some(if reversed {
+            PayoutState::Rejected
+        } else {
+            PayoutState::Completed
+        }))
+    }
 }
 
 /// One Mobile Money operator.
@@ -195,6 +211,16 @@ impl PayoutProvider for FedaPayPayout {
             },
             message: payout.message,
         })
+    }
+
+    async fn status(&self, reference: &str) -> Result<Option<PayoutState>, AppError> {
+        let status = crate::services::fedapay::payout_status(&self.cfg, reference).await?;
+        Ok(Some(match status.as_str() {
+            "sent" => PayoutState::Completed,
+            "failed" => PayoutState::Rejected,
+            // `pending`, `started`, `processing` — still in flight.
+            _ => PayoutState::Pending,
+        }))
     }
 }
 

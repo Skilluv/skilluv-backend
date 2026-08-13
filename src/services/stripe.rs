@@ -443,6 +443,36 @@ pub async fn create_transfer(
         .map_err(|e| AppError::Internal(format!("transfer decode: {e}")))
 }
 
+/// Read back a transfer, for reconciliation.
+///
+/// A transfer between Stripe balances has no failure state of its own; what
+/// can fail is the payout that follows it to the recipient's bank, and that
+/// arrives as a `payout.failed` webhook. So this answers "does Stripe still
+/// have this transfer, and was it reversed", which is the only question the
+/// sweep can usefully ask here.
+pub async fn retrieve_transfer(
+    cfg: &StripeConfig,
+    transfer_id: &str,
+) -> Result<serde_json::Value, AppError> {
+    let client = reqwest::Client::new();
+    let resp = client
+        .get(format!("{STRIPE_API}/transfers/{transfer_id}"))
+        .basic_auth(&cfg.secret_key, Some(""))
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("stripe retrieve transfer: {e}")))?;
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(AppError::Internal(format!(
+            "stripe retrieve transfer failed {status}: {body}"
+        )));
+    }
+    resp.json()
+        .await
+        .map_err(|e| AppError::Internal(format!("transfer decode: {e}")))
+}
+
 // ─── Subscriptions (Phase 4.6) ───────────────────────────────────
 
 /// Crée un checkout Stripe pour un abonnement récurrent (mode subscription).

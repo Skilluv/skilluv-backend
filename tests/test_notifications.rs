@@ -190,11 +190,20 @@ async fn a_channel_a_kind_forbids_is_refused() {
     app.register_user("notif_chan").await;
     app.login("notif_chan").await;
 
-    // badge.earned has allows_email = FALSE.
+    // No shipped kind forbids a channel — see the test below, which is the
+    // point of the policy — so the ceiling is exercised with one made here.
+    sqlx::query(
+        "INSERT INTO notification_kinds (kind, category, allows_email, default_email)
+         VALUES ('test.no_email', 'test', FALSE, FALSE)",
+    )
+    .execute(&app.db)
+    .await
+    .expect("seed a kind that forbids email");
+
     let body: serde_json::Value = app
         .put(
             "/api/users/me/notification-preferences",
-            &json!({ "preferences": [{ "kind": "badge.earned", "email": true }] }),
+            &json!({ "preferences": [{ "kind": "test.no_email", "email": true }] }),
         )
         .await
         .json()
@@ -202,6 +211,28 @@ async fn a_channel_a_kind_forbids_is_refused() {
         .unwrap();
     assert_eq!(body["data"]["updated"], json!(0));
     assert!(!body["data"]["rejected"].as_array().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn no_shipped_kind_locks_anyone_out_of_a_channel() {
+    let app = TestApp::spawn().await;
+
+    // `allows_*` is a ceiling, not a default: FALSE means nobody may ever
+    // turn the channel on, however much they want it. That is a decision
+    // taken away from the user, and no kind in the catalogue earns it.
+    let locked: Vec<String> = sqlx::query_scalar(
+        "SELECT kind FROM notification_kinds
+          WHERE NOT (allows_in_app AND allows_push AND allows_email)
+          ORDER BY kind",
+    )
+    .fetch_all(&app.db)
+    .await
+    .expect("read the catalogue");
+
+    assert!(
+        locked.is_empty(),
+        "these kinds cannot be enabled by anyone: {locked:?} — use default_* instead"
+    );
 }
 
 #[tokio::test]

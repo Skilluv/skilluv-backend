@@ -557,14 +557,31 @@ pub async fn register_momo_phone(
         ));
     }
 
+    // Validate the operator before writing: a typo stored here would only
+    // surface much later, on the first withdrawal.
+    let provider = match body.provider.as_deref() {
+        Some(p) => Some(
+            crate::services::mobile_money::ProviderName::from_str(p)?
+                .as_str()
+                .to_string(),
+        ),
+        None => None,
+    };
+
     let _ = talent_wallet::get_or_init_wallet(&state.db, auth.user_id).await?;
     sqlx::query(
         "UPDATE talent_wallets
-         SET momo_phone = $1, momo_phone_verified = $2, updated_at = NOW()
-         WHERE user_id = $3",
+         SET momo_phone = $1,
+             momo_phone_verified = $2,
+             -- Keep a previously known operator when this call omits one,
+             -- rather than blanking it and breaking the next withdrawal.
+             momo_provider = COALESCE($3, momo_provider),
+             updated_at = NOW()
+         WHERE user_id = $4",
     )
     .bind(&body.phone)
     .bind(body.verified)
+    .bind(provider.as_deref())
     .bind(auth.user_id)
     .execute(&state.db)
     .await?;
@@ -572,13 +589,21 @@ pub async fn register_momo_phone(
     Ok(Json(build_response(json!({
         "phone": body.phone,
         "verified": body.verified,
+        "provider": provider,
     }))))
 }
 
 #[derive(Debug, Deserialize)]
 struct MomoWithdrawBody {
-    /// "orange" | "mtn" | "wave"
-    provider: String,
+    /// `orange` | `mtn` | `wave`. Optional: when omitted, the operator
+    /// recorded with the wallet's phone number is used.
+    ///
+    /// This was required and had no default, while the client sends only
+    /// `{ amount, currency }` — so every Mobile Money withdrawal failed with
+    /// `missing field 'provider'`. The operator belongs to the number, not to
+    /// the transaction (migration 0151).
+    #[serde(default)]
+    provider: Option<String>,
     /// Montant en devise (XOF ex: "5000").
     amount: String,
     /// XOF par défaut.
@@ -615,13 +640,15 @@ pub async fn momo_withdraw(
     let amount = bigdecimal::BigDecimal::from_str(&body.amount)
         .map_err(|_| AppError::Validation("invalid amount".into()))?;
 
-    let (phone, phone_verified): (Option<String>, bool) = sqlx::query_as(
-        "SELECT momo_phone, momo_phone_verified FROM talent_wallets WHERE user_id = $1",
-    )
-    .bind(auth.user_id)
-    .fetch_optional(&state.db)
-    .await?
-    .ok_or_else(|| AppError::Validation("Wallet not initialized".into()))?;
+    let (phone, phone_verified, stored_provider): (Option<String>, bool, Option<String>) =
+        sqlx::query_as(
+            "SELECT momo_phone, momo_phone_verified, momo_provider
+               FROM talent_wallets WHERE user_id = $1",
+        )
+        .bind(auth.user_id)
+        .fetch_optional(&state.db)
+        .await?
+        .ok_or_else(|| AppError::Validation("Wallet not initialized".into()))?;
     let phone = phone
         .ok_or_else(|| AppError::Validation("Register your mobile money phone first".into()))?;
     if !phone_verified {
@@ -661,7 +688,22 @@ pub async fn momo_withdraw(
     )
     .await?;
 
-    let provider_name = crate::services::mobile_money::ProviderName::from_str(&body.provider)?;
+    // Explicit provider wins; otherwise fall back to the one recorded with
+    // the phone number. Wallets registered before migration 0151 have none,
+    // and are told what to do rather than handed a serde rejection.
+    let provider_str = body
+        .provider
+        .as_deref()
+        .or(stored_provider.as_deref())
+        .ok_or_else(|| {
+            AppError::Validation(
+                "No Mobile Money operator on file for this wallet. Send \
+                 `provider` (orange, mtn or wave), or register it once via \
+                 POST /users/me/wallet/momo/phone."
+                    .into(),
+            )
+        })?;
+    let provider_name = crate::services::mobile_money::ProviderName::from_str(provider_str)?;
     let provider = crate::services::mobile_money::get_provider(provider_name);
 
     // Débit d'abord, puis payout provider — rollback si le provider refuse.

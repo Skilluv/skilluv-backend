@@ -157,6 +157,7 @@ serenity = { version = "0.12", default-features = false, features = ["client", "
 utoipa = { version = "5", features = ["axum_extras", "chrono", "uuid", "decimal"] }
 utoipa-swagger-ui = { version = "9", features = ["axum"] }
 utoipa-axum = "0.2"
+resvg = { version = "0.48.1", default-features = false, features = ["text", "system-fonts", "memmap-fonts"] }
 
 [[bin]]
 name = "skilluv-backend"

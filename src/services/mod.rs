@@ -41,6 +41,7 @@ pub mod mobile_money;
 pub mod mobile_push;
 pub mod notification;
 pub mod oauth;
+pub mod og_card;
 pub mod orientations_playlist;
 pub mod peer_matching;
 pub mod plagiarism;

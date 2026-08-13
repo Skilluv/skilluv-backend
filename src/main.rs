@@ -136,11 +136,9 @@ async fn async_main(config: AppConfig) {
     queue.start_listener(&config.redis_url);
     tracing::info!("Redis queue service initialized");
 
-    tracing::info!("Loading GeoNames data (countries + cities)...");
-    let geo = Arc::new(
-        GeoService::load(std::path::Path::new("data"))
-            .expect("Failed to load GeoNames data from ./data"),
-    );
+    let geo_dir = GeoService::data_dir_from_env();
+    tracing::info!(path = %geo_dir.display(), "Loading GeoNames data (countries + cities)...");
+    let geo = Arc::new(GeoService::load_or_empty(&geo_dir));
     tracing::info!(
         countries = geo.countries().len(),
         cities = geo.total_cities(),

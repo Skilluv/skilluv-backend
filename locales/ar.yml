@@ -52,97 +52,165 @@ notification:
     sent:
       title: "تم إرسال دفعتك"
       body: "تم إرسال {amount} إلى {destination}. قد يستغرق الوصول من دقائق إلى أيام حسب القناة."
+      cta: "افتح محفظتي"
     failed:
       title: "تعذّر إرسال دفعتك"
       body: "فشل إرسال {amount}. المبلغ ما زال في رصيدك ويمكنك المحاولة مجددًا."
-  payment:
-    received:
-      title: "تم استلام الدفعة"
-      body: "تم دفع {amount} مقابل {subject}."
-    refunded:
-      title: "تم استرداد الدفعة"
-      body: "تم استرداد {amount} مقابل {subject}."
+      cta: "أعد محاولة السحب"
   funds:
+    held:
+      title: "{amount} بانتظار التحرير"
+      body: "سيصبح المبلغ متاحًا في {date}، أو فور تأكيد {payer}."
+      cta: "عرض التفاصيل"
     released:
       title: "أموالك متاحة الآن"
       body: "تم تحرير {amount}. يمكنك سحبها متى شئت."
+      cta: "اسحب الآن"
     disputed:
       title: "هناك دفعة متنازع عليها"
-      body: "تم تجميد {amount} ريثما نراجع الشكوى بخصوص {subject}."
-  security:
-    new_login:
-      title: "تسجيل دخول جديد إلى حسابك"
-      body: "تم تسجيل الدخول من {location}. إن لم تكن أنت، غيّر كلمة المرور."
-    password_changed:
-      title: "تم تغيير كلمة المرور"
-      body: "إن لم تكن أنت من قام بذلك، تواصل معنا فورًا."
+      body: "تم تجميد {amount} ريثما نراجع الشكوى."
+      cta: "عرض الشكوى"
+    refunded:
+      title: "تم استرداد الدفعة"
+      body: "تم استرداد {amount}."
+      cta: "عرض التفاصيل"
   account:
-    capability_granted:
-      title: "صلاحية جديدة"
-      body: "يمكنك الآن {capability} على Skilluv."
-  challenge:
-    reviewed:
-      title: "تمت مراجعة مساهمتك"
-      body: "ترك {reviewer} ملاحظات على {subject}."
-    validated:
-      title: "تم اعتماد المساهمة"
-      body: "تم اعتماد {subject}. الشهادة المقابلة متاحة."
-  attestation:
-    issued:
-      title: "شهادة جديدة"
-      body: "شهادتك عن {subject} جاهزة، ويمكن التحقق منها علنًا."
-  rank:
-    promoted:
-      title: "أصبحت الآن {rank}"
-      body: "عملك على المنصة رفعك إلى رتبة {rank}."
-  badge:
-    earned:
-      title: "حصلت على شارة: {badge}"
-      body: "أصبحت ظاهرة في ملفك العام."
+    banned:
+      title: "تم تعليق حسابك"
+      body: "السبب: {reason}. يمكنك الرد على هذه الرسالة إذا كنت ترى أن هناك خطأ."
+    unbanned:
+      title: "تمت إعادة تفعيل حسابك"
+      body: "يمكنك تسجيل الدخول والمساهمة من جديد."
+      cta: "العودة إلى Skilluv"
   mentorship:
     booked:
       title: "تم حجز جلسة"
       body: "حجز {other} جلسة بتاريخ {date}."
-    reminder:
-      title: "جلسة غدًا"
-      body: "جلستك مع {other} بتاريخ {date}."
+      cta: "عرض الجلسة"
+    completed:
+      title: "انتهت الجلسة"
+      body: "أشار {other} إلى انتهاء جلسة {date}. أكّدها لتحرير الدفعة فورًا."
+      cta: "تأكيد الجلسة"
     cancelled:
       title: "تم إلغاء الجلسة"
       body: "أُلغيت جلسة {date} مع {other}."
+      cta: "عرض جلساتي"
+  community:
+    challenge_approved:
+      title: "تمت الموافقة على التحدي"
+      body: "{title} أصبح ظاهرًا للجميع."
+      cta: "عرض التحدي"
+    challenge_rejected:
+      title: "لم يُقبل التحدي"
+      body: "{feedback}"
+      cta: "قراءة الملاحظات"
+  forum:
+    question_answered:
+      title: "إجابة جديدة على سؤالك"
+      body: "أجاب {author} على {title}."
+      cta: "قراءة الإجابة"
+    post_replied:
+      title: "ردّ جديد على منشورك"
+      body: "ردّ {author} على {title}."
+      cta: "قراءة الرد"
+    answer_accepted:
+      title: "تم قبول إجابتك"
+      body: "اعتمد {author} إجابتك على {title}."
+      cta: "فتح النقاش"
+    reply:
+      title: "ردّ عليك {author}"
+      body: "{excerpt}"
+      cta: "قراءة الرد"
   social:
     mention:
       title: "أشار إليك {author}"
       body: "{excerpt}"
-    reply:
-      title: "ردّ عليك {author}"
+      cta: "عرض الإشارة"
+  dm:
+    received:
+      title: "رسالة من {author}"
       body: "{excerpt}"
+      cta: "الرد"
   guild:
     invitation:
       title: "دعوة للانضمام إلى {guild}"
       body: "يدعوك {inviter} للانضمام إلى نقابة {guild}."
+      cta: "عرض الدعوة"
     application:
       title: "طلب انضمام جديد"
       body: "يريد {applicant} الانضمام إلى {guild}."
-  enterprise:
-    credits_low:
-      title: "الرصيد على وشك النفاد"
-      body: "تبقّى لديك {credits} رصيدًا. أعد الشحن كي لا تتوقف عمليات البحث."
-    invoice_ready:
-      title: "الفاتورة متاحة"
-      body: "فاتورتك {reference} جاهزة للتنزيل."
-    talent_replied:
-      title: "ردّ {talent}"
-      body: "ردّ على رسالتك."
+      cta: "عرض الطلب"
+    application_decided:
+      title: "تم البتّ في طلبك"
+      body: "طلبك للانضمام إلى {guild} كان {decision}."
+      cta: "فتح النقابة"
+    cofounder_added:
+      title: "شاركت في تأسيس نقابة"
+      body: "[{tag}] {guild}"
+      cta: "فتح نقابتي"
+    role_changed:
+      title: "تغيّر دورك في النقابة"
+      body: "الدور الجديد: {role}."
+      cta: "فتح نقابتي"
+    kicked:
+      title: "تمت إزالتك من النقابة"
+      body: "لم تعد ضمن {guild}."
+    war_proposed:
+      title: "تحدٍّ بين النقابات"
+      body: "يتحدى {challenger} فريق {defender} على {stake} نقطة."
+      cta: "عرض التحدي"
+  contact:
+    interest_received:
+      title: "{company} مهتمة بملفك"
+      body: "{message}"
+      cta: "عرض الطلب"
+    interest_accepted:
+      title: "قبل {talent} تواصلك"
+      body: "يمكنكما الآن التحدث مباشرة."
+      cta: "فتح المحادثة"
+    interest_declined:
+      title: "رفض {talent} تواصلك"
+      body: "لا متابعة لهذا الطلب."
+      cta: "عرض طلباتي"
+  rank:
+    promoted:
+      title: "أصبحت الآن {rank}"
+      body: "عملك على المنصة رفعك إلى رتبة {rank}."
+      cta: "عرض ملفي"
+  tournament:
+    podium:
+      title: "وصلت إلى منصة التتويج"
+      body: "المركز {place} في بطولة {tournament}."
+      cta: "عرض الترتيب"
   admin:
     review_queued:
       title: "{count} عنصر بانتظار المراجعة"
       body: "قائمة الإشراف تحتاج إلى تدخل."
+      cta: "فتح القائمة"
     fraud_flagged:
       title: "بلاغ احتيال"
       body: "تم الإبلاغ عن {subject} تلقائيًا وينتظر قرارًا."
+      cta: "مراجعة البلاغ"
     payout_needs_replay:
       title: "دفعة تحتاج إعادة إرسال"
       body: "{count} دفعة مستحقة لم تُنفّذ. لم يتم إرسالها."
+      cta: "فتح المدفوعات"
     reconciliation_drift:
       title: "فارق في التسوية"
       body: "تختلف الدفاتر الداخلية عن كشف {provider} بمقدار {amount}."
+      cta: "فتح التسوية"
+  capability:
+    granted:
+      title: "صلاحية جديدة"
+      body: "يمكنك الآن {capability} على Skilluv."
+      cta: "عرض ملفي"
+  badge:
+    awarded:
+      title: "حصلت على شارة: {badge}"
+      body: "أصبحت ظاهرة في ملفك العام."
+      cta: "عرض ملفي"
+  deliverable:
+    first_verified:
+      title: "تم التحقق من أول مساهمة لك"
+      body: "تم اعتماد {title}. أصبحت ظاهرة في ملفك."
+      cta: "عرض مساهمتي"

@@ -354,6 +354,7 @@ async fn arabic_notifications_render_right_to_left() {
 
     let html = render(Email {
         locale: "ar",
+        theme: Some("sakura"),
         title: &i18n::t("ar", "notification.payout.sent.title"),
         body: &i18n::t("ar", "notification.payout.sent.body"),
         recipient_name: None,

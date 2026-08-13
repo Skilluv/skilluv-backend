@@ -36,9 +36,62 @@ use serde_json::Value;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::AppState;
 use crate::errors::AppError;
 use crate::services::i18n;
+
+/// What delivering a notification needs.
+///
+/// Built from an `AppState` where there is one, and from its parts where
+/// there is not — the proof engine and the mention recorder run with a
+/// database handle and little else, and requiring the whole application
+/// state there would mean threading it through call chains that have no
+/// other use for it.
+///
+/// `email` is optional for that reason. A context without it cannot send
+/// email, and says so loudly when a notification wanted to: silently
+/// dropping a payout receipt because the caller happened not to carry an
+/// email service is exactly the class of failure this module exists to
+/// remove.
+#[derive(Clone, Copy)]
+pub struct Ctx<'a> {
+    pub db: &'a sqlx::PgPool,
+    pub redis: Option<&'a redis::aio::ConnectionManager>,
+    pub ws: Option<&'a crate::websocket::WsManager>,
+    pub email: Option<&'a crate::services::EmailService>,
+    /// Where the application lives, for building the button's destination.
+    pub frontend_url: Option<&'a str>,
+    /// Signs the one-click unsubscribe link. Without it a declinable email
+    /// goes out with no way to decline, which is not acceptable and, for
+    /// bulk senders, not legal either.
+    pub jwt_secret: Option<&'a str>,
+}
+
+impl<'a> Ctx<'a> {
+    /// Database only. Writes the durable row; no live push, no email.
+    pub fn db_only(db: &'a sqlx::PgPool) -> Self {
+        Self {
+            db,
+            redis: None,
+            ws: None,
+            email: None,
+            frontend_url: None,
+            jwt_secret: None,
+        }
+    }
+}
+
+impl<'a> From<&'a crate::AppState> for Ctx<'a> {
+    fn from(state: &'a crate::AppState) -> Self {
+        Self {
+            db: &state.db,
+            redis: Some(&state.redis),
+            ws: Some(&state.ws),
+            email: Some(&state.email),
+            frontend_url: Some(&state.config.frontend_url),
+            jwt_secret: Some(&state.config.jwt_secret),
+        }
+    }
+}
 
 /// Who is being notified.
 ///
@@ -91,6 +144,7 @@ pub struct Delivery {
 /// What the catalogue says about a kind.
 #[derive(Debug, Clone, sqlx::FromRow)]
 struct KindRow {
+    cta_path: Option<String>,
     allows_in_app: bool,
     allows_push: bool,
     allows_email: bool,
@@ -102,7 +156,7 @@ struct KindRow {
 
 /// A notification being built.
 pub struct Builder<'a> {
-    state: &'a AppState,
+    ctx: Ctx<'a>,
     recipient: Recipient,
     kind: &'a str,
     args: Vec<(String, String)>,
@@ -110,9 +164,9 @@ pub struct Builder<'a> {
 }
 
 /// Start building a notification.
-pub fn send<'a>(state: &'a AppState, recipient: Recipient, kind: &'a str) -> Builder<'a> {
+pub fn send<'a>(ctx: impl Into<Ctx<'a>>, recipient: Recipient, kind: &'a str) -> Builder<'a> {
     Builder {
-        state,
+        ctx: ctx.into(),
         recipient,
         kind,
         args: Vec::new(),
@@ -135,8 +189,8 @@ impl<'a> Builder<'a> {
 
     /// Resolve, render and deliver.
     pub async fn execute(self) -> Result<Delivery, AppError> {
-        let kind_row = load_kind(&self.state.db, self.kind).await?;
-        let recipients = resolve_recipients(&self.state.db, &self.recipient).await?;
+        let kind_row = load_kind(self.ctx.db, self.kind).await?;
+        let recipients = resolve_recipients(self.ctx.db, &self.recipient).await?;
 
         let mut delivery = Delivery::default();
         for user_id in recipients {
@@ -166,7 +220,7 @@ impl<'a> Builder<'a> {
     }
 
     async fn deliver_to(&self, user_id: Uuid, kind: &KindRow, delivery: &mut Delivery) {
-        let locale = user_locale(&self.state.db, user_id).await;
+        let locale = user_locale(self.ctx.db, user_id).await;
 
         let args: Vec<(&str, &str)> = self
             .args
@@ -180,8 +234,7 @@ impl<'a> Builder<'a> {
 
         // In-app first: it is the durable record, and the one the others are
         // a courtesy on top of.
-        if kind.allows_in_app
-            && wants(&self.state.db, user_id, self.kind, Channel::InApp, kind).await
+        if kind.allows_in_app && wants(self.ctx.db, user_id, self.kind, Channel::InApp, kind).await
         {
             match self.write_in_app(user_id, &locale, &title, &body).await {
                 Ok(_) => {
@@ -196,19 +249,14 @@ impl<'a> Builder<'a> {
             }
         }
 
-        if kind.allows_push && wants(&self.state.db, user_id, self.kind, Channel::Push, kind).await
-        {
+        if kind.allows_push && wants(self.ctx.db, user_id, self.kind, Channel::Push, kind).await {
             let message = crate::services::mobile_push::MobilePushMessage {
                 title: &title,
                 body: &body,
                 data: self.payload.clone(),
             };
-            match crate::services::mobile_push::push_to_user_mobile(
-                &self.state.db,
-                user_id,
-                message,
-            )
-            .await
+            match crate::services::mobile_push::push_to_user_mobile(self.ctx.db, user_id, message)
+                .await
             {
                 Ok(_) => {
                     delivery.push += 1;
@@ -221,10 +269,8 @@ impl<'a> Builder<'a> {
             }
         }
 
-        if kind.allows_email
-            && wants(&self.state.db, user_id, self.kind, Channel::Email, kind).await
-        {
-            match self.send_email(user_id, &locale, &title, &body).await {
+        if kind.allows_email && wants(self.ctx.db, user_id, self.kind, Channel::Email, kind).await {
+            match self.send_email(user_id, &locale, &title, &body, kind).await {
                 Ok(true) => {
                     delivery.email += 1;
                     reached = true;
@@ -241,6 +287,47 @@ impl<'a> Builder<'a> {
         if !reached {
             delivery.declined += 1;
         }
+    }
+
+    /// Absolute URL for the email button, or `None`.
+    ///
+    /// Placeholders in the path are filled from the payload. One that cannot
+    /// be filled suppresses the button entirely: a dead link is worse than
+    /// no link, because the reader clicks it and concludes the product is
+    /// broken.
+    fn cta_url(&self, kind: &KindRow) -> Option<String> {
+        let path = kind.cta_path.as_deref()?;
+        let base = self.ctx.frontend_url?.trim_end_matches('/');
+
+        let mut filled = path.to_string();
+        while let Some(start) = filled.find('{') {
+            let end = filled[start..].find('}')? + start;
+            let key = &filled[start + 1..end];
+            let value = self
+                .payload
+                .as_ref()
+                .and_then(|p| p.get(key))
+                .map(|v| match v {
+                    Value::String(s) => s.clone(),
+                    other => other.to_string().trim_matches('"').to_string(),
+                })?;
+            filled = format!("{}{}{}", &filled[..start], value, &filled[end + 1..]);
+        }
+
+        Some(format!("{base}{filled}"))
+    }
+
+    /// One-click unsubscribe link for a declinable email.
+    ///
+    /// Signed with the same secret `GET /api/email/unsubscribe/{token}`
+    /// verifies, so the link works without the reader logging in — which is
+    /// the whole point of one-click.
+    fn unsubscribe_url(&self, user_id: Uuid) -> Option<String> {
+        let base = self.ctx.frontend_url?.trim_end_matches('/');
+        let jwt_secret = self.ctx.jwt_secret?;
+        let secret = crate::routes::email_prefs::unsub_secret(jwt_secret);
+        let token = crate::services::digest::build_unsubscribe_token(user_id, self.kind, &secret);
+        Some(format!("{base}/api/email/unsubscribe/{token}"))
     }
 
     async fn write_in_app(
@@ -264,18 +351,25 @@ impl<'a> Builder<'a> {
         .bind(body)
         .bind(&self.payload)
         .bind(locale)
-        .fetch_one(&self.state.db)
+        .fetch_one(self.ctx.db)
         .await?;
 
-        // Unread counter and live push are a best effort on top of the row.
-        let mut redis = self.state.redis.clone();
-        let _: Result<i64, _> =
-            redis::AsyncCommands::incr(&mut redis, format!("notifications:unread:{user_id}"), 1)
-                .await;
+        // Unread counter and live push are a best effort on top of the row,
+        // and absent entirely from a database-only context. The durable row
+        // is what `GET /api/notifications` reads, so nothing is lost beyond
+        // immediacy.
+        if let Some(redis) = self.ctx.redis {
+            let mut redis = redis.clone();
+            let _: Result<i64, _> = redis::AsyncCommands::incr(
+                &mut redis,
+                format!("notifications:unread:{user_id}"),
+                1,
+            )
+            .await;
+        }
 
-        self.state
-            .ws
-            .send_to_user(
+        if let Some(ws) = self.ctx.ws {
+            ws.send_to_user(
                 user_id,
                 crate::websocket::WsMessage {
                     event: "notification".to_string(),
@@ -291,6 +385,7 @@ impl<'a> Builder<'a> {
                 },
             )
             .await;
+        }
 
         Ok(id)
     }
@@ -303,27 +398,57 @@ impl<'a> Builder<'a> {
         locale: &str,
         title: &str,
         body: &str,
+        kind_row: &KindRow,
     ) -> Result<bool, AppError> {
         let row: Option<(String, Option<String>)> = sqlx::query_as(
             "SELECT email, display_name FROM users WHERE id = $1 AND email_verified = TRUE",
         )
         .bind(user_id)
-        .fetch_optional(&self.state.db)
+        .fetch_optional(self.ctx.db)
         .await?;
 
         let Some((address, display_name)) = row else {
             return Ok(false);
         };
 
+        // The world they chose, so the message looks like it came from the
+        // place they chose it in.
+        let theme: Option<String> =
+            sqlx::query_scalar("SELECT preferred_theme FROM users WHERE id = $1")
+                .bind(user_id)
+                .fetch_optional(self.ctx.db)
+                .await
+                .ok()
+                .flatten()
+                .flatten();
+
+        // The one thing to do next. An email that says something happened
+        // and offers no way to act on it makes the reader hunt for the page
+        // themselves, which most of them will not do.
+        let cta_url = self.cta_url(kind_row);
+        let cta_label = cta_url
+            .as_ref()
+            .map(|_| i18n::t(locale, &format!("notification.{}.cta", self.kind)));
+
+        // Declinable mail carries the one-click unsubscribe. Transactional
+        // mail does not: offering to opt out of a payout receipt would be a
+        // promise we cannot keep.
+        let unsubscribe_url = if kind_row.transactional {
+            None
+        } else {
+            self.unsubscribe_url(user_id)
+        };
+
         let html =
             crate::services::email_template::render(crate::services::email_template::Email {
                 locale,
+                theme: theme.as_deref(),
                 title,
                 body,
                 recipient_name: display_name.as_deref(),
-                cta_label: None,
-                cta_url: None,
-                unsubscribe_url: None,
+                cta_label: cta_label.as_deref(),
+                cta_url: cta_url.as_deref(),
+                unsubscribe_url: unsubscribe_url.as_deref(),
             });
 
         // `send_with_log` rather than the raw sender: it honours
@@ -331,10 +456,20 @@ impl<'a> Builder<'a> {
         // unsubscribed from everything, and records the attempt. Bypassing
         // it would keep mailing an address the provider already rejected,
         // which is how a sending domain gets its reputation destroyed.
-        self.state
-            .email
+        let Some(email) = self.ctx.email else {
+            // Wanted, and impossible here. Loud rather than silent: a
+            // transactional message that never left is a lost obligation.
+            tracing::error!(
+                kind = self.kind,
+                user = %user_id,
+                "email channel requested but this context carries no email                  service — the message was not sent"
+            );
+            return Ok(false);
+        };
+
+        email
             .send_with_log(
-                &self.state.db,
+                self.ctx.db,
                 crate::services::email::SendWithLogParams {
                     user_id,
                     to_email: &address,
@@ -380,7 +515,7 @@ async fn resolve_recipients(db: &PgPool, recipient: &Recipient) -> Result<Vec<Uu
 /// title` to a real person.
 async fn load_kind(db: &PgPool, kind: &str) -> Result<KindRow, AppError> {
     sqlx::query_as(
-        "SELECT allows_in_app, allows_push, allows_email,
+        "SELECT cta_path, allows_in_app, allows_push, allows_email,
                 default_in_app, default_push, default_email, transactional
            FROM notification_kinds WHERE kind = $1",
     )

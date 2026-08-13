@@ -57,97 +57,165 @@ notification:
     sent:
       title: "Your payout is on its way"
       body: "{amount} was sent to {destination}. Allow a few minutes to a few days depending on the channel."
+      cta: "Open my wallet"
     failed:
       title: "Your payout could not be sent"
       body: "Sending {amount} failed. The money is still in your balance and you can try again."
-  payment:
-    received:
-      title: "Payment received"
-      body: "{amount} was paid for {subject}."
-    refunded:
-      title: "Payment refunded"
-      body: "{amount} was refunded for {subject}."
+      cta: "Try the withdrawal again"
   funds:
+    held:
+      title: "{amount} waiting to be released"
+      body: "It becomes available on {date}, or as soon as {payer} confirms."
+      cta: "See the details"
     released:
       title: "Your money is available"
       body: "{amount} has just been released. You can withdraw it whenever you like."
+      cta: "Withdraw now"
     disputed:
       title: "A payment is disputed"
-      body: "{amount} is frozen while we look into the complaint about {subject}."
-  security:
-    new_login:
-      title: "New sign-in to your account"
-      body: "Someone signed in from {location}. If this was not you, change your password."
-    password_changed:
-      title: "Your password changed"
-      body: "If you did not make this change, contact us immediately."
+      body: "{amount} is frozen while we look into the complaint."
+      cta: "See the complaint"
+    refunded:
+      title: "Payment refunded"
+      body: "{amount} was refunded."
+      cta: "See the details"
   account:
-    capability_granted:
-      title: "New capability unlocked"
-      body: "You can now {capability} on Skilluv."
-  challenge:
-    reviewed:
-      title: "Your contribution was reviewed"
-      body: "{reviewer} left feedback on {subject}."
-    validated:
-      title: "Contribution validated"
-      body: "{subject} is validated. The matching attestation is available."
-  attestation:
-    issued:
-      title: "New attestation"
-      body: "Your attestation for {subject} is ready, and publicly verifiable."
-  rank:
-    promoted:
-      title: "You are now {rank}"
-      body: "Your work on the platform earned you the rank of {rank}."
-  badge:
-    earned:
-      title: "Badge earned: {badge}"
-      body: "It is now visible on your public profile."
+    banned:
+      title: "Your account has been suspended"
+      body: "Reason: {reason}. Reply to this email if you believe this is a mistake."
+    unbanned:
+      title: "Your account is active again"
+      body: "You can sign in and contribute as before."
+      cta: "Back to Skilluv"
   mentorship:
     booked:
       title: "Session booked"
       body: "{other} booked a session on {date}."
-    reminder:
-      title: "Session tomorrow"
-      body: "Your session with {other} is on {date}."
+      cta: "See the session"
+    completed:
+      title: "Session finished"
+      body: "{other} marked the session on {date} as done. Confirm it to release payment right away."
+      cta: "Confirm the session"
     cancelled:
       title: "Session cancelled"
       body: "The session on {date} with {other} was cancelled."
+      cta: "See my sessions"
+  community:
+    challenge_approved:
+      title: "Your challenge was approved"
+      body: "{title} is now visible to everyone."
+      cta: "See my challenge"
+    challenge_rejected:
+      title: "Your challenge was not accepted"
+      body: "{feedback}"
+      cta: "Read the feedback"
+  forum:
+    question_answered:
+      title: "New answer to your question"
+      body: "{author} answered {title}."
+      cta: "Read the answer"
+    post_replied:
+      title: "New reply to your post"
+      body: "{author} replied to {title}."
+      cta: "Read the reply"
+    answer_accepted:
+      title: "Your answer was accepted"
+      body: "{author} marked your answer on {title} as the accepted one."
+      cta: "Open the thread"
+    reply:
+      title: "{author} replied to you"
+      body: "{excerpt}"
+      cta: "Read the reply"
   social:
     mention:
       title: "{author} mentioned you"
       body: "{excerpt}"
-    reply:
-      title: "{author} replied to you"
+      cta: "See the mention"
+  dm:
+    received:
+      title: "Message from {author}"
       body: "{excerpt}"
+      cta: "Reply"
   guild:
     invitation:
       title: "Invitation to join {guild}"
       body: "{inviter} invites you to join the {guild} guild."
+      cta: "See the invitation"
     application:
       title: "New application"
       body: "{applicant} wants to join {guild}."
-  enterprise:
-    credits_low:
-      title: "Credits running low"
-      body: "You have {credits} credits left. Top up to keep your searches running."
-    invoice_ready:
-      title: "Invoice available"
-      body: "Your invoice {reference} is ready to download."
-    talent_replied:
-      title: "{talent} replied"
-      body: "A reply to your outreach."
+      cta: "See the application"
+    application_decided:
+      title: "Your application was decided"
+      body: "Your application to {guild} was {decision}."
+      cta: "Open the guild"
+    cofounder_added:
+      title: "You co-founded a guild"
+      body: "[{tag}] {guild}"
+      cta: "Open my guild"
+    role_changed:
+      title: "Your guild role changed"
+      body: "New role: {role}."
+      cta: "Open my guild"
+    kicked:
+      title: "You were removed from the guild"
+      body: "You are no longer part of {guild}."
+    war_proposed:
+      title: "Guild challenge"
+      body: "{challenger} challenges {defender} for {stake} guild points."
+      cta: "See the challenge"
+  contact:
+    interest_received:
+      title: "{company} is interested in your profile"
+      body: "{message}"
+      cta: "See the request"
+    interest_accepted:
+      title: "{talent} accepted your outreach"
+      body: "You can now talk directly."
+      cta: "Open the conversation"
+    interest_declined:
+      title: "{talent} declined your outreach"
+      body: "No follow-up on this one."
+      cta: "See my requests"
+  rank:
+    promoted:
+      title: "You are now {rank}"
+      body: "Your work on the platform earned you the rank of {rank}."
+      cta: "See my profile"
+  tournament:
+    podium:
+      title: "You made the podium"
+      body: "{place} place in the {tournament} tournament."
+      cta: "See the standings"
   admin:
     review_queued:
       title: "{count} item(s) awaiting review"
       body: "The moderation queue needs attention."
+      cta: "Open the queue"
     fraud_flagged:
       title: "Fraud flag raised"
       body: "{subject} was flagged automatically and awaits a decision."
+      cta: "Review the flag"
     payout_needs_replay:
       title: "Payout needs replaying"
       body: "{count} payout(s) are owed and did not go through. They were not sent."
+      cta: "Open payouts"
     reconciliation_drift:
       title: "Reconciliation drift"
       body: "Internal books and the {provider} statement differ by {amount}."
+      cta: "Open reconciliation"
+  capability:
+    granted:
+      title: "New capability unlocked"
+      body: "You can now {capability} on Skilluv."
+      cta: "See my profile"
+  badge:
+    awarded:
+      title: "Badge earned: {badge}"
+      body: "It is now visible on your public profile."
+      cta: "See my profile"
+  deliverable:
+    first_verified:
+      title: "Your first contribution is verified"
+      body: "{title} is validated. It now appears on your profile."
+      cta: "See my contribution"

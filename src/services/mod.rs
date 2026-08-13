@@ -21,6 +21,7 @@ pub mod dm;
 pub mod drip;
 mod email;
 pub mod email_template;
+pub mod email_theme;
 pub mod enterprise_sso;
 pub mod external_refresh;
 pub mod external_signals;

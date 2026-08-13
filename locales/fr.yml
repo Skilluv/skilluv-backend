@@ -48,105 +48,173 @@ email:
   unsubscribe: "Gérer mes notifications"
 
 # ─── Notifications ───────────────────────────────────────────────
-# Une clé par entrée de notification_kinds. `title` sert aussi d'objet
-# d'email et de titre de push : trois formulations pour la même chose
-# divergeraient au premier changement.
+# Une cle par entree de notification_kinds. `title` sert d'objet d'email et
+# de titre de push : trois formulations pour la meme chose divergeraient au
+# premier changement.
 notification:
   payout:
     sent:
       title: "Ton paiement est parti"
-      body: "{amount} ont été envoyés vers {destination}. Compte quelques minutes à quelques jours selon le canal."
+      body: "{amount} ont ete envoyes vers {destination}. Compte de quelques minutes a quelques jours selon le canal."
+      cta: "Voir mon portefeuille"
     failed:
       title: "Ton paiement n'a pas pu partir"
-      body: "L'envoi de {amount} a échoué. L'argent est toujours sur ton solde, tu peux réessayer."
-  payment:
-    received:
-      title: "Paiement reçu"
-      body: "{amount} ont été réglés pour {subject}."
-    refunded:
-      title: "Paiement remboursé"
-      body: "{amount} ont été remboursés pour {subject}."
+      body: "L'envoi de {amount} a echoue. L'argent est toujours sur ton solde, tu peux reessayer."
+      cta: "Reessayer le retrait"
   funds:
+    held:
+      title: "{amount} en attente de liberation"
+      body: "La somme sera disponible le {date}, ou des que {payer} confirme."
+      cta: "Voir le detail"
     released:
       title: "Ton argent est disponible"
-      body: "{amount} viennent d'être débloqués. Tu peux les retirer quand tu veux."
+      body: "{amount} viennent d'etre debloques. Tu peux les retirer quand tu veux."
+      cta: "Retirer maintenant"
     disputed:
-      title: "Un paiement est contesté"
-      body: "{amount} sont gelés le temps qu'on examine la réclamation sur {subject}."
-  security:
-    new_login:
-      title: "Nouvelle connexion à ton compte"
-      body: "Une connexion vient d'avoir lieu depuis {location}. Si ce n'est pas toi, change ton mot de passe."
-    password_changed:
-      title: "Ton mot de passe a changé"
-      body: "Si tu n'es pas à l'origine de ce changement, contacte-nous immédiatement."
+      title: "Un paiement est conteste"
+      body: "{amount} sont geles le temps qu'on examine la reclamation."
+      cta: "Voir la reclamation"
+    refunded:
+      title: "Paiement rembourse"
+      body: "{amount} ont ete rembourses."
+      cta: "Voir le detail"
   account:
-    capability_granted:
-      title: "Nouvelle capacité débloquée"
-      body: "Tu peux désormais {capability} sur Skilluv."
-  challenge:
-    reviewed:
-      title: "Ta contribution a été relue"
-      body: "{reviewer} a laissé un retour sur {subject}."
-    validated:
-      title: "Contribution validée"
-      body: "{subject} est validée. L'attestation correspondante est disponible."
-  attestation:
-    issued:
-      title: "Nouvelle attestation"
-      body: "Ton attestation pour {subject} est prête, et vérifiable publiquement."
+    banned:
+      title: "Ton compte a ete suspendu"
+      body: "Motif : {reason}. Tu peux repondre a cet email si tu penses qu'il s'agit d'une erreur."
+    unbanned:
+      title: "Ton compte est reactive"
+      body: "Tu peux de nouveau te connecter et contribuer."
+      cta: "Retourner sur Skilluv"
+  mentorship:
+    booked:
+      title: "Seance reservee"
+      body: "{other} a reserve une seance le {date}."
+      cta: "Voir la seance"
+    completed:
+      title: "Seance terminee"
+      body: "{other} a marque la seance du {date} comme terminee. Confirme-la pour liberer le paiement tout de suite."
+      cta: "Confirmer la seance"
+    cancelled:
+      title: "Seance annulee"
+      body: "La seance du {date} avec {other} est annulee."
+      cta: "Voir mes seances"
+  community:
+    challenge_approved:
+      title: "Ton challenge a ete approuve"
+      body: "{title} est desormais visible par tout le monde."
+      cta: "Voir mon challenge"
+    challenge_rejected:
+      title: "Ton challenge n'a pas ete retenu"
+      body: "{feedback}"
+      cta: "Voir les retours"
+  forum:
+    question_answered:
+      title: "Nouvelle reponse a ta question"
+      body: "{author} a repondu a {title}."
+      cta: "Lire la reponse"
+    post_replied:
+      title: "Nouvelle reponse a ton post"
+      body: "{author} a repondu a {title}."
+      cta: "Lire la reponse"
+    answer_accepted:
+      title: "Ta reponse a ete acceptee"
+      body: "{author} a retenu ta reponse sur {title}."
+      cta: "Voir la discussion"
+    reply:
+      title: "{author} t'a repondu"
+      body: "{excerpt}"
+      cta: "Lire la reponse"
+  social:
+    mention:
+      title: "{author} t'a mentionne"
+      body: "{excerpt}"
+      cta: "Voir la mention"
+  dm:
+    received:
+      title: "Message de {author}"
+      body: "{excerpt}"
+      cta: "Repondre"
+  guild:
+    invitation:
+      title: "Invitation a rejoindre {guild}"
+      body: "{inviter} t'invite a rejoindre la guilde {guild}."
+      cta: "Voir l'invitation"
+    application:
+      title: "Nouvelle candidature"
+      body: "{applicant} souhaite rejoindre {guild}."
+      cta: "Voir la candidature"
+    application_decided:
+      title: "Reponse a ta candidature"
+      body: "Ta candidature pour {guild} a ete {decision}."
+      cta: "Voir la guilde"
+    cofounder_added:
+      title: "Tu as co-fonde une guilde"
+      body: "[{tag}] {guild}"
+      cta: "Voir ma guilde"
+    role_changed:
+      title: "Ton role dans la guilde a change"
+      body: "Nouveau role : {role}."
+      cta: "Voir ma guilde"
+    kicked:
+      title: "Tu as ete retire de la guilde"
+      body: "Tu ne fais plus partie de {guild}."
+    war_proposed:
+      title: "Defi de guilde"
+      body: "{challenger} defie {defender} pour {stake} points de guilde."
+      cta: "Voir le defi"
+  contact:
+    interest_received:
+      title: "{company} s'interesse a ton profil"
+      body: "{message}"
+      cta: "Voir la demande"
+    interest_accepted:
+      title: "{talent} a accepte ton contact"
+      body: "Tu peux maintenant echanger directement."
+      cta: "Ouvrir la conversation"
+    interest_declined:
+      title: "{talent} a decline ton contact"
+      body: "Pas de suite donnee a ta prise de contact."
+      cta: "Voir mes demandes"
   rank:
     promoted:
       title: "Tu passes {rank}"
       body: "Ton travail sur la plateforme t'a fait passer au rang de {rank}."
-  badge:
-    earned:
-      title: "Badge obtenu : {badge}"
-      body: "Il est visible sur ton profil public."
-  mentorship:
-    booked:
-      title: "Séance réservée"
-      body: "{other} a réservé une séance le {date}."
-    reminder:
-      title: "Séance demain"
-      body: "Ta séance avec {other} a lieu le {date}."
-    cancelled:
-      title: "Séance annulée"
-      body: "La séance du {date} avec {other} est annulée."
-  social:
-    mention:
-      title: "{author} t'a mentionné"
-      body: "{excerpt}"
-    reply:
-      title: "{author} t'a répondu"
-      body: "{excerpt}"
-  guild:
-    invitation:
-      title: "Invitation à rejoindre {guild}"
-      body: "{inviter} t'invite à rejoindre la guilde {guild}."
-    application:
-      title: "Nouvelle candidature"
-      body: "{applicant} souhaite rejoindre {guild}."
-  enterprise:
-    credits_low:
-      title: "Crédits bientôt épuisés"
-      body: "Il te reste {credits} crédits. Pense à recharger pour ne pas interrompre tes recherches."
-    invoice_ready:
-      title: "Facture disponible"
-      body: "Ta facture {reference} est prête au téléchargement."
-    talent_replied:
-      title: "{talent} a répondu"
-      body: "Réponse à ta prise de contact."
+      cta: "Voir mon profil"
+  tournament:
+    podium:
+      title: "Tu montes sur le podium"
+      body: "{place} place au tournoi {tournament}."
+      cta: "Voir le classement"
   admin:
     review_queued:
-      title: "{count} élément(s) en attente de relecture"
-      body: "La file de modération demande une intervention."
+      title: "{count} element(s) en attente de relecture"
+      body: "La file de moderation demande une intervention."
+      cta: "Ouvrir la file"
     fraud_flagged:
       title: "Signalement de fraude"
-      body: "{subject} a été signalé automatiquement et attend une décision."
+      body: "{subject} a ete signale automatiquement et attend une decision."
+      cta: "Examiner le signalement"
     payout_needs_replay:
-      title: "Paiement à rejouer"
-      body: "{count} paiement(s) sont dus et n'ont pas abouti. Ils n'ont pas été envoyés."
+      title: "Paiement a rejouer"
+      body: "{count} paiement(s) sont dus et n'ont pas abouti. Ils n'ont pas ete envoyes."
+      cta: "Ouvrir les paiements"
     reconciliation_drift:
-      title: "Écart de réconciliation"
-      body: "Les comptes internes et le relevé de {provider} divergent de {amount}."
+      title: "Ecart de reconciliation"
+      body: "Les comptes internes et le releve de {provider} divergent de {amount}."
+      cta: "Ouvrir la reconciliation"
+  capability:
+    granted:
+      title: "Nouvelle capacite debloquee"
+      body: "Tu peux desormais {capability} sur Skilluv."
+      cta: "Voir mon profil"
+  badge:
+    awarded:
+      title: "Badge obtenu : {badge}"
+      body: "Il est visible sur ton profil public."
+      cta: "Voir mon profil"
+  deliverable:
+    first_verified:
+      title: "Ta premiere contribution est verifiee"
+      body: "{title} est validee. Elle apparait desormais sur ton profil."
+      cta: "Voir ma contribution"

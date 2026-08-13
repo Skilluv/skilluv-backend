@@ -998,8 +998,14 @@ pub async fn handle_pull_request_event(state: &AppState, payload: &Value) -> Res
         .await?;
 
     // P13.4 : dual payout — en plus des fragments, crédite le talent_wallet
-    // en devise réelle (EUR ou XOF selon residency_country). Best-effort :
-    // si le wallet n'existe pas ou le taux est 0, on skip silencieusement.
+    // en devise réelle (EUR ou XOF selon residency_country).
+    //
+    // Was best-effort *and* silent: an unset BOUNTY_CREDIT_TO_* variable
+    // parses to 0.0, the whole block is skipped, and the slice is still
+    // stamped `paid_at = NOW()` below. The talent is owed money, the row
+    // says they were paid, and nothing is logged. `payout_ok` below carries
+    // the outcome so the stamp reflects what actually happened.
+    let mut payout_ok = false;
     let residency: Option<String> =
         sqlx::query_scalar("SELECT residency_country FROM talent_wallets WHERE user_id = $1")
             .bind(talent_user_id)
@@ -1025,6 +1031,19 @@ pub async fn handle_pull_request_event(state: &AppState, payload: &Value) -> Res
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(0.0);
+    if rate <= 0.0 {
+        // Deployment problem, not a business case: someone has to hear it.
+        metrics::counter!(
+            "skilluv_bounty_payout_unconfigured_total",
+            "currency" => wallet_currency.as_str().to_string()
+        )
+        .increment(1);
+        tracing::error!(
+            talent = %talent_user_id, slice_id = %slice_id,
+            env_var = rate_env,
+            "bounty payout skipped: no credit-to-fiat rate configured. The              talent is owed money and has not been credited."
+        );
+    }
     if rate > 0.0 {
         // BE-P26 : le wallet talent reçoit talent_share (92% après fee 8%),
         // pas le reward brut. Ex bounty 500€ → wallet 460€ EUR.
@@ -1042,6 +1061,7 @@ pub async fn handle_pull_request_event(state: &AppState, payload: &Value) -> Res
             };
             match crate::services::talent_wallet::credit(&state.db, entry).await {
                 Ok(txn) => {
+                    payout_ok = true;
                     metrics::counter!(
                         "skilluv_bounty_wallet_payouts_total",
                         "currency" => wallet_currency.as_str().to_string()
@@ -1055,29 +1075,43 @@ pub async fn handle_pull_request_event(state: &AppState, payload: &Value) -> Res
                     );
                 }
                 Err(e) => {
-                    tracing::warn!(
+                    metrics::counter!(
+                        "skilluv_bounty_payout_failed_total",
+                        "currency" => wallet_currency.as_str().to_string()
+                    )
+                    .increment(1);
+                    tracing::error!(
                         error = %e, talent = %talent_user_id, slice_id = %slice_id,
-                        "P13.4 dual payout to wallet failed (best-effort, fragments still awarded)"
+                        amount = %fiat_amount, currency = wallet_currency.as_str(),
+                        "bounty wallet payout failed. Fragments were awarded;                          the money was not. Needs replay."
                     );
                 }
             }
         }
     }
 
+    // `paid_at` records that the money moved, so it is only stamped when it
+    // did. The merge itself is a fact either way — the contribution is in the
+    // upstream repository regardless of whether our payout succeeded — so
+    // `status` and `merged_at` are unconditional. A NULL `paid_at` on a
+    // merged slice is the queue of what still owes money.
     sqlx::query(
         r#"
         UPDATE project_slices
         SET status = 'merged',
             merged_at = NOW(),
-            paid_at = NOW()
+            paid_at = CASE WHEN $2 THEN NOW() ELSE NULL END
         WHERE id = $1
         "#,
     )
     .bind(slice_id)
+    .bind(payout_ok)
     .execute(&state.db)
     .await?;
 
-    metrics::counter!("skilluv_bounties_paid_total").increment(1);
+    if payout_ok {
+        metrics::counter!("skilluv_bounties_paid_total").increment(1);
+    }
     tracing::info!(
         slice_id = %slice_id,
         talent = %talent_user_id,

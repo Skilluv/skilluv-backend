@@ -718,45 +718,91 @@ pub async fn mark_completed(
     .fetch_optional(&state.db)
     .await?;
 
+    // The session is completed either way — the mentoring happened, and
+    // refusing to record it because our payment provider hiccuped would
+    // punish the wrong person. What must not happen is stamping it as paid
+    // when no money moved: that is what made failed payouts invisible.
     let mut transfer_id: Option<String> = None;
+    let mut payout_status = "pending";
+    let mut payout_error: Option<String> = None;
+
     if let Some(row) = details {
         let mentor_cents: i64 = row.get("price_mentor_cents");
         let currency: String = row.get("currency");
         let connect_id: Option<String> = row.get("stripe_connect_account_id");
-        if let Some(connect_id) = connect_id
-            && mentor_cents > 0
-            && let Some(cfg) = crate::services::stripe::StripeConfig::from_env()
-        {
-            match crate::services::stripe::create_transfer(
-                &cfg,
-                &connect_id,
-                mentor_cents,
-                &currency,
-                &format!("mentorship_session:{id}"),
-            )
-            .await
-            {
-                Ok(v) => {
-                    transfer_id = v.get("id").and_then(|x| x.as_str()).map(String::from);
-                    metrics::counter!("skilluv_stripe_connect_transfers_total").increment(1);
-                }
-                Err(e) => tracing::warn!(
-                    session_id = %id,
-                    error = %e,
-                    "stripe connect transfer failed"
-                ),
+
+        match (connect_id, mentor_cents > 0) {
+            // Nothing owed: a free session settles as paid, there is no debt
+            // left hanging.
+            (_, false) => payout_status = "paid",
+            // The common case outside Stripe's coverage. Silently doing
+            // nothing here is how a mentor ends up never paid with no trace.
+            (None, true) => {
+                payout_status = "no_account";
+                metrics::counter!("skilluv_mentorship_payout_no_account_total").increment(1);
+                tracing::error!(
+                    session_id = %id, mentor = %mentor_id, amount_cents = mentor_cents,
+                    "mentor has no payout account — session completed, money owed and unsent"
+                );
             }
+            (Some(connect_id), true) => match crate::services::stripe::StripeConfig::from_env() {
+                None => {
+                    payout_status = "failed";
+                    payout_error = Some("Stripe is not configured on this deployment".into());
+                    tracing::error!(
+                        session_id = %id,
+                        "mentorship payout skipped: Stripe not configured"
+                    );
+                }
+                Some(cfg) => {
+                    match crate::services::stripe::create_transfer(
+                        &cfg,
+                        &connect_id,
+                        mentor_cents,
+                        &currency,
+                        &format!("mentorship_session:{id}"),
+                    )
+                    .await
+                    {
+                        Ok(v) => {
+                            transfer_id = v.get("id").and_then(|x| x.as_str()).map(String::from);
+                            payout_status = "paid";
+                            metrics::counter!("skilluv_stripe_connect_transfers_total")
+                                .increment(1);
+                        }
+                        Err(e) => {
+                            payout_status = "failed";
+                            payout_error = Some(e.to_string());
+                            metrics::counter!("skilluv_mentorship_payout_failed_total")
+                                .increment(1);
+                            tracing::error!(
+                                session_id = %id, mentor = %mentor_id,
+                                amount_cents = mentor_cents, error = %e,
+                                "mentorship payout failed — session completed, money owed"
+                            );
+                        }
+                    }
+                }
+            },
         }
     }
 
     sqlx::query(
         r#"
         UPDATE mentorship_sessions
-        SET status = 'completed', payout_released_at = NOW()
+        SET status = 'completed',
+            payout_status = $2,
+            payout_error = $3,
+            payout_reference = $4,
+            -- Only stamped when the money actually left.
+            payout_released_at = CASE WHEN $2 = 'paid' THEN NOW() ELSE NULL END
         WHERE id = $1
         "#,
     )
     .bind(id)
+    .bind(payout_status)
+    .bind(payout_error.as_deref())
+    .bind(transfer_id.as_deref())
     .execute(&state.db)
     .await?;
     sqlx::query(

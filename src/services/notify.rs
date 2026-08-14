@@ -184,6 +184,12 @@ pub struct Delivery {
     /// and not a refusal: the message arrived, on a line that was already
     /// there, and deliberately without a second buzz.
     pub grouped: usize,
+    /// Failed on its channel and was put in the outbox to try again.
+    pub queued: usize,
+    /// A transactional push that could not be delivered, so an email was
+    /// queued instead. Counted apart from `queued` because it means a
+    /// device is unreachable, which is worth seeing on its own.
+    pub fell_back: usize,
     /// Recipients who declined every channel this kind offers. Not an error:
     /// a preference honoured is the system working.
     pub declined: usize,
@@ -272,11 +278,16 @@ impl<'a> Builder<'a> {
             self.deliver_to(user_id, &kind_row, &mut delivery).await;
         }
 
+        // Queued counts as reached: the obligation is now the outbox's, and
+        // it says so loudly of its own accord if it runs out of attempts.
+        // Alerting here as well would page twice for one problem.
         if kind_row.transactional
             && delivery.in_app == 0
             && delivery.push == 0
             && delivery.email == 0
             && delivery.grouped == 0
+            && delivery.queued == 0
+            && delivery.fell_back == 0
         {
             // A transactional notification is an obligation. Reaching nobody
             // is a failure worth waking someone for, not a quiet no-op.
@@ -362,10 +373,33 @@ impl<'a> Builder<'a> {
                     delivery.push += 1;
                     reached = true;
                 }
-                // Not an error by default: a device token goes stale every
-                // time someone reinstalls, and the in-app record stands.
-                Err(e) => tracing::debug!(kind = self.kind, user = %user_id, error = %e,
-                    "mobile push failed"),
+                Err(e) => {
+                    // A push is never retried: the usual cause is a token
+                    // that went stale when someone reinstalled, and asking
+                    // the same question again gets the same answer forever.
+                    tracing::debug!(kind = self.kind, user = %user_id, error = %e,
+                        "mobile push failed");
+
+                    // For a transactional kind the push was the fast path
+                    // and nothing took its place. Another road, then —
+                    // ignoring the email preference, because the message is
+                    // an obligation rather than a nudge.
+                    if kind.transactional {
+                        self.queue(
+                            user_id,
+                            &locale,
+                            &title,
+                            &body,
+                            kind,
+                            Channel::Email,
+                            true,
+                            &e.to_string(),
+                        )
+                        .await;
+                        delivery.fell_back += 1;
+                        reached = true;
+                    }
+                }
             }
         }
 
@@ -383,9 +417,24 @@ impl<'a> Builder<'a> {
                 }
                 Ok(false) => {}
                 Err(e) => {
+                    // Queued rather than lost. A 503 from the provider used
+                    // to be logged and the message was gone — not late,
+                    // gone, with nowhere to put it.
                     delivery.failures.push(format!("email: {e}"));
-                    tracing::error!(kind = self.kind, user = %user_id, error = %e,
-                        "notification email failed");
+                    tracing::warn!(kind = self.kind, user = %user_id, error = %e,
+                        "notification email failed — queued for retry");
+                    self.queue(
+                        user_id,
+                        &locale,
+                        &title,
+                        &body,
+                        kind,
+                        Channel::Email,
+                        false,
+                        &e.to_string(),
+                    )
+                    .await;
+                    delivery.queued += 1;
                 }
             }
         }
@@ -393,6 +442,51 @@ impl<'a> Builder<'a> {
         if !reached {
             delivery.declined += 1;
         }
+    }
+
+    /// Hand a failed channel to the outbox.
+    ///
+    /// The words are already translated and interpolated, so a retry sends
+    /// what this attempt meant to send. The frame around them is rendered
+    /// again at delivery, which is why a template fix reaches a queued
+    /// message and a theme change is honoured.
+    #[allow(clippy::too_many_arguments)]
+    async fn queue(
+        &self,
+        user_id: Uuid,
+        locale: &str,
+        title: &str,
+        body: &str,
+        kind_row: &KindRow,
+        channel: Channel,
+        is_fallback: bool,
+        reason: &str,
+    ) {
+        let cta_url = self.cta_url(kind_row);
+        let unsubscribe_url = if kind_row.transactional {
+            None
+        } else {
+            self.unsubscribe_url(user_id)
+        };
+
+        crate::services::outbox::enqueue(
+            self.ctx.db,
+            crate::services::outbox::Queued {
+                user_id,
+                notification_id: None,
+                kind: self.kind,
+                channel,
+                locale,
+                title,
+                body,
+                payload: self.payload.as_ref(),
+                cta_url: cta_url.as_deref(),
+                unsubscribe_url: unsubscribe_url.as_deref(),
+                is_fallback,
+                reason,
+            },
+        )
+        .await;
     }
 
     /// Absolute URL for the email button, or `None`.

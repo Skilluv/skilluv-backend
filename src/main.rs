@@ -94,6 +94,10 @@ async fn async_main(config: AppConfig) {
         config.jwt_secret.clone(),
     );
 
+    // Drains what failed on its channel, every minute — the shortest
+    // backoff, so a first retry waits for the backoff rather than the tick.
+    skilluv_backend::services::outbox::start_outbox_worker(db.clone(), email.clone());
+
     // Drip sequences (Phase 3.15) — hourly background task, idempotent via email_log.
     skilluv_backend::services::drip::start_drip_task(
         db.clone(),

@@ -50,6 +50,7 @@ pub mod notify;
 pub mod oauth;
 pub mod og_card;
 pub mod orientations_playlist;
+pub mod outbox;
 pub mod payment_webhook_sources;
 pub mod payment_webhooks;
 pub mod payout;

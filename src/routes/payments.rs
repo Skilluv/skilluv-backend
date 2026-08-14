@@ -84,16 +84,14 @@ pub async fn methods(
             let user = auth.ok_or_else(|| {
                 AppError::Validation("country is required when not signed in".into())
             })?;
-            sqlx::query_scalar::<_, Option<String>>(
-                "SELECT country_iso2 FROM users WHERE id = $1",
-            )
-            .bind(user.user_id)
-            .fetch_optional(&state.db)
-            .await?
-            .flatten()
-            .ok_or_else(|| {
-                AppError::Validation("this account has no country on it yet".into())
-            })?
+            sqlx::query_scalar::<_, Option<String>>("SELECT country_iso2 FROM users WHERE id = $1")
+                .bind(user.user_id)
+                .fetch_optional(&state.db)
+                .await?
+                .flatten()
+                .ok_or_else(|| {
+                    AppError::Validation("this account has no country on it yet".into())
+                })?
         }
     };
 

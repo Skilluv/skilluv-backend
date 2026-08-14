@@ -689,6 +689,13 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::payment_webhooks::receive,
         crate::routes::email_preview::preview,
         crate::routes::email_preview::index,
+        crate::routes::disputes::raise,
+        crate::routes::disputes::concede,
+        crate::routes::disputes::contest,
+        crate::routes::disputes::withdraw,
+        crate::routes::disputes::mine,
+        crate::routes::disputes::decide,
+        crate::routes::disputes::queue,
     ),
     components(
         schemas(

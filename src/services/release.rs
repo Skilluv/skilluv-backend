@@ -72,6 +72,14 @@ pub struct Hold<'a> {
     /// From `release_windows`. Passed in rather than looked up here so the
     /// caller can hold inside a transaction it already owns.
     pub hold_hours: i32,
+    /// Who funded this, and therefore who may dispute it. A hold created
+    /// without one is money nobody can contest — the release window
+    /// promises the payer recourse, and this is what makes the promise
+    /// keepable.
+    pub payer_id: Option<Uuid>,
+    /// Set instead of `payer_id` when an organisation funded it: a bounty
+    /// pot, an enterprise budget.
+    pub payer_enterprise_id: Option<Uuid>,
 }
 
 /// Record a hold created by a capture, so the sweep can release it later.
@@ -91,15 +99,28 @@ pub async fn hold(
         amount,
         currency,
         hold_hours,
+        payer_id,
+        payer_enterprise_id,
     } = params;
+
+    // Not an error, because an existing flow may legitimately have no
+    // single payer yet — but loud, because it silently removes the payer's
+    // only recourse and nothing else in the system would say so.
+    if payer_id.is_none() && payer_enterprise_id.is_none() {
+        tracing::warn!(
+            subject_type = subject_type,
+            subject_id = %subject_id,
+            "hold created with no payer — nobody will be able to dispute it"
+        );
+    }
     let release_at = Utc::now() + Duration::hours(hold_hours as i64);
 
     sqlx::query(
         r#"
         INSERT INTO pending_releases
             (ledger_transaction_id, beneficiary_id, subject_type, subject_id,
-             amount, currency, release_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+             amount, currency, release_at, payer_id, payer_enterprise_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         ON CONFLICT (subject_type, subject_id) DO NOTHING
         "#,
     )
@@ -110,6 +131,8 @@ pub async fn hold(
     .bind(amount)
     .bind(currency.as_str())
     .bind(release_at)
+    .bind(payer_id)
+    .bind(payer_enterprise_id)
     .execute(&mut **tx)
     .await?;
 

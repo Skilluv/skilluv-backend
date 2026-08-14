@@ -39,6 +39,7 @@ pub mod deliverables;
 // PR #39 — dev helper endpoints (verify-token peek), gated by SKILLUV_DEV_MODE
 pub mod dev;
 pub mod developer;
+pub mod disputes;
 pub mod dm;
 pub mod email_prefs;
 pub mod email_preview;
@@ -154,6 +155,7 @@ pub use contact::contact_routes;
 pub use deliverables::deliverable_routes;
 pub use dev::dev_routes;
 pub use developer::developer_routes;
+pub use disputes::dispute_routes;
 pub use dm::dm_routes;
 pub use email_prefs::email_prefs_routes;
 pub use email_preview::email_preview_routes;

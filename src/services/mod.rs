@@ -18,6 +18,7 @@ pub mod credits;
 pub mod data_export;
 pub mod deliverables;
 pub mod digest;
+pub mod disputes;
 pub mod dm;
 pub mod drip;
 mod email;

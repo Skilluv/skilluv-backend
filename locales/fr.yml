@@ -291,6 +291,28 @@ notification:
       body: "Les packs de credits, les challenges sponsorises qui te donnent acces direct aux soumissions, et le pipeline pour suivre tes candidats sans tableur."
       cta: "Voir les formules"
 
+  dispute:
+    opened:
+      title: "Un paiement de {amount} est conteste"
+      body: "La personne qui a paye indique : « {reason} ». La somme est gelee le temps que tu repondes. Si tu es d'accord, elle est remboursee immediatement ; sinon, donne ta version et quelqu'un tranchera."
+      cta: "Repondre"
+    refunded:
+      title: "Litige clos : {amount} rembourses"
+      body: "La somme est retournee a la personne qui avait paye."
+      cta: "Voir le litige"
+    released:
+      title: "Litige clos : {amount} debloques"
+      body: "La somme est disponible sur ton solde."
+      cta: "Voir le litige"
+    withdrawn:
+      title: "Litige retire"
+      body: "La contestation a ete retiree. Les {amount} suivent leur cours normal."
+      cta: "Voir le litige"
+    needs_review:
+      title: "{count} litige(s) a trancher"
+      body: "Les deux parties ne sont pas d'accord. Personne n'est paye tant que ce n'est pas decide."
+      cta: "Ouvrir les litiges"
+
 # Vocabulary reused inside notification bodies, so a translator writes
 # one sentence with a placeholder rather than two parallel titles.
 guild:

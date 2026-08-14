@@ -699,6 +699,9 @@ async fn capture_session_funds(
     state: &AppState,
     session_id: Uuid,
     mentor_id: Uuid,
+    // The student. They paid, so they are the one who may dispute — the
+    // release window is their recourse and it needs to know whose it is.
+    mentee_id: Uuid,
     mentor_cents: i64,
     platform_cents: i64,
     currency_str: &str,
@@ -752,6 +755,8 @@ async fn capture_session_funds(
             amount: &mentor_share,
             currency,
             hold_hours: window.hold_hours,
+            payer_id: Some(mentee_id),
+            payer_enterprise_id: None,
         },
     )
     .await?;
@@ -780,12 +785,16 @@ pub async fn mark_completed(
     auth: AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Value>, AppError> {
-    let row = sqlx::query("SELECT mentor_user_id, status FROM mentorship_sessions WHERE id = $1")
-        .bind(id)
-        .fetch_optional(&state.db)
-        .await?
-        .ok_or(AppError::NotFound("session not found".into()))?;
+    let row = sqlx::query(
+        "SELECT mentor_user_id, mentee_user_id, status FROM mentorship_sessions WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or(AppError::NotFound("session not found".into()))?;
     let mentor_id: Uuid = row.get("mentor_user_id");
+    // The student paid, so the hold records them as the one who may dispute.
+    let mentee_id: Uuid = row.get("mentee_user_id");
     let status: String = row.get("status");
     if auth.user_id != mentor_id {
         return Err(AppError::Forbidden);
@@ -830,6 +839,7 @@ pub async fn mark_completed(
                 &state,
                 id,
                 mentor_id,
+                mentee_id,
                 mentor_cents,
                 platform_cents,
                 &currency_str,

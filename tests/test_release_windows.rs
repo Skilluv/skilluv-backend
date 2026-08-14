@@ -63,6 +63,8 @@ async fn capture_and_hold(
             amount: &dec(amount),
             currency: Currency::Eur,
             hold_hours: window.hold_hours,
+            payer_id: None,
+            payer_enterprise_id: None,
         },
     )
     .await

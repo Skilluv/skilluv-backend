@@ -292,6 +292,28 @@ notification:
       body: "Credit packs, sponsored challenges that give you direct access to the submissions, and a pipeline to track candidates without a spreadsheet."
       cta: "See the options"
 
+  dispute:
+    opened:
+      title: "A payment of {amount} is disputed"
+      body: "The person who paid says: “{reason}”. The money is frozen until you answer. If you agree, it is refunded straight away; if not, give your account and someone will decide."
+      cta: "Answer"
+    refunded:
+      title: "Dispute closed: {amount} refunded"
+      body: "The money went back to the person who paid it."
+      cta: "See the dispute"
+    released:
+      title: "Dispute closed: {amount} released"
+      body: "The money is available on your balance."
+      cta: "See the dispute"
+    withdrawn:
+      title: "Dispute withdrawn"
+      body: "The challenge was withdrawn. The {amount} resumes its normal course."
+      cta: "See the dispute"
+    needs_review:
+      title: "{count} dispute(s) to decide"
+      body: "The two sides disagree. Nobody is paid until this is settled."
+      cta: "Open the disputes"
+
 # Vocabulary reused inside notification bodies, so a translator writes
 # one sentence with a placeholder rather than two parallel titles.
 guild:

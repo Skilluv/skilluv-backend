@@ -260,8 +260,26 @@ pub async fn list_preferences(
         })
         .collect();
 
+    // Quiet hours ride along rather than getting an endpoint of their own.
+    // They could be written and never read back, so a settings screen had
+    // no way to show the window someone had already set — it would offer
+    // the defaults again and quietly overwrite their choice on save.
+    let quiet: QuietHoursRow = sqlx::query_as(
+        "SELECT quiet_hours_start, quiet_hours_end, timezone FROM users WHERE id = $1",
+    )
+    .bind(auth.user_id)
+    .fetch_one(&state.db)
+    .await?;
+
     Ok(Json(serde_json::json!({
-        "data": { "preferences": preferences },
+        "data": {
+            "preferences": preferences,
+            "quiet_hours": {
+                "start": quiet.quiet_hours_start,
+                "end": quiet.quiet_hours_end,
+                "timezone": quiet.timezone,
+            },
+        },
         "meta": {
             "request_id": uuid::Uuid::new_v4().to_string(),
             "timestamp": chrono::Utc::now().to_rfc3339(),

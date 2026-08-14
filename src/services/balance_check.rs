@@ -55,9 +55,22 @@ pub struct Position {
     pub within_tolerance: bool,
 }
 
+/// An account whose snapshot and whose entries disagree.
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct SnapshotDrift {
+    pub account_code: String,
+    pub snapshot: String,
+    pub recomputed: String,
+    pub drift: String,
+}
+
 #[derive(Debug, Default, Clone, serde::Serialize)]
 pub struct CheckReport {
     pub positions: Vec<Position>,
+    /// Accounts where the running total no longer matches its own entries.
+    /// Must always be empty: it means the arithmetic the whole ledger rests
+    /// on has gone wrong, which is more serious than any provider drift.
+    pub snapshot_drift: Vec<SnapshotDrift>,
     /// Positions outside tolerance. Non-zero means a person should look
     /// today rather than at month end.
     pub drifting: usize,
@@ -69,6 +82,29 @@ pub struct CheckReport {
 pub async fn check(db: &PgPool) -> Result<CheckReport, AppError> {
     let ours = crate::services::ledger::provider_positions(db).await?;
     let mut report = CheckReport::default();
+
+    // Our own arithmetic first. Comparing a snapshot against a provider is
+    // meaningless if the snapshot has drifted from the entries underneath
+    // it, and that failure is the more serious of the two: a provider
+    // disagreeing is a reconciliation problem, our own totals disagreeing
+    // is every balance in the system being wrong.
+    let internal: Vec<SnapshotDrift> = sqlx::query_as(
+        "SELECT account_code, snapshot::TEXT AS snapshot,
+                recomputed::TEXT AS recomputed, drift::TEXT AS drift
+           FROM ledger_verify_balances()",
+    )
+    .fetch_all(db)
+    .await?;
+
+    if !internal.is_empty() {
+        metrics::counter!("skilluv_ledger_snapshot_drift_total").increment(internal.len() as u64);
+        tracing::error!(
+            accounts = internal.len(),
+            details = ?internal,
+            "a ledger snapshot disagrees with its own entries — every balance              derived from it is suspect"
+        );
+    }
+    report.snapshot_drift = internal;
 
     for position in ours {
         // `psp:stripe:settlement:EUR` — the provider is the middle segment.
@@ -161,6 +197,24 @@ pub fn start_balance_check(db: PgPool) {
             ticker.tick().await;
             match check(&db).await {
                 Ok(report) => {
+                    if !report.snapshot_drift.is_empty() {
+                        // Louder than provider drift, and told separately:
+                        // this is our own arithmetic disagreeing with
+                        // itself, which no reconciliation can explain.
+                        let _ = crate::services::notify::send(
+                            crate::services::notify::Ctx::db_only(&db),
+                            crate::services::notify::Recipient::Capability("admin"),
+                            "admin.reconciliation_drift",
+                        )
+                        .arg("provider", "the ledger itself")
+                        .arg(
+                            "amount",
+                            format!("{} account(s)", report.snapshot_drift.len()),
+                        )
+                        .payload(serde_json::json!({ "accounts": report.snapshot_drift }))
+                        .execute()
+                        .await;
+                    }
                     if report.drifting > 0 {
                         // The kind was seeded for this and had no sender.
                         let _ = crate::services::notify::send(

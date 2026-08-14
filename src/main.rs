@@ -94,6 +94,11 @@ async fn async_main(config: AppConfig) {
         config.jwt_secret.clone(),
     );
 
+    // Compares our books against what each provider says it holds. Daily,
+    // and it never corrects anything — a discrepancy in real money is for a
+    // person to resolve, not a background job.
+    skilluv_backend::services::balance_check::start_balance_check(db.clone());
+
     // Asks providers about payments still open, and delivers anything paid
     // for that was never delivered. The piece that makes a closed browser
     // tab cost nothing.

@@ -564,6 +564,63 @@ pub async fn create_payment_checkout(
         .map_err(|e| AppError::Internal(format!("checkout decode: {e}")))
 }
 
+/// What Stripe says it is holding for us, in one currency.
+///
+/// `None` when Stripe reports no balance in that currency at all, which is
+/// different from zero: the first means they have never held any, and the
+/// second that they hold none right now.
+pub async fn available_balance(
+    cfg: &StripeConfig,
+    currency: &str,
+) -> Result<Option<bigdecimal::BigDecimal>, AppError> {
+    let resp = reqwest::Client::new()
+        .get(format!("{STRIPE_API}/balance"))
+        .basic_auth(&cfg.secret_key, Some(""))
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("stripe balance: {e}")))?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(AppError::Internal(format!(
+            "stripe balance failed {status}: {body}"
+        )));
+    }
+
+    let body: serde_json::Value = resp
+        .json()
+        .await
+        .map_err(|e| AppError::Internal(format!("balance decode: {e}")))?;
+
+    // `available` and `pending` are separate lists. Both are money Stripe
+    // holds for us and both belong in the comparison — leaving `pending`
+    // out would report drift on every payment that has not settled yet.
+    let wanted = currency.to_lowercase();
+    let mut total: Option<i64> = None;
+    for bucket in ["available", "pending"] {
+        if let Some(entries) = body.get(bucket).and_then(|v| v.as_array()) {
+            for entry in entries {
+                if entry.get("currency").and_then(|c| c.as_str()) == Some(wanted.as_str())
+                    && let Some(amount) = entry.get("amount").and_then(serde_json::Value::as_i64)
+                {
+                    total = Some(total.unwrap_or(0) + amount);
+                }
+            }
+        }
+    }
+
+    Ok(total.map(|minor| {
+        // Back out of minor units, which is where a comparison silently
+        // goes wrong by a factor of a hundred.
+        match wanted.as_str() {
+            // XOF has no subdivision; Stripe reports it unscaled.
+            "xof" => bigdecimal::BigDecimal::from(minor),
+            _ => bigdecimal::BigDecimal::from(minor) / bigdecimal::BigDecimal::from(100),
+        }
+    }))
+}
+
 // ─── Subscriptions (Phase 4.6) ───────────────────────────────────
 
 /// Crée un checkout Stripe pour un abonnement récurrent (mode subscription).

@@ -8,7 +8,7 @@
 #   - SENTRY_DSN can point to a separate staging GlitchTip project
 #   - ENVIRONMENT=staging tag
 #   - Seed data via skilluv-seed binary on first boot
-#   - Subdomain assumption: staging.skilluv.com / staging-api.skilluv.com
+#   - Subdomain assumption: staging.skill-uv.com / staging-api.skill-uv.com
 
 services:
   skilluv-backend:
@@ -17,7 +17,7 @@ services:
       RUST_LOG: ${RUST_LOG:-skilluv_backend=debug,tower_http=info}
       # Override email to use MailHog (no real sends)
       BREVO_API_KEY: ""
-      EMAIL_FROM: noreply@staging.skilluv.com
+      EMAIL_FROM: noreply@staging.skill-uv.com
       EMAIL_FROM_NAME: "Skilluv (staging)"
       # SMTP via MailHog for transactional emails in staging
       SMTP_HOST: mailhog

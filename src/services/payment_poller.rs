@@ -45,6 +45,20 @@ const FIRST_CHECK_SECONDS: i64 = 45;
 /// Past that the answer cannot change.
 const GIVE_UP_HOURS: i64 = 25;
 
+/// A payment still waiting on an answer.
+#[derive(sqlx::FromRow)]
+struct Open {
+    id: Uuid,
+    provider: String,
+    merchant_reference: Option<String>,
+    /// Their identifier for the checkout. Absent exactly when the create
+    /// response never reached us, which is the case the recovery path
+    /// exists for.
+    provider_session_id: Option<String>,
+    age_seconds: f64,
+    check_count: i32,
+}
+
 #[derive(Debug, Default, Clone, serde::Serialize)]
 pub struct PollReport {
     pub asked: usize,
@@ -72,18 +86,8 @@ pub async fn poll(db: &PgPool) -> Result<PollReport, AppError> {
         }
     }
 
-    #[derive(sqlx::FromRow)]
-    struct Open {
-        id: Uuid,
-        provider: String,
-        merchant_reference: Option<String>,
-        provider_reference: Option<String>,
-        age_seconds: f64,
-        check_count: i32,
-    }
-
     let open: Vec<Open> = sqlx::query_as(
-        "SELECT id, provider, merchant_reference, provider_reference,
+        "SELECT id, provider, merchant_reference, provider_session_id,
                 EXTRACT(EPOCH FROM (NOW() - created_at)) AS age_seconds,
                 check_count
            FROM payments
@@ -113,39 +117,52 @@ pub async fn poll(db: &PgPool) -> Result<PollReport, AppError> {
         .await?;
         report.asked += 1;
 
-        // Only FedaPay can be asked by our own reference today. Stripe's
-        // sessions are polled by their id, which we do have — the case a
-        // merchant reference exists for is the one where their id is what
-        // got lost.
-        if payment.provider != "fedapay" {
-            report.still_open += 1;
-            continue;
-        }
-
-        let Some(cfg) = crate::services::fedapay::FedaPayConfig::from_env() else {
-            // This deployment does not hold the credentials. Not an error,
-            // and not something to count as asked either.
-            continue;
-        };
-
-        let lookup = match (
-            payment.merchant_reference.as_deref(),
-            payment.provider_reference.as_deref(),
-        ) {
-            (Some(reference), _) => {
-                crate::services::fedapay::transaction_by_merchant_reference(&cfg, reference).await
+        // Both providers can be asked now, by different means and with
+        // the same guarantee. Neither goes through a search endpoint:
+        // Stripe's own documentation says search can be an hour behind
+        // during an incident, which is no basis for deciding whether
+        // somebody has paid.
+        let lookup = match payment.provider.as_str() {
+            "fedapay" => {
+                let Some(cfg) = crate::services::fedapay::FedaPayConfig::from_env() else {
+                    continue;
+                };
+                match (
+                    payment.merchant_reference.as_deref(),
+                    payment.provider_session_id.as_deref(),
+                ) {
+                    (Some(reference), _) => {
+                        crate::services::fedapay::transaction_by_merchant_reference(&cfg, reference)
+                            .await
+                    }
+                    (None, Some(id)) => {
+                        crate::services::fedapay::transaction_status(&cfg, id).await
+                    }
+                    (None, None) => continue,
+                }
             }
-            (None, Some(id)) => crate::services::fedapay::transaction_status(&cfg, id).await,
-            // Neither: the create call never returned and never recorded a
-            // reference. Nothing to ask about, and the row stays as
-            // evidence that a checkout was attempted.
-            (None, None) => continue,
+
+            "stripe" => {
+                let Some(cfg) = crate::services::stripe::StripeConfig::from_env() else {
+                    continue;
+                };
+                stripe_outcome(db, &cfg, &payment).await
+            }
+
+            // A provider this deployment cannot ask. Not an error, and not
+            // something to count as asked either.
+            _ => {
+                report.still_open += 1;
+                continue;
+            }
         };
 
         match lookup {
             Ok(status) => match status.as_str() {
-                // The whole point of this module.
-                "approved" | "transferred" => {
+                // The whole point of this module. `paid` is Stripe's word
+                // and the other two are FedaPay's, normalised here rather
+                // than in two separate loops.
+                "approved" | "transferred" | "paid" => {
                     match crate::services::fulfilment::settle_and_deliver(db, payment.id, None)
                         .await
                     {
@@ -162,7 +179,7 @@ pub async fn poll(db: &PgPool) -> Result<PollReport, AppError> {
                         }
                     }
                 }
-                "declined" | "canceled" | "expired" => {
+                "declined" | "canceled" | "expired" | "failed" => {
                     sqlx::query(
                         "UPDATE payments SET status = 'failed', failure_reason = $2 WHERE id = $1",
                     )
@@ -192,6 +209,142 @@ pub async fn poll(db: &PgPool) -> Result<PollReport, AppError> {
     }
     metrics::gauge!("skilluv_payments_open").set(report.still_open as f64);
     Ok(report)
+}
+
+/// Ask Stripe what became of a checkout, recovering the session if needed.
+///
+/// Two paths, and the second is the interesting one.
+///
+/// With a session id, retrieving it is strongly consistent and cheap.
+///
+/// Without one -- the create response was lost, which is exactly what a
+/// dropped connection leaves behind -- the original create call is replayed
+/// under the same idempotency key. Stripe keeps the first response for that
+/// key for twenty-four hours and returns it verbatim, so this is not a
+/// second charge: it is asking what our own request produced. It is the
+/// counterpart of FedaPay's lookup by merchant reference, and the better of
+/// the two, because it does not go through an eventually-consistent index.
+async fn stripe_outcome(
+    db: &PgPool,
+    cfg: &crate::services::stripe::StripeConfig,
+    payment: &Open,
+) -> Result<String, AppError> {
+    let session = match payment.provider_session_id.as_deref() {
+        Some(session_id) => {
+            crate::services::stripe::retrieve_checkout_session(cfg, session_id).await?
+        }
+        None => {
+            let Some(recovered) = recover_stripe_session(db, cfg, payment).await? else {
+                // Past the twenty-four hours Stripe keeps an idempotency
+                // key, or missing a detail needed to replay. Nothing left
+                // to ask; the row stays as evidence a checkout was opened.
+                return Ok("expired".to_string());
+            };
+            recovered
+        }
+    };
+
+    // Learned or confirmed, either way worth keeping: the next poll takes
+    // the cheap path, and a refund needs the payment intent.
+    let session_id = session.get("id").and_then(|v| v.as_str());
+    let intent = session.get("payment_intent").and_then(|v| v.as_str());
+    if session_id.is_some() || intent.is_some() {
+        sqlx::query(
+            "UPDATE payments
+                SET provider_session_id = COALESCE(provider_session_id, $2),
+                    provider_reference = COALESCE(provider_reference, $3)
+              WHERE id = $1",
+        )
+        .bind(payment.id)
+        .bind(session_id)
+        .bind(intent)
+        .execute(db)
+        .await?;
+    }
+
+    Ok(crate::services::stripe::session_outcome(&session).to_string())
+}
+
+/// Replay the create call under its original idempotency key.
+///
+/// Every parameter must match the first request or Stripe answers
+/// `idempotency_error` -- a guard rather than an obstacle, because a
+/// mismatch means this is not the same request and must not be treated as
+/// one. So the values are read back from the payment row rather than
+/// rebuilt from anything that may have moved on since.
+async fn recover_stripe_session(
+    db: &PgPool,
+    cfg: &crate::services::stripe::StripeConfig,
+    payment: &Open,
+) -> Result<Option<serde_json::Value>, AppError> {
+    #[derive(sqlx::FromRow)]
+    struct Original {
+        idempotency_key: Option<String>,
+        merchant_reference: Option<String>,
+        amount: bigdecimal::BigDecimal,
+        currency: String,
+        email: Option<String>,
+    }
+
+    let original: Option<Original> = sqlx::query_as(
+        "SELECT p.idempotency_key, p.merchant_reference, p.amount, p.currency, u.email
+           FROM payments p
+           LEFT JOIN users u ON u.id = p.payer_id
+          WHERE p.id = $1",
+    )
+    .bind(payment.id)
+    .fetch_optional(db)
+    .await?;
+
+    let Some(original) = original else {
+        return Ok(None);
+    };
+    let (Some(key), Some(reference), Some(email)) = (
+        original.idempotency_key,
+        original.merchant_reference,
+        original.email,
+    ) else {
+        return Ok(None);
+    };
+
+    use num_traits::ToPrimitive;
+    let minor = match original.currency.as_str() {
+        // XOF has no subdivision.
+        "XOF" => original.amount.to_i64().unwrap_or(0),
+        _ => (original.amount * bigdecimal::BigDecimal::from(100))
+            .to_i64()
+            .unwrap_or(0),
+    };
+
+    let recovered = crate::services::stripe::recover_checkout_session(
+        cfg,
+        &crate::services::stripe::PaymentCheckout {
+            amount_minor: minor,
+            currency: &original.currency,
+            description: "Skilluv",
+            customer_email: &email,
+            client_reference_id: &reference,
+            success_url: &cfg.success_url,
+            cancel_url: &cfg.cancel_url,
+            idempotency_key: &key,
+        },
+    )
+    .await;
+
+    match recovered {
+        Ok(session) => Ok(Some(session)),
+        Err(e) => {
+            // `idempotency_error` means the parameters no longer match the
+            // original. Recovery is impossible and guessing would be worse:
+            // a human reconciles this one.
+            tracing::error!(
+                payment = %payment.id,
+                error = %e,
+                "could not recover a Stripe session -- reconcile this payment by hand"
+            );
+            Ok(None)
+        }
+    }
 }
 
 /// Whether this payment is due for another question.

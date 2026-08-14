@@ -33,7 +33,13 @@ impl CollectionProvider for StripeCollect {
 
     async fn start(&self, request: &CollectionRequest<'_>) -> Result<Checkout, AppError> {
         let minor = to_minor_units(request.amount, request.currency)?;
-        let reference = format!("{}:{}", request.subject_type, request.subject_id);
+        // Our own reference, not the subject: it is what a poller replays
+        // the idempotency key to recover, what the webhook matches on, and
+        // what a human finds in the dashboard.
+        let reference = request
+            .merchant_reference
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("{}:{}", request.subject_type, request.subject_id));
         let session = crate::services::stripe::create_payment_checkout(
             &self.cfg,
             &crate::services::stripe::PaymentCheckout {

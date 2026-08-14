@@ -539,6 +539,24 @@ pub async fn create_payment_checkout(
             "line_items[0][price_data][product_data][name]".into(),
             description.to_string(),
         ),
+        // Ours, in the three places it has to be. `client_reference_id` is
+        // what a human matches in the dashboard; the session metadata is
+        // what a `checkout.session.completed` webhook carries; and
+        // `payment_intent_data` is needed because a session's own metadata
+        // is *not* copied to the PaymentIntent -- which is the object a
+        // refund and a `payment_intent.succeeded` event talk about.
+        (
+            "client_reference_id".into(),
+            client_reference_id.to_string(),
+        ),
+        (
+            "metadata[merchant_reference]".into(),
+            client_reference_id.to_string(),
+        ),
+        (
+            "payment_intent_data[metadata][merchant_reference]".into(),
+            client_reference_id.to_string(),
+        ),
     ];
 
     let resp = client
@@ -619,6 +637,77 @@ pub async fn available_balance(
             _ => bigdecimal::BigDecimal::from(minor) / bigdecimal::BigDecimal::from(100),
         }
     }))
+}
+
+/// What became of a checkout session.
+///
+/// Strongly consistent, unlike search -- Stripe's own documentation warns
+/// that search data can be up to an hour behind during an incident, which
+/// is not a basis for deciding whether someone has paid.
+pub async fn retrieve_checkout_session(
+    cfg: &StripeConfig,
+    session_id: &str,
+) -> Result<serde_json::Value, AppError> {
+    let resp = reqwest::Client::new()
+        .get(format!("{STRIPE_API}/checkout/sessions/{session_id}"))
+        .basic_auth(&cfg.secret_key, Some(""))
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("stripe session: {e}")))?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(AppError::Internal(format!(
+            "stripe session failed {status}: {body}"
+        )));
+    }
+    resp.json()
+        .await
+        .map_err(|e| AppError::Internal(format!("session decode: {e}")))
+}
+
+/// Get back a session whose create response we never received.
+///
+/// Stripe stores the status code and body of the first request made under
+/// an idempotency key and returns the same result to every later request
+/// with that key, for twenty-four hours. So replaying the original create
+/// call is not a second charge -- it is how you ask "what did my request
+/// actually produce" when the answer was lost in transit.
+///
+/// This is the Stripe equivalent of FedaPay's
+/// `GET /transactions/merchant/{reference}`, and it is the better of the
+/// two: strongly consistent, where their search endpoint explicitly is not.
+///
+/// The parameters must match the original exactly. Stripe answers
+/// `idempotency_error` if they do not, which is a guard rather than an
+/// obstacle: a mismatch means this is not the same request.
+pub async fn recover_checkout_session(
+    cfg: &StripeConfig,
+    params: &PaymentCheckout<'_>,
+) -> Result<serde_json::Value, AppError> {
+    create_payment_checkout(cfg, params).await
+}
+
+/// Whether a session has been paid, in our words.
+///
+/// `payment_status` rather than `status`: a session can be `complete` while
+/// `payment_status` is `unpaid` because the payment is still processing,
+/// and treating that as paid would deliver against money that has not
+/// arrived.
+pub fn session_outcome(session: &serde_json::Value) -> &'static str {
+    let payment_status = session
+        .get("payment_status")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let status = session.get("status").and_then(|v| v.as_str()).unwrap_or("");
+
+    match (status, payment_status) {
+        (_, "paid" | "no_payment_required") => "paid",
+        ("expired", _) => "expired",
+        // `open`, or `complete` while the payment is still processing.
+        _ => "pending",
+    }
 }
 
 // ─── Subscriptions (Phase 4.6) ───────────────────────────────────

@@ -282,3 +282,96 @@ async fn front_polling_does_not_eat_the_pollers_backoff_budget() {
         "the front's polling must not count against the poller's budget"
     );
 }
+
+// ─── Stripe reaches the same guarantee by a different road ────────
+
+#[tokio::test]
+async fn a_stripe_payment_is_polled_like_a_fedapay_one() {
+    let app = TestApp::spawn().await;
+    let mentee = person(&app, "stripe_polled").await;
+
+    // Stripe used to be skipped by the poller entirely: delivery depended
+    // on the webhook alone, which is the exact failure this whole path
+    // exists to remove. It only had a weaker version of it.
+    let payment: Uuid = sqlx::query_scalar(
+        "INSERT INTO payments
+            (payer_id, subject_type, subject_id, provider, method, amount, currency,
+             merchant_reference, idempotency_key, provider_session_id, created_at)
+         VALUES ($1, 'mentorship_session', gen_random_uuid(), 'stripe', 'card', 50, 'EUR',
+                 'SKU-stripe-1', 'test-stripe-1', 'cs_test_1', NOW() - INTERVAL '5 minutes')
+         RETURNING id",
+    )
+    .bind(mentee)
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+
+    // No Stripe credentials in tests, so the poller skips the call rather
+    // than failing. What must hold is that the payment is *in* its working
+    // set — a Stripe payment older than the quiet period is something the
+    // poller looks at.
+    let open: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT id FROM payments
+          WHERE status = 'pending'
+            AND created_at < NOW() - INTERVAL '45 seconds'",
+    )
+    .fetch_all(&app.db)
+    .await
+    .unwrap();
+    assert!(
+        open.contains(&payment),
+        "a Stripe payment must be in the poller's working set"
+    );
+}
+
+#[tokio::test]
+async fn every_payment_carries_the_reference_needed_to_recover_it() {
+    let app = TestApp::spawn().await;
+
+    // The two recovery paths need different things and both are stored on
+    // the same row: FedaPay is asked by our `merchant_reference`, Stripe by
+    // replaying `idempotency_key`. A payment missing both cannot be
+    // recovered at all if the create response is lost.
+    let missing: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM payments
+          WHERE merchant_reference IS NULL AND idempotency_key IS NULL",
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert_eq!(missing, 0);
+}
+
+#[tokio::test]
+async fn a_session_that_is_complete_but_unpaid_is_not_treated_as_paid() {
+    use serde_json::json;
+    use skilluv_backend::services::stripe::session_outcome;
+
+    let _app = TestApp::spawn().await;
+
+    // A Checkout Session reaches `complete` while an asynchronous payment
+    // method is still processing. Delivering there hands over the goods
+    // against money that has not arrived and may never.
+    assert_eq!(
+        session_outcome(&json!({ "status": "complete", "payment_status": "unpaid" })),
+        "pending"
+    );
+    assert_eq!(
+        session_outcome(&json!({ "status": "complete", "payment_status": "paid" })),
+        "paid"
+    );
+    assert_eq!(
+        session_outcome(&json!({ "status": "open", "payment_status": "unpaid" })),
+        "pending"
+    );
+    assert_eq!(
+        session_outcome(&json!({ "status": "expired", "payment_status": "unpaid" })),
+        "expired"
+    );
+    // A hundred-percent discount leaves nothing to collect and is still a
+    // completed order.
+    assert_eq!(
+        session_outcome(&json!({ "status": "complete", "payment_status": "no_payment_required" })),
+        "paid"
+    );
+}

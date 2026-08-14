@@ -268,6 +268,7 @@ pub async fn status(
         status: String,
         merchant_reference: Option<String>,
         provider_reference: Option<String>,
+        provider_session_id: Option<String>,
         fulfilled_at: Option<chrono::DateTime<chrono::Utc>>,
         /// Seconds since the provider was last asked about this payment, by
         /// this endpoint or by the background poller. They share the budget
@@ -278,7 +279,7 @@ pub async fn status(
 
     let payment: Row = sqlx::query_as(
         "SELECT payer_id, provider, status, merchant_reference, provider_reference,
-                fulfilled_at,
+                provider_session_id, fulfilled_at,
                 EXTRACT(EPOCH FROM (NOW() - last_checked_at)) AS since_last_ask
            FROM payments WHERE id = $1",
     )
@@ -295,11 +296,7 @@ pub async fn status(
         .since_last_ask
         .is_none_or(|seconds| seconds >= PROVIDER_ASK_EVERY_SECONDS as f64);
 
-    if payment.status == "pending"
-        && payment.provider == "fedapay"
-        && may_ask
-        && let Some(cfg) = crate::services::fedapay::FedaPayConfig::from_env()
-    {
+    if payment.status == "pending" && may_ask {
         // Stamped before the call, not after: two requests arriving
         // together must not both decide they are allowed to ask.
         //
@@ -312,21 +309,50 @@ pub async fn status(
             .execute(&state.db)
             .await?;
 
-        let lookup = match (
-            payment.merchant_reference.as_deref(),
-            payment.provider_reference.as_deref(),
-        ) {
-            (Some(reference), _) => {
-                crate::services::fedapay::transaction_by_merchant_reference(&cfg, reference).await
-            }
-            (None, Some(their_id)) => {
-                crate::services::fedapay::transaction_status(&cfg, their_id).await
-            }
-            (None, None) => Ok("pending".to_string()),
+        // Both providers, so the page behaves the same whichever one the
+        // payer was routed to. Neither is asked through a search endpoint.
+        let lookup = match payment.provider.as_str() {
+            "fedapay" => match crate::services::fedapay::FedaPayConfig::from_env() {
+                Some(cfg) => match (
+                    payment.merchant_reference.as_deref(),
+                    payment.provider_reference.as_deref(),
+                ) {
+                    (Some(reference), _) => {
+                        crate::services::fedapay::transaction_by_merchant_reference(&cfg, reference)
+                            .await
+                    }
+                    (None, Some(their_id)) => {
+                        crate::services::fedapay::transaction_status(&cfg, their_id).await
+                    }
+                    (None, None) => Ok("pending".to_string()),
+                },
+                None => Ok("pending".to_string()),
+            },
+
+            "stripe" => match (
+                crate::services::stripe::StripeConfig::from_env(),
+                payment.provider_session_id.as_deref(),
+            ) {
+                (Some(cfg), Some(session_id)) => {
+                    crate::services::stripe::retrieve_checkout_session(&cfg, session_id)
+                        .await
+                        .map(|session| {
+                            crate::services::stripe::session_outcome(&session).to_string()
+                        })
+                }
+                // No session id means the create response was lost.
+                // Recovering it replays a create call, which is the
+                // poller's job rather than a request handler's — the front
+                // waits a minute rather than this endpoint doing something
+                // expensive on every impatient refresh.
+                _ => Ok("pending".to_string()),
+            },
+
+            _ => Ok("pending".to_string()),
         };
 
         if let Ok(remote) = lookup
-            && matches!(remote.as_str(), "approved" | "transferred")
+            && matches!(remote.as_str(), "approved" | "transferred" | "paid")
         {
             // The delivery happens in the shared path, not here — so a
             // forged call to this endpoint cannot deliver anything, and the

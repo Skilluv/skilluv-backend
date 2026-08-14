@@ -131,10 +131,28 @@ async fn deliver(db: &PgPool, paid: &Paid) -> Result<(), AppError> {
             sqlx::query(
                 "UPDATE certification_attempts
                     SET status = 'paid'
-                  WHERE id = $1 AND status = 'pending_payment'",
+                  WHERE id = $1 AND status = 'pending'",
             )
             .bind(paid.subject_id)
             .execute(db)
+            .await?;
+
+            // A certification sale never reached the books. The platform is
+            // the seller and nobody else is owed anything, which is why it
+            // was skipped — and why it should not have been: this is the
+            // account an accountant reads first, and it was understated by
+            // every certification ever sold.
+            //
+            // Recorded as revenue captured for the platform: the money is at
+            // the provider, and all of it is ours.
+            crate::services::ledger::capture_platform_revenue(
+                db,
+                &paid.currency,
+                paid.amount.clone(),
+                "certification_purchase",
+                paid.subject_id,
+                format!("certification:{}", paid.id),
+            )
             .await?;
             Ok(())
         }

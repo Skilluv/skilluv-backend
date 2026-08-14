@@ -696,6 +696,9 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::disputes::mine,
         crate::routes::disputes::decide,
         crate::routes::disputes::queue,
+        crate::routes::payments::methods,
+        crate::routes::payments::charge,
+        crate::routes::payments::status,
     ),
     components(
         schemas(

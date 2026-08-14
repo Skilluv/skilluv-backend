@@ -440,6 +440,53 @@ pub async fn user_balance(
 /// The money lands at the provider (an asset) and is split in the same
 /// breath between what we owe the recipient — held `pending`, not
 /// withdrawable — and what we earned.
+/// A sale where the platform is the seller and nobody else is owed.
+///
+/// A certification is bought from us: the money arrives at the provider and
+/// all of it is revenue. There is no recipient, no hold and no release —
+/// which is why this flow was never posted to the books at all, and why
+/// `platform:revenue` was understated by every certification ever sold.
+///
+/// Idempotent on the key, like every other movement: two roads confirming
+/// the same payment must not book the revenue twice.
+pub async fn capture_platform_revenue(
+    db: &PgPool,
+    currency: &str,
+    gross: BigDecimal,
+    subject_type: &str,
+    subject_id: Uuid,
+    idempotency_key: impl Into<String>,
+) -> Result<Posted, AppError> {
+    let currency: Currency = currency.parse()?;
+    post(
+        db,
+        Posting::new(
+            "platform_sale",
+            vec![
+                // The money physically sits at the provider...
+                Leg::debit(
+                    Account::Psp {
+                        provider: "stripe",
+                        currency,
+                    },
+                    gross.clone(),
+                ),
+                // ...and every franc of it is ours.
+                Leg::credit(
+                    Account::Platform {
+                        bucket: "revenue",
+                        currency,
+                    },
+                    gross,
+                ),
+            ],
+        )
+        .about(subject_type, subject_id)
+        .idempotent(idempotency_key),
+    )
+    .await
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn capture_for_recipient(
     db: &PgPool,

@@ -225,6 +225,7 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::payment_webhook_routes())
         .nest("/api", routes::email_preview_routes())
         .nest("/api", routes::dispute_routes())
+        .nest("/api", routes::payment_routes())
         // SKI-72 / SKI-73 — inbound webhook receivers for tracker⇄GitHub
         // sync. Mounted OUTSIDE `/api` so external senders don't hit API
         // rate-limits and signature verification is not conflated with JWT.

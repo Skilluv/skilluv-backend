@@ -66,6 +66,13 @@ pub struct Dispute {
     pub currency: String,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub resolved_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// Which side of this dispute the caller is on: `payer` or `recipient`.
+    ///
+    /// The two sides have different moves — the payer can withdraw, the
+    /// recipient can concede or contest — so a list that does not say which
+    /// one you are forces the client to infer it, and a client that infers
+    /// wrong offers someone a button that will be refused.
+    pub viewer_role: String,
 }
 
 /// Who won.
@@ -420,12 +427,13 @@ pub async fn for_user(db: &PgPool, user_id: Uuid) -> Result<Vec<Dispute>, AppErr
         currency: String,
         created_at: chrono::DateTime<chrono::Utc>,
         resolved_at: Option<chrono::DateTime<chrono::Utc>>,
+        raised_by: Uuid,
     }
 
     let rows: Vec<Row> = sqlx::query_as(
         "SELECT d.id, d.status, d.reason, d.recipient_response, d.resolution_note,
                 p.subject_type, p.subject_id, p.amount, p.currency,
-                d.created_at, d.resolved_at
+                d.created_at, d.resolved_at, d.raised_by
            FROM disputes d
            JOIN pending_releases p ON p.id = d.pending_release_id
           WHERE d.raised_by = $1 OR p.beneficiary_id = $1
@@ -450,6 +458,11 @@ pub async fn for_user(db: &PgPool, user_id: Uuid) -> Result<Vec<Dispute>, AppErr
             currency: r.currency,
             created_at: r.created_at,
             resolved_at: r.resolved_at,
+            viewer_role: if r.raised_by == user_id {
+                "payer".to_string()
+            } else {
+                "recipient".to_string()
+            },
         })
         .collect())
 }

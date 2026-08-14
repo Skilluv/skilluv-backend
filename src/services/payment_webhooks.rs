@@ -47,6 +47,20 @@ pub enum Event {
         reference: String,
         reason: Option<String>,
     },
+    /// Money came in and the thing paid for should now exist.
+    PaymentSucceeded {
+        /// The provider's identifier for the charge, for refunds later.
+        reference: String,
+        /// Ours, echoed back. Present where the provider supports it, and
+        /// the only handle that survives a lost create response.
+        merchant_reference: Option<String>,
+    },
+    /// Money did not come in.
+    PaymentFailed {
+        reference: String,
+        merchant_reference: Option<String>,
+        reason: Option<String>,
+    },
     /// Something happened that we understood, and that requires nothing.
     /// Recorded, acknowledged, not acted on.
     Ignored { kind: String },
@@ -58,6 +72,8 @@ impl Event {
         match self {
             Event::PayoutSettled { .. } => "payout.settled".into(),
             Event::PayoutFailed { .. } => "payout.failed".into(),
+            Event::PaymentSucceeded { .. } => "payment.succeeded".into(),
+            Event::PaymentFailed { .. } => "payment.failed".into(),
             Event::Ignored { kind } => format!("ignored:{kind}"),
         }
     }
@@ -174,28 +190,39 @@ pub async fn receive(
         return Ok(Outcome::Duplicate);
     };
 
-    let outcome = apply(db, source.name(), &event).await;
-
-    match &outcome {
-        Ok(_) => {
+    match apply(db, source.name(), &event).await {
+        Ok(outcome) => {
             sqlx::query("UPDATE payment_webhook_events SET processed_at = NOW() WHERE id = $1")
                 .bind(stored_id)
                 .execute(db)
                 .await?;
+            Ok(outcome)
         }
         Err(e) => {
-            // Left unprocessed on purpose: the sweep retries it, and an
-            // event that silently failed to apply is the exact hole this
-            // module exists to close.
+            // Left unprocessed on purpose: the sweep and the poller both
+            // retry from here, and an event that silently failed to apply
+            // is the exact hole this module exists to close.
             sqlx::query("UPDATE payment_webhook_events SET processing_error = $2 WHERE id = $1")
                 .bind(stored_id)
                 .bind(e.to_string())
                 .execute(db)
                 .await?;
+
+            tracing::error!(
+                provider = source.name(),
+                event_id = %event_id,
+                error = %e,
+                "webhook stored but not applied — acknowledged anyway, the sweep will retry"
+            );
+
+            // Acknowledged, not refused. The event is durably ours and two
+            // other roads will apply it; answering non-2xx would only ask
+            // the provider to send it again — and FedaPay disables an
+            // endpoint after ten failures, which would cost us every
+            // subsequent event to fix one.
+            Ok(Outcome::Ignored)
         }
     }
-
-    outcome
 }
 
 /// Move the books to match what the provider said.
@@ -206,6 +233,68 @@ pub async fn receive(
 async fn apply(db: &PgPool, provider: &str, event: &Event) -> Result<Outcome, AppError> {
     match event {
         Event::Ignored { .. } => Ok(Outcome::Ignored),
+
+        Event::PaymentSucceeded {
+            reference,
+            merchant_reference,
+        } => {
+            let Some(payment_id) =
+                find_payment(db, provider, reference, merchant_reference.as_deref()).await?
+            else {
+                // A payment we have no record of. Another environment
+                // sharing the credential, or a charge created outside this
+                // system — both worth eyes, neither worth failing over.
+                tracing::error!(
+                    provider = provider,
+                    reference = %reference,
+                    "provider reports a payment we have no record of"
+                );
+                metrics::counter!(
+                    "skilluv_payment_webhook_orphan_total",
+                    "provider" => provider.to_string()
+                )
+                .increment(1);
+                return Ok(Outcome::Ignored);
+            };
+
+            // The same path the poller takes. A payment confirmed by
+            // webhook and one confirmed by polling are indistinguishable
+            // afterwards, which is the property that makes the browser
+            // optional.
+            match crate::services::fulfilment::settle_and_deliver(db, payment_id, Some(reference))
+                .await?
+            {
+                true => Ok(Outcome::Applied("payment.succeeded".into())),
+                // Already delivered by another road. Expected, not an error.
+                false => Ok(Outcome::Ignored),
+            }
+        }
+
+        Event::PaymentFailed {
+            reference,
+            merchant_reference,
+            reason,
+        } => {
+            let Some(payment_id) =
+                find_payment(db, provider, reference, merchant_reference.as_deref()).await?
+            else {
+                return Ok(Outcome::Ignored);
+            };
+            sqlx::query(
+                "UPDATE payments
+                    SET status = 'failed', failure_reason = $2
+                  WHERE id = $1 AND status = 'pending'",
+            )
+            .bind(payment_id)
+            .bind(
+                reason
+                    .clone()
+                    .unwrap_or_else(|| "the provider reported a failure".into()),
+            )
+            .execute(db)
+            .await?;
+            Ok(Outcome::Applied("payment.failed".into()))
+        }
 
         Event::PayoutSettled { reference } => {
             let settled = sqlx::query(
@@ -297,6 +386,38 @@ async fn apply(db: &PgPool, provider: &str, event: &Event) -> Result<Outcome, Ap
             Ok(Outcome::Applied("payout.failed".into()))
         }
     }
+}
+
+/// Find the payment a provider is talking about.
+///
+/// By our reference first: it is the one that exists even when the response
+/// carrying theirs was lost, which is the case this whole path is built
+/// around.
+async fn find_payment(
+    db: &PgPool,
+    provider: &str,
+    reference: &str,
+    merchant_reference: Option<&str>,
+) -> Result<Option<Uuid>, AppError> {
+    if let Some(ours) = merchant_reference
+        && let Some(id) =
+            sqlx::query_scalar::<_, Uuid>("SELECT id FROM payments WHERE merchant_reference = $1")
+                .bind(ours)
+                .fetch_optional(db)
+                .await?
+    {
+        return Ok(Some(id));
+    }
+
+    Ok(sqlx::query_scalar(
+        "SELECT id FROM payments
+          WHERE provider = $1
+            AND (provider_reference = $2 OR provider_session_id = $2)",
+    )
+    .bind(provider)
+    .bind(reference)
+    .fetch_optional(db)
+    .await?)
 }
 
 /// A pending payout, enough of it to reverse.

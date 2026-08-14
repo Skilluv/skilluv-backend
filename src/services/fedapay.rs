@@ -250,6 +250,99 @@ pub async fn payout_status(cfg: &FedaPayConfig, id: &str) -> Result<String, AppE
         .to_string())
 }
 
+/// Ask what became of a transaction, by our own reference.
+///
+/// The call that makes a lost response recoverable. `merchant_reference` is
+/// ours and is sent when the transaction is created, so this works in
+/// exactly the situation where their id never reached us — which is the
+/// situation a closed browser tab produces.
+pub async fn transaction_by_merchant_reference(
+    cfg: &FedaPayConfig,
+    reference: &str,
+) -> Result<String, AppError> {
+    let body = get(cfg, &format!("/transactions/merchant/{reference}")).await?;
+    Ok(status_of(&body))
+}
+
+/// Ask what became of a transaction, by theirs.
+pub async fn transaction_status(cfg: &FedaPayConfig, id: &str) -> Result<String, AppError> {
+    let body = get(cfg, &format!("/transactions/{id}")).await?;
+    Ok(status_of(&body))
+}
+
+/// Charge without leaving our page.
+///
+/// Two calls after the transaction exists: a token, then a push to the
+/// operator's prompt on the payer's phone. `mode` is FedaPay's own name for
+/// the rail — `mtn_open`, `moov`, `celtiis`, `togocel`, ... — and comes from
+/// the `payment_methods` table rather than from a match here, because the
+/// list grows.
+pub async fn charge_inline(
+    cfg: &FedaPayConfig,
+    transaction_id: &str,
+    mode: &str,
+    phone: &str,
+    country: &str,
+    idempotency_key: &str,
+) -> Result<(), AppError> {
+    let client = reqwest::Client::new();
+
+    let tokenised = post(
+        &client,
+        cfg,
+        &format!("/transactions/{transaction_id}/token"),
+        &json!({}),
+        idempotency_key,
+    )
+    .await?;
+    let token = tokenised
+        .get("token")
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            AppError::Internal(format!(
+                "fedapay: transaction {transaction_id} produced no token: {tokenised}"
+            ))
+        })?;
+
+    post(
+        &client,
+        cfg,
+        &format!("/{mode}"),
+        &json!({
+            "token": token,
+            "phone_number": { "number": phone, "country": country.to_lowercase() },
+        }),
+        idempotency_key,
+    )
+    .await?;
+
+    // Nothing is confirmed here. The payer now has a prompt on their phone,
+    // and what happens next reaches us by webhook or by polling -- never by
+    // the browser, which may already be closed.
+    Ok(())
+}
+
+/// The status FedaPay reports, whichever envelope it arrives in.
+fn status_of(body: &Value) -> String {
+    body.get("v1/transaction")
+        .or_else(|| body.get("transaction"))
+        .unwrap_or(body)
+        .get("status")
+        .and_then(Value::as_str)
+        .unwrap_or("pending")
+        .to_string()
+}
+
+async fn get(cfg: &FedaPayConfig, path: &str) -> Result<Value, AppError> {
+    let resp = reqwest::Client::new()
+        .get(format!("{}{path}", cfg.base()))
+        .bearer_auth(&cfg.secret_key)
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("fedapay {path}: {e}")))?;
+    decode(resp, path).await
+}
+
 /// FedaPay wraps its objects under a versioned key, and lists under the
 /// plural of it. Both shapes reach here, from create and from start.
 fn unwrap_payout(body: &Value) -> Option<&Value> {

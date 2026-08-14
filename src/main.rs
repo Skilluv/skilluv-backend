@@ -94,6 +94,11 @@ async fn async_main(config: AppConfig) {
         config.jwt_secret.clone(),
     );
 
+    // Asks providers about payments still open, and delivers anything paid
+    // for that was never delivered. The piece that makes a closed browser
+    // tab cost nothing.
+    skilluv_backend::services::payment_poller::start_payment_poller(db.clone());
+
     // Drains what failed on its channel, every minute — the shortest
     // backoff, so a first retry waits for the backoff rather than the tick.
     skilluv_backend::services::outbox::start_outbox_worker(db.clone(), email.clone());

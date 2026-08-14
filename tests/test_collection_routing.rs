@@ -166,6 +166,9 @@ async fn a_charge_is_recorded_before_the_provider_is_asked() {
             success_url: "https://skill-uv.com/ok",
             cancel_url: "https://skill-uv.com/no",
             idempotency_key: "test:collect:1",
+            operator: Some("mtn"),
+            credits: None,
+            merchant_reference: None,
         },
     )
     .await;

@@ -96,6 +96,15 @@ pub struct CollectionRequest<'a> {
     pub cancel_url: &'a str,
     /// Stable key so a double-submitted form cannot charge twice.
     pub idempotency_key: &'a str,
+    /// Which operator, when the payer chose one. `None` lets the provider
+    /// decide from the number, which is what a redirect flow does anyway.
+    pub operator: Option<&'a str>,
+    /// Credits bought, for a credit pack. Frozen here so a price change
+    /// between paying and delivering cannot alter what someone receives.
+    pub credits: Option<i32>,
+    /// Filled in by [`start`], never by the caller: the identifier the
+    /// provider echoes back and that a poller looks the payment up by.
+    pub merchant_reference: Option<&'a str>,
 }
 
 /// Where to send the payer, and what to call this later.
@@ -245,11 +254,15 @@ pub async fn start(
     method: Method,
     request: CollectionRequest<'_>,
 ) -> Result<Checkout, AppError> {
+    // The merchant reference is ours and travels to the provider, so a
+    // payment can be asked about even when the response carrying their
+    // identifier is the thing that got lost — which is exactly what a
+    // closed browser tab produces.
     let payment_id: Uuid = sqlx::query_scalar(
         "INSERT INTO payments
             (payer_id, payer_enterprise_id, subject_type, subject_id, provider,
-             method, amount, currency, idempotency_key)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+             method, amount, currency, idempotency_key, operator, credits_purchased)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
          ON CONFLICT (idempotency_key) DO UPDATE SET updated_at = NOW()
          RETURNING id",
     )
@@ -262,8 +275,22 @@ pub async fn start(
     .bind(request.amount)
     .bind(request.currency.as_str())
     .bind(request.idempotency_key)
+    .bind(request.operator)
+    .bind(request.credits)
     .fetch_one(db)
     .await?;
+
+    let merchant_reference = format!("SKU-{}", payment_id.simple());
+    sqlx::query(
+        "UPDATE payments SET merchant_reference = $2 WHERE id = $1 AND merchant_reference IS NULL",
+    )
+    .bind(payment_id)
+    .bind(&merchant_reference)
+    .execute(db)
+    .await?;
+
+    let mut request = request;
+    request.merchant_reference = Some(&merchant_reference);
 
     match provider.start(&request).await {
         Ok(checkout) => {

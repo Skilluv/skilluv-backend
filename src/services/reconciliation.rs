@@ -155,7 +155,10 @@ pub async fn sweep(db: &PgPool, registry: &PayoutRegistry) -> Result<SweepReport
                 match &event {
                     Event::PayoutSettled { .. } => report.settled += 1,
                     Event::PayoutFailed { .. } => report.failed += 1,
-                    Event::Ignored { .. } => report.still_pending += 1,
+                    // Collection events never come from a payout status.
+                    Event::Ignored { .. }
+                    | Event::PaymentSucceeded { .. }
+                    | Event::PaymentFailed { .. } => report.still_pending += 1,
                 }
                 payment_webhooks::apply_event(db, &row.provider, &event).await?;
             }

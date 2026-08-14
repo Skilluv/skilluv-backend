@@ -64,6 +64,34 @@ impl Source for StripeSource {
             // `transfer.created` only moves it between Stripe balances,
             // which `send` already recorded, so it is not a settlement.
             "payout.paid" => Event::PayoutSettled { reference },
+
+            // Money coming in. `client_reference_id` is what `collect`
+            // sends as the subject, and the merchant reference travels in
+            // metadata since Stripe has no field of its own for it.
+            "checkout.session.completed" | "payment_intent.succeeded" => Event::PaymentSucceeded {
+                merchant_reference: object
+                    .get("metadata")
+                    .and_then(|m| m.get("merchant_reference"))
+                    .and_then(Value::as_str)
+                    .map(str::to_string),
+                // The payment intent, not the session: it is what a refund
+                // takes, and a session id cannot be refunded.
+                reference: object
+                    .get("payment_intent")
+                    .and_then(Value::as_str)
+                    .unwrap_or(&reference)
+                    .to_string(),
+            },
+            "checkout.session.expired" | "payment_intent.payment_failed" => Event::PaymentFailed {
+                merchant_reference: None,
+                reason: object
+                    .get("last_payment_error")
+                    .and_then(|e| e.get("message"))
+                    .and_then(Value::as_str)
+                    .map(str::to_string),
+                reference,
+            },
+
             "payout.failed" | "transfer.reversed" => Event::PayoutFailed {
                 reason: object
                     .get("failure_message")
@@ -130,6 +158,13 @@ impl Source for FedaPaySource {
             })
             .unwrap_or_default();
 
+        // Ours, echoed back. The handle that survives a create response
+        // we never received, which is what a closed browser tab produces.
+        let merchant_reference = entity
+            .get("merchant_reference")
+            .and_then(Value::as_str)
+            .map(str::to_string);
+
         Ok(match kind {
             "payout.sent" | "payout.succeeded" => Event::PayoutSettled { reference },
             "payout.failed" | "payout.canceled" => Event::PayoutFailed {
@@ -139,6 +174,26 @@ impl Source for FedaPaySource {
                     .map(str::to_string),
                 reference,
             },
+
+            // Money coming in. `transferred` is FedaPay moving an approved
+            // transaction onto the merchant balance — the same money, one
+            // step later — so both mean the payer has paid.
+            "transaction.approved" | "transaction.transferred" => Event::PaymentSucceeded {
+                reference,
+                merchant_reference,
+            },
+            "transaction.declined" | "transaction.canceled" | "transaction.expired" => {
+                Event::PaymentFailed {
+                    reason: entity
+                        .get("last_error_message")
+                        .and_then(Value::as_str)
+                        .map(str::to_string)
+                        .or_else(|| Some(kind.to_string())),
+                    reference,
+                    merchant_reference,
+                }
+            }
+
             other => Event::Ignored {
                 kind: other.to_string(),
             },

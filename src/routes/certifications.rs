@@ -317,6 +317,9 @@ pub async fn purchase_certification(
             success_url: &success_url,
             cancel_url: &cancel_url,
             idempotency_key: &idempotency_key,
+            operator: None,
+            credits: None,
+            merchant_reference: None,
         },
     )
     .await?;

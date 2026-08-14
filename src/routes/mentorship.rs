@@ -453,6 +453,9 @@ pub async fn book_session(
             success_url: &success_url,
             cancel_url: &cancel_url,
             idempotency_key: &idempotency_key,
+            operator: None,
+            credits: None,
+            merchant_reference: None,
         },
     )
     .await?;

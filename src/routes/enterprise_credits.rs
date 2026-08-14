@@ -217,6 +217,9 @@ pub async fn create_checkout(
             success_url: &success_url,
             cancel_url: &cancel_url,
             idempotency_key: &idempotency_key,
+            operator: None,
+            credits: Some(pack.credits),
+            merchant_reference: None,
         },
     )
     .await?;

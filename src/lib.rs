@@ -223,6 +223,7 @@ pub fn build_router(state: AppState) -> Router {
         // endpoint that predates it; the signature check is the
         // authentication, so no JWT layer applies.
         .nest("/api", routes::payment_webhook_routes())
+        .nest("/api", routes::email_preview_routes())
         // SKI-72 / SKI-73 — inbound webhook receivers for tracker⇄GitHub
         // sync. Mounted OUTSIDE `/api` so external senders don't hit API
         // rate-limits and signature verification is not conflated with JWT.

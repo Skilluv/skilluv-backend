@@ -318,6 +318,38 @@ async fn settle(
             .await?;
         }
         Outcome::Payer => {
+            // At the provider first. `refund_from_dispute` writes entries
+            // saying the money has left the provider's float; if nothing
+            // tells the provider, the books say refunded and the card was
+            // never credited — the one accounting error a customer notices
+            // before we do.
+            //
+            // A provider that cannot refund returns an error, and the
+            // failure stops here rather than moving our books into a state
+            // the money is not in.
+            let registry = crate::services::collect_adapters::registry_from_env();
+            let refunded = crate::services::collect::refund(
+                db,
+                &registry,
+                &hold.subject_type,
+                hold.subject_id,
+                "dispute settled for the payer",
+            )
+            .await?;
+
+            if refunded.is_none() {
+                // No recorded charge — a payment from before `payments`
+                // existed. The books still have to move, because the money
+                // is certainly not the recipient's, but somebody has to
+                // give it back by hand.
+                tracing::error!(
+                    dispute = %hold.dispute_id,
+                    subject = %hold.subject_type,
+                    "refunded in the books with no provider charge to reverse — refund this by hand"
+                );
+                metrics::counter!("skilluv_dispute_manual_refund_needed_total").increment(1);
+            }
+
             // The platform's cut goes back with the rest: taking a
             // commission on a service that was not delivered is not
             // defensible, and reconciling a partial refund later is worse

@@ -264,36 +264,60 @@ pub async fn purchase_certification(
     .fetch_one(&state.db)
     .await?;
 
-    // Stripe checkout via helper existant. Ici on utilise Stripe pour un pack
-    // synthétique "certification" — le webhook `checkout.session.completed`
-    // marquera l'attempt comme 'paid'.
-    let cfg = crate::services::stripe::StripeConfig::from_env()
-        .ok_or(AppError::Internal("Stripe not configured".into()))?;
-    let pack = crate::services::stripe::Pack {
-        slug: Box::leak(format!("cert_{slug}").into_boxed_str()),
-        credits: 0,
-        price_eur_cents: price_cents,
-        stripe_price_lookup_key: Box::leak(format!("skilluv_cert_{slug}").into_boxed_str()),
-    };
-    let user_email: Option<(String,)> = sqlx::query_as("SELECT email FROM users WHERE id = $1")
-        .bind(auth.user_id)
-        .fetch_optional(&state.db)
-        .await?;
-    let email = user_email
-        .map(|(e,)| e)
-        .ok_or(AppError::NotFound("user not found".into()))?;
+    // Two `Box::leak`ed strings per purchase, to build a synthetic "pack"
+    // for a helper shaped around credit packs. Both leaked for the life of
+    // the process, and neither reached anyone paying by Mobile Money.
+    let payer: (String, String, Option<String>, Option<String>) = sqlx::query_as(
+        "SELECT u.email, u.display_name, u.country_iso2, w.momo_phone
+           FROM users u
+           LEFT JOIN talent_wallets w ON w.user_id = u.id
+          WHERE u.id = $1",
+    )
+    .bind(auth.user_id)
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or(AppError::NotFound("user not found".into()))?;
+    let (email, display_name, country, phone) = payer;
 
-    let session = crate::services::stripe::create_checkout_session(
-        &cfg,
-        &pack,
-        &email,
-        &attempt.0.to_string(),
-        &[
-            ("purpose", "certification".to_string()),
-            ("attempt_id", attempt.0.to_string()),
-            ("certification_id", cert_id.to_string()),
-            ("certification_title", title),
-        ],
+    let currency = crate::services::ledger::Currency::Eur;
+    let method = if phone.is_some() && currency == crate::services::ledger::Currency::Xof {
+        crate::services::collect::Method::MobileMoney
+    } else {
+        crate::services::collect::Method::Card
+    };
+
+    let registry = crate::services::collect_adapters::registry_from_env();
+    let provider = registry
+        .resolve(&state.db, country.as_deref(), currency, method)
+        .await?;
+
+    let amount = bigdecimal::BigDecimal::from(price_cents) / bigdecimal::BigDecimal::from(100);
+    let base = state.config.frontend_url.trim_end_matches('/').to_string();
+    let success_url = format!("{base}/certifications/{slug}?paid=1");
+    let cancel_url = format!("{base}/certifications/{slug}?canceled=1");
+    let idempotency_key = format!("certification_purchase:{}", attempt.0);
+    let description = format!("Skilluv — {title}");
+
+    let session = crate::services::collect::start(
+        &state.db,
+        provider.as_ref(),
+        method,
+        crate::services::collect::CollectionRequest {
+            payer_id: Some(auth.user_id),
+            payer_enterprise_id: None,
+            payer_email: &email,
+            payer_name: &display_name,
+            payer_country: country.as_deref(),
+            payer_phone: phone.as_deref(),
+            subject_type: "certification_purchase",
+            subject_id: attempt.0,
+            amount: &amount,
+            currency,
+            description: &description,
+            success_url: &success_url,
+            cancel_url: &cancel_url,
+            idempotency_key: &idempotency_key,
+        },
     )
     .await?;
 
@@ -301,7 +325,7 @@ pub async fn purchase_certification(
         attempt_id: attempt.0,
         status: None,
         message: None,
-        checkout_url: Some(session.checkout_url),
+        checkout_url: Some(session.redirect_url),
         session_id: Some(session.session_id),
     })))
 }

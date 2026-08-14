@@ -156,6 +156,78 @@ pub async fn send_payout(
     })
 }
 
+/// Open a checkout the payer completes on FedaPay's page.
+///
+/// Two calls, like the payout side: `POST /transactions` creates it and
+/// `POST /transactions/{id}/token` produces the URL to send someone to.
+/// A transaction with no token is a charge that exists and that nobody can
+/// pay, so this always does both.
+pub async fn create_checkout(
+    cfg: &FedaPayConfig,
+    transfer: &Transfer<'_>,
+    callback_url: &str,
+) -> Result<(String, String), AppError> {
+    let client = reqwest::Client::new();
+    let (firstname, lastname) = split_name(transfer.recipient_name);
+
+    let mut customer = json!({
+        "firstname": firstname,
+        "lastname": lastname,
+        "phone_number": {
+            "number": transfer.phone,
+            "country": transfer.country.to_lowercase(),
+        },
+    });
+    if let Some(email) = transfer.recipient_email {
+        customer["email"] = json!(email);
+    }
+
+    let created = post(
+        &client,
+        cfg,
+        "/transactions",
+        &json!({
+            "description": transfer.description,
+            "amount": transfer.amount,
+            "currency": { "iso": transfer.currency_iso },
+            "callback_url": callback_url,
+            "customer": customer,
+        }),
+        transfer.idempotency_key,
+    )
+    .await?;
+
+    let transaction = created
+        .get("v1/transaction")
+        .or_else(|| created.get("transaction"))
+        .unwrap_or(&created);
+    let id = transaction
+        .get("id")
+        .and_then(Value::as_i64)
+        .ok_or_else(|| AppError::Internal(format!("fedapay: transaction has no id: {created}")))?;
+
+    let tokenised = post(
+        &client,
+        cfg,
+        &format!("/transactions/{id}/token"),
+        &json!({}),
+        transfer.idempotency_key,
+    )
+    .await?;
+
+    let url = tokenised
+        .get("url")
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            AppError::Internal(format!(
+                "fedapay: transaction {id} has no payment url — the payer has nowhere to go: {tokenised}"
+            ))
+        })?
+        .to_string();
+
+    Ok((id.to_string(), url))
+}
+
 /// Read back what became of a payout.
 ///
 /// The reconciliation sweep calls this for payouts whose callback never

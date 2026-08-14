@@ -158,30 +158,72 @@ pub async fn create_checkout(
     // knowledge. `require_enterprise_owner_pub` also enforces the standard
     // enterprise gates (verified email, active membership, 2FA).
     let enterprise = crate::routes::enterprise::require_enterprise_owner_pub(&state, &auth).await?;
-    let cfg = stripe::StripeConfig::from_env()
-        .ok_or(AppError::Internal("Stripe not configured".into()))?;
     let pack =
         stripe::pack_by_slug(&body.pack_slug).ok_or(AppError::Validation("unknown pack".into()))?;
     let enterprise_id = enterprise.id;
 
-    // Resolve buyer email (the requesting recruiter)
-    let email: (String,) = sqlx::query_as("SELECT email FROM users WHERE id = $1")
-        .bind(auth.user_id)
-        .fetch_one(&state.db)
+    // The buyer, and the country their organisation is in — which decides
+    // whether a card checkout reaches them at all. A Beninese enterprise
+    // could not buy credits before this: the only door was Stripe, and
+    // Stripe does not take Mobile Money there.
+    // The buyer's own country: `enterprises` records no location, so the
+    // person clicking is the best signal we have for which corridor
+    // reaches them.
+    let buyer: (String, String, Option<String>) =
+        sqlx::query_as("SELECT email, display_name, country_iso2 FROM users WHERE id = $1")
+            .bind(auth.user_id)
+            .fetch_one(&state.db)
+            .await?;
+    let (email, display_name, country) = buyer;
+
+    let currency = crate::services::ledger::Currency::Eur;
+    let registry = crate::services::collect_adapters::registry_from_env();
+    let provider = registry
+        .resolve(
+            &state.db,
+            country.as_deref(),
+            currency,
+            crate::services::collect::Method::Card,
+        )
         .await?;
-    let session = stripe::create_checkout_session(
-        &cfg,
-        pack,
-        &email.0,
-        &enterprise_id.to_string(),
-        &[
-            ("enterprise_id", enterprise_id.to_string()),
-            ("recruiter_user_id", auth.user_id.to_string()),
-        ],
+
+    let amount =
+        bigdecimal::BigDecimal::from(pack.price_eur_cents) / bigdecimal::BigDecimal::from(100);
+    let base = state.config.frontend_url.trim_end_matches('/').to_string();
+    let success_url = format!("{base}/enterprise/credits?paid=1");
+    let cancel_url = format!("{base}/enterprise/credits?canceled=1");
+    // Keyed on the order rather than the enterprise: a company buying two
+    // packs in a day is buying two packs.
+    let order = Uuid::new_v4();
+    let idempotency_key = format!("credit_pack:{order}");
+    let description = format!("Skilluv — {} crédit(s)", pack.credits);
+
+    let session = crate::services::collect::start(
+        &state.db,
+        provider.as_ref(),
+        crate::services::collect::Method::Card,
+        crate::services::collect::CollectionRequest {
+            payer_id: Some(auth.user_id),
+            payer_enterprise_id: Some(enterprise_id),
+            payer_email: &email,
+            payer_name: &display_name,
+            payer_country: country.as_deref(),
+            payer_phone: None,
+            subject_type: "credit_pack",
+            subject_id: order,
+            amount: &amount,
+            currency,
+            description: &description,
+            success_url: &success_url,
+            cancel_url: &cancel_url,
+            idempotency_key: &idempotency_key,
+        },
     )
     .await?;
+
     Ok(Json(build_response(json!({
-        "checkout_url": session.checkout_url,
+        "checkout_url": session.redirect_url,
+        "provider": session.provider,
         "session_id": session.session_id,
     }))))
 }
@@ -906,8 +948,10 @@ pub async fn public_pricing(
 ) -> Result<Json<Value>, AppError> {
     let packs = crate::services::fx::active_packs(&state.db, Some("credits")).await?;
     let subs = crate::services::fx::active_packs(&state.db, Some("subscription")).await?;
-    let (currency, provider) =
-        resolve_currency_and_provider(q.country.as_deref(), q.currency.as_deref());
+    let currency = resolve_currency(q.country.as_deref(), q.currency.as_deref());
+    let provider = provider_for_display(&state.db, q.country.as_deref(), &currency)
+        .await
+        .unwrap_or_else(|| "unavailable".to_string());
     let mut redis = state.redis.clone();
 
     let mut packs_out: Vec<Value> = Vec::with_capacity(packs.len());
@@ -979,16 +1023,18 @@ pub async fn public_pricing(
     }))))
 }
 
-fn resolve_currency_and_provider(
-    country: Option<&str>,
-    currency: Option<&str>,
-) -> (String, &'static str) {
+/// The currency this country is quoted in.
+///
+/// The provider used to come back from here too, out of a const array in
+/// `psp.rs` that nothing else read. It comes from `collection_routes` now,
+/// which is the table that actually decides — a display that disagrees with
+/// the routing is worse than no display.
+fn resolve_currency(country: Option<&str>, currency: Option<&str>) -> String {
     if let Some(c) = currency {
-        let cc = c.to_uppercase();
-        return (cc, "auto");
+        return c.to_uppercase();
     }
     let Some(cc) = country else {
-        return ("EUR".into(), "stripe");
+        return "EUR".into();
     };
     let cc = cc.to_uppercase();
     // Very small country → currency table for display purposes.
@@ -1013,6 +1059,32 @@ fn resolve_currency_and_provider(
         "CH" => "CHF",
         _ => "EUR",
     };
-    let provider = crate::services::psp::default_provider_name_for_country(&cc);
-    (currency.into(), provider)
+    currency.into()
+}
+
+/// Which provider would take this payment, for display.
+///
+/// Read from the routing table rather than guessed, and `None` when no
+/// route matches — a currency we cannot collect should say so on the
+/// pricing page rather than at checkout.
+async fn provider_for_display(
+    db: &sqlx::PgPool,
+    country: Option<&str>,
+    currency: &str,
+) -> Option<String> {
+    use crate::services::collect::{Method, routes};
+    use crate::services::ledger::Currency;
+
+    let parsed: Currency = currency.parse().ok()?;
+    // Card first, because that is what a pricing page implies; falling back
+    // to Mobile Money covers the franc zone, where it is the normal way to
+    // pay.
+    for method in [Method::Card, Method::MobileMoney] {
+        if let Ok(found) = routes(db, country, parsed, method).await
+            && let Some(route) = found.first()
+        {
+            return Some(route.provider.clone());
+        }
+    }
+    None
 }

@@ -284,6 +284,9 @@ pub async fn create_refund(
     let resp = client
         .post(format!("{STRIPE_API}/refunds"))
         .basic_auth(&cfg.secret_key, Some(""))
+        // Keyed on the charge. Without it, a retried request after a lost
+        // response gives the money back a second time.
+        .header("Idempotency-Key", format!("refund:{payment_intent_id}"))
         .form(&form)
         .send()
         .await
@@ -476,6 +479,89 @@ pub async fn retrieve_transfer(
     resp.json()
         .await
         .map_err(|e| AppError::Internal(format!("transfer decode: {e}")))
+}
+
+/// A checkout for an arbitrary amount, not a credit pack.
+///
+/// The pack-shaped helper above serves one flow. Everything else — a
+/// mentorship session, a certification — pays a price computed at runtime,
+/// and had to be expressed as a fake pack or by calling Stripe again by
+/// hand. This is the generic form the collection adapter uses.
+pub struct PaymentCheckout<'a> {
+    /// In the currency's smallest unit: cents for EUR, whole francs for XOF.
+    pub amount_minor: i64,
+    pub currency: &'a str,
+    /// Shown to the payer on Stripe's page.
+    pub description: &'a str,
+    pub customer_email: &'a str,
+    /// Ours, echoed back on the webhook so a payment finds its subject.
+    pub client_reference_id: &'a str,
+    pub success_url: &'a str,
+    pub cancel_url: &'a str,
+    pub idempotency_key: &'a str,
+}
+
+pub async fn create_payment_checkout(
+    cfg: &StripeConfig,
+    params: &PaymentCheckout<'_>,
+) -> Result<serde_json::Value, AppError> {
+    let PaymentCheckout {
+        amount_minor,
+        currency,
+        description,
+        customer_email,
+        client_reference_id,
+        success_url,
+        cancel_url,
+        idempotency_key,
+    } = params;
+    let client = reqwest::Client::new();
+    let currency = currency.to_lowercase();
+    let form: Vec<(String, String)> = vec![
+        ("mode".into(), "payment".into()),
+        ("success_url".into(), success_url.to_string()),
+        ("cancel_url".into(), cancel_url.to_string()),
+        (
+            "client_reference_id".into(),
+            client_reference_id.to_string(),
+        ),
+        ("customer_email".into(), customer_email.to_string()),
+        ("line_items[0][quantity]".into(), "1".into()),
+        (
+            "line_items[0][price_data][currency]".into(),
+            currency.clone(),
+        ),
+        (
+            "line_items[0][price_data][unit_amount]".into(),
+            amount_minor.to_string(),
+        ),
+        (
+            "line_items[0][price_data][product_data][name]".into(),
+            description.to_string(),
+        ),
+    ];
+
+    let resp = client
+        .post(format!("{STRIPE_API}/checkout/sessions"))
+        .basic_auth(&cfg.secret_key, Some(""))
+        // A double-submitted form must not charge twice, and a retried
+        // request after a lost response must not open a second checkout.
+        .header("Idempotency-Key", *idempotency_key)
+        .form(&form)
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("stripe checkout: {e}")))?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(AppError::Internal(format!(
+            "stripe checkout failed {status}: {body}"
+        )));
+    }
+    resp.json()
+        .await
+        .map_err(|e| AppError::Internal(format!("checkout decode: {e}")))
 }
 
 // ─── Subscriptions (Phase 4.6) ───────────────────────────────────

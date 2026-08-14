@@ -395,34 +395,72 @@ pub async fn book_session(
     .fetch_one(&state.db)
     .await?;
 
-    // Stripe checkout (le webhook marquera 'paid').
-    let cfg = crate::services::stripe::StripeConfig::from_env()
-        .ok_or(AppError::Internal("Stripe not configured".into()))?;
-    let pack = crate::services::stripe::Pack {
-        slug: Box::leak(format!("mentorship_{}", inserted.0.simple()).into_boxed_str()),
-        credits: 0,
-        price_eur_cents: total,
-        stripe_price_lookup_key: "skilluv_mentorship_session",
+    // Which way of taking money reaches this payer. A card through Stripe;
+    // Mobile Money through FedaPay for the franc zone, which Stripe cannot
+    // serve at all — and which is how most people in Benin hold money.
+    //
+    // This used to build a fake `Pack` with a `Box::leak`ed slug, to squeeze
+    // a session through a helper shaped for credit packs. It leaked a
+    // string per booking and it only ever reached card payers.
+    let payer: (String, String, Option<String>, Option<String>) = sqlx::query_as(
+        "SELECT u.email, u.display_name, u.country_iso2, w.momo_phone
+           FROM users u
+           LEFT JOIN talent_wallets w ON w.user_id = u.id
+          WHERE u.id = $1",
+    )
+    .bind(auth.user_id)
+    .fetch_one(&state.db)
+    .await?;
+    let (email, display_name, country, phone) = payer;
+
+    // Sessions are priced in EUR today. When they are not, the currency
+    // comes from the row above and the rest of this needs no change — which
+    // is the point of routing on it rather than on a provider name.
+    let currency = crate::services::ledger::Currency::Eur;
+    let method = if currency == crate::services::ledger::Currency::Xof && phone.is_some() {
+        crate::services::collect::Method::MobileMoney
+    } else {
+        crate::services::collect::Method::Card
     };
-    let email = sqlx::query_scalar::<_, String>("SELECT email FROM users WHERE id = $1")
-        .bind(auth.user_id)
-        .fetch_one(&state.db)
+
+    let registry = crate::services::collect_adapters::registry_from_env();
+    let provider = registry
+        .resolve(&state.db, country.as_deref(), currency, method)
         .await?;
-    let checkout = crate::services::stripe::create_checkout_session(
-        &cfg,
-        &pack,
-        &email,
-        &inserted.0.to_string(),
-        &[
-            ("purpose", "mentorship".to_string()),
-            ("session_id", inserted.0.to_string()),
-            ("mentor_user_id", body.mentor_user_id.to_string()),
-        ],
+
+    let amount = bigdecimal::BigDecimal::from(total) / bigdecimal::BigDecimal::from(100);
+    let base = state.config.frontend_url.trim_end_matches('/').to_string();
+    let success_url = format!("{base}/mentorship/sessions/{}?paid=1", inserted.0);
+    let cancel_url = format!("{base}/mentorship/sessions/{}?canceled=1", inserted.0);
+    let idempotency_key = format!("mentorship_session:{}", inserted.0);
+
+    let checkout = crate::services::collect::start(
+        &state.db,
+        provider.as_ref(),
+        method,
+        crate::services::collect::CollectionRequest {
+            payer_id: Some(auth.user_id),
+            payer_enterprise_id: None,
+            payer_email: &email,
+            payer_name: &display_name,
+            payer_country: country.as_deref(),
+            payer_phone: phone.as_deref(),
+            subject_type: "mentorship_session",
+            subject_id: inserted.0,
+            amount: &amount,
+            currency,
+            description: "Skilluv — session de mentorat",
+            success_url: &success_url,
+            cancel_url: &cancel_url,
+            idempotency_key: &idempotency_key,
+        },
     )
     .await?;
+
     Ok(Json(build_response(json!({
         "session_id": inserted.0,
-        "checkout_url": checkout.checkout_url,
+        "checkout_url": checkout.redirect_url,
+        "provider": checkout.provider,
         "price_total_cents": total,
         "mentor_share_cents": mentor_cut,
         "platform_share_cents": platform_cut,

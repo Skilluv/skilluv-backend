@@ -107,7 +107,7 @@ pub struct CollectionRequest<'a> {
     pub merchant_reference: Option<&'a str>,
 }
 
-/// Where to send the payer, and what to call this later.
+/// What a provider hands back when it has opened a checkout.
 #[derive(Debug, Clone, Serialize)]
 pub struct Checkout {
     pub provider: String,
@@ -115,6 +115,25 @@ pub struct Checkout {
     pub session_id: String,
     /// Where the payer completes the payment. Every method has one, card or
     /// Mobile Money — the operator's confirmation page counts.
+    pub redirect_url: String,
+}
+
+/// A checkout, plus the row we wrote for it.
+///
+/// Separate from [`Checkout`] because a provider cannot fill `payment_id`
+/// in — it names a row that [`start`] creates. Giving the provider type
+/// that field would mean every implementation returning a placeholder, and
+/// one of them eventually escaping.
+///
+/// Callers must pass `payment_id` on to the payer's page: pushing the
+/// operator prompt and asking where the payment got to are both keyed on
+/// it, so without it the inline path exists on the server and is
+/// unreachable from a browser.
+#[derive(Debug, Clone, Serialize)]
+pub struct StartedPayment {
+    pub payment_id: Uuid,
+    pub provider: String,
+    pub session_id: String,
     pub redirect_url: String,
 }
 
@@ -253,7 +272,7 @@ pub async fn start(
     provider: &dyn CollectionProvider,
     method: Method,
     request: CollectionRequest<'_>,
-) -> Result<Checkout, AppError> {
+) -> Result<StartedPayment, AppError> {
     // The merchant reference is ours and travels to the provider, so a
     // payment can be asked about even when the response carrying their
     // identifier is the thing that got lost — which is exactly what a
@@ -299,7 +318,12 @@ pub async fn start(
                 .bind(&checkout.session_id)
                 .execute(db)
                 .await?;
-            Ok(checkout)
+            Ok(StartedPayment {
+                payment_id,
+                provider: checkout.provider,
+                session_id: checkout.session_id,
+                redirect_url: checkout.redirect_url,
+            })
         }
         Err(e) => {
             // Marked failed rather than left pending: a checkout that never

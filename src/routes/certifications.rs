@@ -71,6 +71,10 @@ pub struct PurchaseResponse {
     pub checkout_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub session_id: Option<String>,
+    /// Our identifier for the charge. The page needs it to push the
+    /// operator prompt and to ask where the payment got to.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub payment_id: Option<Uuid>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -247,6 +251,7 @@ pub async fn purchase_certification(
             message: Some("existing attempt already in progress".to_string()),
             checkout_url: None,
             session_id: None,
+            payment_id: None,
         })));
     }
 
@@ -330,6 +335,7 @@ pub async fn purchase_certification(
         message: None,
         checkout_url: Some(session.redirect_url),
         session_id: Some(session.session_id),
+        payment_id: Some(session.payment_id),
     })))
 }
 

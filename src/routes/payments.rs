@@ -26,7 +26,7 @@ use uuid::Uuid;
 use crate::AppState;
 use crate::api_response::ApiResponse;
 use crate::errors::AppError;
-use crate::middleware::AuthUser;
+use crate::middleware::{AuthUser, OptionalAuth};
 
 pub fn payment_routes() -> Router<AppState> {
     Router::new()
@@ -38,7 +38,12 @@ pub fn payment_routes() -> Router<AppState> {
 #[derive(Debug, Deserialize, IntoParams)]
 pub struct MethodsQuery {
     /// ISO 3166-1 alpha-2 of the payer. Decides which operators exist.
-    pub country: String,
+    ///
+    /// Optional for a signed-in caller, whose own country is used instead.
+    /// The account stores the code; the profile only exposes the country's
+    /// name, so a client asked to supply this would have to map names back
+    /// to codes and would get it wrong for every country spelled two ways.
+    pub country: Option<String>,
     /// Defaults to the currency the country is quoted in.
     pub currency: Option<String>,
 }
@@ -65,12 +70,32 @@ pub struct PaymentMethod {
 )]
 pub async fn methods(
     State(state): State<AppState>,
+    OptionalAuth(auth): OptionalAuth,
     Query(q): Query<MethodsQuery>,
 ) -> Result<Json<ApiResponse<Vec<PaymentMethod>>>, AppError> {
     let currency = q
         .currency
         .unwrap_or_else(|| "XOF".to_string())
         .to_uppercase();
+
+    let country = match q.country {
+        Some(given) => given,
+        None => {
+            let user = auth.ok_or_else(|| {
+                AppError::Validation("country is required when not signed in".into())
+            })?;
+            sqlx::query_scalar::<_, Option<String>>(
+                "SELECT country_iso2 FROM users WHERE id = $1",
+            )
+            .bind(user.user_id)
+            .fetch_optional(&state.db)
+            .await?
+            .flatten()
+            .ok_or_else(|| {
+                AppError::Validation("this account has no country on it yet".into())
+            })?
+        }
+    };
 
     let methods: Vec<PaymentMethod> = sqlx::query_as(
         "SELECT operator, label, supports_inline, provider
@@ -80,7 +105,7 @@ pub async fn methods(
             AND currency = $2
           ORDER BY sort_order, label",
     )
-    .bind(q.country.to_uppercase())
+    .bind(country.to_uppercase())
     .bind(&currency)
     .fetch_all(&state.db)
     .await?;

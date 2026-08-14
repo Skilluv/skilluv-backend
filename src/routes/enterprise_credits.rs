@@ -228,6 +228,7 @@ pub async fn create_checkout(
         "checkout_url": session.redirect_url,
         "provider": session.provider,
         "session_id": session.session_id,
+        "payment_id": session.payment_id,
     }))))
 }
 

@@ -463,6 +463,7 @@ pub async fn book_session(
     Ok(Json(build_response(json!({
         "session_id": inserted.0,
         "checkout_url": checkout.redirect_url,
+        "payment_id": checkout.payment_id,
         "provider": checkout.provider,
         "price_total_cents": total,
         "mentor_share_cents": mentor_cut,

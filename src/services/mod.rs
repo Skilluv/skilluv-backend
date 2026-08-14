@@ -85,6 +85,7 @@ pub mod slices;
 pub mod social;
 pub mod stewards;
 pub mod storage;
+pub mod streak_reminder;
 pub mod stripe;
 pub mod subscriptions;
 pub mod talent_offers;

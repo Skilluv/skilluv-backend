@@ -42,7 +42,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         title = "Skilluv Backend API",
         description = "Compétences tech prouvées par des artefacts opposables. \
                        Contract-tested via schemathesis on every PR.",
-        contact(name = "Skilluv Team", email = "security@skilluv.com"),
+        contact(name = "Skilluv Team", email = "security@skill-uv.com"),
         license(name = "Proprietary"),
     ),
     servers(
@@ -107,6 +107,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::notification_preferences::list_preferences,
         crate::routes::notification_preferences::update_preferences,
         crate::routes::notification_preferences::reset_preferences,
+        crate::routes::notification_preferences::set_quiet_hours,
         // ─── mentions (SKI-286) ───────────────────────────────────
         crate::routes::mentions::list_mine,
         crate::routes::mentions::read_one,

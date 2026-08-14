@@ -232,7 +232,7 @@ impl PortfolioService {
     ///
     /// Format shields.io minimaliste : 2 sections (label + value) avec couleur
     /// dépendant du titre. Intégrable dans un README GitHub via :
-    ///   ![Skilluv Badge](https://skilluv.com/api/users/{username}/badge.svg)
+    ///   ![Skilluv Badge](https://skill-uv.com/api/users/{username}/badge.svg)
     pub async fn build_badge_svg(db: &PgPool, username: &str) -> Result<String, AppError> {
         let user = Self::get_user_by_username(db, username).await?;
 

@@ -30,8 +30,12 @@ impl PaystackConfig {
             secret_key: std::env::var("PAYSTACK_SECRET_KEY")
                 .ok()
                 .filter(|s| !s.is_empty())?,
-            callback_url: std::env::var("PAYSTACK_CALLBACK_URL")
-                .unwrap_or_else(|_| "https://skilluv.com/enterprise/credits/success".into()),
+            callback_url: std::env::var("PAYSTACK_CALLBACK_URL").unwrap_or_else(|_| {
+                format!(
+                    "{}/enterprise/credits/success",
+                    crate::config::PUBLIC_SITE_URL
+                )
+            }),
         })
     }
 }
@@ -224,8 +228,12 @@ impl FlutterwaveConfig {
             secret_hash: std::env::var("FLUTTERWAVE_SECRET_HASH")
                 .ok()
                 .filter(|s| !s.is_empty())?,
-            redirect_url: std::env::var("FLUTTERWAVE_REDIRECT_URL")
-                .unwrap_or_else(|_| "https://skilluv.com/enterprise/credits/success".into()),
+            redirect_url: std::env::var("FLUTTERWAVE_REDIRECT_URL").unwrap_or_else(|_| {
+                format!(
+                    "{}/enterprise/credits/success",
+                    crate::config::PUBLIC_SITE_URL
+                )
+            }),
         })
     }
 }

@@ -220,6 +220,46 @@ notification:
       body: "أصبحت دليلاً معتمداً وتظهر في ملفك العام."
       cta: "عرض مساهمتي"
 
+  digest:
+    weekly:
+      title: "أسبوعك في الورشة"
+      body: "هذا ما صنعته هذا الأسبوع. رتبتك {rank}."
+      cta: "أكمل من حيث توقفت"
+  streak:
+    reminder:
+      title: "سلسلتك تتوقف على اليوم"
+      body: "{days} يوماً متتالياً. مساهمة واحدة تكفي للحفاظ عليها."
+      cta: "حافظ على سلسلتي"
+  lifecycle:
+    activate:
+      title: "طاولتك ما زالت فارغة"
+      body: "فتحت حسابك، لكن لم تضع عليه شيئاً بعد. أول مساهمة هي الأقصر: تستغرق دقائق وتبقى في ملفك."
+      cta: "اختر أول مساهمة"
+    join_guild:
+      title: "العمل مع الآخرين أفضل"
+      body: "تعمل وحدك منذ أيام. النقابة هي أشخاص يراجعون عملك ويجيبون حين تتعثر."
+      cta: "استعرض النقابات"
+    silent:
+      title: "مرّ أسبوعان"
+      body: "طاولتك بانتظارك. لم يضع شيء: أدلتك ما زالت هناك، وهناك جديد منذ زيارتك."
+      cta: "العودة إلى الورشة"
+    last_chance:
+      title: "آخر رسالة في هذه السلسلة"
+      body: "شهر دون أخبار. سنتوقف هنا — حسابك وأدلتك تبقى كما هي، وتعود متى شئت. إن كان هناك سبب، ردّ على هذه الرسالة: نقرأ كل الردود."
+      cta: "العودة الآن"
+    enterprise_welcome:
+      title: "كيف تقرأ دليلاً"
+      body: "لديك رصيد بانتظارك. الملف على Skilluv ليس سيرة ذاتية: هو قائمة مساهمات موثقة، مع رابط لكل واحدة. ابدأ بالنظر إلى ما أنجزه الناس فعلاً."
+      cta: "ابحث عن ملف"
+    enterprise_demo:
+      title: "يمكننا إعداد القائمة المختصرة لك"
+      body: "لم تتواصل مع أحد بعد. ردّ على هذه الرسالة بالمجال والمستوى ونوع العقد: نعود خلال 24 ساعة بثلاثة ملفات مختارة يدوياً."
+      cta: "افتح البحث"
+    enterprise_value:
+      title: "ثلاث طرق للتقدم أسرع"
+      body: "باقات الأرصدة، والتحديات المموّلة التي تمنحك وصولاً مباشراً إلى المشاركات، ولوحة لمتابعة المرشحين دون جداول."
+      cta: "استعرض الخيارات"
+
 # Vocabulary reused inside notification bodies, so a translator writes
 # one sentence with a placeholder rather than two parallel titles.
 guild:
@@ -235,3 +275,11 @@ goal:
     skill_level: "تبلغ المستوى {level} في مهارة"
     capability: "تفتح دور {capability}"
     artifact_count: "تنشر {count} مساهمة موثقة"
+
+# Labels under the figures in the weekly digest. Fragments of a layout
+# rather than sentences, so they sit with the other vocabulary.
+digest:
+  stat:
+    challenges: "مساهمات"
+    fragments: "شظايا"
+    streak: "أيام متتالية"

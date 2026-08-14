@@ -25,11 +25,11 @@ pub fn legal_routes() -> Router<AppState> {
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct LegalPages {
-    #[schema(example = "https://skilluv.com/legal/terms")]
+    #[schema(example = "https://skill-uv.com/legal/terms")]
     pub terms: &'static str,
-    #[schema(example = "https://skilluv.com/legal/privacy")]
+    #[schema(example = "https://skill-uv.com/legal/privacy")]
     pub privacy: &'static str,
-    #[schema(example = "https://skilluv.com/legal/cookies")]
+    #[schema(example = "https://skill-uv.com/legal/cookies")]
     pub cookies: &'static str,
 }
 
@@ -55,9 +55,9 @@ pub async fn consent_version() -> Json<ApiResponse<ConsentVersionResponse>> {
     Json(ApiResponse::new(ConsentVersionResponse {
         version: CURRENT_CONSENT_VERSION,
         pages: LegalPages {
-            terms: "https://skilluv.com/legal/terms",
-            privacy: "https://skilluv.com/legal/privacy",
-            cookies: "https://skilluv.com/legal/cookies",
+            terms: "https://skill-uv.com/legal/terms",
+            privacy: "https://skill-uv.com/legal/privacy",
+            cookies: "https://skill-uv.com/legal/cookies",
         },
     }))
 }

@@ -161,6 +161,7 @@ pub struct Builder<'a> {
     kind: &'a str,
     args: Vec<(String, String)>,
     payload: Option<Value>,
+    stats: Vec<(String, String)>,
 }
 
 /// Start building a notification.
@@ -171,6 +172,7 @@ pub fn send<'a>(ctx: impl Into<Ctx<'a>>, recipient: Recipient, kind: &'a str) ->
         kind,
         args: Vec::new(),
         payload: None,
+        stats: Vec::new(),
     }
 }
 
@@ -184,6 +186,16 @@ impl<'a> Builder<'a> {
     /// Structured data for the client — ids to navigate to, not text.
     pub fn payload(mut self, payload: Value) -> Self {
         self.payload = Some(payload);
+        self
+    }
+
+    /// A figure to show in the email, under the body.
+    ///
+    /// For the handful of notifications that are a shape rather than a
+    /// sentence — the weekly digest, and nothing else today. The label is
+    /// a translation key, resolved in the recipient's language.
+    pub fn stat(mut self, label_key: &str, value: impl Into<String>) -> Self {
+        self.stats.push((label_key.to_string(), value.into()));
         self
     }
 
@@ -249,7 +261,15 @@ impl<'a> Builder<'a> {
             }
         }
 
-        if kind.allows_push && wants(self.ctx.db, user_id, self.kind, Channel::Push, kind).await {
+        // Quiet hours suppress the buzz, never the record. A transactional
+        // kind ignores them: someone whose payout failed at 3am would
+        // rather be woken.
+        let quiet = !kind.transactional && in_quiet_hours(self.ctx.db, user_id).await;
+
+        if kind.allows_push
+            && !quiet
+            && wants(self.ctx.db, user_id, self.kind, Channel::Push, kind).await
+        {
             let message = crate::services::mobile_push::MobilePushMessage {
                 title: &title,
                 body: &body,
@@ -446,6 +466,14 @@ impl<'a> Builder<'a> {
                 title,
                 body,
                 recipient_name: display_name.as_deref(),
+                // Labels are translation keys until here, so one digest
+                // reaches a French reader and an Arabic one in their own
+                // words without the caller knowing either.
+                stats: &self
+                    .stats
+                    .iter()
+                    .map(|(key, value)| (i18n::t(locale, key), value.clone()))
+                    .collect::<Vec<_>>(),
                 cta_label: cta_label.as_deref(),
                 cta_url: cta_url.as_deref(),
                 unsubscribe_url: unsubscribe_url.as_deref(),
@@ -556,6 +584,73 @@ async fn wants(db: &PgPool, user_id: Uuid, kind: &str, channel: Channel, row: &K
         Channel::Push => row.default_push,
         Channel::Email => row.default_email,
     })
+}
+
+/// Does this person want this kind, without a loaded catalogue row.
+///
+/// For callers outside a delivery — the settings screen projecting several
+/// kinds onto one switch, a bulk job deciding whether to build an email at
+/// all. An unknown kind reads as "no": inventing consent for something the
+/// catalogue does not describe is the wrong direction to fail in.
+pub async fn wants_kind(db: &PgPool, user_id: Uuid, kind: &str, channel: Channel) -> bool {
+    match load_kind(db, kind).await {
+        Ok(row) => wants(db, user_id, kind, channel, &row).await,
+        Err(_) => false,
+    }
+}
+
+/// Is it the middle of this person's night?
+///
+/// Only push asks. A buzz at three in the morning is how an application
+/// gets its notifications revoked at the operating-system level, which is a
+/// decision nobody goes back on — and the in-app record and the email are
+/// waiting whenever they wake up.
+///
+/// Unknown timezone means not enforced. Assuming UTC would silence a talent
+/// in Cotonou at the wrong hours half the year, which is worse than not
+/// having the feature.
+async fn in_quiet_hours(db: &PgPool, user_id: Uuid) -> bool {
+    #[derive(sqlx::FromRow)]
+    struct Window {
+        quiet_hours_start: Option<i16>,
+        quiet_hours_end: Option<i16>,
+        timezone: Option<String>,
+    }
+
+    let Ok(Some(window)) = sqlx::query_as::<_, Window>(
+        "SELECT quiet_hours_start, quiet_hours_end, timezone FROM users WHERE id = $1",
+    )
+    .bind(user_id)
+    .fetch_optional(db)
+    .await
+    else {
+        return false;
+    };
+
+    let (Some(start), Some(end), Some(tz)) = (
+        window.quiet_hours_start,
+        window.quiet_hours_end,
+        window.timezone,
+    ) else {
+        return false;
+    };
+
+    let Ok(zone) = tz.parse::<chrono_tz::Tz>() else {
+        tracing::warn!(user = %user_id, timezone = %tz, "unparseable timezone — quiet hours not enforced");
+        return false;
+    };
+
+    let hour = {
+        use chrono::Timelike;
+        chrono::Utc::now().with_timezone(&zone).hour() as i16
+    };
+    // A window that wraps midnight — 22 to 7 — is the normal case, and the
+    // one a naive range check gets wrong.
+    if start <= end {
+        hour >= start && hour < end
+    } else {
+        hour >= start || hour < end
+    }
 }
 
 /// The language this person reads, falling back to the default.

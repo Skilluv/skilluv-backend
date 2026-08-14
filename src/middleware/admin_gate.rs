@@ -4,7 +4,7 @@
 //! tous les routers admin :
 //!
 //! 1. **BE-C — Origin check** (`ensure_admin_origin`) : la requête doit provenir
-//!    d'une origin autorisée (`admin.skilluv.com`, `localhost:5174` en dev, ou
+//!    d'une origin autorisée (`admin.skill-uv.com`, `localhost:5174` en dev, ou
 //!    une entrée de l'env `ADMIN_ORIGINS`). Sinon 403 `AUTH_ADMIN_ORIGIN_REQUIRED`.
 //!    Défense en profondeur en plus du CORS (qui n'est qu'un contrôle client).
 //!

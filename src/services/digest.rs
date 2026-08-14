@@ -30,7 +30,8 @@ pub struct DigestService<'a> {
     pub db: &'a PgPool,
     pub email: &'a EmailService,
     pub base_url: &'a str,
-    pub unsubscribe_secret: &'a [u8],
+    /// Signs the one-click unsubscribe link `notify` puts in the footer.
+    pub jwt_secret: &'a str,
 }
 
 impl<'a> DigestService<'a> {
@@ -44,17 +45,17 @@ impl<'a> DigestService<'a> {
             failures: 0,
         };
 
-        // Iterate active, non-disabled, opted-in users with digest_weekly = TRUE
-        // We use a stream-style approach via paginated query to handle large user bases.
+        // Every account that can receive mail. Consent is not filtered here
+        // any more: `notify` asks the catalogue per recipient, which is the
+        // same question this used to answer against a different table, and
+        // sometimes differently.
         let rows: Vec<DigestTarget> = sqlx::query_as(
             r#"
-            SELECT u.id, u.email, u.display_name, u.skill_domain
+            SELECT u.id, u.skill_domain
             FROM users u
-            LEFT JOIN user_email_preferences p ON p.user_id = u.id
             WHERE u.profile_active = TRUE
               AND u.is_banned = FALSE
               AND u.email_disabled = FALSE
-              AND COALESCE(p.digest_weekly, TRUE) = TRUE
             "#,
         )
         .fetch_all(self.db)
@@ -93,34 +94,43 @@ impl<'a> DigestService<'a> {
             return Ok(DigestOutcome::NoActivity);
         }
 
-        let unsub_token =
-            build_unsubscribe_token(target.id, "digest_weekly", self.unsubscribe_secret);
-        let unsub_url = format!(
-            // SKI-287 — token in the path. The category travels signed
-            // inside the token, so a prefetching mail client cannot
-            // unsubscribe a different one by editing the URL.
-            "{}/api/email/unsubscribe/{}",
-            self.base_url, unsub_token
-        );
-        let html = render_digest_html(target, &stats, &unsub_url);
-        let subject = format!(
-            "Ta semaine Skilluv — {}/{}",
-            stats.challenges_completed, stats.fragments_earned
-        );
+        // Consent, language, theme, the unsubscribe link and the HTML all
+        // belonged to this function and belong to `notify` now. What is left
+        // is the only part specific to a digest: the figures.
+        let delivery = crate::services::notify::send(
+            crate::services::notify::Ctx {
+                db: self.db,
+                redis: None,
+                ws: None,
+                email: Some(self.email),
+                frontend_url: Some(self.base_url),
+                jwt_secret: Some(self.jwt_secret),
+            },
+            crate::services::notify::Recipient::User(target.id),
+            "digest.weekly",
+        )
+        .stat(
+            "digest.stat.challenges",
+            stats.challenges_completed.to_string(),
+        )
+        .stat("digest.stat.fragments", stats.fragments_earned.to_string())
+        .stat("digest.stat.streak", stats.streak_current.to_string())
+        .arg("rank", &stats.current_title)
+        .payload(serde_json::json!({
+            "challenges_completed": stats.challenges_completed,
+            "fragments_earned": stats.fragments_earned,
+            "streak_current": stats.streak_current,
+            "domain": target.skill_domain,
+        }))
+        .execute()
+        .await?;
 
-        self.email
-            .send_with_log(
-                self.db,
-                crate::services::email::SendWithLogParams {
-                    user_id: target.id,
-                    to_email: &target.email,
-                    to_name: &target.display_name,
-                    subject: &subject,
-                    html: &html,
-                    kind: "digest_weekly",
-                },
-            )
-            .await?;
+        // A refusal is the preference working, not a failure — but it is not
+        // a send either, and counting it as one would have the report say the
+        // digest went out when it did not.
+        if delivery.email == 0 {
+            return Ok(DigestOutcome::OptOut);
+        }
         Ok(DigestOutcome::Sent)
     }
 }
@@ -128,17 +138,16 @@ impl<'a> DigestService<'a> {
 #[derive(sqlx::FromRow, Debug)]
 struct DigestTarget {
     id: Uuid,
-    email: String,
-    display_name: String,
-    skill_domain: String,
+    /// Nullable since migration 0049. Declared `String` here, which made
+    /// every account that never picked a domain fail the whole run.
+    skill_domain: Option<String>,
 }
 
 enum DigestOutcome {
     Sent,
     NoActivity,
-    #[allow(dead_code)]
     OptOut,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // `email_disabled` is filtered in the query above.
     Disabled,
 }
 
@@ -187,53 +196,6 @@ async fn compute_weekly_stats(
         streak_current,
         current_title,
     })
-}
-
-fn render_digest_html(target: &DigestTarget, stats: &WeeklyStats, unsub_url: &str) -> String {
-    format!(
-        r#"
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a2e;">
-            <h2>Salut {name},</h2>
-            <p>Ta semaine sur Skilluv en chiffres :</p>
-            <table cellpadding="12" style="width: 100%; border-collapse: collapse;">
-                <tr style="background:#f4f4f9;">
-                    <td><strong>Challenges réussis</strong></td>
-                    <td style="text-align:right; font-size:20px; color:#6c5ce7;">{ch}</td>
-                </tr>
-                <tr>
-                    <td><strong>Fragments gagnés</strong></td>
-                    <td style="text-align:right; font-size:20px; color:#6c5ce7;">+{fr}</td>
-                </tr>
-                <tr style="background:#f4f4f9;">
-                    <td><strong>Streak actuel</strong></td>
-                    <td style="text-align:right; font-size:20px;"> {streak} jour(s)</td>
-                </tr>
-                <tr>
-                    <td><strong>Titre</strong></td>
-                    <td style="text-align:right; text-transform: capitalize;">{title}</td>
-                </tr>
-            </table>
-            <p style="text-align:center; margin: 30px 0;">
-                <a href="{base}/challenges?domain={domain}" style="background-color: #6c5ce7; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold;">
-                    Continuer mes challenges
-                </a>
-            </p>
-            <hr style="border:none; border-top:1px solid #eee;">
-            <p style="color:#999; font-size:11px; text-align:center;">
-                Tu reçois ce résumé hebdomadaire parce que tu es inscrit·e sur Skilluv.<br>
-                <a href="{unsub}" style="color:#999;">Me désinscrire des digests</a>
-            </p>
-        </div>
-        "#,
-        name = target.display_name,
-        ch = stats.challenges_completed,
-        fr = stats.fragments_earned,
-        streak = stats.streak_current,
-        title = stats.current_title,
-        base = "https://skilluv.com",
-        domain = target.skill_domain,
-        unsub = unsub_url,
-    )
 }
 
 // ─── Unsubscribe tokens (signed) ──────────────────────────────────

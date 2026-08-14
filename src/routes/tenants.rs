@@ -47,7 +47,7 @@ pub fn tenant_routes() -> Router<AppState> {
 ///
 /// Ordre de priorité :
 ///   1. En-tête `X-Skilluv-Tenant` (utilisé par le front en dev + preview)
-///   2. `Host` header : extrait le sous-domaine (`acme.skilluv.com` → `acme`)
+///   2. `Host` header : extrait le sous-domaine (`acme.skill-uv.com` → `acme`)
 ///   3. Fallback : le tenant racine
 pub async fn resolve_tenant_from_headers(
     db: &sqlx::PgPool,

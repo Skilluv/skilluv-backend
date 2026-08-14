@@ -1,8 +1,9 @@
 //! Notification settings — what a person is told, and how.
 //!
-//! `user_email_preferences` (SKI-287) answers a narrower question: three
-//! marketing categories, email only. This covers every kind and all three
-//! channels, and it is what the settings screen reads.
+//! The one place a preference is stored. `/users/me/email-preferences`
+//! still answers in three words — digest, streak, marketing — because
+//! unsubscribe links already delivered speak them, but it is a view over
+//! these rows rather than a second table.
 //!
 //! Rows exist only where someone changed something, so the response merges
 //! the catalogue's defaults with the stored overrides. A caller therefore
@@ -31,6 +32,114 @@ pub fn notification_preferences_routes() -> Router<AppState> {
             "/users/me/notification-preferences/reset",
             put(reset_preferences),
         )
+        // Quiet hours apply across every kind at once, so they are a
+        // setting of their own rather than a column on each row.
+        .route("/users/me/quiet-hours", put(set_quiet_hours))
+}
+
+/// When not to buzz someone's phone.
+///
+/// Both bounds or neither, and a zone with them. Half a window is a window
+/// nobody can interpret, and a window with no zone cannot be placed in
+/// time — assuming UTC would silence a talent in Cotonou at the wrong
+/// hours for half the year.
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct QuietHoursRequest {
+    /// Local hour pushes stop, 0-23. `null` with the others clears the
+    /// window entirely.
+    pub start: Option<i16>,
+    /// Local hour they resume, 0-23. A window may wrap midnight.
+    pub end: Option<i16>,
+    /// IANA name, e.g. `Africa/Porto-Novo`.
+    pub timezone: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct QuietHours {
+    pub start: Option<i16>,
+    pub end: Option<i16>,
+    pub timezone: Option<String>,
+}
+
+#[utoipa::path(
+    put,
+    path = "/api/users/me/quiet-hours",
+    tag = "profile",
+    request_body = QuietHoursRequest,
+    responses(
+        (status = 200, description = "Quiet hours saved", body = ApiResponse<QuietHours>),
+        (status = 400, description = "Incomplete window or unknown timezone", body = crate::api_response::ErrorResponse),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn set_quiet_hours(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Json(body): Json<QuietHoursRequest>,
+) -> Result<Json<ApiResponse<QuietHours>>, AppError> {
+    let clearing = body.start.is_none() && body.end.is_none();
+
+    if !clearing {
+        let (Some(start), Some(end)) = (body.start, body.end) else {
+            return Err(AppError::Validation(
+                "start and end must both be given, or both omitted to clear the window".into(),
+            ));
+        };
+        if !(0..=23).contains(&start) || !(0..=23).contains(&end) {
+            return Err(AppError::Validation(
+                "hours must be between 0 and 23".into(),
+            ));
+        }
+        if start == end {
+            return Err(AppError::Validation(
+                "a window that starts and ends at the same hour would silence the whole day".into(),
+            ));
+        }
+
+        let Some(tz) = body.timezone.as_deref() else {
+            return Err(AppError::Validation(
+                "a timezone is required — an hour with no zone cannot be placed in time".into(),
+            ));
+        };
+        // Validated here rather than at delivery: a name we cannot parse
+        // would make the window silently not apply, which looks exactly
+        // like the feature not working.
+        if tz.parse::<chrono_tz::Tz>().is_err() {
+            return Err(AppError::Validation(format!(
+                "unknown timezone '{tz}' — use an IANA name such as Africa/Porto-Novo"
+            )));
+        }
+    }
+
+    let saved: QuietHoursRow = sqlx::query_as(
+        "UPDATE users
+            SET quiet_hours_start = $2,
+                quiet_hours_end = $3,
+                timezone = COALESCE($4, timezone)
+          WHERE id = $1
+      RETURNING quiet_hours_start, quiet_hours_end, timezone",
+    )
+    .bind(auth.user_id)
+    .bind(if clearing { None } else { body.start })
+    .bind(if clearing { None } else { body.end })
+    .bind(body.timezone.as_deref())
+    .fetch_one(&state.db)
+    .await?;
+
+    Ok(Json(ApiResponse::new(QuietHours {
+        start: saved.quiet_hours_start,
+        end: saved.quiet_hours_end,
+        timezone: saved.timezone,
+    })))
+}
+
+#[derive(sqlx::FromRow)]
+struct QuietHoursRow {
+    quiet_hours_start: Option<i16>,
+    quiet_hours_end: Option<i16>,
+    timezone: Option<String>,
 }
 
 /// One notification kind, with the caller's effective settings.

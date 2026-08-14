@@ -215,7 +215,7 @@ pub async fn billing_portal(
             .into(),
     ))?;
     let return_url = std::env::var("STRIPE_PORTAL_RETURN_URL")
-        .unwrap_or_else(|_| "https://skilluv.com/enterprise/credits".into());
+        .unwrap_or_else(|_| format!("{}/enterprise/credits", crate::config::PUBLIC_SITE_URL));
     let url = stripe::create_billing_portal_session(&cfg, &customer_id, &return_url).await?;
     Ok(Json(build_response(json!({ "url": url }))))
 }

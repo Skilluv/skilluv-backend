@@ -224,6 +224,46 @@ notification:
       body: "Elle est desormais opposable et visible sur ton profil public."
       cta: "Voir ma contribution"
 
+  digest:
+    weekly:
+      title: "Ta semaine a l'atelier"
+      body: "Voici ce que tu as forge cette semaine. Tu es {rank}."
+      cta: "Reprendre ou j'en etais"
+  streak:
+    reminder:
+      title: "Ta serie tient a aujourd'hui"
+      body: "{days} jours d'affilee. Une seule contribution suffit a la garder."
+      cta: "Garder ma serie"
+  lifecycle:
+    activate:
+      title: "Ton etabli est encore vide"
+      body: "Tu as ouvert ton compte, mais rien n'y est encore pose. La premiere contribution est la plus courte : elle prend quelques minutes et elle reste sur ton profil."
+      cta: "Choisir ma premiere contribution"
+    join_guild:
+      title: "On forge mieux a plusieurs"
+      body: "Tu avances seul depuis quelques jours. Une guilde, c'est des gens qui relisent ton travail et qui repondent quand tu bloques."
+      cta: "Voir les guildes"
+    silent:
+      title: "Ca fait deux semaines"
+      body: "Ton etabli t'attend. Rien ne s'est perdu : tes preuves sont toujours la, et il y a du nouveau depuis ton passage."
+      cta: "Revenir a l'atelier"
+    last_chance:
+      title: "Le dernier mail de cette serie"
+      body: "Un mois sans nouvelles. On arrete de t'ecrire ici — ton compte et tes preuves restent intacts, et tu reviens quand tu veux. Si tu as une raison de ne pas etre revenu, reponds a ce mail : on lit tout."
+      cta: "Revenir quand meme"
+    enterprise_welcome:
+      title: "Comment lire une preuve"
+      body: "Tu as un credit qui t'attend. Sur Skilluv un profil n'est pas un CV : c'est une liste de contributions verifiees, avec le lien vers chacune. Commence par regarder ce que les gens ont reellement livre."
+      cta: "Chercher un profil"
+    enterprise_demo:
+      title: "On peut faire la short-list pour toi"
+      body: "Tu n'as encore contacte personne. Reponds a ce mail avec le domaine, le niveau et le type de contrat : on revient sous 24h avec trois profils choisis a la main."
+      cta: "Ouvrir la recherche"
+    enterprise_value:
+      title: "Trois facons d'aller plus vite"
+      body: "Les packs de credits, les challenges sponsorises qui te donnent acces direct aux soumissions, et le pipeline pour suivre tes candidats sans tableur."
+      cta: "Voir les formules"
+
 # Vocabulary reused inside notification bodies, so a translator writes
 # one sentence with a placeholder rather than two parallel titles.
 guild:
@@ -239,3 +279,11 @@ goal:
     skill_level: "atteindre le niveau {level} sur une competence"
     capability: "debloquer le role {capability}"
     artifact_count: "publier {count} contributions verifiees"
+
+# Labels under the figures in the weekly digest. Fragments of a layout
+# rather than sentences, so they sit with the other vocabulary.
+digest:
+  stat:
+    challenges: "contributions"
+    fragments: "fragments"
+    streak: "jours d'affilee"

@@ -389,6 +389,7 @@ async fn arabic_notifications_render_right_to_left() {
         title: &i18n::t("ar", "notification.payout.sent.title"),
         body: &i18n::t("ar", "notification.payout.sent.body"),
         recipient_name: None,
+        stats: &[],
         cta_label: None,
         cta_url: None,
         unsubscribe_url: None,

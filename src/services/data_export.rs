@@ -183,7 +183,7 @@ pub async fn generate_export(
                     Télécharger mon archive ({mb:.1} MB)
                 </a>
             </p>
-            <p style="color:#666;font-size:12px;">Si tu n'as pas demandé cet export, signale-le immédiatement à security@skilluv.com.</p>
+            <p style="color:#666;font-size:12px;">Si tu n'as pas demandé cet export, signale-le immédiatement à security@skill-uv.com.</p>
         </div>
         "#,
         url = url,

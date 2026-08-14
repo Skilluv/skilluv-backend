@@ -56,7 +56,7 @@ impl VapidConfig {
                 .ok()
                 .filter(|s| !s.is_empty())?,
             subject: std::env::var("VAPID_SUBJECT")
-                .unwrap_or_else(|_| "mailto:ops@skilluv.com".into()),
+                .unwrap_or_else(|_| "mailto:ops@skill-uv.com".into()),
         })
     }
 }

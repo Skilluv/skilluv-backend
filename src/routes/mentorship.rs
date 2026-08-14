@@ -633,7 +633,8 @@ pub async fn start_connect_onboarding(
         account.id
     };
 
-    let base_url = std::env::var("APP_BASE_URL").unwrap_or_else(|_| "https://skilluv.com".into());
+    let base_url =
+        std::env::var("APP_BASE_URL").unwrap_or_else(|_| crate::config::PUBLIC_SITE_URL.into());
     let link = crate::services::stripe::create_account_link(
         &cfg,
         &account_id,

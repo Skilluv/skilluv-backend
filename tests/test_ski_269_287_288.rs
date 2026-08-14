@@ -237,11 +237,16 @@ async fn preferences_return_defaults_for_an_untouched_account() {
     );
 
     // Reading must not have created a row: consent is recorded when given,
-    // not when the screen is opened.
-    let rows: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM user_email_preferences")
-        .fetch_one(&app.db)
-        .await
-        .unwrap();
+    // not when the screen is opened. The three words are a view over the
+    // notification catalogue now, so the row that must not exist is there.
+    let rows: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM notification_preferences
+          WHERE kind IN (SELECT kind FROM notification_kinds
+                          WHERE category IN ('digest', 'lifecycle'))",
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
     assert_eq!(rows, 0);
 }
 
@@ -317,12 +322,14 @@ async fn one_click_unsubscribe_works_without_a_session_and_is_idempotent() {
         "the link is opened in a browser, so it answers HTML"
     );
 
-    let digest_weekly: bool =
-        sqlx::query_scalar("SELECT digest_weekly FROM user_email_preferences WHERE user_id = $1")
-            .bind(my_id)
-            .fetch_one(&app.db)
-            .await
-            .unwrap();
+    let digest_weekly: bool = sqlx::query_scalar(
+        "SELECT enabled FROM notification_preferences
+          WHERE user_id = $1 AND kind = 'digest.weekly' AND channel = 'email'",
+    )
+    .bind(my_id)
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
     assert!(!digest_weekly);
 
     // Mail clients prefetch links: a second hit must not fail.
@@ -333,16 +340,19 @@ async fn one_click_unsubscribe_works_without_a_session_and_is_idempotent() {
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 
-    // Only the encoded category was touched.
-    let (streak, marketing): (bool, bool) = sqlx::query_as(
-        "SELECT streak_reminder, marketing FROM user_email_preferences WHERE user_id = $1",
-    )
-    .bind(my_id)
-    .fetch_one(&app.db)
-    .await
-    .unwrap();
-    assert!(streak, "unsubscribing from one category leaves the others");
-    assert!(!marketing, "marketing was already off by default");
+    // Only the encoded category was touched. Nothing was written for the
+    // other two, so they still read as their defaults.
+    let touched: Vec<String> =
+        sqlx::query_scalar("SELECT DISTINCT kind FROM notification_preferences WHERE user_id = $1")
+            .bind(my_id)
+            .fetch_all(&app.db)
+            .await
+            .unwrap();
+    assert_eq!(
+        touched,
+        vec!["digest.weekly".to_string()],
+        "unsubscribing from one category leaves the others alone"
+    );
 }
 
 #[tokio::test]

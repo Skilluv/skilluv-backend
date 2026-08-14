@@ -85,7 +85,15 @@ async fn async_main(config: AppConfig) {
         &config.email_from_name,
     ));
     // Drip sequences (Phase 3.15) — hourly background task, idempotent via email_log.
-    skilluv_backend::services::drip::start_drip_task(db.clone(), email.clone());
+    skilluv_backend::services::drip::start_drip_task(
+        db.clone(),
+        email.clone(),
+        config.frontend_url.clone(),
+        config.jwt_secret.clone(),
+    );
+
+    // The streak reminder the settings screen has promised since phase 1.7.
+    skilluv_backend::services::streak_reminder::start_streak_reminder_task(db.clone());
 
     // P19.3 — Proof engine sweep (weekly by default). Filet de sécurité qui
     // rattrape les évolutions de seuils/rules et les hooks inline en échec.

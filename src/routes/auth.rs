@@ -627,8 +627,8 @@ const REFRESH_COOKIE_MAX_AGE: i64 = 7 * 24 * 60 * 60;
 
 /// True when the incoming request originated from the admin frontend (dev
 /// server on :5174 or `admin.*` in prod). Login handlers use this to emit
-/// admin-prefixed cookies so an admin session on `admin.skilluv.com` and a
-/// candidate session on `skilluv.com` can coexist in the same browser cookie
+/// admin-prefixed cookies so an admin session on `admin.skill-uv.com` and a
+/// candidate session on `skill-uv.com` can coexist in the same browser cookie
 /// jar without stepping on each other. The `AuthUser` extractor accepts
 /// either prefix, so downstream endpoints don't have to care.
 pub fn is_admin_origin(headers: &axum::http::HeaderMap) -> bool {
@@ -1149,7 +1149,7 @@ pub async fn login(
         && !user.totp_enabled
         && !has_passkey;
     let user_private: UserPrivate = user.into();
-    // Origin-aware cookie namespace — admin.skilluv.com → admin_* cookies,
+    // Origin-aware cookie namespace — admin.skill-uv.com → admin_* cookies,
     // everything else → the standard names.
     let prefix = cookie_prefix(&headers);
     let access_cookie = build_cookie(

@@ -76,10 +76,15 @@ impl StripeConfig {
             .ok()
             .filter(|s| !s.is_empty())?;
         let success_url = std::env::var("STRIPE_SUCCESS_URL").unwrap_or_else(|_| {
-            "https://skilluv.com/enterprise/credits/success?session_id={CHECKOUT_SESSION_ID}".into()
+            "https://skill-uv.com/enterprise/credits/success?session_id={CHECKOUT_SESSION_ID}"
+                .into()
         });
-        let cancel_url = std::env::var("STRIPE_CANCEL_URL")
-            .unwrap_or_else(|_| "https://skilluv.com/enterprise/credits/canceled".into());
+        let cancel_url = std::env::var("STRIPE_CANCEL_URL").unwrap_or_else(|_| {
+            format!(
+                "{}/enterprise/credits/canceled",
+                crate::config::PUBLIC_SITE_URL
+            )
+        });
         Some(Self {
             secret_key,
             webhook_secret,

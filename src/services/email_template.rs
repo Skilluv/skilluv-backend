@@ -39,6 +39,13 @@ pub struct Email<'a> {
     pub title: &'a str,
     pub body: &'a str,
     pub recipient_name: Option<&'a str>,
+    /// Figures to show under the body, as (label, value) already translated.
+    ///
+    /// The digest is the reason this exists: it has a shape no sentence
+    /// carries. Structured rather than a slab of HTML the caller builds,
+    /// so the design stays here and a second theme does not mean a second
+    /// digest.
+    pub stats: &'a [(String, String)],
     /// The one thing to do next. Emails with no action have no button
     /// rather than a limp "open the app".
     pub cta_label: Option<&'a str>,
@@ -92,6 +99,37 @@ pub fn render(email: Email<'_>) -> String {
             muted = t.text_muted,
         ),
         None => String::new(),
+    };
+
+    // One row of figures. Laid out as a table rather than flex or grid:
+    // Outlook renders neither, and a digest that collapses into a column of
+    // orphaned numbers is worse than no digest.
+    let stats = if email.stats.is_empty() {
+        String::new()
+    } else {
+        let cells: String = email
+            .stats
+            .iter()
+            .map(|(label, value)| {
+                format!(
+                    r#"<td align="center" style="padding:14px 10px;">
+                         <div style="font-family:Georgia,'Times New Roman',serif;font-size:26px;font-weight:bold;color:{accent};">{value}</div>
+                         <div style="font-size:12px;color:{muted};letter-spacing:0.3px;">{label}</div>
+                       </td>"#,
+                    value = escape(value),
+                    label = escape(label),
+                    accent = t.accent,
+                    muted = t.text_muted,
+                )
+            })
+            .collect();
+        format!(
+            r#"<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                      style="margin:22px 0;border-radius:10px;background:{surface};">
+                 <tr>{cells}</tr>
+               </table>"#,
+            surface = t.surface,
+        )
     };
 
     let cta = match (email.cta_label, email.cta_url) {
@@ -162,6 +200,7 @@ pub fn render(email: Email<'_>) -> String {
             <td style="padding:14px 34px 0;text-align:{align};font-family:-apple-system,'Segoe UI',Arial,sans-serif;">
               {greeting}
               <div style="font-size:16px;line-height:1.65;color:{text};">{body}</div>
+              {stats}
               {cta}
             </td>
           </tr>
@@ -204,6 +243,7 @@ mod tests {
             title: "Ton paiement est parti",
             body: "42,50 € ont été envoyés sur ton Mobile Money.",
             recipient_name: Some("Ada"),
+            stats: &[],
             cta_label: Some("Voir le détail"),
             cta_url: Some("https://skill-uv.com/wallet"),
             unsubscribe_url: None,
@@ -289,6 +329,7 @@ mod tests {
             title: "<script>alert(1)</script>",
             body: "ok",
             recipient_name: Some("<img src=x onerror=alert(1)>"),
+            stats: &[],
             cta_label: None,
             cta_url: None,
             unsubscribe_url: None,
@@ -306,6 +347,7 @@ mod tests {
             title: "t",
             body: "b",
             recipient_name: None,
+            stats: &[],
             cta_label: Some("Go"),
             cta_url: Some("https://x.test/\" onmouseover=\"alert(1)"),
             unsubscribe_url: None,
@@ -324,6 +366,7 @@ mod tests {
             title: "t",
             body: "b",
             recipient_name: None,
+            stats: &[],
             cta_label: None,
             cta_url: None,
             unsubscribe_url: None,
@@ -345,6 +388,7 @@ mod tests {
             title: "t",
             body: "ligne un\nligne deux",
             recipient_name: None,
+            stats: &[],
             cta_label: None,
             cta_url: None,
             unsubscribe_url: None,

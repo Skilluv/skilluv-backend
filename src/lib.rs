@@ -401,7 +401,7 @@ async fn normalize_error_response_content_type(
 
 /// Build the CORS layer with an explicit origin allowlist. Reads
 /// `ALLOWED_ORIGINS` from env — comma-separated, e.g.
-/// `http://localhost:5173,http://localhost:5174,https://skilluv.com,https://admin.skilluv.com`.
+/// `http://localhost:5173,http://localhost:5174,https://skill-uv.com,https://admin.skill-uv.com`.
 /// Falls back to the two dev origins so `cargo run` on a fresh checkout works
 /// out of the box. `credentials: true` is required for the httpOnly cookie
 /// auth flow — the previous `permissive` layer set `Access-Control-Allow-*`

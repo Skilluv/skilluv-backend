@@ -26,6 +26,14 @@ use crate::errors::AppError;
 use crate::services::EmailService;
 use std::sync::Arc;
 
+/// How many accounts one sequence walks per run.
+///
+/// Each sequence targets a one-day-wide signup window and runs hourly, so
+/// this is only reachable on a day with more signups than that — which is
+/// a good problem, and one worth being told about rather than truncated
+/// through.
+const MAX_PER_SEQUENCE: usize = 50_000;
+
 #[derive(Debug, Clone, Serialize)]
 pub struct DripRunReport {
     pub sequences_evaluated: usize,
@@ -186,42 +194,68 @@ async fn run_sequence(
 ) -> Result<(), AppError> {
     let since_min = Utc::now() - ChronoDuration::days(seq.delay_max_days);
     let since_max = Utc::now() - ChronoDuration::days(seq.delay_min_days);
-    let candidates: Vec<(Uuid, Option<DateTime<Utc>>)> = sqlx::query_as(
-        r#"
-        SELECT u.id,
-               (SELECT MAX(evaluated_at) FROM challenge_submissions cs WHERE cs.user_id = u.id) AS last_activity
-        FROM users u
-        WHERE u.email_disabled = FALSE
-          AND u.is_banned = FALSE
-          AND u.created_at BETWEEN $1 AND $2
-          AND NOT EXISTS (
-              SELECT 1 FROM email_log el WHERE el.user_id = u.id AND el.kind = $3
-          )
-        LIMIT 500
-        "#,
-    )
-    .bind(since_min)
-    .bind(since_max)
-    .bind(seq.kind)
-    .fetch_all(db)
-    .await?;
 
-    for (user_id, last_activity) in candidates {
-        if seq.require_inactive {
-            let recently_active = last_activity
-                .map(|d| (Utc::now() - d) < ChronoDuration::days(seq.delay_min_days))
-                .unwrap_or(false);
-            if recently_active {
-                report.emails_skipped_no_match += 1;
-                continue;
+    // This selected `LIMIT 500` with no cursor. The 501st eligible account
+    // never received the message — not late, never — and nothing said so.
+    // The window is one day wide, so the ceiling is only reachable on a day
+    // with more than that many signups, and hitting it is now logged.
+    let mut walk = crate::services::batch::Walk::new("drip_talent", MAX_PER_SEQUENCE);
+    let mut page_len;
+
+    loop {
+        let candidates: Vec<(Uuid, Option<DateTime<Utc>>)> = sqlx::query_as(
+            r#"
+            SELECT u.id,
+                   (SELECT MAX(evaluated_at) FROM challenge_submissions cs WHERE cs.user_id = u.id) AS last_activity
+            FROM users u
+            WHERE u.email_disabled = FALSE
+              AND u.is_banned = FALSE
+              AND u.created_at BETWEEN $1 AND $2
+              AND NOT EXISTS (
+                  SELECT 1 FROM email_log el WHERE el.user_id = u.id AND el.kind = $3
+              )
+              AND ($4::uuid IS NULL OR u.id > $4)
+            ORDER BY u.id
+            LIMIT $5
+            "#,
+        )
+        .bind(since_min)
+        .bind(since_max)
+        .bind(seq.kind)
+        .bind(walk.after())
+        .bind(walk.page_size())
+        .fetch_all(db)
+        .await?;
+
+        page_len = candidates.len();
+        let Some(last) = candidates.last().map(|(id, _)| *id) else {
+            break;
+        };
+
+        for (user_id, last_activity) in candidates {
+            if seq.require_inactive {
+                let recently_active = last_activity
+                    .map(|d| (Utc::now() - d) < ChronoDuration::days(seq.delay_min_days))
+                    .unwrap_or(false);
+                if recently_active {
+                    report.emails_skipped_no_match += 1;
+                    continue;
+                }
+            }
+            match deliver(db, email, site, user_id, seq.kind).await {
+                Ok(true) => report.emails_sent += 1,
+                Ok(false) => report.emails_skipped_already_sent += 1,
+                Err(_) => report.failures += 1,
             }
         }
-        match deliver(db, email, site, user_id, seq.kind).await {
-            Ok(true) => report.emails_sent += 1,
-            Ok(false) => report.emails_skipped_already_sent += 1,
-            Err(_) => report.failures += 1,
+
+        walk.advance(page_len, last);
+        if !walk.should_continue(page_len) {
+            break;
         }
     }
+
+    walk.finish(page_len);
     Ok(())
 }
 
@@ -264,39 +298,61 @@ async fn run_enterprise_sequence(
 ) -> Result<(), AppError> {
     let since_min = Utc::now() - ChronoDuration::days(seq.delay_max_days);
     let since_max = Utc::now() - ChronoDuration::days(seq.delay_min_days);
-    // Enterprise primary user = founder = first enterprise_members row created
-    let candidates: Vec<(Uuid, i32)> = sqlx::query_as(
-        r#"
-        SELECT u.id, COALESCE(ec.total_used, 0)::INT AS credits_used_count
-        FROM enterprises e
-        JOIN enterprise_members em ON em.enterprise_id = e.id AND em.status = 'active'
-        JOIN users u ON u.id = em.user_id
-        LEFT JOIN enterprise_credits ec ON ec.enterprise_id = e.id
-        WHERE u.email_disabled = FALSE
-          AND u.is_banned = FALSE
-          AND e.created_at BETWEEN $1 AND $2
-          AND NOT EXISTS (
-              SELECT 1 FROM email_log el WHERE el.user_id = u.id AND el.kind = $3
-          )
-        LIMIT 300
-        "#,
-    )
-    .bind(since_min)
-    .bind(since_max)
-    .bind(seq.kind)
-    .fetch_all(db)
-    .await?;
+    let mut walk = crate::services::batch::Walk::new("drip_enterprise", MAX_PER_SEQUENCE);
+    let mut page_len;
 
-    for (user_id, credits_used) in candidates {
-        if seq.require_no_credit_use && credits_used > 0 {
-            report.emails_skipped_no_match += 1;
-            continue;
+    loop {
+        // Every active member of the enterprise, not only the founder: the
+        // person who signed up is often not the one who does the hiring.
+        let candidates: Vec<(Uuid, i32)> = sqlx::query_as(
+            r#"
+            SELECT u.id, COALESCE(ec.total_used, 0)::INT AS credits_used_count
+            FROM enterprises e
+            JOIN enterprise_members em ON em.enterprise_id = e.id AND em.status = 'active'
+            JOIN users u ON u.id = em.user_id
+            LEFT JOIN enterprise_credits ec ON ec.enterprise_id = e.id
+            WHERE u.email_disabled = FALSE
+              AND u.is_banned = FALSE
+              AND e.created_at BETWEEN $1 AND $2
+              AND NOT EXISTS (
+                  SELECT 1 FROM email_log el WHERE el.user_id = u.id AND el.kind = $3
+              )
+              AND ($4::uuid IS NULL OR u.id > $4)
+            ORDER BY u.id
+            LIMIT $5
+            "#,
+        )
+        .bind(since_min)
+        .bind(since_max)
+        .bind(seq.kind)
+        .bind(walk.after())
+        .bind(walk.page_size())
+        .fetch_all(db)
+        .await?;
+
+        page_len = candidates.len();
+        let Some(last) = candidates.last().map(|(id, _)| *id) else {
+            break;
+        };
+
+        for (user_id, credits_used) in candidates {
+            if seq.require_no_credit_use && credits_used > 0 {
+                report.emails_skipped_no_match += 1;
+                continue;
+            }
+            match deliver(db, email, site, user_id, seq.kind).await {
+                Ok(true) => report.emails_sent += 1,
+                Ok(false) => report.emails_skipped_already_sent += 1,
+                Err(_) => report.failures += 1,
+            }
         }
-        match deliver(db, email, site, user_id, seq.kind).await {
-            Ok(true) => report.emails_sent += 1,
-            Ok(false) => report.emails_skipped_already_sent += 1,
-            Err(_) => report.failures += 1,
+
+        walk.advance(page_len, last);
+        if !walk.should_continue(page_len) {
+            break;
         }
     }
+
+    walk.finish(page_len);
     Ok(())
 }

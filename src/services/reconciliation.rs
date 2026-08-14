@@ -44,6 +44,13 @@ const ESCALATE_AFTER_HOURS: i64 = 72;
 /// How many times to ask before asking a person instead.
 const MAX_CHECKS: i32 = 12;
 
+/// How many unconfirmed payouts one sweep examines.
+///
+/// Not a truncation: `last_checked_at` rotates what has been looked at to
+/// the back of the queue, so a backlog drains across cycles instead of
+/// starving its tail.
+const STALE_PAGE: usize = 200;
+
 /// What one sweep did.
 #[derive(Debug, Default, Clone, serde::Serialize)]
 pub struct SweepReport {
@@ -84,11 +91,26 @@ pub async fn sweep(db: &PgPool, registry: &PayoutRegistry) -> Result<SweepReport
             AND (last_checked_at IS NULL
                  OR last_checked_at < NOW() - ($1 || ' minutes')::INTERVAL)
           ORDER BY created_at
-          LIMIT 200",
+          LIMIT $2",
     )
     .bind(QUIET_PERIOD_MINUTES.to_string())
+    .bind(STALE_PAGE as i64)
     .fetch_all(db)
     .await?;
+
+    // The cap here is fair rather than truncating: `last_checked_at` pushes
+    // anything looked at to the back, and the sweep runs every fifteen
+    // minutes, so a backlog drains rather than starving its tail. It is
+    // still worth saying when there is a backlog at all.
+    if stale.len() >= STALE_PAGE {
+        metrics::counter!("skilluv_batch_truncated_total", "job" => "reconciliation").increment(1);
+        tracing::warn!(
+            page = STALE_PAGE,
+            "more unconfirmed payouts than one sweep examines — the rest are \
+             checked next cycle, but a backlog that persists means payouts are \
+             not settling"
+        );
+    }
 
     for row in stale {
         report.checked += 1;

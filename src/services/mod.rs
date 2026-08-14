@@ -8,6 +8,7 @@ pub mod audit;
 mod auth;
 pub mod backup;
 pub mod badge_engine;
+pub mod batch;
 pub mod cache;
 pub mod capabilities_engine;
 pub mod ci_sync;

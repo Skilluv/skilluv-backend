@@ -16,8 +16,19 @@ use crate::services::EmailService;
 
 type HmacSha256 = Hmac<Sha256>;
 
+/// How many accounts one weekly run will walk.
+///
+/// Generous, because this runs once a week and is the message most people
+/// judge the product by. Reaching it is logged rather than silent, which is
+/// the signal to move the digest onto its own schedule.
+const MAX_PER_RUN: usize = 200_000;
+
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct DigestRunReport {
+    /// True when the run hit its ceiling. The rest resumes next time, but
+    /// a digest that is "weekly" and takes two runs to reach everyone is
+    /// worth knowing about.
+    pub truncated: bool,
     pub users_processed: usize,
     pub emails_sent: usize,
     pub emails_skipped_no_activity: usize,
@@ -37,6 +48,7 @@ pub struct DigestService<'a> {
 impl<'a> DigestService<'a> {
     pub async fn run_weekly(&self) -> Result<DigestRunReport, AppError> {
         let mut report = DigestRunReport {
+            truncated: false,
             users_processed: 0,
             emails_sent: 0,
             emails_skipped_no_activity: 0,
@@ -45,42 +57,66 @@ impl<'a> DigestService<'a> {
             failures: 0,
         };
 
-        // Every account that can receive mail. Consent is not filtered here
-        // any more: `notify` asks the catalogue per recipient, which is the
-        // same question this used to answer against a different table, and
-        // sometimes differently.
-        let rows: Vec<DigestTarget> = sqlx::query_as(
-            r#"
-            SELECT u.id, u.skill_domain
-            FROM users u
-            WHERE u.profile_active = TRUE
-              AND u.is_banned = FALSE
-              AND u.email_disabled = FALSE
-            "#,
-        )
-        .fetch_all(self.db)
-        .await?;
-
         let week_ago = Utc::now() - ChronoDuration::days(7);
 
-        for target in rows {
-            report.users_processed += 1;
-            match self.process_one(&target, week_ago).await {
-                Ok(DigestOutcome::Sent) => report.emails_sent += 1,
-                Ok(DigestOutcome::NoActivity) => report.emails_skipped_no_activity += 1,
-                Ok(DigestOutcome::OptOut) => report.emails_skipped_opt_out += 1,
-                Ok(DigestOutcome::Disabled) => report.emails_skipped_disabled += 1,
-                Err(err) => {
-                    tracing::warn!(
-                        user_id = %target.id,
-                        error = %err,
-                        "digest send failed"
-                    );
-                    report.failures += 1;
+        // Walked a page at a time. This read every active account into one
+        // `Vec` before sending anything, which works until the day the
+        // process is killed part-way through and nobody gets a digest at
+        // all — with a restart in the logs rather than a cause.
+        let mut walk = crate::services::batch::Walk::new("digest_weekly", MAX_PER_RUN);
+        let mut page_len;
+
+        loop {
+            // Consent is not filtered here: `notify` asks the catalogue per
+            // recipient, which is the same question this used to answer
+            // against a different table, and sometimes differently.
+            let rows: Vec<DigestTarget> = sqlx::query_as(
+                r#"
+                SELECT u.id, u.skill_domain
+                FROM users u
+                WHERE u.profile_active = TRUE
+                  AND u.is_banned = FALSE
+                  AND u.email_disabled = FALSE
+                  AND ($1::uuid IS NULL OR u.id > $1)
+                ORDER BY u.id
+                LIMIT $2
+                "#,
+            )
+            .bind(walk.after())
+            .bind(walk.page_size())
+            .fetch_all(self.db)
+            .await?;
+
+            page_len = rows.len();
+            let Some(last) = rows.last().map(|r| r.id) else {
+                break;
+            };
+
+            for target in &rows {
+                report.users_processed += 1;
+                match self.process_one(target, week_ago).await {
+                    Ok(DigestOutcome::Sent) => report.emails_sent += 1,
+                    Ok(DigestOutcome::NoActivity) => report.emails_skipped_no_activity += 1,
+                    Ok(DigestOutcome::OptOut) => report.emails_skipped_opt_out += 1,
+                    Ok(DigestOutcome::Disabled) => report.emails_skipped_disabled += 1,
+                    Err(err) => {
+                        tracing::warn!(
+                            user_id = %target.id,
+                            error = %err,
+                            "digest send failed"
+                        );
+                        report.failures += 1;
+                    }
                 }
+            }
+
+            walk.advance(page_len, last);
+            if !walk.should_continue(page_len) {
+                break;
             }
         }
 
+        report.truncated = walk.finish(page_len) == crate::services::batch::Ending::Truncated;
         Ok(report)
     }
 

@@ -28,6 +28,13 @@ RUN rm -rf src
 COPY src/ src/
 COPY migrations/ migrations/
 
+# Embedded at compile time by `include_str!` / `include_bytes!`, so they have
+# to exist in the builder even though nothing reads them at runtime: the
+# translation catalogues behind `services::i18n`, and the two fonts the
+# OpenGraph card rasterises with.
+COPY locales/ locales/
+COPY assets/ assets/
+
 # Touch to force cargo to rebuild the (now real) sources.
 # --features discord-bot pulls serenity in so the discord_bot binary
 # is included in the image (feature-gated to keep test builds lean).

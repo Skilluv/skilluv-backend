@@ -77,7 +77,10 @@ pub async fn list_notifications(
 
     let (notifications, total) = if let Some(read_filter) = query.read {
         let notifs: Vec<Notification> = sqlx::query_as(
-            "SELECT * FROM notifications WHERE user_id = $1 AND read = $2 ORDER BY created_at DESC LIMIT $3 OFFSET $4",
+            "SELECT * FROM notifications
+              WHERE user_id = $1 AND read = $2
+              ORDER BY COALESCE(updated_at, created_at) DESC
+              LIMIT $3 OFFSET $4",
         )
         .bind(auth.user_id)
         .bind(read_filter)
@@ -97,7 +100,10 @@ pub async fn list_notifications(
         (notifs, count)
     } else {
         let notifs: Vec<Notification> = sqlx::query_as(
-            "SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3",
+            "SELECT * FROM notifications
+              WHERE user_id = $1
+              ORDER BY COALESCE(updated_at, created_at) DESC
+              LIMIT $2 OFFSET $3",
         )
         .bind(auth.user_id)
         .bind(per_page)

@@ -699,6 +699,13 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::payments::methods,
         crate::routes::payments::charge,
         crate::routes::payments::status,
+        crate::routes::admin_money::overview,
+        crate::routes::admin_money::payments,
+        crate::routes::admin_money::payouts,
+        crate::routes::admin_money::routes,
+        crate::routes::admin_money::toggle_route,
+        crate::routes::admin_money::methods,
+        crate::routes::admin_money::toggle_method,
     ),
     components(
         schemas(

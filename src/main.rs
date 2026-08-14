@@ -84,6 +84,16 @@ async fn async_main(config: AppConfig) {
         &config.email_from,
         &config.email_from_name,
     ));
+    // Installed before any background task can emit: the proof engine, the
+    // mention recorder and the reconciliation sweep hold only a `PgPool`,
+    // and without this their notifications reach every channel except the
+    // one that matters when nobody is looking at the app.
+    skilluv_backend::services::notify::install_ambient(
+        email.clone(),
+        config.frontend_url.clone(),
+        config.jwt_secret.clone(),
+    );
+
     // Drip sequences (Phase 3.15) — hourly background task, idempotent via email_log.
     skilluv_backend::services::drip::start_drip_task(
         db.clone(),

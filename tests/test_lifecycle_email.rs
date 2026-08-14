@@ -318,3 +318,79 @@ async fn no_email_points_at_a_domain_we_do_not_own() {
         "the domain is skill-uv.com"
     );
 }
+
+// ─── Background senders reach the inbox too ───────────────────────
+
+#[tokio::test]
+async fn a_notification_from_a_pool_only_caller_can_still_email() {
+    let app = TestApp::spawn().await;
+    let user = person(&app, "life_ambient").await;
+
+    // `rank.promoted` has email on by default, and the proof engine that
+    // emits it holds a `PgPool` and nothing else. That combination used to
+    // log "email channel requested but this context carries no email
+    // service" and send nothing — every rank promotion, every first
+    // verified contribution, and the queue of payouts an operator has to
+    // unblock.
+    let delivery = skilluv_backend::services::notify::send(
+        skilluv_backend::services::notify::Ctx::db_only(&app.db),
+        skilluv_backend::services::notify::Recipient::User(user),
+        "rank.promoted",
+    )
+    .arg("rank", "Ranger")
+    .execute()
+    .await
+    .expect("delivery");
+
+    assert_eq!(
+        delivery.email, 1,
+        "a background sender must reach the inbox: {:?}",
+        delivery.failures
+    );
+    assert!(
+        delivery.failures.is_empty(),
+        "no channel was meant to fire and failed: {:?}",
+        delivery.failures
+    );
+
+    // And it was recorded, so a bounce or a complaint can be traced back.
+    let logged: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM email_log WHERE user_id = $1 AND kind = $2")
+            .bind(user)
+            .bind("rank.promoted")
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
+    assert_eq!(logged, 1);
+}
+
+#[tokio::test]
+async fn a_transactional_kind_from_a_background_sweep_reaches_someone() {
+    let app = TestApp::spawn().await;
+
+    // `admin.payout_needs_replay` is transactional and emitted by the
+    // reconciliation sweep, which has no request behind it. A transactional
+    // notification reaching nobody is a lost obligation, not a missed nudge.
+    let admin = person(&app, "life_admin").await;
+    sqlx::query("INSERT INTO user_capabilities (user_id, capability) VALUES ($1, 'admin')")
+        .bind(admin)
+        .execute(&app.db)
+        .await
+        .unwrap();
+
+    let delivery = skilluv_backend::services::notify::send(
+        skilluv_backend::services::notify::Ctx::db_only(&app.db),
+        skilluv_backend::services::notify::Recipient::Capability("admin"),
+        "admin.payout_needs_replay",
+    )
+    .arg("count", "1")
+    .execute()
+    .await
+    .expect("delivery");
+
+    assert!(
+        delivery.email > 0,
+        "the payout queue must reach an inbox: {:?}",
+        delivery.failures
+    );
+}

@@ -73,14 +73,15 @@ async fn emit_draft(
     draft: &Draft,
     live: &mut Option<LiveChannel<'_>>,
 ) -> Result<(), AppError> {
+    // The live channels are what the caller can supply; everything else
+    // comes from what `main` installed. Passing `email: None` here is what
+    // made `rank.promoted` and `deliverable.first_verified` log an error
+    // and send nothing, whichever way the promotion was reached.
     let ctx = match live.as_ref() {
         Some(channel) => crate::services::notify::Ctx {
-            db,
             redis: Some(channel.redis),
             ws: Some(channel.ws),
-            email: None,
-            frontend_url: None,
-            jwt_secret: None,
+            ..crate::services::notify::Ctx::db_only(db)
         },
         None => crate::services::notify::Ctx::db_only(db),
     };

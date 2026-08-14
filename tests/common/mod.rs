@@ -188,6 +188,19 @@ impl TestApp {
             .expect("Failed to bind");
         let addr = format!("http://127.0.0.1:{}", listener.local_addr().unwrap().port());
 
+        // Same as `main`: the background senders hold only a pool, and
+        // without this a test asserting that a promotion emails somebody
+        // would pass for the wrong reason.
+        skilluv_backend::services::notify::install_ambient(
+            Arc::new(skilluv_backend::services::EmailService::new(
+                None,
+                "test@skill-uv.com",
+                "Skilluv Test",
+            )),
+            "http://localhost:5173".to_string(),
+            "test-secret-key-for-testing".to_string(),
+        );
+
         let state = AppState {
             db: db.clone(),
             redis,

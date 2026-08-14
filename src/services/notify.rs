@@ -66,16 +66,63 @@ pub struct Ctx<'a> {
     pub jwt_secret: Option<&'a str>,
 }
 
+/// The mail service and the URLs, installed once at startup.
+///
+/// The proof engine, the mention recorder and the reconciliation sweep run
+/// with a `PgPool` and nothing else, by design — threading `AppState` down
+/// into them would invert the dependency between the service and HTTP
+/// layers. But they emit kinds whose email is on by default, and a context
+/// with no mail service turned that into an error log and a message nobody
+/// received. `rank.promoted`, `deliverable.first_verified` and
+/// `admin.payout_needs_replay` were all silently email-less that way, and
+/// the last one is the queue of payouts a human has to unblock.
+///
+/// So the pieces that are genuinely process-wide live here. They are:
+/// `EmailService` is an API key and a from-address, and the two URLs are
+/// deployment constants. None of them is request state, and pretending
+/// otherwise is what made three notifications disappear.
+struct Ambient {
+    email: std::sync::Arc<crate::services::EmailService>,
+    frontend_url: String,
+    jwt_secret: String,
+}
+
+static AMBIENT: std::sync::OnceLock<Ambient> = std::sync::OnceLock::new();
+
+/// Called once from `main`, before any background task can emit.
+///
+/// Idempotent and ignores a second call: a test harness booting two apps in
+/// one process must not panic, and the values are identical anyway.
+pub fn install_ambient(
+    email: std::sync::Arc<crate::services::EmailService>,
+    frontend_url: String,
+    jwt_secret: String,
+) {
+    let _ = AMBIENT.set(Ambient {
+        email,
+        frontend_url,
+        jwt_secret,
+    });
+}
+
 impl<'a> Ctx<'a> {
-    /// Database only. Writes the durable row; no live push, no email.
+    /// Database only, for callers that hold nothing else.
+    ///
+    /// Not email-less: the mail service falls back to what `main` installed,
+    /// so a promotion reached from a background webhook sends the same
+    /// message as one reached from a request. Live channels stay absent —
+    /// a Redis connection and a WebSocket registry are per-process state
+    /// this cannot borrow, and their loss costs immediacy rather than the
+    /// message.
     pub fn db_only(db: &'a sqlx::PgPool) -> Self {
+        let ambient = AMBIENT.get();
         Self {
             db,
             redis: None,
             ws: None,
-            email: None,
-            frontend_url: None,
-            jwt_secret: None,
+            email: ambient.map(|a| a.email.as_ref()),
+            frontend_url: ambient.map(|a| a.frontend_url.as_str()),
+            jwt_secret: ambient.map(|a| a.jwt_secret.as_str()),
         }
     }
 }

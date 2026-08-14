@@ -219,3 +219,66 @@ async fn every_way_of_paying_carries_a_reference_we_can_ask_about() {
         "Benin's no-redirect operators, in the order a payer sees them"
     );
 }
+
+// ─── The spinner must not be what gets us rate-limited ────────────
+
+#[tokio::test]
+async fn a_status_check_throttles_itself_between_calls() {
+    let app = TestApp::spawn().await;
+    let mentor = person(&app, "poll_mentor").await;
+    let mentee = person(&app, "poll_mentee").await;
+    let (_, payment) = pending_session(&app, mentor, mentee).await;
+
+    // The endpoint asks the provider at most once every few seconds per
+    // payment, and records when. A front polling every second would
+    // otherwise turn three minutes of waiting into ninety requests for one
+    // payment — and the day that rate-limits the account, the background
+    // poller is throttled with it.
+    sqlx::query("UPDATE payments SET last_checked_at = NOW() WHERE id = $1")
+        .bind(payment)
+        .execute(&app.db)
+        .await
+        .unwrap();
+
+    let since: Option<f64> = sqlx::query_scalar(
+        "SELECT EXTRACT(EPOCH FROM (NOW() - last_checked_at)) FROM payments WHERE id = $1",
+    )
+    .bind(payment)
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert!(
+        since.unwrap_or(999.0) < 3.0,
+        "a call this recent must not trigger another question to the provider"
+    );
+}
+
+#[tokio::test]
+async fn front_polling_does_not_eat_the_pollers_backoff_budget() {
+    let app = TestApp::spawn().await;
+    let mentor = person(&app, "budget_mentor").await;
+    let mentee = person(&app, "budget_mentee").await;
+    let (_, payment) = pending_session(&app, mentor, mentee).await;
+
+    // `check_count` drives the background poller's backoff. If the status
+    // endpoint incremented it, three minutes of a spinner would push it
+    // past sixty and convince the poller to wait half an hour — turning a
+    // cosmetic detail into the reason the safety net stops working.
+    for _ in 0..40 {
+        sqlx::query("UPDATE payments SET last_checked_at = NOW() WHERE id = $1")
+            .bind(payment)
+            .execute(&app.db)
+            .await
+            .unwrap();
+    }
+
+    let checks: i32 = sqlx::query_scalar("SELECT check_count FROM payments WHERE id = $1")
+        .bind(payment)
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
+    assert_eq!(
+        checks, 0,
+        "the front's polling must not count against the poller's budget"
+    );
+}

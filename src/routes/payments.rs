@@ -226,11 +226,27 @@ pub async fn charge(
     })))
 }
 
+/// The shortest gap between two questions to the provider about one payment.
+///
+/// The front polls this endpoint every second or two while someone watches
+/// a spinner, and every one of those used to become a request to FedaPay:
+/// three minutes of waiting is ninety requests for a single payment.
+/// Multiply by concurrent checkouts and the account gets rate-limited —
+/// and the day that happens, the background poller is throttled with it,
+/// which turns a cosmetic problem into a delivery one.
+///
+/// Three seconds is under what a person perceives as lag and two orders of
+/// magnitude below a rate limit.
+const PROVIDER_ASK_EVERY_SECONDS: i64 = 3;
+
 /// Where a payment has got to.
 ///
-/// Called by the page the payer lands on, and safe to call from anywhere:
-/// it asks the provider and routes any answer through the shared fulfilment
-/// path. It is a way to stop showing a spinner, not a way to be paid.
+/// Called by the page the payer is waiting on. It asks the provider — a
+/// real question, not a cached guess — but at most once every few seconds
+/// per payment, and it routes any answer through the shared fulfilment
+/// path. It is a way to stop showing a spinner, not a way to be paid: a
+/// forged call delivers nothing that the poller would not have delivered a
+/// minute later anyway.
 #[utoipa::path(
     get, path = "/api/payments/{id}/status", tag = "payments",
     params(("id" = Uuid, Path, description = "Payment id")),
@@ -253,10 +269,17 @@ pub async fn status(
         merchant_reference: Option<String>,
         provider_reference: Option<String>,
         fulfilled_at: Option<chrono::DateTime<chrono::Utc>>,
+        /// Seconds since the provider was last asked about this payment, by
+        /// this endpoint or by the background poller. They share the budget
+        /// on purpose: the provider counts the requests, not our reasons
+        /// for making them.
+        since_last_ask: Option<f64>,
     }
 
     let payment: Row = sqlx::query_as(
-        "SELECT payer_id, provider, status, merchant_reference, provider_reference, fulfilled_at
+        "SELECT payer_id, provider, status, merchant_reference, provider_reference,
+                fulfilled_at,
+                EXTRACT(EPOCH FROM (NOW() - last_checked_at)) AS since_last_ask
            FROM payments WHERE id = $1",
     )
     .bind(id)
@@ -268,13 +291,27 @@ pub async fn status(
         return Err(AppError::Forbidden);
     }
 
-    // Still open: ask, rather than tell the payer to keep waiting. This is
-    // the same question the poller asks, a minute earlier because someone
-    // is watching.
+    let may_ask = payment
+        .since_last_ask
+        .is_none_or(|seconds| seconds >= PROVIDER_ASK_EVERY_SECONDS as f64);
+
     if payment.status == "pending"
         && payment.provider == "fedapay"
+        && may_ask
         && let Some(cfg) = crate::services::fedapay::FedaPayConfig::from_env()
     {
+        // Stamped before the call, not after: two requests arriving
+        // together must not both decide they are allowed to ask.
+        //
+        // `last_checked_at` only. `check_count` drives the poller's
+        // backoff — a front polling for three minutes would push it past
+        // sixty and convince the poller to wait half an hour, turning a
+        // spinner into the reason the safety net stops working.
+        sqlx::query("UPDATE payments SET last_checked_at = NOW() WHERE id = $1")
+            .bind(id)
+            .execute(&state.db)
+            .await?;
+
         let lookup = match (
             payment.merchant_reference.as_deref(),
             payment.provider_reference.as_deref(),
@@ -307,8 +344,11 @@ pub async fn status(
     Ok(Json(json!({
         "data": {
             "status": status,
-            // The two are not the same, and the front should wait for this
-            // one: money arriving is not the thing being delivered.
+            // How long to wait before asking again. Sent rather than left
+            // for the front to guess: the right interval is a property of
+            // what the backend does with the question, and a front that
+            // guesses too low is the thing that gets us rate-limited.
+            "poll_after_ms": PROVIDER_ASK_EVERY_SECONDS * 1000,
             "delivered": fulfilled.is_some() || payment.fulfilled_at.is_some(),
         }
     })))

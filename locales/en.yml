@@ -114,10 +114,16 @@ notification:
       title: "New answer to your question"
       body: "{author} answered {title}."
       cta: "Read the answer"
+      grouped:
+        title: "{count} answers to your question"
+        body: "{author} and {others} others answered."
     post_replied:
       title: "New reply to your post"
       body: "{author} replied to {title}."
       cta: "Read the reply"
+      grouped:
+        title: "{count} replies to your post"
+        body: "{author} and {others} others replied to “{title}”."
     answer_accepted:
       title: "Your answer was accepted"
       body: "{author} marked your answer on {title} as the accepted one."
@@ -126,16 +132,25 @@ notification:
       title: "{author} replied to you"
       body: "{excerpt}"
       cta: "Read the reply"
+      grouped:
+        title: "{count} replies to your comment"
+        body: "{author} and {others} others replied."
   social:
     mention:
       title: "{author} mentioned you"
       body: "{excerpt}"
       cta: "See the mention"
+      grouped:
+        title: "{count} mentions in the same thread"
+        body: "{author} and {others} others mentioned you."
   dm:
     received:
       title: "Message from {author}"
       body: "{excerpt}"
       cta: "Reply"
+      grouped:
+        title: "{count} messages from {author}"
+        body: "The latest: {excerpt}"
   guild:
     invitation:
       title: "Invitation to join {guild}"
@@ -145,6 +160,9 @@ notification:
       title: "New application"
       body: "{applicant} wants to join {guild}."
       cta: "See the application"
+      grouped:
+        title: "{count} applications to your guild"
+        body: "{author} and {others} others want to join {guild}."
     application_decided:
       title: "Your application was decided"
       body: "Your application to {guild} was {decision}."
@@ -192,10 +210,16 @@ notification:
       title: "{count} item(s) awaiting review"
       body: "The moderation queue needs attention."
       cta: "Open the queue"
+      grouped:
+        title: "{count} items waiting for review"
+        body: "The queue is growing."
     fraud_flagged:
       title: "Fraud flag raised"
       body: "{subject} was flagged automatically and awaits a decision."
       cta: "Review the flag"
+      grouped:
+        title: "{count} fraud reports"
+        body: "They are waiting on a decision."
     payout_needs_replay:
       title: "Payout needs replaying"
       body: "{count} payout(s) are owed and did not go through. They were not sent."
@@ -214,6 +238,9 @@ notification:
       title: "Badge earned: {badge}"
       body: "It is now visible on your public profile."
       cta: "See my profile"
+      grouped:
+        title: "{count} new badges"
+        body: "Including “{badge}”. They show on your profile."
   goal:
     reached:
       title: "Goal reached"

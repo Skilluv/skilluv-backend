@@ -180,6 +180,10 @@ pub struct Delivery {
     pub in_app: usize,
     pub push: usize,
     pub email: usize,
+    /// Folded into a notification the recipient already had. Not a delivery
+    /// and not a refusal: the message arrived, on a line that was already
+    /// there, and deliberately without a second buzz.
+    pub grouped: usize,
     /// Recipients who declined every channel this kind offers. Not an error:
     /// a preference honoured is the system working.
     pub declined: usize,
@@ -192,6 +196,9 @@ pub struct Delivery {
 #[derive(Debug, Clone, sqlx::FromRow)]
 struct KindRow {
     cta_path: Option<String>,
+    /// How long an unread notification of this kind absorbs another about
+    /// the same context. `None` never groups.
+    group_window_seconds: Option<i32>,
     allows_in_app: bool,
     allows_push: bool,
     allows_email: bool,
@@ -199,6 +206,15 @@ struct KindRow {
     default_push: bool,
     default_email: bool,
     transactional: bool,
+}
+
+/// What writing the durable row did.
+struct InApp {
+    #[allow(dead_code)] // Kept for the WebSocket payload and future callers.
+    id: Uuid,
+    /// True when it folded into an existing notification rather than
+    /// adding one.
+    grouped: bool,
 }
 
 /// A notification being built.
@@ -260,6 +276,7 @@ impl<'a> Builder<'a> {
             && delivery.in_app == 0
             && delivery.push == 0
             && delivery.email == 0
+            && delivery.grouped == 0
         {
             // A transactional notification is an obligation. Reaching nobody
             // is a failure worth waking someone for, not a quiet no-op.
@@ -290,14 +307,26 @@ impl<'a> Builder<'a> {
         let body = i18n::t_with(&locale, &format!("notification.{}.body", self.kind), &args);
 
         let mut reached = false;
+        // Set when this event folded into a notification the person already
+        // has. Everything below reads it: the whole value of grouping is
+        // that the second mention in a thread does not buzz again.
+        let mut absorbed = false;
 
         // In-app first: it is the durable record, and the one the others are
         // a courtesy on top of.
         if kind.allows_in_app && wants(self.ctx.db, user_id, self.kind, Channel::InApp, kind).await
         {
-            match self.write_in_app(user_id, &locale, &title, &body).await {
-                Ok(_) => {
-                    delivery.in_app += 1;
+            match self
+                .write_in_app(user_id, &locale, &title, &body, kind)
+                .await
+            {
+                Ok(written) => {
+                    absorbed = written.grouped;
+                    if !absorbed {
+                        delivery.in_app += 1;
+                    } else {
+                        delivery.grouped += 1;
+                    }
                     reached = true;
                 }
                 Err(e) => {
@@ -313,8 +342,12 @@ impl<'a> Builder<'a> {
         // rather be woken.
         let quiet = !kind.transactional && in_quiet_hours(self.ctx.db, user_id).await;
 
+        // A group that already buzzed does not buzz again. This is the
+        // whole point: ten replies to one thread are one interruption, and
+        // an application that vibrates ten times is one people mute.
         if kind.allows_push
             && !quiet
+            && !absorbed
             && wants(self.ctx.db, user_id, self.kind, Channel::Push, kind).await
         {
             let message = crate::services::mobile_push::MobilePushMessage {
@@ -336,7 +369,13 @@ impl<'a> Builder<'a> {
             }
         }
 
-        if kind.allows_email && wants(self.ctx.db, user_id, self.kind, Channel::Email, kind).await {
+        // Same for email, and more so: the first one already said what
+        // happened and where, and a second about the same thread would read
+        // as the platform being broken.
+        if kind.allows_email
+            && !absorbed
+            && wants(self.ctx.db, user_id, self.kind, Channel::Email, kind).await
+        {
             match self.send_email(user_id, &locale, &title, &body, kind).await {
                 Ok(true) => {
                     delivery.email += 1;
@@ -397,18 +436,73 @@ impl<'a> Builder<'a> {
         Some(format!("{base}/api/email/unsubscribe/{token}"))
     }
 
+    /// The context this notification is about, if it has one.
+    ///
+    /// `kind:target_type:target_id`, built from the payload the caller
+    /// already passes. A kind whose payload names no subject has no
+    /// context, so it never groups — which is the right answer for
+    /// anything carrying money or a decision.
+    fn group_key(&self) -> Option<String> {
+        let payload = self.payload.as_ref()?;
+        // In the order senders use them. The first that is present wins,
+        // so a comment on a post groups by the post rather than by itself.
+        for field in [
+            "post_id",
+            "guild_id",
+            "conversation_id",
+            "target_id",
+            "project_id",
+            "slice_id",
+        ] {
+            if let Some(value) = payload.get(field).and_then(|v| match v {
+                Value::String(s) => Some(s.clone()),
+                Value::Null => None,
+                other => Some(other.to_string().trim_matches('"').to_string()),
+            }) {
+                return Some(format!("{}:{field}:{value}", self.kind));
+            }
+        }
+        None
+    }
+
+    /// Who this notification is about, for "Awa and 3 others".
+    ///
+    /// Taken from the `author` argument the sender already provides, which
+    /// is the same string the ungrouped copy interpolates.
+    fn actor(&self) -> Option<&str> {
+        self.args
+            .iter()
+            .find(|(name, _)| name == "author" || name == "inviter")
+            .map(|(_, value)| value.as_str())
+    }
+
     async fn write_in_app(
         &self,
         user_id: Uuid,
         locale: &str,
         title: &str,
         body: &str,
-    ) -> Result<Uuid, AppError> {
+        kind_row: &KindRow,
+    ) -> Result<InApp, AppError> {
+        // An unread notification about the same context, still inside its
+        // window, absorbs this one instead of adding a line.
+        if let (Some(window), Some(group_key)) = (kind_row.group_window_seconds, self.group_key())
+            && let Some(existing) = self
+                .absorb_into(user_id, &group_key, window, locale)
+                .await?
+        {
+            return Ok(InApp {
+                id: existing,
+                grouped: true,
+            });
+        }
+
         let id: Uuid = sqlx::query_scalar(
             r#"
             INSERT INTO notifications
-                (user_id, notification_type, title, body, data, kind, locale, payload)
-            VALUES ($1, $2, $3, $4, $5, $2, $6, $5)
+                (user_id, notification_type, title, body, data, kind, locale, payload,
+                 group_key, group_actors, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $2, $6, $5, $7, $8, NOW())
             RETURNING id
             "#,
         )
@@ -418,6 +512,10 @@ impl<'a> Builder<'a> {
         .bind(body)
         .bind(&self.payload)
         .bind(locale)
+        .bind(self.group_key())
+        .bind(serde_json::json!(
+            self.actor().map(|a| vec![a]).unwrap_or_default()
+        ))
         .fetch_one(self.ctx.db)
         .await?;
 
@@ -454,7 +552,162 @@ impl<'a> Builder<'a> {
             .await;
         }
 
-        Ok(id)
+        Ok(InApp { id, grouped: false })
+    }
+
+    /// Fold this event into an open notification about the same context.
+    ///
+    /// Returns the absorbing row's id, or `None` when there is nothing open
+    /// to absorb it — a different context, an expired window, or one the
+    /// person has already read. Read is a boundary on purpose: merging into
+    /// a line someone has seen would make it change under them, and they
+    /// would never learn the second thing happened.
+    async fn absorb_into(
+        &self,
+        user_id: Uuid,
+        group_key: &str,
+        window_seconds: i32,
+        locale: &str,
+    ) -> Result<Option<Uuid>, AppError> {
+        #[derive(sqlx::FromRow)]
+        struct Open {
+            id: Uuid,
+            group_count: i32,
+            group_actors: Value,
+        }
+
+        let open: Option<Open> = sqlx::query_as(
+            "SELECT id, group_count, group_actors
+               FROM notifications
+              WHERE user_id = $1
+                AND group_key = $2
+                AND read = FALSE
+                AND created_at > NOW() - ($3 || ' seconds')::INTERVAL
+              ORDER BY created_at DESC
+              LIMIT 1",
+        )
+        .bind(user_id)
+        .bind(group_key)
+        .bind(window_seconds.to_string())
+        .fetch_optional(self.ctx.db)
+        .await?;
+
+        let Some(open) = open else {
+            return Ok(None);
+        };
+
+        // Newest first, distinct, capped. A thread with four hundred
+        // participants must not carry four hundred names in a row someone
+        // reads on a phone, and only the first two are ever shown.
+        const ACTORS_KEPT: usize = 4;
+        let mut actors: Vec<String> = open
+            .group_actors
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default();
+        if let Some(actor) = self.actor() {
+            actors.retain(|existing| existing != actor);
+            actors.insert(0, actor.to_string());
+            actors.truncate(ACTORS_KEPT);
+        }
+
+        let count = open.group_count + 1;
+        let (title, body) = self.grouped_text(locale, &actors, count);
+
+        sqlx::query(
+            "UPDATE notifications
+                SET group_count = $2,
+                    group_actors = $3,
+                    title = $4,
+                    body = $5,
+                    payload = $6,
+                    data = $6,
+                    updated_at = NOW()
+              WHERE id = $1",
+        )
+        .bind(open.id)
+        .bind(count)
+        .bind(serde_json::json!(actors))
+        .bind(&title)
+        .bind(&body)
+        .bind(&self.payload)
+        .execute(self.ctx.db)
+        .await?;
+
+        // The live channel still fires: the bell count does not change, but
+        // an open list must not show a stale line.
+        if let Some(ws) = self.ctx.ws {
+            ws.send_to_user(
+                user_id,
+                crate::websocket::WsMessage {
+                    event: "notification.updated".to_string(),
+                    room: None,
+                    payload: serde_json::json!({
+                        "id": open.id,
+                        "kind": self.kind,
+                        "title": title,
+                        "body": body,
+                        "group_count": count,
+                    }),
+                },
+            )
+            .await;
+        }
+
+        metrics::counter!(
+            "skilluv_notifications_grouped_total",
+            "kind" => self.kind.to_string()
+        )
+        .increment(1);
+
+        Ok(Some(open.id))
+    }
+
+    /// The copy for a notification standing for several events.
+    ///
+    /// Falls back to the ungrouped text when a kind has no grouped copy, so
+    /// a window added to the catalogue without translations degrades to the
+    /// old wording rather than to a translation key.
+    fn grouped_text(&self, locale: &str, actors: &[String], count: i32) -> (String, String) {
+        let others = (count as usize).saturating_sub(1);
+        let first = actors.first().map(String::as_str).unwrap_or("");
+        let owned: Vec<(&str, String)> = vec![
+            ("author", first.to_string()),
+            ("actor", first.to_string()),
+            ("count", count.to_string()),
+            ("others", others.to_string()),
+        ];
+        let mut args: Vec<(&str, &str)> = self
+            .args
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.as_str()))
+            .collect();
+        // The grouped values win over the single-event ones they replace.
+        for (name, value) in &owned {
+            args.retain(|(existing, _)| existing != name);
+            args.push((name, value.as_str()));
+        }
+
+        let title_key = format!("notification.{}.grouped.title", self.kind);
+        let body_key = format!("notification.{}.grouped.body", self.kind);
+        let title = i18n::t_with(locale, &title_key, &args);
+        let body = i18n::t_with(locale, &body_key, &args);
+
+        if title == title_key || body == body_key {
+            tracing::debug!(
+                kind = self.kind,
+                "kind groups but has no grouped copy — falling back to the single-event wording"
+            );
+            return (
+                i18n::t_with(locale, &format!("notification.{}.title", self.kind), &args),
+                i18n::t_with(locale, &format!("notification.{}.body", self.kind), &args),
+            );
+        }
+        (title, body)
     }
 
     /// Returns `false` when there is nobody to write to — an account with no
@@ -590,7 +843,7 @@ async fn resolve_recipients(db: &PgPool, recipient: &Recipient) -> Result<Vec<Uu
 /// title` to a real person.
 async fn load_kind(db: &PgPool, kind: &str) -> Result<KindRow, AppError> {
     sqlx::query_as(
-        "SELECT cta_path, allows_in_app, allows_push, allows_email,
+        "SELECT cta_path, group_window_seconds, allows_in_app, allows_push, allows_email,
                 default_in_app, default_push, default_email, transactional
            FROM notification_kinds WHERE kind = $1",
     )

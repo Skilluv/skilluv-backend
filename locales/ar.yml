@@ -109,10 +109,16 @@ notification:
       title: "إجابة جديدة على سؤالك"
       body: "أجاب {author} على {title}."
       cta: "قراءة الإجابة"
+      grouped:
+        title: "{count} إجابات على سؤالك"
+        body: "{author} و{others} آخرون أجابوا."
     post_replied:
       title: "ردّ جديد على منشورك"
       body: "ردّ {author} على {title}."
       cta: "قراءة الرد"
+      grouped:
+        title: "{count} ردود على منشورك"
+        body: "{author} و{others} آخرون ردّوا على «{title}»."
     answer_accepted:
       title: "تم قبول إجابتك"
       body: "اعتمد {author} إجابتك على {title}."
@@ -121,16 +127,25 @@ notification:
       title: "ردّ عليك {author}"
       body: "{excerpt}"
       cta: "قراءة الرد"
+      grouped:
+        title: "{count} ردود على تعليقك"
+        body: "{author} و{others} آخرون ردّوا."
   social:
     mention:
       title: "أشار إليك {author}"
       body: "{excerpt}"
       cta: "عرض الإشارة"
+      grouped:
+        title: "{count} إشارات في النقاش نفسه"
+        body: "{author} و{others} آخرون أشاروا إليك."
   dm:
     received:
       title: "رسالة من {author}"
       body: "{excerpt}"
       cta: "الرد"
+      grouped:
+        title: "{count} رسائل من {author}"
+        body: "الأخيرة: {excerpt}"
   guild:
     invitation:
       title: "دعوة للانضمام إلى {guild}"
@@ -140,6 +155,9 @@ notification:
       title: "طلب انضمام جديد"
       body: "يريد {applicant} الانضمام إلى {guild}."
       cta: "عرض الطلب"
+      grouped:
+        title: "{count} طلبات انضمام إلى نقابتك"
+        body: "{author} و{others} آخرون يريدون الانضمام إلى {guild}."
     application_decided:
       title: "تم البتّ في طلبك"
       body: "طلبك للانضمام إلى {guild} كان {decision}."
@@ -187,10 +205,16 @@ notification:
       title: "{count} عنصر بانتظار المراجعة"
       body: "قائمة الإشراف تحتاج إلى تدخل."
       cta: "فتح القائمة"
+      grouped:
+        title: "{count} عناصر بانتظار المراجعة"
+        body: "الطابور يتزايد."
     fraud_flagged:
       title: "بلاغ احتيال"
       body: "تم الإبلاغ عن {subject} تلقائيًا وينتظر قرارًا."
       cta: "مراجعة البلاغ"
+      grouped:
+        title: "{count} بلاغات احتيال"
+        body: "بانتظار قرار."
     payout_needs_replay:
       title: "دفعة تحتاج إعادة إرسال"
       body: "{count} دفعة مستحقة لم تُنفّذ. لم يتم إرسالها."
@@ -209,6 +233,9 @@ notification:
       title: "حصلت على شارة: {badge}"
       body: "أصبحت ظاهرة في ملفك العام."
       cta: "عرض ملفي"
+      grouped:
+        title: "{count} أوسمة جديدة"
+        body: "منها «{badge}». تظهر في ملفك."
   goal:
     reached:
       title: "تم بلوغ الهدف"

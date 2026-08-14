@@ -113,10 +113,16 @@ notification:
       title: "Nouvelle reponse a ta question"
       body: "{author} a repondu a {title}."
       cta: "Lire la reponse"
+      grouped:
+        title: "{count} reponses a ta question"
+        body: "{author} et {others} autres ont propose une reponse."
     post_replied:
       title: "Nouvelle reponse a ton post"
       body: "{author} a repondu a {title}."
       cta: "Lire la reponse"
+      grouped:
+        title: "{count} reponses a ton post"
+        body: "{author} et {others} autres ont repondu a « {title} »."
     answer_accepted:
       title: "Ta reponse a ete acceptee"
       body: "{author} a retenu ta reponse sur {title}."
@@ -125,16 +131,25 @@ notification:
       title: "{author} t'a repondu"
       body: "{excerpt}"
       cta: "Lire la reponse"
+      grouped:
+        title: "{count} reponses a ton commentaire"
+        body: "{author} et {others} autres ont repondu."
   social:
     mention:
       title: "{author} t'a mentionne"
       body: "{excerpt}"
       cta: "Voir la mention"
+      grouped:
+        title: "{count} mentions dans la meme discussion"
+        body: "{author} et {others} autres t'ont mentionne."
   dm:
     received:
       title: "Message de {author}"
       body: "{excerpt}"
       cta: "Repondre"
+      grouped:
+        title: "{count} messages de {author}"
+        body: "Le dernier : {excerpt}"
   guild:
     invitation:
       title: "Invitation a rejoindre {guild}"
@@ -144,6 +159,9 @@ notification:
       title: "Nouvelle candidature"
       body: "{applicant} souhaite rejoindre {guild}."
       cta: "Voir la candidature"
+      grouped:
+        title: "{count} candidatures a ta guilde"
+        body: "{author} et {others} autres veulent rejoindre {guild}."
     application_decided:
       title: "Reponse a ta candidature"
       body: "Ta candidature pour {guild} a ete {decision}."
@@ -191,10 +209,16 @@ notification:
       title: "{count} element(s) en attente de relecture"
       body: "La file de moderation demande une intervention."
       cta: "Ouvrir la file"
+      grouped:
+        title: "{count} elements en attente de review"
+        body: "La file s'allonge."
     fraud_flagged:
       title: "Signalement de fraude"
       body: "{subject} a ete signale automatiquement et attend une decision."
       cta: "Examiner le signalement"
+      grouped:
+        title: "{count} signalements de fraude"
+        body: "Ils attendent une decision."
     payout_needs_replay:
       title: "Paiement a rejouer"
       body: "{count} paiement(s) sont dus et n'ont pas abouti. Ils n'ont pas ete envoyes."
@@ -213,6 +237,9 @@ notification:
       title: "Badge obtenu : {badge}"
       body: "Il est visible sur ton profil public."
       cta: "Voir mon profil"
+      grouped:
+        title: "{count} nouveaux badges"
+        body: "Dont « {badge} ». Ils sont visibles sur ton profil."
   goal:
     reached:
       title: "Objectif atteint"

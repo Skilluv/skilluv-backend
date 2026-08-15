@@ -81,22 +81,43 @@ pub async fn evaluate_deliverable(
     }
 
     // Charge le challenge_template pour title + instructions + rubric.
-    let (title, instructions, difficulty, rubric): (
+    let (title, instructions, difficulty, rubric, domain): (
         String,
         String,
         i16,
         Option<serde_json::Value>,
+        Option<String>,
     ) = if let Some(cid) = challenge_id {
         sqlx::query_as(
-            "SELECT title, instructions, difficulty, evaluation_rubric
+            "SELECT title, instructions, difficulty, evaluation_rubric, skill_domain
              FROM challenge_templates WHERE id = $1",
         )
         .bind(cid)
         .fetch_optional(db)
         .await?
-        .unwrap_or_else(|| ("(no template)".into(), "".into(), 3i16, None))
+        .unwrap_or_else(|| ("(no template)".into(), "".into(), 3i16, None, None))
     } else {
-        ("(no template)".into(), "".into(), 3i16, None)
+        ("(no template)".into(), "".into(), 3i16, None, None)
+    };
+
+    // A challenge with no rubric used to be evaluated against its
+    // instructions alone: the model was asked whether the work was good with
+    // no statement of what good means, and answered anyway. The domain grid
+    // is what it falls back on.
+    let rubric = match rubric {
+        Some(r) => Some(r),
+        None => match domain.as_deref() {
+            Some(domain) => {
+                sqlx::query_scalar::<_, serde_json::Value>(
+                    "SELECT criteria FROM review_grids
+                  WHERE domain = $1 AND reviewer_group IS NULL",
+                )
+                .bind(domain)
+                .fetch_optional(db)
+                .await?
+            }
+            None => None,
+        },
     };
 
     // Concatène instructions + rubric pour donner du contexte au LLM.

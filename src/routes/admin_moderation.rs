@@ -9,7 +9,7 @@ use uuid::Uuid;
 use crate::AppState;
 use crate::errors::AppError;
 use crate::middleware::{AuthUser, extract_ip};
-use crate::services::{AuthService, LeaderboardService, NotificationService, SessionService};
+use crate::services::{AuthService, LeaderboardService, SessionService};
 
 pub fn admin_moderation_routes() -> Router<AppState> {
     Router::new()
@@ -551,18 +551,15 @@ pub async fn ban_user(
     .await?;
 
     // 6. Notify user
-    NotificationService::send(
-        &state.db,
-        &mut state.redis.clone(),
-        &state.ws,
-        crate::services::notification::NotificationPayload {
-            user_id: id,
-            notification_type: "account_banned",
-            title: "Votre compte a été suspendu",
-            body: Some(&format!("Raison : {}", body.reason)),
-            data: None,
-        },
+    // Transactional: someone locked out cannot open the app to find out
+    // why, so this one reaches them by email whatever they had chosen.
+    crate::services::notify::send(
+        &state,
+        crate::services::notify::Recipient::User(id),
+        "account.banned",
     )
+    .arg("reason", body.reason.clone())
+    .execute()
     .await?;
 
     tracing::warn!(
@@ -630,18 +627,12 @@ pub async fn unban_user(
     )
     .await?;
 
-    NotificationService::send(
-        &state.db,
-        &mut state.redis.clone(),
-        &state.ws,
-        crate::services::notification::NotificationPayload {
-            user_id: id,
-            notification_type: "account_unbanned",
-            title: "Votre compte a été réactivé",
-            body: Some("Vous pouvez à nouveau utiliser la plateforme."),
-            data: None,
-        },
+    crate::services::notify::send(
+        &state,
+        crate::services::notify::Recipient::User(id),
+        "account.unbanned",
     )
+    .execute()
     .await?;
 
     Ok(Json(build_response(json!({

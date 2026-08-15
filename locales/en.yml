@@ -44,3 +44,296 @@ system:
   internal_error: "Something went wrong. Please try again."
   service_unavailable: "Service temporarily unavailable"
   insufficient_credits: "Insufficient credits to perform this action"
+
+# ─── Email frame ─────────────────────────────────────────────────
+email:
+  greeting: "Hello {name},"
+  footer_note: "You are receiving this because you have a Skilluv account."
+  unsubscribe: "Manage my notifications"
+
+# ─── Notifications ───────────────────────────────────────────────
+notification:
+  payout:
+    sent:
+      title: "Your payout is on its way"
+      body: "{amount} was sent to {destination}. Allow a few minutes to a few days depending on the channel."
+      cta: "Open my wallet"
+    failed:
+      title: "Your payout could not be sent"
+      body: "Sending {amount} failed. The money is still in your balance and you can try again."
+      cta: "Try the withdrawal again"
+  funds:
+    held:
+      title: "{amount} waiting to be released"
+      body: "It becomes available on {date}, or as soon as {payer} confirms."
+      cta: "See the details"
+    released:
+      title: "Your money is available"
+      body: "{amount} has just been released. You can withdraw it whenever you like."
+      cta: "Withdraw now"
+    disputed:
+      title: "A payment is disputed"
+      body: "{amount} is frozen while we look into the complaint."
+      cta: "See the complaint"
+    refunded:
+      title: "Payment refunded"
+      body: "{amount} was refunded."
+      cta: "See the details"
+  account:
+    banned:
+      title: "Your account has been suspended"
+      body: "Reason: {reason}. Reply to this email if you believe this is a mistake."
+    unbanned:
+      title: "Your account is active again"
+      body: "You can sign in and contribute as before."
+      cta: "Back to Skilluv"
+  mentorship:
+    booked:
+      title: "Session booked"
+      body: "{other} booked a session on {date}."
+      cta: "See the session"
+    completed:
+      title: "Session finished"
+      body: "{other} marked the session on {date} as done. Confirm it to release payment right away."
+      cta: "Confirm the session"
+    cancelled:
+      title: "Session cancelled"
+      body: "The session on {date} with {other} was cancelled."
+      cta: "See my sessions"
+  community:
+    challenge_approved:
+      title: "Your challenge was approved"
+      body: "{title} is now visible to everyone."
+      cta: "See my challenge"
+    challenge_rejected:
+      title: "Your challenge was not accepted"
+      body: "{feedback}"
+      cta: "Read the feedback"
+  forum:
+    question_answered:
+      title: "New answer to your question"
+      body: "{author} answered {title}."
+      cta: "Read the answer"
+      grouped:
+        title: "{count} answers to your question"
+        body: "{author} and {others} others answered."
+    post_replied:
+      title: "New reply to your post"
+      body: "{author} replied to {title}."
+      cta: "Read the reply"
+      grouped:
+        title: "{count} replies to your post"
+        body: "{author} and {others} others replied to “{title}”."
+    answer_accepted:
+      title: "Your answer was accepted"
+      body: "{author} marked your answer on {title} as the accepted one."
+      cta: "Open the thread"
+    reply:
+      title: "{author} replied to you"
+      body: "{excerpt}"
+      cta: "Read the reply"
+      grouped:
+        title: "{count} replies to your comment"
+        body: "{author} and {others} others replied."
+  social:
+    mention:
+      title: "{author} mentioned you"
+      body: "{excerpt}"
+      cta: "See the mention"
+      grouped:
+        title: "{count} mentions in the same thread"
+        body: "{author} and {others} others mentioned you."
+  dm:
+    received:
+      title: "Message from {author}"
+      body: "{excerpt}"
+      cta: "Reply"
+      grouped:
+        title: "{count} messages from {author}"
+        body: "The latest: {excerpt}"
+  guild:
+    invitation:
+      title: "Invitation to join {guild}"
+      body: "{inviter} invites you to join the {guild} guild."
+      cta: "See the invitation"
+    application:
+      title: "New application"
+      body: "{applicant} wants to join {guild}."
+      cta: "See the application"
+      grouped:
+        title: "{count} applications to your guild"
+        body: "{author} and {others} others want to join {guild}."
+    application_decided:
+      title: "Your application was decided"
+      body: "Your application to {guild} was {decision}."
+      cta: "Open the guild"
+    cofounder_added:
+      title: "You co-founded a guild"
+      body: "[{tag}] {guild}"
+      cta: "Open my guild"
+    role_changed:
+      title: "Your guild role changed"
+      body: "New role: {role}."
+      cta: "Open my guild"
+    kicked:
+      title: "You were removed from the guild"
+      body: "You are no longer part of {guild}."
+    war_proposed:
+      title: "Guild challenge"
+      body: "{challenger} challenges {defender} for {stake} guild points."
+      cta: "See the challenge"
+  contact:
+    interest_received:
+      title: "{company} is interested in your profile"
+      body: "{message}"
+      cta: "See the request"
+    interest_accepted:
+      title: "{talent} accepted your outreach"
+      body: "You can now talk directly."
+      cta: "Open the conversation"
+    interest_declined:
+      title: "{talent} declined your outreach"
+      body: "No follow-up on this one."
+      cta: "See my requests"
+  rank:
+    promoted:
+      title: "You are now {rank}"
+      body: "Your work on the platform earned you the rank of {rank}."
+      cta: "See my profile"
+  tournament:
+    podium:
+      title: "You made the podium"
+      body: "{place} place in the {tournament} tournament."
+      cta: "See the standings"
+  admin:
+    review_queued:
+      title: "{count} item(s) awaiting review"
+      body: "The moderation queue needs attention."
+      cta: "Open the queue"
+      grouped:
+        title: "{count} items waiting for review"
+        body: "The queue is growing."
+    fraud_flagged:
+      title: "Fraud flag raised"
+      body: "{subject} was flagged automatically and awaits a decision."
+      cta: "Review the flag"
+      grouped:
+        title: "{count} fraud reports"
+        body: "They are waiting on a decision."
+    payout_needs_replay:
+      title: "Payout needs replaying"
+      body: "{count} payout(s) are owed and did not go through. They were not sent."
+      cta: "Open payouts"
+    reconciliation_drift:
+      title: "Reconciliation drift"
+      body: "Internal books and the {provider} statement differ by {amount}."
+      cta: "Open reconciliation"
+  capability:
+    granted:
+      title: "New capability unlocked"
+      body: "You can now {capability} on Skilluv."
+      cta: "See my profile"
+  badge:
+    awarded:
+      title: "Badge earned: {badge}"
+      body: "It is now visible on your public profile."
+      cta: "See my profile"
+      grouped:
+        title: "{count} new badges"
+        body: "Including “{badge}”. They show on your profile."
+  goal:
+    reached:
+      title: "Goal reached"
+      body: "You set out to {goal}. Done."
+      cta: "Set a new goal"
+  deliverable:
+    first_verified:
+      title: "Your first contribution is verified"
+      body: "It now stands as proof and shows on your public profile."
+      cta: "See my contribution"
+
+  digest:
+    weekly:
+      title: "Your week at the workshop"
+      body: "Here is what you forged this week. You are {rank}."
+      cta: "Pick up where I left off"
+  streak:
+    reminder:
+      title: "Your streak comes down to today"
+      body: "{days} days running. One contribution is enough to keep it."
+      cta: "Keep my streak"
+  lifecycle:
+    activate:
+      title: "Your bench is still empty"
+      body: "You opened your account, but nothing is on it yet. The first contribution is the shortest one: it takes a few minutes, and it stays on your profile."
+      cta: "Pick my first contribution"
+    join_guild:
+      title: "Forging goes better with company"
+      body: "You have been going alone for a few days. A guild is people who read your work and answer when you are stuck."
+      cta: "See the guilds"
+    silent:
+      title: "It has been two weeks"
+      body: "Your bench is waiting. Nothing was lost: your proofs are still there, and there is new work since you last came by."
+      cta: "Back to the workshop"
+    last_chance:
+      title: "The last email in this series"
+      body: "A month without news. We are stopping here — your account and your proofs stay exactly as they are, and you come back whenever you want. If there is a reason you did not, reply to this email: we read all of them."
+      cta: "Come back anyway"
+    enterprise_welcome:
+      title: "How to read a proof"
+      body: "You have a credit waiting. On Skilluv a profile is not a CV: it is a list of verified contributions, each with a link to the thing itself. Start by looking at what people actually shipped."
+      cta: "Search for a profile"
+    enterprise_demo:
+      title: "We can build the short-list for you"
+      body: "You have not contacted anyone yet. Reply to this email with the field, the level and the kind of contract: we come back within 24 hours with three profiles picked by hand."
+      cta: "Open the search"
+    enterprise_value:
+      title: "Three ways to move faster"
+      body: "Credit packs, sponsored challenges that give you direct access to the submissions, and a pipeline to track candidates without a spreadsheet."
+      cta: "See the options"
+
+  dispute:
+    opened:
+      title: "A payment of {amount} is disputed"
+      body: "The person who paid says: “{reason}”. The money is frozen until you answer. If you agree, it is refunded straight away; if not, give your account and someone will decide."
+      cta: "Answer"
+    refunded:
+      title: "Dispute closed: {amount} refunded"
+      body: "The money went back to the person who paid it."
+      cta: "See the dispute"
+    released:
+      title: "Dispute closed: {amount} released"
+      body: "The money is available on your balance."
+      cta: "See the dispute"
+    withdrawn:
+      title: "Dispute withdrawn"
+      body: "The challenge was withdrawn. The {amount} resumes its normal course."
+      cta: "See the dispute"
+    needs_review:
+      title: "{count} dispute(s) to decide"
+      body: "The two sides disagree. Nobody is paid until this is settled."
+      cta: "Open the disputes"
+
+# Vocabulary reused inside notification bodies, so a translator writes
+# one sentence with a placeholder rather than two parallel titles.
+guild:
+  decision:
+    accepted: "accepted"
+    rejected: "rejected"
+
+# Fragments of the "goal reached" sentence. Half a sentence, so it lives
+# next to the sentence it lands in rather than in a Rust match.
+goal:
+  target:
+    rank: "reach the rank of {rank}"
+    skill_level: "reach level {level} on a skill"
+    capability: "unlock the {capability} role"
+    artifact_count: "publish {count} verified contributions"
+
+# Labels under the figures in the weekly digest. Fragments of a layout
+# rather than sentences, so they sit with the other vocabulary.
+digest:
+  stat:
+    challenges: "contributions"
+    fragments: "fragments"
+    streak: "day streak"

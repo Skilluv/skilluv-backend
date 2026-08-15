@@ -11,7 +11,6 @@ use crate::AppState;
 use crate::errors::AppError;
 use crate::middleware::{AuthUser, RateLimiter};
 use crate::models::{Conversation, Enterprise, InterestRequest, Message};
-use crate::services::NotificationService;
 
 pub fn contact_routes() -> Router<AppState> {
     Router::new()
@@ -202,22 +201,22 @@ pub async fn send_interest(
     metrics::counter!("skilluv_credits_spent_total").increment(1);
 
     // Send notification to talent
-    NotificationService::send(
-        &state.db,
-        &mut state.redis.clone(),
-        &state.ws,
-        crate::services::notification::NotificationPayload {
-            user_id: body.talent_id,
-            notification_type: "interest_request_received",
-            title: &format!("{} souhaite te contacter", enterprise.company_name),
-            body: Some(&body.message[..body.message.len().min(100)]),
-            data: Some(json!({
-                "request_id": request.id,
-                "enterprise_id": enterprise.id,
-                "enterprise_name": enterprise.company_name,
-            })),
-        },
+    crate::services::notify::send(
+        &state,
+        crate::services::notify::Recipient::User(body.talent_id),
+        "contact.interest_received",
     )
+    .arg("company", enterprise.company_name.clone())
+    .arg(
+        "message",
+        body.message.chars().take(100).collect::<String>(),
+    )
+    .payload(json!({
+        "request_id": request.id,
+        "enterprise_id": enterprise.id,
+        "enterprise_name": enterprise.company_name,
+    }))
+    .execute()
     .await?;
 
     Ok((
@@ -425,21 +424,26 @@ pub async fn accept_interest(
         .await?;
 
     // Notify enterprise
-    NotificationService::send(
-        &state.db,
-        &mut state.redis.clone(),
-        &state.ws,
-        crate::services::notification::NotificationPayload {
-            user_id: request.sender_id,
-            notification_type: "interest_accepted",
-            title: "Demande d'intérêt acceptée",
-            body: Some("Le talent a accepté votre demande. La conversation est ouverte."),
-            data: Some(json!({
-                "conversation_id": conversation.id,
-                "request_id": id,
-            })),
-        },
+    // The talent's name, since the enterprise is being told about them.
+    let talent_name: String = sqlx::query_scalar("SELECT display_name FROM users WHERE id = $1")
+        .bind(auth.user_id)
+        .fetch_optional(&state.db)
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+
+    crate::services::notify::send(
+        &state,
+        crate::services::notify::Recipient::User(request.sender_id),
+        "contact.interest_accepted",
     )
+    .arg("talent", talent_name.clone())
+    .payload(json!({
+        "conversation_id": conversation.id,
+        "request_id": id,
+    }))
+    .execute()
     .await?;
 
     Ok(Json(build_response(json!({
@@ -497,18 +501,23 @@ pub async fn decline_interest(
     }
 
     // Notify enterprise
-    NotificationService::send(
-        &state.db,
-        &mut state.redis.clone(),
-        &state.ws,
-        crate::services::notification::NotificationPayload {
-            user_id: request.sender_id,
-            notification_type: "interest_declined",
-            title: "Demande d'intérêt déclinée",
-            body: Some("50% du crédit a été remboursé sur ton solde."),
-            data: Some(json!({ "request_id": id })),
-        },
+    // The talent's name, since the enterprise is being told about them.
+    let talent_name: String = sqlx::query_scalar("SELECT display_name FROM users WHERE id = $1")
+        .bind(auth.user_id)
+        .fetch_optional(&state.db)
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+
+    crate::services::notify::send(
+        &state,
+        crate::services::notify::Recipient::User(request.sender_id),
+        "contact.interest_declined",
     )
+    .arg("talent", talent_name.clone())
+    .payload(json!({ "request_id": id }))
+    .execute()
     .await?;
 
     Ok(Json(build_response(json!({
@@ -757,21 +766,21 @@ pub async fn send_message(
         .fetch_one(&state.db)
         .await?;
 
-    NotificationService::send(
-        &state.db,
-        &mut state.redis.clone(),
-        &state.ws,
-        crate::services::notification::NotificationPayload {
-            user_id: recipient_id,
-            notification_type: "new_message",
-            title: &format!("Nouveau message de {sender_name}"),
-            body: Some(&body.content[..body.content.len().min(100)]),
-            data: Some(json!({
-                "conversation_id": id,
-                "message_id": message.id,
-            })),
-        },
+    crate::services::notify::send(
+        &state,
+        crate::services::notify::Recipient::User(recipient_id),
+        "dm.received",
     )
+    .arg("author", sender_name.clone())
+    .arg(
+        "excerpt",
+        body.content.chars().take(100).collect::<String>(),
+    )
+    .payload(json!({
+        "conversation_id": id,
+        "message_id": message.id,
+    }))
+    .execute()
     .await?;
 
     Ok((

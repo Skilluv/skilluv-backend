@@ -38,3 +38,301 @@ system:
   internal_error: "Une erreur est survenue. Réessaie."
   service_unavailable: "Service temporairement indisponible"
   insufficient_credits: "Crédits insuffisants pour cette action"
+
+# ─── Cadre des emails ────────────────────────────────────────────
+# Le squelette est unique (src/services/email_template.rs) ; seul le texte
+# change d'une langue à l'autre.
+email:
+  greeting: "Bonjour {name},"
+  footer_note: "Tu reçois ce message parce que tu as un compte Skilluv."
+  unsubscribe: "Gérer mes notifications"
+
+# ─── Notifications ───────────────────────────────────────────────
+# Une cle par entree de notification_kinds. `title` sert d'objet d'email et
+# de titre de push : trois formulations pour la meme chose divergeraient au
+# premier changement.
+notification:
+  payout:
+    sent:
+      title: "Ton paiement est parti"
+      body: "{amount} ont ete envoyes vers {destination}. Compte de quelques minutes a quelques jours selon le canal."
+      cta: "Voir mon portefeuille"
+    failed:
+      title: "Ton paiement n'a pas pu partir"
+      body: "L'envoi de {amount} a echoue. L'argent est toujours sur ton solde, tu peux reessayer."
+      cta: "Reessayer le retrait"
+  funds:
+    held:
+      title: "{amount} en attente de liberation"
+      body: "La somme sera disponible le {date}, ou des que {payer} confirme."
+      cta: "Voir le detail"
+    released:
+      title: "Ton argent est disponible"
+      body: "{amount} viennent d'etre debloques. Tu peux les retirer quand tu veux."
+      cta: "Retirer maintenant"
+    disputed:
+      title: "Un paiement est conteste"
+      body: "{amount} sont geles le temps qu'on examine la reclamation."
+      cta: "Voir la reclamation"
+    refunded:
+      title: "Paiement rembourse"
+      body: "{amount} ont ete rembourses."
+      cta: "Voir le detail"
+  account:
+    banned:
+      title: "Ton compte a ete suspendu"
+      body: "Motif : {reason}. Tu peux repondre a cet email si tu penses qu'il s'agit d'une erreur."
+    unbanned:
+      title: "Ton compte est reactive"
+      body: "Tu peux de nouveau te connecter et contribuer."
+      cta: "Retourner sur Skilluv"
+  mentorship:
+    booked:
+      title: "Seance reservee"
+      body: "{other} a reserve une seance le {date}."
+      cta: "Voir la seance"
+    completed:
+      title: "Seance terminee"
+      body: "{other} a marque la seance du {date} comme terminee. Confirme-la pour liberer le paiement tout de suite."
+      cta: "Confirmer la seance"
+    cancelled:
+      title: "Seance annulee"
+      body: "La seance du {date} avec {other} est annulee."
+      cta: "Voir mes seances"
+  community:
+    challenge_approved:
+      title: "Ton challenge a ete approuve"
+      body: "{title} est desormais visible par tout le monde."
+      cta: "Voir mon challenge"
+    challenge_rejected:
+      title: "Ton challenge n'a pas ete retenu"
+      body: "{feedback}"
+      cta: "Voir les retours"
+  forum:
+    question_answered:
+      title: "Nouvelle reponse a ta question"
+      body: "{author} a repondu a {title}."
+      cta: "Lire la reponse"
+      grouped:
+        title: "{count} reponses a ta question"
+        body: "{author} et {others} autres ont propose une reponse."
+    post_replied:
+      title: "Nouvelle reponse a ton post"
+      body: "{author} a repondu a {title}."
+      cta: "Lire la reponse"
+      grouped:
+        title: "{count} reponses a ton post"
+        body: "{author} et {others} autres ont repondu a « {title} »."
+    answer_accepted:
+      title: "Ta reponse a ete acceptee"
+      body: "{author} a retenu ta reponse sur {title}."
+      cta: "Voir la discussion"
+    reply:
+      title: "{author} t'a repondu"
+      body: "{excerpt}"
+      cta: "Lire la reponse"
+      grouped:
+        title: "{count} reponses a ton commentaire"
+        body: "{author} et {others} autres ont repondu."
+  social:
+    mention:
+      title: "{author} t'a mentionne"
+      body: "{excerpt}"
+      cta: "Voir la mention"
+      grouped:
+        title: "{count} mentions dans la meme discussion"
+        body: "{author} et {others} autres t'ont mentionne."
+  dm:
+    received:
+      title: "Message de {author}"
+      body: "{excerpt}"
+      cta: "Repondre"
+      grouped:
+        title: "{count} messages de {author}"
+        body: "Le dernier : {excerpt}"
+  guild:
+    invitation:
+      title: "Invitation a rejoindre {guild}"
+      body: "{inviter} t'invite a rejoindre la guilde {guild}."
+      cta: "Voir l'invitation"
+    application:
+      title: "Nouvelle candidature"
+      body: "{applicant} souhaite rejoindre {guild}."
+      cta: "Voir la candidature"
+      grouped:
+        title: "{count} candidatures a ta guilde"
+        body: "{author} et {others} autres veulent rejoindre {guild}."
+    application_decided:
+      title: "Reponse a ta candidature"
+      body: "Ta candidature pour {guild} a ete {decision}."
+      cta: "Voir la guilde"
+    cofounder_added:
+      title: "Tu as co-fonde une guilde"
+      body: "[{tag}] {guild}"
+      cta: "Voir ma guilde"
+    role_changed:
+      title: "Ton role dans la guilde a change"
+      body: "Nouveau role : {role}."
+      cta: "Voir ma guilde"
+    kicked:
+      title: "Tu as ete retire de la guilde"
+      body: "Tu ne fais plus partie de {guild}."
+    war_proposed:
+      title: "Defi de guilde"
+      body: "{challenger} defie {defender} pour {stake} points de guilde."
+      cta: "Voir le defi"
+  contact:
+    interest_received:
+      title: "{company} s'interesse a ton profil"
+      body: "{message}"
+      cta: "Voir la demande"
+    interest_accepted:
+      title: "{talent} a accepte ton contact"
+      body: "Tu peux maintenant echanger directement."
+      cta: "Ouvrir la conversation"
+    interest_declined:
+      title: "{talent} a decline ton contact"
+      body: "Pas de suite donnee a ta prise de contact."
+      cta: "Voir mes demandes"
+  rank:
+    promoted:
+      title: "Tu passes {rank}"
+      body: "Ton travail sur la plateforme t'a fait passer au rang de {rank}."
+      cta: "Voir mon profil"
+  tournament:
+    podium:
+      title: "Tu montes sur le podium"
+      body: "{place} place au tournoi {tournament}."
+      cta: "Voir le classement"
+  admin:
+    review_queued:
+      title: "{count} element(s) en attente de relecture"
+      body: "La file de moderation demande une intervention."
+      cta: "Ouvrir la file"
+      grouped:
+        title: "{count} elements en attente de review"
+        body: "La file s'allonge."
+    fraud_flagged:
+      title: "Signalement de fraude"
+      body: "{subject} a ete signale automatiquement et attend une decision."
+      cta: "Examiner le signalement"
+      grouped:
+        title: "{count} signalements de fraude"
+        body: "Ils attendent une decision."
+    payout_needs_replay:
+      title: "Paiement a rejouer"
+      body: "{count} paiement(s) sont dus et n'ont pas abouti. Ils n'ont pas ete envoyes."
+      cta: "Ouvrir les paiements"
+    reconciliation_drift:
+      title: "Ecart de reconciliation"
+      body: "Les comptes internes et le releve de {provider} divergent de {amount}."
+      cta: "Ouvrir la reconciliation"
+  capability:
+    granted:
+      title: "Nouvelle capacite debloquee"
+      body: "Tu peux desormais {capability} sur Skilluv."
+      cta: "Voir mon profil"
+  badge:
+    awarded:
+      title: "Badge obtenu : {badge}"
+      body: "Il est visible sur ton profil public."
+      cta: "Voir mon profil"
+      grouped:
+        title: "{count} nouveaux badges"
+        body: "Dont « {badge} ». Ils sont visibles sur ton profil."
+  goal:
+    reached:
+      title: "Objectif atteint"
+      body: "Tu t'etais fixe de {goal}. C'est fait."
+      cta: "Fixer un nouvel objectif"
+  deliverable:
+    first_verified:
+      title: "Ta premiere contribution est verifiee"
+      body: "Elle est desormais opposable et visible sur ton profil public."
+      cta: "Voir ma contribution"
+
+  digest:
+    weekly:
+      title: "Ta semaine a l'atelier"
+      body: "Voici ce que tu as forge cette semaine. Tu es {rank}."
+      cta: "Reprendre ou j'en etais"
+  streak:
+    reminder:
+      title: "Ta serie tient a aujourd'hui"
+      body: "{days} jours d'affilee. Une seule contribution suffit a la garder."
+      cta: "Garder ma serie"
+  lifecycle:
+    activate:
+      title: "Ton etabli est encore vide"
+      body: "Tu as ouvert ton compte, mais rien n'y est encore pose. La premiere contribution est la plus courte : elle prend quelques minutes et elle reste sur ton profil."
+      cta: "Choisir ma premiere contribution"
+    join_guild:
+      title: "On forge mieux a plusieurs"
+      body: "Tu avances seul depuis quelques jours. Une guilde, c'est des gens qui relisent ton travail et qui repondent quand tu bloques."
+      cta: "Voir les guildes"
+    silent:
+      title: "Ca fait deux semaines"
+      body: "Ton etabli t'attend. Rien ne s'est perdu : tes preuves sont toujours la, et il y a du nouveau depuis ton passage."
+      cta: "Revenir a l'atelier"
+    last_chance:
+      title: "Le dernier mail de cette serie"
+      body: "Un mois sans nouvelles. On arrete de t'ecrire ici — ton compte et tes preuves restent intacts, et tu reviens quand tu veux. Si tu as une raison de ne pas etre revenu, reponds a ce mail : on lit tout."
+      cta: "Revenir quand meme"
+    enterprise_welcome:
+      title: "Comment lire une preuve"
+      body: "Tu as un credit qui t'attend. Sur Skilluv un profil n'est pas un CV : c'est une liste de contributions verifiees, avec le lien vers chacune. Commence par regarder ce que les gens ont reellement livre."
+      cta: "Chercher un profil"
+    enterprise_demo:
+      title: "On peut faire la short-list pour toi"
+      body: "Tu n'as encore contacte personne. Reponds a ce mail avec le domaine, le niveau et le type de contrat : on revient sous 24h avec trois profils choisis a la main."
+      cta: "Ouvrir la recherche"
+    enterprise_value:
+      title: "Trois facons d'aller plus vite"
+      body: "Les packs de credits, les challenges sponsorises qui te donnent acces direct aux soumissions, et le pipeline pour suivre tes candidats sans tableur."
+      cta: "Voir les formules"
+
+  dispute:
+    opened:
+      title: "Un paiement de {amount} est conteste"
+      body: "La personne qui a paye indique : « {reason} ». La somme est gelee le temps que tu repondes. Si tu es d'accord, elle est remboursee immediatement ; sinon, donne ta version et quelqu'un tranchera."
+      cta: "Repondre"
+    refunded:
+      title: "Litige clos : {amount} rembourses"
+      body: "La somme est retournee a la personne qui avait paye."
+      cta: "Voir le litige"
+    released:
+      title: "Litige clos : {amount} debloques"
+      body: "La somme est disponible sur ton solde."
+      cta: "Voir le litige"
+    withdrawn:
+      title: "Litige retire"
+      body: "La contestation a ete retiree. Les {amount} suivent leur cours normal."
+      cta: "Voir le litige"
+    needs_review:
+      title: "{count} litige(s) a trancher"
+      body: "Les deux parties ne sont pas d'accord. Personne n'est paye tant que ce n'est pas decide."
+      cta: "Ouvrir les litiges"
+
+# Vocabulary reused inside notification bodies, so a translator writes
+# one sentence with a placeholder rather than two parallel titles.
+guild:
+  decision:
+    accepted: "acceptee"
+    rejected: "refusee"
+
+# Fragments of the "goal reached" sentence. Half a sentence, so it lives
+# next to the sentence it lands in rather than in a Rust match.
+goal:
+  target:
+    rank: "atteindre le rang {rank}"
+    skill_level: "atteindre le niveau {level} sur une competence"
+    capability: "debloquer le role {capability}"
+    artifact_count: "publier {count} contributions verifiees"
+
+# Labels under the figures in the weekly digest. Fragments of a layout
+# rather than sentences, so they sit with the other vocabulary.
+digest:
+  stat:
+    challenges: "contributions"
+    fragments: "fragments"
+    streak: "jours d'affilee"

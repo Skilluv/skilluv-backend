@@ -35,12 +35,12 @@ pub fn well_known_routes() -> Router<AppState> {
 async fn security_txt() -> impl IntoResponse {
     let one_year_ahead = chrono::Utc::now() + chrono::Duration::days(365);
     let body = format!(
-        "Contact: mailto:security@skilluv.com\n\
+        "Contact: mailto:security@skill-uv.com\n\
          Expires: {}\n\
          Preferred-Languages: fr, en\n\
-         Policy: https://skilluv.com/legal/security\n\
-         Acknowledgments: https://skilluv.com/legal/security#hall-of-fame\n\
-         Canonical: https://skilluv.com/.well-known/security.txt\n",
+         Policy: https://skill-uv.com/legal/security\n\
+         Acknowledgments: https://skill-uv.com/legal/security#hall-of-fame\n\
+         Canonical: https://skill-uv.com/.well-known/security.txt\n",
         one_year_ahead.to_rfc3339()
     );
     ([(header::CONTENT_TYPE, "text/plain; charset=utf-8")], body)

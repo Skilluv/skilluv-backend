@@ -15,8 +15,8 @@ use crate::errors::AppError;
 use crate::middleware::{AuthUser, AuthUserComplete};
 use crate::routes::analytics_consent;
 use crate::services::analytics::{events, props};
+use crate::services::dm;
 use crate::services::dm::{ConversationSummary, DmConversation, DmMessage, UserBlock};
-use crate::services::{NotificationService, dm};
 use crate::websocket::WsMessage;
 
 pub fn dm_routes() -> Router<AppState> {
@@ -217,24 +217,29 @@ pub async fn send_message(
 ) -> Result<Json<ApiResponse<SendMessageResponse>>, AppError> {
     let (message, peer_id) = dm::send_message(&state.db, auth.user_id, id, &body.body).await?;
 
-    // Persistent notification to peer + WS push (NotificationService handles both)
+    // Persistent notification to peer + live push (notify handles both)
     let preview: String = body.body.chars().take(140).collect();
-    let _ = NotificationService::send(
-        &state.db,
-        &mut state.redis.clone(),
-        &state.ws,
-        crate::services::notification::NotificationPayload {
-            user_id: peer_id,
-            notification_type: "dm.received",
-            title: "Nouveau message",
-            body: Some(&preview),
-            data: Some(json!({
-                "conversation_id": id,
-                "message_id": message.id,
-                "from_user_id": auth.user_id,
-            })),
-        },
+    let sender_name: String = sqlx::query_scalar("SELECT display_name FROM users WHERE id = $1")
+        .bind(auth.user_id)
+        .fetch_optional(&state.db)
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| "Quelqu'un".to_string());
+
+    let _ = crate::services::notify::send(
+        &state,
+        crate::services::notify::Recipient::User(peer_id),
+        "dm.received",
     )
+    .arg("author", sender_name)
+    .arg("excerpt", preview.clone())
+    .payload(json!({
+        "conversation_id": id,
+        "message_id": message.id,
+        "from_user_id": auth.user_id,
+    }))
+    .execute()
     .await;
 
     // Additional realtime event for clients that subscribe to dm streams specifically

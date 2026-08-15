@@ -1,8 +1,19 @@
-//! Drip email sequences (Phase 3.15).
+//! Drip email sequences — onboarding and retention.
 //!
-//! Onboarding + retention sequences. Triggered hourly by a background task ; each
-//! send is recorded in `email_log` so we never send the same `kind` to the same user
-//! twice (idempotency).
+//! Triggered hourly by a background task. Each send is recorded in
+//! `email_log`, so the same sequence never reaches the same person twice.
+//!
+//! What is here is *when*: which accounts are at the right age, and whether
+//! they have done the thing the message is about. Everything else — the
+//! words, the language, the theme, the button, the unsubscribe link and
+//! whether this person consented at all — belongs to
+//! [`crate::services::notify`].
+//!
+//! It did not, until now. Each sequence carried a French subject line and a
+//! slab of hand-written HTML with the accent colour typed in, and the
+//! targeting query filtered on `user_email_preferences.marketing` while
+//! `notify` read the catalogue. Two answers to "may we write to this
+//! person", and the one that won was whichever code path ran.
 
 use std::time::Duration;
 
@@ -15,6 +26,14 @@ use crate::errors::AppError;
 use crate::services::EmailService;
 use std::sync::Arc;
 
+/// How many accounts one sequence walks per run.
+///
+/// Each sequence targets a one-day-wide signup window and runs hourly, so
+/// this is only reachable on a day with more signups than that — which is
+/// a good problem, and one worth being told about rather than truncated
+/// through.
+const MAX_PER_SEQUENCE: usize = 50_000;
+
 #[derive(Debug, Clone, Serialize)]
 pub struct DripRunReport {
     pub sequences_evaluated: usize,
@@ -24,19 +43,78 @@ pub struct DripRunReport {
     pub failures: usize,
 }
 
-pub fn start_drip_task(db: PgPool, email: Arc<EmailService>) {
+/// What building an email needs beyond the database.
+///
+/// Carried rather than read from the environment at the point of use: a
+/// background task holds these for its whole life, and a sequence that
+/// silently sent links to `localhost` because a variable was missing is
+/// the kind of failure nobody sees until a recipient reports it.
+#[derive(Clone, Copy)]
+pub struct Site<'a> {
+    /// Where a human clicks. Every button in every sequence starts here.
+    pub frontend_url: &'a str,
+    /// Signs the one-click unsubscribe link. Marketing mail without one is
+    /// not acceptable, and for a bulk sender it is not legal either.
+    pub jwt_secret: &'a str,
+}
+
+pub fn start_drip_task(
+    db: PgPool,
+    email: Arc<EmailService>,
+    frontend_url: String,
+    jwt_secret: String,
+) {
     tokio::spawn(async move {
         let mut ticker = tokio::time::interval(Duration::from_secs(3600));
         loop {
             ticker.tick().await;
-            if let Err(err) = run_all(&db, &email).await {
+            let site = Site {
+                frontend_url: &frontend_url,
+                jwt_secret: &jwt_secret,
+            };
+            if let Err(err) = run_all(&db, &email, site).await {
                 tracing::warn!(error = %err, "drip sequences run failed");
             }
         }
     });
 }
 
-pub async fn run_all(db: &PgPool, email: &EmailService) -> Result<DripRunReport, AppError> {
+/// Send one sequence message, or report that it went out before.
+///
+/// The whole delivery is `notify`'s: it asks the catalogue whether this
+/// person consented, resolves their language and theme, renders the shared
+/// template and logs the send under the same kind this sequence
+/// deduplicates on.
+async fn deliver(
+    db: &PgPool,
+    email: &EmailService,
+    site: Site<'_>,
+    user_id: Uuid,
+    kind: &str,
+) -> Result<bool, AppError> {
+    let delivery = crate::services::notify::send(
+        crate::services::notify::Ctx {
+            db,
+            redis: None,
+            ws: None,
+            email: Some(email),
+            frontend_url: Some(site.frontend_url),
+            jwt_secret: Some(site.jwt_secret),
+        },
+        crate::services::notify::Recipient::User(user_id),
+        kind,
+    )
+    .execute()
+    .await?;
+
+    Ok(delivery.email > 0)
+}
+
+pub async fn run_all(
+    db: &PgPool,
+    email: &EmailService,
+    site: Site<'_>,
+) -> Result<DripRunReport, AppError> {
     let mut report = DripRunReport {
         sequences_evaluated: 0,
         emails_sent: 0,
@@ -47,14 +125,14 @@ pub async fn run_all(db: &PgPool, email: &EmailService) -> Result<DripRunReport,
 
     for seq in talent_sequences() {
         report.sequences_evaluated += 1;
-        if let Err(err) = run_sequence(db, email, &seq, &mut report).await {
+        if let Err(err) = run_sequence(db, email, site, &seq, &mut report).await {
             tracing::warn!(seq = seq.kind, error = %err, "drip sequence failed");
             report.failures += 1;
         }
     }
     for seq in enterprise_sequences() {
         report.sequences_evaluated += 1;
-        if let Err(err) = run_enterprise_sequence(db, email, &seq, &mut report).await {
+        if let Err(err) = run_enterprise_sequence(db, email, site, &seq, &mut report).await {
             tracing::warn!(seq = seq.kind, error = %err, "drip sequence failed");
             report.failures += 1;
         }
@@ -62,92 +140,47 @@ pub async fn run_all(db: &PgPool, email: &EmailService) -> Result<DripRunReport,
     Ok(report)
 }
 
+/// One message in a sequence: when it fires, and to whom.
+///
+/// `kind` is the catalogue kind, which is also the `email_log` key and so
+/// the deduplication key. One name for one message, everywhere.
 struct TalentSeq {
-    /// `email_log.kind` value, also acts as dedup key.
     kind: &'static str,
     delay_min_days: i64,
     delay_max_days: i64,
     require_inactive: bool,
-    subject: &'static str,
-    /// Returns the HTML body for the user. Receives display_name + base_url.
-    render: fn(&str, &str) -> String,
 }
 
 fn talent_sequences() -> Vec<TalentSeq> {
     vec![
+        // Signed up yesterday, has not tried anything yet.
         TalentSeq {
-            kind: "drip_talent_d1_activate",
+            kind: "lifecycle.activate",
             delay_min_days: 1,
             delay_max_days: 2,
             require_inactive: true,
-            subject: "Skilluv — tu n'as pas encore essayé un challenge",
-            render: |name, base| {
-                format!(
-                    r#"<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#1a1a2e;">
-<h2>Salut {name},</h2>
-<p>Tu as créé ton compte hier, mais tu n'as pas encore lancé ton premier challenge. Voici 3 pour démarrer :</p>
-<p style="text-align:center;margin:30px 0;">
-  <a href="{base}/challenges?domain=code" style="background:#6c5ce7;color:white;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:bold;">Choisir mon challenge</a>
-</p>
-<p style="color:#666;font-size:12px;">5 minutes suffisent. Tu gagnes des fragments dès le premier réussi.</p>
-</div>"#
-                )
-            },
         },
+        // Active, and alone. A guild is the difference between a tool and
+        // a place, which is the whole thesis.
         TalentSeq {
-            kind: "drip_talent_d3_join_guild",
+            kind: "lifecycle.join_guild",
             delay_min_days: 3,
             delay_max_days: 4,
             require_inactive: false,
-            subject: "Skilluv — rejoins une guilde",
-            render: |name, base| {
-                format!(
-                    r#"<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#1a1a2e;">
-<h2>Salut {name},</h2>
-<p>Tu progresses bien. Pour aller plus loin : rejoins une guilde. Tu y gagnes plus de fragments, des coéquipiers, et tu peux participer aux Guild Wars.</p>
-<p style="text-align:center;margin:30px 0;">
-  <a href="{base}/guilds" style="background:#6c5ce7;color:white;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:bold;">Explorer les guildes</a>
-</p>
-</div>"#
-                )
-            },
         },
         TalentSeq {
-            kind: "drip_talent_d14_silent",
+            kind: "lifecycle.silent",
             delay_min_days: 14,
             delay_max_days: 15,
             require_inactive: true,
-            subject: "Skilluv — on t'attend",
-            render: |name, base| {
-                format!(
-                    r#"<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#1a1a2e;">
-<h2>{name}, ça fait 2 semaines.</h2>
-<p>Plusieurs nouveaux challenges et features sociales depuis ta dernière visite. Tu reprends quand tu veux :</p>
-<p style="text-align:center;margin:30px 0;">
-  <a href="{base}/dashboard" style="background:#6c5ce7;color:white;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:bold;">Mon tableau de bord</a>
-</p>
-</div>"#
-                )
-            },
         },
+        // The last one. It says so, and it is the last one — after this the
+        // sequence stops rather than nagging forever.
         TalentSeq {
-            kind: "drip_talent_d30_last_chance",
+            kind: "lifecycle.last_chance",
             delay_min_days: 30,
             delay_max_days: 31,
             require_inactive: true,
-            subject: "Skilluv — avant qu'on te perde",
-            render: |name, base| {
-                format!(
-                    r#"<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#1a1a2e;">
-<h2>{name}, dernière chance.</h2>
-<p>Tu ne t'es pas reconnecté·e depuis 30 jours. On va arrêter de t'envoyer des emails sauf le digest hebdo, jusqu'à ton retour.</p>
-<p>Si tu veux nous dire pourquoi tu n'es pas revenu·e, réponds à ce mail — on lit tout.</p>
-<p style="text-align:center;margin:30px 0;">
-  <a href="{base}/dashboard" style="background:#6c5ce7;color:white;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:bold;">Revenir maintenant</a>
-</p>
-</div>"#
-                )
-            },
         },
     ]
 }
@@ -155,63 +188,74 @@ fn talent_sequences() -> Vec<TalentSeq> {
 async fn run_sequence(
     db: &PgPool,
     email: &EmailService,
+    site: Site<'_>,
     seq: &TalentSeq,
     report: &mut DripRunReport,
 ) -> Result<(), AppError> {
     let since_min = Utc::now() - ChronoDuration::days(seq.delay_max_days);
     let since_max = Utc::now() - ChronoDuration::days(seq.delay_min_days);
-    let candidates: Vec<(Uuid, String, String, Option<DateTime<Utc>>)> = sqlx::query_as(
-        r#"
-        SELECT u.id, u.email, u.display_name,
-               (SELECT MAX(evaluated_at) FROM challenge_submissions cs WHERE cs.user_id = u.id) AS last_activity
-        FROM users u
-        LEFT JOIN user_email_preferences p ON p.user_id = u.id
-        WHERE u.email_disabled = FALSE
-          AND u.is_banned = FALSE
-          AND COALESCE(p.marketing, FALSE) = TRUE
-          AND u.created_at BETWEEN $1 AND $2
-          AND NOT EXISTS (
-              SELECT 1 FROM email_log el WHERE el.user_id = u.id AND el.kind = $3
-          )
-        LIMIT 500
-        "#,
-    )
-    .bind(since_min)
-    .bind(since_max)
-    .bind(seq.kind)
-    .fetch_all(db)
-    .await?;
 
-    for (user_id, user_email, display_name, last_activity) in candidates {
-        if seq.require_inactive {
-            let recently_active = last_activity
-                .map(|d| (Utc::now() - d) < ChronoDuration::days(seq.delay_min_days))
-                .unwrap_or(false);
-            if recently_active {
-                report.emails_skipped_no_match += 1;
-                continue;
+    // This selected `LIMIT 500` with no cursor. The 501st eligible account
+    // never received the message — not late, never — and nothing said so.
+    // The window is one day wide, so the ceiling is only reachable on a day
+    // with more than that many signups, and hitting it is now logged.
+    let mut walk = crate::services::batch::Walk::new("drip_talent", MAX_PER_SEQUENCE);
+    let mut page_len;
+
+    loop {
+        let candidates: Vec<(Uuid, Option<DateTime<Utc>>)> = sqlx::query_as(
+            r#"
+            SELECT u.id,
+                   (SELECT MAX(evaluated_at) FROM challenge_submissions cs WHERE cs.user_id = u.id) AS last_activity
+            FROM users u
+            WHERE u.email_disabled = FALSE
+              AND u.is_banned = FALSE
+              AND u.created_at BETWEEN $1 AND $2
+              AND NOT EXISTS (
+                  SELECT 1 FROM email_log el WHERE el.user_id = u.id AND el.kind = $3
+              )
+              AND ($4::uuid IS NULL OR u.id > $4)
+            ORDER BY u.id
+            LIMIT $5
+            "#,
+        )
+        .bind(since_min)
+        .bind(since_max)
+        .bind(seq.kind)
+        .bind(walk.after())
+        .bind(walk.page_size())
+        .fetch_all(db)
+        .await?;
+
+        page_len = candidates.len();
+        let Some(last) = candidates.last().map(|(id, _)| *id) else {
+            break;
+        };
+
+        for (user_id, last_activity) in candidates {
+            if seq.require_inactive {
+                let recently_active = last_activity
+                    .map(|d| (Utc::now() - d) < ChronoDuration::days(seq.delay_min_days))
+                    .unwrap_or(false);
+                if recently_active {
+                    report.emails_skipped_no_match += 1;
+                    continue;
+                }
+            }
+            match deliver(db, email, site, user_id, seq.kind).await {
+                Ok(true) => report.emails_sent += 1,
+                Ok(false) => report.emails_skipped_already_sent += 1,
+                Err(_) => report.failures += 1,
             }
         }
-        let html = (seq.render)(&display_name, "https://skilluv.com");
-        match email
-            .send_with_log(
-                db,
-                crate::services::email::SendWithLogParams {
-                    user_id,
-                    to_email: &user_email,
-                    to_name: &display_name,
-                    subject: seq.subject,
-                    html: &html,
-                    kind: seq.kind,
-                },
-            )
-            .await
-        {
-            Ok(true) => report.emails_sent += 1,
-            Ok(false) => report.emails_skipped_already_sent += 1,
-            Err(_) => report.failures += 1,
+
+        walk.advance(page_len, last);
+        if !walk.should_continue(page_len) {
+            break;
         }
     }
+
+    walk.finish(page_len);
     Ok(())
 }
 
@@ -220,74 +264,27 @@ struct EntSeq {
     delay_min_days: i64,
     delay_max_days: i64,
     require_no_credit_use: bool,
-    subject: &'static str,
-    render: fn(&str, &str) -> String,
 }
 
 fn enterprise_sequences() -> Vec<EntSeq> {
     vec![
         EntSeq {
-            kind: "drip_ent_d1_welcome",
+            kind: "lifecycle.enterprise_welcome",
             delay_min_days: 1,
             delay_max_days: 2,
             require_no_credit_use: true,
-            subject: "Skilluv — Comment trouver le talent parfait",
-            render: |name, base| {
-                format!(
-                    r#"<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#1a1a2e;">
-<h2>Salut {name},</h2>
-<p>Tu as 1 crédit gratuit qui t'attend. Voici comment l'utiliser efficacement :</p>
-<ol>
-<li>Filtre les talents par <strong>domaine, ville, niveau</strong></li>
-<li>Regarde la <strong>preuve de skill</strong> (challenges complétés, GitHub, projets)</li>
-<li>Envoie ta demande avec un message personnalisé</li>
-</ol>
-<p style="text-align:center;margin:30px 0;">
-  <a href="{base}/enterprise/talents" style="background:#6c5ce7;color:white;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:bold;">Rechercher des talents</a>
-</p>
-</div>"#
-                )
-            },
         },
         EntSeq {
-            kind: "drip_ent_d3_demo",
+            kind: "lifecycle.enterprise_demo",
             delay_min_days: 3,
             delay_max_days: 4,
             require_no_credit_use: true,
-            subject: "Skilluv — On peut t'aider à matcher ?",
-            render: |name, _base| {
-                format!(
-                    r#"<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#1a1a2e;">
-<h2>Bonjour {name},</h2>
-<p>Tu n'as pas encore contacté de talent. Si tu veux qu'on te propose 3 profils sélectionnés à la main pour ton besoin, réponds à ce mail avec :</p>
-<ul><li>Stack tech / domaine recherché</li><li>Niveau (junior/mid/senior)</li><li>Type de contrat (CDI/freelance/etc.)</li></ul>
-<p>On revient sous 24h avec une short-list.</p>
-</div>"#
-                )
-            },
         },
         EntSeq {
-            kind: "drip_ent_d7_value_education",
+            kind: "lifecycle.enterprise_value",
             delay_min_days: 7,
             delay_max_days: 8,
             require_no_credit_use: false,
-            subject: "Skilluv — Comment maximiser ton ROI",
-            render: |name, base| {
-                format!(
-                    r#"<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#1a1a2e;">
-<h2>{name},</h2>
-<p>Trois leviers pour multiplier tes embauches sur Skilluv :</p>
-<ol>
-<li><strong>Packs de crédits</strong> : 5 = -13%, 20 = -23%, 100 = -36%</li>
-<li><strong>Sponsored challenges</strong> : crée un challenge brandé, accès direct aux soumissions</li>
-<li><strong>Pipeline kanban</strong> : track tes candidats sans Excel</li>
-</ol>
-<p style="text-align:center;margin:30px 0;">
-  <a href="{base}/enterprise/pricing" style="background:#6c5ce7;color:white;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:bold;">Voir les packs</a>
-</p>
-</div>"#
-                )
-            },
         },
     ]
 }
@@ -295,59 +292,67 @@ fn enterprise_sequences() -> Vec<EntSeq> {
 async fn run_enterprise_sequence(
     db: &PgPool,
     email: &EmailService,
+    site: Site<'_>,
     seq: &EntSeq,
     report: &mut DripRunReport,
 ) -> Result<(), AppError> {
     let since_min = Utc::now() - ChronoDuration::days(seq.delay_max_days);
     let since_max = Utc::now() - ChronoDuration::days(seq.delay_min_days);
-    // Enterprise primary user = founder = first enterprise_members row created
-    let candidates: Vec<(Uuid, String, String, i32)> = sqlx::query_as(
-        r#"
-        SELECT u.id, u.email, u.display_name,
-               COALESCE(ec.total_used, 0)::INT AS credits_used_count
-        FROM enterprises e
-        JOIN enterprise_members em ON em.enterprise_id = e.id AND em.status = 'active'
-        JOIN users u ON u.id = em.user_id
-        LEFT JOIN enterprise_credits ec ON ec.enterprise_id = e.id
-        WHERE u.email_disabled = FALSE
-          AND u.is_banned = FALSE
-          AND e.created_at BETWEEN $1 AND $2
-          AND NOT EXISTS (
-              SELECT 1 FROM email_log el WHERE el.user_id = u.id AND el.kind = $3
-          )
-        LIMIT 300
-        "#,
-    )
-    .bind(since_min)
-    .bind(since_max)
-    .bind(seq.kind)
-    .fetch_all(db)
-    .await?;
+    let mut walk = crate::services::batch::Walk::new("drip_enterprise", MAX_PER_SEQUENCE);
+    let mut page_len;
 
-    for (user_id, user_email, display_name, credits_used) in candidates {
-        if seq.require_no_credit_use && credits_used > 0 {
-            report.emails_skipped_no_match += 1;
-            continue;
+    loop {
+        // Every active member of the enterprise, not only the founder: the
+        // person who signed up is often not the one who does the hiring.
+        let candidates: Vec<(Uuid, i32)> = sqlx::query_as(
+            r#"
+            SELECT u.id, COALESCE(ec.total_used, 0)::INT AS credits_used_count
+            FROM enterprises e
+            JOIN enterprise_members em ON em.enterprise_id = e.id AND em.status = 'active'
+            JOIN users u ON u.id = em.user_id
+            LEFT JOIN enterprise_credits ec ON ec.enterprise_id = e.id
+            WHERE u.email_disabled = FALSE
+              AND u.is_banned = FALSE
+              AND e.created_at BETWEEN $1 AND $2
+              AND NOT EXISTS (
+                  SELECT 1 FROM email_log el WHERE el.user_id = u.id AND el.kind = $3
+              )
+              AND ($4::uuid IS NULL OR u.id > $4)
+            ORDER BY u.id
+            LIMIT $5
+            "#,
+        )
+        .bind(since_min)
+        .bind(since_max)
+        .bind(seq.kind)
+        .bind(walk.after())
+        .bind(walk.page_size())
+        .fetch_all(db)
+        .await?;
+
+        page_len = candidates.len();
+        let Some(last) = candidates.last().map(|(id, _)| *id) else {
+            break;
+        };
+
+        for (user_id, credits_used) in candidates {
+            if seq.require_no_credit_use && credits_used > 0 {
+                report.emails_skipped_no_match += 1;
+                continue;
+            }
+            match deliver(db, email, site, user_id, seq.kind).await {
+                Ok(true) => report.emails_sent += 1,
+                Ok(false) => report.emails_skipped_already_sent += 1,
+                Err(_) => report.failures += 1,
+            }
         }
-        let html = (seq.render)(&display_name, "https://skilluv.com");
-        match email
-            .send_with_log(
-                db,
-                crate::services::email::SendWithLogParams {
-                    user_id,
-                    to_email: &user_email,
-                    to_name: &display_name,
-                    subject: seq.subject,
-                    html: &html,
-                    kind: seq.kind,
-                },
-            )
-            .await
-        {
-            Ok(true) => report.emails_sent += 1,
-            Ok(false) => report.emails_skipped_already_sent += 1,
-            Err(_) => report.failures += 1,
+
+        walk.advance(page_len, last);
+        if !walk.should_continue(page_len) {
+            break;
         }
     }
+
+    walk.finish(page_len);
     Ok(())
 }

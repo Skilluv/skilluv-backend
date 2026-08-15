@@ -3,7 +3,7 @@
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::Html;
-use axum::routing::{get, post, put};
+use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -25,12 +25,15 @@ pub fn email_prefs_routes() -> Router<AppState> {
         )
         // One-click unsubscribe with the token in the path (RFC 8058 style).
         .route("/email/unsubscribe/{token}", get(unsubscribe_by_path))
-        // Pre-SKI-287 surface, kept so existing callers and already-sent
-        // email footers keep working. Different response shape (`data.
-        // preferences`) and partial-update semantics; new clients should
-        // use the `/users/me` routes above.
-        .route("/auth/me/email-preferences", get(get_prefs))
-        .route("/auth/me/email-preferences", put(update_prefs))
+        // SKI-293 — `/auth/me/email-preferences` removed. It answered the
+        // same question as the `/users/me` pair above with a different shape
+        // (`data.preferences` versus flat `data`) and partial-update
+        // semantics, and it was the one the OpenAPI document advertised. No
+        // caller was left: checked across the front and admin repos and the
+        // test suite.
+        //
+        // `/email/unsubscribe` stays: its link is printed in emails already
+        // delivered, and those cannot be revised.
         .route("/email/unsubscribe", get(unsubscribe))
         .route("/webhooks/brevo", post(brevo_webhook))
         .route("/admin/digest/run-weekly", post(admin_run_weekly_digest))
@@ -53,48 +56,8 @@ pub struct EmailPrefs {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
-pub struct EmailPrefsResponse {
-    pub preferences: EmailPrefs,
-}
-
-#[derive(Debug, Serialize, ToSchema)]
 pub struct AdminDigestResponse {
     pub digest: DigestRunReport,
-}
-
-/// Read the caller's email preferences. Rows are lazily upserted with
-/// the marketing-opt-out defaults on first read — the endpoint always
-/// returns a full record.
-#[utoipa::path(
-    get,
-    path = "/api/auth/me/email-preferences",
-    tag = "auth",
-    responses(
-        (status = 200, description = "Current preferences", body = ApiResponse<EmailPrefsResponse>),
-        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
-    ),
-    security(("cookie_auth" = [])),
-)]
-pub async fn get_prefs(
-    State(state): State<AppState>,
-    auth: AuthUser,
-) -> Result<Json<ApiResponse<EmailPrefsResponse>>, AppError> {
-    // Upsert defaults on first read.
-    let prefs: EmailPrefs = sqlx::query_as(
-        r#"
-        INSERT INTO user_email_preferences (user_id)
-        VALUES ($1)
-        ON CONFLICT (user_id) DO UPDATE SET user_id = user_email_preferences.user_id
-        RETURNING digest_weekly, streak_reminder, marketing, updated_at
-        "#,
-    )
-    .bind(auth.user_id)
-    .fetch_one(&state.db)
-    .await?;
-
-    Ok(Json(ApiResponse::new(EmailPrefsResponse {
-        preferences: prefs,
-    })))
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -107,8 +70,8 @@ pub async fn get_prefs(
 /// defaults, not a 404: the absence of a row means "never customised",
 /// which is a perfectly good answer to "what are my preferences".
 ///
-/// Unlike [`get_prefs`], the payload is the preference object itself
-/// rather than `{ preferences: … }`.
+/// The payload is the preference object itself rather than
+/// `{ preferences: … }` — the shape the settings screen consumes.
 #[utoipa::path(
     get,
     path = "/api/users/me/email-preferences",
@@ -123,24 +86,95 @@ pub async fn get_prefs_v2(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<ApiResponse<EmailPrefs>>, AppError> {
-    // Read-only: a GET must not create a row. The defaults below mirror
-    // the column defaults in migration 0021.
-    let prefs: Option<EmailPrefs> = sqlx::query_as(
-        "SELECT digest_weekly, streak_reminder, marketing, updated_at
-           FROM user_email_preferences WHERE user_id = $1",
+    Ok(Json(ApiResponse::new(
+        read_categories(&state.db, auth.user_id).await?,
+    )))
+}
+
+/// The three categories, computed from the catalogue.
+///
+/// `user_email_preferences` used to hold these as columns, and the digest
+/// and drip services read that table while `notify` read the catalogue —
+/// two answers to "may we email this person", and the marketing one won by
+/// accident. There is one now; this is a narrower view of it, kept because
+/// the settings screen and the unsubscribe links already delivered speak in
+/// these three words.
+async fn read_categories(db: &sqlx::PgPool, user_id: uuid::Uuid) -> Result<EmailPrefs, AppError> {
+    use crate::services::notify::{Channel, wants_kind};
+
+    let digest_weekly = wants_kind(db, user_id, "digest.weekly", Channel::Email).await;
+    // The reminder is a push by default and an email only if asked for, so
+    // "do you want streak reminders" is either channel saying yes.
+    let streak_reminder = wants_kind(db, user_id, "streak.reminder", Channel::Push).await
+        || wants_kind(db, user_id, "streak.reminder", Channel::Email).await;
+
+    // One consent covered six sequences, so any of them being on means it
+    // was given.
+    let mut marketing = false;
+    for kind in lifecycle_kinds(db).await? {
+        if wants_kind(db, user_id, &kind, Channel::Email).await {
+            marketing = true;
+            break;
+        }
+    }
+
+    // The most recent decision across the rows behind these three words.
+    // No row means the person never answered, which is now.
+    let updated_at: Option<chrono::DateTime<chrono::Utc>> = sqlx::query_scalar(
+        "SELECT MAX(updated_at) FROM notification_preferences
+          WHERE user_id = $1
+            AND kind IN (SELECT kind FROM notification_kinds
+                          WHERE category IN ('digest', 'lifecycle'))",
     )
-    .bind(auth.user_id)
-    .fetch_optional(&state.db)
+    .bind(user_id)
+    .fetch_one(db)
     .await?;
 
-    let prefs = prefs.unwrap_or_else(|| EmailPrefs {
-        digest_weekly: true,
-        streak_reminder: true,
-        marketing: false,
-        updated_at: chrono::Utc::now(),
-    });
+    Ok(EmailPrefs {
+        digest_weekly,
+        streak_reminder,
+        marketing,
+        updated_at: updated_at.unwrap_or_else(chrono::Utc::now),
+    })
+}
 
-    Ok(Json(ApiResponse::new(prefs)))
+/// Every kind the single `marketing` box stands for.
+///
+/// Read from the catalogue rather than listed here, so a sequence added
+/// later is covered by the same consent instead of being sent to everyone.
+async fn lifecycle_kinds(db: &sqlx::PgPool) -> Result<Vec<String>, AppError> {
+    Ok(
+        sqlx::query_scalar("SELECT kind FROM notification_kinds WHERE category = 'lifecycle'")
+            .fetch_all(db)
+            .await?,
+    )
+}
+
+/// Turn one of the three words into rows on the kinds behind it.
+///
+/// Enabling writes an explicit yes rather than removing the override:
+/// marketing defaults to off, and consent has to be recorded as given, not
+/// inferred from the absence of a refusal.
+async fn write_category(
+    db: &sqlx::PgPool,
+    user_id: uuid::Uuid,
+    rows: &[(&str, &str, bool)],
+) -> Result<(), AppError> {
+    for (kind, channel, enabled) in rows {
+        sqlx::query(
+            "INSERT INTO notification_preferences (user_id, kind, channel, enabled)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (user_id, kind, channel)
+             DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = NOW()",
+        )
+        .bind(user_id)
+        .bind(kind)
+        .bind(channel)
+        .bind(enabled)
+        .execute(db)
+        .await?;
+    }
+    Ok(())
 }
 
 /// Full replacement of the caller's email preferences.
@@ -220,26 +254,37 @@ pub async fn replace_prefs(
 ) -> Result<Json<ApiResponse<EmailPrefs>>, AppError> {
     let body = parse_replace_prefs(&raw)?;
 
-    let prefs: EmailPrefs = sqlx::query_as(
-        r#"
-        INSERT INTO user_email_preferences (user_id, digest_weekly, streak_reminder, marketing)
-        VALUES ($1, $2, $3, $4)
-        ON CONFLICT (user_id) DO UPDATE SET
-            digest_weekly   = EXCLUDED.digest_weekly,
-            streak_reminder = EXCLUDED.streak_reminder,
-            marketing       = EXCLUDED.marketing,
-            updated_at      = NOW()
-        RETURNING digest_weekly, streak_reminder, marketing, updated_at
-        "#,
+    write_category(
+        &state.db,
+        auth.user_id,
+        &[("digest.weekly", "email", body.digest_weekly)],
     )
-    .bind(auth.user_id)
-    .bind(body.digest_weekly)
-    .bind(body.streak_reminder)
-    .bind(body.marketing)
-    .fetch_one(&state.db)
     .await?;
 
-    Ok(Json(ApiResponse::new(prefs)))
+    // Turning the reminder on means the channel it is designed for, not
+    // every channel: a streak nudge that arrives tomorrow by email is not a
+    // nudge, and silently opting someone into it would be a second decision
+    // they did not make.
+    write_category(
+        &state.db,
+        auth.user_id,
+        &[
+            ("streak.reminder", "push", body.streak_reminder),
+            ("streak.reminder", "email", false),
+        ],
+    )
+    .await?;
+
+    let lifecycle: Vec<String> = lifecycle_kinds(&state.db).await?;
+    let marketing_rows: Vec<(&str, &str, bool)> = lifecycle
+        .iter()
+        .map(|kind| (kind.as_str(), "email", body.marketing))
+        .collect();
+    write_category(&state.db, auth.user_id, &marketing_rows).await?;
+
+    Ok(Json(ApiResponse::new(
+        read_categories(&state.db, auth.user_id).await?,
+    )))
 }
 
 /// One-click unsubscribe with the token in the path.
@@ -286,19 +331,30 @@ async fn apply_unsubscribe(
             "Unsupported unsubscribe kind: {kind}"
         )));
     }
-    // `kind` is checked against the allowlist above, so interpolating it as
-    // a column name cannot inject.
-    let sql = format!(
-        r#"
-        INSERT INTO user_email_preferences (user_id, {kind})
-        VALUES ($1, FALSE)
-        ON CONFLICT (user_id) DO UPDATE SET {kind} = FALSE, updated_at = NOW()
-        "#
-    );
-    sqlx::query(sqlx::AssertSqlSafe(sql))
-        .bind(user_id)
-        .execute(&state.db)
-        .await?;
+
+    // These three words are printed in links inside emails already
+    // delivered, and those cannot be revised. They resolve to the kinds
+    // behind them rather than to columns of a table that no longer exists.
+    let rows: Vec<(String, &str)> = match kind {
+        "digest_weekly" => vec![("digest.weekly".to_string(), "email")],
+        "streak_reminder" => vec![
+            ("streak.reminder".to_string(), "push"),
+            ("streak.reminder".to_string(), "email"),
+        ],
+        "marketing" => lifecycle_kinds(&state.db)
+            .await?
+            .into_iter()
+            .map(|k| (k, "email"))
+            .collect(),
+        other => {
+            return Err(AppError::Validation(format!(
+                "Unsupported unsubscribe kind: {other}"
+            )));
+        }
+    };
+
+    let off: Vec<(&str, &str, bool)> = rows.iter().map(|(k, c)| (k.as_str(), *c, false)).collect();
+    write_category(&state.db, user_id, &off).await?;
 
     Ok(Html(unsubscribe_confirmation_html(kind)))
 }
@@ -321,58 +377,9 @@ fn unsubscribe_confirmation_html(kind: &str) -> String {
 <h1>C'est fait</h1>
 <p>Tu ne recevras plus d'emails de type <strong>{label}</strong> de Skilluv.</p>
 <p>Les emails liés à ton compte (vérification, sécurité, reçus) continuent d'arriver.</p>
-<p>Si tu changes d'avis, tu peux réactiver depuis <a href="https://skilluv.com/settings/notifications">tes paramètres</a>.</p>
+<p>Si tu changes d'avis, tu peux réactiver depuis <a href="https://skill-uv.com/settings/notifications">tes paramètres</a>.</p>
 </body></html>"#
     )
-}
-
-#[derive(Debug, Deserialize, ToSchema)]
-pub struct UpdatePrefsRequest {
-    pub digest_weekly: Option<bool>,
-    pub streak_reminder: Option<bool>,
-    pub marketing: Option<bool>,
-}
-
-/// Partial update of the caller's email preferences. Any missing
-/// field keeps its current value (COALESCE-based upsert).
-#[utoipa::path(
-    put,
-    path = "/api/auth/me/email-preferences",
-    tag = "auth",
-    request_body = UpdatePrefsRequest,
-    responses(
-        (status = 200, description = "Updated preferences", body = ApiResponse<EmailPrefsResponse>),
-        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
-    ),
-    security(("cookie_auth" = [])),
-)]
-pub async fn update_prefs(
-    State(state): State<AppState>,
-    auth: AuthUser,
-    Json(body): Json<UpdatePrefsRequest>,
-) -> Result<Json<ApiResponse<EmailPrefsResponse>>, AppError> {
-    let prefs: EmailPrefs = sqlx::query_as(
-        r#"
-        INSERT INTO user_email_preferences (user_id, digest_weekly, streak_reminder, marketing)
-        VALUES ($1, COALESCE($2, TRUE), COALESCE($3, TRUE), COALESCE($4, FALSE))
-        ON CONFLICT (user_id) DO UPDATE SET
-            digest_weekly = COALESCE($2, user_email_preferences.digest_weekly),
-            streak_reminder = COALESCE($3, user_email_preferences.streak_reminder),
-            marketing = COALESCE($4, user_email_preferences.marketing),
-            updated_at = NOW()
-        RETURNING digest_weekly, streak_reminder, marketing, updated_at
-        "#,
-    )
-    .bind(auth.user_id)
-    .bind(body.digest_weekly)
-    .bind(body.streak_reminder)
-    .bind(body.marketing)
-    .fetch_one(&state.db)
-    .await?;
-
-    Ok(Json(ApiResponse::new(EmailPrefsResponse {
-        preferences: prefs,
-    })))
 }
 
 #[derive(Debug, Deserialize, IntoParams)]
@@ -559,12 +566,11 @@ pub async fn admin_run_weekly_digest(
     if auth.role != "admin" {
         return Err(AppError::Forbidden);
     }
-    let secret = unsub_secret(&state.config.jwt_secret);
     let svc = digest::DigestService {
         db: &state.db,
         email: &state.email,
         base_url: &state.config.frontend_url,
-        unsubscribe_secret: &secret,
+        jwt_secret: &state.config.jwt_secret,
     };
     let report = svc.run_weekly().await?;
     Ok(Json(ApiResponse::new(AdminDigestResponse {

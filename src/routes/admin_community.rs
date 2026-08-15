@@ -11,7 +11,6 @@ use crate::api_response::ApiResponse;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
 use crate::models::ChallengeTemplate;
-use crate::services::NotificationService;
 
 pub fn admin_community_routes() -> Router<AppState> {
     Router::new()
@@ -237,18 +236,14 @@ pub async fn approve_challenge(
 
     // Notify creator
     if let Some(creator_id) = challenge.created_by {
-        NotificationService::send(
-            &state.db,
-            &mut state.redis.clone(),
-            &state.ws,
-            crate::services::notification::NotificationPayload {
-                user_id: creator_id,
-                notification_type: "challenge_approved",
-                title: &format!("Ton challenge '{}' a été approuvé !", challenge.title),
-                body: Some("Il est maintenant visible par tous les utilisateurs."),
-                data: Some(json!({ "challenge_id": id })),
-            },
+        crate::services::notify::send(
+            &state,
+            crate::services::notify::Recipient::User(creator_id),
+            "community.challenge_approved",
         )
+        .arg("title", challenge.title.clone())
+        .payload(json!({ "challenge_id": id }))
+        .execute()
         .await?;
     }
 
@@ -317,18 +312,15 @@ pub async fn reject_challenge(
 
     // Notify creator
     if let Some(creator_id) = challenge.created_by {
-        NotificationService::send(
-            &state.db,
-            &mut state.redis.clone(),
-            &state.ws,
-            crate::services::notification::NotificationPayload {
-                user_id: creator_id,
-                notification_type: "challenge_rejected",
-                title: &format!("Ton challenge '{}' n'a pas été retenu", challenge.title),
-                body: Some(&body.feedback),
-                data: Some(json!({ "challenge_id": id })),
-            },
+        crate::services::notify::send(
+            &state,
+            crate::services::notify::Recipient::User(creator_id),
+            "community.challenge_rejected",
         )
+        .arg("title", challenge.title.clone())
+        .arg("feedback", body.feedback.clone())
+        .payload(json!({ "challenge_id": id }))
+        .execute()
         .await?;
     }
 

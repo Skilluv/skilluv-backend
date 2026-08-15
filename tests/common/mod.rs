@@ -54,6 +54,15 @@ pub struct TestApp {
 }
 
 impl TestApp {
+    /// Connection string of this instance's isolated database.
+    ///
+    /// Needed by suites that run one of the `src/bin` binaries as a real
+    /// subprocess: the binary reads `DATABASE_URL` and has no other way to
+    /// find the schema this harness just migrated.
+    pub fn database_url(&self) -> String {
+        test_db_url(&self.db_name)
+    }
+
     /// Spawn a test server with an isolated database.
     /// Emails are delivered to the local Mailpit container (SMTP :1025, UI :8025).
     pub async fn spawn() -> Self {
@@ -164,10 +173,11 @@ impl TestApp {
 
         let queue = Arc::new(skilluv_backend::services::QueueService::new(redis.clone()));
 
-        let geo = Arc::new(
-            skilluv_backend::services::GeoService::load(std::path::Path::new("data"))
-                .expect("Failed to load GeoNames data from ./data"),
-        );
+        // SKI-294 — same tolerance as the server: a suite that does not touch
+        // country autocompletion should not need the 31 MB of dumps present.
+        let geo = Arc::new(skilluv_backend::services::GeoService::load_or_empty(
+            &skilluv_backend::services::GeoService::data_dir_from_env(),
+        ));
 
         // Bind to random port FIRST so the app's `base_url` can be aligned with
         // the actual test server address. Otherwise features that mint absolute
@@ -177,6 +187,19 @@ impl TestApp {
             .await
             .expect("Failed to bind");
         let addr = format!("http://127.0.0.1:{}", listener.local_addr().unwrap().port());
+
+        // Same as `main`: the background senders hold only a pool, and
+        // without this a test asserting that a promotion emails somebody
+        // would pass for the wrong reason.
+        skilluv_backend::services::notify::install_ambient(
+            Arc::new(skilluv_backend::services::EmailService::new(
+                None,
+                "test@skill-uv.com",
+                "Skilluv Test",
+            )),
+            "http://localhost:5173".to_string(),
+            "test-secret-key-for-testing".to_string(),
+        );
 
         let state = AppState {
             db: db.clone(),

@@ -41,6 +41,16 @@ pub struct AppConfig {
     pub pdf_renderer_url: Option<String>,
 }
 
+/// The site's public address, for the places that cannot read the config.
+///
+/// Twenty-two places hardcoded `https://skilluv.com` — a domain nobody here
+/// owns, which anyone could register and which every drip email, every
+/// legal link and `security.txt` pointed at. The domain is `skill-uv.com`.
+///
+/// Prefer `config.frontend_url` wherever a config is reachable; this is the
+/// fallback for static documents, schema examples and environment defaults.
+pub const PUBLIC_SITE_URL: &str = "https://skill-uv.com";
+
 impl AppConfig {
     pub fn from_env() -> Self {
         let base_url = env::var("BASE_URL").unwrap_or_else(|_| "http://localhost:3001".to_string());
@@ -74,7 +84,7 @@ impl AppConfig {
             grpc_ai_url: env::var("GRPC_AI_URL").ok(),
             brevo_api_key: env::var("BREVO_API_KEY").ok(),
             email_from: env::var("EMAIL_FROM")
-                .unwrap_or_else(|_| "noreply@skilluv.com".to_string()),
+                .unwrap_or_else(|_| "noreply@skill-uv.com".to_string()),
             email_from_name: env::var("EMAIL_FROM_NAME").unwrap_or_else(|_| "Skilluv".to_string()),
             environment: env::var("ENVIRONMENT").unwrap_or_else(|_| "dev".to_string()),
             sso_encryption_key: env::var("SSO_ENCRYPTION_KEY")

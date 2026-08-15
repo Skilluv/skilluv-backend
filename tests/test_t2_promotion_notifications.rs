@@ -10,7 +10,7 @@ use common::TestApp;
 use serde_json::Value;
 use uuid::Uuid;
 
-use skilluv_backend::services::{promotion_notify, proof_hooks};
+use skilluv_backend::services::proof_hooks;
 
 fn user_id_of(register_body: &Value) -> Uuid {
     register_body["data"]["user"]["id"]
@@ -94,7 +94,7 @@ async fn rank_promotion_notifies_with_an_unlock_hint() {
     assert!(report.rank_promoted, "four deliverables reach Ranger");
     assert_eq!(report.rank_computed, "ranger");
 
-    let notifs = notifications_of(&app, my_id, promotion_notify::TYPE_RANK_PROMOTION).await;
+    let notifs = notifications_of(&app, my_id, "rank.promoted").await;
     assert_eq!(notifs.len(), 1, "one notification per promotion");
     assert!(
         notifs[0]["title"].as_str().unwrap().contains("Ranger"),
@@ -174,7 +174,7 @@ async fn promotion_notification_is_not_repeated_on_a_second_recompute() {
         .await
         .expect("second recompute");
 
-    let notifs = notifications_of(&app, my_id, promotion_notify::TYPE_RANK_PROMOTION).await;
+    let notifs = notifications_of(&app, my_id, "rank.promoted").await;
     assert_eq!(
         notifs.len(),
         1,
@@ -193,12 +193,7 @@ async fn first_verified_deliverable_is_celebrated_exactly_once() {
         .await
         .expect("recompute");
 
-    let notifs = notifications_of(
-        &app,
-        my_id,
-        promotion_notify::TYPE_FIRST_VERIFIED_DELIVERABLE,
-    )
-    .await;
+    let notifs = notifications_of(&app, my_id, "deliverable.first_verified").await;
     assert_eq!(notifs.len(), 1);
     assert_eq!(notifs[0]["data"]["verified_count"], 1);
 
@@ -206,12 +201,7 @@ async fn first_verified_deliverable_is_celebrated_exactly_once() {
     proof_hooks::recompute_all_for_user(&app.db, my_id)
         .await
         .expect("recompute");
-    let notifs = notifications_of(
-        &app,
-        my_id,
-        promotion_notify::TYPE_FIRST_VERIFIED_DELIVERABLE,
-    )
-    .await;
+    let notifs = notifications_of(&app, my_id, "deliverable.first_verified").await;
     assert_eq!(notifs.len(), 1);
 
     // ...and neither must a later one, once the count has moved on.
@@ -219,12 +209,7 @@ async fn first_verified_deliverable_is_celebrated_exactly_once() {
     proof_hooks::recompute_all_for_user(&app.db, my_id)
         .await
         .expect("recompute");
-    let notifs = notifications_of(
-        &app,
-        my_id,
-        promotion_notify::TYPE_FIRST_VERIFIED_DELIVERABLE,
-    )
-    .await;
+    let notifs = notifications_of(&app, my_id, "deliverable.first_verified").await;
     assert_eq!(notifs.len(), 1, "'first' means first, forever");
 }
 
@@ -240,7 +225,7 @@ async fn capability_grant_produces_its_own_notification() {
         .await
         .expect("recompute");
 
-    let notifs = notifications_of(&app, my_id, promotion_notify::TYPE_CAPABILITY_GRANTED).await;
+    let notifs = notifications_of(&app, my_id, "capability.granted").await;
     assert_eq!(
         notifs.len(),
         report.capabilities_granted.len(),
@@ -272,16 +257,19 @@ async fn achieved_goal_emits_a_milestone_notification() {
         .await
         .expect("recompute");
 
-    let notifs = notifications_of(&app, my_id, promotion_notify::TYPE_MILESTONE_REACHED).await;
+    let notifs = notifications_of(&app, my_id, "goal.reached").await;
     assert_eq!(notifs.len(), 1);
-    assert_eq!(notifs[0]["data"]["kind"], "artifact_count");
+    // `goal_kind`, not `kind`: the notification already has a kind of its
+    // own — `goal.reached` — and two different things under one name in the
+    // same object is how a reader ends up asserting on the wrong one.
+    assert_eq!(notifs[0]["data"]["goal_kind"], "artifact_count");
     assert_eq!(notifs[0]["data"]["target_value"], "2");
 
     // achieved_at is stamped, so the milestone cannot fire twice.
     proof_hooks::recompute_all_for_user(&app.db, my_id)
         .await
         .expect("recompute");
-    let notifs = notifications_of(&app, my_id, promotion_notify::TYPE_MILESTONE_REACHED).await;
+    let notifs = notifications_of(&app, my_id, "goal.reached").await;
     assert_eq!(notifs.len(), 1);
 
     let achieved: Option<chrono::DateTime<chrono::Utc>> =
@@ -319,6 +307,6 @@ async fn live_variant_also_writes_the_durable_row() {
         .expect("recompute live");
     assert!(report.rank_promoted);
 
-    let notifs = notifications_of(&app, my_id, promotion_notify::TYPE_RANK_PROMOTION).await;
+    let notifs = notifications_of(&app, my_id, "rank.promoted").await;
     assert_eq!(notifs.len(), 1);
 }

@@ -92,7 +92,7 @@ impl FromRequestParts<AppState> for AuthUser {
 ///
 /// Résolu depuis (dans l'ordre) :
 ///   1. header `X-Skilluv-Tenant` (slug)
-///   2. sous-domaine du header `Host` (ex: `acme.skilluv.com` → tenant `acme`)
+///   2. sous-domaine du header `Host` (ex: `acme.skill-uv.com` → tenant `acme`)
 ///   3. tenant racine (`00000000-...-0001`) par défaut
 ///
 /// Ne rejette jamais — un tenant est toujours résolu, au pire c'est le racine.

@@ -53,12 +53,24 @@ cd skilluv-backend
 cp .env.example .env
 # edit .env with your values
 
-docker compose up -d postgres redis minio
+docker compose up -d
 cargo build
 cargo run
 ```
 
-The API listens on `http://localhost:3001`. For the full developer setup (Judge0, seed data, staging), see [`README.fr.md`](README.fr.md) — English translation of the extended guide is in progress.
+That starts Postgres, Redis, MinIO and Mailpit — everything the server needs
+to boot and everything the test suite talks to.
+
+Judge0, the code execution engine, sits behind a profile and does not start
+by default: it is four containers of its own and was the heaviest thing on a
+development machine, for a service no test calls. Bring it up when working on
+challenge execution:
+
+```bash
+docker compose --profile judge0 up -d
+```
+
+The API listens on `http://localhost:3001`. For the full developer setup (seed data, staging), see [`README.fr.md`](README.fr.md) — English translation of the extended guide is in progress.
 
 ## Architecture at a glance
 

@@ -39,3 +39,296 @@ system:
   internal_error: "حدث خطأ ما. يرجى المحاولة مرة أخرى."
   service_unavailable: "الخدمة غير متوفرة مؤقتًا"
   insufficient_credits: "أرصدة غير كافية لإجراء هذه العملية"
+
+# ─── إطار البريد الإلكتروني ──────────────────────────────────────
+email:
+  greeting: "مرحبًا {name}،"
+  footer_note: "تصلك هذه الرسالة لأن لديك حسابًا على Skilluv."
+  unsubscribe: "إدارة الإشعارات"
+
+# ─── الإشعارات ───────────────────────────────────────────────────
+notification:
+  payout:
+    sent:
+      title: "تم إرسال دفعتك"
+      body: "تم إرسال {amount} إلى {destination}. قد يستغرق الوصول من دقائق إلى أيام حسب القناة."
+      cta: "افتح محفظتي"
+    failed:
+      title: "تعذّر إرسال دفعتك"
+      body: "فشل إرسال {amount}. المبلغ ما زال في رصيدك ويمكنك المحاولة مجددًا."
+      cta: "أعد محاولة السحب"
+  funds:
+    held:
+      title: "{amount} بانتظار التحرير"
+      body: "سيصبح المبلغ متاحًا في {date}، أو فور تأكيد {payer}."
+      cta: "عرض التفاصيل"
+    released:
+      title: "أموالك متاحة الآن"
+      body: "تم تحرير {amount}. يمكنك سحبها متى شئت."
+      cta: "اسحب الآن"
+    disputed:
+      title: "هناك دفعة متنازع عليها"
+      body: "تم تجميد {amount} ريثما نراجع الشكوى."
+      cta: "عرض الشكوى"
+    refunded:
+      title: "تم استرداد الدفعة"
+      body: "تم استرداد {amount}."
+      cta: "عرض التفاصيل"
+  account:
+    banned:
+      title: "تم تعليق حسابك"
+      body: "السبب: {reason}. يمكنك الرد على هذه الرسالة إذا كنت ترى أن هناك خطأ."
+    unbanned:
+      title: "تمت إعادة تفعيل حسابك"
+      body: "يمكنك تسجيل الدخول والمساهمة من جديد."
+      cta: "العودة إلى Skilluv"
+  mentorship:
+    booked:
+      title: "تم حجز جلسة"
+      body: "حجز {other} جلسة بتاريخ {date}."
+      cta: "عرض الجلسة"
+    completed:
+      title: "انتهت الجلسة"
+      body: "أشار {other} إلى انتهاء جلسة {date}. أكّدها لتحرير الدفعة فورًا."
+      cta: "تأكيد الجلسة"
+    cancelled:
+      title: "تم إلغاء الجلسة"
+      body: "أُلغيت جلسة {date} مع {other}."
+      cta: "عرض جلساتي"
+  community:
+    challenge_approved:
+      title: "تمت الموافقة على التحدي"
+      body: "{title} أصبح ظاهرًا للجميع."
+      cta: "عرض التحدي"
+    challenge_rejected:
+      title: "لم يُقبل التحدي"
+      body: "{feedback}"
+      cta: "قراءة الملاحظات"
+  forum:
+    question_answered:
+      title: "إجابة جديدة على سؤالك"
+      body: "أجاب {author} على {title}."
+      cta: "قراءة الإجابة"
+      grouped:
+        title: "{count} إجابات على سؤالك"
+        body: "{author} و{others} آخرون أجابوا."
+    post_replied:
+      title: "ردّ جديد على منشورك"
+      body: "ردّ {author} على {title}."
+      cta: "قراءة الرد"
+      grouped:
+        title: "{count} ردود على منشورك"
+        body: "{author} و{others} آخرون ردّوا على «{title}»."
+    answer_accepted:
+      title: "تم قبول إجابتك"
+      body: "اعتمد {author} إجابتك على {title}."
+      cta: "فتح النقاش"
+    reply:
+      title: "ردّ عليك {author}"
+      body: "{excerpt}"
+      cta: "قراءة الرد"
+      grouped:
+        title: "{count} ردود على تعليقك"
+        body: "{author} و{others} آخرون ردّوا."
+  social:
+    mention:
+      title: "أشار إليك {author}"
+      body: "{excerpt}"
+      cta: "عرض الإشارة"
+      grouped:
+        title: "{count} إشارات في النقاش نفسه"
+        body: "{author} و{others} آخرون أشاروا إليك."
+  dm:
+    received:
+      title: "رسالة من {author}"
+      body: "{excerpt}"
+      cta: "الرد"
+      grouped:
+        title: "{count} رسائل من {author}"
+        body: "الأخيرة: {excerpt}"
+  guild:
+    invitation:
+      title: "دعوة للانضمام إلى {guild}"
+      body: "يدعوك {inviter} للانضمام إلى نقابة {guild}."
+      cta: "عرض الدعوة"
+    application:
+      title: "طلب انضمام جديد"
+      body: "يريد {applicant} الانضمام إلى {guild}."
+      cta: "عرض الطلب"
+      grouped:
+        title: "{count} طلبات انضمام إلى نقابتك"
+        body: "{author} و{others} آخرون يريدون الانضمام إلى {guild}."
+    application_decided:
+      title: "تم البتّ في طلبك"
+      body: "طلبك للانضمام إلى {guild} كان {decision}."
+      cta: "فتح النقابة"
+    cofounder_added:
+      title: "شاركت في تأسيس نقابة"
+      body: "[{tag}] {guild}"
+      cta: "فتح نقابتي"
+    role_changed:
+      title: "تغيّر دورك في النقابة"
+      body: "الدور الجديد: {role}."
+      cta: "فتح نقابتي"
+    kicked:
+      title: "تمت إزالتك من النقابة"
+      body: "لم تعد ضمن {guild}."
+    war_proposed:
+      title: "تحدٍّ بين النقابات"
+      body: "يتحدى {challenger} فريق {defender} على {stake} نقطة."
+      cta: "عرض التحدي"
+  contact:
+    interest_received:
+      title: "{company} مهتمة بملفك"
+      body: "{message}"
+      cta: "عرض الطلب"
+    interest_accepted:
+      title: "قبل {talent} تواصلك"
+      body: "يمكنكما الآن التحدث مباشرة."
+      cta: "فتح المحادثة"
+    interest_declined:
+      title: "رفض {talent} تواصلك"
+      body: "لا متابعة لهذا الطلب."
+      cta: "عرض طلباتي"
+  rank:
+    promoted:
+      title: "أصبحت الآن {rank}"
+      body: "عملك على المنصة رفعك إلى رتبة {rank}."
+      cta: "عرض ملفي"
+  tournament:
+    podium:
+      title: "وصلت إلى منصة التتويج"
+      body: "المركز {place} في بطولة {tournament}."
+      cta: "عرض الترتيب"
+  admin:
+    review_queued:
+      title: "{count} عنصر بانتظار المراجعة"
+      body: "قائمة الإشراف تحتاج إلى تدخل."
+      cta: "فتح القائمة"
+      grouped:
+        title: "{count} عناصر بانتظار المراجعة"
+        body: "الطابور يتزايد."
+    fraud_flagged:
+      title: "بلاغ احتيال"
+      body: "تم الإبلاغ عن {subject} تلقائيًا وينتظر قرارًا."
+      cta: "مراجعة البلاغ"
+      grouped:
+        title: "{count} بلاغات احتيال"
+        body: "بانتظار قرار."
+    payout_needs_replay:
+      title: "دفعة تحتاج إعادة إرسال"
+      body: "{count} دفعة مستحقة لم تُنفّذ. لم يتم إرسالها."
+      cta: "فتح المدفوعات"
+    reconciliation_drift:
+      title: "فارق في التسوية"
+      body: "تختلف الدفاتر الداخلية عن كشف {provider} بمقدار {amount}."
+      cta: "فتح التسوية"
+  capability:
+    granted:
+      title: "صلاحية جديدة"
+      body: "يمكنك الآن {capability} على Skilluv."
+      cta: "عرض ملفي"
+  badge:
+    awarded:
+      title: "حصلت على شارة: {badge}"
+      body: "أصبحت ظاهرة في ملفك العام."
+      cta: "عرض ملفي"
+      grouped:
+        title: "{count} أوسمة جديدة"
+        body: "منها «{badge}». تظهر في ملفك."
+  goal:
+    reached:
+      title: "تم بلوغ الهدف"
+      body: "كان هدفك أن {goal}. لقد تحقق."
+      cta: "حدد هدفاً جديداً"
+  deliverable:
+    first_verified:
+      title: "تم التحقق من أول مساهمة لك"
+      body: "أصبحت دليلاً معتمداً وتظهر في ملفك العام."
+      cta: "عرض مساهمتي"
+
+  digest:
+    weekly:
+      title: "أسبوعك في الورشة"
+      body: "هذا ما صنعته هذا الأسبوع. رتبتك {rank}."
+      cta: "أكمل من حيث توقفت"
+  streak:
+    reminder:
+      title: "سلسلتك تتوقف على اليوم"
+      body: "{days} يوماً متتالياً. مساهمة واحدة تكفي للحفاظ عليها."
+      cta: "حافظ على سلسلتي"
+  lifecycle:
+    activate:
+      title: "طاولتك ما زالت فارغة"
+      body: "فتحت حسابك، لكن لم تضع عليه شيئاً بعد. أول مساهمة هي الأقصر: تستغرق دقائق وتبقى في ملفك."
+      cta: "اختر أول مساهمة"
+    join_guild:
+      title: "العمل مع الآخرين أفضل"
+      body: "تعمل وحدك منذ أيام. النقابة هي أشخاص يراجعون عملك ويجيبون حين تتعثر."
+      cta: "استعرض النقابات"
+    silent:
+      title: "مرّ أسبوعان"
+      body: "طاولتك بانتظارك. لم يضع شيء: أدلتك ما زالت هناك، وهناك جديد منذ زيارتك."
+      cta: "العودة إلى الورشة"
+    last_chance:
+      title: "آخر رسالة في هذه السلسلة"
+      body: "شهر دون أخبار. سنتوقف هنا — حسابك وأدلتك تبقى كما هي، وتعود متى شئت. إن كان هناك سبب، ردّ على هذه الرسالة: نقرأ كل الردود."
+      cta: "العودة الآن"
+    enterprise_welcome:
+      title: "كيف تقرأ دليلاً"
+      body: "لديك رصيد بانتظارك. الملف على Skilluv ليس سيرة ذاتية: هو قائمة مساهمات موثقة، مع رابط لكل واحدة. ابدأ بالنظر إلى ما أنجزه الناس فعلاً."
+      cta: "ابحث عن ملف"
+    enterprise_demo:
+      title: "يمكننا إعداد القائمة المختصرة لك"
+      body: "لم تتواصل مع أحد بعد. ردّ على هذه الرسالة بالمجال والمستوى ونوع العقد: نعود خلال 24 ساعة بثلاثة ملفات مختارة يدوياً."
+      cta: "افتح البحث"
+    enterprise_value:
+      title: "ثلاث طرق للتقدم أسرع"
+      body: "باقات الأرصدة، والتحديات المموّلة التي تمنحك وصولاً مباشراً إلى المشاركات، ولوحة لمتابعة المرشحين دون جداول."
+      cta: "استعرض الخيارات"
+
+  dispute:
+    opened:
+      title: "دفعة بقيمة {amount} محل نزاع"
+      body: "من دفع يقول: «{reason}». المبلغ مجمّد حتى تردّ. إن كنت موافقاً يُعاد فوراً؛ وإلا فاذكر روايتك وسيبتّ أحدهم في الأمر."
+      cta: "الرد"
+    refunded:
+      title: "أُغلق النزاع: أُعيد {amount}"
+      body: "عاد المبلغ إلى من دفعه."
+      cta: "عرض النزاع"
+    released:
+      title: "أُغلق النزاع: أُفرج عن {amount}"
+      body: "المبلغ متاح في رصيدك."
+      cta: "عرض النزاع"
+    withdrawn:
+      title: "سُحب النزاع"
+      body: "سُحب الاعتراض. يتابع مبلغ {amount} مساره الطبيعي."
+      cta: "عرض النزاع"
+    needs_review:
+      title: "{count} نزاع بانتظار البتّ"
+      body: "الطرفان غير متفقين. لا أحد يُدفع له قبل الحسم."
+      cta: "فتح النزاعات"
+
+# Vocabulary reused inside notification bodies, so a translator writes
+# one sentence with a placeholder rather than two parallel titles.
+guild:
+  decision:
+    accepted: "مقبولاً"
+    rejected: "مرفوضاً"
+
+# Fragments of the "goal reached" sentence. Half a sentence, so it lives
+# next to the sentence it lands in rather than in a Rust match.
+goal:
+  target:
+    rank: "تبلغ رتبة {rank}"
+    skill_level: "تبلغ المستوى {level} في مهارة"
+    capability: "تفتح دور {capability}"
+    artifact_count: "تنشر {count} مساهمة موثقة"
+
+# Labels under the figures in the weekly digest. Fragments of a layout
+# rather than sentences, so they sit with the other vocabulary.
+digest:
+  stat:
+    challenges: "مساهمات"
+    fragments: "شظايا"
+    streak: "أيام متتالية"

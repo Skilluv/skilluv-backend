@@ -27,7 +27,7 @@ use crate::errors::AppError;
 use crate::middleware::{AuthUser, AuthUserComplete, OptionalAuth};
 use crate::routes::analytics_consent;
 use crate::services::analytics::{events, props};
-use crate::services::{NotificationService, social};
+use crate::services::social;
 
 pub fn social_routes() -> Router<AppState> {
     Router::new()
@@ -43,7 +43,10 @@ pub fn social_routes() -> Router<AppState> {
             "/social/reactions/{target_type}/{target_id}/summary",
             get(reaction_summary),
         )
-        .route("/social/mentions/me", get(my_mentions))
+        // SKI-293 — `/social/mentions/me` removed. It served the same data as
+        // `GET /api/users/me/mentions` with a different shape and an empty
+        // OpenAPI schema, so the documented route was not the one anyone used.
+        // No client called it: checked across the front and admin repos.
         .route("/tags", get(list_tags))
         .route(
             "/social/tag-map/{target_type}/{target_id}",
@@ -99,29 +102,35 @@ pub async fn create_comment(
     )
     .await?;
 
+    // Looked up once: all three notifications below name the same author.
+    let author_name: String = sqlx::query_scalar("SELECT display_name FROM users WHERE id = $1")
+        .bind(auth.user_id)
+        .fetch_optional(&state.db)
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+
     // Extract @mentions and notify mentioned users
     let usernames = social::parse_mentions(&body.body);
     let mentioned_ids =
         social::record_mentions(&state.db, auth.user_id, "comment", comment.id, &usernames).await?;
     for uid in &mentioned_ids {
         // Persistent notif (DB) + ws push + redis counter, via the centralised service.
-        let _ = NotificationService::send(
-            &state.db,
-            &mut state.redis.clone(),
-            &state.ws,
-            crate::services::notification::NotificationPayload {
-                user_id: *uid,
-                notification_type: "mention.received",
-                title: "Tu as été mentionné·e",
-                body: Some(body.body.chars().take(140).collect::<String>().as_str()),
-                data: Some(json!({
-                    "comment_id": comment.id,
-                    "target_type": comment.target_type,
-                    "target_id": comment.target_id,
-                    "author_id": auth.user_id,
-                })),
-            },
+        let _ = crate::services::notify::send(
+            &state,
+            crate::services::notify::Recipient::User(*uid),
+            "social.mention",
         )
+        .arg("author", author_name.clone())
+        .arg("excerpt", body.body.chars().take(140).collect::<String>())
+        .payload(json!({
+            "comment_id": comment.id,
+            "target_type": comment.target_type,
+            "target_id": comment.target_id,
+            "author_id": auth.user_id,
+        }))
+        .execute()
         .await;
         if analytics_consent(&headers) {
             state.analytics.track(
@@ -149,31 +158,23 @@ pub async fn create_comment(
         && !mentioned_ids.contains(&post_author)
     {
         let event_kind = if post_kind == "question" {
-            "question.answered"
+            "forum.question_answered"
         } else {
-            "post.replied"
+            "forum.post_replied"
         };
-        let title = if post_kind == "question" {
-            "Nouvelle réponse à ta question"
-        } else {
-            "Nouvelle réponse à ton post"
-        };
-        let _ = NotificationService::send(
-            &state.db,
-            &mut state.redis.clone(),
-            &state.ws,
-            crate::services::notification::NotificationPayload {
-                user_id: post_author,
-                notification_type: event_kind,
-                title,
-                body: Some(post_title.chars().take(140).collect::<String>().as_str()),
-                data: Some(json!({
-                    "post_id": comment.target_id,
-                    "comment_id": comment.id,
-                    "author_id": auth.user_id,
-                })),
-            },
+        let _ = crate::services::notify::send(
+            &state,
+            crate::services::notify::Recipient::User(post_author),
+            event_kind,
         )
+        .arg("author", author_name.clone())
+        .arg("title", post_title.chars().take(140).collect::<String>())
+        .payload(json!({
+            "post_id": comment.target_id,
+            "comment_id": comment.id,
+            "author_id": auth.user_id,
+        }))
+        .execute()
         .await;
     }
 
@@ -187,24 +188,22 @@ pub async fn create_comment(
         && parent_author != auth.user_id
         && !mentioned_ids.contains(&parent_author)
     {
-        let _ = NotificationService::send(
-            &state.db,
-            &mut state.redis.clone(),
-            &state.ws,
-            crate::services::notification::NotificationPayload {
-                user_id: parent_author,
-                notification_type: "reply.received",
-                title: "Réponse à ton commentaire",
-                body: Some(body.body.chars().take(140).collect::<String>().as_str()),
-                data: Some(json!({
-                    "comment_id": comment.id,
-                    "parent_id": parent_id,
-                    "target_type": comment.target_type,
-                    "target_id": comment.target_id,
-                    "author_id": auth.user_id,
-                })),
-            },
+        let _ = crate::services::notify::send(
+            &state,
+            crate::services::notify::Recipient::User(parent_author),
+            "forum.reply",
         )
+        .arg("author", author_name.clone())
+        .arg("excerpt", body.body.chars().take(140).collect::<String>())
+        .payload(json!({
+            "comment_id": comment.id,
+            "parent_id": parent_id,
+            "post_id": comment.target_id,
+            "target_type": comment.target_type,
+            "target_id": comment.target_id,
+            "author_id": auth.user_id,
+        }))
+        .execute()
         .await;
     }
 

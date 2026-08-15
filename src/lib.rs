@@ -89,6 +89,7 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::health_routes())
         .nest("/api", routes::auth_routes())
         .nest("/api", routes::email_prefs_routes())
+        .nest("/api", routes::notification_preferences_routes())
         .nest("/api", routes::challenge_routes())
         .nest("/api", routes::sandbox_routes())
         .nest("/api", routes::slice_routes())
@@ -218,6 +219,14 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::tenant_routes())
         .nest("/api", routes::ai_job_routes())
         .nest("/api", routes::enterprise_subscription_routes())
+        // Payment provider callbacks. Inside /api next to the Connect
+        // endpoint that predates it; the signature check is the
+        // authentication, so no JWT layer applies.
+        .nest("/api", routes::payment_webhook_routes())
+        .nest("/api", routes::email_preview_routes())
+        .nest("/api", routes::dispute_routes())
+        .nest("/api", routes::payment_routes())
+        .nest("/api", routes::admin_money_routes())
         // SKI-72 / SKI-73 — inbound webhook receivers for tracker⇄GitHub
         // sync. Mounted OUTSIDE `/api` so external senders don't hit API
         // rate-limits and signature verification is not conflated with JWT.
@@ -396,7 +405,7 @@ async fn normalize_error_response_content_type(
 
 /// Build the CORS layer with an explicit origin allowlist. Reads
 /// `ALLOWED_ORIGINS` from env — comma-separated, e.g.
-/// `http://localhost:5173,http://localhost:5174,https://skilluv.com,https://admin.skilluv.com`.
+/// `http://localhost:5173,http://localhost:5174,https://skill-uv.com,https://admin.skill-uv.com`.
 /// Falls back to the two dev origins so `cargo run` on a fresh checkout works
 /// out of the box. `credentials: true` is required for the httpOnly cookie
 /// auth flow — the previous `permissive` layer set `Access-Control-Allow-*`

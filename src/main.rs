@@ -84,8 +84,40 @@ async fn async_main(config: AppConfig) {
         &config.email_from,
         &config.email_from_name,
     ));
+    // Installed before any background task can emit: the proof engine, the
+    // mention recorder and the reconciliation sweep hold only a `PgPool`,
+    // and without this their notifications reach every channel except the
+    // one that matters when nobody is looking at the app.
+    skilluv_backend::services::notify::install_ambient(
+        email.clone(),
+        config.frontend_url.clone(),
+        config.jwt_secret.clone(),
+    );
+
+    // Compares our books against what each provider says it holds. Daily,
+    // and it never corrects anything — a discrepancy in real money is for a
+    // person to resolve, not a background job.
+    skilluv_backend::services::balance_check::start_balance_check(db.clone());
+
+    // Asks providers about payments still open, and delivers anything paid
+    // for that was never delivered. The piece that makes a closed browser
+    // tab cost nothing.
+    skilluv_backend::services::payment_poller::start_payment_poller(db.clone());
+
+    // Drains what failed on its channel, every minute — the shortest
+    // backoff, so a first retry waits for the backoff rather than the tick.
+    skilluv_backend::services::outbox::start_outbox_worker(db.clone(), email.clone());
+
     // Drip sequences (Phase 3.15) — hourly background task, idempotent via email_log.
-    skilluv_backend::services::drip::start_drip_task(db.clone(), email.clone());
+    skilluv_backend::services::drip::start_drip_task(
+        db.clone(),
+        email.clone(),
+        config.frontend_url.clone(),
+        config.jwt_secret.clone(),
+    );
+
+    // The streak reminder the settings screen has promised since phase 1.7.
+    skilluv_backend::services::streak_reminder::start_streak_reminder_task(db.clone());
 
     // P19.3 — Proof engine sweep (weekly by default). Filet de sécurité qui
     // rattrape les évolutions de seuils/rules et les hooks inline en échec.
@@ -136,11 +168,9 @@ async fn async_main(config: AppConfig) {
     queue.start_listener(&config.redis_url);
     tracing::info!("Redis queue service initialized");
 
-    tracing::info!("Loading GeoNames data (countries + cities)...");
-    let geo = Arc::new(
-        GeoService::load(std::path::Path::new("data"))
-            .expect("Failed to load GeoNames data from ./data"),
-    );
+    let geo_dir = GeoService::data_dir_from_env();
+    tracing::info!(path = %geo_dir.display(), "Loading GeoNames data (countries + cities)...");
+    let geo = Arc::new(GeoService::load_or_empty(&geo_dir));
     tracing::info!(
         countries = geo.countries().len(),
         cities = geo.total_cities(),
@@ -191,6 +221,8 @@ async fn async_main(config: AppConfig) {
     //   SKILLUV_PROFILE_README_SYNC_ENABLED=1
     // Sans le flag, la tache spawn quand meme mais log un no-op.
     spawn_hello_wall_mirror_worker(state.clone());
+    spawn_release_sweep_worker(state.clone());
+    spawn_payout_reconciliation_worker(state.clone());
     spawn_profile_readme_sync_worker(state.clone());
 
     let app = build_router(state);
@@ -209,6 +241,96 @@ async fn async_main(config: AppConfig) {
 /// Requiert `SKILLUV_HELLO_WALL_MIRROR_ENABLED=1` + `SKILLUV_BOT_GITHUB_TOKEN`.
 /// Sans le token, la tache log un warning au demarrage puis dort — permet
 /// d'ajouter le token plus tard sans redemarrer.
+/// Releases money whose hold has expired.
+///
+/// Not behind a feature flag, unlike the other workers. Every other job here
+/// enriches something; this one is the difference between a mentor being paid
+/// and a mentor waiting forever. A deployment that forgets to enable it would
+/// look healthy and quietly stop paying people.
+///
+/// Runs every ten minutes. The precision that matters is hours — nobody
+/// notices their money arriving at 14:07 instead of 14:00 — and a short
+/// interval keeps the backlog small enough that one failing hold cannot bury
+/// the rest.
+fn spawn_release_sweep_worker(state: skilluv_backend::AppState) {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(10 * 60));
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+            match skilluv_backend::services::release::sweep(&state.db).await {
+                Ok(report) => {
+                    if !report.failed.is_empty() {
+                        tracing::error!(
+                            failed = report.failed.len(),
+                            examined = report.examined,
+                            details = ?report.failed,
+                            "release sweep could not release every due hold -                              people are owed money they cannot reach"
+                        );
+                    }
+                }
+                Err(e) => tracing::error!(
+                    error = %e,
+                    "release sweep failed entirely - no funds were released this cycle"
+                ),
+            }
+
+            // Anything still late an hour after its window closed means the
+            // sweep is not doing its job. Surfaced separately from a failed
+            // cycle: a sweep can succeed every time and still leave a hold
+            // stuck behind a dispute nobody resolved.
+            if let Ok(late) = skilluv_backend::services::release::overdue(&state.db).await
+                && !late.is_empty()
+            {
+                metrics::gauge!("skilluv_release_overdue_holds").set(late.len() as f64);
+                tracing::warn!(
+                    count = late.len(),
+                    "holds are past their release window and still unreleased"
+                );
+            }
+        }
+    });
+}
+
+/// Chases payouts whose provider never called back.
+///
+/// Not behind a feature flag, for the same reason as the release sweep: a
+/// deployment that forgets to enable it looks healthy while holding payouts
+/// that are `pending` forever — the recipient's balance debited, the money
+/// somewhere nobody can name.
+///
+/// Every fifteen minutes. The sweep only looks at payouts older than its own
+/// quiet period, so running often costs a cheap indexed query and keeps the
+/// backlog from arriving all at once.
+fn spawn_payout_reconciliation_worker(state: skilluv_backend::AppState) {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(15 * 60));
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+            let registry = skilluv_backend::services::payout_adapters::registry_from_env();
+            match skilluv_backend::services::reconciliation::sweep(&state.db, &registry).await {
+                Ok(report) => {
+                    if report.checked > 0 || report.replayed_events > 0 {
+                        tracing::info!(
+                            checked = report.checked,
+                            settled = report.settled,
+                            failed = report.failed,
+                            escalated = report.escalated,
+                            replayed = report.replayed_events,
+                            "payout reconciliation cycle"
+                        );
+                    }
+                }
+                Err(e) => tracing::error!(
+                    error = %e,
+                    "payout reconciliation failed entirely - unconfirmed payouts stayed unconfirmed"
+                ),
+            }
+        }
+    });
+}
+
 fn spawn_hello_wall_mirror_worker(state: skilluv_backend::AppState) {
     tokio::spawn(async move {
         if std::env::var("SKILLUV_HELLO_WALL_MIRROR_ENABLED").as_deref() != Ok("1") {

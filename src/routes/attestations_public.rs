@@ -40,10 +40,14 @@ use serde_json::json;
 
 use crate::AppState;
 use crate::errors::AppError;
+use crate::services::og_card;
 
 pub fn attestations_public_routes() -> Router<AppState> {
     Router::new()
         .route("/verify/{hash}", get(verify))
+        // SKI-292 — share card. Same segment-per-parameter constraint as the
+        // PDF route below, hence `/og.png` as its own segment.
+        .route("/verify/{hash}/og.png", get(verify_og_card))
         // SKI-118 — separate segment for the PDF form. axum/matchit
         // requires exactly one parameter per path segment, so
         // `/verify/{hash}.pdf` panics at Router::new() time. Adding
@@ -64,6 +68,7 @@ pub fn attestations_public_routes() -> Router<AppState> {
 pub fn attestations_public_api_routes() -> Router<AppState> {
     Router::new()
         .route("/verify/{hash}", get(verify))
+        .route("/verify/{hash}/og.png", get(verify_og_card))
         .route("/verify/{hash}/pdf", get(verify_pdf))
 }
 
@@ -176,6 +181,116 @@ async fn verify(
 }
 
 // ─── SKI-118 PDF handler ─────────────────────────────────────────
+
+/// Row backing the share card. Separate from `AttestationRow` because the
+/// card needs the repository, which the JSON payload does not carry.
+type CardRow = (
+    Option<chrono::DateTime<chrono::Utc>>,
+    Option<String>, // primary_domain
+    i16,            // difficulty
+    Option<String>, // contributor username
+    Option<String>, // contributor display_name
+    Option<String>, // github_repo_owner
+    Option<String>, // github_repo_name
+);
+
+/// OpenGraph share card for an attestation, as a PNG.
+///
+/// Public and unauthenticated: the callers are the crawlers of X, LinkedIn
+/// and Facebook, which follow `og:image` without cookies.
+///
+/// An unknown or malformed hash returns a generic card with **200**, never a
+/// 404. A crawler that receives an error renders no preview at all, and the
+/// person who shared the link is never told why their post looks broken.
+#[utoipa::path(
+    get,
+    path = "/api/verify/{hash}/og.png",
+    tag = "attestations",
+    params(("hash" = String, Path, description = "Attestation hash (64 hex chars)")),
+    responses(
+        (status = 200, description = "PNG share card, 1200x630", content_type = "image/png"),
+    ),
+    security(),
+)]
+pub async fn verify_og_card(
+    State(state): State<AppState>,
+    Path(hash): Path<String>,
+) -> Result<axum::response::Response, AppError> {
+    let data = if is_valid_hash_shape(&hash) {
+        load_card_data(&state, &hash).await?
+    } else {
+        None
+    };
+    let card = data.unwrap_or_else(og_card::fallback_card);
+    let png = og_card::render_png(&card)?;
+
+    let mut headers = axum::http::HeaderMap::new();
+    headers.insert(
+        axum::http::header::CONTENT_TYPE,
+        axum::http::HeaderValue::from_static("image/png"),
+    );
+    // A validated attestation never changes, so the card is immutable. The
+    // fallback is cached far more briefly: the hash may simply not exist yet
+    // when a crawler races the page being published.
+    headers.insert(
+        axum::http::header::CACHE_CONTROL,
+        axum::http::HeaderValue::from_static("public, max-age=31536000, immutable"),
+    );
+
+    Ok((StatusCode::OK, headers, png).into_response())
+}
+
+/// Fetch what the card shows. `None` means no such attestation.
+async fn load_card_data(
+    state: &AppState,
+    hash: &str,
+) -> Result<Option<og_card::CardData>, AppError> {
+    let row: Option<CardRow> = sqlx::query_as(
+        r#"
+        SELECT s.validated_at,
+               s.primary_domain,
+               s.difficulty,
+               cu.username,
+               cu.display_name,
+               p.github_repo_owner,
+               p.github_repo_name
+          FROM project_slices s
+          LEFT JOIN users cu ON cu.id = s.claimed_by_user_id
+          LEFT JOIN projects p ON p.id = s.project_id
+         WHERE s.attestation_hash = $1
+        "#,
+    )
+    .bind(hash)
+    .fetch_optional(&state.db)
+    .await?;
+
+    let Some((validated_at, domain, difficulty, username, display_name, repo_owner, repo_name)) =
+        row
+    else {
+        return Ok(None);
+    };
+
+    // Same guard as `verify`: a hash without a validation date means the row
+    // was written outside the approval path. Do not vouch for it on a card
+    // that will be cached for a year.
+    let Some(validated_at) = validated_at else {
+        return Ok(None);
+    };
+
+    let username = username.unwrap_or_else(|| "anonyme".to_string());
+    Ok(Some(og_card::CardData {
+        display_name: display_name.unwrap_or_else(|| username.clone()),
+        username,
+        repository: match (repo_owner, repo_name) {
+            (Some(o), Some(n)) => Some(format!("{o}/{n}")),
+            _ => None,
+        },
+        domain,
+        difficulty: Some(difficulty),
+        validated_on: Some(validated_at.format("%d/%m/%Y").to_string()),
+        hash: Some(hash.to_string()),
+    }))
+}
 
 async fn verify_pdf(
     State(state): State<AppState>,

@@ -51,7 +51,8 @@ struct PublicUser {
     id: Uuid,
     username: String,
     display_name: String,
-    skill_domain: String,
+    /// Nullable since migration 0049 — see the note on the profile route.
+    skill_domain: Option<String>,
     title: String,
     golden_stars: i32,
     total_fragments: i32,
@@ -73,7 +74,8 @@ pub struct V1UserProfile {
     pub id: Uuid,
     pub username: String,
     pub display_name: String,
-    pub skill_domain: String,
+    /// `null` when the user has not picked a domain yet.
+    pub skill_domain: Option<String>,
     pub title: String,
     pub golden_stars: i32,
     pub total_fragments: i32,

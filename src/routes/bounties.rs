@@ -944,12 +944,10 @@ pub async fn handle_pull_request_event(state: &AppState, payload: &Value) -> Res
     let platform_share_bd = BigDecimal::from(platform_share_i64);
     let talent_share_bd = BigDecimal::from(talent_share_i64);
 
-    // Conversion crédits séquestrés → fragments talent (les crédits sont B2B).
-    let credit_to_frag: i64 = std::env::var("BOUNTY_CREDIT_TO_FRAGMENTS")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(500);
-    let fragments_from_credits = (talent_share_i64 * credit_to_frag) as i32;
+    // Escrowed credits become fragments for the talent. Credits are B2B;
+    // fragments are the gamification currency.
+    let fragments_from_credits =
+        (talent_share_i64 * crate::services::credit_value::FRAGMENTS_PER_CREDIT) as i32;
     let total_fragments_award = fragments_from_credits + fragments_bonus;
 
     sqlx::query(
@@ -997,87 +995,137 @@ pub async fn handle_pull_request_event(state: &AppState, payload: &Value) -> Res
         .execute(&state.db)
         .await?;
 
-    // P13.4 : dual payout — en plus des fragments, crédite le talent_wallet
-    // en devise réelle (EUR ou XOF selon residency_country). Best-effort :
-    // si le wallet n'existe pas ou le taux est 0, on skip silencieusement.
+    // The talent's share, recorded in the ledger and released immediately.
+    //
+    // Two things were wrong here. The amount was converted from credits to
+    // real money using a rate read from an environment variable, which
+    // parses to 0.0 when unset — so the whole block was skipped and the
+    // slice was stamped paid anyway. And that conversion was us doing
+    // foreign exchange, which is a regulated activity we have no business
+    // performing.
+    //
+    // Credits are prepaid at a fixed, published value, so this is not an
+    // exchange rate: it is the denomination the enterprise already paid in.
+    // `credit_value` lives with the pack definitions, one place, auditable.
+    //
+    // Released with no hold: a merged contribution is public and verifiable
+    // in the upstream repository, so there is nothing for the payer to
+    // contest. `release_windows` says zero hours for `bounty_slice`, and
+    // paying a contributor the same day is a real advantage over platforms
+    // that hold for a fortnight.
+    let mut payout_ok = false;
     let residency: Option<String> =
         sqlx::query_scalar("SELECT residency_country FROM talent_wallets WHERE user_id = $1")
             .bind(talent_user_id)
             .fetch_optional(&state.db)
             .await?
             .flatten();
-    let is_xof_country = matches!(
+
+    let wallet_currency = if matches!(
         residency.as_deref(),
         Some("CI" | "SN" | "BJ" | "TG" | "ML" | "BF" | "NE" | "GW")
-    );
-    let (wallet_currency, rate_env) = if is_xof_country {
-        (
-            crate::services::talent_wallet::Currency::Xof,
-            "BOUNTY_CREDIT_TO_XOF",
-        )
+    ) {
+        crate::services::ledger::Currency::Xof
     } else {
-        (
-            crate::services::talent_wallet::Currency::Eur,
-            "BOUNTY_CREDIT_TO_EUR",
-        )
+        crate::services::ledger::Currency::Eur
     };
-    let rate: f64 = std::env::var(rate_env)
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(0.0);
-    if rate > 0.0 {
-        // BE-P26 : le wallet talent reçoit talent_share (92% après fee 8%),
-        // pas le reward brut. Ex bounty 500€ → wallet 460€ EUR.
-        let rate_bd = BigDecimal::try_from(rate).unwrap_or(BigDecimal::from(0));
-        let fiat_amount = &talent_share_bd * &rate_bd;
-        if fiat_amount > 0 {
-            let entry = crate::services::talent_wallet::LedgerEntry {
-                user_id: talent_user_id,
-                delta: &fiat_amount,
-                currency: wallet_currency,
-                reason: "bounty_payout",
-                related_slice_id: Some(slice_id),
-                related_provider_txn_id: None,
-                notes: Some("automatic bounty merge payout"),
-            };
-            match crate::services::talent_wallet::credit(&state.db, entry).await {
-                Ok(txn) => {
-                    metrics::counter!(
-                        "skilluv_bounty_wallet_payouts_total",
-                        "currency" => wallet_currency.as_str().to_string()
-                    )
-                    .increment(1);
-                    tracing::info!(
-                        talent = %talent_user_id, slice_id = %slice_id,
-                        currency = wallet_currency.as_str(), amount = %fiat_amount,
-                        tx_id = %txn.id,
-                        "bounty wallet payout credited"
-                    );
+
+    let fiat_amount = crate::services::credit_value::to_currency(&talent_share_bd, wallet_currency);
+    let platform_fiat =
+        crate::services::credit_value::to_currency(&platform_share_bd, wallet_currency);
+
+    if fiat_amount.sign() == bigdecimal::num_bigint::Sign::Plus {
+        match crate::services::ledger::capture_for_recipient(
+            &state.db,
+            "stripe",
+            format!("bounty:{slice_id}"),
+            talent_user_id,
+            fiat_amount.clone() + platform_fiat.clone(),
+            platform_fiat,
+            wallet_currency,
+            "bounty_slice",
+            slice_id,
+        )
+        .await
+        {
+            Ok(posted) => {
+                // Zero-hour window, so it goes straight to withdrawable.
+                match crate::services::ledger::release(
+                    &state.db,
+                    talent_user_id,
+                    fiat_amount.clone(),
+                    wallet_currency,
+                    "bounty_slice",
+                    slice_id,
+                )
+                .await
+                {
+                    Ok(_) => {
+                        payout_ok = true;
+                        metrics::counter!(
+                            "skilluv_bounty_wallet_payouts_total",
+                            "currency" => wallet_currency.as_str().to_string()
+                        )
+                        .increment(1);
+                        tracing::info!(
+                            talent = %talent_user_id, slice_id = %slice_id,
+                            currency = wallet_currency.as_str(), amount = %fiat_amount,
+                            tx_id = %posted.transaction_id(),
+                            "bounty payout recorded and released"
+                        );
+                    }
+                    Err(e) => {
+                        metrics::counter!(
+                            "skilluv_bounty_payout_failed_total",
+                            "currency" => wallet_currency.as_str().to_string()
+                        )
+                        .increment(1);
+                        tracing::error!(
+                            error = %e, talent = %talent_user_id, slice_id = %slice_id,
+                            "bounty captured but not released - the talent is owed \
+                             money they cannot reach"
+                        );
+                    }
                 }
-                Err(e) => {
-                    tracing::warn!(
-                        error = %e, talent = %talent_user_id, slice_id = %slice_id,
-                        "P13.4 dual payout to wallet failed (best-effort, fragments still awarded)"
-                    );
-                }
+            }
+            Err(e) => {
+                metrics::counter!(
+                    "skilluv_bounty_payout_failed_total",
+                    "currency" => wallet_currency.as_str().to_string()
+                )
+                .increment(1);
+                tracing::error!(
+                    error = %e, talent = %talent_user_id, slice_id = %slice_id,
+                    amount = %fiat_amount, currency = wallet_currency.as_str(),
+                    "bounty payout failed to record. Fragments were awarded; \
+                     the money was not."
+                );
             }
         }
     }
 
+    // `paid_at` records that the money moved, so it is only stamped when it
+    // did. The merge itself is a fact either way — the contribution is in the
+    // upstream repository regardless of whether our payout succeeded — so
+    // `status` and `merged_at` are unconditional. A NULL `paid_at` on a
+    // merged slice is the queue of what still owes money.
     sqlx::query(
         r#"
         UPDATE project_slices
         SET status = 'merged',
             merged_at = NOW(),
-            paid_at = NOW()
+            paid_at = CASE WHEN $2 THEN NOW() ELSE NULL END
         WHERE id = $1
         "#,
     )
     .bind(slice_id)
+    .bind(payout_ok)
     .execute(&state.db)
     .await?;
 
-    metrics::counter!("skilluv_bounties_paid_total").increment(1);
+    if payout_ok {
+        metrics::counter!("skilluv_bounties_paid_total").increment(1);
+    }
     tracing::info!(
         slice_id = %slice_id,
         talent = %talent_user_id,

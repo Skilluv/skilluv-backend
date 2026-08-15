@@ -42,7 +42,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         title = "Skilluv Backend API",
         description = "Compétences tech prouvées par des artefacts opposables. \
                        Contract-tested via schemathesis on every PR.",
-        contact(name = "Skilluv Team", email = "security@skilluv.com"),
+        contact(name = "Skilluv Team", email = "security@skill-uv.com"),
         license(name = "Proprietary"),
     ),
     servers(
@@ -93,11 +93,25 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         // ─── i18n ─────────────────────────────────────────────────
         crate::routes::i18n::list_locales,
         // ─── email preferences ────────────────────────────────────
-        crate::routes::email_prefs::get_prefs,
-        crate::routes::email_prefs::update_prefs,
+        // SKI-293 — the v2 routes under /users/me were shipped in SKI-287 and
+        // never registered here, so the document advertised only the legacy
+        // /auth/me pair, with a different payload shape. That is why the front
+        // reported "two routes, two shapes".
+        crate::routes::email_prefs::get_prefs_v2,
+        crate::routes::email_prefs::replace_prefs,
         crate::routes::email_prefs::unsubscribe,
+        crate::routes::email_prefs::unsubscribe_by_path,
         crate::routes::email_prefs::brevo_webhook,
         crate::routes::email_prefs::admin_run_weekly_digest,
+        // Notification settings across all three channels.
+        crate::routes::notification_preferences::list_preferences,
+        crate::routes::notification_preferences::update_preferences,
+        crate::routes::notification_preferences::reset_preferences,
+        crate::routes::notification_preferences::set_quiet_hours,
+        // ─── mentions (SKI-286) ───────────────────────────────────
+        crate::routes::mentions::list_mine,
+        crate::routes::mentions::read_one,
+        crate::routes::mentions::read_all,
         // ─── metrics (internal dashboards) ────────────────────────
         crate::routes::metrics::metrics_summary,
         // ─── tracks ───────────────────────────────────────────────
@@ -150,6 +164,9 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::attestations::verify_attestation,
         crate::routes::attestations::issue_compagnonnage,
         crate::routes::attestations::revoke_attestation,
+        // SKI-292 — share card. Documented so the front knows the URL to put
+        // in `og:image` without reading the router.
+        crate::routes::attestations_public::verify_og_card,
         // ─── push notifications ───────────────────────────────────
         crate::routes::push::vapid_public_key,
         crate::routes::push::subscribe,
@@ -411,7 +428,6 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::social::delete_comment,
         crate::routes::social::toggle_reaction,
         crate::routes::social::reaction_summary,
-        crate::routes::social::my_mentions,
         crate::routes::social::list_tags,
         crate::routes::social::list_target_tags,
         crate::routes::social::attach_tag,
@@ -662,15 +678,34 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::mentorship::submit_review,
         crate::routes::mentorship::upsert_my_mentor_profile,
         // ─── talent wallet ───────────────────────────────────────
-        crate::routes::talent_wallet::momo_withdraw,
         crate::routes::talent_wallet::my_wallet,
         crate::routes::talent_wallet::my_wallet_transactions,
         crate::routes::talent_wallet::register_momo_phone,
         crate::routes::talent_wallet::set_my_residency,
         crate::routes::talent_wallet::stripe_connect_webhook,
         crate::routes::talent_wallet::stripe_onboard,
-        crate::routes::talent_wallet::stripe_withdraw,
+        crate::routes::talent_wallet::withdraw,
         crate::routes::talent_wallet::wallet_statement_csv,
+        crate::routes::payment_webhooks::receive,
+        crate::routes::email_preview::preview,
+        crate::routes::email_preview::index,
+        crate::routes::disputes::raise,
+        crate::routes::disputes::concede,
+        crate::routes::disputes::contest,
+        crate::routes::disputes::withdraw,
+        crate::routes::disputes::mine,
+        crate::routes::disputes::decide,
+        crate::routes::disputes::queue,
+        crate::routes::payments::methods,
+        crate::routes::payments::charge,
+        crate::routes::payments::status,
+        crate::routes::admin_money::overview,
+        crate::routes::admin_money::payments,
+        crate::routes::admin_money::payouts,
+        crate::routes::admin_money::routes,
+        crate::routes::admin_money::toggle_route,
+        crate::routes::admin_money::methods,
+        crate::routes::admin_money::toggle_method,
     ),
     components(
         schemas(
@@ -679,6 +714,32 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
             MetaInfo,
             SimpleMessage,
             ApiResponse<SimpleMessage>,
+            // SKI-291 — the profile page reads `github_repo_owner` /
+            // `github_repo_name` off these, so the shape has to be published.
+            crate::services::projects::Project,
+            crate::routes::projects::UserProjectsData,
+            crate::routes::projects::UserProjectsResponse,
+            // SKI-293 — the decide contract was untyped, so the only way to
+            // find the field name was to probe the running API.
+            crate::routes::notification_preferences::KindPreference,
+            crate::routes::notification_preferences::PreferencesData,
+            crate::routes::notification_preferences::PreferencesResponse,
+            crate::routes::notification_preferences::PreferenceUpdate,
+            crate::routes::notification_preferences::UpdatePreferencesRequest,
+            crate::routes::notification_preferences::UpdateResult,
+            crate::routes::notification_preferences::ResetResult,
+            crate::routes::guild::DecideBody,
+            crate::routes::guild::DecidedApplicationData,
+            crate::routes::guild::DecidedApplicationResponse,
+            crate::services::guild::GuildApplication,
+            // SKI-293 — mention inbox, shipped in SKI-286 without a schema.
+            crate::services::mentions::Mention,
+            crate::services::mentions::MentionAuthor,
+            crate::routes::mentions::MentionListResponse,
+            crate::routes::mentions::MentionRead,
+            crate::routes::mentions::MentionReadResponse,
+            crate::routes::mentions::MentionsMarked,
+            crate::routes::mentions::MentionsMarkedResponse,
             crate::routes::auth::ForgotPasswordRequest,
             crate::routes::auth::VerifyEmailQuery,
             crate::routes::auth::ResetPasswordRequest,
@@ -687,6 +748,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
             crate::services::session::SessionRow,
             crate::routes::auth::TotpDisableRequest,
             crate::routes::auth::PasswordConfirmRequest,
+            crate::routes::auth::Email2faEnableRequest,
             crate::routes::auth::MeResponse,
             crate::routes::auth::RankInfo,
             crate::models::UserPrivate,
@@ -722,8 +784,6 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
             crate::routes::i18n::LocalesResponse,
             crate::routes::i18n::LocaleEntry,
             crate::routes::email_prefs::EmailPrefs,
-            crate::routes::email_prefs::EmailPrefsResponse,
-            crate::routes::email_prefs::UpdatePrefsRequest,
             crate::routes::email_prefs::AdminDigestResponse,
             crate::services::digest::DigestRunReport,
             crate::routes::metrics::MetricsSummary,

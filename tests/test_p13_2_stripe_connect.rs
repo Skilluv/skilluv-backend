@@ -94,11 +94,11 @@ async fn stripe_onboard_fails_without_config() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// stripe_withdraw refuse si KYC pas verified
+// Withdrawing over a bank rail refuses until Stripe has verified KYC
 // ═══════════════════════════════════════════════════════════════════
 
 #[tokio::test]
-async fn stripe_withdraw_refuses_when_kyc_not_verified() {
+async fn withdraw_refuses_when_kyc_not_verified() {
     let _env_guard = ENV_MUTEX.lock().await;
     set_stripe_env();
     let app = TestApp::spawn().await;
@@ -120,9 +120,14 @@ async fn stripe_withdraw_refuses_when_kyc_not_verified() {
     .await
     .expect("seed wallet");
 
+    // Funded, because the balance is checked before onboarding is. An empty
+    // account is refused for having no money — true, and not what this test
+    // is named after.
+    fund_eur(&app, user_id, "50.00").await;
+
     let resp = app
         .post(
-            "/api/users/me/wallet/withdraw/stripe",
+            "/api/users/me/wallet/withdraw",
             &json!({ "amount": "10.00", "currency": "EUR" }),
         )
         .await;
@@ -132,28 +137,33 @@ async fn stripe_withdraw_refuses_when_kyc_not_verified() {
         body["error"]["message"]
             .as_str()
             .unwrap()
-            .contains("KYC status is 'pending'")
+            .contains("Complete Stripe onboarding"),
+        "got: {body}"
     );
 
     drop(app);
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// stripe_withdraw refuse si currency != EUR
+// Le rail bancaire ne porte pas le XOF
 // ═══════════════════════════════════════════════════════════════════
 
 #[tokio::test]
-async fn stripe_withdraw_refuses_non_eur() {
+async fn the_bank_rail_refuses_a_currency_it_cannot_carry() {
     let _env_guard = ENV_MUTEX.lock().await;
     set_stripe_env();
     let app = TestApp::spawn().await;
     app.register_user("u_xof").await;
     app.login("u_xof").await;
 
+    // There used to be a Stripe-only endpoint that rejected anything but
+    // EUR. There is one endpoint now, and which rail carries which currency
+    // is a row in `payout_routes` rather than a branch in a handler — the
+    // only bank_account route is EUR, so this has nowhere to go.
     let resp = app
         .post(
-            "/api/users/me/wallet/withdraw/stripe",
-            &json!({ "amount": "10.00", "currency": "XOF" }),
+            "/api/users/me/wallet/withdraw",
+            &json!({ "amount": "10.00", "currency": "XOF", "rail": "bank_account" }),
         )
         .await;
     assert_eq!(resp.status(), 400);
@@ -276,4 +286,41 @@ async fn webhook_rejects_invalid_signature() {
     assert_eq!(resp.status(), 401);
 
     drop(app);
+}
+
+/// Give someone withdrawable EUR, the way a real flow would.
+///
+/// Only released money can leave, and the withdraw endpoint checks the
+/// balance before anything else — so a test about any later refusal has to
+/// fund the account first, or it is answered for the wrong reason.
+async fn fund_eur(app: &TestApp, user: Uuid, amount: &str) {
+    use bigdecimal::BigDecimal;
+    use skilluv_backend::services::ledger::{self, Currency};
+    use std::str::FromStr;
+
+    let subject = Uuid::new_v4();
+    let amount = BigDecimal::from_str(amount).unwrap();
+    ledger::capture_for_recipient(
+        &app.db,
+        "stripe",
+        format!("seed:{subject}"),
+        user,
+        amount.clone(),
+        BigDecimal::from(0),
+        Currency::Eur,
+        "bounty_slice",
+        subject,
+    )
+    .await
+    .expect("capture");
+    ledger::release(
+        &app.db,
+        user,
+        amount,
+        Currency::Eur,
+        "bounty_slice",
+        subject,
+    )
+    .await
+    .expect("release");
 }

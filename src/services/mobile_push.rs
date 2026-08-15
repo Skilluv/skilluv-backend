@@ -4,8 +4,8 @@
 //! Le trait est similaire au pattern mobile_money : impls concrètes stubbed
 //! en dev (sans FCM_SERVER_KEY / APNS_KEY_ID), fonctionnelles en prod.
 //!
-//! `NotificationService::send` en P15.1 appellera `push_to_user_mobile`
-//! best-effort en parallèle de son écriture DB + WebSocket.
+//! [`crate::services::notify`] appelle `push_to_user_mobile` best-effort en
+//! parallèle de son écriture DB + WebSocket.
 
 use std::str::FromStr;
 
@@ -207,7 +207,7 @@ fn get_provider(platform: Platform) -> Box<dyn MobilePushProvider> {
 
 /// Push best-effort à tous les devices d'un user. Retourne les outcomes par device.
 ///
-/// Appelé par `NotificationService::send` en background — les échecs n'impactent
+/// Appelé par [`crate::services::notify`] en background — les échecs n'impactent
 /// pas la notification DB principale.
 pub async fn push_to_user_mobile(
     db: &PgPool,

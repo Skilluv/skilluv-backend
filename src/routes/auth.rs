@@ -480,12 +480,35 @@ pub struct TotpDisableRequest {
 }
 
 /// Body for any endpoint that gates a sensitive action on password re-entry
-/// (enable/disable email 2FA, other sudo-mode toggles). Avoids leaking the
+/// (disable email 2FA, other sudo-mode toggles). Avoids leaking the
 /// unrelated fields of `ChangePasswordRequest` that caused BE-P0-04.
+///
+/// `current_password` is accepted as an alias: clients that reused their
+/// change-password form send that name, and rejecting a correct password
+/// over its label helps nobody.
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct PasswordConfirmRequest {
+    #[serde(alias = "current_password")]
     #[schema(min_length = 1, max_length = 128)]
     pub password: String,
+}
+
+/// Body for turning email 2FA **on**.
+///
+/// No password required. Enabling a second factor strengthens the account:
+/// someone holding a stolen session gains nothing by switching it on, since
+/// the codes go to the account's own address. Demanding re-authentication
+/// here only ever stopped legitimate users — the client sent no body at all
+/// and got a 422.
+///
+/// Disabling stays gated on the password: that one is a downgrade.
+#[derive(Debug, Default, Deserialize, utoipa::ToSchema)]
+pub struct Email2faEnableRequest {
+    /// Optional. Verified when present, so a client that already collects it
+    /// loses nothing.
+    #[serde(default, alias = "current_password")]
+    #[schema(min_length = 1, max_length = 128)]
+    pub password: Option<String>,
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
@@ -604,8 +627,8 @@ const REFRESH_COOKIE_MAX_AGE: i64 = 7 * 24 * 60 * 60;
 
 /// True when the incoming request originated from the admin frontend (dev
 /// server on :5174 or `admin.*` in prod). Login handlers use this to emit
-/// admin-prefixed cookies so an admin session on `admin.skilluv.com` and a
-/// candidate session on `skilluv.com` can coexist in the same browser cookie
+/// admin-prefixed cookies so an admin session on `admin.skill-uv.com` and a
+/// candidate session on `skill-uv.com` can coexist in the same browser cookie
 /// jar without stepping on each other. The `AuthUser` extractor accepts
 /// either prefix, so downstream endpoints don't have to care.
 pub fn is_admin_origin(headers: &axum::http::HeaderMap) -> bool {
@@ -1126,7 +1149,7 @@ pub async fn login(
         && !user.totp_enabled
         && !has_passkey;
     let user_private: UserPrivate = user.into();
-    // Origin-aware cookie namespace — admin.skilluv.com → admin_* cookies,
+    // Origin-aware cookie namespace — admin.skill-uv.com → admin_* cookies,
     // everything else → the standard names.
     let prefix = cookie_prefix(&headers);
     let access_cookie = build_cookie(
@@ -1876,8 +1899,19 @@ pub async fn totp_enable(
 pub async fn totp_disable(
     State(state): State<AppState>,
     auth: AuthUser,
-    Json(body): Json<TotpDisableRequest>,
+    // Taken raw so a body missing `password` produces a 400 that names what
+    // is required, instead of axum's 422 with a serde message. Clients were
+    // sending `{ "code": "123456" }` alone and could not tell from the
+    // response what else to send.
+    Json(raw): Json<serde_json::Value>,
 ) -> Result<Json<ApiResponse<SimpleMessage>>, AppError> {
+    let body: TotpDisableRequest = serde_json::from_value(raw).map_err(|_| {
+        AppError::Validation(
+            "Disabling TOTP requires both `password` and a live 6-digit              `code`. Holding a session is not enough to drop a second              factor, so the account password is re-checked here."
+                .into(),
+        )
+    })?;
+
     let user: User = sqlx::query_as("SELECT * FROM users WHERE id = $1")
         .bind(auth.user_id)
         .fetch_one(&state.db)
@@ -1936,33 +1970,42 @@ pub async fn totp_disable(
 // ─── Email 2FA ───────────────────────────────────────────────────
 
 /// Enable email-based 2FA. Requires the account email to already be
-/// verified — otherwise the user could lock themselves out. Password
-/// re-entry gates against session hijack.
+/// verified — otherwise the user could lock themselves out.
+///
+/// The body is optional. Turning a second factor **on** cannot be abused
+/// from a stolen session: the codes are delivered to the account's own
+/// address, so the thief gains nothing. Requiring a password here rejected
+/// legitimate clients that sent no body, and protected no one. Disabling
+/// remains gated on the password, because that one is a downgrade.
 #[utoipa::path(
     post,
     path = "/api/auth/email-2fa/enable",
     tag = "auth",
-    request_body = PasswordConfirmRequest,
+    request_body(content = Email2faEnableRequest, description = "Optional — a password is verified when supplied"),
     responses(
         (status = 200, description = "Email 2FA enabled", body = ApiResponse<SimpleMessage>),
         (status = 400, description = "Email not verified or already enabled", body = crate::api_response::ErrorResponse),
-        (status = 401, description = "Password wrong", body = crate::api_response::ErrorResponse),
+        (status = 401, description = "Password supplied but wrong", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
 )]
 pub async fn email_2fa_enable(
     State(state): State<AppState>,
     auth: AuthUser,
-    Json(body): Json<PasswordConfirmRequest>,
+    // An absent or empty body is valid, so the extractor must not reject it.
+    body: Option<Json<Email2faEnableRequest>>,
 ) -> Result<Json<ApiResponse<SimpleMessage>>, AppError> {
+    let body = body.map(|Json(b)| b).unwrap_or_default();
+
     let user: User = sqlx::query_as("SELECT * FROM users WHERE id = $1")
         .bind(auth.user_id)
         .fetch_one(&state.db)
         .await?;
 
-    // Confirm the user really typed the password (protect against a stolen
-    // session flipping 2FA silently).
-    if !AuthService::verify_password(&body.password, &user.password_hash)? {
+    // Still checked when the client bothers to send one.
+    if let Some(password) = body.password.as_deref()
+        && !AuthService::verify_password(password, &user.password_hash)?
+    {
         return Err(AppError::InvalidCredentials);
     }
 

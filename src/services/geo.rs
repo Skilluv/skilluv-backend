@@ -32,6 +32,50 @@ pub struct GeoService {
 }
 
 impl GeoService {
+    /// A service with no data. Country and city lookups return empty
+    /// results; every other feature of the platform is unaffected.
+    pub fn empty() -> Self {
+        Self {
+            countries: Vec::new(),
+            iso3_to_iso2: HashMap::new(),
+            cities_by_country: HashMap::new(),
+        }
+    }
+
+    /// Directory holding the GeoNames dumps.
+    ///
+    /// SKI-294 — `GEONAMES_DIR` overrides the default. The default is
+    /// relative to the process working directory, which is fine when running
+    /// from a checkout and wrong everywhere else: the published image has no
+    /// `data/` next to wherever it happens to be started from.
+    pub fn data_dir_from_env() -> std::path::PathBuf {
+        std::env::var("GEONAMES_DIR")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|_| std::path::PathBuf::from("data"))
+    }
+
+    /// Load the dumps, or fall back to an empty service.
+    ///
+    /// SKI-294 — this used to be an `.expect()` at startup. Countries and
+    /// cities feed profile autocompletion; their absence is not a reason to
+    /// refuse logins, moderation, payments and everything else. The image
+    /// published to GHCR could not boot at all because of it.
+    pub fn load_or_empty(data_dir: &Path) -> Self {
+        match Self::load(data_dir) {
+            Ok(geo) => geo,
+            Err(e) => {
+                tracing::warn!(
+                    path = %data_dir.display(),
+                    error = %e,
+                    "GeoNames data unavailable — country and city lookups will \
+                     return empty results. Set GEONAMES_DIR to point at the \
+                     dumps, or ignore this if autocompletion is not needed here."
+                );
+                Self::empty()
+            }
+        }
+    }
+
     pub fn load(data_dir: &Path) -> std::io::Result<Self> {
         let (countries, iso3_to_iso2) = Self::load_countries(data_dir)?;
         let cities_by_country = Self::load_cities(data_dir)?;

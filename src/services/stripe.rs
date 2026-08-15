@@ -76,10 +76,15 @@ impl StripeConfig {
             .ok()
             .filter(|s| !s.is_empty())?;
         let success_url = std::env::var("STRIPE_SUCCESS_URL").unwrap_or_else(|_| {
-            "https://skilluv.com/enterprise/credits/success?session_id={CHECKOUT_SESSION_ID}".into()
+            "https://skill-uv.com/enterprise/credits/success?session_id={CHECKOUT_SESSION_ID}"
+                .into()
         });
-        let cancel_url = std::env::var("STRIPE_CANCEL_URL")
-            .unwrap_or_else(|_| "https://skilluv.com/enterprise/credits/canceled".into());
+        let cancel_url = std::env::var("STRIPE_CANCEL_URL").unwrap_or_else(|_| {
+            format!(
+                "{}/enterprise/credits/canceled",
+                crate::config::PUBLIC_SITE_URL
+            )
+        });
         Some(Self {
             secret_key,
             webhook_secret,
@@ -279,6 +284,9 @@ pub async fn create_refund(
     let resp = client
         .post(format!("{STRIPE_API}/refunds"))
         .basic_auth(&cfg.secret_key, Some(""))
+        // Keyed on the charge. Without it, a retried request after a lost
+        // response gives the money back a second time.
+        .header("Idempotency-Key", format!("refund:{payment_intent_id}"))
         .form(&form)
         .send()
         .await
@@ -412,6 +420,7 @@ pub async fn create_transfer(
     amount_cents: i64,
     currency: &str,
     description: &str,
+    idempotency_key: &str,
 ) -> Result<serde_json::Value, AppError> {
     let client = reqwest::Client::new();
     let form = [
@@ -423,6 +432,9 @@ pub async fn create_transfer(
     let resp = client
         .post(format!("{STRIPE_API}/transfers"))
         .basic_auth(&cfg.secret_key, Some(""))
+        // Without this, a transfer whose response was lost in flight cannot
+        // be retried without risking paying twice.
+        .header("Idempotency-Key", idempotency_key)
         .form(&form)
         .send()
         .await
@@ -437,6 +449,265 @@ pub async fn create_transfer(
     resp.json()
         .await
         .map_err(|e| AppError::Internal(format!("transfer decode: {e}")))
+}
+
+/// Read back a transfer, for reconciliation.
+///
+/// A transfer between Stripe balances has no failure state of its own; what
+/// can fail is the payout that follows it to the recipient's bank, and that
+/// arrives as a `payout.failed` webhook. So this answers "does Stripe still
+/// have this transfer, and was it reversed", which is the only question the
+/// sweep can usefully ask here.
+pub async fn retrieve_transfer(
+    cfg: &StripeConfig,
+    transfer_id: &str,
+) -> Result<serde_json::Value, AppError> {
+    let client = reqwest::Client::new();
+    let resp = client
+        .get(format!("{STRIPE_API}/transfers/{transfer_id}"))
+        .basic_auth(&cfg.secret_key, Some(""))
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("stripe retrieve transfer: {e}")))?;
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(AppError::Internal(format!(
+            "stripe retrieve transfer failed {status}: {body}"
+        )));
+    }
+    resp.json()
+        .await
+        .map_err(|e| AppError::Internal(format!("transfer decode: {e}")))
+}
+
+/// A checkout for an arbitrary amount, not a credit pack.
+///
+/// The pack-shaped helper above serves one flow. Everything else — a
+/// mentorship session, a certification — pays a price computed at runtime,
+/// and had to be expressed as a fake pack or by calling Stripe again by
+/// hand. This is the generic form the collection adapter uses.
+pub struct PaymentCheckout<'a> {
+    /// In the currency's smallest unit: cents for EUR, whole francs for XOF.
+    pub amount_minor: i64,
+    pub currency: &'a str,
+    /// Shown to the payer on Stripe's page.
+    pub description: &'a str,
+    pub customer_email: &'a str,
+    /// Ours, echoed back on the webhook so a payment finds its subject.
+    pub client_reference_id: &'a str,
+    pub success_url: &'a str,
+    pub cancel_url: &'a str,
+    pub idempotency_key: &'a str,
+}
+
+pub async fn create_payment_checkout(
+    cfg: &StripeConfig,
+    params: &PaymentCheckout<'_>,
+) -> Result<serde_json::Value, AppError> {
+    let PaymentCheckout {
+        amount_minor,
+        currency,
+        description,
+        customer_email,
+        client_reference_id,
+        success_url,
+        cancel_url,
+        idempotency_key,
+    } = params;
+    let client = reqwest::Client::new();
+    let currency = currency.to_lowercase();
+    let form: Vec<(String, String)> = vec![
+        ("mode".into(), "payment".into()),
+        ("success_url".into(), success_url.to_string()),
+        ("cancel_url".into(), cancel_url.to_string()),
+        (
+            "client_reference_id".into(),
+            client_reference_id.to_string(),
+        ),
+        ("customer_email".into(), customer_email.to_string()),
+        ("line_items[0][quantity]".into(), "1".into()),
+        (
+            "line_items[0][price_data][currency]".into(),
+            currency.clone(),
+        ),
+        (
+            "line_items[0][price_data][unit_amount]".into(),
+            amount_minor.to_string(),
+        ),
+        (
+            "line_items[0][price_data][product_data][name]".into(),
+            description.to_string(),
+        ),
+        // Ours, in the three places it has to be. `client_reference_id` is
+        // what a human matches in the dashboard; the session metadata is
+        // what a `checkout.session.completed` webhook carries; and
+        // `payment_intent_data` is needed because a session's own metadata
+        // is *not* copied to the PaymentIntent -- which is the object a
+        // refund and a `payment_intent.succeeded` event talk about.
+        (
+            "client_reference_id".into(),
+            client_reference_id.to_string(),
+        ),
+        (
+            "metadata[merchant_reference]".into(),
+            client_reference_id.to_string(),
+        ),
+        (
+            "payment_intent_data[metadata][merchant_reference]".into(),
+            client_reference_id.to_string(),
+        ),
+    ];
+
+    let resp = client
+        .post(format!("{STRIPE_API}/checkout/sessions"))
+        .basic_auth(&cfg.secret_key, Some(""))
+        // A double-submitted form must not charge twice, and a retried
+        // request after a lost response must not open a second checkout.
+        .header("Idempotency-Key", *idempotency_key)
+        .form(&form)
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("stripe checkout: {e}")))?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(AppError::Internal(format!(
+            "stripe checkout failed {status}: {body}"
+        )));
+    }
+    resp.json()
+        .await
+        .map_err(|e| AppError::Internal(format!("checkout decode: {e}")))
+}
+
+/// What Stripe says it is holding for us, in one currency.
+///
+/// `None` when Stripe reports no balance in that currency at all, which is
+/// different from zero: the first means they have never held any, and the
+/// second that they hold none right now.
+pub async fn available_balance(
+    cfg: &StripeConfig,
+    currency: &str,
+) -> Result<Option<bigdecimal::BigDecimal>, AppError> {
+    let resp = reqwest::Client::new()
+        .get(format!("{STRIPE_API}/balance"))
+        .basic_auth(&cfg.secret_key, Some(""))
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("stripe balance: {e}")))?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(AppError::Internal(format!(
+            "stripe balance failed {status}: {body}"
+        )));
+    }
+
+    let body: serde_json::Value = resp
+        .json()
+        .await
+        .map_err(|e| AppError::Internal(format!("balance decode: {e}")))?;
+
+    // `available` and `pending` are separate lists. Both are money Stripe
+    // holds for us and both belong in the comparison — leaving `pending`
+    // out would report drift on every payment that has not settled yet.
+    let wanted = currency.to_lowercase();
+    let mut total: Option<i64> = None;
+    for bucket in ["available", "pending"] {
+        if let Some(entries) = body.get(bucket).and_then(|v| v.as_array()) {
+            for entry in entries {
+                if entry.get("currency").and_then(|c| c.as_str()) == Some(wanted.as_str())
+                    && let Some(amount) = entry.get("amount").and_then(serde_json::Value::as_i64)
+                {
+                    total = Some(total.unwrap_or(0) + amount);
+                }
+            }
+        }
+    }
+
+    Ok(total.map(|minor| {
+        // Back out of minor units, which is where a comparison silently
+        // goes wrong by a factor of a hundred.
+        match wanted.as_str() {
+            // XOF has no subdivision; Stripe reports it unscaled.
+            "xof" => bigdecimal::BigDecimal::from(minor),
+            _ => bigdecimal::BigDecimal::from(minor) / bigdecimal::BigDecimal::from(100),
+        }
+    }))
+}
+
+/// What became of a checkout session.
+///
+/// Strongly consistent, unlike search -- Stripe's own documentation warns
+/// that search data can be up to an hour behind during an incident, which
+/// is not a basis for deciding whether someone has paid.
+pub async fn retrieve_checkout_session(
+    cfg: &StripeConfig,
+    session_id: &str,
+) -> Result<serde_json::Value, AppError> {
+    let resp = reqwest::Client::new()
+        .get(format!("{STRIPE_API}/checkout/sessions/{session_id}"))
+        .basic_auth(&cfg.secret_key, Some(""))
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("stripe session: {e}")))?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(AppError::Internal(format!(
+            "stripe session failed {status}: {body}"
+        )));
+    }
+    resp.json()
+        .await
+        .map_err(|e| AppError::Internal(format!("session decode: {e}")))
+}
+
+/// Get back a session whose create response we never received.
+///
+/// Stripe stores the status code and body of the first request made under
+/// an idempotency key and returns the same result to every later request
+/// with that key, for twenty-four hours. So replaying the original create
+/// call is not a second charge -- it is how you ask "what did my request
+/// actually produce" when the answer was lost in transit.
+///
+/// This is the Stripe equivalent of FedaPay's
+/// `GET /transactions/merchant/{reference}`, and it is the better of the
+/// two: strongly consistent, where their search endpoint explicitly is not.
+///
+/// The parameters must match the original exactly. Stripe answers
+/// `idempotency_error` if they do not, which is a guard rather than an
+/// obstacle: a mismatch means this is not the same request.
+pub async fn recover_checkout_session(
+    cfg: &StripeConfig,
+    params: &PaymentCheckout<'_>,
+) -> Result<serde_json::Value, AppError> {
+    create_payment_checkout(cfg, params).await
+}
+
+/// Whether a session has been paid, in our words.
+///
+/// `payment_status` rather than `status`: a session can be `complete` while
+/// `payment_status` is `unpaid` because the payment is still processing,
+/// and treating that as paid would deliver against money that has not
+/// arrived.
+pub fn session_outcome(session: &serde_json::Value) -> &'static str {
+    let payment_status = session
+        .get("payment_status")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let status = session.get("status").and_then(|v| v.as_str()).unwrap_or("");
+
+    match (status, payment_status) {
+        (_, "paid" | "no_payment_required") => "paid",
+        ("expired", _) => "expired",
+        // `open`, or `complete` while the payment is still processing.
+        _ => "pending",
+    }
 }
 
 // ─── Subscriptions (Phase 4.6) ───────────────────────────────────

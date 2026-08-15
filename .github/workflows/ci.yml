@@ -350,9 +350,16 @@ jobs:
         # across 4 shards. `--test-threads=1` kept within each shard
         # because a few tests still touch shared Postgres server-side
         # state (RLS GUC, metrics counters).
+        #
+        # `--no-fail-fast` because the default stops a shard at its first
+        # failure: a branch with six broken tests reports four, and each
+        # fix costs another twenty-five minute run to see the next one.
+        # The shards run in parallel anyway, so finishing them costs
+        # nothing over stopping early.
         run: |
           cargo nextest run \
             --test-threads=1 \
+            --no-fail-fast \
             --partition count:${{ matrix.shard }}/4 \
             --failure-output=immediate \
             --success-output=never

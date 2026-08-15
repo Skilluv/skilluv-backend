@@ -4,7 +4,7 @@ use axum::extract::{Path, Query, State};
 use axum::http::HeaderMap;
 use axum::routing::{delete, get, post};
 use axum::{Json, Router};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use uuid::Uuid;
 
@@ -161,23 +161,48 @@ pub async fn by_slug(
     Ok(Json(build_response(json!({ "project": p }))))
 }
 
+/// Payload of `GET /api/u/{username}/projects`.
+///
+/// SKI-291 — the route is not paginated: a user owns a handful of projects,
+/// and the profile page renders all of them at once.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct UserProjectsData {
+    pub projects: Vec<projects::Project>,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct UserProjectsResponse {
+    pub data: UserProjectsData,
+    pub meta: crate::api_response::MetaInfo,
+}
+
 /// List projects owned by a specific user (by username). Public.
+///
+/// A user who exists and owns nothing answers 200 with an empty list. 404 is
+/// reserved for a username that really has no account — otherwise the front
+/// cannot tell "no projects" from "no such user".
 #[utoipa::path(
     get,
     path = "/api/u/{username}/projects",
     tag = "projects",
     params(("username" = String, Path)),
     responses(
-        (status = 200, body = serde_json::Value),
-        (status = 404, body = crate::api_response::ErrorResponse),
+        (status = 200, description = "Projects owned by this user, possibly empty", body = UserProjectsResponse),
+        (status = 404, description = "No such username, or the profile is hidden", body = crate::api_response::ErrorResponse),
     ),
 )]
 pub async fn by_user(
     State(state): State<AppState>,
     Path(username): Path<String>,
 ) -> Result<Json<Value>, AppError> {
+    // SKI-291 — visibility is `profile_hidden`, matching `GET
+    // /api/profile/{username}`. This route used to gate on `profile_active`,
+    // which only records whether onboarding was cleared: every account that
+    // had signed up without completing a challenge answered 200 on the
+    // profile and 404 here, for the same username. Same bug as SKI-70, fixed
+    // on one route only.
     let user: Option<(Uuid,)> = sqlx::query_as(
-        "SELECT id FROM users WHERE username = $1 AND profile_active = TRUE AND is_banned = FALSE",
+        "SELECT id FROM users WHERE username = $1 AND profile_hidden = FALSE AND is_banned = FALSE",
     )
     .bind(&username)
     .fetch_optional(&state.db)

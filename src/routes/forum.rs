@@ -14,7 +14,7 @@ use crate::errors::AppError;
 use crate::middleware::{AuthUser, AuthUserComplete, RateLimiter};
 use crate::routes::analytics_consent;
 use crate::services::analytics::{events, props};
-use crate::services::{NotificationService, forum};
+use crate::services::forum;
 
 pub fn forum_routes() -> Router<AppState> {
     Router::new()
@@ -318,28 +318,35 @@ pub async fn accept_answer(
 ) -> Result<Json<Value>, AppError> {
     let res = forum::accept_answer(&state.db, auth.user_id, id, body.answer_id).await?;
 
-    // Notify answer author
-    let bounty_msg = if res.bounty_transferred > 0 {
-        Some(format!("+{} fragments de bounty", res.bounty_transferred))
-    } else {
-        None
-    };
-    let _ = NotificationService::send(
-        &state.db,
-        &mut state.redis.clone(),
-        &state.ws,
-        crate::services::notification::NotificationPayload {
-            user_id: res.answer_author_id,
-            notification_type: "answer.accepted",
-            title: "Ta réponse a été acceptée",
-            body: bounty_msg.as_deref(),
-            data: Some(json!({
-                "post_id": id,
-                "comment_id": res.answer_id,
-                "bounty_fragments": res.bounty_transferred,
-            })),
-        },
+    // The person who asked, since it is their acceptance being announced.
+    let asker_name: String = sqlx::query_scalar("SELECT display_name FROM users WHERE id = $1")
+        .bind(auth.user_id)
+        .fetch_optional(&state.db)
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+    let post_title: String = sqlx::query_scalar("SELECT title FROM posts WHERE id = $1")
+        .bind(id)
+        .fetch_optional(&state.db)
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+
+    let _ = crate::services::notify::send(
+        &state,
+        crate::services::notify::Recipient::User(res.answer_author_id),
+        "forum.answer_accepted",
     )
+    .arg("author", asker_name.clone())
+    .arg("title", post_title)
+    .payload(json!({
+        "post_id": id,
+        "comment_id": res.answer_id,
+        "bounty_fragments": res.bounty_transferred,
+    }))
+    .execute()
     .await;
     metrics::counter!("skilluv_answers_accepted_total").increment(1);
     if res.bounty_transferred > 0 {

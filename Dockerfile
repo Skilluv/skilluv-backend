@@ -28,6 +28,13 @@ RUN rm -rf src
 COPY src/ src/
 COPY migrations/ migrations/
 
+# Embedded at compile time by `include_str!` / `include_bytes!`, so they have
+# to exist in the builder even though nothing reads them at runtime: the
+# translation catalogues behind `services::i18n`, and the two fonts the
+# OpenGraph card rasterises with.
+COPY locales/ locales/
+COPY assets/ assets/
+
 # Touch to force cargo to rebuild the (now real) sources.
 # --features discord-bot pulls serenity in so the discord_bot binary
 # is included in the image (feature-gated to keep test builds lean).
@@ -38,7 +45,14 @@ RUN touch src/main.rs src/lib.rs && cargo build --release --features discord-bot
 # ═══════════════════════════════════════════════════════════════════
 FROM debian:trixie-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# `upgrade` as well as `install`: the packages that ship inside the base
+# image — util-linux among them — never got a security update otherwise, so
+# the scan failed on fixes Debian had already published and this image had
+# simply not taken. It costs a layer and makes the build non-reproducible
+# across days, which is the point: a rebuild should pick up patches.
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && apt-get install -y --no-install-recommends \
         ca-certificates \
         libssl3 \
         curl \

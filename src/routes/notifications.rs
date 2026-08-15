@@ -10,7 +10,7 @@ use crate::api_response::{ApiResponse, SimpleMessage};
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
 use crate::models::Notification;
-use crate::services::NotificationService;
+use crate::services::notify;
 
 pub fn notification_routes() -> Router<AppState> {
     Router::new()
@@ -77,7 +77,10 @@ pub async fn list_notifications(
 
     let (notifications, total) = if let Some(read_filter) = query.read {
         let notifs: Vec<Notification> = sqlx::query_as(
-            "SELECT * FROM notifications WHERE user_id = $1 AND read = $2 ORDER BY created_at DESC LIMIT $3 OFFSET $4",
+            "SELECT * FROM notifications
+              WHERE user_id = $1 AND read = $2
+              ORDER BY COALESCE(updated_at, created_at) DESC
+              LIMIT $3 OFFSET $4",
         )
         .bind(auth.user_id)
         .bind(read_filter)
@@ -97,7 +100,10 @@ pub async fn list_notifications(
         (notifs, count)
     } else {
         let notifs: Vec<Notification> = sqlx::query_as(
-            "SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3",
+            "SELECT * FROM notifications
+              WHERE user_id = $1
+              ORDER BY COALESCE(updated_at, created_at) DESC
+              LIMIT $2 OFFSET $3",
         )
         .bind(auth.user_id)
         .bind(per_page)
@@ -154,7 +160,7 @@ pub async fn mark_read(
     .await?;
 
     if result.rows_affected() > 0 {
-        NotificationService::decrement_counter(&mut state.redis.clone(), auth.user_id).await?;
+        notify::decrement_counter(&mut state.redis.clone(), auth.user_id).await?;
     }
 
     Ok(Json(ApiResponse::new(SimpleMessage::new(
@@ -183,7 +189,7 @@ pub async fn mark_all_read(
         .execute(&state.db)
         .await?;
 
-    NotificationService::reset_counter(&mut state.redis.clone(), auth.user_id).await?;
+    notify::reset_counter(&mut state.redis.clone(), auth.user_id).await?;
 
     Ok(Json(ApiResponse::new(SimpleMessage::new(
         "All notifications marked as read",
@@ -206,9 +212,7 @@ pub async fn unread_count(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<ApiResponse<UnreadCountResponse>>, AppError> {
-    let count =
-        NotificationService::unread_count(&state.db, &mut state.redis.clone(), auth.user_id)
-            .await?;
+    let count = notify::unread_count(&state.db, &mut state.redis.clone(), auth.user_id).await?;
 
     Ok(Json(ApiResponse::new(UnreadCountResponse {
         unread_count: count,

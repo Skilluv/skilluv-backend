@@ -17,7 +17,7 @@ async fn openapi_spec() -> Json<serde_json::Value> {
             "version": "1.0.0",
             "contact": {
                 "name": "Skilluv Team",
-                "url": "https://skilluv.com"
+                "url": "https://skill-uv.com"
             }
         },
         "servers": [

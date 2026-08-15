@@ -13,7 +13,7 @@ use crate::errors::AppError;
 
 pub const VALID_OWNER_TYPES: &[&str] = &["user", "guild"];
 
-#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, sqlx::FromRow, utoipa::ToSchema)]
 pub struct Project {
     pub id: Uuid,
     pub slug: String,
@@ -36,7 +36,16 @@ pub struct Project {
     pub skill_domains: Vec<String>,
     /// P12.1 : score de santé projet (0.0-1.0), pondération du match reco.
     #[serde(default)]
+    #[schema(value_type = Option<f64>)]
     pub health_score: Option<BigDecimal>,
+    /// SKI-291 — the GitHub coordinates have existed since migration 0055 but
+    /// were never declared here, so `SELECT *` read them and this struct
+    /// dropped them on the floor. The profile page needs them to render one
+    /// badge per maintained repository.
+    #[serde(default)]
+    pub github_repo_owner: Option<String>,
+    #[serde(default)]
+    pub github_repo_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

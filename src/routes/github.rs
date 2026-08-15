@@ -104,7 +104,7 @@ pub struct CallbackQuery {
     get, path = "/api/auth/github/callback", tag = "auth",
     params(CallbackQuery),
     responses(
-        (status = 302, description = "Redirect back to skilluv.com"),
+        (status = 302, description = "Redirect back to skill-uv.com"),
         (status = 400, body = crate::api_response::ErrorResponse),
     ),
 )]
@@ -532,7 +532,7 @@ fn render_cv_html(c: CvContext) -> String {
 </section>
 
 <footer>
-  Membre depuis {since} · CV généré par Skilluv · skilluv.com/u/{username}/cv · Imprime cette page (Ctrl/Cmd+P) pour PDF.
+  Membre depuis {since} · CV généré par Skilluv · skill-uv.com/u/{username}/cv · Imprime cette page (Ctrl/Cmd+P) pour PDF.
 </footer>
 </body>
 </html>"#,

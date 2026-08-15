@@ -71,7 +71,7 @@ pub struct GuildInvitation {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, sqlx::FromRow, utoipa::ToSchema)]
 pub struct GuildApplication {
     pub id: Uuid,
     pub guild_id: Uuid,

@@ -43,20 +43,41 @@ pub fn email_preview_routes() -> Router<AppState> {
 /// filled with `Test` proves nothing about a layout.
 const SAMPLE_ARGS: &[(&str, &str)] = &[
     ("amount", "42 500 XOF"),
+    ("applicant", "Kofi Mensah"),
     ("author", "Awa Kponou-Diallo"),
     ("badge", "Première contribution vérifiée"),
     ("capability", "Steward de projet"),
+    ("challenger", "Awa Kponou-Diallo"),
+    ("challenges_completed", "7"),
+    ("company", "Atelier Numérique du Golfe"),
     ("count", "3"),
+    ("date", "jeudi 12 mars, 18h30"),
     ("days", "12"),
+    ("decision", "acceptée"),
+    ("defender", "Les Forgerons de Cotonou"),
     ("destination", "MTN Mobile Money"),
     (
         "excerpt",
         "regarde la review, il reste deux commentaires à traiter",
     ),
+    (
+        "feedback",
+        "l'énoncé décrit deux exercices différents ; garde le premier et ouvre une seconde proposition pour l'autre",
+    ),
+    ("fragments_earned", "180"),
     ("goal", "atteindre le rang Ranger"),
     ("guild", "Les Forgerons de Cotonou"),
     ("inviter", "Awa Kponou-Diallo"),
+    ("level", "Artisan"),
+    (
+        "message",
+        "on cherche quelqu'un sur de la revue Rust, ton dernier livrable correspond",
+    ),
     ("name", "Awa"),
+    ("other", "Kofi Mensah"),
+    ("others", "2"),
+    ("payer", "Atelier Numérique du Golfe"),
+    ("place", "2e"),
     ("provider", "FedaPay"),
     ("rank", "Ranger"),
     (
@@ -64,8 +85,12 @@ const SAMPLE_ARGS: &[(&str, &str)] = &[
         "plusieurs livrables copiés depuis un dépôt public sans attribution",
     ),
     ("role", "steward"),
+    ("stake", "1 500 fragments"),
     ("subject", "une soumission signalée automatiquement"),
+    ("tag", "rust"),
+    ("talent", "Awa Kponou-Diallo"),
     ("title", "Ajouter la locale wolof au sélecteur de langue"),
+    ("tournament", "Tournoi de la Forge, édition de mars"),
 ];
 
 /// Figures shown when previewing a kind that carries them.

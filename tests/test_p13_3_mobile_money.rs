@@ -132,48 +132,39 @@ async fn momo_withdraw_full_flow_from_wallet() {
     let user_id = Uuid::parse_str(body["data"]["user"]["id"].as_str().unwrap()).unwrap();
     app.login("u_momo").await;
 
-    // Seed 5000 XOF sur le wallet
+    // A wallet that can be paid into. The operator is not asked for: it
+    // belongs to the number, and routing decides the rest.
     sqlx::query(
-        "INSERT INTO talent_wallets (user_id, balance_xof, momo_phone, momo_phone_verified)
-         VALUES ($1, 5000, '+22507333333', TRUE)
+        "INSERT INTO talent_wallets
+            (user_id, residency_country, momo_phone, momo_phone_verified, momo_provider)
+         VALUES ($1, 'CI', '+22507333333', TRUE, 'orange')
          ON CONFLICT (user_id) DO UPDATE SET
-             balance_xof = 5000,
+             residency_country = 'CI',
              momo_phone = '+22507333333',
-             momo_phone_verified = TRUE",
+             momo_phone_verified = TRUE,
+             momo_provider = 'orange'",
     )
     .bind(user_id)
     .execute(&app.db)
     .await
     .expect("seed wallet");
 
+    fund_xof(&app, user_id, "5000").await;
+
     let resp = app
         .post(
-            "/api/users/me/wallet/withdraw/momo",
-            &json!({
-                "provider": "orange",
-                "amount": "2000",
-                "currency": "XOF"
-            }),
+            "/api/users/me/wallet/withdraw",
+            &json!({ "amount": "2000", "currency": "XOF", "rail": "mobile_money" }),
         )
         .await;
-    assert_eq!(resp.status(), 200);
+    let status = resp.status();
     let jv: serde_json::Value = resp.json().await.unwrap();
-    assert_eq!(jv["data"]["provider"], "orange");
-    assert!(
-        jv["data"]["provider_txn_id"]
-            .as_str()
-            .unwrap()
-            .starts_with("orange:dev:")
-    );
+    assert_eq!(status, 200, "body: {jv}");
+    assert_eq!(jv["data"]["currency"], "XOF");
 
-    // Balance décrémentée
-    let bal: BigDecimal =
-        sqlx::query_scalar("SELECT balance_xof FROM talent_wallets WHERE user_id = $1")
-            .bind(user_id)
-            .fetch_one(&app.db)
-            .await
-            .expect("bal");
-    assert_eq!(bal, BigDecimal::from(3000));
+    // The ledger is what a withdrawal moves. The wallet column it used to
+    // decrement is gone from this path entirely.
+    assert_eq!(available_xof(&app, user_id).await, BigDecimal::from(3000));
 
     drop(app);
 }
@@ -190,11 +181,15 @@ async fn momo_withdraw_refuses_without_verified_phone() {
 
     let resp = app
         .post(
-            "/api/users/me/wallet/withdraw/momo",
-            &json!({ "provider": "orange", "amount": "500", "currency": "XOF" }),
+            "/api/users/me/wallet/withdraw",
+            &json!({ "amount": "500", "currency": "XOF", "rail": "mobile_money" }),
         )
         .await;
-    assert_eq!(resp.status(), 400);
+    assert_eq!(
+        resp.status(),
+        400,
+        "with no number on file there is nowhere to send it"
+    );
 
     drop(app);
 }
@@ -210,12 +205,12 @@ async fn momo_withdraw_refuses_above_kyc_lite_limit() {
     let user_id = Uuid::parse_str(body["data"]["user"]["id"].as_str().unwrap()).unwrap();
     app.login("u_big").await;
 
-    // Seed 500 000 XOF
     sqlx::query(
-        "INSERT INTO talent_wallets (user_id, balance_xof, momo_phone, momo_phone_verified)
-         VALUES ($1, 500000, '+22507444444', TRUE)
+        "INSERT INTO talent_wallets
+            (user_id, residency_country, momo_phone, momo_phone_verified)
+         VALUES ($1, 'CI', '+22507444444', TRUE)
          ON CONFLICT (user_id) DO UPDATE SET
-             balance_xof = 500000,
+             residency_country = 'CI',
              momo_phone = '+22507444444',
              momo_phone_verified = TRUE",
     )
@@ -224,10 +219,15 @@ async fn momo_withdraw_refuses_above_kyc_lite_limit() {
     .await
     .expect("seed");
 
+    // Funded past the limit on purpose: the balance is checked before the
+    // limit is, so an unfunded account would be refused for the wrong
+    // reason and this would pass without testing anything.
+    fund_xof(&app, user_id, "500000").await;
+
     let resp = app
         .post(
-            "/api/users/me/wallet/withdraw/momo",
-            &json!({ "provider": "orange", "amount": "150000", "currency": "XOF" }),
+            "/api/users/me/wallet/withdraw",
+            &json!({ "amount": "150000", "currency": "XOF", "rail": "mobile_money" }),
         )
         .await;
     assert_eq!(resp.status(), 400);
@@ -261,4 +261,48 @@ async fn register_phone_requires_e164() {
     assert_eq!(resp.status(), 400);
 
     drop(app);
+}
+
+/// Give someone withdrawable XOF, the way a real flow would.
+///
+/// Money lives in the ledger now, not in a wallet column, and only the
+/// `available` state can leave. Seeding a balance directly would test a
+/// path production no longer has.
+async fn fund_xof(app: &TestApp, user: Uuid, amount: &str) {
+    use skilluv_backend::services::ledger::{self, Currency};
+
+    let subject = Uuid::new_v4();
+    let amount = BigDecimal::from_str(amount).unwrap();
+    ledger::capture_for_recipient(
+        &app.db,
+        "mtn",
+        format!("seed:{subject}"),
+        user,
+        amount.clone(),
+        BigDecimal::from(0),
+        Currency::Xof,
+        "bounty_slice",
+        subject,
+    )
+    .await
+    .expect("capture");
+    ledger::release(
+        &app.db,
+        user,
+        amount,
+        Currency::Xof,
+        "bounty_slice",
+        subject,
+    )
+    .await
+    .expect("release");
+}
+
+/// What is left that could be withdrawn.
+async fn available_xof(app: &TestApp, user: Uuid) -> BigDecimal {
+    use skilluv_backend::services::ledger::{self, Currency, State};
+
+    ledger::user_balance(&app.db, user, State::Available, Currency::Xof)
+        .await
+        .expect("balance")
 }

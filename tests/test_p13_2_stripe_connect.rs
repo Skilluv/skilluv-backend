@@ -139,21 +139,25 @@ async fn withdraw_refuses_when_kyc_not_verified() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// stripe_withdraw refuse si currency != EUR
+// Le rail bancaire ne porte pas le XOF
 // ═══════════════════════════════════════════════════════════════════
 
 #[tokio::test]
-async fn stripe_withdraw_refuses_non_eur() {
+async fn the_bank_rail_refuses_a_currency_it_cannot_carry() {
     let _env_guard = ENV_MUTEX.lock().await;
     set_stripe_env();
     let app = TestApp::spawn().await;
     app.register_user("u_xof").await;
     app.login("u_xof").await;
 
+    // There used to be a Stripe-only endpoint that rejected anything but
+    // EUR. There is one endpoint now, and which rail carries which currency
+    // is a row in `payout_routes` rather than a branch in a handler — the
+    // only bank_account route is EUR, so this has nowhere to go.
     let resp = app
         .post(
-            "/api/users/me/wallet/withdraw/stripe",
-            &json!({ "amount": "10.00", "currency": "XOF" }),
+            "/api/users/me/wallet/withdraw",
+            &json!({ "amount": "10.00", "currency": "XOF", "rail": "bank_account" }),
         )
         .await;
     assert_eq!(resp.status(), 400);

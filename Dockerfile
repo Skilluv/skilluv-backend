@@ -45,7 +45,14 @@ RUN touch src/main.rs src/lib.rs && cargo build --release --features discord-bot
 # ═══════════════════════════════════════════════════════════════════
 FROM debian:trixie-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# `upgrade` as well as `install`: the packages that ship inside the base
+# image — util-linux among them — never got a security update otherwise, so
+# the scan failed on fixes Debian had already published and this image had
+# simply not taken. It costs a layer and makes the build non-reproducible
+# across days, which is the point: a rebuild should pick up patches.
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && apt-get install -y --no-install-recommends \
         ca-certificates \
         libssl3 \
         curl \

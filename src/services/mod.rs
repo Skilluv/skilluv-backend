@@ -56,6 +56,7 @@ pub mod oauth;
 pub mod og_card;
 pub mod orientations_playlist;
 pub mod outbox;
+pub mod package_registry;
 pub mod payment_poller;
 pub mod payment_webhook_sources;
 pub mod payment_webhooks;

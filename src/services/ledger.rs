@@ -323,6 +323,23 @@ pub async fn post_in_tx(
     tx: &mut Transaction<'_, Postgres>,
     posting: Posting<'_>,
 ) -> Result<Posted, AppError> {
+    let mut posting = posting;
+
+    // A leg that moves nothing is dropped rather than written.
+    //
+    // Zero shares are legitimate — a bounty with no platform cut, a waived
+    // fee — and the caller should not have to build its leg list
+    // conditionally to express that. The database forbids a zero amount, and
+    // it is right to: an entry that moves nothing says nothing, and in an
+    // append-only book it is noise that never goes away.
+    //
+    // Dropping them cannot unbalance the posting, since they contribute zero
+    // to every sum. If it empties the posting, the arity check below says so.
+    {
+        use num_traits::Zero;
+        posting.legs.retain(|leg| !leg.amount.is_zero());
+    }
+
     if posting.legs.len() < 2 {
         return Err(AppError::Internal(format!(
             "posting '{}' has {} leg(s): money must move between at least two accounts",

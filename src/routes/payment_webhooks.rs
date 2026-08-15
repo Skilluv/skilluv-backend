@@ -42,6 +42,7 @@ const SIGNATURE_HEADERS: [&str; 5] = [
     request_body(content = String, description = "The provider's raw event payload"),
     responses(
         (status = 200, description = "Event accepted", body = serde_json::Value),
+        (status = 400, description = "Body is not valid UTF-8", body = crate::api_response::ErrorResponse),
         (status = 401, description = "Signature did not verify"),
         (status = 404, description = "No such provider configured on this deployment"),
     ),

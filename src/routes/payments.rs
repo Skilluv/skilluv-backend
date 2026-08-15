@@ -66,6 +66,7 @@ pub struct PaymentMethod {
     params(MethodsQuery),
     responses(
         (status = 200, description = "Available methods, in display order", body = ApiResponse<Vec<PaymentMethod>>),
+        (status = 400, description = "No country given, and no signed-in account to take one from", body = crate::api_response::ErrorResponse),
     ),
 )]
 pub async fn methods(

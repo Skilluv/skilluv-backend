@@ -38,6 +38,7 @@ pub mod community;
 pub mod contact;
 pub mod deliverables;
 // PR #39 — dev helper endpoints (verify-token peek), gated by SKILLUV_DEV_MODE
+pub mod code_stats;
 pub mod dev;
 pub mod developer;
 pub mod disputes;
@@ -152,6 +153,7 @@ pub use challenge_feed::challenge_feed_routes;
 pub use challenge_tags::challenge_tag_routes;
 pub use challenge_teams::challenge_team_routes;
 pub use challenges::challenge_routes;
+pub use code_stats::code_stats_routes;
 pub use cohorts::cohort_routes;
 pub use community::community_routes;
 pub use contact::contact_routes;

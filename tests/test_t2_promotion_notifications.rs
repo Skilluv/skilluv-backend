@@ -259,7 +259,10 @@ async fn achieved_goal_emits_a_milestone_notification() {
 
     let notifs = notifications_of(&app, my_id, "goal.reached").await;
     assert_eq!(notifs.len(), 1);
-    assert_eq!(notifs[0]["data"]["kind"], "artifact_count");
+    // `goal_kind`, not `kind`: the notification already has a kind of its
+    // own — `goal.reached` — and two different things under one name in the
+    // same object is how a reader ends up asserting on the wrong one.
+    assert_eq!(notifs[0]["data"]["goal_kind"], "artifact_count");
     assert_eq!(notifs[0]["data"]["target_value"], "2");
 
     // achieved_at is stamped, so the milestone cannot fire twice.

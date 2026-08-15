@@ -33,8 +33,10 @@ _bmad-output/
 .claude/
 .claude.*
 
-# Project docs (generated)
-docs/
+# `docs/` is hand-written and tracked — fourteen files were committed here
+# before this rule existed, and it only ever caught the fifteenth. Ignoring a
+# directory whose contents are tracked means every new document needs `-f`,
+# which is how documents stop being written.
 design-artifacts/
 
 # OS

@@ -316,7 +316,7 @@ pub async fn status(
     let payment: Row = sqlx::query_as(
         "SELECT payer_id, provider, status, merchant_reference, provider_reference,
                 provider_session_id, fulfilled_at,
-                EXTRACT(EPOCH FROM (NOW() - last_checked_at)) AS since_last_ask
+                EXTRACT(EPOCH FROM (NOW() - last_checked_at))::float8 AS since_last_ask
            FROM payments WHERE id = $1",
     )
     .bind(id)

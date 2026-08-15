@@ -335,6 +335,11 @@ async fn withdrawing_without_a_destination_says_what_to_do() {
     .await
     .unwrap();
 
+    // Funded, because the balance is checked before the destination is. An
+    // empty account is refused for having no money, which is true and is
+    // not what this test is named after.
+    fund_xof(&app, uid, "5000").await;
+
     let resp = app
         .post(
             "/api/users/me/wallet/withdraw",
@@ -473,4 +478,41 @@ async fn the_card_is_cacheable() {
         cache.contains("max-age"),
         "a validated attestation never changes, got: {cache}"
     );
+}
+
+/// Give someone withdrawable XOF, the way a real flow would.
+///
+/// Only released money can leave, and the withdraw endpoint checks the
+/// balance before anything else — so a test about any later refusal has to
+/// fund the account first, or it is answered for the wrong reason.
+async fn fund_xof(app: &TestApp, user: Uuid, amount: &str) {
+    use bigdecimal::BigDecimal;
+    use skilluv_backend::services::ledger::{self, Currency};
+    use std::str::FromStr;
+
+    let subject = Uuid::new_v4();
+    let amount = BigDecimal::from_str(amount).unwrap();
+    ledger::capture_for_recipient(
+        &app.db,
+        "mtn",
+        format!("seed:{subject}"),
+        user,
+        amount.clone(),
+        BigDecimal::from(0),
+        Currency::Xof,
+        "bounty_slice",
+        subject,
+    )
+    .await
+    .expect("capture");
+    ledger::release(
+        &app.db,
+        user,
+        amount,
+        Currency::Xof,
+        "bounty_slice",
+        subject,
+    )
+    .await
+    .expect("release");
 }

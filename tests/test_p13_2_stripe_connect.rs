@@ -120,6 +120,11 @@ async fn withdraw_refuses_when_kyc_not_verified() {
     .await
     .expect("seed wallet");
 
+    // Funded, because the balance is checked before onboarding is. An empty
+    // account is refused for having no money — true, and not what this test
+    // is named after.
+    fund_eur(&app, user_id, "50.00").await;
+
     let resp = app
         .post(
             "/api/users/me/wallet/withdraw",
@@ -132,7 +137,8 @@ async fn withdraw_refuses_when_kyc_not_verified() {
         body["error"]["message"]
             .as_str()
             .unwrap()
-            .contains("Complete Stripe onboarding")
+            .contains("Complete Stripe onboarding"),
+        "got: {body}"
     );
 
     drop(app);
@@ -280,4 +286,41 @@ async fn webhook_rejects_invalid_signature() {
     assert_eq!(resp.status(), 401);
 
     drop(app);
+}
+
+/// Give someone withdrawable EUR, the way a real flow would.
+///
+/// Only released money can leave, and the withdraw endpoint checks the
+/// balance before anything else — so a test about any later refusal has to
+/// fund the account first, or it is answered for the wrong reason.
+async fn fund_eur(app: &TestApp, user: Uuid, amount: &str) {
+    use bigdecimal::BigDecimal;
+    use skilluv_backend::services::ledger::{self, Currency};
+    use std::str::FromStr;
+
+    let subject = Uuid::new_v4();
+    let amount = BigDecimal::from_str(amount).unwrap();
+    ledger::capture_for_recipient(
+        &app.db,
+        "stripe",
+        format!("seed:{subject}"),
+        user,
+        amount.clone(),
+        BigDecimal::from(0),
+        Currency::Eur,
+        "bounty_slice",
+        subject,
+    )
+    .await
+    .expect("capture");
+    ledger::release(
+        &app.db,
+        user,
+        amount,
+        Currency::Eur,
+        "bounty_slice",
+        subject,
+    )
+    .await
+    .expect("release");
 }

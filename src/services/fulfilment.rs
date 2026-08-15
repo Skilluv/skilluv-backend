@@ -116,9 +116,13 @@ pub async fn settle_and_deliver(
 async fn deliver(db: &PgPool, paid: &Paid) -> Result<(), AppError> {
     match paid.subject_type.as_str() {
         "mentorship_session" => {
+            // No `updated_at`: the table has never had that column, and
+            // writing it meant every mentorship payment succeeded and then
+            // failed to deliver — money taken, session left pending, and
+            // the row handed to the sweep to retry forever.
             sqlx::query(
                 "UPDATE mentorship_sessions
-                    SET status = 'paid', updated_at = NOW()
+                    SET status = 'paid'
                   WHERE id = $1 AND status = 'pending'",
             )
             .bind(paid.subject_id)

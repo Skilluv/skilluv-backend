@@ -84,7 +84,7 @@ pub async fn sweep(db: &PgPool, registry: &PayoutRegistry) -> Result<SweepReport
 
     let stale: Vec<Row> = sqlx::query_as(
         "SELECT id, provider, provider_reference, check_count,
-                EXTRACT(EPOCH FROM (NOW() - created_at)) / 3600 AS age_hours
+                (EXTRACT(EPOCH FROM (NOW() - created_at)) / 3600)::float8 AS age_hours
            FROM payouts
           WHERE status = 'pending'
             AND created_at < NOW() - ($1 || ' minutes')::INTERVAL

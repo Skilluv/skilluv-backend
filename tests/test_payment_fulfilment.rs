@@ -240,8 +240,12 @@ async fn a_status_check_throttles_itself_between_calls() {
         .await
         .unwrap();
 
+    // Cast, because EXTRACT(EPOCH ...) is numeric in Postgres and decoding
+    // it straight into an f64 fails — the same mismatch that stopped the
+    // status endpoint and the background poller from running at all.
     let since: Option<f64> = sqlx::query_scalar(
-        "SELECT EXTRACT(EPOCH FROM (NOW() - last_checked_at)) FROM payments WHERE id = $1",
+        "SELECT EXTRACT(EPOCH FROM (NOW() - last_checked_at))::float8
+           FROM payments WHERE id = $1",
     )
     .bind(payment)
     .fetch_one(&app.db)

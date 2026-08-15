@@ -88,7 +88,7 @@ pub async fn poll(db: &PgPool) -> Result<PollReport, AppError> {
 
     let open: Vec<Open> = sqlx::query_as(
         "SELECT id, provider, merchant_reference, provider_session_id,
-                EXTRACT(EPOCH FROM (NOW() - created_at)) AS age_seconds,
+                EXTRACT(EPOCH FROM (NOW() - created_at))::float8 AS age_seconds,
                 check_count
            FROM payments
           WHERE status = 'pending'

@@ -591,12 +591,40 @@ impl<'a> Builder<'a> {
             });
         }
 
+        // The button, resolved once and stored with the row.
+        //
+        // The catalogue holds the path and `cta_url` fills its placeholders
+        // from the payload, returning nothing rather than a broken link.
+        // Doing it here means the in-app client and the email agree on where
+        // a notification leads — the client cannot resolve it on its own,
+        // since the catalogue is not something it can read.
+        let mut stored = self.payload.clone();
+        if let Some(href) = self.cta_url(kind_row) {
+            let cta = serde_json::json!({
+                "href": href,
+                "label": i18n::t(locale, &format!("notification.{}.cta", self.kind)),
+            });
+            let empty = stored.is_none();
+            match stored.as_mut().and_then(|value| value.as_object_mut()) {
+                Some(object) => {
+                    object.insert("next_step_cta".to_string(), cta);
+                }
+                // A payload that is not an object is left alone rather than
+                // replaced: whatever it holds was put there deliberately,
+                // and a button is not worth losing it over.
+                None if empty => {
+                    stored = Some(serde_json::json!({ "next_step_cta": cta }));
+                }
+                None => {}
+            }
+        }
+
         let id: Uuid = sqlx::query_scalar(
             r#"
             INSERT INTO notifications
                 (user_id, notification_type, title, body, data, kind, locale, payload,
                  group_key, group_actors, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $2, $6, $5, $7, $8, NOW())
+            VALUES ($1, $2, $3, $4, $5, $2, $6, $9, $7, $8, NOW())
             RETURNING id
             "#,
         )
@@ -604,12 +632,15 @@ impl<'a> Builder<'a> {
         .bind(self.kind)
         .bind(title)
         .bind(body)
-        .bind(&self.payload)
+        .bind(&stored)
         .bind(locale)
         .bind(self.group_key())
         .bind(serde_json::json!(
             self.actor().map(|a| vec![a]).unwrap_or_default()
         ))
+        // `payload` keeps the raw arguments: it is what a re-render reads,
+        // and a resolved button is not an argument.
+        .bind(&self.payload)
         .fetch_one(self.ctx.db)
         .await?;
 

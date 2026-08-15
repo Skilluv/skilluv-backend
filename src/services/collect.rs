@@ -243,20 +243,33 @@ impl CollectionRegistry {
                 return Ok(provider);
             }
         }
-        Err(AppError::Validation(format!(
-            "no way to take {} by {} from {}. Routes matched: {}",
+        // Two failures wearing one status code, until now.
+        //
+        // No route at all means this corridor is not one we serve, and the
+        // payer is entitled to be told so — that is a 400. Routes that
+        // matched but resolved to nothing means the table names a provider
+        // this deployment holds no credentials for: our fault, not theirs,
+        // and answering "your request is invalid" would send an operator
+        // looking at the payer's country instead of at the missing key.
+        let where_from = country.unwrap_or("an unspecified country");
+        if candidates.is_empty() {
+            return Err(AppError::Validation(format!(
+                "no way to take {} by {} from {where_from}",
+                currency.as_str(),
+                method.as_str(),
+            )));
+        }
+
+        let named = candidates
+            .iter()
+            .map(|r| r.provider.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        Err(AppError::Internal(format!(
+            "routes for {} by {} from {where_from} name providers this deployment \
+             has no credentials for: {named}",
             currency.as_str(),
             method.as_str(),
-            country.unwrap_or("an unspecified country"),
-            if candidates.is_empty() {
-                "none".to_string()
-            } else {
-                candidates
-                    .iter()
-                    .map(|r| r.provider.as_str())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            }
         )))
     }
 }

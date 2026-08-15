@@ -29,9 +29,19 @@ fn full_registry() -> payout::PayoutRegistry {
     for operator in [ProviderName::Orange, ProviderName::Mtn, ProviderName::Wave] {
         registry.register(Arc::new(MomoPayout { operator }));
     }
-    if let Some(cfg) = skilluv_backend::services::stripe::StripeConfig::from_env() {
-        registry.register(Arc::new(StripePayout { cfg }));
-    }
+    // Built from a stub rather than from the environment, like FedaPay
+    // above. Whether a provider has an adapter is a question about the
+    // code; gating it on credentials made this registry claim to be full
+    // while missing Stripe on any machine without a key, so the orphan
+    // check below reported the EUR bank corridor as unreachable.
+    registry.register(Arc::new(StripePayout {
+        cfg: skilluv_backend::services::stripe::StripeConfig {
+            secret_key: "sk_test_routing".into(),
+            webhook_secret: "whsec_test_routing".into(),
+            success_url: "https://example.test/ok".into(),
+            cancel_url: "https://example.test/ko".into(),
+        },
+    }));
     registry
 }
 

@@ -137,9 +137,15 @@ async fn purchase_returns_checkout_or_stripe_missing_error() {
         .send()
         .await
         .expect("POST purchase");
-    // Sans Stripe configuré → 500 avec "Stripe not configured" ; c'est le
-    // comportement attendu en test. Si un jour Stripe est configuré via env
-    // pour les tests, on aura 200. Les deux cas valident l'API.
-    assert!(resp.status() == 500 || resp.status() == 200);
+    // Without credentials the EUR card route resolves to a provider this
+    // deployment cannot build, which is a 500 — ours to fix, not the
+    // payer's. With Stripe configured it is a 200 and a checkout URL. Both
+    // are the API working.
+    assert!(
+        resp.status() == 500 || resp.status() == 200,
+        "got {}: {}",
+        resp.status(),
+        resp.text().await.unwrap_or_default()
+    );
     drop(app);
 }

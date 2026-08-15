@@ -203,12 +203,33 @@ pub async fn approve(
 
 /// Reject the PR with a mandatory reason. Rewinds to `claimed`, clears
 /// the pickup holder, and stores the reason so the challenger sees it.
+/// What kind of blocker a rejection names.
+///
+/// Required, because "rejected" tells a contributor nothing about what to do
+/// next: red CI is a different action from a naming comment, which is
+/// different again from a slice that was never the right size.
+pub const BLOCKING_REASONS: &[&str] = &[
+    "ci_failing",
+    "tests_missing",
+    "docs_missing",
+    "review_comments",
+    "scope_mismatch",
+    "out_of_depth",
+];
+
 pub async fn reject(
     db: &PgPool,
     slice_id: Uuid,
     validator_id: Uuid,
     reason: &str,
+    blocking_reason: &str,
 ) -> Result<ProjectSlice, AppError> {
+    if !BLOCKING_REASONS.contains(&blocking_reason) {
+        return Err(AppError::Validation(format!(
+            "unknown blocking reason '{blocking_reason}' (expected one of: {})",
+            BLOCKING_REASONS.join(", ")
+        )));
+    }
     let trimmed = reason.trim();
     if trimmed.is_empty() || trimmed.chars().count() > 2000 {
         return Err(AppError::Validation(
@@ -255,8 +276,9 @@ pub async fn reject(
     // SKI-114 (M-08) — journal the reject with the reason.
     let _ = sqlx::query(
         r#"
-        INSERT INTO slice_validation_decisions (slice_id, validator_id, decision, reason, picked_at)
-        VALUES ($1, $2, 'reject', $3, $4)
+        INSERT INTO slice_validation_decisions
+            (slice_id, validator_id, decision, reason, blocking_reason, picked_at)
+        VALUES ($1, $2, 'reject', $3, $5, $4)
         "#,
     )
     .bind(slice_id)

@@ -63,6 +63,14 @@ pub async fn approve(
 pub struct RejectBody {
     /// Feedback shown to the challenger. Required, ≤ 2000 chars.
     pub reason: String,
+    /// What kind of blocker this is: `ci_failing`, `tests_missing`,
+    /// `docs_missing`, `review_comments`, `scope_mismatch`, `out_of_depth`.
+    ///
+    /// Required alongside the prose. The prose says what is wrong with this
+    /// submission; the category says what kind of thing to do about it, and
+    /// is what lets an operator see that a project rejects everything for
+    /// missing tests.
+    pub blocking_reason: String,
 }
 
 /// SKI-85 — POST /api/slices/{id}/validation/reject
@@ -72,7 +80,14 @@ pub async fn reject(
     Path(id): Path<Uuid>,
     Json(body): Json<RejectBody>,
 ) -> Result<impl IntoResponse, AppError> {
-    let slice = slice_validation::reject(&state.db, id, auth.user_id, &body.reason).await?;
+    let slice = slice_validation::reject(
+        &state.db,
+        id,
+        auth.user_id,
+        &body.reason,
+        &body.blocking_reason,
+    )
+    .await?;
     Ok((StatusCode::OK, Json(wrap(json!({ "slice": slice })))))
 }
 

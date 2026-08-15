@@ -59,6 +59,10 @@ const SAMPLE_ARGS: &[(&str, &str)] = &[
     ("name", "Awa"),
     ("provider", "FedaPay"),
     ("rank", "Ranger"),
+    (
+        "reason",
+        "plusieurs livrables copiés depuis un dépôt public sans attribution",
+    ),
     ("role", "steward"),
     ("subject", "une soumission signalée automatiquement"),
     ("title", "Ajouter la locale wolof au sélecteur de langue"),

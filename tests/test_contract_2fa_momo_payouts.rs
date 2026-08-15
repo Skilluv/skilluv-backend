@@ -266,11 +266,17 @@ async fn held_funds_cannot_be_withdrawn() {
 
     let app = TestApp::spawn().await;
     let uid = wallet_owner(&app, "momo_held").await;
+    // Inserted rather than updated: registering an account does not create
+    // a wallet, so the UPDATE this used to do matched no row and the
+    // withdraw answered "wallet not initialized" — which is correct, and
+    // not the refusal this test is about.
     sqlx::query(
-        "UPDATE talent_wallets
+        "INSERT INTO talent_wallets
+            (user_id, residency_country, momo_phone, momo_phone_verified)
+         VALUES ($1, 'BJ', '+22997000000', TRUE)
+         ON CONFLICT (user_id) DO UPDATE
             SET residency_country = 'BJ', momo_phone = '+22997000000',
-                momo_phone_verified = TRUE
-          WHERE user_id = $1",
+                momo_phone_verified = TRUE",
     )
     .bind(uid)
     .execute(&app.db)
@@ -315,12 +321,19 @@ async fn withdrawing_without_a_destination_says_what_to_do() {
     let app = TestApp::spawn().await;
     let uid = wallet_owner(&app, "momo_none").await;
 
-    // A wallet with a country and nothing to pay into.
-    sqlx::query("UPDATE talent_wallets SET residency_country = 'BJ' WHERE user_id = $1")
-        .bind(uid)
-        .execute(&app.db)
-        .await
-        .unwrap();
+    // A wallet with a country and nothing to pay into. Inserted, because
+    // registering an account does not create one and an UPDATE would match
+    // no row — leaving this asserting on "wallet not initialized" instead
+    // of on the missing destination it is named after.
+    sqlx::query(
+        "INSERT INTO talent_wallets (user_id, residency_country)
+         VALUES ($1, 'BJ')
+         ON CONFLICT (user_id) DO UPDATE SET residency_country = 'BJ'",
+    )
+    .bind(uid)
+    .execute(&app.db)
+    .await
+    .unwrap();
 
     let resp = app
         .post(
@@ -377,7 +390,7 @@ async fn payout_status_is_constrained_to_known_values() {
 }
 
 #[tokio::test]
-async fn a_completed_session_defaults_to_an_unpaid_payout() {
+async fn a_new_session_holds_the_mentor_share() {
     let app = TestApp::spawn().await;
     let mentor = wallet_owner(&app, "mentor_y").await;
     let mentee = wallet_owner(&app, "mentee_y").await;
@@ -402,7 +415,10 @@ async fn a_completed_session_defaults_to_an_unpaid_payout() {
     .fetch_one(&app.db)
     .await
     .unwrap();
-    assert_eq!(status, "pending");
+    // `held`, not `pending`: migration 0157 replaced the vocabulary of a
+    // world where completing a session wired money immediately. Completing
+    // one now records what is owed and holds it through the window.
+    assert_eq!(status, "held");
     assert!(
         released.is_none(),
         "nothing was released, so nothing is stamped"

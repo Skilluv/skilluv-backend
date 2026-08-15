@@ -335,8 +335,15 @@ mod tests {
             unsubscribe_url: None,
         });
         assert!(!html.contains("<script>"), "markup must not survive");
-        assert!(!html.contains("onerror="));
         assert!(html.contains("&lt;script&gt;"));
+
+        // What matters is that no tag opens, not that the attribute's name
+        // is absent: `escape` leaves `=` alone, and does not need to touch
+        // it, because the text sits inside an element no parser will ever
+        // open. Asserting on the substring instead flags correctly escaped
+        // output as a vulnerability.
+        assert!(!html.contains("<img"), "a tag must not open");
+        assert!(html.contains("&lt;img src=x onerror=alert(1)&gt;"));
     }
 
     #[test]

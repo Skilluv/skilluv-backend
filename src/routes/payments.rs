@@ -39,10 +39,13 @@ pub fn payment_routes() -> Router<AppState> {
 pub struct MethodsQuery {
     /// ISO 3166-1 alpha-2 of the payer. Decides which operators exist.
     ///
-    /// Optional for a signed-in caller, whose own country is used instead.
-    /// The account stores the code; the profile only exposes the country's
-    /// name, so a client asked to supply this would have to map names back
-    /// to codes and would get it wrong for every country spelled two ways.
+    /// Optional. A signed-in caller's own country is used when it is
+    /// absent; anyone else gets an empty list.
+    ///
+    /// The account stores the code, while the profile only exposes the
+    /// country's name, so a client asked to supply this would have to map
+    /// names back to codes and would get it wrong for every country spelled
+    /// two ways.
     pub country: Option<String>,
     /// Defaults to the currency the country is quoted in.
     pub currency: Option<String>,
@@ -65,8 +68,7 @@ pub struct PaymentMethod {
     get, path = "/api/payments/methods", tag = "payments",
     params(MethodsQuery),
     responses(
-        (status = 200, description = "Available methods, in display order", body = ApiResponse<Vec<PaymentMethod>>),
-        (status = 400, description = "No country given, and no signed-in account to take one from", body = crate::api_response::ErrorResponse),
+        (status = 200, description = "Available methods, in display order. Empty when no country is given and none can be resolved from the caller's account", body = ApiResponse<Vec<PaymentMethod>>),
     ),
 )]
 pub async fn methods(
@@ -79,21 +81,31 @@ pub async fn methods(
         .unwrap_or_else(|| "XOF".to_string())
         .to_uppercase();
 
+    // No country, and no account to take one from, is answered with an
+    // empty list rather than a refusal.
+    //
+    // The question this endpoint answers is "what can this payer use". When
+    // we cannot tell who is asking or from where, the honest answer is
+    // "nothing we can determine" — which is a list, and one every client
+    // already renders. Refusing instead would mean the schema advertises an
+    // optional parameter that is not really optional, and a caller sending
+    // a request the schema calls valid would be told it is not.
     let country = match q.country {
-        Some(given) => given,
-        None => {
-            let user = auth.ok_or_else(|| {
-                AppError::Validation("country is required when not signed in".into())
-            })?;
-            sqlx::query_scalar::<_, Option<String>>("SELECT country_iso2 FROM users WHERE id = $1")
-                .bind(user.user_id)
-                .fetch_optional(&state.db)
-                .await?
-                .flatten()
-                .ok_or_else(|| {
-                    AppError::Validation("this account has no country on it yet".into())
-                })?
-        }
+        Some(given) => Some(given),
+        None => match auth {
+            None => None,
+            Some(user) => sqlx::query_scalar::<_, Option<String>>(
+                "SELECT country_iso2 FROM users WHERE id = $1",
+            )
+            .bind(user.user_id)
+            .fetch_optional(&state.db)
+            .await?
+            .flatten(),
+        },
+    };
+
+    let Some(country) = country else {
+        return Ok(Json(ApiResponse::new(Vec::new())));
     };
 
     let methods: Vec<PaymentMethod> = sqlx::query_as(

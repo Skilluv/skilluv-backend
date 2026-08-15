@@ -8,11 +8,18 @@
 //!
 //!   {
 //!     "proof_types": ["deliverable_verified" | "attestation_received"
-//!                     | "onboarding_bonjour_completed"],
+//!                     | "onboarding_bonjour_completed"
+//!                     | "slice_merged_upstream" | "deliverable_featured"],
 //!     "min_count":   integer (obligatoire, default 1),
 //!     "skill_tag":   "react"      // filtre : deliverables/attestations sur ce skill
 //!                                   // (via user_skills touchées)
 //!     "display_category": "craft" // filtre par catégorie UX (P17.2)
+//!     "skill_domain": "code"      // filtre : domaine du challenge derrière la preuve
+//!     "distinct_over": "challenge_language" // compte des valeurs distinctes,
+//!                                   // pas des preuves : "trois langages" et non
+//!                                   // "trois livrables"
+//!     "manual": true              // le moteur n'attribue jamais : un opérateur
+//!                                   // décide, et la raison est enregistrée
 //!   }
 //!
 //! Le proof_type `onboarding_bonjour_completed` compte la ligne
@@ -45,6 +52,19 @@ struct RuleConditions {
     skill_tag: Option<String>,
     #[serde(default)]
     display_category: Option<String>,
+    /// Domain of the challenge behind the proof. A code badge should not be
+    /// awarded for a design deliverable.
+    #[serde(default)]
+    skill_domain: Option<String>,
+    /// Count distinct values of a dimension instead of counting proofs.
+    /// "three languages" is not "three deliverables".
+    #[serde(default)]
+    distinct_over: Option<String>,
+    /// The engine never awards this one. Some distinctions are judgements —
+    /// "shipped an audited contract to mainnet" is not a row count — and
+    /// inventing a rule for them would award them to the wrong people.
+    #[serde(default)]
+    manual: bool,
 }
 fn one() -> i64 {
     1
@@ -90,30 +110,126 @@ async fn count_matching_proofs(
         .proof_types
         .iter()
         .any(|t| t == "onboarding_bonjour_completed");
+    let want_merged_upstream = conds
+        .proof_types
+        .iter()
+        .any(|t| t == "slice_merged_upstream");
+    // A variant of the deliverable count rather than a source of its own:
+    // being featured is a property of a deliverable, not a different proof.
+    let featured_only = conds
+        .proof_types
+        .iter()
+        .any(|t| t == "deliverable_featured");
+    let want_deliverable = want_deliverable || featured_only;
+
+    // Counting distinct values answers a different question, and answers it
+    // on its own: "three languages" is satisfied by three deliverables in
+    // three languages, not by thirty in one.
+    if let Some(dimension) = conds.distinct_over.as_deref() {
+        return count_distinct_dimension(db, user_id, conds, dimension).await;
+    }
 
     let mut total: i64 = 0;
     let mut sources: Vec<Uuid> = Vec::new();
 
     if want_deliverable {
+        // Counted and sampled separately. They used to be the same query
+        // with `LIMIT 25`, which capped the count at twenty-five and made
+        // every rule above that threshold unreachable — the badge existed,
+        // the condition was met, and nothing ever fired.
+        let matched: i64 = sqlx::query_scalar(
+            r#"
+            SELECT count(DISTINCT d.id)
+            FROM deliverables d
+            LEFT JOIN slice_skills ss ON ss.slice_id = d.slice_id
+            LEFT JOIN skill_nodes sn  ON sn.id = ss.skill_id
+            LEFT JOIN challenge_templates ct ON ct.id = d.challenge_id
+            WHERE d.user_id = $1
+              AND d.verification_status = 'verified'
+              AND d.revoked_at IS NULL
+              AND ($2::VARCHAR IS NULL OR sn.slug = $2)
+              AND ($3::VARCHAR IS NULL OR sn.display_category = $3)
+              AND ($4::VARCHAR IS NULL OR ct.skill_domain = $4)
+              AND ($5::BOOLEAN IS FALSE OR d.featured)
+            "#,
+        )
+        .bind(user_id)
+        .bind(conds.skill_tag.as_deref())
+        .bind(conds.display_category.as_deref())
+        .bind(conds.skill_domain.as_deref())
+        .bind(featured_only)
+        .fetch_one(db)
+        .await?;
+
         let ids: Vec<Uuid> = sqlx::query_scalar(
             r#"
             SELECT DISTINCT d.id
             FROM deliverables d
             LEFT JOIN slice_skills ss ON ss.slice_id = d.slice_id
             LEFT JOIN skill_nodes sn  ON sn.id = ss.skill_id
+            LEFT JOIN challenge_templates ct ON ct.id = d.challenge_id
             WHERE d.user_id = $1
               AND d.verification_status = 'verified'
+              AND d.revoked_at IS NULL
               AND ($2::VARCHAR IS NULL OR sn.slug = $2)
               AND ($3::VARCHAR IS NULL OR sn.display_category = $3)
+              AND ($4::VARCHAR IS NULL OR ct.skill_domain = $4)
+              AND ($5::BOOLEAN IS FALSE OR d.featured)
             LIMIT 25
             "#,
         )
         .bind(user_id)
         .bind(conds.skill_tag.as_deref())
         .bind(conds.display_category.as_deref())
+        .bind(conds.skill_domain.as_deref())
+        .bind(featured_only)
         .fetch_all(db)
         .await?;
-        total += ids.len() as i64;
+
+        total += matched;
+        sources.extend(ids);
+    }
+
+    if want_merged_upstream {
+        // A slice merged upstream is the artefact this platform exists to
+        // produce. `merged_at` is set by the GitHub ingestion, not by the
+        // person claiming it.
+        let matched: i64 = sqlx::query_scalar(
+            r#"
+            SELECT count(DISTINCT ps.id)
+            FROM project_slices ps
+            JOIN deliverables d ON d.slice_id = ps.id
+            LEFT JOIN challenge_templates ct ON ct.id = d.challenge_id
+            WHERE d.user_id = $1
+              AND ps.merged_at IS NOT NULL
+              AND d.revoked_at IS NULL
+              AND ($2::VARCHAR IS NULL OR ct.skill_domain = $2)
+            "#,
+        )
+        .bind(user_id)
+        .bind(conds.skill_domain.as_deref())
+        .fetch_one(db)
+        .await?;
+
+        let ids: Vec<Uuid> = sqlx::query_scalar(
+            r#"
+            SELECT DISTINCT ps.id
+            FROM project_slices ps
+            JOIN deliverables d ON d.slice_id = ps.id
+            LEFT JOIN challenge_templates ct ON ct.id = d.challenge_id
+            WHERE d.user_id = $1
+              AND ps.merged_at IS NOT NULL
+              AND d.revoked_at IS NULL
+              AND ($2::VARCHAR IS NULL OR ct.skill_domain = $2)
+            LIMIT 25
+            "#,
+        )
+        .bind(user_id)
+        .bind(conds.skill_domain.as_deref())
+        .fetch_all(db)
+        .await?;
+
+        total += matched;
         sources.extend(ids);
     }
 
@@ -152,6 +268,64 @@ async fn count_matching_proofs(
     }
 
     Ok((total, sources))
+}
+
+/// How many distinct values of a dimension this user's verified work covers.
+///
+/// The source proofs are the deliverables behind those values, capped like
+/// everywhere else — enough to audit the award, not the whole history.
+async fn count_distinct_dimension(
+    db: &PgPool,
+    user_id: Uuid,
+    conds: &RuleConditions,
+    dimension: &str,
+) -> Result<(i64, Vec<Uuid>), AppError> {
+    // One dimension today. Named rather than interpolated, because a
+    // dimension built from a rule's own text would be a column name coming
+    // from a JSONB field an operator can edit.
+    if dimension != "challenge_language" {
+        return Err(AppError::Internal(format!(
+            "badge rule asks to count distinct '{dimension}', which nothing implements"
+        )));
+    }
+
+    let matched: i64 = sqlx::query_scalar(
+        r#"
+        SELECT count(DISTINCT ct.language)
+        FROM deliverables d
+        JOIN challenge_templates ct ON ct.id = d.challenge_id
+        WHERE d.user_id = $1
+          AND d.verification_status = 'verified'
+          AND d.revoked_at IS NULL
+          AND ct.language IS NOT NULL
+          AND ($2::VARCHAR IS NULL OR ct.skill_domain = $2)
+        "#,
+    )
+    .bind(user_id)
+    .bind(conds.skill_domain.as_deref())
+    .fetch_one(db)
+    .await?;
+
+    let sources: Vec<Uuid> = sqlx::query_scalar(
+        r#"
+        SELECT DISTINCT ON (ct.language) d.id
+        FROM deliverables d
+        JOIN challenge_templates ct ON ct.id = d.challenge_id
+        WHERE d.user_id = $1
+          AND d.verification_status = 'verified'
+          AND d.revoked_at IS NULL
+          AND ct.language IS NOT NULL
+          AND ($2::VARCHAR IS NULL OR ct.skill_domain = $2)
+        ORDER BY ct.language, d.id
+        LIMIT 25
+        "#,
+    )
+    .bind(user_id)
+    .bind(conds.skill_domain.as_deref())
+    .fetch_all(db)
+    .await?;
+
+    Ok((matched, sources))
 }
 
 /// Dérive la rareté effective en fonction du count matched si la rule est en 'auto'.
@@ -201,6 +375,14 @@ pub async fn recompute_badges_for_user(
     for rule in rules {
         let conds: RuleConditions =
             serde_json::from_value(rule.conditions.clone()).unwrap_or_default();
+
+        // A manual rule is skipped entirely rather than evaluated to zero:
+        // evaluating it would revoke a badge an operator granted on purpose.
+        if conds.manual {
+            unchanged += 1;
+            continue;
+        }
+
         let (count, sources) = count_matching_proofs(db, user_id, &conds).await?;
         let meets = count >= conds.min_count;
         let has: Option<(bool,)> = sqlx::query_as(

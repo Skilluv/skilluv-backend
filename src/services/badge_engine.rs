@@ -280,9 +280,12 @@ async fn count_distinct_dimension(
     conds: &RuleConditions,
     dimension: &str,
 ) -> Result<(i64, Vec<Uuid>), AppError> {
-    // One dimension today. Named rather than interpolated, because a
-    // dimension built from a rule's own text would be a column name coming
-    // from a JSONB field an operator can edit.
+    // Each dimension is a query, never an interpolated column name: a
+    // dimension read from a JSONB field an operator can edit has no business
+    // reaching SQL as an identifier.
+    if dimension == "orientation" {
+        return count_distinct_orientations(db, user_id, conds).await;
+    }
     if dimension != "challenge_language" {
         return Err(AppError::Internal(format!(
             "badge rule asks to count distinct '{dimension}', which nothing implements"
@@ -318,6 +321,58 @@ async fn count_distinct_dimension(
           AND ($2::VARCHAR IS NULL OR ct.skill_domain = $2)
         ORDER BY ct.language, d.id
         LIMIT 25
+        "#,
+    )
+    .bind(user_id)
+    .bind(conds.skill_domain.as_deref())
+    .fetch_all(db)
+    .await?;
+
+    Ok((matched, sources))
+}
+
+/// How many distinct trades this user's verified work covers.
+///
+/// Reads the orientation on the slice, which migration 0186 added. Work that
+/// carries none is not counted: an unlabelled issue is honestly untyped, and
+/// counting it as a trade would credit somebody with a speciality nobody
+/// recorded.
+async fn count_distinct_orientations(
+    db: &PgPool,
+    user_id: Uuid,
+    conds: &RuleConditions,
+) -> Result<(i64, Vec<Uuid>), AppError> {
+    let matched: i64 = sqlx::query_scalar(
+        r#"
+        SELECT count(DISTINCT ps.orientation_id)
+          FROM deliverables d
+          JOIN project_slices ps ON ps.id = d.slice_id
+          LEFT JOIN orientations o ON o.id = ps.orientation_id
+         WHERE d.user_id = $1
+           AND d.verification_status = 'verified'
+           AND d.revoked_at IS NULL
+           AND ps.orientation_id IS NOT NULL
+           AND ($2::VARCHAR IS NULL OR o.primary_domain = $2)
+        "#,
+    )
+    .bind(user_id)
+    .bind(conds.skill_domain.as_deref())
+    .fetch_one(db)
+    .await?;
+
+    let sources: Vec<Uuid> = sqlx::query_scalar(
+        r#"
+        SELECT DISTINCT ON (ps.orientation_id) d.id
+          FROM deliverables d
+          JOIN project_slices ps ON ps.id = d.slice_id
+          LEFT JOIN orientations o ON o.id = ps.orientation_id
+         WHERE d.user_id = $1
+           AND d.verification_status = 'verified'
+           AND d.revoked_at IS NULL
+           AND ps.orientation_id IS NOT NULL
+           AND ($2::VARCHAR IS NULL OR o.primary_domain = $2)
+         ORDER BY ps.orientation_id, d.id
+         LIMIT 25
         "#,
     )
     .bind(user_id)

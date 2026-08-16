@@ -188,13 +188,20 @@ async fn the_engine_never_awards_a_judgement() {
         "code-blockchain-shipper",
         "code-standards-contributor",
         "code-systems-hero",
-        "code-multi-domain",
     ] {
         assert!(
             !holds(&app, user, slug).await,
             "{slug} must not be derivable from a count"
         );
     }
+
+    // `code-multi-domain` was in this list until migration 0186 put a trade on
+    // the slice. It is a count now — of distinct trades, which these hundred
+    // deliverables do not have, since none of them belongs to a slice.
+    assert!(
+        !holds(&app, user, "code-multi-domain").await,
+        "a hundred deliverables in no trade is not three trades"
+    );
 }
 
 #[tokio::test]
@@ -211,7 +218,7 @@ async fn a_manual_grant_carries_its_author_and_its_reason() {
         .fetch_optional(&app.db)
         .await
         .unwrap()
-        .unwrap_or_else(|| Uuid::nil());
+        .unwrap_or_else(Uuid::nil);
 
     if badge.is_nil() {
         // The sentinel is created by the engine on first run.

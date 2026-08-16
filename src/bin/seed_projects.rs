@@ -1,5 +1,16 @@
-//! skilluv-seed-projects — provision the 4 Skilluv public repos as Projects
-//! in the DB, wired to the P11 GitHubIngestor via label `skilluv-challenge`.
+//! skilluv-seed-projects — provision the repositories Skilluv draws work
+//! from, wired to the P11 GitHubIngestor.
+//!
+//! Three catalogues:
+//!
+//!   * our own repos, where dogfooding happens;
+//!   * the twelve partner repos of Annexe F, curated unilaterally — no
+//!     permission is needed to point people at a public issue tracker;
+//!   * the large ecosystem projects, which take contributions in every trade.
+//!
+//! Labels are per repository. Rust projects say `E-easy`, most say `good
+//! first issue`, and our own say `skilluv-challenge`; one global list only
+//! ever fitted the last of those.
 //!
 //! Phase 1 dogfooding (P26 v2 SKI-74): these 4 rows are what makes the P11
 //! ingestor pick up issues from our own repos and materialise them as slices.
@@ -38,8 +49,8 @@ struct Cli {
     owner_email: Option<String>,
 }
 
-/// A Skilluv-owned public repo to seed as a Project.
-struct SkilluvRepo {
+/// A repository Skilluv draws work from.
+struct SeedProject {
     slug: &'static str,
     name: &'static str,
     description: &'static str,
@@ -47,13 +58,22 @@ struct SkilluvRepo {
     github_repo: &'static str,
     skill_domains: &'static [&'static str],
     tech_stack: &'static [&'static str],
+    /// Issues carrying one of these become slices. Empty means the repo is
+    /// listed but nothing is ingested from it yet.
+    curated_labels: &'static [&'static str],
+    /// Which trade an issue belongs to, by label. Written against whichever
+    /// slug the catalogue used — `resolve_orientation` follows a rename, so
+    /// entries naming `dev-frontend` land on the trade that replaced it.
+    label_orientations: &'static [(&'static str, &'static str)],
+    /// False for our own repos: we own those rather than curate them.
+    curated: bool,
 }
 
-/// The 4 repos that make up Phase 1 dogfooding — see docs/DOGFOODING-PHASE-1.md.
-/// Extending this list means adding repos to the ingestion pool; the binary is
-/// idempotent so re-runs pick up the new ones without touching existing rows.
-const REPOS: &[SkilluvRepo] = &[
-    SkilluvRepo {
+/// Our own repositories. Dogfooding: the platform is built by people using
+/// the platform, and a challenge on our own backend is the shortest path
+/// from "I want to contribute" to a merged pull request.
+const SKILLUV_REPOS: &[SeedProject] = &[
+    SeedProject {
         slug: "skilluv-backend",
         name: "Skilluv Backend",
         description: "Rust/axum backend powering the Skilluv platform.",
@@ -61,8 +81,11 @@ const REPOS: &[SkilluvRepo] = &[
         github_repo: "skilluv-backend",
         skill_domains: &["code", "ops"],
         tech_stack: &["rust", "axum", "postgres", "sqlx"],
+        curated_labels: &["skilluv-challenge"],
+        label_orientations: &[("skilluv-challenge", "web-backend-developer")],
+        curated: false,
     },
-    SkilluvRepo {
+    SeedProject {
         slug: "skilluv-frontend",
         name: "Skilluv Frontend",
         description: "SvelteKit frontend for the Skilluv user experience.",
@@ -70,8 +93,11 @@ const REPOS: &[SkilluvRepo] = &[
         github_repo: "skilluv-frontend",
         skill_domains: &["code", "design"],
         tech_stack: &["typescript", "sveltekit", "tailwind"],
+        curated_labels: &["skilluv-challenge"],
+        label_orientations: &[("skilluv-challenge", "web-frontend-developer")],
+        curated: false,
     },
-    SkilluvRepo {
+    SeedProject {
         slug: "skilluv-admin",
         name: "Skilluv Admin Panel",
         description: "SvelteKit admin panel (moderation, ops, analytics).",
@@ -79,8 +105,11 @@ const REPOS: &[SkilluvRepo] = &[
         github_repo: "skilluv-admin",
         skill_domains: &["code", "ops"],
         tech_stack: &["typescript", "sveltekit"],
+        curated_labels: &["skilluv-challenge"],
+        label_orientations: &[("skilluv-challenge", "web-frontend-developer")],
+        curated: false,
     },
-    SkilluvRepo {
+    SeedProject {
         slug: "skilluv-ia",
         name: "Skilluv IA",
         description: "AI/ML services (verifier, coach, embeddings).",
@@ -88,14 +117,360 @@ const REPOS: &[SkilluvRepo] = &[
         github_repo: "skilluv-ia",
         skill_domains: &["ai", "code"],
         tech_stack: &["python", "fastapi", "grpc"],
+        curated_labels: &["skilluv-challenge"],
+        label_orientations: &[("skilluv-challenge", "web-backend-developer")],
+        curated: false,
+    },
+    SeedProject {
+        slug: "skilluv-discord-bot",
+        name: "Skilluv Discord Bot",
+        description: "Rust/serenity bot: onboarding, notifications, community rituals.",
+        github_owner: "skilluv",
+        github_repo: "skilluv-discord",
+        skill_domains: &["code"],
+        tech_stack: &["rust", "serenity"],
+        curated_labels: &["skilluv-challenge"],
+        label_orientations: &[("skilluv-challenge", "platform-app-developer")],
+        curated: false,
+    },
+    SeedProject {
+        slug: "skilluv-community-repos",
+        name: "Skilluv Community Starters",
+        description: "Starter repositories community members fork and extend.",
+        github_owner: "skilluv",
+        github_repo: "skilluv-community-repos",
+        skill_domains: &["code"],
+        tech_stack: &["typescript", "rust", "python"],
+        curated_labels: &["skilluv-challenge"],
+        label_orientations: &[("skilluv-challenge", "web-fullstack-developer")],
+        curated: false,
     },
 ];
 
-/// Curated labels the P11 GitHubIngestor will filter on. Only issues carrying
-/// one of these labels are ingested as slices. `skilluv-challenge` is added by
-/// the Linear→GitHub bot (SKI-72) when a Linear ticket is tagged
-/// `challenge-ready`.
-const CURATED_LABELS: &[&str] = &["skilluv-challenge"];
+/// The twelve partner repositories of Annexe F. Curated unilaterally: no
+/// permission is required to point somebody at a public issue tracker, and
+/// the partnership conversation comes after there is something to show.
+///
+/// The orientations are the ones the annexe assigns, written with the slugs
+/// it used — several were renamed in migration 0173, and the lineage handles
+/// that rather than this list drifting from the document it came from.
+const PARTNER_REPOS: &[SeedProject] = &[
+    SeedProject {
+        slug: "sqlx",
+        name: "sqlx",
+        description: "Async, compile-time checked SQL for Rust. Relation directe, et ce que Skilluv utilise.",
+        github_owner: "launchbadge",
+        github_repo: "sqlx",
+        skill_domains: &["code"],
+        tech_stack: &["rust", "postgres"],
+        curated_labels: &["good first issue", "E-easy", "help wanted"],
+        label_orientations: &[
+            ("good first issue", "dev-backend"),
+            ("E-easy", "dev-backend"),
+            ("help wanted", "systems-programmer"),
+        ],
+        curated: true,
+    },
+    SeedProject {
+        slug: "bevy",
+        name: "Bevy Engine",
+        description: "Moteur de jeu Rust, orienté données. Contributions gameplay, rendu et outils.",
+        github_owner: "bevyengine",
+        github_repo: "bevy",
+        skill_domains: &["game", "code"],
+        tech_stack: &["rust", "wgpu"],
+        curated_labels: &["D-Good-First-Issue", "good first issue"],
+        label_orientations: &[
+            ("D-Good-First-Issue", "systems-programmer"),
+            ("good first issue", "systems-programmer"),
+        ],
+        curated: true,
+    },
+    SeedProject {
+        slug: "esp-hal",
+        name: "esp-hal",
+        description: "Couche d''abstraction matérielle Rust pour les puces ESP32.",
+        github_owner: "esp-rs",
+        github_repo: "esp-hal",
+        skill_domains: &["code"],
+        tech_stack: &["rust", "embedded"],
+        curated_labels: &["good first issue", "help wanted"],
+        label_orientations: &[
+            ("good first issue", "dev-embarque-iot"),
+            ("help wanted", "dev-embarque-iot"),
+        ],
+        curated: true,
+    },
+    SeedProject {
+        slug: "cal-com",
+        name: "Cal.com",
+        description: "Planification open source. Culture explicite de recrutement parmi les contributeurs.",
+        github_owner: "calcom",
+        github_repo: "cal.com",
+        skill_domains: &["code"],
+        tech_stack: &["typescript", "nextjs", "prisma"],
+        curated_labels: &["good first issue", "🐛 bug", "help wanted"],
+        label_orientations: &[
+            ("good first issue", "dev-frontend"),
+            ("help wanted", "dev-fullstack"),
+            ("🐛 bug", "dev-backend"),
+        ],
+        curated: true,
+    },
+    SeedProject {
+        slug: "excalidraw",
+        name: "Excalidraw",
+        description: "Tableau blanc collaboratif. Contributions visibles immédiatement à l''écran.",
+        github_owner: "excalidraw",
+        github_repo: "excalidraw",
+        skill_domains: &["code", "design"],
+        tech_stack: &["typescript", "react", "canvas"],
+        curated_labels: &["good first issue", "help wanted"],
+        label_orientations: &[
+            ("good first issue", "dev-frontend"),
+            ("help wanted", "dev-frontend"),
+        ],
+        curated: true,
+    },
+    SeedProject {
+        slug: "astro",
+        name: "Astro",
+        description: "Framework web orienté contenu. Utilisé par les livrables Skilluv.",
+        github_owner: "withastro",
+        github_repo: "astro",
+        skill_domains: &["code"],
+        tech_stack: &["typescript"],
+        curated_labels: &["good first issue", "help wanted"],
+        label_orientations: &[
+            ("good first issue", "dev-frontend"),
+            ("help wanted", "dev-fullstack"),
+        ],
+        curated: true,
+    },
+    SeedProject {
+        slug: "fastapi",
+        name: "FastAPI",
+        description: "Framework web Python typé. Synergie avec le tutoriel FastAPI francophone.",
+        github_owner: "tiangolo",
+        github_repo: "fastapi",
+        skill_domains: &["code"],
+        tech_stack: &["python"],
+        curated_labels: &["good first issue", "help wanted"],
+        label_orientations: &[
+            ("good first issue", "dev-backend"),
+            ("help wanted", "dev-backend"),
+        ],
+        curated: true,
+    },
+    SeedProject {
+        slug: "hf-transformers",
+        name: "HuggingFace Transformers",
+        description: "Bibliothèque de modèles. Porte d''entrée pour les initiatives sur les langues africaines.",
+        github_owner: "huggingface",
+        github_repo: "transformers",
+        skill_domains: &["ai", "code"],
+        tech_stack: &["python", "pytorch"],
+        curated_labels: &["good first issue", "Good Second Issue"],
+        label_orientations: &[
+            ("good first issue", "scientific-computing-developer"),
+            ("Good Second Issue", "scientific-computing-developer"),
+        ],
+        curated: true,
+    },
+    SeedProject {
+        slug: "penpot",
+        name: "Penpot",
+        description: "Conception d''interfaces open source. Ligne éditoriale Skilluv sur le design libre.",
+        github_owner: "penpot",
+        github_repo: "penpot",
+        skill_domains: &["design", "code"],
+        tech_stack: &["clojurescript", "react"],
+        curated_labels: &["good first issue", "help wanted"],
+        label_orientations: &[
+            ("good first issue", "dev-frontend"),
+            ("help wanted", "dev-backend"),
+        ],
+        curated: true,
+    },
+    SeedProject {
+        slug: "mdn-content",
+        name: "MDN Web Docs",
+        description: "La documentation web de référence. La barrière technique la plus basse du catalogue, pour un impact large.",
+        github_owner: "mdn",
+        github_repo: "content",
+        skill_domains: &["code"],
+        tech_stack: &["markdown"],
+        curated_labels: &["good first issue", "help wanted"],
+        label_orientations: &[
+            ("good first issue", "dev-frontend"),
+            ("help wanted", "dev-frontend"),
+        ],
+        curated: true,
+    },
+    SeedProject {
+        slug: "africastalking-python",
+        name: "Africa''s Talking Python",
+        description: "SDK Python pour SMS et USSD. Infrastructure critique sur le continent.",
+        github_owner: "AfricasTalkingLtd",
+        github_repo: "africastalking-python",
+        skill_domains: &["code"],
+        tech_stack: &["python"],
+        curated_labels: &["good first issue", "help wanted"],
+        label_orientations: &[
+            ("good first issue", "dev-backend"),
+            ("help wanted", "dev-backend"),
+        ],
+        curated: true,
+    },
+    SeedProject {
+        slug: "masakhane-ner",
+        name: "Masakhane NER",
+        description: "Reconnaissance d''entités pour les langues africaines. Travail de recherche ouvert.",
+        github_owner: "masakhane-io",
+        github_repo: "masakhane-ner",
+        skill_domains: &["ai", "code"],
+        tech_stack: &["python", "jupyter"],
+        curated_labels: &["good first issue", "help wanted"],
+        label_orientations: &[
+            ("good first issue", "scientific-computing-developer"),
+            ("help wanted", "scientific-computing-developer"),
+        ],
+        curated: true,
+    },
+];
+
+/// Large ecosystem projects, which take contributions across every trade.
+///
+/// Listed with no curated labels on purpose: their issue volume is enormous,
+/// their contribution processes differ wildly — the Linux kernel does not use
+/// GitHub issues at all — and ingesting them blindly would bury the partner
+/// repos under thousands of tickets nobody vetted. They are here so the
+/// catalogue names them and an operator can enable one deliberately.
+const ECOSYSTEM_REPOS: &[SeedProject] = &[
+    SeedProject {
+        slug: "rust-lang",
+        name: "Rust",
+        description: "Le langage lui-même : compilateur, bibliothèque standard, outils.",
+        github_owner: "rust-lang",
+        github_repo: "rust",
+        skill_domains: &["code"],
+        tech_stack: &["rust"],
+        curated_labels: &[],
+        label_orientations: &[],
+        curated: true,
+    },
+    SeedProject {
+        slug: "cpython",
+        name: "CPython",
+        description: "L''implémentation de référence de Python.",
+        github_owner: "python",
+        github_repo: "cpython",
+        skill_domains: &["code"],
+        tech_stack: &["c", "python"],
+        curated_labels: &[],
+        label_orientations: &[],
+        curated: true,
+    },
+    SeedProject {
+        slug: "nodejs",
+        name: "Node.js",
+        description: "Le runtime JavaScript serveur.",
+        github_owner: "nodejs",
+        github_repo: "node",
+        skill_domains: &["code"],
+        tech_stack: &["c++", "javascript"],
+        curated_labels: &[],
+        label_orientations: &[],
+        curated: true,
+    },
+    SeedProject {
+        slug: "postgres",
+        name: "PostgreSQL",
+        description: "Le moteur de base de données. Contributions par liste de diffusion, pas par pull request.",
+        github_owner: "postgres",
+        github_repo: "postgres",
+        skill_domains: &["code"],
+        tech_stack: &["c"],
+        curated_labels: &[],
+        label_orientations: &[],
+        curated: true,
+    },
+    SeedProject {
+        slug: "linux-kernel",
+        name: "Linux",
+        description: "Le noyau. Contributions par correctifs sur liste de diffusion ; le processus est strict et documenté.",
+        github_owner: "torvalds",
+        github_repo: "linux",
+        skill_domains: &["code"],
+        tech_stack: &["c"],
+        curated_labels: &[],
+        label_orientations: &[],
+        curated: true,
+    },
+    SeedProject {
+        slug: "godot",
+        name: "Godot Engine",
+        description: "Moteur de jeu libre. Gameplay, rendu, éditeur.",
+        github_owner: "godotengine",
+        github_repo: "godot",
+        skill_domains: &["game", "code"],
+        tech_stack: &["c++"],
+        curated_labels: &[],
+        label_orientations: &[],
+        curated: true,
+    },
+    SeedProject {
+        slug: "vscode",
+        name: "Visual Studio Code",
+        description: "L''éditeur et son protocole de serveur de langage.",
+        github_owner: "microsoft",
+        github_repo: "vscode",
+        skill_domains: &["code"],
+        tech_stack: &["typescript"],
+        curated_labels: &[],
+        label_orientations: &[],
+        curated: true,
+    },
+    SeedProject {
+        slug: "kubernetes",
+        name: "Kubernetes",
+        description: "L''orchestrateur de conteneurs.",
+        github_owner: "kubernetes",
+        github_repo: "kubernetes",
+        skill_domains: &["ops", "code"],
+        tech_stack: &["go"],
+        curated_labels: &[],
+        label_orientations: &[],
+        curated: true,
+    },
+    SeedProject {
+        slug: "deno",
+        name: "Deno",
+        description: "Runtime JavaScript et TypeScript écrit en Rust.",
+        github_owner: "denoland",
+        github_repo: "deno",
+        skill_domains: &["code"],
+        tech_stack: &["rust", "typescript"],
+        curated_labels: &[],
+        label_orientations: &[],
+        curated: true,
+    },
+    SeedProject {
+        slug: "ruff",
+        name: "Ruff",
+        description: "Analyseur et formateur Python écrit en Rust.",
+        github_owner: "astral-sh",
+        github_repo: "ruff",
+        skill_domains: &["code"],
+        tech_stack: &["rust", "python"],
+        curated_labels: &[],
+        label_orientations: &[],
+        curated: true,
+    },
+];
+
+/// Everything, in the order it should be seeded.
+const ALL_PROJECTS: &[&[SeedProject]] = &[SKILLUV_REPOS, PARTNER_REPOS, ECOSYSTEM_REPOS];
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -135,19 +510,27 @@ async fn main() -> Result<()> {
         })?
         .0;
 
-    let curated_labels: Vec<String> = CURATED_LABELS.iter().map(|s| s.to_string()).collect();
     let mut created = 0usize;
     let mut updated = 0usize;
 
-    for repo in REPOS {
+    for repo in ALL_PROJECTS.iter().copied().flatten() {
         let skill_domains: Vec<String> = repo.skill_domains.iter().map(|s| s.to_string()).collect();
         let tech_stack: Vec<String> = repo.tech_stack.iter().map(|s| s.to_string()).collect();
+        let curated_labels: Vec<String> =
+            repo.curated_labels.iter().map(|s| s.to_string()).collect();
+        // Nothing to ingest yet means nothing to ingest: `auto` on an
+        // empty label list would pull every issue the repository has.
+        let ingestion_mode = if repo.curated_labels.is_empty() {
+            "manual_only"
+        } else {
+            "auto"
+        };
         let repo_url = format!(
             "https://github.com/{}/{}",
             repo.github_owner, repo.github_repo
         );
 
-        let row: (bool,) = sqlx::query_as(
+        let row: (bool, Uuid) = sqlx::query_as(
             r#"
             INSERT INTO projects
                 (slug, name, description, repo_url, tech_stack, is_oss,
@@ -156,24 +539,24 @@ async fn main() -> Result<()> {
                  github_repo_owner, github_repo_name,
                  slice_ingestion_mode, curated_labels)
             VALUES ($1, $2, $3, $4, $5, TRUE,
-                    TRUE, 'user', $6, TRUE,
+                    TRUE, 'user', $6, $12,
                     $7, 'active',
                     $8, $9,
-                    'auto', $10)
+                    $11, $10)
             ON CONFLICT (slug) DO UPDATE SET
                 name = EXCLUDED.name,
                 description = EXCLUDED.description,
                 repo_url = EXCLUDED.repo_url,
                 tech_stack = EXCLUDED.tech_stack,
                 looking_for_contributors = TRUE,
-                curated_by_admin = TRUE,
+                curated_by_admin = EXCLUDED.curated_by_admin,
                 skill_domains = EXCLUDED.skill_domains,
                 github_repo_owner = EXCLUDED.github_repo_owner,
                 github_repo_name = EXCLUDED.github_repo_name,
                 slice_ingestion_mode = EXCLUDED.slice_ingestion_mode,
                 curated_labels = EXCLUDED.curated_labels,
                 updated_at = NOW()
-            RETURNING (xmax = 0) AS inserted
+            RETURNING (xmax = 0) AS inserted, id
             "#,
         )
         .bind(repo.slug)
@@ -186,9 +569,51 @@ async fn main() -> Result<()> {
         .bind(repo.github_owner)
         .bind(repo.github_repo)
         .bind(&curated_labels)
+        .bind(ingestion_mode)
+        .bind(repo.curated)
         .fetch_one(&db)
         .await
         .with_context(|| format!("failed to upsert project {}", repo.slug))?;
+
+        // What each upstream label means, for this project. Replaced wholesale
+        // rather than merged: the catalogue in this binary is the statement of
+        // record, and a mapping removed from it should disappear rather than
+        // linger in a table nobody is reading any more.
+        sqlx::query("DELETE FROM project_label_orientations WHERE project_id = $1")
+            .bind(row.1)
+            .execute(&db)
+            .await
+            .with_context(|| format!("failed to clear label map for {}", repo.slug))?;
+
+        for (label, orientation_slug) in repo.label_orientations {
+            // `resolve_orientation` follows one rename, so a catalogue written
+            // against `dev-frontend` lands on the trade that replaced it. A
+            // slug that resolves to nothing is reported rather than skipped:
+            // silence here means a whole project ingests untyped work.
+            let mapped: Option<Uuid> = sqlx::query_scalar(
+                "INSERT INTO project_label_orientations (project_id, label, orientation_id)
+                 SELECT $1, $2, resolve_orientation($3)
+                  WHERE resolve_orientation($3) IS NOT NULL
+                 ON CONFLICT (project_id, label) DO UPDATE
+                     SET orientation_id = EXCLUDED.orientation_id
+                 RETURNING orientation_id",
+            )
+            .bind(row.1)
+            .bind(label)
+            .bind(orientation_slug)
+            .fetch_optional(&db)
+            .await
+            .with_context(|| format!("failed to map {label} for {}", repo.slug))?;
+
+            if mapped.is_none() {
+                tracing::warn!(
+                    slug = repo.slug,
+                    label,
+                    orientation = orientation_slug,
+                    "orientation not found — issues with this label will be ingested untyped"
+                );
+            }
+        }
 
         if row.0 {
             created += 1;
@@ -201,20 +626,36 @@ async fn main() -> Result<()> {
 
     println!();
     println!("═══════════════════════════════════════════════════════════");
-    println!("  Skilluv public repos seeded ({created} created, {updated} updated)");
+    println!("  Projects seeded ({created} created, {updated} updated)");
     println!("═══════════════════════════════════════════════════════════");
-    for repo in REPOS {
-        println!(
-            "  • {} → github.com/{}/{}",
-            repo.slug, repo.github_owner, repo.github_repo
-        );
+
+    for (heading, catalogue) in [
+        ("Skilluv repositories (dogfooding)", SKILLUV_REPOS),
+        ("Partner repositories (Annexe F)", PARTNER_REPOS),
+        (
+            "Ecosystem projects (listed, ingestion off)",
+            ECOSYSTEM_REPOS,
+        ),
+    ] {
+        println!();
+        println!("  {heading}");
+        for repo in catalogue {
+            let labels = if repo.curated_labels.is_empty() {
+                "no ingestion".to_string()
+            } else {
+                repo.curated_labels.join(", ")
+            };
+            println!(
+                "    • {} → github.com/{}/{}  [{}]",
+                repo.slug, repo.github_owner, repo.github_repo, labels
+            );
+        }
     }
+
     println!();
-    println!(
-        "  Curated labels (P11 ingest filter): {}",
-        curated_labels.join(", ")
-    );
-    println!("  Ingestion mode: auto (issues appear directly as 'open' slices)");
+    println!("  Ecosystem projects carry no labels on purpose: their issue");
+    println!("  volume would bury the partner repositories. Enable one");
+    println!("  deliberately when somebody is ready to steward it.");
     println!("  Owner: {owner_email}");
     println!("═══════════════════════════════════════════════════════════");
 

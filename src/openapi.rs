@@ -217,6 +217,9 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::sponsored_challenges::admin_link_challenge,
         crate::routes::sponsored_challenges::public_active,
         crate::routes::sponsored_challenges::sponsor_view_submissions,
+        // ─── code: first-issue feed + language ecosystems ─────────
+        crate::routes::code::first_issues,
+        crate::routes::code::language_ecosystems,
         // ─── orientations ─────────────────────────────────────────
         crate::routes::orientations::list_orientations,
         crate::routes::orientations::get_orientation,
@@ -927,6 +930,10 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
             crate::routes::sponsored_challenges::SponsorSubmissionRow,
             crate::routes::sponsored_challenges::SponsorSubmissionsResponse,
             // orientations
+            crate::routes::code::FirstIssueRow,
+            crate::routes::code::FirstIssuesResponse,
+            crate::routes::code::EcosystemRow,
+            crate::routes::code::EcosystemsResponse,
             crate::routes::orientations::OrientationRow,
             crate::routes::orientations::CatalogPagination,
             crate::routes::orientations::OrientationsCatalogResponse,

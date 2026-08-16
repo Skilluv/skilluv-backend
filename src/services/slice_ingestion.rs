@@ -214,6 +214,58 @@ async fn fetch_open_issues(
     Ok(issues)
 }
 
+/// Which trade an ingested issue belongs to, read from the labels the
+/// maintainers put on it.
+///
+/// `trigger` is the label that caused the ingestion, when there is one — a
+/// webhook knows which label was just added, a polling cycle does not. It
+/// wins over the rest, because it is the most recent statement anybody made
+/// about that issue.
+///
+/// Otherwise the issue is typed only when the mapped labels agree. Two curated
+/// labels pointing at two different trades is a contradiction on the upstream
+/// repository, and guessing between them would credit somebody with a
+/// speciality they may never have worked in. An untyped slice is honest;
+/// a wrongly typed one is not.
+pub async fn orientation_for_labels(
+    db: &PgPool,
+    project_id: Uuid,
+    labels: &[String],
+    trigger: Option<&str>,
+) -> Result<Option<Uuid>, AppError> {
+    if let Some(trigger) = trigger {
+        let direct: Option<Uuid> = sqlx::query_scalar(
+            "SELECT orientation_id FROM project_label_orientations
+              WHERE project_id = $1 AND label = $2",
+        )
+        .bind(project_id)
+        .bind(trigger)
+        .fetch_optional(db)
+        .await?;
+        if direct.is_some() {
+            return Ok(direct);
+        }
+    }
+
+    if labels.is_empty() {
+        return Ok(None);
+    }
+
+    let agreed: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT DISTINCT orientation_id FROM project_label_orientations
+          WHERE project_id = $1 AND label = ANY($2)",
+    )
+    .bind(project_id)
+    .bind(labels)
+    .fetch_all(db)
+    .await?;
+
+    match agreed.as_slice() {
+        [single] => Ok(Some(*single)),
+        _ => Ok(None),
+    }
+}
+
 /// INSERT ON CONFLICT : true si nouveau, false si duplicate.
 ///
 /// P26 v2 SKI-101 — `default_domain` is the project's fallback (usually
@@ -267,17 +319,19 @@ async fn insert_slice_from_issue(
         },
     });
 
+    let orientation_id = orientation_for_labels(db, project_id, &labels, None).await?;
+
     let inserted: Option<Uuid> = sqlx::query_scalar(
         r#"
         INSERT INTO project_slices
             (project_id, slice_type, external_ref, external_metadata,
              title, description, acceptance_criteria,
              primary_domain, difficulty, fragments_reward,
-             status, ingested_from)
+             status, ingested_from, orientation_id)
         VALUES ($1, 'github_issue', $2, $3,
                 $4, $5, $6,
                 $7, $8, $9,
-                $10, 'github_webhook')
+                $10, 'github_webhook', $11)
         ON CONFLICT (project_id, external_ref)
             WHERE slice_type = 'github_issue' AND external_ref IS NOT NULL
             DO NOTHING
@@ -294,6 +348,7 @@ async fn insert_slice_from_issue(
     .bind(enriched.difficulty)
     .bind(fragments_reward)
     .bind(default_status)
+    .bind(orientation_id)
     .fetch_optional(db)
     .await?;
 

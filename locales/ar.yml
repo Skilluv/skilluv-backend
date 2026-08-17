@@ -195,6 +195,11 @@ notification:
       title: "أصبحت الآن {rank}"
       body: "عملك على المنصة رفعك إلى رتبة {rank}."
       cta: "عرض ملفي"
+  recruitment:
+    shortlisted:
+      title: "شركة مهتمة بملفك"
+      body: "تم ترشيحك لوظيفة {role}. أجب لتعرف عن أي شركة يتعلق الأمر."
+      cta: "عرض العرض"
   mission:
     application_received:
       title: "طلب جديد"

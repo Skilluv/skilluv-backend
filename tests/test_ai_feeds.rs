@@ -88,8 +88,7 @@ async fn the_competition_feed_hides_what_is_over() {
     .await
     .unwrap();
 
-    let titles: Vec<String> = json(&app, "/api/ai/competitions")
-        .await["competitions"]
+    let titles: Vec<String> = json(&app, "/api/ai/competitions").await["competitions"]
         .as_array()
         .unwrap()
         .iter()
@@ -106,7 +105,10 @@ async fn the_competition_feed_hides_what_is_over() {
     // reading it.
     assert!(!titles.contains(&"Déjà close".to_string()), "{titles:?}");
     // Unreviewed rows are not a feed.
-    assert!(!titles.contains(&"Pas encore relue".to_string()), "{titles:?}");
+    assert!(
+        !titles.contains(&"Pas encore relue".to_string()),
+        "{titles:?}"
+    );
 }
 
 #[tokio::test]
@@ -176,8 +178,7 @@ async fn the_artifact_feed_shows_only_verified_public_work() {
         .unwrap();
     }
 
-    let titles: Vec<String> = json(&app, "/api/ai/artifacts")
-        .await["artifacts"]
+    let titles: Vec<String> = json(&app, "/api/ai/artifacts").await["artifacts"]
         .as_array()
         .unwrap()
         .iter()

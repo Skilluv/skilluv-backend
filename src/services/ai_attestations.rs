@@ -79,10 +79,7 @@ fn wording(basis: &str) -> (&'static str, &'static str) {
             "Trouvaille de sûreté validée",
             "Une trouvaille reproduite, évaluée en gravité et divulguée dans les règles.",
         ),
-        _ => (
-            "Contribution IA",
-            "Un travail IA vérifié.",
-        ),
+        _ => ("Contribution IA", "Un travail IA vérifié."),
     }
 }
 
@@ -370,7 +367,10 @@ mod tests {
     #[test]
     fn a_served_model_and_a_downloaded_one_make_the_same_claim() {
         assert_eq!(basis_for_subtype("ml_model"), Some("ai_model_shipped"));
-        assert_eq!(basis_for_subtype("ai_service_api"), Some("ai_model_shipped"));
+        assert_eq!(
+            basis_for_subtype("ai_service_api"),
+            Some("ai_model_shipped")
+        );
     }
 
     #[test]

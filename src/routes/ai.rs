@@ -156,8 +156,8 @@ pub async fn toolkit(
         category: q.category.clone(),
         orientation: q.orientation.clone(),
     };
-    let _ =
-        crate::services::cache::set_json(&mut redis, &cache_key, &response, AI_CACHE_TTL_SECS).await;
+    let _ = crate::services::cache::set_json(&mut redis, &cache_key, &response, AI_CACHE_TTL_SECS)
+        .await;
 
     Ok(Json(ApiResponse::new(response)))
 }
@@ -240,7 +240,9 @@ pub async fn competitions(
     .fetch_all(&state.db)
     .await?;
 
-    Ok(Json(ApiResponse::new(CompetitionsResponse { competitions })))
+    Ok(Json(ApiResponse::new(CompetitionsResponse {
+        competitions,
+    })))
 }
 
 // ═══════════════════════════════════════════════════════════════════

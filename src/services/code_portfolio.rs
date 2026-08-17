@@ -400,6 +400,201 @@ pub async fn fetch(
     }
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// The contribution graph
+// ═══════════════════════════════════════════════════════════════════
+
+/// A year of daily contribution counts.
+///
+/// The one figure on a GitHub profile that reads as effort rather than
+/// outcome, and the reason it is worth the trouble: a graph shows somebody
+/// who turned up on Tuesdays for a year, which no count of merged pull
+/// requests does.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ContributionGraph {
+    pub total: i32,
+    /// `[["2026-01-14", 3], …]`, oldest first. A flat array of pairs rather
+    /// than a map: it is rendered in order and JSON objects have none.
+    pub days: Vec<(String, i32)>,
+    /// The longest run of consecutive days with at least one contribution.
+    pub longest_streak: i32,
+}
+
+#[derive(Deserialize)]
+struct GraphqlEnvelope {
+    data: Option<GraphqlData>,
+}
+
+#[derive(Deserialize)]
+struct GraphqlData {
+    user: Option<GraphqlUser>,
+}
+
+#[derive(Deserialize)]
+struct GraphqlUser {
+    #[serde(rename = "contributionsCollection")]
+    contributions_collection: ContributionsCollection,
+}
+
+#[derive(Deserialize)]
+struct ContributionsCollection {
+    #[serde(rename = "contributionCalendar")]
+    contribution_calendar: ContributionCalendar,
+}
+
+#[derive(Deserialize)]
+struct ContributionCalendar {
+    #[serde(rename = "totalContributions")]
+    total_contributions: i32,
+    weeks: Vec<ContributionWeek>,
+}
+
+#[derive(Deserialize)]
+struct ContributionWeek {
+    #[serde(rename = "contributionDays")]
+    contribution_days: Vec<ContributionDay>,
+}
+
+#[derive(Deserialize)]
+struct ContributionDay {
+    date: String,
+    #[serde(rename = "contributionCount")]
+    contribution_count: i32,
+}
+
+/// The longest run of consecutive days with something on them.
+///
+/// Pure, and worth its own function: an off-by-one here reports somebody's
+/// hundred-day streak as ninety-nine, which is the kind of wrong that gets
+/// noticed by exactly the person it is about.
+pub fn longest_streak(days: &[(String, i32)]) -> i32 {
+    let mut best = 0;
+    let mut current = 0;
+    for (_, count) in days {
+        if *count > 0 {
+            current += 1;
+            best = best.max(current);
+        } else {
+            current = 0;
+        }
+    }
+    best
+}
+
+/// Ask GitHub for a year of contributions.
+///
+/// GraphQL, because this is the one thing the REST API does not expose — and
+/// authenticated, because the calendar is not public over the API even for a
+/// public profile. So it is only available for somebody who connected their
+/// account, which is the same set of people it is countable for.
+pub async fn fetch_contribution_graph(
+    client: &reqwest::Client,
+    token: &str,
+    handle: &str,
+) -> Result<ContributionGraph, AppError> {
+    let query = serde_json::json!({
+        "query": "query($login: String!) { \
+                    user(login: $login) { \
+                      contributionsCollection { \
+                        contributionCalendar { \
+                          totalContributions \
+                          weeks { contributionDays { date contributionCount } } \
+                        } \
+                      } \
+                    } \
+                  }",
+        "variables": { "login": handle },
+    });
+
+    let response = client
+        .post("https://api.github.com/graphql")
+        .header("User-Agent", "skilluv (https://skill-uv.com)")
+        .header("Authorization", format!("Bearer {token}"))
+        .json(&query)
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("github graphql unreachable: {e}")))?
+        .error_for_status()
+        .map_err(|e| AppError::Internal(format!("github graphql refused: {e}")))?;
+
+    let envelope: GraphqlEnvelope = response
+        .json()
+        .await
+        .map_err(|e| AppError::Internal(format!("github sent something unexpected: {e}")))?;
+
+    // GraphQL answers 200 with `data: null` when the user is gone or the
+    // token cannot see them. Treated as absence rather than as an error:
+    // there is nothing to retry.
+    let Some(user) = envelope.data.and_then(|d| d.user) else {
+        return Ok(ContributionGraph::default());
+    };
+
+    let calendar = user.contributions_collection.contribution_calendar;
+    let days: Vec<(String, i32)> = calendar
+        .weeks
+        .into_iter()
+        .flat_map(|w| w.contribution_days)
+        .map(|d| (d.date, d.contribution_count))
+        .collect();
+
+    Ok(ContributionGraph {
+        total: calendar.total_contributions,
+        longest_streak: longest_streak(&days),
+        days,
+    })
+}
+
+/// Refresh somebody's contribution graph, if they connected GitHub.
+///
+/// Stored in `metadata` rather than in a column of its own: it is three
+/// hundred and sixty-five pairs read as one blob by one page, and a column
+/// per figure would be a column nobody queries on.
+pub async fn sync_contribution_graph(
+    db: &PgPool,
+    client: &reqwest::Client,
+    jwt_secret: &str,
+    user_id: Uuid,
+) -> Result<Option<ContributionGraph>, AppError> {
+    let handle: Option<String> = sqlx::query_scalar(
+        "SELECT handle FROM user_code_portfolios
+          WHERE user_id = $1 AND platform = 'github' AND verified_at IS NOT NULL",
+    )
+    .bind(user_id)
+    .fetch_optional(db)
+    .await?;
+    let Some(handle) = handle else {
+        return Ok(None);
+    };
+
+    let Some(token) = crate::services::github::load_token(db, jwt_secret, user_id).await? else {
+        // Proved but the token is gone — disconnected, or revoked upstream.
+        // Not an error: there is simply nothing to ask with.
+        return Ok(None);
+    };
+
+    let graph = fetch_contribution_graph(client, &token, &handle).await?;
+
+    sqlx::query(
+        "UPDATE user_code_portfolios
+            SET contributions_last_year = $2,
+                metadata = metadata || jsonb_build_object(
+                    'contribution_graph', $3::JSONB,
+                    'longest_streak_days', $4::INT
+                ),
+                last_synced_at = NOW(),
+                last_error = NULL
+          WHERE user_id = $1 AND platform = 'github'",
+    )
+    .bind(user_id)
+    .bind(graph.total)
+    .bind(serde_json::to_value(&graph.days).unwrap_or_else(|_| serde_json::json!([])))
+    .bind(graph.longest_streak)
+    .execute(db)
+    .await?;
+
+    Ok(Some(graph))
+}
+
 /// Stars across the repositories already imported for this person.
 ///
 /// Read from `github_repos` rather than from the API: the repository list is
@@ -485,7 +680,43 @@ pub async fn sync_one(
 ///
 /// Weekly, because none of these figures move fast enough to be worth asking
 /// more often, and every one of these APIs rate-limits anonymous callers.
-pub async fn sync_stale(db: &PgPool, client: &reqwest::Client) -> Result<u64, AppError> {
+///
+/// `jwt_secret` is what decrypts a stored GitHub token, which is the only way
+/// to reach the contribution calendar. Passed rather than read from the
+/// environment so a caller with no secret gets everything except the graph
+/// instead of a panic.
+pub async fn sync_stale(
+    db: &PgPool,
+    client: &reqwest::Client,
+    jwt_secret: Option<&str>,
+) -> Result<u64, AppError> {
+    if let Some(secret) = jwt_secret {
+        // The graph is per person rather than per portfolio row: one call
+        // covers somebody however many accounts they have listed.
+        let connected: Vec<Uuid> = sqlx::query_scalar(
+            "SELECT p.user_id FROM user_code_portfolios p
+               JOIN github_connections g ON g.user_id = p.user_id
+              WHERE p.platform = 'github' AND p.verified_at IS NOT NULL
+                AND p.sync_enabled = TRUE
+                AND (p.last_synced_at IS NULL
+                     OR p.last_synced_at < NOW() - INTERVAL '7 days')
+              LIMIT 200",
+        )
+        .fetch_all(db)
+        .await?;
+
+        for user_id in connected {
+            // One failure must not stop the sweep.
+            if let Err(err) = sync_contribution_graph(db, client, secret, user_id).await {
+                tracing::warn!(%user_id, error = %err, "contribution graph refresh failed");
+            }
+        }
+    }
+
+    sync_stale_profiles(db, client).await
+}
+
+async fn sync_stale_profiles(db: &PgPool, client: &reqwest::Client) -> Result<u64, AppError> {
     let stale: Vec<Uuid> = sqlx::query_scalar(
         "SELECT id FROM user_code_portfolios
           WHERE sync_enabled = TRUE
@@ -564,6 +795,41 @@ mod tests {
             assert!(PLATFORMS.contains(platform));
             assert!(FORGES.contains(platform));
         }
+    }
+
+    fn day(date: &str, count: i32) -> (String, i32) {
+        (date.to_string(), count)
+    }
+
+    #[test]
+    fn a_streak_is_consecutive_days_with_something_on_them() {
+        let days = vec![
+            day("2026-01-01", 3),
+            day("2026-01-02", 1),
+            day("2026-01-03", 0),
+            day("2026-01-04", 2),
+            day("2026-01-05", 2),
+            day("2026-01-06", 2),
+        ];
+        assert_eq!(longest_streak(&days), 3);
+    }
+
+    #[test]
+    fn a_streak_that_runs_to_the_end_still_counts() {
+        // An off-by-one here reports somebody's hundred-day streak as
+        // ninety-nine, which is noticed by exactly the person it is about.
+        let days = vec![
+            day("2026-01-01", 0),
+            day("2026-01-02", 1),
+            day("2026-01-03", 1),
+        ];
+        assert_eq!(longest_streak(&days), 2);
+    }
+
+    #[test]
+    fn a_year_of_nothing_is_a_streak_of_nothing() {
+        assert_eq!(longest_streak(&[]), 0);
+        assert_eq!(longest_streak(&[day("2026-01-01", 0)]), 0);
     }
 
     #[test]

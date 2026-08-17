@@ -73,7 +73,7 @@ VALUES
 -- The badge stops being a judgement
 -- ═══════════════════════════════════════════════════════════════════
 --
--- Migration 0211 marked `ai-mission-veteran` manual and said why: paid
+-- Migration 0212 marked `ai-mission-veteran` manual and said why: paid
 -- missions had no table, and a rule counting something else would have
 -- awarded it to people who never did the thing it names. They have one now.
 --

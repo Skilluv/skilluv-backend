@@ -282,8 +282,14 @@ async fn a_safety_finding_attests_only_once_it_has_been_disclosed() {
     let user = a_user(&app, "att_safety").await;
     let reviewer = a_user(&app, "att_safety_rev").await;
     let project = a_project(&app, user).await;
-    let slice =
-        a_verified_artifact(&app, project, user, "ai_research_paper", "ai-safety-researcher").await;
+    let slice = a_verified_artifact(
+        &app,
+        project,
+        user,
+        "ai_research_paper",
+        "ai-safety-researcher",
+    )
+    .await;
 
     let report: Uuid = sqlx::query_scalar(
         "INSERT INTO ai_safety_reports

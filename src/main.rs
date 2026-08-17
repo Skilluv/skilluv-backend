@@ -368,7 +368,14 @@ fn spawn_code_portfolio_worker(state: skilluv_backend::AppState) {
         interval.tick().await;
         loop {
             interval.tick().await;
-            match skilluv_backend::services::code_portfolio::sync_stale(&state.db, &client).await {
+            let secret = state.config.jwt_secret.clone();
+            match skilluv_backend::services::code_portfolio::sync_stale(
+                &state.db,
+                &client,
+                Some(&secret),
+            )
+            .await
+            {
                 Ok(0) => tracing::debug!("code_portfolio worker : nothing stale"),
                 Ok(n) => {
                     tracing::info!(refreshed = n, "code_portfolio worker : profiles refreshed")

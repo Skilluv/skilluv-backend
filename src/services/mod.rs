@@ -50,6 +50,7 @@ pub mod external_refresh;
 pub mod external_signals;
 pub mod feature_flags;
 pub mod fedapay;
+pub mod finance_line;
 pub mod fingerprint;
 pub mod forum;
 pub mod fulfilment;

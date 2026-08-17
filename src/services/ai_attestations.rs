@@ -7,24 +7,25 @@
 //! generator that trusts its caller produces attestations whose basis is
 //! false the day somebody adds a second call site.
 //!
-//! ## Why they are `skill` attestations
+//! ## Why they are `artefact` attestations
 //!
-//! `attestation_type` has three values and each carries an invariant. A
-//! `compagnonnage` needs a project, and its unique index allows one per
-//! project — so two models shipped in the same project would collide.
-//! `skill` needs exactly one skill node, which an AI artefact can always
-//! name: the one the slice is tagged with, or the core skill of the trade it
-//! belongs to.
+//! Migration 0198 added that type for exactly this shape of claim: it rests
+//! on a deliverable and names it, with `basis` saying what kind. The three
+//! older types each carry an invariant written for a different story —
+//! `gesture` and `skill` name one skill node, `compagnonnage` names a project
+//! — and filing a shipped model under any of them meant either inventing a
+//! skill node to point at or breaking a constraint.
 //!
-//! When it can name neither, nothing is issued and a warning says so. Picking
-//! a skill arbitrarily would put a claim in somebody's record that no
-//! evidence supports, which is worse than a missing attestation.
+//! Skills stay optional and are attached when the slice already names them.
+//! A model whose slice was never tagged is still attested; what it rests on
+//! is the model, not a skill somebody chose for it.
 //!
 //! ## Re-running is free
 //!
-//! Migration 0222 makes (user, basis, deliverables) unique, so a second pass
-//! over already-attested work inserts nothing. That is what lets this be
-//! called from a hook without the hook having to remember what it did.
+//! `uniq_attestations_artefact_per_deliverable` makes (user, basis,
+//! deliverables) unique, so a second pass over already-attested work inserts
+//! nothing. That is what lets this be called from a hook without the hook
+//! having to remember what it did.
 
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -85,47 +86,25 @@ fn wording(basis: &str) -> (&'static str, &'static str) {
     }
 }
 
-/// The skill node an AI attestation names.
+/// The skills the slice already says it touches.
 ///
-/// The slice's own tags first — somebody said what this work touches, and
-/// that beats anything derived. Failing that, the core skill of the trade the
-/// slice belongs to. Failing both, `None`: nothing is issued rather than a
-/// skill being chosen for somebody.
-async fn skill_node_for_slice(db: &PgPool, slice_id: Uuid) -> Result<Option<Uuid>, AppError> {
-    let tagged: Option<Uuid> = sqlx::query_scalar(
+/// Attached to the attestation when they exist, and left empty when they do
+/// not. Nothing is derived: an `artefact` attestation rests on the deliverable
+/// it names, so a slice nobody tagged still produces one rather than being
+/// filed under a skill chosen on its behalf.
+async fn skill_nodes_for_slice(db: &PgPool, slice_id: Uuid) -> Result<Vec<Uuid>, AppError> {
+    Ok(sqlx::query_scalar(
         r#"
         SELECT ss.skill_id
           FROM slice_skills ss
           JOIN skill_nodes sn ON sn.id = ss.skill_id
          WHERE ss.slice_id = $1
          ORDER BY sn.slug
-         LIMIT 1
         "#,
     )
     .bind(slice_id)
-    .fetch_optional(db)
-    .await?;
-    if tagged.is_some() {
-        return Ok(tagged);
-    }
-
-    let from_trade: Option<Uuid> = sqlx::query_scalar(
-        r#"
-        SELECT m.skill_id
-          FROM project_slices ps
-          JOIN orientation_skill_map m ON m.orientation_id = ps.orientation_id
-          JOIN skill_nodes sn ON sn.id = m.skill_id
-         WHERE ps.id = $1
-           AND m.is_core = TRUE
-         ORDER BY sn.slug
-         LIMIT 1
-        "#,
-    )
-    .bind(slice_id)
-    .fetch_optional(db)
-    .await?;
-
-    Ok(from_trade)
+    .fetch_all(db)
+    .await?)
 }
 
 /// Insert an attestation, or do nothing if this artefact already carries one
@@ -139,7 +118,7 @@ async fn issue(
     user_id: Uuid,
     basis: &str,
     deliverable_id: Uuid,
-    skill_node_id: Uuid,
+    skill_node_ids: &[Uuid],
 ) -> Result<Option<Uuid>, AppError> {
     let (title, description) = wording(basis);
     let code = crate::services::attestations::AttestationsService::generate_verification_code();
@@ -151,7 +130,7 @@ async fn issue(
             linked_deliverable_ids, linked_skill_node_ids,
             verification_code, basis
         )
-        VALUES ($1, 'skill', $2, $3, ARRAY[$4], ARRAY[$5], $6, $7)
+        VALUES ($1, 'artefact', $2, $3, ARRAY[$4], $5, $6, $7)
         ON CONFLICT DO NOTHING
         RETURNING id
         "#,
@@ -160,7 +139,7 @@ async fn issue(
     .bind(title)
     .bind(description)
     .bind(deliverable_id)
-    .bind(skill_node_id)
+    .bind(skill_node_ids)
     .bind(&code)
     .bind(basis)
     .fetch_optional(db)
@@ -200,19 +179,11 @@ pub async fn issue_for_slice(db: &PgPool, slice_id: Uuid) -> Result<Vec<String>,
         return Ok(Vec::new());
     }
 
-    let Some(skill_node_id) = skill_node_for_slice(db, slice_id).await? else {
-        tracing::warn!(
-            slice = %slice_id,
-            "AI artefact names no skill and belongs to no trade, so no attestation \
-             can say what it attests — tag the slice or set its orientation"
-        );
-        return Ok(Vec::new());
-    };
-
+    let skills = skill_nodes_for_slice(db, slice_id).await?;
     let mut issued = Vec::new();
 
     if let Some(basis) = ai_subtype.as_deref().and_then(basis_for_subtype)
-        && issue(db, user_id, basis, deliverable_id, skill_node_id)
+        && issue(db, user_id, basis, deliverable_id, &skills)
             .await?
             .is_some()
     {
@@ -238,7 +209,7 @@ pub async fn issue_for_slice(db: &PgPool, slice_id: Uuid) -> Result<Vec<String>,
             user_id,
             "ai_benchmark_result",
             deliverable_id,
-            skill_node_id,
+            &skills,
         )
         .await?
         .is_some()
@@ -268,7 +239,7 @@ pub async fn issue_for_slice(db: &PgPool, slice_id: Uuid) -> Result<Vec<String>,
             user_id,
             "ai_safety_finding_validated",
             deliverable_id,
-            skill_node_id,
+            &skills,
         )
         .await?
         .is_some()

@@ -1006,7 +1006,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
             crate::routes::ai::ArtifactRow,
             crate::routes::ai::ArtifactsResponse,
             crate::services::ai_profile::AiProfile,
-            crate::services::ai_profile::AiProofCounts,
+            crate::services::craft_score::Term,
             crate::routes::code_profile::ClaimBody,
             crate::routes::public_feed::PreferenceBody,
             crate::routes::revenue::RevenueStream,

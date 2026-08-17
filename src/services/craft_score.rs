@@ -36,7 +36,7 @@ pub const CAP: i32 = 10_000;
 /// branch in this one.
 pub const DOMAIN: &str = "code";
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct Term {
     pub term: String,
     /// What was counted. A whole number for `count` terms, the raw figure for
@@ -61,12 +61,91 @@ pub struct CraftScore {
 }
 
 #[derive(sqlx::FromRow)]
-struct WeightRow {
-    term: String,
-    weight: BigDecimal,
-    kind: String,
-    baseline: Option<BigDecimal>,
-    explanation: String,
+pub struct WeightRow {
+    pub term: String,
+    pub weight: BigDecimal,
+    pub kind: String,
+    pub baseline: Option<BigDecimal>,
+    pub explanation: String,
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// What every domain shares
+// ═══════════════════════════════════════════════════════════════════
+//
+// The formula, the tiers and the storage are keyed by domain; only the
+// measuring is domain-specific, because it reads different tables. These
+// three take the domain so a second module — `ai_profile` is the first —
+// reuses them instead of copying the queries and drifting.
+
+/// The active formula for one domain, in display order.
+pub async fn weights_for(db: &PgPool, domain: &str) -> Result<Vec<WeightRow>, AppError> {
+    Ok(sqlx::query_as::<_, WeightRow>(
+        "SELECT term, weight, kind, baseline, explanation
+           FROM craft_score_weights
+          WHERE skill_domain = $1 AND is_active = TRUE
+          ORDER BY sort_order, term",
+    )
+    .bind(domain)
+    .fetch_all(db)
+    .await?)
+}
+
+/// Where a score lands, and where the next tier starts.
+///
+/// An error rather than a default when no tier covers the score: a domain
+/// whose tiers do not span it is a seeding mistake, and quietly calling
+/// somebody an apprentice would hide it.
+pub async fn resolve_tier(
+    db: &PgPool,
+    domain: &str,
+    score: i32,
+) -> Result<(String, String, String, Option<i32>), AppError> {
+    sqlx::query_as(
+        "SELECT slug, name, description,
+                (SELECT min(t2.min_score) FROM craft_score_tiers t2
+                  WHERE t2.skill_domain = $2 AND t2.min_score > $1)
+           FROM craft_score_tiers
+          WHERE skill_domain = $2
+            AND min_score <= $1
+            AND (max_score IS NULL OR max_score >= $1)
+          ORDER BY min_score DESC
+          LIMIT 1",
+    )
+    .bind(score)
+    .bind(domain)
+    .fetch_optional(db)
+    .await?
+    .ok_or_else(|| AppError::Internal(format!("no {domain} tier covers a score of {score}")))
+}
+
+/// Write a score and its tier, in one statement.
+///
+/// The tier duplicates what the score and the thresholds imply. Written here
+/// so there is exactly one place that can get the duplicate wrong, rather
+/// than a search endpoint recomputing it per row.
+pub async fn store(
+    db: &PgPool,
+    user_id: Uuid,
+    domain: &str,
+    score: i32,
+    tier_slug: &str,
+) -> Result<(), AppError> {
+    sqlx::query(
+        "INSERT INTO craft_scores (user_id, skill_domain, score, tier_slug, computed_at)
+         VALUES ($1, $2, $3, $4, NOW())
+         ON CONFLICT (user_id, skill_domain) DO UPDATE
+             SET score = EXCLUDED.score,
+                 tier_slug = EXCLUDED.tier_slug,
+                 computed_at = NOW()",
+    )
+    .bind(user_id)
+    .bind(domain)
+    .bind(score)
+    .bind(tier_slug)
+    .execute(db)
+    .await?;
+    Ok(())
 }
 
 /// Everything the formula counts, gathered in one round-trip.
@@ -95,8 +174,12 @@ async fn measure(db: &PgPool, user_id: Uuid) -> Result<Measurements, AppError> {
     sqlx::query_as::<_, Measurements>(
         r#"
         SELECT
+            -- Code bases only. `basis IS NOT NULL` counted every artefact
+            -- attestation there is, so once the AI domain started issuing
+            -- them a published model was paying into the code craft score.
             (SELECT count(*) FROM attestations
-              WHERE user_id = $1 AND revoked_at IS NULL AND basis IS NOT NULL)
+              WHERE user_id = $1 AND revoked_at IS NULL
+                AND (basis LIKE 'code\_%' OR basis = 'featured_coder'))
                 AS attestations_code,
 
             (SELECT count(*) FROM attestations
@@ -121,7 +204,7 @@ async fn measure(db: &PgPool, user_id: Uuid) -> Result<Measurements, AppError> {
             -- Cast: summing bigints gives a NUMERIC, and decoding that into
             -- an i64 fails at runtime rather than at compile time.
             (SELECT COALESCE(sum(COALESCE(ps.downloads_recent, ps.downloads_total)), 0)::BIGINT
-               FROM code_package_stats ps
+               FROM published_artifact_stats ps
                -- The disclosure view rather than the table: an artefact
                -- whose author never said whether an assistant helped stops
                -- counting when its window closes.
@@ -224,16 +307,7 @@ pub fn points_for(kind: &str, weight: f64, baseline: Option<f64>, measured: f64)
 
 /// Compute the score without storing it.
 pub async fn compute(db: &PgPool, user_id: Uuid) -> Result<CraftScore, AppError> {
-    let weights = sqlx::query_as::<_, WeightRow>(
-        "SELECT term, weight, kind, baseline, explanation
-           FROM craft_score_weights
-          WHERE skill_domain = $1 AND is_active = TRUE
-          ORDER BY sort_order, term",
-    )
-    .bind(DOMAIN)
-    .fetch_all(db)
-    .await?;
-
+    let weights = weights_for(db, DOMAIN).await?;
     let m = measure(db, user_id).await?;
 
     let mut breakdown = Vec::new();
@@ -297,24 +371,8 @@ pub async fn compute(db: &PgPool, user_id: Uuid) -> Result<CraftScore, AppError>
     let capped = total > CAP as i64;
     let score = total.min(CAP as i64) as i32;
 
-    let tier: Option<(String, String, String, Option<i32>)> = sqlx::query_as(
-        "SELECT slug, name, description,
-                (SELECT min(t2.min_score) FROM craft_score_tiers t2
-                  WHERE t2.skill_domain = $2 AND t2.min_score > $1)
-           FROM craft_score_tiers
-          WHERE skill_domain = $2
-            AND min_score <= $1
-            AND (max_score IS NULL OR max_score >= $1)
-          ORDER BY min_score DESC
-          LIMIT 1",
-    )
-    .bind(score)
-    .bind(DOMAIN)
-    .fetch_optional(db)
-    .await?;
-
-    let (tier_slug, tier_name, tier_description, next_tier_at) = tier
-        .ok_or_else(|| AppError::Internal(format!("no {DOMAIN} tier covers a score of {score}")))?;
+    let (tier_slug, tier_name, tier_description, next_tier_at) =
+        resolve_tier(db, DOMAIN, score).await?;
 
     Ok(CraftScore {
         score,
@@ -334,20 +392,7 @@ pub async fn compute(db: &PgPool, user_id: Uuid) -> Result<CraftScore, AppError>
 /// than a search endpoint recomputing it per row.
 pub async fn recompute(db: &PgPool, user_id: Uuid) -> Result<CraftScore, AppError> {
     let computed = compute(db, user_id).await?;
-    sqlx::query(
-        "INSERT INTO craft_scores (user_id, skill_domain, score, tier_slug, computed_at)
-         VALUES ($1, $2, $3, $4, NOW())
-         ON CONFLICT (user_id, skill_domain) DO UPDATE
-             SET score = EXCLUDED.score,
-                 tier_slug = EXCLUDED.tier_slug,
-                 computed_at = NOW()",
-    )
-    .bind(user_id)
-    .bind(DOMAIN)
-    .bind(computed.score)
-    .bind(&computed.tier_slug)
-    .execute(db)
-    .await?;
+    store(db, user_id, DOMAIN, computed.score, &computed.tier_slug).await?;
     Ok(computed)
 }
 

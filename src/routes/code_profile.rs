@@ -171,7 +171,7 @@ pub async fn code_profile(
         SELECT DISTINCT ON (ps.registry, ps.package_name)
                ps.registry, ps.package_name, ps.latest_version,
                ps.downloads_recent, ps.downloads_total, ps.fetched_at
-          FROM code_package_stats ps
+          FROM published_artifact_stats ps
           JOIN deliverables d ON d.slice_id = ps.slice_id
          WHERE d.user_id = $1
            AND d.verification_status = 'verified'

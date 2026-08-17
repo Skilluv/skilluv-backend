@@ -454,7 +454,7 @@ impl AttestationsService {
     /// Appelée :
     /// - Manuellement par admin
     /// - Automatiquement quand un deliverable sous-jacent est révoqué
-    ///   (voir `revoke_attestations_depending_on_deliverable`)
+    ///   (trigger `trg_attestation_loses_its_evidence`, migration 0207)
     pub async fn revoke(
         db: &PgPool,
         attestation_id: Uuid,
@@ -476,23 +476,14 @@ impl AttestationsService {
         Ok(())
     }
 
-    /// Cascade révocation : quand un deliverable est révoqué, on révoque toutes
-    /// les attestations qui listaient ce deliverable dans leurs preuves.
-    pub async fn revoke_attestations_depending_on_deliverable(
-        tx: &mut Transaction<'_, Postgres>,
-        deliverable_id: Uuid,
-    ) -> Result<u64, AppError> {
-        let result = sqlx::query(
-            r#"
-            UPDATE attestations
-            SET revoked_at = NOW(),
-                revoke_reason = 'underlying_deliverable_revoked'
-            WHERE $1 = ANY(linked_deliverable_ids) AND revoked_at IS NULL
-            "#,
-        )
-        .bind(deliverable_id)
-        .execute(&mut **tx)
-        .await?;
-        Ok(result.rows_affected())
-    }
+    // The cascade that used to live here is a trigger since migration 0207.
+    // It was `pub`, written for exactly this, and called from nowhere — so a
+    // deliverable revoked for plagiarism kept its attestation issued and the
+    // record kept pointing at something withdrawn. A function nobody calls
+    // does not become a rule by existing.
+    //
+    // The trigger also fires on the moderation path, which sets the status
+    // and never touches `revoked_at`, and it waits for the *last* live
+    // deliverable to go: a compagnonnage attestation on five deliverables
+    // still stands on four.
 }

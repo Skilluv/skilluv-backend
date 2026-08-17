@@ -87,6 +87,45 @@ const COMPUTE: &[&str] = &[
 ];
 const FRAMEWORKS: &[&str] = &["pytorch", "jax", "tensorflow", "candle", "mlx", "other"];
 
+/// At most three. Somebody who selects everything has told us nothing while
+/// believing they answered — the same cap the code wizard uses.
+const MAX_SELECTIONS: usize = 3;
+
+/// The families a mentee wants to be matched in, per domain: reviewer groups,
+/// the same ones the guides and the review capabilities use.
+///
+/// Read by the mentor matching, which is why an unknown one is refused rather
+/// than stored: it would match nobody, silently, and look like an empty
+/// platform.
+async fn check_families(
+    db: &sqlx::PgPool,
+    domain: &str,
+    families: &[String],
+) -> Result<(), AppError> {
+    if families.len() > MAX_SELECTIONS {
+        return Err(AppError::Validation(format!(
+            "at most {MAX_SELECTIONS} families — picking everything says nothing"
+        )));
+    }
+    let known: Vec<String> = sqlx::query_scalar(
+        "SELECT DISTINCT reviewer_group FROM orientations
+          WHERE reviewer_group IS NOT NULL AND primary_domain = $1",
+    )
+    .bind(domain)
+    .fetch_all(db)
+    .await?;
+
+    for family in families {
+        if !known.contains(family) {
+            return Err(AppError::Validation(format!(
+                "'{family}' is not a {domain} family — expected one of: {}",
+                known.join(", ")
+            )));
+        }
+    }
+    Ok(())
+}
+
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct DomainProfileBody {
@@ -96,8 +135,12 @@ pub struct DomainProfileBody {
     /// AI only: `none`, `personal_gpu`, `cloud_small`, `cloud_large`,
     /// `enterprise`.
     pub compute: Option<String>,
-    /// AI only: `pytorch`, `jax`, `tensorflow`, `candle`, `mlx`, `other`.
-    pub main_framework: Option<String>,
+    /// The families to be matched in — reviewer groups of this domain. Read
+    /// by the mentor matching; at most three.
+    pub preferred_families: Option<Vec<String>>,
+    /// AI only, and plural: nobody uses exactly one. `pytorch`, `jax`,
+    /// `tensorflow`, `candle`, `mlx`, `other`.
+    pub main_frameworks: Option<Vec<String>>,
     /// AI only. A link, not an import: models count when they arrive as
     /// reviewed work.
     #[schema(max_length = 60)]
@@ -216,7 +259,17 @@ pub async fn put_profile(
     let weekly_hours = checked("weekly_hours", body.weekly_hours.as_ref(), WEEKLY_HOURS)?;
     let goal = checked("goal", body.goal.as_ref(), GOALS)?;
     let compute = checked("compute", body.compute.as_ref(), COMPUTE)?;
-    let framework = checked("main_framework", body.main_framework.as_ref(), FRAMEWORKS)?;
+    let frameworks = body.main_frameworks.clone().unwrap_or_default();
+    if frameworks.len() > MAX_SELECTIONS {
+        return Err(AppError::Validation(format!(
+            "at most {MAX_SELECTIONS} frameworks — picking everything says nothing"
+        )));
+    }
+    for framework in &frameworks {
+        checked("main_frameworks", Some(framework), FRAMEWORKS)?;
+    }
+    let families = body.preferred_families.clone().unwrap_or_default();
+    check_families(&state.db, &domain, &families).await?;
     crate::validators::check_max_len_opt(&body.huggingface_username, "huggingface_username", 60)?;
 
     // Only the answers actually given. A key present with a null value and an
@@ -228,12 +281,20 @@ pub async fn put_profile(
         ("weekly_hours", weekly_hours),
         ("goal", goal),
         ("compute", compute),
-        ("main_framework", framework),
         ("huggingface_username", body.huggingface_username.as_ref()),
     ] {
         if let Some(v) = value {
             answers.insert(key.to_string(), json!(v));
         }
+    }
+    // Empty lists stay out, for the same reason an unanswered question does:
+    // a key present with nothing in it and an absent key read the same to a
+    // recommender, and one of them claims the question was asked.
+    if !frameworks.is_empty() {
+        answers.insert("main_frameworks".to_string(), json!(frameworks));
+    }
+    if !families.is_empty() {
+        answers.insert("preferred_families".to_string(), json!(families));
     }
     let answers = serde_json::Value::Object(answers);
 

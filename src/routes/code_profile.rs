@@ -353,7 +353,7 @@ pub async fn mentor_matches(
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
     let matches =
-        crate::services::code_mentorship::matches_for(&state.db, auth.user_id, 10).await?;
+        crate::services::mentorship_matching::matches_for(&state.db, crate::services::mentorship_matching::CODE, auth.user_id, 10).await?;
     Ok(Json(build_response(json!({ "mentors": matches }))))
 }
 

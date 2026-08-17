@@ -281,6 +281,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::domain_profile::put_profile,
         crate::routes::domain_profile::skip_profile,
         crate::routes::ai::toolkit,
+        crate::routes::ai::mentor_matches,
         crate::routes::benchmarks::list_benchmarks,
         crate::routes::benchmarks::record_benchmark,
         crate::routes::benchmarks::reproduce_benchmark,
@@ -1005,6 +1006,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
             // orientations
             crate::routes::domain_profile::DomainProfileBody,
             crate::routes::domain_profile::DomainProfileResponse,
+            crate::services::mentorship_matching::Match,
             crate::routes::ai::ToolkitRow,
             crate::routes::benchmarks::BenchmarkRow,
             crate::routes::benchmarks::RecordBenchmarkBody,

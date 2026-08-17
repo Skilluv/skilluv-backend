@@ -18,7 +18,7 @@ pub mod cache;
 pub mod capabilities_engine;
 pub mod ci_sync;
 pub mod code_attestations;
-pub mod code_mentorship;
+pub mod mentorship_matching;
 pub mod code_onboarding;
 pub mod code_portfolio;
 pub mod cohorts;

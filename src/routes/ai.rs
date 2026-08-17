@@ -11,6 +11,8 @@
 //!     — `GET /api/ai/artifacts`
 //!   * "what has this person done in AI?"
 //!     — `GET /api/users/{username}/ai-profile`
+//!   * "who could teach me?"
+//!     — `GET /api/ai/mentors/for-me`
 //!
 //! The prefix means the domain of work, not the assistant — that moved to
 //! `/api/assistant` for exactly this reason.
@@ -42,6 +44,7 @@ pub fn ai_routes() -> Router<AppState> {
         .route("/ai/competitions", get(competitions))
         .route("/ai/artifacts", get(artifacts))
         .route("/users/{username}/ai-profile", get(user_ai_profile))
+        .route("/ai/mentors/for-me", get(mentor_matches))
 }
 
 fn check_limit(limit: i64) -> Result<i64, AppError> {
@@ -378,4 +381,39 @@ pub async fn user_ai_profile(
 ) -> Result<Json<ApiResponse<AiProfile>>, AppError> {
     let profile = ai_profile::build(&state.db, &username).await?;
     Ok(Json(ApiResponse::new(profile)))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// GET /ai/mentors/for-me
+// ═══════════════════════════════════════════════════════════════════
+
+/// Mentors worth suggesting to the caller, best first, with the reasoning.
+///
+/// The matching is the same module the code domain uses: what differs between
+/// the two is which domain to score, which answer key holds the tools, and
+/// how many mentees is too many. Three strings, not a second implementation.
+///
+/// AI caps a mentor at three active mentees where code allows five —
+/// reading somebody's training run is not reviewing a pull request.
+#[utoipa::path(
+    get, path = "/api/ai/mentors/for-me", tag = "ai",
+    responses(
+        (status = 200, description = "Suggested mentors", body = ApiResponse<Vec<crate::services::mentorship_matching::Match>>),
+        (status = 400, description = "AI onboarding not answered", body = crate::api_response::ErrorResponse),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn mentor_matches(
+    State(state): State<AppState>,
+    auth: crate::middleware::AuthUser,
+) -> Result<Json<ApiResponse<Vec<crate::services::mentorship_matching::Match>>>, AppError> {
+    let matches = crate::services::mentorship_matching::matches_for(
+        &state.db,
+        crate::services::mentorship_matching::AI,
+        auth.user_id,
+        10,
+    )
+    .await?;
+    Ok(Json(ApiResponse::new(matches)))
 }

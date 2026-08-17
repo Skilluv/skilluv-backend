@@ -334,3 +334,121 @@ async fn an_english_reader_gets_the_english_guide() {
     assert_eq!(body["data"]["locale"], "en");
     assert_eq!(body["data"]["title"], "Getting started in safety");
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// Mentor matching
+// ═══════════════════════════════════════════════════════════════════
+
+#[tokio::test]
+async fn ai_mentor_matching_needs_a_family_to_match_on() {
+    let app = TestApp::spawn().await;
+    app.register_user("ai_mentee_bare").await;
+
+    // Refused with a message that names the fix, rather than an empty list
+    // that reads as "there is nobody".
+    let resp = app.get("/api/ai/mentors/for-me").await;
+    assert_eq!(resp.status().as_u16(), 400);
+    let body = resp.text().await.unwrap_or_default();
+    assert!(body.contains("ai"), "the message must name the domain: {body}");
+}
+
+#[tokio::test]
+async fn an_ai_mentor_is_suggested_with_the_reasoning_attached() {
+    let app = TestApp::spawn().await;
+
+    let mentee = a_user(&app, "ai_mentee").await;
+    profile_for(&app, mentee, "ai", "ml", "pytorch", "+01:00").await;
+    score_for(&app, mentee, "ai", 100).await;
+
+    // One good match, and one in the wrong family who must not appear.
+    for (name, family, score) in [
+        ("ai_mentor_good", "ml", 2000),
+        ("ai_mentor_wrong", "safety", 4000),
+    ] {
+        let mentor = a_user(&app, name).await;
+        profile_for(&app, mentor, "ai", family, "pytorch", "+02:00").await;
+        score_for(&app, mentor, "ai", score).await;
+        sqlx::query(
+            "INSERT INTO mentor_profiles (user_id, headline, active)
+             VALUES ($1, 'Je relis des entraînements', TRUE)",
+        )
+        .bind(mentor)
+        .execute(&app.db)
+        .await
+        .unwrap();
+    }
+
+    app.login("ai_mentee").await;
+    let resp = app.get("/api/ai/mentors/for-me").await;
+    assert_eq!(resp.status().as_u16(), 200, "{:?}", resp.text().await);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    let mentors = body["data"].as_array().unwrap();
+
+    assert_eq!(mentors.len(), 1, "the wrong family must not appear: {mentors:?}");
+    assert_eq!(mentors[0]["username"], "ai_mentor_good");
+
+    // The reasoning is the point: a mentee who can read why somebody was
+    // suggested can tell us it was wrong.
+    let because = mentors[0]["because"].as_array().unwrap();
+    assert!(!because.is_empty());
+    assert!(
+        because
+            .iter()
+            .any(|b| b.as_str().unwrap_or("").contains("outils")),
+        "the AI wording says tools, not languages: {because:?}"
+    );
+}
+
+async fn profile_for(
+    app: &TestApp,
+    user: Uuid,
+    domain: &str,
+    family: &str,
+    tool: &str,
+    timezone: &str,
+) {
+    sqlx::query("UPDATE users SET timezone = $2 WHERE id = $1")
+        .bind(user)
+        .bind(timezone)
+        .execute(&app.db)
+        .await
+        .unwrap();
+    sqlx::query(
+        "INSERT INTO user_domain_profiles (user_id, domain, answers, completed_at)
+         VALUES ($1, $2,
+                 jsonb_build_object('preferred_families', jsonb_build_array($3),
+                                    'main_frameworks', jsonb_build_array($4)),
+                 NOW())",
+    )
+    .bind(user)
+    .bind(domain)
+    .bind(family)
+    .bind(tool)
+    .execute(&app.db)
+    .await
+    .unwrap();
+}
+
+async fn score_for(app: &TestApp, user: Uuid, domain: &str, score: i32) {
+    sqlx::query(
+        "INSERT INTO craft_scores (user_id, skill_domain, score, tier_slug)
+         VALUES ($1, $2, $3, 'apprentice')
+         ON CONFLICT (user_id, skill_domain) DO UPDATE SET score = EXCLUDED.score",
+    )
+    .bind(user)
+    .bind(domain)
+    .bind(score)
+    .execute(&app.db)
+    .await
+    .unwrap();
+}
+
+async fn a_user(app: &TestApp, username: &str) -> Uuid {
+    app.register_user(username).await;
+    sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+        "SELECT id FROM users WHERE username = '{username}'"
+    )))
+    .fetch_one(&app.db)
+    .await
+    .unwrap()
+}

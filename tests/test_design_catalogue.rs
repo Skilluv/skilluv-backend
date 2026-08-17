@@ -390,3 +390,145 @@ async fn the_design_attestation_bases_are_accepted_and_need_evidence() {
     .await
     .expect("an editorial distinction rests on a decision, not on an artefact");
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// The catalogue of things to actually do
+// ═══════════════════════════════════════════════════════════════════
+
+#[tokio::test]
+async fn every_trade_has_challenges_waiting_for_it() {
+    let app = TestApp::spawn().await;
+
+    // Twenty-six trades with an empty catalogue are twenty-six trades the
+    // platform claims to support and cannot. A designer who arrives on a
+    // motion 3D profile and finds nothing to do leaves.
+    let seeded: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM challenge_templates
+          WHERE skill_domain = 'design' AND is_training = TRUE",
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert!(seeded >= 130, "expected 130 design drafts, found {seeded}");
+}
+
+#[tokio::test]
+async fn seeded_challenges_are_drafts_and_carry_their_grid() {
+    let app = TestApp::spawn().await;
+
+    // Drafts, because the full brief needs an author who knows the trade and
+    // an unreviewed challenge must not reach somebody learning.
+    let published: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM challenge_templates
+          WHERE skill_domain = 'design' AND is_training = TRUE AND status <> 'draft'",
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert_eq!(published, 0);
+
+    // And each carries a rubric, so verification never runs with no
+    // statement of what good means.
+    let without_rubric: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM challenge_templates
+          WHERE skill_domain = 'design' AND is_training = TRUE
+            AND (evaluation_rubric IS NULL
+                 OR jsonb_array_length(evaluation_rubric) = 0)",
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert_eq!(without_rubric, 0);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// The craft score
+// ═══════════════════════════════════════════════════════════════════
+
+#[tokio::test]
+async fn the_design_score_has_weights_and_a_ladder() {
+    let app = TestApp::spawn().await;
+
+    let weights: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM craft_score_weights
+          WHERE skill_domain = 'design' AND is_active = TRUE",
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert!(weights >= 12, "found {weights} design weights");
+
+    // A ladder with a hole in it means a score that resolves to no tier, and
+    // the service treats that as an internal error rather than guessing.
+    let tiers: Vec<(i32, Option<i32>)> = sqlx::query_as(
+        "SELECT min_score, max_score FROM craft_score_tiers
+          WHERE skill_domain = 'design' ORDER BY min_score",
+    )
+    .fetch_all(&app.db)
+    .await
+    .unwrap();
+    assert!(!tiers.is_empty());
+    assert_eq!(tiers[0].0, 0, "the ladder must start at zero");
+    for pair in tiers.windows(2) {
+        let (_, upper) = pair[0];
+        let (next_min, _) = pair[1];
+        assert_eq!(
+            upper.map(|u| u + 1),
+            Some(next_min),
+            "a gap between tiers leaves scores with no name"
+        );
+    }
+    assert!(
+        tiers.last().unwrap().1.is_none(),
+        "the top tier has no ceiling other than the cap"
+    );
+}
+
+#[tokio::test]
+async fn a_fresh_designer_scores_zero_and_still_gets_a_tier() {
+    let app = TestApp::spawn().await;
+    app.register_user("fresh_designer").await;
+    let user: Uuid = sqlx::query_scalar("SELECT id FROM users WHERE username = 'fresh_designer'")
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
+
+    let score = skilluv_backend::services::design_craft_score::compute(&app.db, user)
+        .await
+        .expect("a profile with no work must still resolve to the first tier");
+    assert_eq!(score.score, 0);
+    assert_eq!(score.tier_slug, "apprentice");
+    assert!(score.breakdown.is_empty());
+    assert!(!score.capped);
+}
+
+#[tokio::test]
+async fn the_design_score_ignores_imported_reputation() {
+    let app = TestApp::spawn().await;
+    app.register_user("importer").await;
+    let user: Uuid = sqlx::query_scalar("SELECT id FROM users WHERE username = 'importer'")
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
+
+    let before = skilluv_backend::services::design_craft_score::compute(&app.db, user)
+        .await
+        .unwrap();
+
+    sqlx::query(
+        "INSERT INTO external_signals (user_id, provider, url, title)
+         VALUES ($1, 'medium', 'https://example.test/portfolio', 'Portfolio')",
+    )
+    .bind(user)
+    .execute(&app.db)
+    .await
+    .unwrap();
+
+    let after = skilluv_backend::services::design_craft_score::compute(&app.db, user)
+        .await
+        .unwrap();
+    assert_eq!(
+        before.score, after.score,
+        "a score an import can move stops meaning proven here"
+    );
+}

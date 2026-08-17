@@ -426,6 +426,9 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::design::history,
         crate::routes::design::review,
         crate::routes::design::reviewer_queue,
+        crate::routes::design_profile::design_profile,
+        crate::routes::design_profile::recompute_mine,
+        crate::routes::design_profile::list_tiers,
         // ─── deliverables ─────────────────────────────────────────
         crate::routes::deliverables::get_deliverable,
         crate::routes::deliverables::list_user_deliverables,

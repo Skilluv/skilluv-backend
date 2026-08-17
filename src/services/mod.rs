@@ -30,6 +30,7 @@ pub mod credits;
 pub mod data_export;
 pub mod deliverables;
 pub mod design_attestations;
+pub mod design_craft_score;
 pub mod design_reviews;
 pub mod digest;
 pub mod disputes;

@@ -40,6 +40,7 @@ pub mod digest;
 pub mod disputes;
 pub mod dm;
 pub mod drip;
+pub mod ecosystem;
 mod email;
 pub mod email_template;
 pub mod email_theme;

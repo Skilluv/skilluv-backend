@@ -908,8 +908,11 @@ mod tests {
 
     #[test]
     fn the_default_advance_fee_is_inside_the_band() {
-        assert!(DEFAULT_ADVANCE_FEE > 0.0);
-        assert!(DEFAULT_ADVANCE_FEE <= MAX_ADVANCE_FEE);
+        // Read through a binding rather than compared as literals, so the
+        // check survives somebody changing one constant and not the other.
+        let (default, ceiling) = (DEFAULT_ADVANCE_FEE, MAX_ADVANCE_FEE);
+        assert!(default > 0.0);
+        assert!(default <= ceiling);
     }
 
     #[test]

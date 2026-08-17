@@ -71,6 +71,7 @@ pub mod linear_sync;
 pub mod llm_verifier;
 pub mod maintainer_digest;
 pub mod mentions;
+pub mod mentoring_products;
 pub mod mission_billing;
 pub mod missions;
 pub mod mobile_money;

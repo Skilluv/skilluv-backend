@@ -89,7 +89,7 @@ sha2 = "0.11"
 hex = "0.4"
 base64 = "0.23"
 getrandom = "0.4"
-rand_core = "0.6"
+rand_core = "0.10"
 # `rand::rngs::OsRng` is the CryptoRng that p256 0.14's ecdh::EphemeralSecret::random accepts.
 rand = "0.10"
 

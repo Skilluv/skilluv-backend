@@ -217,7 +217,7 @@ async fn a_benchmark_without_a_baseline_is_not_a_comparison() {
     let slice = a_code_slice(&app, project, &["rust"]).await;
 
     let refused = sqlx::query(
-        "INSERT INTO code_benchmark_results
+        "INSERT INTO benchmark_results
             (slice_id, benchmark_name, metric_name, metric_unit, metric_value,
              lower_is_better, comparison_baselines, methodology_md, code_url)
          VALUES ($1, 'parse', 'latence', 'ms', 1.2, TRUE, '[]'::jsonb,
@@ -238,7 +238,7 @@ async fn a_benchmark_without_a_method_cannot_be_judged_fair() {
     let slice = a_code_slice(&app, project, &["rust"]).await;
 
     let refused = sqlx::query(
-        "INSERT INTO code_benchmark_results
+        "INSERT INTO benchmark_results
             (slice_id, benchmark_name, metric_name, metric_unit, metric_value,
              lower_is_better, comparison_baselines, methodology_md, code_url)
          VALUES ($1, 'parse', 'latence', 'ms', 1.2, TRUE,
@@ -259,7 +259,7 @@ async fn a_complete_benchmark_is_accepted_and_reproduction_is_all_or_nothing() {
     let slice = a_code_slice(&app, project, &["rust"]).await;
 
     let id: Uuid = sqlx::query_scalar(
-        "INSERT INTO code_benchmark_results
+        "INSERT INTO benchmark_results
             (slice_id, benchmark_name, metric_name, metric_unit, metric_value,
              lower_is_better, comparison_baselines, methodology_md, harness, code_url)
          VALUES ($1, 'parse', 'latence', 'ms', 1.2, TRUE,
@@ -274,7 +274,7 @@ async fn a_complete_benchmark_is_accepted_and_reproduction_is_all_or_nothing() {
     .expect("complete benchmark accepted");
 
     // A reproduction with no author says nothing about who checked.
-    let half = sqlx::query("UPDATE code_benchmark_results SET reproduced_at = NOW() WHERE id = $1")
+    let half = sqlx::query("UPDATE benchmark_results SET reproduced_at = NOW() WHERE id = $1")
         .bind(id)
         .execute(&app.db)
         .await;

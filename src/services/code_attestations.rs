@@ -355,7 +355,7 @@ pub async fn library_published(
     deliverable_id: Uuid,
     package_url: &str,
 ) -> Result<Issued, AppError> {
-    let package = crate::services::package_registry::identify(package_url).ok_or_else(|| {
+    let package = crate::services::artifact_registry::identify(package_url).ok_or_else(|| {
         AppError::Validation(
             "that URL does not point at a package registry Skilluv knows how to read".into(),
         )
@@ -364,7 +364,7 @@ pub async fn library_published(
     // A registry that answers about the package is the proof it is published.
     // A registry that cannot be reached is not evidence of absence, and is
     // reported as itself rather than as a refusal.
-    let stats = crate::services::package_registry::fetch(client, &package).await?;
+    let stats = crate::services::artifact_registry::fetch(client, &package).await?;
 
     let version = stats
         .latest_version
@@ -475,13 +475,13 @@ pub async fn devtool_adopted(
     package_url: &str,
     what: &str,
 ) -> Result<Issued, AppError> {
-    let package = crate::services::package_registry::identify(package_url).ok_or_else(|| {
+    let package = crate::services::artifact_registry::identify(package_url).ok_or_else(|| {
         AppError::Validation(
             "adoption is measured from a registry, and that URL is not one Skilluv reads".into(),
         )
     })?;
 
-    let stats = crate::services::package_registry::fetch(client, &package).await?;
+    let stats = crate::services::artifact_registry::fetch(client, &package).await?;
     let reach = stats
         .downloads_recent
         .or(stats.downloads_total)

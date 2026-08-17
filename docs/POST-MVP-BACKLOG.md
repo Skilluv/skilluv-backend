@@ -251,7 +251,7 @@ en review" — le tout **loggé** dans `deliverables.verification_signal`
 si code final soumis.
 
 **Design** :
-- Nouvelle route `POST /api/ai/companion/ask` avec type ∈ `{explain,
+- Nouvelle route `POST /api/assistant/ask` avec type ∈ `{explain,
   generate_exercises, pre_review, debug_help}`.
 - Rate limit strict par user (10 req/jour) pour maîtriser coûts.
 - Toute utilisation IA loggée dans `ai_interactions` avec disclosure

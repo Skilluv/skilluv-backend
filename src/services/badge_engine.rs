@@ -18,6 +18,9 @@
 //!     "distinct_over": "challenge_language" // compte des valeurs distinctes,
 //!                                   // pas des preuves : "trois langages" et non
 //!                                   // "trois livrables"
+//!     "attestation_basis": "ai_model_shipped" // filtre : ce sur quoi
+//!                                   // l'attestation se fonde. Rend comptable
+//!                                   // ce qui était une appréciation.
 //!     "manual": true              // le moteur n'attribue jamais : un opérateur
 //!                                   // décide, et la raison est enregistrée
 //!   }
@@ -60,6 +63,18 @@ struct RuleConditions {
     /// "three languages" is not "three deliverables".
     #[serde(default)]
     distinct_over: Option<String>,
+    /// What the attestation rests on — `ai_model_shipped`,
+    /// `code_library_published`. Only meaningful alongside the
+    /// `attestation_received` proof type.
+    ///
+    /// This is what makes "shipped a model" countable rather than a
+    /// judgement: the basis is a recorded value, so the engine reads it
+    /// instead of an operator deciding. It carries the domain in its own
+    /// name, which is why `skill_domain` is not also applied to attestations
+    /// — they link deliverables, not challenges, and there is no domain on
+    /// them to filter by.
+    #[serde(default)]
+    attestation_basis: Option<String>,
     /// The engine never awards this one. Some distinctions are judgements —
     /// "shipped an audited contract to mainnet" is not a row count — and
     /// inventing a rule for them would award them to the wrong people.
@@ -234,17 +249,37 @@ async fn count_matching_proofs(
     }
 
     if want_attestation {
+        // Counted and sampled separately. They used to be one query with
+        // `LIMIT 25`, and the count was the length of that page — so any rule
+        // above twenty-five attestations was unreachable, the same bug 0177
+        // fixed for deliverables.
+        let matched: i64 = sqlx::query_scalar(
+            r#"
+            SELECT count(*) FROM attestations
+            WHERE user_id = $1 AND revoked_at IS NULL
+              AND ($2::VARCHAR IS NULL OR basis = $2)
+            "#,
+        )
+        .bind(user_id)
+        .bind(conds.attestation_basis.as_deref())
+        .fetch_one(db)
+        .await?;
+
         let ids: Vec<Uuid> = sqlx::query_scalar(
             r#"
             SELECT id FROM attestations
             WHERE user_id = $1 AND revoked_at IS NULL
+              AND ($2::VARCHAR IS NULL OR basis = $2)
+            ORDER BY issued_at DESC
             LIMIT 25
             "#,
         )
         .bind(user_id)
+        .bind(conds.attestation_basis.as_deref())
         .fetch_all(db)
         .await?;
-        total += ids.len() as i64;
+
+        total += matched;
         sources.extend(ids);
     }
 

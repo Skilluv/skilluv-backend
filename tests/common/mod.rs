@@ -481,6 +481,16 @@ impl TestApp {
             .expect("PUT request failed")
     }
 
+    /// PATCH helper with JSON body.
+    pub async fn patch(&self, path: &str, body: &Value) -> reqwest::Response {
+        self.client
+            .patch(format!("{}{}", self.addr, path))
+            .json(body)
+            .send()
+            .await
+            .expect("PATCH request failed")
+    }
+
     /// DELETE helper.
     pub async fn delete(&self, path: &str) -> reqwest::Response {
         self.client

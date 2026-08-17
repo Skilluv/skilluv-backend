@@ -1,9 +1,9 @@
 //! SKI-44 (Post-MVP T3-01) — disclosed AI learning companion.
 //!
 //! Endpoints:
-//!   POST /api/ai/companion/ask               (auth)
-//!   GET  /api/users/me/ai-interactions       (auth — my disclosure ledger)
-//!   GET  /api/users/me/ai-companion/quota    (auth)
+//!   POST /api/assistant/ask                  (auth)
+//!   GET  /api/users/me/assistant-interactions (auth — my disclosure ledger)
+//!   GET  /api/users/me/assistant-quota       (auth)
 //!
 //! Order of operations in `ask` is deliberate:
 //!
@@ -33,9 +33,9 @@ use crate::services::{ai_companion, ranks};
 
 pub fn ai_companion_routes() -> Router<AppState> {
     Router::new()
-        .route("/ai/companion/ask", post(ask))
-        .route("/users/me/ai-interactions", get(list_interactions))
-        .route("/users/me/ai-companion/quota", get(quota))
+        .route("/assistant/ask", post(ask))
+        .route("/users/me/assistant-interactions", get(list_interactions))
+        .route("/users/me/assistant-quota", get(quota))
 }
 
 fn wrap(data: serde_json::Value) -> serde_json::Value {

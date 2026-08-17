@@ -1,3 +1,5 @@
+pub mod ai_profile;
+pub mod ai_attestations;
 pub mod ai_companion;
 pub mod ai_log;
 pub mod ai_queue;
@@ -65,7 +67,7 @@ pub mod oauth;
 pub mod og_card;
 pub mod orientations_playlist;
 pub mod outbox;
-pub mod package_registry;
+pub mod artifact_registry;
 pub mod payment_poller;
 pub mod payment_webhook_sources;
 pub mod payment_webhooks;

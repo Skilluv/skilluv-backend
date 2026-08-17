@@ -91,6 +91,23 @@ async fn recompute_inner(
         }
     };
 
+    // 1bis. AI attestations, before the badges that count them.
+    //
+    // Ordered here for the same reason capabilities come before the rank: the
+    // step that produces the proof runs before the step that reads it, so a
+    // model shipped and its badge land in the same pass rather than one
+    // recompute apart.
+    match crate::services::ai_attestations::issue_for_user(db, user_id).await {
+        Ok(issued) if !issued.is_empty() => {
+            tracing::info!(user_id = %user_id, ?issued, "AI attestations issued");
+        }
+        Ok(_) => {}
+        Err(e) => {
+            tracing::warn!(user_id = %user_id, error = %e, "P19: AI attestations failed");
+            errors.push(format!("ai_attestations: {e}"));
+        }
+    }
+
     // 2. Badges
     let badges = match badge_engine::recompute_badges_for_user(db, user_id).await {
         Ok(r) => r,

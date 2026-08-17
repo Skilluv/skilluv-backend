@@ -118,7 +118,22 @@ const SKILLUV_REPOS: &[SeedProject] = &[
         skill_domains: &["ai", "code"],
         tech_stack: &["python", "fastapi", "grpc"],
         curated_labels: &["skilluv-challenge"],
-        label_orientations: &[("skilluv-challenge", "web-backend-developer")],
+        // `skilluv-challenge` is deliberately not mapped here. It marks a
+        // repository's issues as available, not what trade they belong to,
+        // and mapping it to one would have filed every verifier fix under
+        // backend development. The area labels say the trade, and this is our
+        // own repository, so the convention is ours to keep.
+        //
+        // Two mapped labels pointing at different trades leave the slice
+        // untyped by design — so an issue carries one area label, not three.
+        label_orientations: &[
+            ("area/llm", "llm-engineer"),
+            ("area/prompt", "prompt-engineer"),
+            ("area/mlops", "mlops-engineer"),
+            ("area/safety", "ai-safety-researcher"),
+            ("area/nlp", "nlp-engineer"),
+            ("area/data", "data-engineer"),
+        ],
         curated: false,
     },
     SeedProject {
@@ -469,8 +484,185 @@ const ECOSYSTEM_REPOS: &[SeedProject] = &[
     },
 ];
 
+/// The AI ecosystem.
+///
+/// Separate from `ECOSYSTEM_REPOS` because the domain differs, not because
+/// the curation rules do: these are public trackers, and pointing people at a
+/// public tracker needs nobody's permission.
+///
+/// `label_orientations` is empty throughout, and that is the honest state
+/// rather than an unfinished one. On a repository we do not own, `good first
+/// issue` means "small", not "vision" — an issue so labelled on Transformers
+/// is as likely to be documentation as a tokeniser fix. Guessing would credit
+/// somebody with a speciality they never worked in, and the mapping is
+/// per-project in the admin panel precisely so a maintainer relationship can
+/// fill it in later with real knowledge.
+const AI_REPOS: &[SeedProject] = &[
+    SeedProject {
+        slug: "hf-transformers",
+        name: "HuggingFace Transformers",
+        description: "La bibliothèque par laquelle passe presque tout modèle publié.",
+        github_owner: "huggingface",
+        github_repo: "transformers",
+        skill_domains: &["ai", "code"],
+        tech_stack: &["python", "pytorch"],
+        curated_labels: &["Good First Issue"],
+        label_orientations: &[],
+        curated: true,
+    },
+    SeedProject {
+        slug: "hf-datasets",
+        name: "HuggingFace Datasets",
+        description: "Chargement et partage de jeux de données, du prototype au téraoctet.",
+        github_owner: "huggingface",
+        github_repo: "datasets",
+        skill_domains: &["ai", "code"],
+        tech_stack: &["python"],
+        curated_labels: &["good first issue"],
+        label_orientations: &[],
+        curated: true,
+    },
+    SeedProject {
+        slug: "hf-diffusers",
+        name: "HuggingFace Diffusers",
+        description: "Les chaînes de diffusion : génération d'images, ControlNet, LoRA.",
+        github_owner: "huggingface",
+        github_repo: "diffusers",
+        skill_domains: &["ai", "design"],
+        tech_stack: &["python", "pytorch"],
+        curated_labels: &["good first issue"],
+        label_orientations: &[],
+        curated: true,
+    },
+    SeedProject {
+        slug: "candle",
+        name: "Candle",
+        description: "Inférence en Rust, sans Python à l'exécution. Le pont entre nos deux écosystèmes.",
+        github_owner: "huggingface",
+        github_repo: "candle",
+        skill_domains: &["ai", "code"],
+        tech_stack: &["rust"],
+        curated_labels: &[],
+        label_orientations: &[],
+        curated: true,
+    },
+    SeedProject {
+        slug: "pytorch",
+        name: "PyTorch",
+        description: "Le cadre de calcul sous presque toute la recherche publiée.",
+        github_owner: "pytorch",
+        github_repo: "pytorch",
+        skill_domains: &["ai", "code"],
+        tech_stack: &["python", "c++"],
+        curated_labels: &[],
+        label_orientations: &[],
+        curated: true,
+    },
+    SeedProject {
+        slug: "jax",
+        name: "JAX",
+        description: "Différentiation et compilation. Exigeant, et rapide quand le calcul est le goulot.",
+        github_owner: "jax-ml",
+        github_repo: "jax",
+        skill_domains: &["ai", "code"],
+        tech_stack: &["python"],
+        curated_labels: &[],
+        label_orientations: &[],
+        curated: true,
+    },
+    SeedProject {
+        slug: "vllm",
+        name: "vLLM",
+        description: "Servir un modèle de langage avec un débit sérieux.",
+        github_owner: "vllm-project",
+        github_repo: "vllm",
+        skill_domains: &["ai", "ops"],
+        tech_stack: &["python", "cuda"],
+        curated_labels: &["good first issue"],
+        label_orientations: &[],
+        curated: true,
+    },
+    SeedProject {
+        slug: "langchain",
+        name: "LangChain",
+        description: "Chaînes et agents. Très fréquenté, donc des relectures rapides.",
+        github_owner: "langchain-ai",
+        github_repo: "langchain",
+        skill_domains: &["ai", "code"],
+        tech_stack: &["python"],
+        curated_labels: &["good first issue"],
+        label_orientations: &[],
+        curated: true,
+    },
+    SeedProject {
+        slug: "llamaindex",
+        name: "LlamaIndex",
+        description: "Indexation et récupération pour RAG.",
+        github_owner: "run-llama",
+        github_repo: "llama_index",
+        skill_domains: &["ai", "code"],
+        tech_stack: &["python"],
+        curated_labels: &["good first issue"],
+        label_orientations: &[],
+        curated: true,
+    },
+    SeedProject {
+        slug: "dspy",
+        name: "DSPy",
+        description: "Optimiser des invites par mesure plutôt que par intuition.",
+        github_owner: "stanfordnlp",
+        github_repo: "dspy",
+        skill_domains: &["ai"],
+        tech_stack: &["python"],
+        curated_labels: &[],
+        label_orientations: &[],
+        curated: true,
+    },
+    SeedProject {
+        slug: "masakhane-mt",
+        name: "Masakhane",
+        description: "TAL pour les langues africaines, mené depuis le continent. Le terrain le plus proche de nous.",
+        github_owner: "masakhane-io",
+        github_repo: "masakhane-mt",
+        skill_domains: &["ai"],
+        tech_stack: &["python"],
+        curated_labels: &[],
+        label_orientations: &[],
+        curated: true,
+    },
+    SeedProject {
+        slug: "evidently",
+        name: "Evidently",
+        description: "Détection de dérive et rapports de qualité pour modèles en production.",
+        github_owner: "evidentlyai",
+        github_repo: "evidently",
+        skill_domains: &["ai", "ops"],
+        tech_stack: &["python"],
+        curated_labels: &["good first issue"],
+        label_orientations: &[],
+        curated: true,
+    },
+    SeedProject {
+        slug: "dbt-core",
+        name: "dbt Core",
+        description: "Transformations versionnées et testées dans l'entrepôt.",
+        github_owner: "dbt-labs",
+        github_repo: "dbt-core",
+        skill_domains: &["ai", "code"],
+        tech_stack: &["python", "sql"],
+        curated_labels: &["good_first_issue"],
+        label_orientations: &[],
+        curated: true,
+    },
+];
+
 /// Everything, in the order it should be seeded.
-const ALL_PROJECTS: &[&[SeedProject]] = &[SKILLUV_REPOS, PARTNER_REPOS, ECOSYSTEM_REPOS];
+const ALL_PROJECTS: &[&[SeedProject]] = &[
+    SKILLUV_REPOS,
+    PARTNER_REPOS,
+    ECOSYSTEM_REPOS,
+    AI_REPOS,
+];
 
 #[tokio::main]
 async fn main() -> Result<()> {

@@ -37,10 +37,15 @@ use crate::errors::AppError;
 use crate::middleware::AuthUser;
 
 pub fn domain_profile_routes() -> Router<AppState> {
-    Router::new().route(
-        "/users/me/domain-profile/{domain}",
-        get(get_profile).put(put_profile),
-    )
+    Router::new()
+        .route(
+            "/users/me/domain-profile/{domain}",
+            get(get_profile).put(put_profile),
+        )
+        .route(
+            "/users/me/domain-profile/{domain}/skip",
+            axum::routing::post(skip_profile),
+        )
 }
 
 const DOMAINS: &[&str] = &[
@@ -104,6 +109,11 @@ pub struct DomainProfileResponse {
     pub domain: String,
     #[schema(value_type = Object)]
     pub answers: serde_json::Value,
+    /// When the wizard was answered. Absent means never.
+    pub completed_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// When somebody said stop asking. Different from having answered
+    /// nothing: the first means "stop", the second means "ask again".
+    pub skipped_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// Refuse an answer outside the vocabulary, naming what was allowed.
@@ -153,17 +163,27 @@ pub async fn get_profile(
 ) -> Result<Json<ApiResponse<DomainProfileResponse>>, AppError> {
     check_domain(&domain)?;
 
-    let answers: Option<serde_json::Value> = sqlx::query_scalar(
-        "SELECT answers FROM user_domain_profiles WHERE user_id = $1 AND domain = $2",
+    type Row = (
+        serde_json::Value,
+        Option<chrono::DateTime<chrono::Utc>>,
+        Option<chrono::DateTime<chrono::Utc>>,
+    );
+    let row: Option<Row> = sqlx::query_as(
+        "SELECT answers, completed_at, skipped_at
+           FROM user_domain_profiles WHERE user_id = $1 AND domain = $2",
     )
     .bind(auth.user_id)
     .bind(&domain)
     .fetch_optional(&state.db)
     .await?;
 
+    let (answers, completed_at, skipped_at) = row.unwrap_or((json!({}), None, None));
+
     Ok(Json(ApiResponse::new(DomainProfileResponse {
         domain,
-        answers: answers.unwrap_or_else(|| json!({})),
+        answers,
+        completed_at,
+        skipped_at,
     })))
 }
 
@@ -219,9 +239,14 @@ pub async fn put_profile(
 
     sqlx::query(
         r#"
-        INSERT INTO user_domain_profiles (user_id, domain, answers)
-        VALUES ($1, $2, $3)
-        ON CONFLICT (user_id, domain) DO UPDATE SET answers = EXCLUDED.answers
+        INSERT INTO user_domain_profiles (user_id, domain, answers, completed_at)
+        VALUES ($1, $2, $3, NOW())
+        ON CONFLICT (user_id, domain) DO UPDATE
+            SET answers      = EXCLUDED.answers,
+                completed_at = NOW(),
+                -- Answering is un-skipping: somebody who said "stop asking"
+                -- and then answered has changed their mind.
+                skipped_at   = NULL
         "#,
     )
     .bind(auth.user_id)
@@ -233,6 +258,51 @@ pub async fn put_profile(
     Ok(Json(ApiResponse::new(DomainProfileResponse {
         domain,
         answers,
+        completed_at: Some(chrono::Utc::now()),
+        skipped_at: None,
+    })))
+}
+
+/// Stop asking.
+///
+/// Recorded separately from "answered nothing". Without the distinction the
+/// wizard reappears forever for exactly the people who least wanted it, and a
+/// missing key cannot carry that difference — which is why 0235 keeps these
+/// two as columns while the answers stay a blob.
+#[utoipa::path(
+    post, path = "/api/users/me/domain-profile/{domain}/skip", tag = "profile",
+    params(("domain" = String, Path, description = "Domain slug")),
+    responses(
+        (status = 200, description = "Recorded", body = ApiResponse<DomainProfileResponse>),
+        (status = 400, description = "Unknown domain", body = crate::api_response::ErrorResponse),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn skip_profile(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(domain): Path<String>,
+) -> Result<Json<ApiResponse<DomainProfileResponse>>, AppError> {
+    check_domain(&domain)?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO user_domain_profiles (user_id, domain, skipped_at)
+        VALUES ($1, $2, NOW())
+        ON CONFLICT (user_id, domain) DO UPDATE SET skipped_at = NOW()
+        "#,
+    )
+    .bind(auth.user_id)
+    .bind(&domain)
+    .execute(&state.db)
+    .await?;
+
+    Ok(Json(ApiResponse::new(DomainProfileResponse {
+        domain,
+        answers: json!({}),
+        completed_at: None,
+        skipped_at: Some(chrono::Utc::now()),
     })))
 }
 

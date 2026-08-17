@@ -257,27 +257,33 @@ pub async fn complete(
         }
     }
 
+    // One row per person per domain (migration 0235). Replaces the whole
+    // answer object rather than merging: the wizard sends every question it
+    // asked, and merging would keep an answer the person has just cleared.
+    let stored = serde_json::json!({
+        "level": answers.level,
+        "preferred_families": answers.preferred_families,
+        "weekly_hours": answers.weekly_hours,
+        "objective": answers.objective,
+        "main_languages": answers.main_languages,
+        "challenge_preference": answers.challenge_preference,
+    });
+
     sqlx::query(
         r#"
-        UPDATE users
-           SET code_onboarding_completed_at = NOW(),
-               code_onboarding_skipped_at = NULL,
-               code_level = $2,
-               code_preferred_families = $3,
-               code_weekly_hours = $4,
-               code_objective = $5,
-               code_main_languages = $6,
-               code_challenge_preference = $7
-         WHERE id = $1
+        INSERT INTO user_domain_profiles (user_id, domain, answers, completed_at)
+        VALUES ($1, 'code', $2, NOW())
+        ON CONFLICT (user_id, domain) DO UPDATE
+            SET answers      = EXCLUDED.answers,
+                completed_at = NOW(),
+                -- Answering is un-skipping. Somebody who said "stop asking"
+                -- and then answered has changed their mind, and leaving the
+                -- old timestamp would keep the profile reading as skipped.
+                skipped_at   = NULL
         "#,
     )
     .bind(user_id)
-    .bind(&answers.level)
-    .bind(&answers.preferred_families)
-    .bind(&answers.weekly_hours)
-    .bind(&answers.objective)
-    .bind(&answers.main_languages)
-    .bind(&answers.challenge_preference)
+    .bind(&stored)
     .execute(db)
     .await?;
 
@@ -289,10 +295,16 @@ pub async fn complete(
 /// Recorded separately from "answered nothing": without this the wizard would
 /// reappear forever for exactly the people who least wanted it.
 pub async fn skip(db: &PgPool, user_id: Uuid) -> Result<(), AppError> {
-    sqlx::query("UPDATE users SET code_onboarding_skipped_at = NOW() WHERE id = $1")
-        .bind(user_id)
-        .execute(db)
-        .await?;
+    sqlx::query(
+        r#"
+        INSERT INTO user_domain_profiles (user_id, domain, skipped_at)
+        VALUES ($1, 'code', NOW())
+        ON CONFLICT (user_id, domain) DO UPDATE SET skipped_at = NOW()
+        "#,
+    )
+    .bind(user_id)
+    .execute(db)
+    .await?;
     Ok(())
 }
 

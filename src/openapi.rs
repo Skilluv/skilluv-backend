@@ -279,6 +279,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         // ─── code: first-issue feed + language ecosystems ─────────
         crate::routes::domain_profile::get_profile,
         crate::routes::domain_profile::put_profile,
+        crate::routes::domain_profile::skip_profile,
         crate::routes::ai::toolkit,
         crate::routes::benchmarks::list_benchmarks,
         crate::routes::benchmarks::record_benchmark,

@@ -12,34 +12,12 @@
 -- validated in the handler where the vocabulary lives, not in a CHECK that
 -- would need a migration every time an option is reworded.
 --
--- ## An open disagreement, stated rather than hidden
+-- ## The disagreement that used to be here
 --
 -- Migration 0201 made the opposite choice for the code domain: eight
--- `users.code_*` columns, on the grounds that every answer is read by a query
--- and a blob would mean each of those queries reaching into JSON with no
--- constraint on what it finds.
---
--- That argument is real and it is answered — a GIN index queries JSONB, and
--- the vocabulary is enforced in the handler — but it is not answered *here*,
--- because settling it means rewriting the code recommendation and mentorship
--- services while that branch is still moving. Two shapes coexist for now and
--- this comment is the record of why.
---
--- Whoever resolves it: the cost of keeping both is one more shape to learn.
--- The cost of the columns is eight per domain on `users`, forever, and a
--- recommender with a branch per domain deciding which column to read.
---
--- ## What is deliberately not in here
---
--- The trades somebody claims. `user_orientations` has held those since 0089,
--- with a cap and a history, and a second copy in a JSONB blob is how the two
--- start disagreeing. The wizard writes there.
---
--- ## Declared, not proven
---
--- Everything here is self-reported, and it is used to recommend rather than
--- to credit: nothing in this table reaches a rank, a badge or a craft score.
--- Someone writing "researcher" gets shown harder challenges, not a title.
+-- `users.code_*` columns. Both shapes coexisted for a while and this comment
+-- recorded why. Migration 0235 settles it — the code answers moved here and
+-- the columns are gone — and states the reasoning.
 
 CREATE TABLE user_domain_profiles (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

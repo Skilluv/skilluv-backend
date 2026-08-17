@@ -156,10 +156,20 @@ pub async fn matches_for(db: &PgPool, mentee_id: Uuid, limit: i64) -> Result<Vec
     // answer: the gap to a mentor is then the mentor's whole score, and
     // somebody with nothing proved has the most to learn.
     let mentee: Option<Mentee> = sqlx::query_as(
+        // The answers live in `user_domain_profiles` since migration 0235.
+        // COALESCE to an empty array rather than NULL: somebody who never
+        // answered the wizard has no families, which the check below turns
+        // into a message telling them to answer it.
         "SELECT COALESCE(cs.score, 0) AS craft_score_code,
-                u.code_preferred_families, u.code_main_languages, u.timezone
+                COALESCE(ARRAY(SELECT jsonb_array_elements_text(
+                            p.answers -> 'preferred_families')), '{}') AS code_preferred_families,
+                COALESCE(ARRAY(SELECT jsonb_array_elements_text(
+                            p.answers -> 'main_languages')), '{}') AS code_main_languages,
+                u.timezone
            FROM users u
            LEFT JOIN craft_scores cs ON cs.user_id = u.id AND cs.skill_domain = $2
+           LEFT JOIN user_domain_profiles p
+                  ON p.user_id = u.id AND p.domain = 'code'
           WHERE u.id = $1",
     )
     .bind(mentee_id)
@@ -186,13 +196,17 @@ pub async fn matches_for(db: &PgPool, mentee_id: Uuid, limit: i64) -> Result<Vec
                u.username,
                m.headline,
                cs.score AS craft_score_code,
-               u.code_preferred_families AS families,
+               COALESCE(ARRAY(SELECT jsonb_array_elements_text(
+                   p.answers -> 'preferred_families')), '{}') AS families,
                -- What the mentor works in: their declared languages, and the
                -- expertise they wrote on their mentor profile. Both, because
                -- somebody who filled in one rarely filled in the other.
                ARRAY(
                    SELECT DISTINCT lower(l)
-                     FROM unnest(u.code_main_languages || m.expertise_areas) AS l
+                     FROM unnest(
+                        COALESCE(ARRAY(SELECT jsonb_array_elements_text(
+                            p.answers -> 'main_languages')), '{}')
+                        || m.expertise_areas) AS l
                ) AS languages,
                u.timezone,
                (SELECT count(DISTINCT s.mentee_user_id)
@@ -210,6 +224,8 @@ pub async fn matches_for(db: &PgPool, mentee_id: Uuid, limit: i64) -> Result<Vec
           -- nothing in this domain, and suggesting them would be suggesting
           -- somebody on the strength of having a mentor profile.
           JOIN craft_scores cs ON cs.user_id = u.id AND cs.skill_domain = $3
+          LEFT JOIN user_domain_profiles p
+                 ON p.user_id = u.id AND p.domain = 'code'
          WHERE m.active = TRUE
            AND u.is_banned = FALSE
            AND u.id <> $1

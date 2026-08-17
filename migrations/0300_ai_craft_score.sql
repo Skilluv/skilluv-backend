@@ -27,9 +27,10 @@
 --
 -- ## The ceiling
 --
--- Six thousand rather than the code domain's ten. Not because the work is
--- worth less — because there are fewer ways to leave a trace in it, and a cap
--- that nobody can approach is a cap that says nothing.
+-- The same ten thousand as code. An earlier draft used six, on the grounds
+-- that there are fewer ways to leave a trace in this domain — which would
+-- have put the top tier, starting at seven thousand, out of reach forever.
+-- A ceiling below a threshold is a tier nobody can hold.
 
 INSERT INTO craft_score_weights
     (skill_domain, term, weight, kind, baseline, explanation, sort_order)
@@ -67,29 +68,21 @@ VALUES
      'Chaque mise en avant éditoriale.', 130);
 
 -- ═══════════════════════════════════════════════════════════════════
--- The tiers
+-- No tiers here
 -- ═══════════════════════════════════════════════════════════════════
 --
--- The names the trade actually uses. `researcher` sits above `senior` here
--- and would not in the code domain: in AI it names a distinct path rather
--- than a rung above engineering, and pretending otherwise would tell a senior
--- MLOps engineer they are below somebody who publishes.
+-- Migration 0204 already gave every domain the same six, and states why: a
+-- tier is a position on a scale, the scales are each calibrated by their own
+-- weights, and giving each domain its own vocabulary would mean nobody can
+-- compare a profile to itself across two domains.
 --
--- It is placed high anyway, and the reason is the same as the benchmark
--- weight: what it takes to get there is published work a stranger can check.
-
-INSERT INTO craft_score_tiers
-    (skill_domain, slug, name, min_score, max_score, description, sort_order)
-VALUES
-    ('ai', 'apprentice', 'Apprenti', 0, 99,
-     'Les premiers artefacts. Le seul palier que tout le monde traverse.', 1),
-    ('ai', 'practitioner', 'Praticien', 100, 499,
-     'Des modèles entraînés et évalués honnêtement, régulièrement.', 2),
-    ('ai', 'engineer', 'Ingénieur', 500, 1499,
-     'Du travail mis en service et surveillé, pas seulement entraîné.', 3),
-    ('ai', 'senior', 'Senior', 1500, 3499,
-     'Une trace assez large pour que d''autres s''appuient dessus.', 4),
-    ('ai', 'researcher', 'Chercheur', 3500, 5499,
-     'Des résultats publiés qu''un tiers a pu rejouer.', 5),
-    ('ai', 'principal', 'Principal', 5500, NULL,
-     'Une contribution qui a changé quelque chose pour un champ entier.', 6);
+-- That argument holds, and an earlier draft of this migration broke it —
+-- inventing `practitioner` and `researcher` for AI, with French names and
+-- lower thresholds. It would have meant "Chercheur at 3500" facing "Staff at
+-- 3500" on the same person's profile, with no way to tell whether that was
+-- the same distance travelled.
+--
+-- So the vocabulary is shared and the calibration is above: the AI weights
+-- are lower in aggregate than the code ones, which is what makes the same
+-- thresholds mean something different — and it is the difference the design
+-- intends to carry.

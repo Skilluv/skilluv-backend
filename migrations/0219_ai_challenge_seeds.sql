@@ -32,10 +32,12 @@ ALTER TABLE users
         'code', 'design', 'game', 'security', 'soft_skills', 'ai', 'ops'
     ));
 
-ALTER TABLE sponsored_challenges
-    DROP CONSTRAINT IF EXISTS sponsored_challenges_skill_domain_check;
-ALTER TABLE sponsored_challenges
-    ADD CONSTRAINT sponsored_challenges_skill_domain_check
+-- `sponsored_challenge_requests`, not `sponsored_challenges`: the route
+-- module is named after the feature and the table after the row it holds.
+ALTER TABLE sponsored_challenge_requests
+    DROP CONSTRAINT IF EXISTS sponsored_challenge_requests_skill_domain_check;
+ALTER TABLE sponsored_challenge_requests
+    ADD CONSTRAINT sponsored_challenge_requests_skill_domain_check
     CHECK (skill_domain IN (
         'code', 'design', 'game', 'security', 'soft_skills', 'ai', 'ops'
     ));

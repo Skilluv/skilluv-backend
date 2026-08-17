@@ -39,10 +39,17 @@ use crate::services::craft_score::{self, CraftScore, Term};
 /// The domain this module scores.
 pub const DOMAIN: &str = "ai";
 
-/// The ceiling. Lower than the code domain's ten thousand — not because the
-/// work is worth less, but because there are fewer ways to leave a trace in
-/// it, and a cap nobody can approach is a cap that says nothing.
-pub const CAP: i32 = 6_000;
+/// The same ceiling as every other domain, and deliberately.
+///
+/// Migration 0204 shares one set of tiers across all of them, because a tier
+/// is a position on a scale and each scale is calibrated by its own weights.
+/// A domain-specific cap breaks that as surely as domain-specific names
+/// would: a ceiling of six thousand puts `principal`, which starts at seven,
+/// permanently out of reach.
+///
+/// What makes AI score differently is the weights, which are lower in
+/// aggregate. That is the whole mechanism.
+pub const CAP: i32 = craft_score::CAP;
 
 /// Everything the formula counts, in one round-trip.
 ///
@@ -311,8 +318,9 @@ pub async fn sweep(db: &PgPool, batch: i64) -> Result<u64, AppError> {
 pub struct AiProfile {
     pub username: String,
     pub craft_score: i32,
-    /// `apprentice`, `practitioner`, `engineer`, `senior`, `researcher`,
-    /// `principal`.
+    /// `apprentice`, `contributor`, `engineer`, `senior`, `staff`,
+    /// `principal` — the same six every domain uses, so somebody can compare
+    /// their own two profiles.
     pub tier: String,
     pub tier_name: String,
     pub tier_description: String,

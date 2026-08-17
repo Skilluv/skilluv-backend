@@ -115,16 +115,25 @@ ALTER TABLE tournaments
 -- The rule
 -- ═══════════════════════════════════════════════════════════════════
 --
--- A contest promising money stays invisible until the money is there.
--- `upcoming` is the drafting state; everything past it is a contest people
--- can see and enter.
+-- Half of it is already above, and it is the stronger half: the column that
+-- announces the money is the column that records it. There is no way to write
+-- an amount without writing the escrow state in the same breath, so a brief
+-- can never advertise a prize nobody put up. `fund()` writes both or neither.
+--
+-- What is left is the other end. A contest whose escrow was returned still
+-- carries the amount it once held, and nothing above stops it running with a
+-- prize it can no longer pay. So: a contest people can enter — `registration`
+-- or `active` — must be holding the money or have already paid it out.
+--
+-- `concluded` is allowed with any state because the refund happens after the
+-- ranking, when nobody deserved the prize.
 
 ALTER TABLE tournaments
-    ADD CONSTRAINT tournaments_cash_prize_is_funded_before_it_opens
+    ADD CONSTRAINT tournaments_open_contest_still_holds_its_prize
     CHECK (
         prize_cash_amount IS NULL
-        OR status IN ('upcoming', 'cancelled')
-        OR prize_escrow_state IN ('funded', 'awarded', 'refunded')
+        OR status NOT IN ('registration', 'active')
+        OR prize_escrow_state IN ('funded', 'awarded')
     );
 
 -- Sweeps read this: contests whose money is still held after they ended, and

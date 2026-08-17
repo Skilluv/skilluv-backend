@@ -77,27 +77,20 @@ VALUES
 ON CONFLICT (skill_domain, term) DO NOTHING;
 
 -- ═══════════════════════════════════════════════════════════════════
--- The words next to somebody's name
+-- No tiers here, on purpose
 -- ═══════════════════════════════════════════════════════════════════
 --
--- Not the code ladder with the nouns swapped. "Staff designer" is a title
--- that exists in three companies and confuses everybody else, while the words
--- below say what the person can be asked to do — which is what a recruiter
--- and a beginner are both actually reading for.
-
-INSERT INTO craft_score_tiers
-    (skill_domain, slug, name, min_score, max_score, description, sort_order)
-VALUES
-    ('design', 'apprentice', 'Apprenti', 0, 99,
-     'Les premiers livrables. Le seul palier que tout le monde traverse.', 1),
-    ('design', 'praticien', 'Praticien', 100, 499,
-     'Des livrables réguliers, critiqués par d''autres et repris.', 2),
-    ('design', 'artisan', 'Artisan', 500, 1499,
-     'Du travail livré de bout en bout, sur plusieurs briefs et plusieurs supports.', 3),
-    ('design', 'auteur', 'Auteur', 1500, 3499,
-     'Une direction reconnaissable, tenue d''un projet à l''autre.', 4),
-    ('design', 'referent', 'Référent', 3500, 6999,
-     'Un travail sur lequel d''autres s''appuient : systèmes, guidelines, critiques.', 5),
-    ('design', 'maitre', 'Maître d''œuvre', 7000, NULL,
-     'Une contribution qui a changé la façon de faire de toute une communauté.', 6)
-ON CONFLICT (skill_domain, slug) DO NOTHING;
+-- Migration 0204 already gave design the six tiers of the code ladder, and
+-- said why: a tier is a position on a scale, each scale is calibrated by its
+-- own weights, and a vocabulary per domain would stop anybody comparing a
+-- profile to itself across two domains.
+--
+-- An earlier draft of this migration seeded a French design ladder —
+-- Praticien, Artisan, Auteur, Référent — beside them. Every score band ended
+-- up covered by two rows with the same `min_score`, and the tier lookup
+-- (`ORDER BY min_score DESC LIMIT 1`) would have returned whichever the
+-- planner reached first. A designer's tier would have been Engineer or
+-- Artisan depending on the day.
+--
+-- The weights above are the whole of design's contribution, which is what
+-- 0204 said it would be.

@@ -418,20 +418,26 @@ async fn seeded_challenges_are_drafts_and_carry_their_grid() {
 
     // Drafts, because the full brief needs an author who knows the trade and
     // an unreviewed challenge must not reach somebody learning.
-    let published: i64 = sqlx::query_scalar(
+    //
+    // Scoped past the onboarding challenge, which is published on purpose:
+    // "Premier pas" exists to be somebody's first, and it was reviewed. The
+    // catalogue seeded here is what must stay in draft.
+    let published_seeds: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM challenge_templates
-          WHERE skill_domain = 'design' AND is_training = TRUE AND status <> 'draft'",
+          WHERE skill_domain = 'design' AND is_training = TRUE
+            AND is_onboarding = FALSE AND status <> 'draft'",
     )
     .fetch_one(&app.db)
     .await
     .unwrap();
-    assert_eq!(published, 0);
+    assert_eq!(published_seeds, 0);
 
     // And each carries a rubric, so verification never runs with no
     // statement of what good means.
     let without_rubric: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM challenge_templates
           WHERE skill_domain = 'design' AND is_training = TRUE
+            AND is_onboarding = FALSE
             AND (evaluation_rubric IS NULL
                  OR jsonb_array_length(evaluation_rubric) = 0)",
     )
@@ -460,6 +466,10 @@ async fn the_design_score_has_weights_and_a_ladder() {
 
     // A ladder with a hole in it means a score that resolves to no tier, and
     // the service treats that as an internal error rather than guessing.
+    // The ladder itself is 0204's, shared by every domain on purpose: a tier
+    // is a position on a scale, and a vocabulary per domain would stop
+    // anybody comparing a profile to itself across two of them. What design
+    // contributes is the weights above.
     let tiers: Vec<(i32, Option<i32>)> = sqlx::query_as(
         "SELECT min_score, max_score FROM craft_score_tiers
           WHERE skill_domain = 'design' ORDER BY min_score",

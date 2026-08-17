@@ -31,11 +31,28 @@ pub const PROVIDER_MEDIUM: &str = "medium";
 pub const PROVIDER_DEV_TO: &str = "dev_to";
 pub const PROVIDER_CONF_REF: &str = "conf_ref";
 
+// Design portfolios (migration 0241). Declared and reviewed, never imported:
+// Behance's public API was withdrawn in 2020 and Dribbble's needs a
+// partnership, so an "import" would mean fetching arbitrary user-supplied
+// URLs from the backend — and an imported portfolio must not count for
+// anything anyway.
+pub const PROVIDER_BEHANCE: &str = "behance";
+pub const PROVIDER_DRIBBBLE: &str = "dribbble";
+pub const PROVIDER_ARTSTATION: &str = "artstation";
+pub const PROVIDER_VIMEO: &str = "vimeo";
+/// A type foundry. Open-hosted, because a family can be published anywhere.
+pub const PROVIDER_FOUNDRY: &str = "foundry";
+
 pub const PROVIDERS: &[&str] = &[
     PROVIDER_GITHUB,
     PROVIDER_MEDIUM,
     PROVIDER_DEV_TO,
     PROVIDER_CONF_REF,
+    PROVIDER_BEHANCE,
+    PROVIDER_DRIBBBLE,
+    PROVIDER_ARTSTATION,
+    PROVIDER_VIMEO,
+    PROVIDER_FOUNDRY,
 ];
 
 /// Cap on signals per user. External context is a sidebar, not a second
@@ -69,6 +86,15 @@ fn allowed_hosts(provider: &str) -> Option<&'static [&'static str]> {
         PROVIDER_GITHUB => Some(&["github.com", "www.github.com", "gist.github.com"]),
         PROVIDER_MEDIUM => Some(&["medium.com"]),
         PROVIDER_DEV_TO => Some(&["dev.to"]),
+        // Pinned hosts, so a link labelled "Behance" cannot point somewhere
+        // else. A moderator confirming ownership should not also have to
+        // notice the domain.
+        PROVIDER_BEHANCE => Some(&["behance.net", "www.behance.net"]),
+        PROVIDER_DRIBBBLE => Some(&["dribbble.com", "www.dribbble.com"]),
+        PROVIDER_ARTSTATION => Some(&["artstation.com", "www.artstation.com"]),
+        PROVIDER_VIMEO => Some(&["vimeo.com", "player.vimeo.com"]),
+        // `foundry` and `conf_ref` accept any host: a typeface and a talk
+        // both live wherever their author put them.
         _ => None,
     }
 }

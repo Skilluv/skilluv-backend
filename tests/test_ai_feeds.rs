@@ -204,3 +204,70 @@ async fn an_oversized_limit_is_refused_rather_than_silently_capped() {
     let resp = app.get("/api/ai/artifacts?limit=5000").await;
     assert_eq!(resp.status().as_u16(), 400);
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// Guides
+// ═══════════════════════════════════════════════════════════════════
+
+#[tokio::test]
+async fn the_guides_listing_honours_the_domain() {
+    let app = TestApp::spawn().await;
+
+    // `content_guides` carried a domain from the start and the endpoint
+    // ignored it. Invisible while one domain had rows; the moment a second
+    // one did, an AI onboarding guide answered under the code path.
+    let ai = json(&app, "/api/guides?domain=ai&kind=onboarding").await;
+    let slugs: Vec<&str> = ai
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|g| g["slug"].as_str().unwrap())
+        .collect();
+
+    assert!(slugs.contains(&"onboarding-ai-safety"), "{slugs:?}");
+    assert!(
+        !slugs.iter().any(|s| s.starts_with("onboarding-web")),
+        "{slugs:?}"
+    );
+}
+
+#[tokio::test]
+async fn every_ai_reviewer_family_has_an_onboarding_guide() {
+    let app = TestApp::spawn().await;
+
+    let missing: Vec<String> = sqlx::query_scalar(
+        "SELECT DISTINCT o.reviewer_group FROM orientations o
+          LEFT JOIN content_guides g
+                 ON g.skill_domain = 'ai' AND g.kind = 'onboarding'
+                AND g.reviewer_group = o.reviewer_group
+          WHERE o.primary_domain = 'ai'
+            AND o.reviewer_group IS NOT NULL
+            AND g.id IS NULL",
+    )
+    .fetch_all(&app.db)
+    .await
+    .unwrap();
+
+    assert!(
+        missing.is_empty(),
+        "families with nowhere to start: {missing:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_guide_is_served_with_its_body() {
+    let app = TestApp::spawn().await;
+
+    let resp = app.get("/api/guides/template-red-team-report").await;
+    assert_eq!(resp.status().as_u16(), 200);
+    let body: serde_json::Value = resp.json().await.unwrap();
+
+    assert_eq!(body["data"]["skill_domain"], "ai");
+    assert!(
+        body["data"]["body_md"]
+            .as_str()
+            .unwrap()
+            .contains("Double usage"),
+        "the template must carry the section the disclosure policy requires"
+    );
+}

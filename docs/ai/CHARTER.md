@@ -120,6 +120,6 @@ reste visible comme tel.
 
 ---
 
-*Voir aussi : les [modèles de brief](./BRIEF-TEMPLATES.md), les [modèles de
-compte rendu](./WRITEUP-TEMPLATES.md) et la [politique de
-divulgation](./SAFETY-DISCLOSURE.md).*
+*Voir aussi : les [modèles de brief](./BRIEF-TEMPLATES.md), la [politique de
+divulgation](./SAFETY-DISCLOSURE.md), et les modèles de compte rendu servis
+par `GET /api/guides?domain=ai&kind=writeup_template`.*

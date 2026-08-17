@@ -13,6 +13,8 @@ pub const VALID_KINDS: &[&str] = &[
     "hackathon",
     "marathon",       // Format 1 Grande Epreuve : saisons impaires, cooperatif
     "defi_solitaire", // Format 3 : background permanent, defi ultime solo
+    "benchmark_rush", // IA : 48h pour bouger un banc public, classement ladder
+    "prompt_battle",  // IA : face a face sur une tache, vote de la communaute
 ];
 pub const VALID_FORMATS: &[&str] = &["swiss", "bracket", "ladder"];
 pub const VALID_PARTICIPANT_TYPES: &[&str] = &["user", "guild"];
@@ -407,9 +409,18 @@ pub async fn register_individual(
         .fetch_optional(db)
         .await?
         .ok_or(AppError::NotFound("tournament not found".into()))?;
-    if t.kind != "individual" && t.kind != "hackathon" {
+    // Stated the other way round on purpose. It used to allow `individual`
+    // and `hackathon` and refuse everything else, so `marathon` and
+    // `defi_solitaire` — added in migration 0114 — could be created and never
+    // joined: the endpoint answered "not open to individual registration"
+    // about tournaments that take nothing but individuals.
+    //
+    // Guild wars take guilds. Everything else takes people, including the two
+    // AI kinds added here, and a new kind is now open by default rather than
+    // silently closed.
+    if t.kind == "guild_war" {
         return Err(AppError::Validation(
-            "this tournament is not open to individual registration".into(),
+            "this tournament takes guilds, not individual registrations".into(),
         ));
     }
     if !matches!(t.status.as_str(), "registration" | "upcoming") {

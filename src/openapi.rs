@@ -218,6 +218,8 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::sponsored_challenges::public_active,
         crate::routes::sponsored_challenges::sponsor_view_submissions,
         // ─── code: first-issue feed + language ecosystems ─────────
+        crate::routes::domain_profile::get_profile,
+        crate::routes::domain_profile::put_profile,
         crate::routes::ai::toolkit,
         crate::routes::benchmarks::list_benchmarks,
         crate::routes::benchmarks::record_benchmark,
@@ -941,6 +943,8 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
             crate::routes::sponsored_challenges::SponsorSubmissionRow,
             crate::routes::sponsored_challenges::SponsorSubmissionsResponse,
             // orientations
+            crate::routes::domain_profile::DomainProfileBody,
+            crate::routes::domain_profile::DomainProfileResponse,
             crate::routes::ai::ToolkitRow,
             crate::routes::benchmarks::BenchmarkRow,
             crate::routes::benchmarks::RecordBenchmarkBody,

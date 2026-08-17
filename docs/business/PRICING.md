@@ -135,10 +135,38 @@ Formules de sponsoring d'événement :
 | Bronze | Logo, mention, accès aux profils des participants | 300 000 | 460 |
 | Argent | Plus une épreuve co-conçue et une prise de parole | 900 000 | 1 400 |
 | Or | Plus le nom sur l'événement et un accompagnement des finalistes | 2 500 000 | 3 800 |
+| Platine | Événement présenté par le sponsor, rapport d'impact sur mesure | 7 900 000 | 12 000 |
+
+Cette grille est en base (`event_sponsorship_packages`), une ligne par
+formule. Un prix négocié s'écrit sur le sponsoring concerné, jamais sur la
+grille : remettre la remise dans la grille réécrirait l'histoire de tous les
+autres sponsors de la même formule.
+
+Contrat annuel : jusqu'à **30 % de remise** selon le nombre d'événements
+engagés, et seulement sur un contrat signé — la remise paye l'engagement, pas
+l'intention. Au-delà de 30 % le contrat coûte plus à servir que les
+événements couverts ne rapportent.
 
 Contenu sponsorisé : à partir de 400 000 XOF / 600 EUR l'article,
 **systématiquement signalé comme tel**. Un contenu sponsorisé non signalé
-n'est pas un tarif plus élevé, c'est un refus.
+n'est pas un tarif plus élevé, c'est un refus. La mention est stockée avec la
+pièce et la base refuse une pièce sans elle.
+
+Campagne de lancement : **frais d'organisation 3 à 10 k€**, plus une cagnotte
+que le client met pour les contributeurs. Deux montants distincts et visibles.
+Chaque contribution passe d'abord par notre contrôle qualité, ensuite par la
+décision du sponsor — dans cet ordre, sinon une critique honnête se fait
+refuser au nom de la « qualité ».
+
+Programme ambassadeurs : **activation 5 à 15 k€**, gestion **1 à 3 k€ par
+mois**, plus une indemnité mensuelle versée aux ambassadeurs. L'indemnité est
+proratisée sur ce qui a été livré : payée en entier quel que soit le mois,
+elle transformerait le programme en abonnement que le client ne peut plus
+arrêter.
+
+Abonnement audience : **10 EUR par an**, rediffusions et coulisses. C'est la
+seule chose qu'un individu paye sur Skilluv, et elle ne vend ni visibilité,
+ni classement, ni accès au travail.
 
 ---
 

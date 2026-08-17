@@ -39,7 +39,7 @@ pub fn admin_ops_routes() -> Router<AppState> {
         )
         // MVP.md Annexe A #8 — CRUD event (Hacktoberfest, Skilluv Fest).
         .route(
-            "/admin/badge-events",
+            "/admin/events",
             get(admin_list_badge_events).post(admin_create_badge_event),
         )
         // MVP.md §2.2 ligne 125 — recompute capabilities seul (scope réduit).
@@ -98,7 +98,7 @@ pub struct CapabilityRecomputeResult {
     pub already_active: Vec<String>,
 }
 
-/// One row of `GET /admin/badge-events`.
+/// One row of `GET /admin/events`.
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct BadgeEventRow {
     pub id: Uuid,
@@ -114,7 +114,7 @@ pub struct BadgeEventRow {
     pub created_at: String,
 }
 
-/// Response of `GET /admin/badge-events`.
+/// Response of `GET /admin/events`.
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct BadgeEventListResponse {
     pub data: Vec<BadgeEventRow>,
@@ -122,7 +122,7 @@ pub struct BadgeEventListResponse {
     pub meta: crate::api_response::MetaInfo,
 }
 
-/// The event echoed by `POST /admin/badge-events`.
+/// The event echoed by `POST /admin/events`.
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct CreatedBadgeEvent {
     pub id: Uuid,
@@ -134,7 +134,7 @@ pub struct CreatedBadgeEvent {
     pub is_partner: bool,
 }
 
-/// Payload of `POST /admin/badge-events`.
+/// Payload of `POST /admin/events`.
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct CreateBadgeEventData {
     pub event: CreatedBadgeEvent,
@@ -379,7 +379,7 @@ pub async fn admin_recompute_capabilities(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// GET /admin/badge-events — liste paginée (filtres is_active + is_partner).
+// GET /admin/events — liste paginée (filtres is_active + is_partner).
 // ═══════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
@@ -396,7 +396,7 @@ pub struct ListEventsQuery {
 
 /// Admin: list badge events (Hacktoberfest, Skilluv Fest, ...).
 #[utoipa::path(
-    get, path = "/api/admin/badge-events", tag = "admin",
+    get, path = "/api/admin/events", tag = "admin",
     params(ListEventsQuery),
     responses(
         (status = 200, body = BadgeEventListResponse),
@@ -477,7 +477,7 @@ pub async fn admin_list_badge_events(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// POST /admin/badge-events — création d'un event (mig 0093).
+// POST /admin/events — création d'un event (mig 0093).
 // ═══════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
@@ -496,11 +496,33 @@ pub struct CreateEventBody {
     pub visual_theme: Option<Value>,
     #[serde(default)]
     pub is_partner: Option<bool>,
+    /// What kind of event it is. Defaults to a meetup, which is the one that
+    /// asks the least of everything else.
+    #[serde(default)]
+    pub event_type: Option<String>,
+    /// Which trades it is for. Empty means everybody — a real answer for a
+    /// meetup, a warning sign for a championship.
+    #[serde(default)]
+    pub domain_focus: Option<Vec<String>>,
+    #[serde(default)]
+    pub location_type: Option<String>,
+    /// Address, room, travel notes. Free-form: a venue in Cotonou and one in
+    /// Lagos do not describe themselves the same way.
+    #[serde(default)]
+    pub location_details: Option<Value>,
+    #[serde(default)]
+    pub max_participants: Option<i32>,
+    #[serde(default)]
+    pub showcase_page_url: Option<String>,
+    /// Events start as drafts unless told otherwise, so a half-filled one is
+    /// not on the public list while somebody finishes it.
+    #[serde(default)]
+    pub status: Option<String>,
 }
 
 /// Admin: create a new badge event.
 #[utoipa::path(
-    post, path = "/api/admin/badge-events", tag = "admin",
+    post, path = "/api/admin/events", tag = "admin",
     request_body = CreateEventBody,
     responses(
         (status = 200, body = crate::api_response::ApiResponse<CreateBadgeEventData>),
@@ -550,8 +572,13 @@ pub async fn admin_create_badge_event(
 
     let (id,): (Uuid,) = sqlx::query_as(
         r#"INSERT INTO events
-                (slug, name, description, starts_at, ends_at, visual_theme, is_partner, created_by)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                (slug, name, description, starts_at, ends_at, visual_theme, is_partner,
+                 event_type, domain_focus, location_type, location_details,
+                 max_participants, showcase_page_url, status, created_by)
+           VALUES ($1, $2, $3, $4, $5, $6, $7,
+                   COALESCE($8, 'community_meetup'), COALESCE($9, '{}'),
+                   COALESCE($10, 'online'), COALESCE($11, '{}'::jsonb),
+                   $12, $13, COALESCE($14, 'draft'), $15)
            RETURNING id"#,
     )
     .bind(&body.slug)
@@ -561,6 +588,13 @@ pub async fn admin_create_badge_event(
     .bind(body.ends_at)
     .bind(&visual)
     .bind(partner)
+    .bind(body.event_type.as_deref())
+    .bind(body.domain_focus.as_deref())
+    .bind(body.location_type.as_deref())
+    .bind(body.location_details.as_ref())
+    .bind(body.max_participants)
+    .bind(body.showcase_page_url.as_deref())
+    .bind(body.status.as_deref())
     .bind(auth.user_id)
     .fetch_one(&state.db)
     .await

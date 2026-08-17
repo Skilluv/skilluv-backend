@@ -131,10 +131,36 @@ Event sponsorship packages:
 | Bronze | Logo, mention, access to participants' profiles | 300,000 | 460 |
 | Silver | Plus a co-designed task and a speaking slot | 900,000 | 1,400 |
 | Gold | Plus naming the event and following the finalists | 2,500,000 | 3,800 |
+| Platinum | Event presented by the sponsor, custom impact report | 7,900,000 | 12,000 |
+
+The grid lives in the database (`event_sponsorship_packages`), one row per
+package. A negotiated price is written on that sponsorship, never on the
+grid: folding the discount back into the grid would rewrite history for every
+other sponsor at the same tier.
+
+Annual contract: up to **30% off**, by the number of events committed to, and
+only on a signed contract — the discount pays for the commitment, not the
+intention. Past 30% the contract costs more to service than the events it
+covers bring in.
 
 Sponsored content: from 400,000 XOF / 600 EUR per article, **always labelled
 as such**. Unlabelled sponsored content is not a higher price, it is a
-refusal.
+refusal. The wording is stored with the piece, and the database refuses a
+piece without it.
+
+Launch campaign: **a 3–10k EUR fee to run it**, plus a pot the client puts up
+for contributors. Two amounts, kept apart and visible. Every piece passes our
+quality check first and the sponsor's decision second — in that order, or
+honest criticism gets refused in the name of "quality".
+
+Ambassador programme: **activation 5–15k EUR**, management **1–3k EUR a
+month**, plus a monthly stipend to the ambassadors. The stipend is pro-rated
+by what was delivered: paid in full regardless, it would turn the programme
+into a subscription the client cannot stop.
+
+Audience subscription: **10 EUR a year**, replays and backstage. The only
+thing an individual pays for on Skilluv, and it sells neither visibility, nor
+ranking, nor access to work.
 
 ---
 

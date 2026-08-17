@@ -562,3 +562,51 @@ async fn the_badge_follows_the_attestation_in_the_same_pass() {
         "the attestation and its badge must land together, got {awarded:?}"
     );
 }
+
+#[tokio::test]
+async fn an_ai_attestation_reaches_the_public_feed() {
+    let app = TestApp::spawn().await;
+    let user = a_user(&app, "att_feed").await;
+    let project = a_project(&app, user).await;
+    let slice = a_verified_artifact(&app, project, user, "ml_model", "ml-engineer").await;
+
+    ai_attestations::issue_for_slice(&app.db, slice)
+        .await
+        .unwrap();
+
+    // The landing page ticker is a projection written by whatever issues the
+    // proof. A feed line with nothing to open is the fabricated social proof
+    // migration 0203 exists to replace, so the artefact address is carried.
+    let row: Option<(String, String)> = sqlx::query_as(
+        "SELECT kind, artifact_url FROM public_artifact_events
+          WHERE subject_id = $1 AND source_type = 'attestation'",
+    )
+    .bind(user)
+    .fetch_optional(&app.db)
+    .await
+    .unwrap();
+
+    let (kind, url) = row.expect("the attestation must reach the feed");
+    assert_eq!(kind, "attestation_issued");
+    assert_eq!(url, "https://huggingface.co/skilluv/demo");
+}
+
+#[tokio::test]
+async fn issuing_the_same_attestation_twice_writes_one_feed_line() {
+    let app = TestApp::spawn().await;
+    let user = a_user(&app, "att_feed_once").await;
+    let project = a_project(&app, user).await;
+    let slice = a_verified_artifact(&app, project, user, "dataset", "data-engineer").await;
+
+    ai_attestations::issue_for_slice(&app.db, slice).await.unwrap();
+    ai_attestations::issue_for_slice(&app.db, slice).await.unwrap();
+
+    let lines: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM public_artifact_events WHERE subject_id = $1",
+    )
+    .bind(user)
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert_eq!(lines, 1);
+}

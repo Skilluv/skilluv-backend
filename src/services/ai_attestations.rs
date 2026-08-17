@@ -145,7 +145,76 @@ async fn issue(
     .fetch_optional(db)
     .await?;
 
+    if let Some(id) = id {
+        announce(db, user_id, id, basis, title, deliverable_id).await;
+    }
+
     Ok(id)
+}
+
+/// Put the attestation on the public feed, if the person allows it.
+///
+/// Best-effort and never fatal: an attestation that was earned must not be
+/// lost because a landing-page projection failed. `emit` decides visibility
+/// from the person's own preferences, so nothing here overrides a withdrawal.
+///
+/// The artefact URL is the one the slice already had to name — a feed line
+/// with nothing to open is the fabricated social proof migration 0203 exists
+/// to replace.
+async fn announce(
+    db: &PgPool,
+    user_id: Uuid,
+    attestation_id: Uuid,
+    basis: &str,
+    title: &str,
+    deliverable_id: Uuid,
+) {
+    let context: Result<Option<(String, Option<String>, Option<String>)>, _> = sqlx::query_as(
+        r#"
+        SELECT u.username, ps.ai_external_hosting_url, d.artifact_url
+          FROM deliverables d
+          JOIN users u ON u.id = d.user_id
+          LEFT JOIN project_slices ps ON ps.id = d.slice_id
+         WHERE d.id = $1
+        "#,
+    )
+    .bind(deliverable_id)
+    .fetch_optional(db)
+    .await;
+
+    let Ok(Some((username, hosting_url, artifact_url))) = context else {
+        return;
+    };
+    // The hub address first: it is where the thing actually is. The
+    // deliverable URL is the fallback for a subtype that names no host.
+    let Some(url) = hosting_url.or(artifact_url) else {
+        return;
+    };
+
+    let outcome = crate::services::public_feed::emit(
+        db,
+        crate::services::public_feed::Emission {
+            kind: "attestation_issued",
+            subject_type: "user",
+            subject_id: user_id,
+            subject_label: &username,
+            headline: format!("{title} — {username}"),
+            artifact_url: url,
+            repository: None,
+            amount: None,
+            currency: None,
+            source_type: "attestation",
+            source_id: attestation_id,
+        },
+    )
+    .await;
+
+    if let Err(e) = outcome {
+        tracing::warn!(
+            attestation = %attestation_id, basis, error = %e,
+            "AI attestation issued but not announced"
+        );
+    }
 }
 
 /// Issue whatever the verified work on this slice earns.

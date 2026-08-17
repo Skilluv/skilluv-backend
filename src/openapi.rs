@@ -218,6 +218,10 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::sponsored_challenges::public_active,
         crate::routes::sponsored_challenges::sponsor_view_submissions,
         // ─── code: first-issue feed + language ecosystems ─────────
+        crate::routes::ai::toolkit,
+        crate::routes::ai::competitions,
+        crate::routes::ai::artifacts,
+        crate::routes::ai::user_ai_profile,
         crate::routes::code::first_issues,
         crate::routes::code::language_ecosystems,
         // ─── orientations ─────────────────────────────────────────
@@ -930,6 +934,14 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
             crate::routes::sponsored_challenges::SponsorSubmissionRow,
             crate::routes::sponsored_challenges::SponsorSubmissionsResponse,
             // orientations
+            crate::routes::ai::ToolkitRow,
+            crate::routes::ai::ToolkitResponse,
+            crate::routes::ai::CompetitionRow,
+            crate::routes::ai::CompetitionsResponse,
+            crate::routes::ai::ArtifactRow,
+            crate::routes::ai::ArtifactsResponse,
+            crate::services::ai_profile::AiProfile,
+            crate::services::ai_profile::AiProofCounts,
             crate::routes::code::FirstIssueRow,
             crate::routes::code::FirstIssuesResponse,
             crate::routes::code::EcosystemRow,

@@ -133,7 +133,13 @@ fn build_response(data: serde_json::Value) -> serde_json::Value {
     })
 }
 
-async fn require_enterprise(state: &AppState, auth: &AuthUser) -> Result<Enterprise, AppError> {
+/// The enterprise the caller is acting for, after the gates every enterprise
+/// surface shares: a verified email and a strong second factor.
+///
+/// Public because the mission board is an enterprise surface living in
+/// another module, and reimplementing these gates there would mean two places
+/// to get 2FA wrong.
+pub async fn require_enterprise(state: &AppState, auth: &AuthUser) -> Result<Enterprise, AppError> {
     // Load the security flags we gate on in one round-trip.
     let row: Option<(bool, bool)> =
         sqlx::query_as("SELECT totp_enabled, email_verified FROM users WHERE id = $1")

@@ -199,6 +199,23 @@ notification:
       title: "Tu passes {rank}"
       body: "Ton travail sur la plateforme t'a fait passer au rang de {rank}."
       cta: "Voir mon profil"
+  mission:
+    application_received:
+      title: "Nouvelle candidature"
+      body: "Quelqu'un a candidate a la mission {mission}."
+      cta: "Voir les candidatures"
+    application_selected:
+      title: "Tu es retenu"
+      body: "Ta candidature a ete retenue. La mission est a toi."
+      cta: "Voir la mission"
+    application_rejected:
+      title: "Candidature non retenue"
+      body: "Ta candidature n'a pas ete retenue cette fois."
+      cta: "Voir mes candidatures"
+    application_shortlisted:
+      title: "Tu es en liste courte"
+      body: "Ta candidature est retenue pour la suite."
+      cta: "Voir mes candidatures"
   tournament:
     podium:
       title: "Tu montes sur le podium"

@@ -195,6 +195,23 @@ notification:
       title: "أصبحت الآن {rank}"
       body: "عملك على المنصة رفعك إلى رتبة {rank}."
       cta: "عرض ملفي"
+  mission:
+    application_received:
+      title: "طلب جديد"
+      body: "تقدّم أحدهم لمهمة {mission}."
+      cta: "عرض الطلبات"
+    application_selected:
+      title: "تم اختيارك"
+      body: "تم قبول طلبك. المهمة لك."
+      cta: "عرض المهمة"
+    application_rejected:
+      title: "لم يتم قبول الطلب"
+      body: "لم يتم اختيار طلبك هذه المرة."
+      cta: "عرض طلباتي"
+    application_shortlisted:
+      title: "أنت في القائمة المختصرة"
+      body: "تأهل طلبك للمرحلة التالية."
+      cta: "عرض طلباتي"
   tournament:
     podium:
       title: "وصلت إلى منصة التتويج"

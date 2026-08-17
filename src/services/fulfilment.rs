@@ -204,6 +204,15 @@ async fn deliver(db: &PgPool, paid: &Paid) -> Result<(), AppError> {
             Ok(())
         }
 
+        "mission_invoice" => {
+            // The talent's share lands in `pending`, not `available`: the
+            // client accepting delivery is what releases it, and until then
+            // an unhappy payer has somewhere to raise it while the money is
+            // still reversible.
+            crate::services::mission_billing::capture(db, paid.subject_id, paid.id).await?;
+            Ok(())
+        }
+
         other => {
             // Loud, not silent. A payment for something nothing delivers is
             // money taken for nothing, and the only way anyone finds out is

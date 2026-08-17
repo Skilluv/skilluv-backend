@@ -200,6 +200,23 @@ notification:
       title: "You are now {rank}"
       body: "Your work on the platform earned you the rank of {rank}."
       cta: "See my profile"
+  mission:
+    application_received:
+      title: "New application"
+      body: "Somebody applied to the {mission} mission."
+      cta: "Read the applications"
+    application_selected:
+      title: "You have been selected"
+      body: "Your application was chosen. The mission is yours."
+      cta: "Open the mission"
+    application_rejected:
+      title: "Application not selected"
+      body: "Your application was not selected this time."
+      cta: "See my applications"
+    application_shortlisted:
+      title: "You are shortlisted"
+      body: "Your application made the shortlist."
+      cta: "See my applications"
   tournament:
     podium:
       title: "You made the podium"

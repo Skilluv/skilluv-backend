@@ -31,7 +31,16 @@ use uuid::Uuid;
 use crate::errors::AppError;
 use crate::services::ledger;
 
-pub const KINDS: &[&str] = &["advisory", "architecture_review"];
+pub const KINDS: &[&str] = &["advisory", "architecture_review", "implementation"];
+
+/// What a company can be helped to build internally.
+pub const IMPLEMENTATION_TYPES: &[&str] = &[
+    "compagnonnage_setup",
+    "apprenticeship_program_design",
+    "tech_talent_strategy",
+    "skills_framework_design",
+    "proof_of_work_implementation",
+];
 
 pub const VERDICTS: &[&str] = &["approve", "approve_with_concerns", "concerns", "reject"];
 
@@ -44,6 +53,9 @@ pub const VERDICTS: &[&str] = &["approve", "approve_with_concerns", "concerns", 
 pub fn commission_for(kind: &str) -> f64 {
     match kind {
         "architecture_review" => 40.0,
+        // An implementation is weeks of somebody else's work with Skilluv
+        // holding the shape of it. Between the two, closer to the review.
+        "implementation" => 35.0,
         _ => 25.0,
     }
 }
@@ -130,6 +142,10 @@ pub struct ConsultationInput {
     pub review_deadline: Option<chrono::DateTime<chrono::Utc>>,
     #[serde(default)]
     pub reviewers_wanted: Option<i16>,
+    #[serde(default)]
+    pub implementation_type: Option<String>,
+    #[serde(default)]
+    pub duration_weeks: Option<i16>,
     pub fee: BigDecimal,
     #[serde(default = "eur")]
     pub currency: String,
@@ -173,14 +189,24 @@ pub async fn request(
         }
     }
 
+    if let Some(kind) = &input.implementation_type
+        && !IMPLEMENTATION_TYPES.contains(&kind.as_str())
+    {
+        return Err(AppError::Validation(format!(
+            "implementation_type must be one of: {}",
+            IMPLEMENTATION_TYPES.join(", ")
+        )));
+    }
+
     let commission = commission_for(&input.kind);
 
     let id: Uuid = sqlx::query_scalar(
         "INSERT INTO consultations
             (enterprise_id, kind, topic, question_md, skill_domain, orientation_slug,
              duration_minutes, document_url, review_deadline, reviewers_wanted,
-             fee, currency, commission_percent, created_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+             implementation_type, duration_weeks, fee, currency, commission_percent,
+             created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
          RETURNING id",
     )
     .bind(enterprise_id)
@@ -193,6 +219,8 @@ pub async fn request(
     .bind(input.document_url.as_deref())
     .bind(input.review_deadline)
     .bind(input.reviewers_wanted)
+    .bind(input.implementation_type.as_deref())
+    .bind(input.duration_weeks)
     .bind(&input.fee)
     .bind(&input.currency)
     .bind(BigDecimal::try_from(commission).unwrap_or_default())
@@ -205,6 +233,12 @@ pub async fn request(
             AppError::Validation(
                 "say how long the call is: 30, 60 or 120 minutes. The expert is pricing \
                  their afternoon on it."
+                    .into(),
+            )
+        } else if m.contains("an_implementation_says_what_and_how_long") {
+            AppError::Validation(
+                "say what is being built and over how many weeks. An implementation is \
+                 weeks of work, and the type decides which experts belong on it."
                     .into(),
             )
         } else if m.contains("a_review_has_a_document_and_a_deadline") {
@@ -890,6 +924,16 @@ mod tests {
     }
 
     #[test]
+    fn an_implementation_sits_between_the_two() {
+        // Weeks of somebody else's work, with Skilluv holding the shape.
+        let advisory = commission_for("advisory");
+        let implementation = commission_for("implementation");
+        let review = commission_for("architecture_review");
+        assert!(implementation > advisory);
+        assert!(implementation < review);
+    }
+
+    #[test]
     fn a_review_keeps_more_than_an_advisory_call() {
         // An advisory is an introduction and an hour in a calendar. A review
         // is a panel assembled, a deadline held and a synthesis written.
@@ -941,7 +985,8 @@ mod tests {
 
     #[test]
     fn every_kind_and_verdict_is_a_known_one() {
-        assert_eq!(KINDS.len(), 2);
+        assert_eq!(KINDS.len(), 3);
+        assert_eq!(IMPLEMENTATION_TYPES.len(), 5);
         assert_eq!(VERDICTS.len(), 4);
         assert!(VERDICTS.contains(&"approve_with_concerns"));
     }

@@ -1,3 +1,4 @@
+pub mod additional_products;
 pub mod admin;
 pub mod admin_badge_rules;
 pub mod admin_community;
@@ -138,6 +139,7 @@ pub mod validator_applications;
 pub mod vouchings;
 pub mod webauthn;
 
+pub use additional_products::{additional_product_routes, admin_additional_product_routes};
 pub use admin::admin_routes;
 pub use admin_badge_rules::admin_badge_rule_routes;
 pub use admin_community::admin_community_routes;

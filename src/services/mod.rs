@@ -1,3 +1,4 @@
+pub mod additional_products;
 pub mod ai_attestations;
 pub mod ai_companion;
 pub mod ai_log;

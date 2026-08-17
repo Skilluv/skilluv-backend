@@ -295,11 +295,12 @@ pub async fn capture(db: &PgPool, invoice_id: Uuid, payment_id: Uuid) -> Result<
     if share.is_positive() {
         sqlx::query(
             "INSERT INTO platform_revenues
-                (source, related_talent_id, amount_credits, notes)
-             VALUES ('mission_marketplace', $1, $2, $3)",
+                (source, related_talent_id, amount_credits, fee_rate_bps, notes)
+             VALUES ('mission_marketplace', $1, $2, $3, $4)",
         )
         .bind(recipient)
         .bind(&share)
+        .bind(ledger::percent_to_bps(&commission))
         .bind(format!(
             "commission {commission}% sur la facture {invoice_id}"
         ))

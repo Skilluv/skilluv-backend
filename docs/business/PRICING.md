@@ -79,20 +79,50 @@ plus ; c'est défendable pour amorcer et probablement trop bas à l'échelle.
 prestataire et recopié sur chaque facture : ce qui a été facturé en mars reste
 lisible en novembre.
 
-C'est le seul chiffre de ce document déjà implémenté.
-
 ### Studios
 
-Une équipe constituée par Skilluv sur une prestation. **Marge cible 20 à
-30 %**, selon la part de coordination assurée par nous.
+Une équipe permanente, réservée par son nom. **Marge 25 %.**
 
-En dessous de 20 % la coordination n'est pas payée et se fait mal. Au-dessus
-de 30 % nous sommes une SSII avec une base de données, et il y en a déjà.
+Plus élevée que la sous-traitance parce que le client achète une équipe déjà
+constituée, avec un historique et la coordination incluse — pas une liste de
+gens disponibles cette semaine-là.
 
 ### Sous-traitance
 
-Du travail confié à Skilluv et réparti entre contributeurs. **Marge cible 15 à
-20 %** — plus basse que Studios parce que la coordination est plus légère.
+Du travail confié à Skilluv et réparti entre contributeurs assemblés pour
+l'occasion. **Marge 15 %** — plus basse que Studios parce que la coordination
+est plus légère.
+
+En dessous de 15 % la coordination n'est pas payée et se fait mal. Au-dessus
+de 30 % nous sommes une SSII avec une base de données, et il y en a déjà. Les
+deux bornes sont dans le code (`MARGIN_FLOOR`, `MARGIN_CEILING`) et un taux
+modifié en dehors de cette bande casse la compilation des tests.
+
+### Cadrage, sprints, placement fractionné
+
+Trois formes de la même prestation, au même taux que la sous-traitance. Ce
+qui change est la forme, pas la marge :
+
+- **cadrage** — 2 à 6 semaines, bornées. Le livrable est une recommandation,
+  et la borne existe pour qu'une exploration ouverte ne devienne pas une
+  facture ouverte ;
+- **sprint** — 1 à 12 semaines, cohorte fixe ;
+- **placement fractionné** — une personne, 0,5 à 4 jours par semaine, sur
+  plusieurs mois.
+
+### Programmes de test
+
+Une cohorte de testeurs rémunérés. **Récompense fixe par testeur, payée sur
+retour accepté, plus un forfait d'organisation facturé séparément.**
+
+Les deux montants restent distincts et visibles : le client doit voir ce qui
+va aux testeurs et ce qui va à la plateforme. Le forfait est comptabilisé à
+la clôture, pas à l'ouverture — il est gagné en livrant le rapport, et un
+programme annulé la première semaine n'en a rien gagné.
+
+Le devis annonce le maximum (récompenses × testeurs demandés + forfait), pas
+la moyenne : un client qui budgète la moyenne et reçoit le maximum a été
+trompé par une arithmétique.
 
 ---
 

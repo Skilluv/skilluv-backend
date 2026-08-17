@@ -381,12 +381,16 @@ pub async fn settle(db: &PgPool, trial_id: Uuid) -> Result<(BigDecimal, BigDecim
     if platform.is_positive() {
         sqlx::query(
             "INSERT INTO platform_revenues
-                (source, related_talent_id, related_enterprise_id, amount_credits, notes)
-             VALUES ('recruitment_success_fee', $1, $2, $3, $4)",
+                (source, related_talent_id, related_enterprise_id, amount_credits,
+                 fee_rate_bps, notes)
+             VALUES ('recruitment_success_fee', $1, $2, $3, $4, $5)",
         )
         .bind(trial.talent_user_id)
         .bind(trial.enterprise_id)
         .bind(&platform)
+        .bind(crate::services::ledger::percent_to_bps(
+            &trial.platform_fee_percent,
+        ))
         .bind(format!(
             "période d'essai : {} h approuvées à {} {}",
             trial.approved_hours, trial.hourly_rate, trial.currency

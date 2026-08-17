@@ -500,12 +500,14 @@ pub async fn record_hire(
     // is to say what was earned.
     sqlx::query(
         "INSERT INTO platform_revenues
-            (source, related_talent_id, related_enterprise_id, amount_credits, notes)
-         VALUES ('recruitment_success_fee', $1, $2, $3, $4)",
+            (source, related_talent_id, related_enterprise_id, amount_credits,
+             fee_rate_bps, notes)
+         VALUES ('recruitment_success_fee', $1, $2, $3, $4, $5)",
     )
     .bind(talent_user_id)
     .bind(campaign.enterprise_id)
     .bind(&fee)
+    .bind(crate::services::ledger::percent_to_bps(&rate))
     .bind(format!("{rate}% sur {annual_salary} {currency}"))
     .execute(&mut *tx)
     .await?;

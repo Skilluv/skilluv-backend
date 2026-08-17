@@ -76,20 +76,49 @@ to get started and probably too low at scale.
 copied onto every invoice: what was charged in March stays readable in
 November.
 
-This is the only figure in this document already implemented.
-
 ### Studios
 
-A team assembled by Skilluv for an engagement. **Target margin 20% to 30%**,
-depending on how much coordination we carry.
+A standing team, booked by name. **Margin 25%.**
 
-Below 20% the coordination is unpaid and done badly. Above 30% we are a
-consultancy with a database, and there are already plenty.
+Higher than outsourcing because the client is buying an assembled team with a
+track record and management included — not a list of people who happened to be
+free that week.
 
 ### Outsourcing
 
-Work handed to Skilluv and distributed among contributors. **Target margin 15%
-to 20%** — lower than Studios because the coordination is lighter.
+Work handed to Skilluv and distributed among contributors assembled for the
+occasion. **Margin 15%** — lower than Studios because the coordination is
+lighter.
+
+Below 15% the coordination is unpaid and done badly. Above 30% we are a
+consultancy with a database, and there are already plenty. Both bounds live in
+the code (`MARGIN_FLOOR`, `MARGIN_CEILING`), and a rate moved outside that band
+fails the tests.
+
+### Discovery, sprints, fractional placements
+
+Three shapes of the same engagement, at the outsourcing rate. What changes is
+the shape, not the margin:
+
+- **discovery** — 2 to 6 weeks, timeboxed. The deliverable is a
+  recommendation, and the box exists so an open-ended exploration does not
+  become an open-ended bill;
+- **sprint** — 1 to 12 weeks, fixed cohort;
+- **fractional placement** — one person, 0.5 to 4 days a week, over months.
+
+### Beta programmes
+
+A cohort of paid testers. **A fixed reward per tester, paid on accepted
+feedback, plus a separate fee for running the programme.**
+
+The two amounts stay apart and visible: a client should see what goes to the
+testers and what goes to the platform. The fee is booked at closing rather
+than at opening — it is earned by delivering the report, and a programme
+cancelled in its first week has earned none of it.
+
+The quote states the maximum (rewards × testers wanted + fee), not the
+average: a client who budgets for the average and is billed for the maximum
+has been misled by arithmetic.
 
 ---
 

@@ -13,11 +13,32 @@ pub const VALID_KINDS: &[&str] = &[
     "hackathon",
     "marathon",       // Format 1 Grande Epreuve : saisons impaires, cooperatif
     "defi_solitaire", // Format 3 : background permanent, defi ultime solo
-    "benchmark_rush", // IA : 48h pour bouger un banc public, classement ladder
-    "prompt_battle",  // IA : face a face sur une tache, vote de la communaute
+    // Code contests (migration 0189). A code hackathon is a `hackathon` with
+    // `skill_domain = 'code'`, not a fourth kind: the difference is subject,
+    // not machinery.
+    "code_golf",
+    "tdd_contest",
+    // AI contests, on the same machinery and distinguished by `skill_domain`.
+    "benchmark_rush", // 48h to move a public benchmark, ladder-scored
+    "prompt_battle",  // head to head on one task, community vote
 ];
 pub const VALID_FORMATS: &[&str] = &["swiss", "bracket", "ladder"];
 pub const VALID_PARTICIPANT_TYPES: &[&str] = &["user", "guild"];
+
+/// Kinds where the smallest number wins.
+///
+/// Only code golf, and that is the whole point of it. Anything ranked by
+/// character count and sorted descending crowns the worst entry.
+pub const LOWER_IS_BETTER_KINDS: &[&str] = &["code_golf"];
+
+/// The end of the scale a kind is won at.
+pub fn scoring_direction_for(kind: &str) -> &'static str {
+    if LOWER_IS_BETTER_KINDS.contains(&kind) {
+        "lower_is_better"
+    } else {
+        "higher_is_better"
+    }
+}
 
 // ─── Seasons ──────────────────────────────────────────────────────
 
@@ -223,6 +244,12 @@ pub struct Tournament {
     pub created_by: Option<Uuid>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    /// NULL means the contest is open to every domain.
+    pub skill_domain: Option<String>,
+    /// What the contest asks for. Shape depends on `kind` — see
+    /// `contest::validate_rules`.
+    pub rules: serde_json::Value,
+    pub scoring_direction: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -241,6 +268,10 @@ pub struct CreateTournamentInput {
     pub registration_opens_at: Option<DateTime<Utc>>,
     pub starts_at: DateTime<Utc>,
     pub ends_at: DateTime<Utc>,
+    #[serde(default)]
+    pub skill_domain: Option<String>,
+    #[serde(default)]
+    pub rules: Option<serde_json::Value>,
 }
 
 pub async fn create_tournament(
@@ -280,14 +311,22 @@ pub async fn create_tournament(
             "Only hackathon tournaments may have a sponsor".into(),
         ));
     }
+    let rules = input.rules.unwrap_or_else(|| serde_json::json!({}));
+    crate::services::contest::validate_rules(&input.kind, &rules)?;
+    // Not a caller's choice: code golf is won at the bottom of the scale
+    // whatever anybody types, and letting an admin invert it once would
+    // silently crown the longest solution.
+    let scoring_direction = scoring_direction_for(&input.kind);
+
     let t: Tournament = sqlx::query_as(
         r#"
         INSERT INTO tournaments
             (season_id, slug, name, description, kind, format,
              prize_pool_fragments, prize_pool_gp,
              sponsor_enterprise_id, sponsor_logo_url, sponsor_blurb,
-             registration_opens_at, starts_at, ends_at, created_by)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+             registration_opens_at, starts_at, ends_at, created_by,
+             skill_domain, rules, scoring_direction)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
         RETURNING *
         "#,
     )
@@ -306,6 +345,9 @@ pub async fn create_tournament(
     .bind(input.starts_at)
     .bind(input.ends_at)
     .bind(creator_id)
+    .bind(input.skill_domain.as_deref())
+    .bind(&rules)
+    .bind(scoring_direction)
     .fetch_one(db)
     .await?;
     Ok(t)
@@ -497,11 +539,23 @@ pub async fn leaderboard_of(
     db: &PgPool,
     tournament_id: Uuid,
 ) -> Result<Vec<TournamentParticipant>, AppError> {
+    // A participant who has not scored yet sorts last in both directions.
+    // Without this, `lower_is_better` would put every unscored entry on top,
+    // and zero would win a code golf.
     let rows = sqlx::query_as(
         r#"
-        SELECT * FROM tournament_participants
-        WHERE tournament_id = $1
-        ORDER BY rank NULLS LAST, score DESC, registered_at ASC
+        SELECT p.* FROM tournament_participants p
+        JOIN tournaments t ON t.id = p.tournament_id
+        WHERE p.tournament_id = $1
+        ORDER BY p.rank NULLS LAST,
+                 (p.score = 0) ASC,
+                 CASE WHEN t.scoring_direction = 'lower_is_better'
+                      THEN p.score
+                 END ASC NULLS LAST,
+                 CASE WHEN t.scoring_direction = 'higher_is_better'
+                      THEN p.score
+                 END DESC NULLS LAST,
+                 p.registered_at ASC
         "#,
     )
     .bind(tournament_id)
@@ -561,11 +615,22 @@ pub async fn conclude_tournament(
 
     let mut tx = db.begin().await?;
 
-    // 1. Assign ranks
+    // 1. Assign ranks, at the end of the scale this kind is won at. An
+    //    unscored participant sorts last either way — zero characters is not
+    //    a winning code golf entry, it is an absent one.
     let participants: Vec<(String, Uuid, i32)> = sqlx::query_as(
-        "SELECT participant_type, participant_id, score FROM tournament_participants WHERE tournament_id = $1 ORDER BY score DESC, registered_at ASC",
+        r#"
+        SELECT participant_type, participant_id, score
+          FROM tournament_participants
+         WHERE tournament_id = $1
+         ORDER BY (score = 0) ASC,
+                  CASE WHEN $2 = 'lower_is_better' THEN score END ASC NULLS LAST,
+                  CASE WHEN $2 = 'higher_is_better' THEN score END DESC NULLS LAST,
+                  registered_at ASC
+        "#,
     )
     .bind(tournament_id)
+    .bind(&t.scoring_direction)
     .fetch_all(&mut *tx)
     .await?;
 

@@ -22,6 +22,12 @@ pub fn tournament_routes() -> Router<AppState> {
         .route("/tournaments/{slug}", get(get_tournament))
         .route("/tournaments/{slug}/leaderboard", get(get_leaderboard))
         .route("/tournaments/{slug}/register", post(register))
+        // Code contests (migration 0189) — hand in an entry, read the entries.
+        .route(
+            "/tournaments/{slug}/submissions",
+            get(list_submissions).post(submit_entry),
+        )
+        .route("/submissions/{id}/judge", post(judge_entry))
         // Public events feed
         .route("/events", get(events_feed))
 }
@@ -186,6 +192,12 @@ pub async fn get_leaderboard(
     Path(slug): Path<String>,
 ) -> Result<Json<Value>, AppError> {
     let t = tournament::by_slug(&state.db, &slug).await?;
+    // A marathon is scored from upstream contributions nobody files here, so
+    // the standing is counted at read time. Once concluded it is frozen —
+    // recounting a finished marathon would rewrite a published result.
+    if t.kind == "marathon" && t.status != "concluded" {
+        crate::services::contest::recompute_marathon_scores(&state.db, t.id).await?;
+    }
     let rows = tournament::leaderboard_of(&state.db, t.id).await?;
     Ok(Json(build_response(json!({ "leaderboard": rows }))))
 }
@@ -232,6 +244,88 @@ pub async fn register(
     metrics::counter!("skilluv_tournament_registrations_total", "kind" => t.kind.clone())
         .increment(1);
     Ok(Json(build_response(json!({ "participant": participant }))))
+}
+
+// ─── Code contest submissions ────────────────────────────────────
+
+/// Hand in an entry, or revise the one already handed in.
+///
+/// Revising replaces: every one of these formats asks for one answer. A
+/// revision clears any judgement, because a score belongs to the artifact it
+/// was given for.
+#[utoipa::path(
+    post, path = "/api/tournaments/{slug}/submissions", tag = "tournament",
+    params(("slug" = String, Path, description = "Tournament slug")),
+    request_body(content = serde_json::Value, description = "SubmitInput"),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 400, description = "Not open, wrong format, or unregistered", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "No such contest", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn submit_entry(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(slug): Path<String>,
+    Json(input): Json<crate::services::contest::SubmitInput>,
+) -> Result<Json<Value>, AppError> {
+    let t = tournament::by_slug(&state.db, &slug).await?;
+    let submission = crate::services::contest::submit(&state.db, t.id, auth.user_id, input).await?;
+    metrics::counter!("skilluv_contest_submissions_total", "kind" => t.kind.clone()).increment(1);
+    Ok(Json(build_response(json!({ "submission": submission }))))
+}
+
+/// Every entry in a contest. Public: a contest whose entries cannot be read
+/// is a contest whose result cannot be questioned.
+#[utoipa::path(
+    get, path = "/api/tournaments/{slug}/submissions", tag = "tournament",
+    params(("slug" = String, Path, description = "Tournament slug")),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 404, description = "No such contest", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn list_submissions(
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+) -> Result<Json<Value>, AppError> {
+    let t = tournament::by_slug(&state.db, &slug).await?;
+    let submissions = crate::services::contest::list_submissions(&state.db, t.id).await?;
+    Ok(Json(build_response(json!({ "submissions": submissions }))))
+}
+
+/// Record a judgement and carry it onto the leaderboard.
+///
+/// Gated on `jury_tournament` rather than on `admin`: judging a TDD contest
+/// is a competence, and the people who have it are not the people who
+/// administer the platform.
+#[utoipa::path(
+    post, path = "/api/submissions/{id}/judge", tag = "tournament",
+    params(("id" = Uuid, Path, description = "Submission id")),
+    request_body(content = serde_json::Value, description = "JudgeInput"),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 400, description = "Refusal with no reason, or a score on a measured contest", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Not a juror", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "No such submission", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn judge_entry(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<Uuid>,
+    Json(input): Json<crate::services::contest::JudgeInput>,
+) -> Result<Json<Value>, AppError> {
+    crate::middleware::capabilities::require_any_capability(
+        &state.db,
+        auth.user_id,
+        &["jury_tournament", "admin"],
+    )
+    .await?;
+    let submission = crate::services::contest::judge(&state.db, id, auth.user_id, input).await?;
+    Ok(Json(build_response(json!({ "submission": submission }))))
 }
 
 /// Admin: create a tournament.
@@ -324,7 +418,28 @@ pub async fn admin_conclude(
     if auth.role != "admin" {
         return Err(AppError::Forbidden);
     }
+    // Count the marathon one last time before the ranks are fixed: a
+    // contribution merged on the final day must count, and the concluding
+    // admin should not have to remember to refresh first.
+    let marathon: bool =
+        sqlx::query_scalar("SELECT kind = 'marathon' FROM tournaments WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&state.db)
+            .await?
+            .unwrap_or(false);
+    if marathon {
+        crate::services::contest::recompute_marathon_scores(&state.db, id).await?;
+    }
+
     let report = tournament::conclude_tournament(&state.db, id).await?;
+
+    // Signed by whoever concluded it: the badge carries a reason, and a
+    // reason with no author cannot be questioned.
+    let badges_granted = if marathon {
+        crate::services::contest::grant_marathon_badges(&state.db, id, auth.user_id).await?
+    } else {
+        0
+    };
 
     // Notify the top 3 (users only — guilds get their GP, officers will see it in their dashboard).
     let top: Vec<(String, Uuid, i32, i32, i32)> = sqlx::query_as(
@@ -381,7 +496,10 @@ pub async fn admin_conclude(
     )
     .await;
 
-    Ok(Json(build_response(json!({ "conclusion": report }))))
+    Ok(Json(build_response(json!({
+        "conclusion": report,
+        "marathon_badges_granted": badges_granted,
+    }))))
 }
 
 // ─── Events feed (public landing) ────────────────────────────────

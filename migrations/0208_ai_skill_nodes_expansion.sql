@@ -5,7 +5,7 @@
 -- Twenty-three nodes, all of them about *using* a language model: prompting,
 -- integration, working alongside an assistant. That is one trade out of ten.
 -- Nothing described a pipeline, a training loop, a serving stack, a detection
--- model or a red-team protocol — so six of the trades named in migration 0189
+-- model or a red-team protocol — so six of the trades named in migration 0207
 -- would have had nothing to attach to, and two of the four that already
 -- existed had an empty skill map since 0088.
 --

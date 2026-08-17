@@ -36,6 +36,8 @@ pub fn code_routes() -> Router<AppState> {
     Router::new()
         .route("/code/first-issues", get(first_issues))
         .route("/code/ecosystems", get(language_ecosystems))
+        .route("/code/guides", get(list_guides))
+        .route("/code/guides/{slug}", get(get_guide))
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -284,4 +286,137 @@ pub async fn language_ecosystems(
     .await?;
 
     Ok(Json(ApiResponse::new(EcosystemsResponse { ecosystems })))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// GET /code/guides
+// ═══════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
+pub struct GuideQuery {
+    /// `onboarding`, `toolkit` or `writeup_template`. Absent means all three.
+    #[param(max_length = 30)]
+    pub kind: Option<String>,
+    /// Restrict onboarding guides to one family of trades.
+    #[param(max_length = 30)]
+    pub reviewer_group: Option<String>,
+}
+
+#[derive(Debug, Serialize, sqlx::FromRow, ToSchema)]
+pub struct GuideSummary {
+    pub slug: String,
+    pub kind: String,
+    pub reviewer_group: Option<String>,
+    pub locale: String,
+    pub title: String,
+    pub summary: String,
+}
+
+#[derive(Debug, Serialize, sqlx::FromRow, ToSchema)]
+pub struct Guide {
+    pub slug: String,
+    pub kind: String,
+    pub reviewer_group: Option<String>,
+    pub locale: String,
+    pub title: String,
+    pub summary: String,
+    /// Markdown. Rendered by the reader, not here.
+    pub body_md: String,
+}
+
+/// The guides, toolkits and templates on offer, without their bodies.
+///
+/// The locale follows `Accept-Language`, and falls back to French — the base
+/// locale everything else on the platform falls back to.
+#[utoipa::path(
+    get,
+    path = "/api/code/guides",
+    tag = "code",
+    params(GuideQuery),
+    responses((status = 200, description = "Published guides", body = ApiResponse<Vec<GuideSummary>>)),
+)]
+pub async fn list_guides(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+    Query(q): Query<GuideQuery>,
+) -> Result<Json<ApiResponse<Vec<GuideSummary>>>, AppError> {
+    crate::validators::check_max_len_opt(&q.kind, "kind", 30)?;
+    crate::validators::check_max_len_opt(&q.reviewer_group, "reviewer_group", 30)?;
+    let locale = guide_locale(&headers);
+
+    let guides = sqlx::query_as::<_, GuideSummary>(
+        r#"
+        SELECT slug, kind, reviewer_group, locale, title, summary
+          FROM content_guides
+         WHERE is_published = TRUE
+           AND locale = $1
+           AND ($2::TEXT IS NULL OR kind = $2)
+           AND ($3::TEXT IS NULL OR reviewer_group = $3)
+         ORDER BY sort_order, slug
+        "#,
+    )
+    .bind(&locale)
+    .bind(q.kind.as_deref())
+    .bind(q.reviewer_group.as_deref())
+    .fetch_all(&state.db)
+    .await?;
+
+    Ok(Json(ApiResponse::new(guides)))
+}
+
+/// One guide, with its body.
+///
+/// Falls back to the French version when the requested locale has none: a
+/// half-translated catalogue should show the untranslated page rather than a
+/// 404 that reads as "this guide does not exist".
+#[utoipa::path(
+    get,
+    path = "/api/code/guides/{slug}",
+    tag = "code",
+    params(("slug" = String, Path, description = "Guide slug")),
+    responses(
+        (status = 200, description = "The guide", body = ApiResponse<Guide>),
+        (status = 404, description = "No such guide", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn get_guide(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+    axum::extract::Path(slug): axum::extract::Path<String>,
+) -> Result<Json<ApiResponse<Guide>>, AppError> {
+    let locale = guide_locale(&headers);
+
+    let guide = sqlx::query_as::<_, Guide>(
+        r#"
+        SELECT slug, kind, reviewer_group, locale, title, summary, body_md
+          FROM content_guides
+         WHERE slug = $1 AND is_published = TRUE
+         ORDER BY (locale = $2) DESC, (locale = 'fr') DESC
+         LIMIT 1
+        "#,
+    )
+    .bind(&slug)
+    .bind(&locale)
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or_else(|| AppError::NotFound(format!("no guide '{slug}'")))?;
+
+    Ok(Json(ApiResponse::new(guide)))
+}
+
+/// French is the base locale for this content, unlike the orientation
+/// catalogue: these are written here first and translated after.
+fn guide_locale(headers: &axum::http::HeaderMap) -> String {
+    let resolved = crate::routes::resolve_from_accept_language(
+        headers
+            .get(axum::http::header::ACCEPT_LANGUAGE)
+            .and_then(|value| value.to_str().ok()),
+    );
+    if headers.contains_key(axum::http::header::ACCEPT_LANGUAGE) {
+        resolved
+    } else {
+        "fr".into()
+    }
 }

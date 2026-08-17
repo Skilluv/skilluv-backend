@@ -53,6 +53,9 @@ pub fn admin_routes() -> Router<AppState> {
         )
         // ADM-M3.1 — CRUD orientations + orientation_skill_map.
         .merge(crate::routes::admin_orientation_routes())
+        .merge(crate::routes::revenue_routes())
+        .merge(crate::routes::admin_enterprise_product_routes())
+        .merge(crate::routes::admin_enterprise_product_routes())
         // ADM-M3.2 — CRUD badge_rules (proof engine editor).
         .merge(crate::routes::admin_badge_rule_routes())
         // ADM-M4 — Enterprise type manager.

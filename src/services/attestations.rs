@@ -454,7 +454,7 @@ impl AttestationsService {
     /// Appelée :
     /// - Manuellement par admin
     /// - Automatiquement quand un deliverable sous-jacent est révoqué
-    ///   (trigger `trg_attestation_loses_its_evidence`, migration 0207)
+    ///   (trigger `trg_attestation_loses_its_evidence`, migration 0225)
     pub async fn revoke(
         db: &PgPool,
         attestation_id: Uuid,
@@ -476,7 +476,7 @@ impl AttestationsService {
         Ok(())
     }
 
-    // The cascade that used to live here is a trigger since migration 0207.
+    // The cascade that used to live here is a trigger since migration 0225.
     // It was `pub`, written for exactly this, and called from nowhere — so a
     // deliverable revoked for plagiarism kept its attestation issued and the
     // record kept pointing at something withdrawn. A function nobody calls

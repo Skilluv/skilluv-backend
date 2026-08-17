@@ -22,7 +22,7 @@
 //!
 //! ## Re-running is free
 //!
-//! Migration 0204 makes (user, basis, deliverables) unique, so a second pass
+//! Migration 0222 makes (user, basis, deliverables) unique, so a second pass
 //! over already-attested work inserts nothing. That is what lets this be
 //! called from a hook without the hook having to remember what it did.
 

@@ -98,6 +98,18 @@ pub fn validate_bio(bio: &str) -> Result<(), AppError> {
 /// post-deserialisation, donc chaque handler qui declare une contrainte
 /// de longueur dans son DTO DOIT appeler ce helper pour la garantir cote
 /// serveur (schema OpenAPI = contrat opposable, pas fiction).
+/// Same rule for a value that is always present. Counts characters, not
+/// bytes: a limit expressed in bytes rejects a shorter message in French than
+/// in English, for no reason the person writing it could guess.
+pub fn check_max_len(value: &str, field: &str, max: usize) -> Result<(), AppError> {
+    if value.chars().count() > max {
+        return Err(AppError::Validation(format!(
+            "{field} must be at most {max} characters"
+        )));
+    }
+    Ok(())
+}
+
 pub fn check_max_len_opt(value: &Option<String>, field: &str, max: usize) -> Result<(), AppError> {
     if let Some(s) = value
         && s.chars().count() > max

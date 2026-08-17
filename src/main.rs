@@ -222,6 +222,8 @@ async fn async_main(config: AppConfig) {
     // Sans le flag, la tache spawn quand meme mais log un no-op.
     spawn_hello_wall_mirror_worker(state.clone());
     spawn_artifact_stats_worker(state.clone());
+    spawn_craft_score_worker(state.clone());
+    spawn_code_portfolio_worker(state.clone());
     spawn_release_sweep_worker(state.clone());
     spawn_payout_reconciliation_worker(state.clone());
     spawn_profile_readme_sync_worker(state.clone());
@@ -340,6 +342,75 @@ fn spawn_payout_reconciliation_worker(state: skilluv_backend::AppState) {
 ///
 /// Off unless asked for: it calls three third-party services, and a
 /// development machine has no business doing that on every boot.
+/// Refresh the accounts people have on other platforms.
+///
+/// Weekly: none of these figures move fast enough to be worth asking more
+/// often, and every one of these APIs rate-limits anonymous callers.
+fn spawn_code_portfolio_worker(state: skilluv_backend::AppState) {
+    tokio::spawn(async move {
+        if std::env::var("SKILLUV_CODE_PORTFOLIO_SYNC_ENABLED").as_deref() != Ok("1") {
+            tracing::info!("code_portfolio worker : disabled (env flag absent)");
+            return;
+        }
+
+        let client = match reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(20))
+            .build()
+        {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::error!(error = %e, "code_portfolio worker : no HTTP client, giving up");
+                return;
+            }
+        };
+
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(24 * 60 * 60));
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+            match skilluv_backend::services::code_portfolio::sync_stale(&state.db, &client).await {
+                Ok(0) => tracing::debug!("code_portfolio worker : nothing stale"),
+                Ok(n) => {
+                    tracing::info!(refreshed = n, "code_portfolio worker : profiles refreshed")
+                }
+                Err(e) => tracing::error!(
+                    error = %e,
+                    "code_portfolio worker : sweep failed, figures stay as they were"
+                ),
+            }
+        }
+    });
+}
+
+/// Keep the stored craft scores fresh.
+///
+/// The score is computed live on the profile page, so this exists only for
+/// the column the sorted lists read. Hourly, bounded per pass: a sweep that
+/// tries to do the whole table at once is one that times out and never
+/// reaches the end of the alphabet.
+fn spawn_craft_score_worker(state: skilluv_backend::AppState) {
+    tokio::spawn(async move {
+        if std::env::var("SKILLUV_CRAFT_SCORE_ENABLED").as_deref() != Ok("1") {
+            tracing::info!("craft_score worker : disabled (env flag absent)");
+            return;
+        }
+
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(60 * 60));
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+            match skilluv_backend::services::craft_score::sweep(&state.db, 500).await {
+                Ok(0) => tracing::debug!("craft_score worker : nothing stale"),
+                Ok(n) => tracing::info!(recomputed = n, "craft_score worker : scores refreshed"),
+                Err(e) => tracing::error!(
+                    error = %e,
+                    "craft_score worker : sweep failed, scores stay as they were"
+                ),
+            }
+        }
+    });
+}
+
 fn spawn_artifact_stats_worker(state: skilluv_backend::AppState) {
     tokio::spawn(async move {
         if std::env::var("SKILLUV_ARTIFACT_STATS_ENABLED").as_deref() != Ok("1") {

@@ -137,6 +137,21 @@ pub async fn callback(
     )
     .await?;
 
+    // The one place a portfolio account becomes verified: OAuth just proved
+    // this person controls it. Everything else somebody types is a claim.
+    if let Err(err) = crate::services::code_portfolio::record_verified(
+        &state.db,
+        user_id,
+        "github",
+        &gh_user.login,
+        &format!("https://github.com/{}", gh_user.login),
+        "oauth",
+    )
+    .await
+    {
+        tracing::warn!(%user_id, error = %err, "github portfolio row not recorded");
+    }
+
     // Mirror GitHub username onto the user's profile.github field if empty
     let _ = sqlx::query("UPDATE users SET github = COALESCE(NULLIF(github, ''), $1) WHERE id = $2")
         .bind(&gh_user.login)

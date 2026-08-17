@@ -271,3 +271,27 @@ async fn a_guide_is_served_with_its_body() {
         "the template must carry the section the disclosure policy requires"
     );
 }
+
+#[tokio::test]
+async fn the_ai_award_categories_join_the_existing_ceremony() {
+    let app = TestApp::spawn().await;
+
+    // One ceremony, not two: an AI researcher and a library author named on
+    // the same evening is what makes the AI categories visible to people who
+    // would never have looked for them.
+    let ai: Vec<String> = sqlx::query_scalar(
+        "SELECT slug FROM award_categories
+          WHERE slug LIKE '%ai%' OR slug = 'best-dataset-published'
+          ORDER BY slug",
+    )
+    .fetch_all(&app.db)
+    .await
+    .unwrap();
+    assert_eq!(ai.len(), 6, "got {ai:?}");
+
+    let total: i64 = sqlx::query_scalar("SELECT count(*) FROM award_categories")
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
+    assert_eq!(total, 14, "eight code categories plus six AI ones");
+}

@@ -12,6 +12,23 @@
 -- validated in the handler where the vocabulary lives, not in a CHECK that
 -- would need a migration every time an option is reworded.
 --
+-- ## An open disagreement, stated rather than hidden
+--
+-- Migration 0201 made the opposite choice for the code domain: eight
+-- `users.code_*` columns, on the grounds that every answer is read by a query
+-- and a blob would mean each of those queries reaching into JSON with no
+-- constraint on what it finds.
+--
+-- That argument is real and it is answered — a GIN index queries JSONB, and
+-- the vocabulary is enforced in the handler — but it is not answered *here*,
+-- because settling it means rewriting the code recommendation and mentorship
+-- services while that branch is still moving. Two shapes coexist for now and
+-- this comment is the record of why.
+--
+-- Whoever resolves it: the cost of keeping both is one more shape to learn.
+-- The cost of the columns is eight per domain on `users`, forever, and a
+-- recommender with a branch per domain deciding which column to read.
+--
 -- ## What is deliberately not in here
 --
 -- The trades somebody claims. `user_orientations` has held those since 0089,

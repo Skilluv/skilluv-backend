@@ -119,6 +119,7 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::recruitment_routes())
         .nest("/api", routes::engagement_routes())
         .nest("/api", routes::brand_routes())
+        .nest("/api", routes::contest_routes())
         .nest("/api", routes::talent_line_routes())
         .nest("/api", routes::code_stats_routes())
         .nest("/api", routes::onboarding_routes())

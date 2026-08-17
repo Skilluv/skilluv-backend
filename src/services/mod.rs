@@ -84,6 +84,7 @@ pub mod queue;
 pub mod ranks;
 pub mod readme_sanitize;
 pub mod reconciliation;
+pub mod recruitment;
 pub mod release;
 pub mod review_queue;
 pub mod reviews;

@@ -199,6 +199,11 @@ notification:
       title: "Tu passes {rank}"
       body: "Ton travail sur la plateforme t'a fait passer au rang de {rank}."
       cta: "Voir mon profil"
+  recruitment:
+    shortlisted:
+      title: "Une entreprise s'interesse a ton profil"
+      body: "Tu as ete propose pour un poste de {role}. Reponds pour savoir de qui il s'agit."
+      cta: "Voir la proposition"
   mission:
     application_received:
       title: "Nouvelle candidature"

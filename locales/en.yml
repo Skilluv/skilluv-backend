@@ -200,6 +200,11 @@ notification:
       title: "You are now {rank}"
       body: "Your work on the platform earned you the rank of {rank}."
       cta: "See my profile"
+  recruitment:
+    shortlisted:
+      title: "A company is interested in your profile"
+      body: "You have been put forward for a {role} role. Answer to find out who."
+      cta: "See the proposal"
   mission:
     application_received:
       title: "New application"

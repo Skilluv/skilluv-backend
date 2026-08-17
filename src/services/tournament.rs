@@ -20,7 +20,14 @@ pub const VALID_KINDS: &[&str] = &[
     "tdd_contest",
     // AI contests, on the same machinery and distinguished by `skill_domain`.
     "benchmark_rush", // 48h to move a public benchmark, ladder-scored
-    "prompt_battle",  // head to head on one task, community vote
+    // Head to head on one task, decided by the room. Renamed from
+    // `prompt_battle` in migration 0235: two designers on one logo is the
+    // same event as two engineers on one prompt, and `skill_domain` is where
+    // the difference belongs.
+    "duel",
+    // One written brief, N answers, a jury ranks them. Not a hackathon:
+    // nobody builds against a clock.
+    "brief_contest",
 ];
 pub const VALID_FORMATS: &[&str] = &["swiss", "bracket", "ladder"];
 pub const VALID_PARTICIPANT_TYPES: &[&str] = &["user", "guild"];

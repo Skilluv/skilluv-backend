@@ -1,13 +1,19 @@
-//! Code contests — what each format asks for, and what a participant hands in.
+//! Contests — what each format asks for, and what a participant hands in.
 //!
-//! Three formats sit on top of the `tournaments` machinery (migration 0189):
+//! Five formats sit on top of the `tournaments` machinery (migrations 0189
+//! and 0235):
 //!
 //!   * a **hackathon** on code — a `hackathon` with `skill_domain = 'code'`,
 //!     a theme, and a project plus a writeup at the end;
 //!   * **code golf** — the shortest working solution to a stated problem, one
 //!     language at a time, ranked ascending;
 //!   * a **TDD contest** — the same problem for everybody, judged on the tests
-//!     as much as on the code that passes them.
+//!     as much as on the code that passes them;
+//!   * a **brief contest** — one written brief, N answers, a jury ranks them.
+//!     Not a hackathon: nobody builds against a clock. Design uses it most,
+//!     but an agency briefing three copywriters is the same event, so the
+//!     kind carries no domain in its name;
+//!   * a **duel** — two people, one task, the room votes.
 //!
 //! Rules live in a JSONB column rather than in columns of their own: the keys
 //! differ per format and a table with a `theme` column that is NULL for two
@@ -19,15 +25,34 @@ use uuid::Uuid;
 
 use crate::errors::AppError;
 
-pub const VALID_ARTIFACT_TYPES: &[&str] =
-    &["repository", "pull_request", "gist", "writeup", "demo"];
+pub const VALID_ARTIFACT_TYPES: &[&str] = &[
+    "repository",
+    "pull_request",
+    "gist",
+    "writeup",
+    "demo",
+    // Migration 0235: answers that are not a repository.
+    "design_file",
+    "image_set",
+    "video",
+    "audio",
+];
 
 pub const VALID_SUBMISSION_STATUSES: &[&str] =
     &["submitted", "accepted", "rejected", "disqualified"];
 
 /// Kinds that expect a submission. The others are scored from activity
 /// elsewhere on the platform, and asking for a link would be theatre.
-pub const KINDS_WITH_SUBMISSIONS: &[&str] = &["hackathon", "code_golf", "tdd_contest"];
+pub const KINDS_WITH_SUBMISSIONS: &[&str] =
+    &["hackathon", "code_golf", "tdd_contest", "brief_contest", "duel"];
+
+/// Kinds whose result is decided by people rather than by a measured number,
+/// and which therefore need a panel before they can be closed.
+pub const JURIED_KINDS: &[&str] = &["hackathon", "tdd_contest", "brief_contest"];
+
+/// Kinds where the room votes. `duel` is the pure case; a brief contest can
+/// opt in through its rules.
+pub const COMMUNITY_VOTED_KINDS: &[&str] = &["duel"];
 
 /// Kinds ranked by a number the submitter measures rather than a judge's
 /// opinion.
@@ -61,6 +86,12 @@ pub fn validate_rules(kind: &str, rules: &serde_json::Value) -> Result<(), AppEr
         // The number of merged pull requests somebody commits to, over the
         // window the contest runs for.
         "marathon" => &["target_merged_prs"],
+        // The brief itself, and what the jury will weigh. A brief contest
+        // with a vague brief is how a contest becomes unpaid guesswork, and
+        // the moment to catch that is before anybody spends a weekend on it.
+        "brief_contest" => &["brief", "judging_criteria"],
+        // What the two of them are being asked to do, and how long they have.
+        "duel" => &["task", "duration_hours"],
         _ => &[],
     };
 
@@ -76,6 +107,34 @@ pub fn validate_rules(kind: &str, rules: &serde_json::Value) -> Result<(), AppEr
             return Err(AppError::Validation(format!(
                 "a {kind} must state '{key}' in its rules"
             )));
+        }
+    }
+
+    if kind == "brief_contest" {
+        // Long enough to be a brief. Under this it is a subject line, and the
+        // answers will differ on things nobody stated.
+        let brief_len = rules
+            .get("brief")
+            .and_then(|v| v.as_str())
+            .map(|s| s.trim().chars().count())
+            .unwrap_or(0);
+        if brief_len < 200 {
+            return Err(AppError::Validation(
+                "a brief contest needs at least 200 characters of brief: below that                  the answers differ on things nobody stated"
+                    .into(),
+            ));
+        }
+    }
+
+    if kind == "duel" {
+        let hours = rules.get("duration_hours").and_then(|v| v.as_i64());
+        match hours {
+            Some(n) if (1..=168).contains(&n) => {}
+            _ => {
+                return Err(AppError::Validation(
+                    "duration_hours must be a whole number of hours between 1 and 168".into(),
+                ));
+            }
         }
     }
 

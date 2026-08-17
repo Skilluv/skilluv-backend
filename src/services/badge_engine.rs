@@ -23,6 +23,10 @@
 //!                                   // ce qui était une appréciation.
 //!     "manual": true              // le moteur n'attribue jamais : un opérateur
 //!                                   // décide, et la raison est enregistrée
+//!     "min_validation_rounds": 5  // ne compte que les livrables passés par
+//!                                   // au moins N tours de revue : la
+//!                                   // persistance, pas le volume
+//!     "rank_at_most": 1           // podium : 1 = gagné, 3 = classé
 //!   }
 //!
 //! Le proof_type `onboarding_bonjour_completed` compte la ligne
@@ -80,6 +84,15 @@ struct RuleConditions {
     /// inventing a rule for them would award them to the wrong people.
     #[serde(default)]
     manual: bool,
+    /// Only count deliverables whose slice took at least this many validation
+    /// rounds. Counts persistence rather than volume: a deliverable brought
+    /// to validation at the fifth round says something a first-round one
+    /// does not.
+    #[serde(default)]
+    min_validation_rounds: Option<i16>,
+    /// Only count contest finishes at this rank or better. `1` is "won".
+    #[serde(default)]
+    rank_at_most: Option<i16>,
 }
 fn one() -> i64 {
     1
@@ -125,6 +138,18 @@ async fn count_matching_proofs(
         .proof_types
         .iter()
         .any(|t| t == "onboarding_bonjour_completed");
+    let want_tournament_podium = conds
+        .proof_types
+        .iter()
+        .any(|t| t == "tournament_podium");
+    let want_tournament_judged = conds
+        .proof_types
+        .iter()
+        .any(|t| t == "tournament_judged");
+    let want_mentees_led = conds
+        .proof_types
+        .iter()
+        .any(|t| t == "mentorship_mentees_led");
     let want_merged_upstream = conds
         .proof_types
         .iter()
@@ -166,6 +191,10 @@ async fn count_matching_proofs(
               AND ($3::VARCHAR IS NULL OR sn.display_category = $3)
               AND ($4::VARCHAR IS NULL OR ct.skill_domain = $4)
               AND ($5::BOOLEAN IS FALSE OR d.featured)
+              AND ($6::SMALLINT IS NULL OR EXISTS (
+                      SELECT 1 FROM slice_validation_decisions v
+                       WHERE v.slice_id = d.slice_id AND v.round >= $6
+                  ))
             "#,
         )
         .bind(user_id)
@@ -173,6 +202,7 @@ async fn count_matching_proofs(
         .bind(conds.display_category.as_deref())
         .bind(conds.skill_domain.as_deref())
         .bind(featured_only)
+        .bind(conds.min_validation_rounds)
         .fetch_one(db)
         .await?;
 
@@ -190,6 +220,10 @@ async fn count_matching_proofs(
               AND ($3::VARCHAR IS NULL OR sn.display_category = $3)
               AND ($4::VARCHAR IS NULL OR ct.skill_domain = $4)
               AND ($5::BOOLEAN IS FALSE OR d.featured)
+              AND ($6::SMALLINT IS NULL OR EXISTS (
+                      SELECT 1 FROM slice_validation_decisions v
+                       WHERE v.slice_id = d.slice_id AND v.round >= $6
+                  ))
             LIMIT 25
             "#,
         )
@@ -198,6 +232,7 @@ async fn count_matching_proofs(
         .bind(conds.display_category.as_deref())
         .bind(conds.skill_domain.as_deref())
         .bind(featured_only)
+        .bind(conds.min_validation_rounds)
         .fetch_all(db)
         .await?;
 
@@ -300,6 +335,97 @@ async fn count_matching_proofs(
             total += 1;
             sources.push(user_id);
         }
+    }
+
+    if want_tournament_podium {
+        // A podium finish, read from `tournament_participants.rank` — the
+        // standing the finaliser wrote, not a badge somebody typed. `rank_at_most` is what separates "won" from
+        // "placed": both are worth saying, and they are not the same thing.
+        let matched: i64 = sqlx::query_scalar(
+            r#"
+            SELECT count(*)
+              FROM tournament_participants p
+              JOIN tournaments t ON t.id = p.tournament_id
+             WHERE p.participant_type = 'user'
+               AND p.participant_id = $1
+               AND p.rank IS NOT NULL
+               AND ($2::VARCHAR IS NULL OR t.skill_domain = $2)
+               AND p.rank <= COALESCE($3::SMALLINT, 3)
+            "#,
+        )
+        .bind(user_id)
+        .bind(conds.skill_domain.as_deref())
+        .bind(conds.rank_at_most)
+        .fetch_one(db)
+        .await?;
+
+        let ids: Vec<Uuid> = sqlx::query_scalar(
+            r#"
+            SELECT s.id
+              FROM tournament_participants p
+              JOIN tournaments t ON t.id = p.tournament_id
+              JOIN tournament_submissions s
+                ON s.tournament_id = p.tournament_id
+               AND s.participant_type = p.participant_type
+               AND s.participant_id = p.participant_id
+             WHERE p.participant_type = 'user'
+               AND p.participant_id = $1
+               AND p.rank IS NOT NULL
+               AND ($2::VARCHAR IS NULL OR t.skill_domain = $2)
+               AND p.rank <= COALESCE($3::SMALLINT, 3)
+             ORDER BY s.submitted_at DESC
+             LIMIT 25
+            "#,
+        )
+        .bind(user_id)
+        .bind(conds.skill_domain.as_deref())
+        .bind(conds.rank_at_most)
+        .fetch_all(db)
+        .await?;
+
+        total += matched;
+        sources.extend(ids);
+    }
+
+    if want_tournament_judged {
+        // Counted per contest, not per score: judging twelve entries in one
+        // contest is one act of service, not twelve.
+        let matched: i64 = sqlx::query_scalar(
+            r#"
+            SELECT count(DISTINCT j.tournament_id)
+              FROM tournament_juries j
+              JOIN tournaments t ON t.id = j.tournament_id
+             WHERE j.juror_user_id = $1
+               AND j.accepted_at IS NOT NULL
+               AND ($2::VARCHAR IS NULL OR t.skill_domain = $2)
+               AND EXISTS (
+                   SELECT 1 FROM tournament_submissions s
+                    WHERE s.tournament_id = j.tournament_id
+                      AND s.judged_by = j.juror_user_id
+               )
+            "#,
+        )
+        .bind(user_id)
+        .bind(conds.skill_domain.as_deref())
+        .fetch_one(db)
+        .await?;
+        total += matched;
+    }
+
+    if want_mentees_led {
+        // Counted per mentee, not per session: mentoring is measured by how
+        // many people you carried, not by how many slots you filled.
+        let matched: i64 = sqlx::query_scalar(
+            r#"
+            SELECT count(DISTINCT mentee_user_id)
+              FROM mentorship_sessions
+             WHERE mentor_user_id = $1 AND status = 'completed'
+            "#,
+        )
+        .bind(user_id)
+        .fetch_one(db)
+        .await?;
+        total += matched;
     }
 
     Ok((total, sources))

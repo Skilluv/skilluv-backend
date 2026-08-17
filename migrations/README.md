@@ -42,6 +42,10 @@ Les contraintes partagées à ce jour :
 - `project_slices_slice_type_check`
 - `missions_deliverable_format_check`
 - `slice_validation_decisions_blocking_reason_check`
+- `challenge_templates_skill_domain_check`, `users_skill_domain_check` et
+  `sponsored_challenges_skill_domain_check` — élargies en 0219 aux sept
+  domaines ; elles en listaient quatre depuis 0002, ce qui rendait impossible
+  tout challenge `ai`, `ops` ou `soft_skills`
 
 Avant d'en réécrire une : lire la version la plus récente sur **toutes** les
 branches vivantes, pas seulement la sienne.

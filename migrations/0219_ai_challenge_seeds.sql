@@ -1,5 +1,45 @@
--- Forty-one challenges, one set per AI trade.
+-- Seven domains everywhere, and forty-one challenges, one set per AI trade.
 --
+-- ## A gap that has been open since 0088
+--
+-- `orientations` has declared seven domains since migration 0088. Three of
+-- them — `ai`, `ops`, `soft_skills` — could never carry a challenge, a user
+-- or a sponsored challenge, because those three tables still hold the CHECK
+-- written in 0002 and 0003 when there were four.
+--
+-- Nothing surfaced it. No migration had tried to insert a challenge outside
+-- the original four until this one, and the failure it produces names a
+-- constraint inherited through a table rename — `challenges_skill_domain_check`
+-- on `challenge_templates` — rather than the thing that is actually wrong.
+--
+-- The widening is not AI-specific, and it is here because this is the first
+-- migration that needed it. A later one would not work: this file runs first
+-- and would fail before reaching it.
+
+ALTER TABLE challenge_templates
+    DROP CONSTRAINT IF EXISTS challenges_skill_domain_check;
+ALTER TABLE challenge_templates
+    ADD CONSTRAINT challenge_templates_skill_domain_check
+    CHECK (skill_domain IN (
+        'code', 'design', 'game', 'security', 'soft_skills', 'ai', 'ops'
+    ));
+
+ALTER TABLE users
+    DROP CONSTRAINT IF EXISTS users_skill_domain_check;
+ALTER TABLE users
+    ADD CONSTRAINT users_skill_domain_check
+    CHECK (skill_domain IN (
+        'code', 'design', 'game', 'security', 'soft_skills', 'ai', 'ops'
+    ));
+
+ALTER TABLE sponsored_challenges
+    DROP CONSTRAINT IF EXISTS sponsored_challenges_skill_domain_check;
+ALTER TABLE sponsored_challenges
+    ADD CONSTRAINT sponsored_challenges_skill_domain_check
+    CHECK (skill_domain IN (
+        'code', 'design', 'game', 'security', 'soft_skills', 'ai', 'ops'
+    ));
+
 -- ## Why they are drafts
 --
 -- The title and the intent come from the backlog; the full brief — the

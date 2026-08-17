@@ -27,6 +27,7 @@ pub mod code_portfolio;
 pub mod cohorts;
 pub mod collect;
 pub mod collect_adapters;
+pub mod consultations;
 pub mod contest;
 pub mod contests;
 pub mod craft_score;

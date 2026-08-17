@@ -454,9 +454,10 @@ async fn ten_closed_ai_missions_earn_the_veteran_badge() {
         sqlx::query(
             "INSERT INTO missions
                 (enterprise_id, mission_type_id, skill_domain, slug, title, description,
-                 deliverable_format, budget_eur, status, assigned_user_id,
-                 assigned_at, delivered_at, closed_at)
-             VALUES ($1, $2, 'ai', 'mission-ai-' || $3, $3, 'x', 'model_weights',
+                 acceptance_criteria, deliverable_format, budget_eur, status,
+                 assigned_user_id, assigned_at, delivered_at, closed_at)
+             VALUES ($1, $2, 'ai', 'mission-ai-' || $3, $3, 'x',
+                     'Le modèle est livré avec sa fiche.', 'model_weights',
                      1000, 'closed', $4, NOW(), NOW(), NOW())",
         )
         .bind(enterprise)
@@ -508,9 +509,10 @@ async fn a_code_mission_does_not_earn_the_ai_badge() {
         sqlx::query(
             "INSERT INTO missions
                 (enterprise_id, mission_type_id, skill_domain, slug, title, description,
-                 deliverable_format, budget_eur, status, assigned_user_id,
-                 assigned_at, delivered_at, closed_at)
-             VALUES ($1, $2, 'code', 'mission-code-' || $3, $3, 'x', 'github_pr',
+                 acceptance_criteria, deliverable_format, budget_eur, status,
+                 assigned_user_id, assigned_at, delivered_at, closed_at)
+             VALUES ($1, $2, 'code', 'mission-code-' || $3, $3, 'x',
+                     'La pull request est fusionnée.', 'github_pr',
                      1000, 'closed', $4, NOW(), NOW(), NOW())",
         )
         .bind(enterprise)

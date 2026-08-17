@@ -369,9 +369,10 @@ async fn an_ai_mentor_is_suggested_with_the_reasoning_attached() {
         profile_for(&app, mentor, "ai", family, "pytorch", "+02:00").await;
         score_for(&app, mentor, "ai", score).await;
         sqlx::query(
-            "INSERT INTO mentor_profiles (user_id, headline, bio, active)
+            "INSERT INTO mentor_profiles
+                (user_id, headline, bio, hourly_rate_eur_cents, active)
              VALUES ($1, 'Je relis des entraînements',
-                     'Je relis des entraînements et des évaluations.', TRUE)",
+                     'Je relis des entraînements et des évaluations.', 0, TRUE)",
         )
         .bind(mentor)
         .execute(&app.db)

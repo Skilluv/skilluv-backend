@@ -93,12 +93,13 @@ async fn a_registry_that_publishes_nothing_stores_nothing_rather_than_zero() {
     .await
     .unwrap();
 
-    let total: Option<i64> =
-        sqlx::query_scalar("SELECT downloads_total FROM published_artifact_stats WHERE slice_id = $1")
-            .bind(slice)
-            .fetch_one(&app.db)
-            .await
-            .unwrap();
+    let total: Option<i64> = sqlx::query_scalar(
+        "SELECT downloads_total FROM published_artifact_stats WHERE slice_id = $1",
+    )
+    .bind(slice)
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
 
     assert_eq!(total, None, "unmeasured is not zero");
 }

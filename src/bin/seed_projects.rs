@@ -657,12 +657,7 @@ const AI_REPOS: &[SeedProject] = &[
 ];
 
 /// Everything, in the order it should be seeded.
-const ALL_PROJECTS: &[&[SeedProject]] = &[
-    SKILLUV_REPOS,
-    PARTNER_REPOS,
-    ECOSYSTEM_REPOS,
-    AI_REPOS,
-];
+const ALL_PROJECTS: &[&[SeedProject]] = &[SKILLUV_REPOS, PARTNER_REPOS, ECOSYSTEM_REPOS, AI_REPOS];
 
 #[tokio::main]
 async fn main() -> Result<()> {

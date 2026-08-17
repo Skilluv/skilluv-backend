@@ -115,7 +115,10 @@ async fn every_ai_trade_says_what_to_learn_first() {
     .await
     .unwrap();
 
-    assert!(coreless.is_empty(), "fewer than three core skills: {coreless:?}");
+    assert!(
+        coreless.is_empty(),
+        "fewer than three core skills: {coreless:?}"
+    );
 }
 
 #[tokio::test]

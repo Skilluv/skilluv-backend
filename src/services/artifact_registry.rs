@@ -133,9 +133,7 @@ pub fn identify(url: &str) -> Option<PackageRef> {
         },
         // https://www.kaggle.com/datasets/owner/name
         "kaggle.com" => match segments.as_slice() {
-            ["datasets", owner, name, ..] => {
-                named("kaggle_datasets", format!("{owner}/{name}"))
-            }
+            ["datasets", owner, name, ..] => named("kaggle_datasets", format!("{owner}/{name}")),
             _ => None,
         },
         _ => None,

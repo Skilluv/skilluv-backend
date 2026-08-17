@@ -113,10 +113,12 @@ async fn revoked_work_scores_nothing() {
     skilluv_backend::services::proof_hooks::recompute_all_for_user(&app.db, user)
         .await
         .unwrap();
-    assert!(profile(&app, "prof_revoked").await["craft_score"]
-        .as_i64()
-        .unwrap()
-        > 0);
+    assert!(
+        profile(&app, "prof_revoked").await["craft_score"]
+            .as_i64()
+            .unwrap()
+            > 0
+    );
 
     sqlx::query(
         "UPDATE deliverables SET revoked_at = NOW(), revocation_reason = 'plagiat'

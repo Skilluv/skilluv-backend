@@ -140,7 +140,10 @@ async fn a_finding_cannot_be_published_before_anyone_is_told() {
     app.login("safe_order").await;
 
     let created = app
-        .post(&format!("/api/slices/{slice}/safety-reports"), &a_finding_body())
+        .post(
+            &format!("/api/slices/{slice}/safety-reports"),
+            &a_finding_body(),
+        )
         .await;
     assert_eq!(created.status().as_u16(), 200, "{:?}", created.text().await);
     let body: serde_json::Value = created.json().await.unwrap();
@@ -166,7 +169,10 @@ async fn the_embargo_defaults_to_ninety_days_from_the_notification() {
     app.login("safe_embargo").await;
 
     let created = app
-        .post(&format!("/api/slices/{slice}/safety-reports"), &a_finding_body())
+        .post(
+            &format!("/api/slices/{slice}/safety-reports"),
+            &a_finding_body(),
+        )
         .await;
     let body: serde_json::Value = created.json().await.unwrap();
     let id = body["data"]["id"].as_str().unwrap().to_string();
@@ -211,7 +217,10 @@ async fn a_vendor_who_fixes_fast_does_not_need_an_embargo() {
     app.login("safe_fast").await;
 
     let created = app
-        .post(&format!("/api/slices/{slice}/safety-reports"), &a_finding_body())
+        .post(
+            &format!("/api/slices/{slice}/safety-reports"),
+            &a_finding_body(),
+        )
         .await;
     let body: serde_json::Value = created.json().await.unwrap();
     let id = body["data"]["id"].as_str().unwrap().to_string();
@@ -239,7 +248,10 @@ async fn withholding_says_why() {
     app.login("safe_withheld").await;
 
     let created = app
-        .post(&format!("/api/slices/{slice}/safety-reports"), &a_finding_body())
+        .post(
+            &format!("/api/slices/{slice}/safety-reports"),
+            &a_finding_body(),
+        )
         .await;
     let body: serde_json::Value = created.json().await.unwrap();
     let id = body["data"]["id"].as_str().unwrap().to_string();

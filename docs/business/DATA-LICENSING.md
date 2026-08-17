@@ -140,16 +140,53 @@ une déclaration d'intention.
 
 ---
 
-## 7. Ce que Skilluv n'a pas encore
+## 7. Ce que l'outillage garantit
 
-Écrit ici pour que ce ne soit pas confondu avec ce qui existe :
+Cette politique a été écrite avant son implémentation, délibérément, parce que
+l'inverse produit un outillage qui décide de la politique. L'implémentation
+existe désormais, et voici ce qu'elle rend impossible plutôt que déconseillé.
 
-- le flux de consentement n'est pas implémenté ;
-- le calcul et le versement de la part talents ne sont pas implémentés ;
-- le journal des licences n'existe pas encore comme table ;
-- aucune licence n'a été accordée, et aucune ne peut l'être avant que les
-  trois points ci-dessus existent.
+**Le consentement est par finalité.** Quatre finalités distinctes (score
+public via l'API, recherche académique, licence commerciale, profil unifié),
+une ligne par personne et par finalité. Accepter d'apparaître dans une API de
+scores n'accepte rien d'autre. Il n'existe aucune route qui accorde un
+consentement à la place de quelqu'un.
 
-Cette politique est donc en vigueur avant son outillage — dans cet ordre
-délibérément, parce que l'inverse produit un outillage qui décide de la
-politique.
+**Le texte accepté est copié sur la ligne de consentement.** La description
+d'une finalité sera reformulée avec le temps ; un consentement donné à
+l'ancienne formulation n'a pas été donné à la nouvelle. Ce qui peut être
+produit lors d'un audit est ce qui était réellement à l'écran.
+
+**Un retrait conserve la ligne.** Un consentement révoqué prouve qu'un
+consentement existait pendant la période où un jeu de données a été construit,
+et supprimer la ligne rendrait ce fait indémontrable précisément dans l'audit
+où il compte.
+
+**La population couverte est relue à chaque échéance**, jamais recopiée dans
+une liste. Quelqu'un qui s'est retiré la semaine dernière n'est pas payé et ne
+figure pas dans le jeu livré.
+
+**Un plancher de trente personnes.** Aucun rapport, aucune licence, aucune
+statistique ne peut être produite sur une population plus petite. Un graphique
+« écart de compétences à Cotonou » tiré de quatre personnes nomme ces quatre
+personnes, quel que soit son titre — et la pression commerciale va exactement
+dans ce sens, ce qui est la raison pour laquelle le plancher est dans le code
+et pas dans un guide de style.
+
+**Une licence commerciale à 0 % de reversement est refusée par la base.** Zéro
+se défend pour un jeu de données de recherche publique ; pas pour une vente.
+
+**Le plafond de reversement est de 20 %** dans le schéma, la valeur par défaut
+de 1 %, et la bande annoncée en section 4 reste 0,5 à 2 %. Le plafond existe
+pour qu'une négociation ne puisse pas écrire un nombre absurde, pas pour être
+atteint.
+
+**L'API publique ne dit rien de quelqu'un qui n'a rien accepté** — et répond
+« introuvable » plutôt que « privé ». Un annuaire construit à partir des refus
+serait un annuaire de toutes les personnes ayant refusé, ce qui est encore une
+information qu'elles n'ont pas acceptée de partager.
+
+**Une reconnaissance officielle exige un contrat signé.** Une instance
+gouvernementale ne peut déclarer reconnaître quoi que ce soit sans convention
+signée jointe : sans elle c'est une affirmation, et ce sont les porteurs de
+l'attestation qui découvriraient qu'elle ne valait rien.

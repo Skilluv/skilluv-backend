@@ -131,15 +131,49 @@ intent.
 
 ---
 
-## 7. What Skilluv does not have yet
+## 7. What the tooling guarantees
 
-Written here so it is not confused with what exists:
+This policy was written before its implementation, deliberately, because the
+other order produces tooling that decides the policy. The implementation now
+exists, and here is what it makes impossible rather than discouraged.
 
-- the consent flow is not implemented;
-- computing and paying the talents' share is not implemented;
-- the licence log does not yet exist as a table;
-- no licence has been granted, and none can be before the three points above
-  exist.
+**Consent is per purpose.** Four distinct purposes (public score API,
+academic research, commercial licence, unified profile), one row per person
+per purpose. Agreeing to appear in a score API agrees to nothing else. There
+is no route that grants consent on somebody's behalf.
 
-This policy is therefore in force before its tooling — deliberately in that
-order, because the reverse produces tooling that decides the policy.
+**The wording agreed to is copied onto the consent row.** A purpose's
+description will be reworded over time; consent given to the old wording was
+not given to the new. What can be produced in an audit is what was actually
+on screen.
+
+**A withdrawal keeps the row.** A revoked consent proves consent existed for
+the period a dataset was built in, and deleting it would make that
+unprovable in exactly the audit where it matters.
+
+**The covered population is read fresh at every settlement**, never copied
+into a list. Somebody who withdrew last week is not paid and is not in the
+delivered set.
+
+**A floor of thirty people.** No report, licence or statistic may rest on a
+smaller population. A "skills gap in Cotonou" chart drawn from four people
+names those four whatever its title says — and the commercial pressure runs
+exactly that way, which is why the floor is in the code and not in a style
+guide.
+
+**A commercial licence at 0% is refused by the database.** Zero is defensible
+for a public research dataset; it is not for a sale.
+
+**The revenue-share ceiling is 20%** in the schema, the default 1%, and the
+band published in section 4 remains 0.5–2%. The ceiling exists so a
+negotiation cannot write an absurd number, not to be reached.
+
+**The public API says nothing about somebody who agreed to nothing** — and
+answers "not found" rather than "private". A directory built from refusals
+would be a directory of everybody who declined, which is still information
+they did not agree to share.
+
+**Official recognition requires a signed contract.** A government instance
+cannot declare it recognises anything without the signed convention attached:
+without it the claim is just a claim, and the people carrying the attestation
+are the ones who would find out it was worthless.

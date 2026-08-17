@@ -461,6 +461,24 @@ impl TestApp {
             .expect("GET request failed")
     }
 
+    /// GET helper carrying one extra header.
+    ///
+    /// The metered public API authenticates on `x-api-key` rather than on the
+    /// session cookie, so its tests need a way to present one.
+    pub async fn get_with_header(
+        &self,
+        path: &str,
+        name: &'static str,
+        value: &str,
+    ) -> reqwest::Response {
+        self.client
+            .get(format!("{}{}", self.addr, path))
+            .header(name, value)
+            .send()
+            .await
+            .expect("GET request failed")
+    }
+
     /// POST helper with JSON body.
     pub async fn post(&self, path: &str, body: &Value) -> reqwest::Response {
         self.client

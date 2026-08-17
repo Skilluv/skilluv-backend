@@ -56,6 +56,7 @@ pub fn admin_routes() -> Router<AppState> {
         .merge(crate::routes::revenue_routes())
         .merge(crate::routes::admin_enterprise_product_routes())
         .merge(crate::routes::admin_recruitment_routes())
+        .merge(crate::routes::admin_talent_line_routes())
         // ADM-M3.2 — CRUD badge_rules (proof engine editor).
         .merge(crate::routes::admin_badge_rule_routes())
         // ADM-M4 — Enterprise type manager.

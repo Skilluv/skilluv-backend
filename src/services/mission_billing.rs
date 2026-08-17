@@ -81,6 +81,10 @@ pub struct IssueInput {
     /// hand is how invoices end up disputed.
     #[serde(default)]
     pub hours: Option<BigDecimal>,
+    /// A cost passed through rather than work billed: rented compute, mostly.
+    /// Carries no commission and needs a receipt.
+    #[serde(default)]
+    pub expense_evidence_url: Option<String>,
 }
 
 /// Put an amount on the mission's account.
@@ -108,7 +112,22 @@ pub async fn issue(db: &PgPool, mission_id: Uuid, input: IssueInput) -> Result<I
         commission_percent: commission,
     } = terms;
 
-    let amount =
+    // A reimbursement is not priced by the payment model: it is what the
+    // receipt says. And it carries no commission — charging on money the
+    // platform is only passing through would mean somebody pays to be repaid,
+    // and the more honest they are about their costs the more it costs them.
+    let is_reimbursement = input.expense_evidence_url.is_some();
+    let commission = if is_reimbursement {
+        BigDecimal::from(0)
+    } else {
+        commission
+    };
+
+    let amount = if is_reimbursement {
+        input.amount.clone().ok_or_else(|| {
+            AppError::Validation("a reimbursement must state what was spent".into())
+        })?
+    } else {
         match payment_model.as_str() {
             "per_hour" => {
                 let hours = input.hours.clone().ok_or_else(|| {
@@ -133,7 +152,8 @@ pub async fn issue(db: &PgPool, mission_id: Uuid, input: IssueInput) -> Result<I
                 .clone()
                 .or_else(|| budget.clone())
                 .ok_or_else(|| AppError::Validation("this invoice needs an amount".into()))?,
-        };
+        }
+    };
 
     if !amount.is_positive() {
         return Err(AppError::Validation(
@@ -145,11 +165,13 @@ pub async fn issue(db: &PgPool, mission_id: Uuid, input: IssueInput) -> Result<I
         r#"
         INSERT INTO mission_invoices
             (mission_id, sequence, label, amount, commission_percent,
-             period_start, period_end, hours)
+             period_start, period_end, hours, kind, expense_evidence_url)
         VALUES (
             $1,
             (SELECT COALESCE(max(sequence), 0) + 1 FROM mission_invoices WHERE mission_id = $1),
-            $2, $3, $4, $5, $6, $7
+            $2, $3, $4, $5, $6, $7,
+            CASE WHEN $8::TEXT IS NULL THEN 'work' ELSE 'expense_reimbursement' END,
+            $8
         )
         RETURNING id, mission_id, sequence, label, amount, currency,
                   commission_percent, period_start, period_end, hours,
@@ -163,6 +185,7 @@ pub async fn issue(db: &PgPool, mission_id: Uuid, input: IssueInput) -> Result<I
     .bind(input.period_start)
     .bind(input.period_end)
     .bind(input.hours.as_ref())
+    .bind(input.expense_evidence_url.as_deref())
     .fetch_one(db)
     .await
     .map_err(assignment_error)?;

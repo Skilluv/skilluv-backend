@@ -266,6 +266,156 @@ pub async fn contest_won(
     .await
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// Contest podiums
+// ═══════════════════════════════════════════════════════════════════
+
+/// What a concluded design contest produced.
+#[derive(Debug, Clone, Serialize)]
+pub struct PodiumReport {
+    pub deliverables_written: u32,
+    pub attestations_issued: u32,
+}
+
+/// Turn the podium of a concluded design contest into proofs.
+///
+/// Called after `tournament::conclude_tournament` has written the ranks. Two
+/// things happen per finisher in the top three, in this order:
+///
+///   1. a verified `deliverables` row, so the win moves the rank, the badges
+///      and the public portfolio like every other proof;
+///   2. a `design_contest_won` attestation, which needs that deliverable to
+///      exist — migration 0233 refuses an artefact basis without one.
+///
+/// Idempotent by construction: the unique index of migration 0237 means a
+/// second run writes no deliverable, and no attestation follows.
+///
+/// Podium only. Taking part is not an achievement, and a proof that means
+/// "showed up" devalues every other row in the table.
+pub async fn award_contest_podium(
+    db: &PgPool,
+    tournament_id: Uuid,
+) -> Result<PodiumReport, AppError> {
+    let contest: Option<(String, Option<String>, String)> = sqlx::query_as(
+        "SELECT name, skill_domain, status FROM tournaments WHERE id = $1",
+    )
+    .bind(tournament_id)
+    .fetch_optional(db)
+    .await?;
+    let (name, domain, status) =
+        contest.ok_or_else(|| AppError::NotFound("tournament not found".into()))?;
+
+    if domain.as_deref() != Some("design") {
+        return Ok(PodiumReport {
+            deliverables_written: 0,
+            attestations_issued: 0,
+        });
+    }
+    if status != "concluded" {
+        return Err(AppError::Validation(
+            "a contest has no podium until it is concluded".into(),
+        ));
+    }
+
+    // The entries that placed, with the ranking the conclusion wrote.
+    let podium: Vec<(Uuid, Uuid, String, i32)> = sqlx::query_as(
+        r#"
+        SELECT s.id, s.participant_id, s.artifact_url, p.rank
+          FROM tournament_submissions s
+          JOIN tournament_participants p
+            ON p.tournament_id = s.tournament_id
+           AND p.participant_type = s.participant_type
+           AND p.participant_id = s.participant_id
+         WHERE s.tournament_id = $1
+           AND s.participant_type = 'user'
+           AND s.status NOT IN ('rejected', 'disqualified')
+           AND p.rank IS NOT NULL
+           AND p.rank <= 3
+         ORDER BY p.rank ASC
+        "#,
+    )
+    .bind(tournament_id)
+    .fetch_all(db)
+    .await?;
+
+    let entries: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM tournament_submissions
+          WHERE tournament_id = $1 AND status NOT IN ('rejected', 'disqualified')",
+    )
+    .bind(tournament_id)
+    .fetch_one(db)
+    .await?;
+
+    let mut deliverables_written = 0u32;
+    let mut attestations_issued = 0u32;
+
+    for (submission_id, user_id, artifact_url, rank) in podium {
+        let deliverable_id: Option<Uuid> = sqlx::query_scalar(
+            r#"
+            INSERT INTO deliverables (
+                tournament_submission_id, user_id, artifact_type, artifact_url,
+                artifact_metadata, verifiable_by, verification_status,
+                verified_at, fragments_awarded, public
+            )
+            VALUES ($1, $2, 'design_artifact', $3, $4,
+                    'human_review', 'verified', NOW(), 0, TRUE)
+            ON CONFLICT (tournament_submission_id)
+                WHERE tournament_submission_id IS NOT NULL
+            DO NOTHING
+            RETURNING id
+            "#,
+        )
+        .bind(submission_id)
+        .bind(user_id)
+        .bind(&artifact_url)
+        .bind(serde_json::json!({
+            "tournament_id": tournament_id,
+            "rank": rank,
+            "entries": entries,
+        }))
+        .fetch_optional(db)
+        .await?;
+
+        let Some(deliverable_id) = deliverable_id else {
+            // Already awarded on an earlier run. The attestation went with it.
+            continue;
+        };
+        deliverables_written += 1;
+
+        contest_won(
+            db,
+            user_id,
+            deliverable_id,
+            &name,
+            &artifact_url,
+            rank as i16,
+            entries,
+        )
+        .await?;
+        attestations_issued += 1;
+
+        // The proof exists now; the rank, the badges and the search score
+        // have to catch up. Best-effort, exactly as the validation path does:
+        // a hook failure must not undo a podium already written.
+        let db_clone = db.clone();
+        tokio::spawn(async move {
+            if let Err(e) =
+                crate::services::proof_hooks::recompute_all_for_user(&db_clone, user_id).await
+            {
+                tracing::warn!(
+                    user_id = %user_id, error = %e,
+                    "proof recompute after a design contest podium failed"
+                );
+            }
+        });
+    }
+
+    Ok(PodiumReport {
+        deliverables_written,
+        attestations_issued,
+    })
+}
+
 #[cfg(test)]
 mod unit {
     use super::*;

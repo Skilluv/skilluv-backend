@@ -28,6 +28,14 @@ pub fn tournament_routes() -> Router<AppState> {
             get(list_submissions).post(submit_entry),
         )
         .route("/submissions/{id}/judge", post(judge_entry))
+        // Juried and community-voted contests (migration 0235).
+        .route("/tournaments/{slug}/jury", get(list_jury))
+        .route("/tournaments/{slug}/jury/respond", post(respond_to_jury))
+        .route("/tournaments/{slug}/community-vote", post(community_vote))
+        .route(
+            "/tournaments/{slug}/community-ranking",
+            get(community_ranking),
+        )
         // Public events feed
         .route("/events", get(events_feed))
 }
@@ -52,6 +60,8 @@ pub fn admin_tournament_routes() -> Router<AppState> {
         )
         .route("/admin/tournaments/{id}/score", post(admin_set_score))
         .route("/admin/tournaments/{id}/conclude", post(admin_conclude))
+        .route("/admin/tournaments/{id}/jury", post(admin_invite_juror))
+        .route("/admin/tournaments/{id}/vote-bursts", get(admin_vote_bursts))
 }
 
 fn build_response(data: Value) -> Value {
@@ -431,7 +441,26 @@ pub async fn admin_conclude(
         crate::services::contest::recompute_marathon_scores(&state.db, id).await?;
     }
 
+    // Same reasoning for the formats decided on entries: the scores a jury
+    // and the room produced have to reach `tournament_participants` before
+    // the ranking reads it, and the concluding admin should not have to
+    // remember a separate call.
+    let kind: Option<String> = sqlx::query_scalar("SELECT kind FROM tournaments WHERE id = $1")
+        .bind(id)
+        .fetch_optional(&state.db)
+        .await?;
+    let scored_from_entries = kind
+        .as_deref()
+        .is_some_and(|k| crate::services::contest::KINDS_WITH_SUBMISSIONS.contains(&k));
+    if scored_from_entries {
+        crate::services::contest::recompute_contest_scores(&state.db, id).await?;
+    }
+
     let report = tournament::conclude_tournament(&state.db, id).await?;
+
+    // A win has to leave a proof, or the profile of whoever won says nothing
+    // happened. No-op outside the domains that define a contest attestation.
+    let podium = crate::services::design_attestations::award_contest_podium(&state.db, id).await?;
 
     // Signed by whoever concluded it: the badge carries a reason, and a
     // reason with no author cannot be questioned.
@@ -499,6 +528,8 @@ pub async fn admin_conclude(
     Ok(Json(build_response(json!({
         "conclusion": report,
         "marathon_badges_granted": badges_granted,
+        "podium_deliverables_written": podium.deliverables_written,
+        "podium_attestations_issued": podium.attestations_issued,
     }))))
 }
 
@@ -515,5 +546,208 @@ pub async fn events_feed(State(state): State<AppState>) -> Result<Json<Value>, A
     Ok(Json(build_response(json!({
         "current_season": current,
         "upcoming_tournaments": upcoming,
+    }))))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Juries (migration 0235)
+// ═══════════════════════════════════════════════════════════════════
+
+/// GET /tournaments/{slug}/jury — who was asked, and what they answered.
+///
+/// Public: a contest whose panel is secret cannot be trusted, and the whole
+/// point of naming a jury before the deadline is that entrants can see who
+/// will judge them.
+#[utoipa::path(
+    get, path = "/api/tournaments/{slug}/jury", tag = "tournaments",
+    params(("slug" = String, Path, description = "tournament slug")),
+    responses((status = 200, description = "the panel: invited, accepted, declined")),
+)]
+pub async fn list_jury(
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+) -> Result<Json<Value>, AppError> {
+    let t = tournament::by_slug(&state.db, &slug).await?;
+    let jury = crate::services::contest::list_jury(&state.db, t.id).await?;
+    Ok(Json(build_response(json!({ "jury": jury }))))
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct JuryResponseBody {
+    pub accept: bool,
+    /// Why, when declining. Saying "outside my competence" is the right
+    /// answer and lets the organiser widen the panel in time.
+    #[serde(default)]
+    pub decline_reason: Option<String>,
+}
+
+/// POST /tournaments/{slug}/jury/respond — accept or decline an invitation.
+#[utoipa::path(
+    post, path = "/api/tournaments/{slug}/jury/respond", tag = "tournaments",
+    params(("slug" = String, Path, description = "tournament slug")),
+    request_body = JuryResponseBody,
+    responses(
+        (status = 200, description = "answer recorded"),
+        (status = 404, description = "no invitation for this contest"),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn respond_to_jury(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(slug): Path<String>,
+    Json(body): Json<JuryResponseBody>,
+) -> Result<Json<Value>, AppError> {
+    let t = tournament::by_slug(&state.db, &slug).await?;
+    let jury = crate::services::contest::respond_to_invitation(
+        &state.db,
+        t.id,
+        auth.user_id,
+        body.accept,
+        body.decline_reason.as_deref(),
+    )
+    .await?;
+    Ok(Json(build_response(json!({ "jury": jury }))))
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct InviteJurorBody {
+    pub juror_user_id: Uuid,
+}
+
+/// POST /admin/tournaments/{id}/jury — ask somebody to judge.
+#[utoipa::path(
+    post, path = "/api/admin/tournaments/{id}/jury", tag = "admin",
+    params(("id" = Uuid, Path, description = "tournament id")),
+    request_body = InviteJurorBody,
+    responses(
+        (status = 200, description = "invitation sent"),
+        (status = 400, description = "this kind has no jury, or the invitee cannot judge it"),
+        (status = 409, description = "the invitee has an entry in the contest"),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_invite_juror(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<InviteJurorBody>,
+) -> Result<Json<Value>, AppError> {
+    if auth.role != "admin" {
+        return Err(AppError::Forbidden);
+    }
+    let jury =
+        crate::services::contest::invite_juror(&state.db, id, auth.user_id, body.juror_user_id)
+            .await?;
+    Ok(Json(build_response(json!({ "jury": jury }))))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// The room (migration 0235)
+// ═══════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CommunityVoteBody {
+    pub submission_id: Uuid,
+}
+
+/// POST /tournaments/{slug}/community-vote — one voice, movable.
+///
+/// Voting again moves the vote rather than adding one. Eligibility — the
+/// account age floor, the self-vote, the withdrawn entry — is refused by the
+/// database, and the message it raises is written to be read by a person.
+#[utoipa::path(
+    post, path = "/api/tournaments/{slug}/community-vote", tag = "tournaments",
+    params(("slug" = String, Path, description = "tournament slug")),
+    request_body = CommunityVoteBody,
+    responses(
+        (status = 200, description = "vote recorded, or moved to this entry"),
+        (status = 400, description = "this contest is not open to a community vote"),
+        (status = 409, description = "account too young, own entry, or entry out of the running"),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn community_vote(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(slug): Path<String>,
+    Json(body): Json<CommunityVoteBody>,
+) -> Result<Json<Value>, AppError> {
+    let t = tournament::by_slug(&state.db, &slug).await?;
+    crate::services::contest::cast_community_vote(
+        &state.db,
+        t.id,
+        auth.user_id,
+        body.submission_id,
+    )
+    .await?;
+    Ok(Json(build_response(json!({ "recorded": true }))))
+}
+
+/// GET /tournaments/{slug}/community-ranking — the live standing.
+#[utoipa::path(
+    get, path = "/api/tournaments/{slug}/community-ranking", tag = "tournaments",
+    params(("slug" = String, Path, description = "tournament slug")),
+    responses((status = 200, description = "entries by vote count, most voted first")),
+)]
+pub async fn community_ranking(
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+) -> Result<Json<Value>, AppError> {
+    let t = tournament::by_slug(&state.db, &slug).await?;
+    let rows = crate::services::contest::community_ranking(&state.db, t.id).await?;
+    let ranking: Vec<Value> = rows
+        .into_iter()
+        .map(|(submission_id, votes)| json!({ "submission_id": submission_id, "votes": votes }))
+        .collect();
+    Ok(Json(build_response(json!({ "ranking": ranking }))))
+}
+
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
+pub struct BurstQuery {
+    /// Lookback window in minutes, 1..1440. Defaults to 5.
+    pub window_minutes: Option<i32>,
+    /// Votes on one entry inside the window before it is worth a look.
+    /// Defaults to 10.
+    pub threshold: Option<i64>,
+}
+
+/// GET /admin/tournaments/{id}/vote-bursts — entries with a suspicious spike.
+///
+/// A reason to look, never a verdict: this reports, it does not disqualify.
+/// Deciding a vote was bought is a human judgement with consequences for a
+/// person, and it stays one.
+#[utoipa::path(
+    get, path = "/api/admin/tournaments/{id}/vote-bursts", tag = "admin",
+    params(("id" = Uuid, Path, description = "tournament id"), BurstQuery),
+    responses((status = 200, description = "entries whose vote count spiked in the window")),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_vote_bursts(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<Uuid>,
+    Query(q): Query<BurstQuery>,
+) -> Result<Json<Value>, AppError> {
+    if auth.role != "admin" {
+        return Err(AppError::Forbidden);
+    }
+    let window = q.window_minutes.unwrap_or(5);
+    let threshold = q.threshold.unwrap_or(10);
+    let rows =
+        crate::services::contest::detect_vote_bursts(&state.db, id, window, threshold).await?;
+    let bursts: Vec<Value> = rows
+        .into_iter()
+        .map(|(submission_id, votes)| json!({ "submission_id": submission_id, "votes": votes }))
+        .collect();
+    Ok(Json(build_response(json!({
+        "window_minutes": window,
+        "threshold": threshold,
+        "bursts": bursts,
     }))))
 }

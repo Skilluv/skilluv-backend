@@ -122,6 +122,47 @@ pub struct ProjectSlice {
     #[serde(default)]
     pub announced_at: Option<DateTime<Utc>>,
 
+    /// The trade this slice belongs to (migration 0186). What routes it to
+    /// somebody competent to review it, through `orientations.reviewer_group`.
+    #[serde(default)]
+    pub orientation_id: Option<Uuid>,
+
+    // ── Per-domain shape ────────────────────────────────────────────
+    // Every domain adds the columns its artefacts need and leaves the others
+    // NULL. They are surfaced here because a client that cannot read them
+    // cannot render a design brief, a model card or a package listing — the
+    // rows existed since migrations 0214, 0181 and 0231 and nothing exposed
+    // them.
+    /// Code: what the finished artefact is (migration 0181).
+    #[serde(default)]
+    pub code_subtype: Option<String>,
+    /// AI: what the finished artefact is (migration 0214).
+    #[serde(default)]
+    pub ai_subtype: Option<String>,
+    /// AI: where the weights, dataset or paper actually live.
+    #[serde(default)]
+    pub ai_external_hosting_url: Option<String>,
+
+    /// Design: what the finished artefact is (migration 0231).
+    /// See [`DesignSubtype`].
+    #[serde(default)]
+    pub design_subtype: Option<String>,
+    /// Design: where the current version lives — a Figma node, a hosted
+    /// board, a published project, or a stored object.
+    #[serde(default)]
+    pub design_external_url: Option<String>,
+    /// Design: what the author says changed since the previous version.
+    /// Copied into the decision row when somebody reviews it.
+    #[serde(default)]
+    pub design_version_notes_md: Option<String>,
+    /// Design: every tool the slice touches.
+    #[serde(default)]
+    pub design_tools: Vec<String>,
+    /// Design: how many critique rounds the brief announces. The hard ceiling
+    /// is five, and it is enforced on the decision journal, not here.
+    #[serde(default)]
+    pub design_expected_rounds: Option<i16>,
+
     pub created_by_user_id: Option<Uuid>,
     pub ingested_from: String,
 
@@ -138,14 +179,189 @@ pub struct ProjectSlice {
 #[serde(rename_all = "snake_case")]
 pub enum SliceType {
     GithubIssue,
-    FigmaFrame,
     GameLevel,
     GameAsset,
     SecTarget,
     CliTask,
-    DesignToken,
     Documentation,
+    CodeArtifact,
+    AiArtifact,
+    DesignArtifact,
     Other,
+}
+
+impl SliceType {
+    /// The exact string stored in `project_slices.slice_type`.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::GithubIssue => "github_issue",
+            Self::GameLevel => "game_level",
+            Self::GameAsset => "game_asset",
+            Self::SecTarget => "sec_target",
+            Self::CliTask => "cli_task",
+            Self::Documentation => "documentation",
+            Self::CodeArtifact => "code_artifact",
+            Self::AiArtifact => "ai_artifact",
+            Self::DesignArtifact => "design_artifact",
+            Self::Other => "other",
+        }
+    }
+
+    /// Every value the SQL CHECK accepts, in the order it lists them.
+    pub const ALL: &'static [SliceType] = &[
+        Self::GithubIssue,
+        Self::GameLevel,
+        Self::GameAsset,
+        Self::SecTarget,
+        Self::CliTask,
+        Self::Documentation,
+        Self::CodeArtifact,
+        Self::AiArtifact,
+        Self::DesignArtifact,
+        Self::Other,
+    ];
+}
+
+/// What a design challenge is expected to produce, mirroring the CHECK on
+/// `project_slices.design_subtype` (migration 0231).
+///
+/// The subtype is what lets one workflow serve twenty-six very different
+/// trades: it decides which preview is worth generating, which automatic
+/// checks apply, and how large the artefact is allowed to be.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DesignSubtype {
+    /// Screens, flows, a prototype.
+    Interface,
+    /// Tokens, components, their documentation.
+    DesignSystem,
+    /// Marks, palette, type, guidelines.
+    BrandKit,
+    /// A set of images and their sources.
+    IllustrationSet,
+    /// An icon system and its delivery formats.
+    IconSet,
+    /// A motion project and its rendered preview.
+    Motion,
+    /// A rendered video and its storyboard.
+    Video,
+    /// A scene, its renders, optionally a glTF.
+    ThreeDScene,
+    /// Audio and its metadata.
+    Sound,
+    /// A typeface and its production files.
+    TypeFamily,
+    /// UX writing, naming, verbal guidelines.
+    CopyDeck,
+    /// A blueprint, a journey map, an audit, a style guide.
+    ResearchDocument,
+}
+
+impl DesignSubtype {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Interface => "interface",
+            Self::DesignSystem => "design_system",
+            Self::BrandKit => "brand_kit",
+            Self::IllustrationSet => "illustration_set",
+            Self::IconSet => "icon_set",
+            Self::Motion => "motion",
+            Self::Video => "video",
+            Self::ThreeDScene => "three_d_scene",
+            Self::Sound => "sound",
+            Self::TypeFamily => "type_family",
+            Self::CopyDeck => "copy_deck",
+            Self::ResearchDocument => "research_document",
+        }
+    }
+
+    pub const ALL: &'static [DesignSubtype] = &[
+        Self::Interface,
+        Self::DesignSystem,
+        Self::BrandKit,
+        Self::IllustrationSet,
+        Self::IconSet,
+        Self::Motion,
+        Self::Video,
+        Self::ThreeDScene,
+        Self::Sound,
+        Self::TypeFamily,
+        Self::CopyDeck,
+        Self::ResearchDocument,
+    ];
+}
+
+#[cfg(test)]
+mod enum_matches_sql {
+    use super::*;
+
+    /// Migration 0231 owns both CHECK constraints these enums mirror. Reading
+    /// it at compile time is what keeps the Rust side from drifting: adding a
+    /// value in SQL without the variant, or the reverse, fails here rather
+    /// than at runtime on a production insert.
+    const MIGRATION: &str = include_str!("../../migrations/0231_design_artifact_slices.sql");
+
+    /// The quoted values of the `IN (...)` list that follows a marker. SQL
+    /// line comments are stripped first: they contain parentheses that would
+    /// otherwise close the list early.
+    fn check_values(marker: &str) -> Vec<String> {
+        // Normalised first: a checkout with CRLF endings must not turn a
+        // schema-drift guard into a mysterious "marker not found".
+        let migration = MIGRATION.replace("\r\n", "\n");
+        let start = migration
+            .find(marker)
+            .unwrap_or_else(|| panic!("marker {marker} not found in migration 0231"));
+        let uncommented: String = migration[start..]
+            .lines()
+            .map(|line| match line.find("--") {
+                Some(i) => &line[..i],
+                None => line,
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let open = uncommented.find("IN (").expect("no IN ( after marker") + 4;
+        let mut depth = 1usize;
+        let mut close = open;
+        for (i, c) in uncommented[open..].char_indices() {
+            match c {
+                '(' => depth += 1,
+                ')' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        close = open + i;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        assert!(close > open, "unterminated IN ( after {marker}");
+
+        let mut out = Vec::new();
+        let mut rest = &uncommented[open..close];
+        while let Some(a) = rest.find('\'') {
+            let after = &rest[a + 1..];
+            let Some(b) = after.find('\'') else { break };
+            out.push(after[..b].to_string());
+            rest = &after[b + 1..];
+        }
+        out
+    }
+
+    #[test]
+    fn slice_type_variants_match_the_sql_check() {
+        let sql = check_values("ADD CONSTRAINT project_slices_slice_type_check");
+        let rust: Vec<String> = SliceType::ALL.iter().map(|t| t.as_str().into()).collect();
+        assert_eq!(sql, rust, "slice_type drifted between SQL and Rust");
+    }
+
+    #[test]
+    fn design_subtype_variants_match_the_sql_check() {
+        let sql = check_values("ADD CONSTRAINT project_slices_design_subtype_values");
+        let rust: Vec<String> = DesignSubtype::ALL.iter().map(|t| t.as_str().into()).collect();
+        assert_eq!(sql, rust, "design_subtype drifted between SQL and Rust");
+    }
 }
 
 /// Lien M2M slice ↔ skill avec poids d'exercice (1-5).

@@ -102,6 +102,7 @@ pub fn build_router(state: AppState) -> Router {
             admin_gate(routes::admin_validator_application_routes()),
         )
         .nest("/api", routes::deliverable_routes())
+        .nest("/api", routes::design_routes())
         .nest("/api", routes::review_queue_routes())
         .nest("/api", routes::track_routes())
         .nest("/api", routes::skill_routes())

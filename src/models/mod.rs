@@ -18,7 +18,7 @@ pub use contact::{Conversation, InterestRequest, Message};
 pub use deliverable::{AiAssistanceLevel, Deliverable, VerifiableBy, VerificationStatus};
 pub use enterprise::{Enterprise, EnterpriseMember, EnterprisePublic};
 pub use notification::Notification;
-pub use project_slice::{ProjectSlice, SliceSkill, SliceType};
+pub use project_slice::{DesignSubtype, ProjectSlice, SliceSkill, SliceType};
 pub use skill_node::{SkillDomain, SkillNode};
 pub use talent_list::{EnterpriseBookmark, TalentList};
 pub use team_role_slot::TeamRoleSlot;

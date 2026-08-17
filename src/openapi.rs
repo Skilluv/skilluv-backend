@@ -265,6 +265,12 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::tournament::submit_entry,
         crate::routes::tournament::list_submissions,
         crate::routes::tournament::judge_entry,
+        crate::routes::tournament::list_jury,
+        crate::routes::tournament::respond_to_jury,
+        crate::routes::tournament::community_vote,
+        crate::routes::tournament::community_ranking,
+        crate::routes::tournament::admin_invite_juror,
+        crate::routes::tournament::admin_vote_bursts,
         // ─── code: first-issue feed + language ecosystems ─────────
         crate::routes::domain_profile::get_profile,
         crate::routes::domain_profile::put_profile,
@@ -415,6 +421,11 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::community::vote_challenge,
         crate::routes::community::unvote_challenge,
         crate::routes::community::popular_challenges,
+        // ─── design (the critique loop) ───────────────────────────
+        crate::routes::design::submit_version,
+        crate::routes::design::history,
+        crate::routes::design::review,
+        crate::routes::design::reviewer_queue,
         // ─── deliverables ─────────────────────────────────────────
         crate::routes::deliverables::get_deliverable,
         crate::routes::deliverables::list_user_deliverables,

@@ -92,6 +92,16 @@ ALTER TABLE project_slices
         'research_document' -- blueprint, journey map, audit, style guide
     ));
 
+-- Rows migrated from the two placeholders, before the coherence constraints
+-- go on: `figma_frame` described a product surface and `design_token` a token
+-- file, and both are an `interface` deliverable in the new vocabulary. Adding
+-- the constraints first would refuse the rows this migration just created.
+UPDATE project_slices ps
+   SET design_subtype = 'interface',
+       orientation_id = COALESCE(ps.orientation_id,
+                                 (SELECT id FROM orientations WHERE slug = 'design-product'))
+ WHERE ps.slice_type = 'design_artifact' AND ps.design_subtype IS NULL;
+
 -- A subtype only means something on a design artefact, and a design artefact
 -- without one is a slice nobody can size, preview or check.
 ALTER TABLE project_slices
@@ -108,14 +118,6 @@ ALTER TABLE project_slices
 ALTER TABLE project_slices
     ADD CONSTRAINT project_slices_design_artifact_names_its_trade
     CHECK (slice_type <> 'design_artifact' OR orientation_id IS NOT NULL);
-
--- Rows migrated from the two placeholders: they described product surfaces
--- and token files respectively.
-UPDATE project_slices ps
-   SET design_subtype = 'interface',
-       orientation_id = COALESCE(ps.orientation_id,
-                                 (SELECT id FROM orientations WHERE slug = 'design-product'))
- WHERE ps.slice_type = 'design_artifact' AND ps.design_subtype IS NULL;
 
 COMMENT ON COLUMN project_slices.design_subtype IS
     'What the finished artefact is, for design_artifact slices. slice_type '

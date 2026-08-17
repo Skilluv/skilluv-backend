@@ -30,6 +30,7 @@ pub mod collect_adapters;
 pub mod consultations;
 pub mod contest;
 pub mod contests;
+pub mod continuous;
 pub mod craft_score;
 pub mod credit_value;
 pub mod credits;

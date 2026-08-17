@@ -2,7 +2,7 @@
 
 mod common;
 use common::TestApp;
-use skilluv_backend::services::package_registry::{PackageRef, PackageStats, record};
+use skilluv_backend::services::artifact_registry::{PackageRef, PackageStats, record};
 use uuid::Uuid;
 
 async fn a_published_library(app: &TestApp, url: &str) -> Uuid {
@@ -25,7 +25,7 @@ async fn a_published_library(app: &TestApp, url: &str) -> Uuid {
     sqlx::query_scalar(
         "INSERT INTO project_slices
             (project_id, title, description, primary_domain, slice_type, code_subtype,
-             code_package_registry_url, difficulty)
+             code_artifact_registry_url, difficulty)
          VALUES ($1, 'Biblio', 'x', 'code', 'code_artifact', 'library_published', $2, 3)
          RETURNING id",
     )
@@ -53,6 +53,7 @@ async fn figures_are_stored_with_the_date_they_were_read() {
             downloads_total: Some(12_000),
             downloads_recent: Some(400),
             dependents_count: None,
+            likes_count: None,
         }),
     )
     .await
@@ -120,6 +121,7 @@ async fn a_failed_fetch_keeps_the_previous_figures() {
             downloads_total: Some(999),
             downloads_recent: None,
             dependents_count: None,
+            likes_count: None,
         }),
     )
     .await

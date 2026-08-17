@@ -1,21 +1,27 @@
-//! Reading a package registry to see whether a published library is used.
+//! Reading a public registry or hub to see whether published work is used.
+//!
+//! Covers package registries — crates.io, npm, PyPI — and the model and
+//! dataset hubs, HuggingFace and Kaggle. The question is the same in both
+//! cases and so is the answer: which registry, what it is called there, how
+//! many downloads, and when we last asked.
 //!
 //! ## What is testable and what is not
 //!
-//! Recognising `https://crates.io/crates/serde` as the crate `serde` is pure
-//! and covered by tests. Asking crates.io how many times it was downloaded is
-//! a network call to somebody else's service, and a test that made it would
-//! fail whenever they deploy.
+//! Recognising `https://huggingface.co/mistralai/Mistral-7B-v0.1` as the
+//! model `mistralai/Mistral-7B-v0.1` is pure and covered by tests. Asking
+//! HuggingFace how many times it was downloaded is a network call to somebody
+//! else's service, and a test that made it would fail whenever they deploy.
 //!
 //! The split is deliberate: everything that can be wrong in our code —
 //! parsing, storage, staleness — is tested, and the part that can only be
-//! wrong in theirs is behind a trait.
+//! wrong in theirs is not.
 //!
 //! ## Why NULL and not zero
 //!
-//! Go modules and Homebrew publish no download count. Writing zero would
-//! claim nobody uses a package we cannot measure, which is a different and
-//! much worse statement.
+//! Go modules and Homebrew publish no download count, and Kaggle asks for
+//! credentials before it publishes anything. Writing zero would claim nobody
+//! uses work we cannot measure, which is a different and much worse
+//! statement.
 
 use serde::Deserialize;
 use sqlx::PgPool;
@@ -110,24 +116,49 @@ pub fn identify(url: &str) -> Option<PackageRef> {
             ["formula", name, ..] => named("homebrew", (*name).to_string()),
             _ => None,
         },
+        // HuggingFace puts models at the root and datasets one level down:
+        //   https://huggingface.co/mistralai/Mistral-7B-v0.1
+        //   https://huggingface.co/datasets/masakhane/masakhaner
+        // The owner is part of the name — two people can publish `bert-base`
+        // and they are not the same weights.
+        "huggingface.co" | "hf.co" => match segments.as_slice() {
+            ["datasets", owner, name, ..] => {
+                named("huggingface_datasets", format!("{owner}/{name}"))
+            }
+            // `spaces` and `docs` are neither a model nor a dataset. Left
+            // unrecognised rather than filed as one.
+            [kind, ..] if matches!(*kind, "datasets" | "spaces" | "docs" | "blog") => None,
+            [owner, name, ..] => named("huggingface_models", format!("{owner}/{name}")),
+            _ => None,
+        },
+        // https://www.kaggle.com/datasets/owner/name
+        "kaggle.com" => match segments.as_slice() {
+            ["datasets", owner, name, ..] => {
+                named("kaggle_datasets", format!("{owner}/{name}"))
+            }
+            _ => None,
+        },
         _ => None,
     }
 }
 
-/// What a registry told us about a package.
+/// What a registry told us about a published artefact.
 #[derive(Debug, Clone, Default)]
 pub struct PackageStats {
     pub latest_version: Option<String>,
     pub downloads_total: Option<i64>,
     pub downloads_recent: Option<i64>,
     pub dependents_count: Option<i32>,
+    /// HuggingFace likes, Kaggle votes. Approval rather than use.
+    pub likes_count: Option<i32>,
 }
 
-/// Ask one registry about one package.
+/// Ask one registry about one artefact.
 ///
 /// Only the registries that publish usage figures over a public API are
 /// implemented. The rest are recognised by [`identify`] and stored with no
-/// numbers, which is the truth about them.
+/// numbers, which is the truth about them — Kaggle among them, because its
+/// API asks for credentials before it answers anything.
 pub async fn fetch(
     client: &reqwest::Client,
     package: &PackageRef,
@@ -136,6 +167,8 @@ pub async fn fetch(
         "crates_io" => fetch_crates_io(client, &package.name).await,
         "npm" => fetch_npm(client, &package.name).await,
         "pypi" => fetch_pypi(client, &package.name).await,
+        "huggingface_models" => fetch_huggingface(client, "models", &package.name).await,
+        "huggingface_datasets" => fetch_huggingface(client, "datasets", &package.name).await,
         // Recognised, and honest about having nothing to report.
         _ => Ok(PackageStats::default()),
     }
@@ -174,6 +207,7 @@ async fn fetch_crates_io(client: &reqwest::Client, name: &str) -> Result<Package
         downloads_total: body.krate.downloads,
         downloads_recent: body.krate.recent_downloads,
         dependents_count: None,
+        likes_count: None,
     })
 }
 
@@ -203,6 +237,7 @@ async fn fetch_npm(client: &reqwest::Client, name: &str) -> Result<PackageStats,
         downloads_total: None,
         downloads_recent: Some(recent.downloads),
         dependents_count: None,
+        likes_count: None,
     })
 }
 
@@ -235,6 +270,50 @@ async fn fetch_pypi(client: &reqwest::Client, name: &str) -> Result<PackageStats
         downloads_total: None,
         downloads_recent: None,
         dependents_count: None,
+        likes_count: None,
+    })
+}
+
+#[derive(Deserialize)]
+struct HuggingFaceRepo {
+    /// Downloads over the last thirty days. The hub publishes no lifetime
+    /// total, so `downloads_total` stays NULL rather than being filled with
+    /// a window that is not one.
+    downloads: Option<i64>,
+    likes: Option<i32>,
+    sha: Option<String>,
+}
+
+/// Ask HuggingFace about one model or dataset.
+///
+/// `kind` is `models` or `datasets`: the hub keeps them in separate
+/// namespaces, and the same owner/name can exist in both as different things.
+async fn fetch_huggingface(
+    client: &reqwest::Client,
+    kind: &str,
+    name: &str,
+) -> Result<PackageStats, AppError> {
+    let body: HuggingFaceRepo = client
+        .get(format!("https://huggingface.co/api/{kind}/{name}"))
+        .header("User-Agent", "skilluv (https://skill-uv.com)")
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("HuggingFace unreachable: {e}")))?
+        .error_for_status()
+        .map_err(|e| AppError::Internal(format!("HuggingFace refused: {e}")))?
+        .json()
+        .await
+        .map_err(|e| AppError::Internal(format!("HuggingFace sent something unexpected: {e}")))?;
+
+    Ok(PackageStats {
+        // The commit the repository is on. It is what "version" means on a
+        // hub with no releases, and it is what lets a reviewer check that the
+        // weights judged are the weights published.
+        latest_version: body.sha.map(|s| s.chars().take(12).collect()),
+        downloads_total: None,
+        downloads_recent: body.downloads,
+        dependents_count: None,
+        likes_count: body.likes,
     })
 }
 
@@ -253,16 +332,17 @@ pub async fn record(
         Ok(stats) => {
             sqlx::query(
                 r#"
-                INSERT INTO code_package_stats
+                INSERT INTO published_artifact_stats
                     (slice_id, registry, package_name, latest_version,
                      downloads_total, downloads_recent, dependents_count,
-                     fetched_at, last_error)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NULL)
+                     likes_count, fetched_at, last_error)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NULL)
                 ON CONFLICT (slice_id, registry, package_name) DO UPDATE SET
                     latest_version   = EXCLUDED.latest_version,
                     downloads_total  = EXCLUDED.downloads_total,
                     downloads_recent = EXCLUDED.downloads_recent,
                     dependents_count = EXCLUDED.dependents_count,
+                    likes_count      = EXCLUDED.likes_count,
                     fetched_at       = NOW(),
                     last_error       = NULL
                 "#,
@@ -274,13 +354,14 @@ pub async fn record(
             .bind(stats.downloads_total)
             .bind(stats.downloads_recent)
             .bind(stats.dependents_count)
+            .bind(stats.likes_count)
             .execute(db)
             .await?;
         }
         Err(e) => {
             sqlx::query(
                 r#"
-                INSERT INTO code_package_stats
+                INSERT INTO published_artifact_stats
                     (slice_id, registry, package_name, last_error)
                 VALUES ($1, $2, $3, $4)
                 ON CONFLICT (slice_id, registry, package_name) DO UPDATE SET
@@ -298,19 +379,29 @@ pub async fn record(
     Ok(())
 }
 
-/// Refresh every published library whose figures are older than a week.
+/// Refresh every published artefact whose figures are older than a week.
 ///
 /// Returns how many were refreshed. One failing registry does not stop the
 /// others: the whole point of running this on a schedule is that a bad day
 /// at npm costs a week of freshness, not the entire sweep.
+///
+/// Two kinds of slice qualify — a published library, which names a package
+/// registry, and a published model or dataset, which names a hub. One sweep
+/// for both, because the staleness rule is the same and having two would mean
+/// one of them silently stops running.
 pub async fn sync_stale(db: &PgPool, client: &reqwest::Client) -> Result<usize, AppError> {
     let rows: Vec<(Uuid, String)> = sqlx::query_as(
         r#"
-        SELECT ps.id, ps.code_package_registry_url
+        SELECT ps.id,
+               COALESCE(ps.code_package_registry_url, ps.ai_external_hosting_url) AS url
           FROM project_slices ps
-          LEFT JOIN code_package_stats st ON st.slice_id = ps.id
-         WHERE ps.code_subtype = 'library_published'
-           AND ps.code_package_registry_url IS NOT NULL
+          LEFT JOIN published_artifact_stats st ON st.slice_id = ps.id
+         WHERE (
+                 (ps.code_subtype = 'library_published'
+                  AND ps.code_package_registry_url IS NOT NULL)
+              OR (ps.ai_subtype IN ('ml_model', 'dataset')
+                  AND ps.ai_external_hosting_url IS NOT NULL)
+               )
            AND (st.fetched_at IS NULL OR st.fetched_at < NOW() - INTERVAL '7 days')
          LIMIT 500
         "#,
@@ -389,6 +480,49 @@ mod tests {
             ident("https://formulae.brew.sh/formula/ripgrep"),
             Some(("homebrew", "ripgrep".into()))
         );
+    }
+
+    #[test]
+    fn the_model_hubs_are_recognised() {
+        assert_eq!(
+            ident("https://huggingface.co/mistralai/Mistral-7B-v0.1"),
+            Some(("huggingface_models", "mistralai/Mistral-7B-v0.1".into()))
+        );
+        assert_eq!(
+            ident("https://huggingface.co/datasets/masakhane/masakhaner"),
+            Some(("huggingface_datasets", "masakhane/masakhaner".into()))
+        );
+        assert_eq!(
+            ident("https://www.kaggle.com/datasets/uciml/iris"),
+            Some(("kaggle_datasets", "uciml/iris".into()))
+        );
+        // The short host redirects to the long one and people paste both.
+        assert_eq!(
+            ident("https://hf.co/google/gemma-2b"),
+            Some(("huggingface_models", "google/gemma-2b".into()))
+        );
+    }
+
+    #[test]
+    fn the_owner_is_part_of_a_model_name() {
+        // Two people can publish `bert-base`, and they are not the same
+        // weights. Dropping the owner would fetch figures for whichever one
+        // the hub resolved first.
+        assert_ne!(
+            ident("https://huggingface.co/google/bert-base"),
+            ident("https://huggingface.co/someone-else/bert-base")
+        );
+    }
+
+    #[test]
+    fn a_huggingface_page_that_is_not_an_artefact_is_left_alone() {
+        // Spaces are demos, not weights. Filing one as a model would count
+        // its likes towards a claim about a model that does not exist.
+        assert_eq!(ident("https://huggingface.co/spaces/owner/demo"), None);
+        assert_eq!(ident("https://huggingface.co/docs/transformers"), None);
+        assert_eq!(ident("https://huggingface.co/datasets"), None);
+        // An owner with no repository names nobody's artefact.
+        assert_eq!(ident("https://huggingface.co/mistralai"), None);
     }
 
     #[test]

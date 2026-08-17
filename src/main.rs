@@ -221,7 +221,7 @@ async fn async_main(config: AppConfig) {
     //   SKILLUV_PROFILE_README_SYNC_ENABLED=1
     // Sans le flag, la tache spawn quand meme mais log un no-op.
     spawn_hello_wall_mirror_worker(state.clone());
-    spawn_package_stats_worker(state.clone());
+    spawn_artifact_stats_worker(state.clone());
     spawn_release_sweep_worker(state.clone());
     spawn_payout_reconciliation_worker(state.clone());
     spawn_profile_readme_sync_worker(state.clone());
@@ -340,10 +340,10 @@ fn spawn_payout_reconciliation_worker(state: skilluv_backend::AppState) {
 ///
 /// Off unless asked for: it calls three third-party services, and a
 /// development machine has no business doing that on every boot.
-fn spawn_package_stats_worker(state: skilluv_backend::AppState) {
+fn spawn_artifact_stats_worker(state: skilluv_backend::AppState) {
     tokio::spawn(async move {
-        if std::env::var("SKILLUV_PACKAGE_STATS_ENABLED").as_deref() != Ok("1") {
-            tracing::info!("package_stats worker : disabled (env flag absent)");
+        if std::env::var("SKILLUV_ARTIFACT_STATS_ENABLED").as_deref() != Ok("1") {
+            tracing::info!("artifact_stats worker : disabled (env flag absent)");
             return;
         }
 
@@ -353,7 +353,7 @@ fn spawn_package_stats_worker(state: skilluv_backend::AppState) {
         {
             Ok(c) => c,
             Err(e) => {
-                tracing::error!(error = %e, "package_stats worker : no HTTP client, giving up");
+                tracing::error!(error = %e, "artifact_stats worker : no HTTP client, giving up");
                 return;
             }
         };
@@ -362,13 +362,13 @@ fn spawn_package_stats_worker(state: skilluv_backend::AppState) {
         interval.tick().await;
         loop {
             interval.tick().await;
-            match skilluv_backend::services::package_registry::sync_stale(&state.db, &client).await
+            match skilluv_backend::services::artifact_registry::sync_stale(&state.db, &client).await
             {
-                Ok(0) => tracing::debug!("package_stats worker : nothing stale"),
-                Ok(n) => tracing::info!(refreshed = n, "package_stats worker : figures refreshed"),
+                Ok(0) => tracing::debug!("artifact_stats worker : nothing stale"),
+                Ok(n) => tracing::info!(refreshed = n, "artifact_stats worker : figures refreshed"),
                 Err(e) => tracing::error!(
                     error = %e,
-                    "package_stats worker : sweep failed, figures stay as they were"
+                    "artifact_stats worker : sweep failed, figures stay as they were"
                 ),
             }
         }

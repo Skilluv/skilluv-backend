@@ -121,6 +121,17 @@ pub enum Account {
     /// The counterparty outside the system, for movements crossing the
     /// boundary with no claim behind them.
     World { currency: Currency },
+    /// Money owed to whoever an outcome designates, held until it does.
+    ///
+    /// A contest prize is escrowed before anybody knows who wins, so it
+    /// cannot sit on a `User` account — those are claims on a named person.
+    /// It sits here, keyed to the thing that will decide, and moves to the
+    /// winners' `pending` accounts at finalisation.
+    Escrow {
+        subject_type: &'static str,
+        subject_id: Uuid,
+        currency: Currency,
+    },
 }
 
 impl Account {
@@ -141,6 +152,11 @@ impl Account {
                 format!("psp:{provider}:settlement:{}", currency.as_str())
             }
             Account::World { currency } => format!("external:world:{}", currency.as_str()),
+            Account::Escrow {
+                subject_type,
+                subject_id,
+                currency,
+            } => format!("escrow:{subject_type}:{subject_id}:{}", currency.as_str()),
         }
     }
 
@@ -149,7 +165,8 @@ impl Account {
             Account::User { currency, .. }
             | Account::Platform { currency, .. }
             | Account::Psp { currency, .. }
-            | Account::World { currency } => *currency,
+            | Account::World { currency }
+            | Account::Escrow { currency, .. } => *currency,
         }
     }
 
@@ -159,6 +176,7 @@ impl Account {
             Account::Platform { .. } => "platform",
             Account::Psp { .. } => "psp",
             Account::World { .. } => "external",
+            Account::Escrow { .. } => "escrow",
         }
     }
 

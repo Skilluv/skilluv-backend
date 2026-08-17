@@ -24,6 +24,7 @@ pub mod cohorts;
 pub mod collect;
 pub mod collect_adapters;
 pub mod contest;
+pub mod contest_prizes;
 pub mod craft_score;
 pub mod credit_value;
 pub mod credits;

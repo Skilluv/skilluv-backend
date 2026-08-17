@@ -62,6 +62,15 @@ pub fn admin_tournament_routes() -> Router<AppState> {
         .route("/admin/tournaments/{id}/conclude", post(admin_conclude))
         .route("/admin/tournaments/{id}/jury", post(admin_invite_juror))
         .route("/admin/tournaments/{id}/vote-bursts", get(admin_vote_bursts))
+        .route(
+            "/admin/tournaments/prizes/outstanding",
+            get(admin_outstanding_prizes),
+        )
+        .route("/admin/tournaments/{id}/prize/fund", post(admin_fund_prize))
+        .route(
+            "/admin/tournaments/{id}/prize/refund",
+            post(admin_refund_prize),
+        )
 }
 
 fn build_response(data: Value) -> Value {
@@ -462,6 +471,10 @@ pub async fn admin_conclude(
     // happened. No-op outside the domains that define a contest attestation.
     let podium = crate::services::design_attestations::award_contest_podium(&state.db, id).await?;
 
+    // And if the contest holds money, the ranking is what decides whose it
+    // is. `None` when there was no cash prize, which is the common case.
+    let prize = crate::services::contest_prizes::award(&state.db, id).await?;
+
     // Signed by whoever concluded it: the badge carries a reason, and a
     // reason with no author cannot be questioned.
     let badges_granted = if marathon {
@@ -530,6 +543,7 @@ pub async fn admin_conclude(
         "marathon_badges_granted": badges_granted,
         "podium_deliverables_written": podium.deliverables_written,
         "podium_attestations_issued": podium.attestations_issued,
+        "prize": prize,
     }))))
 }
 
@@ -547,6 +561,166 @@ pub async fn events_feed(State(state): State<AppState>) -> Result<Json<Value>, A
         "current_season": current,
         "upcoming_tournaments": upcoming,
     }))))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Cash prizes (migration 0242)
+// ═══════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct FundPrizeBody {
+    /// The enterprise whose money this is. Not always the sponsor whose name
+    /// is on the contest.
+    pub funder_enterprise_id: Uuid,
+    /// What the podium receives, whole. The platform takes no share.
+    pub amount: String,
+    /// `EUR` or `XOF` — the two the ledger can hold and pay out.
+    pub currency: String,
+    /// The provider reference for the settled payment, so the ledger entry
+    /// can be reconciled against the provider's statement.
+    pub provider_reference: String,
+}
+
+/// POST /admin/tournaments/{id}/prize/fund — record that the money is held.
+///
+/// Until this succeeds the contest cannot leave `upcoming`, which is the
+/// whole point: a brief promising money that nobody escrowed is spec work
+/// with a nicer name.
+#[utoipa::path(
+    post, path = "/api/admin/tournaments/{id}/prize/fund", tag = "admin",
+    params(("id" = Uuid, Path, description = "tournament id")),
+    request_body = FundPrizeBody,
+    responses(
+        (status = 200, description = "escrow recorded; the contest may now open"),
+        (status = 400, description = "amount not positive, or a currency the ledger cannot hold"),
+        (status = 409, description = "this contest's prize is already funded, awarded or refunded"),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_fund_prize(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<FundPrizeBody>,
+) -> Result<Json<Value>, AppError> {
+    if auth.role != "admin" {
+        return Err(AppError::Forbidden);
+    }
+
+    let amount: bigdecimal::BigDecimal = body
+        .amount
+        .parse()
+        .map_err(|_| AppError::Validation("amount must be a decimal number".into()))?;
+    let currency: crate::services::ledger::Currency = body.currency.parse()?;
+
+    crate::services::contest_prizes::fund(
+        &state.db,
+        id,
+        body.funder_enterprise_id,
+        amount,
+        currency,
+        "stripe",
+        body.provider_reference,
+    )
+    .await?;
+
+    crate::services::audit::record(
+        &state.db,
+        crate::services::audit::AuditEntry {
+            actor_type: crate::services::audit::ActorType::Admin,
+            actor_id: Some(auth.user_id),
+            action: "contest_prize_funded",
+            target_type: Some("tournament"),
+            target_id: Some(id),
+            metadata: Some(json!({
+                "amount": body.amount,
+                "currency": body.currency,
+                "funder": body.funder_enterprise_id,
+            })),
+            headers: None,
+        },
+    )
+    .await;
+
+    Ok(Json(build_response(json!({ "funded": true }))))
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RefundPrizeBody {
+    /// Why the money is going back. Ten characters minimum: a returned prize
+    /// is a question somebody will ask about later.
+    pub reason: String,
+}
+
+/// POST /admin/tournaments/{id}/prize/refund — return the money to the sponsor.
+///
+/// For a cancelled contest, or one that ended with nobody in the running.
+/// Holding money for a contest that will never have a winner is the same
+/// failure as never funding it, seen from the other side.
+#[utoipa::path(
+    post, path = "/api/admin/tournaments/{id}/prize/refund", tag = "admin",
+    params(("id" = Uuid, Path, description = "tournament id")),
+    request_body = RefundPrizeBody,
+    responses(
+        (status = 200, description = "escrow returned"),
+        (status = 400, description = "no reason given"),
+        (status = 409, description = "nothing held for this contest"),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_refund_prize(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<RefundPrizeBody>,
+) -> Result<Json<Value>, AppError> {
+    if auth.role != "admin" {
+        return Err(AppError::Forbidden);
+    }
+    crate::services::contest_prizes::refund(&state.db, id, &body.reason).await?;
+
+    crate::services::audit::record(
+        &state.db,
+        crate::services::audit::AuditEntry {
+            actor_type: crate::services::audit::ActorType::Admin,
+            actor_id: Some(auth.user_id),
+            action: "contest_prize_refunded",
+            target_type: Some("tournament"),
+            target_id: Some(id),
+            metadata: Some(json!({ "reason": body.reason })),
+            headers: None,
+        },
+    )
+    .await;
+
+    Ok(Json(build_response(json!({ "refunded": true }))))
+}
+
+/// GET /admin/tournaments/prizes/outstanding — contests still holding money.
+///
+/// Each one owes an award or a refund. Nothing decides which automatically:
+/// "nobody deserved the prize" and "nobody concluded the contest" look
+/// identical from outside and have opposite answers.
+#[utoipa::path(
+    get, path = "/api/admin/tournaments/prizes/outstanding", tag = "admin",
+    responses((status = 200, description = "ended contests whose escrow is still held")),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_outstanding_prizes(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Json<Value>, AppError> {
+    if auth.role != "admin" {
+        return Err(AppError::Forbidden);
+    }
+    let rows = crate::services::contest_prizes::outstanding(&state.db).await?;
+    let contests: Vec<Value> = rows
+        .into_iter()
+        .map(|(id, name)| json!({ "tournament_id": id, "name": name }))
+        .collect();
+    Ok(Json(build_response(json!({ "contests": contests }))))
 }
 
 // ═══════════════════════════════════════════════════════════════════

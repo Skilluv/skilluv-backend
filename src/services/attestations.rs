@@ -67,7 +67,7 @@ impl AttestationsService {
 
     /// Génère un code base32 de 10 caractères pour l'URL publique de vérification.
     /// 50 bits d'entropie (~10^15 combinaisons, quasi zéro collision).
-    fn generate_verification_code() -> String {
+    pub(crate) fn generate_verification_code() -> String {
         let mut bytes = [0u8; 8];
         rand_core::OsRng.fill_bytes(&mut bytes);
         let encoded = base32::encode(Alphabet::Rfc4648 { padding: false }, &bytes);

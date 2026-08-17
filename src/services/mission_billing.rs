@@ -271,7 +271,7 @@ pub async fn capture(db: &PgPool, invoice_id: Uuid, payment_id: Uuid) -> Result<
         reference.unwrap_or_else(|| format!("invoice:{invoice_id}")),
         recipient,
         amount,
-        share,
+        share.clone(),
         currency,
         "mission_invoice",
         invoice_id,
@@ -287,6 +287,25 @@ pub async fn capture(db: &PgPool, invoice_id: Uuid, payment_id: Uuid) -> Result<
     .bind(payment_id)
     .execute(db)
     .await?;
+
+    // The marketplace's own line in the revenue ledger. The posting above
+    // already credited the platform account; this is the row an accountant
+    // reads to see which stream it came from, and without it marketplace
+    // revenue would be invisible next to bounties and mentoring.
+    if share.is_positive() {
+        sqlx::query(
+            "INSERT INTO platform_revenues
+                (source, related_talent_id, amount_credits, notes)
+             VALUES ('mission_marketplace', $1, $2, $3)",
+        )
+        .bind(recipient)
+        .bind(&share)
+        .bind(format!(
+            "commission {commission}% sur la facture {invoice_id}"
+        ))
+        .execute(db)
+        .await?;
+    }
 
     Ok(())
 }

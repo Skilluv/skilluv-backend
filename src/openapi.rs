@@ -217,6 +217,9 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::sponsored_challenges::admin_link_challenge,
         crate::routes::sponsored_challenges::public_active,
         crate::routes::sponsored_challenges::sponsor_view_submissions,
+        // ─── revenue streams ──────────────────────────────────────
+        crate::routes::revenue::list_streams,
+        crate::routes::revenue::by_pillar,
         // ─── public artefact feed ─────────────────────────────────
         crate::routes::public_feed::read_feed,
         crate::routes::public_feed::my_preferences,
@@ -329,7 +332,6 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::review_queue::submit_review,
         crate::routes::review_queue::list_reviews,
         // ─── talent search v3 ─────────────────────────────────────
-        crate::routes::talent_search_v3::search_v3,
         // ─── explore feed ─────────────────────────────────────────
         crate::routes::explore::explore,
         // ─── admin dashboard ──────────────────────────────────────
@@ -351,9 +353,8 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::dm::unblock_user,
         crate::routes::dm::list_blocks,
         // ─── talent search (v1 + v2) ──────────────────────────────
-        crate::routes::talent_search::search_talents,
-        crate::routes::talent_search::talent_card,
-        crate::routes::talent_search_v2::search_v2,
+        crate::routes::talent_search_v4::search,
+        crate::routes::talent_search_v4::talent_card,
         // ─── forum ────────────────────────────────────────────────
         crate::routes::forum::list_categories,
         crate::routes::forum::list_posts,
@@ -972,6 +973,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
             // orientations
             crate::routes::code_profile::ClaimBody,
             crate::routes::public_feed::PreferenceBody,
+            crate::routes::revenue::RevenueStream,
             crate::routes::missions::StatusBody,
             crate::routes::missions::DecisionBody,
             crate::routes::awards::NominateBody,
@@ -1090,11 +1092,6 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
             crate::routes::review_queue::ReviewRow,
             crate::routes::review_queue::ReviewsListResponse,
             // talent search v3
-            crate::routes::talent_search_v3::TalentRow,
-            crate::routes::talent_search_v3::SearchV3Pagination,
-            crate::routes::talent_search_v3::FiltersApplied,
-            crate::routes::talent_search_v3::SearchV3Data,
-            crate::routes::talent_search_v3::SearchV3Response,
             // explore
             crate::routes::explore::ExploreItem,
             crate::routes::explore::ExplorePage,
@@ -1129,10 +1126,11 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
             crate::routes::dm::UnblockedResponse,
             crate::routes::dm::BlocksResponse,
             // talent_search
-            crate::routes::talent_search::TalentSearchEntry,
-            crate::routes::talent_search::TalentSearchResponse,
-            crate::routes::talent_search::TalentCardTopSkill,
-            crate::routes::talent_search::TalentCardResponse,
+            crate::routes::talent_search_v4::Talent,
+            crate::routes::talent_search_v4::SearchResponse,
+            crate::routes::talent_search_v4::CardScore,
+            crate::routes::talent_search_v4::TalentCardTopSkill,
+            crate::routes::talent_search_v4::TalentCardResponse,
             // forum
             crate::routes::forum::CreatePostBody,
             crate::routes::forum::EditPostBody,

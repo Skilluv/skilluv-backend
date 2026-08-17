@@ -464,9 +464,16 @@ async fn a_mentor_is_suggested_with_the_reasoning_attached() {
     sqlx::query(
         "UPDATE users SET code_preferred_families = ARRAY['systems'],
                           code_main_languages = ARRAY['rust'],
-                          timezone = '+01:00',
-                          craft_score_code = 100
+                          timezone = '+01:00'
           WHERE id = $1",
+    )
+    .bind(mentee)
+    .execute(&app.db)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO craft_scores (user_id, skill_domain, score, tier_slug)
+         VALUES ($1, 'code', 100, 'contributor')",
     )
     .bind(mentee)
     .execute(&app.db)
@@ -482,12 +489,19 @@ async fn a_mentor_is_suggested_with_the_reasoning_attached() {
         sqlx::query(
             "UPDATE users SET code_preferred_families = ARRAY[$2],
                               code_main_languages = ARRAY['rust'],
-                              timezone = '+02:00',
-                              craft_score_code = $3
+                              timezone = '+02:00'
               WHERE id = $1",
         )
         .bind(mentor)
         .bind(family)
+        .execute(&app.db)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO craft_scores (user_id, skill_domain, score, tier_slug)
+             VALUES ($1, 'code', $2, 'senior')",
+        )
+        .bind(mentor)
         .bind(score)
         .execute(&app.db)
         .await

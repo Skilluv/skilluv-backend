@@ -152,11 +152,18 @@ pub fn score_candidate(
 
 /// Mentors worth suggesting to this person, best first.
 pub async fn matches_for(db: &PgPool, mentee_id: Uuid, limit: i64) -> Result<Vec<Match>, AppError> {
+    // A mentee with no computed score reads as zero here, which is the right
+    // answer: the gap to a mentor is then the mentor's whole score, and
+    // somebody with nothing proved has the most to learn.
     let mentee: Option<Mentee> = sqlx::query_as(
-        "SELECT craft_score_code, code_preferred_families, code_main_languages, timezone
-           FROM users WHERE id = $1",
+        "SELECT COALESCE(cs.score, 0) AS craft_score_code,
+                u.code_preferred_families, u.code_main_languages, u.timezone
+           FROM users u
+           LEFT JOIN craft_scores cs ON cs.user_id = u.id AND cs.skill_domain = $2
+          WHERE u.id = $1",
     )
     .bind(mentee_id)
+    .bind(crate::services::craft_score::DOMAIN)
     .fetch_optional(db)
     .await?;
     let Mentee {
@@ -178,7 +185,7 @@ pub async fn matches_for(db: &PgPool, mentee_id: Uuid, limit: i64) -> Result<Vec
         SELECT u.id AS user_id,
                u.username,
                m.headline,
-               u.craft_score_code,
+               cs.score AS craft_score_code,
                u.code_preferred_families AS families,
                -- What the mentor works in: their declared languages, and the
                -- expertise they wrote on their mentor profile. Both, because
@@ -199,14 +206,19 @@ pub async fn matches_for(db: &PgPool, mentee_id: Uuid, limit: i64) -> Result<Vec
                    AS active_mentees
           FROM mentor_profiles m
           JOIN users u ON u.id = m.user_id
+          -- An inner join: a mentor with no computed score has proved
+          -- nothing in this domain, and suggesting them would be suggesting
+          -- somebody on the strength of having a mentor profile.
+          JOIN craft_scores cs ON cs.user_id = u.id AND cs.skill_domain = $3
          WHERE m.active = TRUE
            AND u.is_banned = FALSE
            AND u.id <> $1
-           AND u.craft_score_code >= $2
+           AND cs.score >= $2
         "#,
     )
     .bind(mentee_id)
     .bind(mentee_score + MIN_SCORE_GAP)
+    .bind(crate::services::craft_score::DOMAIN)
     .fetch_all(db)
     .await?;
 

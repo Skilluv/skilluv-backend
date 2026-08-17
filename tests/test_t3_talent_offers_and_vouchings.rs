@@ -736,7 +736,7 @@ async fn vouchings_surface_on_the_profile_and_in_talent_search() {
     let enterprise = app.register_enterprise("SearchCo").await;
     let _ = enterprise;
     let body: Value = app
-        .get("/api/talents/search/v3?orientation=search-orientation")
+        .get("/api/talents/search?orientation=search-orientation")
         .await
         .json()
         .await
@@ -748,7 +748,7 @@ async fn vouchings_surface_on_the_profile_and_in_talent_search() {
     {
         assert_eq!(row["vouched_by_count"], 1);
         assert_eq!(
-            row["matched_wpc_total"], 0,
+            row["craft_score"], 0,
             "an endorsement must never masquerade as verified work"
         );
     }

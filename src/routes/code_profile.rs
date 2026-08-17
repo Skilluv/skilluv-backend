@@ -48,6 +48,16 @@ fn build_response(data: Value) -> Value {
     })
 }
 
+/// The person, and what the sorted lists currently believe about them.
+#[derive(sqlx::FromRow)]
+struct ProfileHeader {
+    id: Uuid,
+    profile_hidden: bool,
+    /// Absent means never computed, which is not the same as zero.
+    score: Option<i32>,
+    computed_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
 #[derive(Debug, Serialize, sqlx::FromRow, ToSchema)]
 pub struct AttestationSummary {
     pub id: Uuid,
@@ -94,20 +104,28 @@ pub async fn code_profile(
     State(state): State<AppState>,
     Path(username): Path<String>,
 ) -> Result<Json<Value>, AppError> {
-    let user: Option<(Uuid, bool, i32, Option<chrono::DateTime<chrono::Utc>>)> = sqlx::query_as(
-        "SELECT id, profile_hidden, craft_score_code, craft_score_code_computed_at
-           FROM users WHERE username = $1 AND is_banned = FALSE",
+    let user: Option<ProfileHeader> = sqlx::query_as(
+        "SELECT u.id, u.profile_hidden, cs.score, cs.computed_at
+           FROM users u
+           LEFT JOIN craft_scores cs
+                  ON cs.user_id = u.id AND cs.skill_domain = $2
+          WHERE u.username = $1 AND u.is_banned = FALSE",
     )
     .bind(&username)
+    .bind(craft_score::DOMAIN)
     .fetch_optional(&state.db)
     .await?;
-    let (user_id, hidden, stored_score, computed_at) =
-        user.ok_or_else(|| AppError::NotFound("profile not found".into()))?;
+    let ProfileHeader {
+        id: user_id,
+        profile_hidden: hidden,
+        score: stored_score,
+        computed_at,
+    } = user.ok_or_else(|| AppError::NotFound("profile not found".into()))?;
     if hidden {
         return Err(AppError::NotFound("profile not found".into()));
     }
 
-    // Computed live rather than read from the column: the column exists so
+    // Computed live rather than read from the stored row: the row exists so
     // lists can be sorted, and this is the one page where being an hour out
     // of date would be visible to the person it is about.
     let score = craft_score::compute(&state.db, user_id).await?;

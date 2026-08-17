@@ -30,6 +30,12 @@ use crate::errors::AppError;
 /// leaving a trace, not because a coder is worth more.
 pub const CAP: i32 = 10_000;
 
+/// The domain this module scores. Named rather than inlined because the
+/// storage and the formula are both keyed by it (migration 0204), and the
+/// next domain is a second module reading its own weights rather than a
+/// branch in this one.
+pub const DOMAIN: &str = "code";
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Term {
     pub term: String,
@@ -221,9 +227,10 @@ pub async fn compute(db: &PgPool, user_id: Uuid) -> Result<CraftScore, AppError>
     let weights = sqlx::query_as::<_, WeightRow>(
         "SELECT term, weight, kind, baseline, explanation
            FROM craft_score_weights
-          WHERE skill_domain = 'code' AND is_active = TRUE
+          WHERE skill_domain = $1 AND is_active = TRUE
           ORDER BY sort_order, term",
     )
+    .bind(DOMAIN)
     .fetch_all(db)
     .await?;
 
@@ -293,20 +300,21 @@ pub async fn compute(db: &PgPool, user_id: Uuid) -> Result<CraftScore, AppError>
     let tier: Option<(String, String, String, Option<i32>)> = sqlx::query_as(
         "SELECT slug, name, description,
                 (SELECT min(t2.min_score) FROM craft_score_tiers t2
-                  WHERE t2.skill_domain = 'code' AND t2.min_score > $1)
+                  WHERE t2.skill_domain = $2 AND t2.min_score > $1)
            FROM craft_score_tiers
-          WHERE skill_domain = 'code'
+          WHERE skill_domain = $2
             AND min_score <= $1
             AND (max_score IS NULL OR max_score >= $1)
           ORDER BY min_score DESC
           LIMIT 1",
     )
     .bind(score)
+    .bind(DOMAIN)
     .fetch_optional(db)
     .await?;
 
-    let (tier_slug, tier_name, tier_description, next_tier_at) =
-        tier.ok_or_else(|| AppError::Internal(format!("no code tier covers a score of {score}")))?;
+    let (tier_slug, tier_name, tier_description, next_tier_at) = tier
+        .ok_or_else(|| AppError::Internal(format!("no {DOMAIN} tier covers a score of {score}")))?;
 
     Ok(CraftScore {
         score,
@@ -319,19 +327,43 @@ pub async fn compute(db: &PgPool, user_id: Uuid) -> Result<CraftScore, AppError>
     })
 }
 
-/// Compute and store.
+/// Compute and store, with the tier resolved in the same write.
+///
+/// The tier duplicates what the score and the thresholds imply. Written here
+/// so there is exactly one place that can get the duplicate wrong, rather
+/// than a search endpoint recomputing it per row.
 pub async fn recompute(db: &PgPool, user_id: Uuid) -> Result<CraftScore, AppError> {
     let computed = compute(db, user_id).await?;
     sqlx::query(
-        "UPDATE users
-            SET craft_score_code = $2, craft_score_code_computed_at = NOW()
-          WHERE id = $1",
+        "INSERT INTO craft_scores (user_id, skill_domain, score, tier_slug, computed_at)
+         VALUES ($1, $2, $3, $4, NOW())
+         ON CONFLICT (user_id, skill_domain) DO UPDATE
+             SET score = EXCLUDED.score,
+                 tier_slug = EXCLUDED.tier_slug,
+                 computed_at = NOW()",
     )
     .bind(user_id)
+    .bind(DOMAIN)
     .bind(computed.score)
+    .bind(&computed.tier_slug)
     .execute(db)
     .await?;
     Ok(computed)
+}
+
+/// Somebody's stored score in this domain, without recomputing it.
+///
+/// What a listing reads. Absent means never computed, which is not zero.
+pub async fn stored(db: &PgPool, user_id: Uuid) -> Result<Option<(i32, String)>, AppError> {
+    let row: Option<(i32, Option<String>)> = sqlx::query_as(
+        "SELECT score, tier_slug FROM craft_scores
+          WHERE user_id = $1 AND skill_domain = $2",
+    )
+    .bind(user_id)
+    .bind(DOMAIN)
+    .fetch_optional(db)
+    .await?;
+    Ok(row.map(|(score, tier)| (score, tier.unwrap_or_else(|| "apprentice".into()))))
 }
 
 /// Recompute everybody whose score is stale or has never been computed.
@@ -341,14 +373,17 @@ pub async fn recompute(db: &PgPool, user_id: Uuid) -> Result<CraftScore, AppErro
 /// end of the alphabet.
 pub async fn sweep(db: &PgPool, batch: i64) -> Result<u64, AppError> {
     let stale: Vec<Uuid> = sqlx::query_scalar(
-        "SELECT id FROM users
-          WHERE is_banned = FALSE
-            AND (craft_score_code_computed_at IS NULL
-                 OR craft_score_code_computed_at < NOW() - INTERVAL '1 hour')
-          ORDER BY craft_score_code_computed_at NULLS FIRST
+        "SELECT u.id FROM users u
+           LEFT JOIN craft_scores cs
+                  ON cs.user_id = u.id AND cs.skill_domain = $2
+          WHERE u.is_banned = FALSE
+            AND (cs.computed_at IS NULL
+                 OR cs.computed_at < NOW() - INTERVAL '1 hour')
+          ORDER BY cs.computed_at NULLS FIRST
           LIMIT $1",
     )
     .bind(batch)
+    .bind(DOMAIN)
     .fetch_all(db)
     .await?;
 

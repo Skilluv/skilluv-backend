@@ -30,7 +30,7 @@ pub fn slice_diary_routes() -> Router<AppState> {
 }
 
 /// Cookie-based auth extraction that does NOT fail on missing/invalid.
-/// Same shape as `routes::talent_search::try_extract_auth` — kept
+/// Same shape as the extractor the recruiter search used to carry — kept
 /// duplicated locally rather than exported publicly (small helper,
 /// less coupling).
 fn peek_user(headers: &HeaderMap, jwt_secret: &str) -> Option<Uuid> {

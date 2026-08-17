@@ -423,22 +423,24 @@ async fn recomputing_stores_what_the_page_computes() {
         .await
         .unwrap();
 
-    let stored_before: i32 = sqlx::query_scalar("SELECT craft_score_code FROM users WHERE id = $1")
-        .bind(user)
-        .fetch_one(&app.db)
+    // Absent, not zero: nothing has computed it, which is a different
+    // statement from having measured nothing.
+    let before = skilluv_backend::services::craft_score::stored(&app.db, user)
         .await
         .unwrap();
-    assert_eq!(stored_before, 0, "nothing has recomputed yet");
+    assert!(before.is_none(), "nothing has recomputed yet");
 
     let done = skilluv_backend::services::craft_score::sweep(&app.db, 100)
         .await
         .unwrap();
     assert!(done > 0);
 
-    let stored_after: i32 = sqlx::query_scalar("SELECT craft_score_code FROM users WHERE id = $1")
-        .bind(user)
-        .fetch_one(&app.db)
+    let (score, tier) = skilluv_backend::services::craft_score::stored(&app.db, user)
         .await
-        .unwrap();
-    assert_eq!(stored_after, 40);
+        .unwrap()
+        .expect("the sweep should have written it");
+    assert_eq!(score, 40);
+    // The tier is resolved in the same write, so a listing can filter on it
+    // without recomputing it per row.
+    assert_eq!(tier, "apprentice");
 }

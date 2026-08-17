@@ -603,15 +603,6 @@ pub fn validate_name(name: &str, field: &str) -> Result<(), AppError> {
     crate::validators::validate_bounded_line(name, field, 1, 50)
 }
 
-fn validate_skill_domain(domain: &str) -> Result<(), AppError> {
-    match domain {
-        "code" | "design" | "game" | "security" => Ok(()),
-        _ => Err(AppError::Validation(
-            "skill_domain must be one of: code, design, game, security".to_string(),
-        )),
-    }
-}
-
 fn build_cookie(name: &str, value: &str, max_age_secs: i64, path: &str) -> String {
     format!(
         "{name}={value}; HttpOnly; Secure; SameSite=Strict; Path={path}; Max-Age={max_age_secs}"
@@ -782,7 +773,7 @@ pub async fn register(
     validate_password(&body.password)?;
     validate_name(&body.first_name, "first_name")?;
     validate_name(&body.last_name, "last_name")?;
-    validate_skill_domain(&body.skill_domain)?;
+    crate::validators::validate_skill_domain(&body.skill_domain, "skill_domain")?;
 
     let email_lower = body.email.trim().to_lowercase();
     let username_lower = body.username.trim().to_lowercase();
@@ -833,7 +824,18 @@ pub async fn register(
         .set_ex(&key, user.id.to_string(), 24 * 60 * 60) // 24h
         .await?;
 
-    state
+    // A failed send does not fail the registration.
+    //
+    // The account row is already committed and the token is already in Redis,
+    // so returning 500 here left a real account behind while telling the
+    // person their signup failed — they retry, and are told the email is
+    // taken. An unreachable SMTP host is an operational problem, and the
+    // recovery path for it already exists: `POST /auth/resend-verification`.
+    //
+    // Nothing is loosened by this. `AuthUserComplete` still refuses every
+    // write endpoint until the address is verified, so an account whose mail
+    // never left can read and can do nothing else.
+    if let Err(err) = state
         .email
         .send_email_verification(
             &user.email,
@@ -841,7 +843,14 @@ pub async fn register(
             &verify_token,
             &state.config.frontend_url,
         )
-        .await?;
+        .await
+    {
+        tracing::error!(
+            user_id = %user.id,
+            error = %err,
+            "verification email could not be sent at registration; the account is usable once the address is confirmed via /auth/resend-verification"
+        );
+    }
 
     // Generate tokens
     let access_token =
@@ -2238,7 +2247,7 @@ pub async fn complete_profile(
     auth: AuthUser,
     Json(body): Json<CompleteProfileRequest>,
 ) -> Result<Json<ApiResponse<CompleteProfileResponse>>, AppError> {
-    validate_skill_domain(&body.skill_domain)?;
+    crate::validators::validate_skill_domain(&body.skill_domain, "skill_domain")?;
     if !body.terms_accepted {
         return Err(AppError::Validation(
             "You must accept the Terms of Service and Privacy Policy".into(),

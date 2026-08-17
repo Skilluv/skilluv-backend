@@ -202,9 +202,100 @@ pub fn validate_display_name(name: &str) -> Result<(), AppError> {
     Ok(())
 }
 
+/// The platform's skill domains, and the only list of them.
+///
+/// A domain is the widest unit of craft: it decides which validators may judge
+/// your work, which craft-score weights apply, which leaderboard you appear on
+/// and which rank ladder you climb. Migrations 0056 and 0088 have known seven
+/// since 2024.
+///
+/// This constant exists because there were six copies of this list and three
+/// of them had been left at the four domains of migration 0002 — so somebody
+/// could be granted `challenge_validator:ai`, be seeded AI challenges and
+/// still be refused `ai` at signup. A list that decides who may do what has to
+/// have one home; `skill_domains_match_the_database` below keeps it honest
+/// against the CHECK constraint that enforces it.
+///
+/// Ordered oldest-first: `code`, `design`, `game` and `security` shipped in
+/// 0002, `ops`, `ai` and `soft_skills` arrived with the orientation work.
+pub const SKILL_DOMAINS: &[&str] = &[
+    "code",
+    "design",
+    "game",
+    "security",
+    "ops",
+    "ai",
+    "soft_skills",
+];
+
+/// Reject anything that is not one of [`SKILL_DOMAINS`].
+///
+/// `field` names the caller's parameter, because the same list is checked at
+/// signup (`skill_domain`), on a validator application (`domain`) and on a
+/// project (`skill_domains[]`), and a message naming the wrong one wastes an
+/// afternoon.
+pub fn validate_skill_domain(domain: &str, field: &str) -> Result<(), AppError> {
+    if !SKILL_DOMAINS.contains(&domain) {
+        return Err(AppError::Validation(format!(
+            "{field} must be one of: {}",
+            SKILL_DOMAINS.join(", ")
+        )));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The list above and the CHECK constraint that enforces it have to say
+    /// the same thing, and they live in different languages in different
+    /// files. This reads migration 0243 at compile time and compares them, so
+    /// adding a domain to one and forgetting the other fails here rather than
+    /// as a 500 at signup.
+    #[test]
+    fn skill_domains_match_the_database() {
+        const MIGRATION: &str = include_str!("../migrations/0243_skill_domains_everywhere.sql");
+
+        // The constraint body, as written: `'code', 'design', ...`. Both
+        // tables get the identical list, so finding it once is enough.
+        let in_clause = MIGRATION
+            .split("skill_domain IN (")
+            .nth(1)
+            .and_then(|rest| rest.split(')').next())
+            .expect("migration 0243 no longer spells its domain list as `skill_domain IN (...)`");
+
+        let from_sql: Vec<&str> = in_clause
+            .split(',')
+            .map(|token| token.trim().trim_matches('\'').trim())
+            .filter(|token| !token.is_empty())
+            .collect();
+
+        assert_eq!(
+            from_sql, SKILL_DOMAINS,
+            "SKILL_DOMAINS and migration 0243 disagree — a domain was added to one of them only"
+        );
+    }
+
+    #[test]
+    fn an_unknown_domain_is_named_in_the_error() {
+        let err = validate_skill_domain("crypto", "skill_domain").unwrap_err();
+        let message = format!("{err:?}");
+        assert!(message.contains("skill_domain"), "{message}");
+        assert!(message.contains("soft_skills"), "{message}");
+    }
+
+    #[test]
+    fn the_three_domains_that_used_to_be_refused_are_accepted() {
+        // The whole point of migration 0243: these were seeded, validated and
+        // ranked long before anybody could declare them.
+        for domain in ["ai", "ops", "soft_skills"] {
+            assert!(
+                validate_skill_domain(domain, "skill_domain").is_ok(),
+                "{domain} should be a declarable domain"
+            );
+        }
+    }
 
     #[test]
     fn no_control_chars_accepts_whitespace() {

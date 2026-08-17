@@ -45,6 +45,188 @@ pub fn test_db_url(db_name: &str) -> String {
     format!("{}/{db_name}", base.trim_end_matches('/'))
 }
 
+/// Migrations, applied once and then copied.
+///
+/// ## Why
+///
+/// Every test used to create an empty database and replay every migration
+/// into it. That is roughly thirteen seconds each, on a schema that is over
+/// two hundred and forty migrations long — a suite of eighteen tests spent
+/// four minutes doing the same work eighteen times, and the whole integration
+/// suite spent most of an hour on it.
+///
+/// PostgreSQL can copy a database at the file level. So the migrations run
+/// once into a template, and each test gets a copy of that template, which
+/// takes about as long as creating an empty database did.
+///
+/// ## Why the template name carries a fingerprint
+///
+/// It is built from every migration's version and checksum, which is exactly
+/// what would have been applied. Change any migration and the name changes,
+/// so the next run builds a fresh template instead of copying a stale schema
+/// — the failure mode this optimisation would otherwise introduce, and the
+/// one that would waste an afternoon.
+///
+/// ## Why an advisory lock
+///
+/// Several test binaries start at once, and all of them would find the
+/// template missing and try to build it. The lock makes one of them build it
+/// while the others wait; they then find it present. It is taken on the
+/// maintenance database, not on the template, because nothing may hold a
+/// connection to a database being used as a template.
+mod template {
+    use super::*;
+
+    /// Namespace for the advisory lock. Arbitrary, but fixed: two runs have
+    /// to pick the same number to exclude each other.
+    const LOCK_NAMESPACE: i32 = 0x5C11;
+
+    /// A fingerprint of the migration set, short enough to read in a database
+    /// name and specific enough that two different sets never collide in
+    /// practice.
+    fn fingerprint() -> String {
+        // FNV-1a over each migration's version and checksum. Hand-rolled to
+        // keep this file dependency-free, and sufficient: this distinguishes
+        // schema versions, it does not defend against an adversary.
+        let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+        let mut eat = |byte: u8| {
+            hash ^= byte as u64;
+            hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+        };
+        for migration in sqlx::migrate!("./migrations").iter() {
+            for byte in migration.version.to_le_bytes() {
+                eat(byte);
+            }
+            for byte in migration.checksum.iter() {
+                eat(*byte);
+            }
+        }
+        format!("{hash:016x}")
+    }
+
+    pub fn name() -> String {
+        format!("skilluv_tmpl_{}", fingerprint())
+    }
+
+    /// Build the template if it is not there, and drop any left by an older
+    /// migration set.
+    ///
+    /// Returns the template name, ready to be copied from.
+    pub async fn ensure(admin: &PgPool) -> String {
+        let tmpl = name();
+
+        let exists: bool =
+            sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = $1)")
+                .bind(&tmpl)
+                .fetch_one(admin)
+                .await
+                .expect("failed to look for the template database");
+        if exists {
+            return tmpl;
+        }
+
+        // One builder, the rest wait. `pg_advisory_lock` is held for the
+        // session, and this pool is closed by the caller right after.
+        sqlx::query("SELECT pg_advisory_lock($1, $2)")
+            .bind(LOCK_NAMESPACE)
+            .bind(lock_key(&tmpl))
+            .execute(admin)
+            .await
+            .expect("failed to take the template lock");
+
+        // Somebody may have built it while we waited.
+        let exists: bool =
+            sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = $1)")
+                .bind(&tmpl)
+                .fetch_one(admin)
+                .await
+                .expect("failed to look for the template database");
+
+        if !exists {
+            build(admin, &tmpl).await;
+            sweep_stale_templates(admin, &tmpl).await;
+        }
+
+        sqlx::query("SELECT pg_advisory_unlock($1, $2)")
+            .bind(LOCK_NAMESPACE)
+            .bind(lock_key(&tmpl))
+            .execute(admin)
+            .await
+            .expect("failed to release the template lock");
+
+        tmpl
+    }
+
+    async fn build(admin: &PgPool, tmpl: &str) {
+        sqlx::query(sqlx::AssertSqlSafe(format!("CREATE DATABASE \"{tmpl}\"")))
+            .execute(admin)
+            .await
+            .expect("failed to create the template database");
+
+        // A pool of its own, closed before anybody copies from it: PostgreSQL
+        // refuses to use a database as a template while a session is attached.
+        let pool = PgPoolOptions::new()
+            .max_connections(1)
+            .connect(&test_db_url(tmpl))
+            .await
+            .expect("failed to connect to the template database");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("failed to migrate the template database");
+        pool.close().await;
+
+        // Nothing should ever connect to it again. Refusing connections is
+        // what keeps a stray psql session from blocking every test at once.
+        let _ = sqlx::query(sqlx::AssertSqlSafe(format!(
+            "ALTER DATABASE \"{tmpl}\" WITH ALLOW_CONNECTIONS false IS_TEMPLATE true"
+        )))
+        .execute(admin)
+        .await;
+    }
+
+    /// Templates from an older migration set are dead weight on somebody's
+    /// development machine, and this runs on the machine that made them.
+    async fn sweep_stale_templates(admin: &PgPool, keep: &str) {
+        let stale: Vec<String> = sqlx::query_scalar(
+            "SELECT datname FROM pg_database
+              WHERE datname LIKE 'skilluv\\_tmpl\\_%' AND datname <> $1",
+        )
+        .bind(keep)
+        .fetch_all(admin)
+        .await
+        .unwrap_or_default();
+
+        for old in stale {
+            // `IS_TEMPLATE` has to be cleared before a template can be
+            // dropped, and both statements are allowed to fail: another run
+            // may be copying from it at this instant, and a template left
+            // behind is a wasted gigabyte rather than a broken test.
+            let _ = sqlx::query(sqlx::AssertSqlSafe(format!(
+                "ALTER DATABASE \"{old}\" WITH IS_TEMPLATE false"
+            )))
+            .execute(admin)
+            .await;
+            let _ = sqlx::query(sqlx::AssertSqlSafe(format!(
+                "DROP DATABASE IF EXISTS \"{old}\" WITH (FORCE)"
+            )))
+            .execute(admin)
+            .await;
+        }
+    }
+
+    /// Second half of the advisory lock key, derived from the template name so
+    /// two different migration sets do not block each other.
+    fn lock_key(tmpl: &str) -> i32 {
+        let mut hash: u32 = 2_166_136_261;
+        for byte in tmpl.as_bytes() {
+            hash ^= *byte as u32;
+            hash = hash.wrapping_mul(16_777_619);
+        }
+        (hash & 0x7fff_ffff) as i32
+    }
+}
+
 /// A test application instance with isolated database.
 pub struct TestApp {
     pub addr: String,
@@ -93,12 +275,17 @@ impl TestApp {
             .await
             .expect("Failed to connect to admin DB");
 
+        // The migrations ran once, into a template. This is a file-level copy
+        // of it, which is what makes a test cost a second rather than the
+        // thirteen it takes to replay two hundred and forty migrations.
+        let tmpl = template::ensure(&admin_pool).await;
+
         sqlx::query(sqlx::AssertSqlSafe(format!(
-            "CREATE DATABASE \"{db_name}\""
+            "CREATE DATABASE \"{db_name}\" TEMPLATE \"{tmpl}\""
         )))
         .execute(&admin_pool)
         .await
-        .expect("Failed to create test DB");
+        .expect("Failed to create test DB from the migration template");
 
         admin_pool.close().await;
 
@@ -109,12 +296,6 @@ impl TestApp {
             .connect(&db_url)
             .await
             .expect("Failed to connect to test DB");
-
-        // Run migrations
-        sqlx::migrate!("./migrations")
-            .run(&db)
-            .await
-            .expect("Failed to run migrations on test DB");
 
         // Redis : chaque binaire de test s'attribue une DB distincte via PID % 16
         // (Redis fournit 16 DBs par défaut). Cela évite les races inter-binaires
@@ -308,11 +489,15 @@ impl TestApp {
             .await
             .expect("Register request failed");
 
-        assert_eq!(resp.status(), StatusCode::CREATED);
+        // The body, not just the status: a failed registration is the first
+        // thing a hundred suites hit, and `201 != 500` on its own has cost
+        // whole afternoons.
+        let status = resp.status();
         let body: Value = resp
             .json()
             .await
             .expect("Failed to parse register response");
+        assert_eq!(status, StatusCode::CREATED, "register {username} said: {body}");
 
         // Short-circuit the email-verification hop for tests — real users have
         // to click the link in the verification email before AuthUserComplete

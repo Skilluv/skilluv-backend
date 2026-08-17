@@ -138,13 +138,11 @@ pub async fn build(db: &PgPool, username: &str) -> Result<AiProfile, AppError> {
         return Err(AppError::NotFound(format!("user '{username}' not found")));
     };
 
-    let mut counts = AiProofCounts::default();
-
     // A deliverable is AI work if its challenge says so, or if the slice it
     // came from belongs to an AI trade. Both, because the two paths into the
     // platform — a challenge and an ingested issue — carry the domain in
     // different places, and reading only one would lose half the work.
-    counts.verified_artifacts = sqlx::query_scalar(
+    let verified_artifacts: i64 = sqlx::query_scalar(
         r#"
         SELECT count(DISTINCT d.id)
           FROM deliverables d
@@ -160,6 +158,11 @@ pub async fn build(db: &PgPool, username: &str) -> Result<AiProfile, AppError> {
     .bind(user_id)
     .fetch_one(db)
     .await?;
+
+    let mut counts = AiProofCounts {
+        verified_artifacts,
+        ..Default::default()
+    };
 
     let by_basis: Vec<(String, i64)> = sqlx::query_as(
         r#"
@@ -320,9 +323,9 @@ mod tests {
     fn a_paper_outweighs_a_dataset_which_outweighs_an_artifact() {
         // The ordering is the editorial position; a change that inverts it
         // should have to change this test and say why.
-        assert!(PER_PAPER > PER_MODEL_SHIPPED);
-        assert!(PER_MODEL_SHIPPED > PER_DATASET_PUBLISHED);
-        assert!(PER_DATASET_PUBLISHED > PER_VERIFIED_ARTIFACT);
-        assert!(PER_BENCHMARK_REPRODUCED > PER_PAPER);
+        const { assert!(PER_PAPER > PER_MODEL_SHIPPED) };
+        const { assert!(PER_MODEL_SHIPPED > PER_DATASET_PUBLISHED) };
+        const { assert!(PER_DATASET_PUBLISHED > PER_VERIFIED_ARTIFACT) };
+        const { assert!(PER_BENCHMARK_REPRODUCED > PER_PAPER) };
     }
 }

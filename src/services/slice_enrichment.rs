@@ -38,7 +38,7 @@
 //! - `difficulty`     → 3 (mid) — same as pre-SKI-101 behaviour
 //! - `acceptance_criteria` → NULL (nothing to parse ≠ empty criteria)
 
-use crate::services::validator_applications::VALID_DOMAINS;
+use crate::validators::SKILL_DOMAINS;
 
 pub const ACCEPTANCE_HEADINGS: &[&str] = &[
     "## acceptance criteria",
@@ -95,14 +95,14 @@ pub fn enrich_from_issue(
 fn infer_domain(lower_labels: &[String], default_domain: &str) -> String {
     for l in lower_labels {
         if let Some(rest) = l.strip_prefix("domain:")
-            && VALID_DOMAINS.contains(&rest)
+            && SKILL_DOMAINS.contains(&rest)
         {
             return rest.to_string();
         }
     }
     // Fallback must itself be a valid domain — guard against a caller
     // passing junk (would otherwise poison downstream validators).
-    if VALID_DOMAINS.contains(&default_domain) {
+    if SKILL_DOMAINS.contains(&default_domain) {
         default_domain.to_string()
     } else {
         "code".to_string()

@@ -194,7 +194,10 @@ async fn the_embargo_defaults_to_ninety_days_from_the_notification() {
     assert_eq!(embargoed.status().as_u16(), 200);
 
     let days: Option<f64> = sqlx::query_scalar(
-        "SELECT EXTRACT(EPOCH FROM (embargo_until - vendor_notified_at)) / 86400
+        // EXTRACT returns NUMERIC on PostgreSQL 14+, and sqlx will not decode
+        // that into an f64. The cast is the fix, not a wider Rust type.
+        "SELECT (EXTRACT(EPOCH FROM (embargo_until - vendor_notified_at)) / 86400)
+                    ::DOUBLE PRECISION
            FROM ai_safety_reports WHERE id = $1::uuid",
     )
     .bind(&id)

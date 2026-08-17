@@ -29,7 +29,7 @@ async fn the_answers_come_back_as_they_went_in() {
                 "weekly_hours": "3_10",
                 "goal": "portfolio",
                 "compute": "none",
-                "main_framework": "pytorch",
+                "main_frameworks": ["pytorch"],
                 "huggingface_username": "quelquun"
             }),
         )
@@ -43,7 +43,7 @@ async fn the_answers_come_back_as_they_went_in() {
         .await
         .unwrap();
     assert_eq!(body["data"]["answers"]["compute"], "none");
-    assert_eq!(body["data"]["answers"]["main_framework"], "pytorch");
+    assert_eq!(body["data"]["answers"]["main_frameworks"][0], "pytorch");
     assert_eq!(body["data"]["answers"]["huggingface_username"], "quelquun");
 }
 
@@ -115,7 +115,7 @@ async fn two_domains_do_not_overwrite_each_other() {
 
     app.put(
         "/api/users/me/domain-profile/ai",
-        &json!({"main_framework": "jax"}),
+        &json!({"main_frameworks": ["jax"]}),
     )
     .await;
     app.put(
@@ -130,7 +130,7 @@ async fn two_domains_do_not_overwrite_each_other() {
         .json()
         .await
         .unwrap();
-    assert_eq!(ai["data"]["answers"]["main_framework"], "jax");
+    assert_eq!(ai["data"]["answers"]["main_frameworks"][0], "jax");
 }
 
 #[tokio::test]
@@ -208,7 +208,7 @@ async fn the_two_wizards_do_not_share_a_row() {
 
     app.put(
         "/api/users/me/domain-profile/ai",
-        &json!({"main_framework": "jax"}),
+        &json!({"main_frameworks": ["jax"]}),
     )
     .await;
     app.post("/api/users/me/domain-profile/code/skip", &json!({}))
@@ -229,7 +229,7 @@ async fn the_two_wizards_do_not_share_a_row() {
         .await
         .unwrap();
 
-    assert_eq!(ai["data"]["answers"]["main_framework"], "jax");
+    assert_eq!(ai["data"]["answers"]["main_frameworks"][0], "jax");
     assert!(!ai["data"]["completed_at"].is_null());
     assert!(code["data"]["completed_at"].is_null());
     assert!(!code["data"]["skipped_at"].is_null());

@@ -199,6 +199,20 @@ notification:
       title: "Tu passes {rank}"
       body: "Ton travail sur la plateforme t'a fait passer au rang de {rank}."
       cta: "Voir mon profil"
+  trial:
+    started:
+      title: "Ta periode d'essai commence"
+      body: "{weeks} semaines remunerees. Declare tes heures au fil de l'eau."
+      cta: "Voir la periode d'essai"
+  reverse_recruitment:
+    pitch_received:
+      title: "{company} argumente pour toi"
+      body: "Une entreprise a pris le temps d'ecrire. A toi de voir."
+      cta: "Lire la proposition"
+    pitch_answered:
+      title: "Reponse a ta proposition"
+      body: "La personne que tu as contactee a repondu."
+      cta: "Voir la reponse"
   recruitment:
     shortlisted:
       title: "Une entreprise s'interesse a ton profil"

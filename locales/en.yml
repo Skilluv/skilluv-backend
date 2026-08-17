@@ -200,6 +200,20 @@ notification:
       title: "You are now {rank}"
       body: "Your work on the platform earned you the rank of {rank}."
       cta: "See my profile"
+  trial:
+    started:
+      title: "Your trial period starts"
+      body: "{weeks} paid weeks. Log your hours as you go."
+      cta: "Open the trial"
+  reverse_recruitment:
+    pitch_received:
+      title: "{company} is making its case"
+      body: "A company took the time to write. Your call."
+      cta: "Read the pitch"
+    pitch_answered:
+      title: "An answer to your pitch"
+      body: "The person you approached has replied."
+      cta: "See the answer"
   recruitment:
     shortlisted:
       title: "A company is interested in your profile"

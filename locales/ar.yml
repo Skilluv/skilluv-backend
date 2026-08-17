@@ -195,6 +195,20 @@ notification:
       title: "أصبحت الآن {rank}"
       body: "عملك على المنصة رفعك إلى رتبة {rank}."
       cta: "عرض ملفي"
+  trial:
+    started:
+      title: "تبدأ فترة التجربة"
+      body: "{weeks} أسابيع مدفوعة. سجّل ساعاتك أولًا بأول."
+      cta: "عرض فترة التجربة"
+  reverse_recruitment:
+    pitch_received:
+      title: "{company} تعرض حجّتها"
+      body: "شركة أخذت الوقت للكتابة. القرار لك."
+      cta: "قراءة العرض"
+    pitch_answered:
+      title: "ردّ على عرضك"
+      body: "الشخص الذي تواصلت معه قد ردّ."
+      cta: "عرض الرد"
   recruitment:
     shortlisted:
       title: "شركة مهتمة بملفك"

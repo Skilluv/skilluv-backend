@@ -257,7 +257,7 @@ pub async fn complete(
         }
     }
 
-    // One row per person per domain (migration 0235). Replaces the whole
+    // One row per person per domain (migration 0306). Replaces the whole
     // answer object rather than merging: the wizard sends every question it
     // asked, and merging would keep an answer the person has just cleared.
     let stored = serde_json::json!({

@@ -1,4 +1,4 @@
-//! The AI craft score (migration 0229).
+//! The AI craft score (migration 0300).
 //!
 //! The second domain to score, and deliberately a second module rather than a
 //! branch in [`crate::services::craft_score`] — which is what that module

@@ -202,7 +202,7 @@ pub async fn matches_for(
     // answer: the gap to a mentor is then the mentor's whole score, and
     // somebody with nothing proved has the most to learn.
     let mentee: Option<Mentee> = sqlx::query_as(
-        // The answers live in `user_domain_profiles` since migration 0235.
+        // The answers live in `user_domain_profiles` since migration 0306.
         // COALESCE to an empty array rather than NULL: somebody who never
         // answered the wizard has no families, which the check below turns
         // into a message telling them to answer it.

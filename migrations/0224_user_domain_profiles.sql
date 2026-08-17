@@ -16,7 +16,7 @@
 --
 -- Migration 0201 made the opposite choice for the code domain: eight
 -- `users.code_*` columns. Both shapes coexisted for a while and this comment
--- recorded why. Migration 0235 settles it — the code answers moved here and
+-- recorded why. Migration 0306 settles it — the code answers moved here and
 -- the columns are gone — and states the reasoning.
 
 CREATE TABLE user_domain_profiles (

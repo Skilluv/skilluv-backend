@@ -46,6 +46,20 @@ use uuid::Uuid;
 
 use crate::errors::AppError;
 
+/// A rate as `platform_revenues.fee_rate_bps` wants it.
+///
+/// That column is NOT NULL and has no default, so every stream that books a
+/// margin has to say what rate produced it. Basis points rather than percent
+/// because 8.25% is a rate somebody will eventually charge, and rounding it
+/// to 8 in the audit trail makes the reported total disagree with the money.
+pub fn percent_to_bps(percent: &BigDecimal) -> i32 {
+    use bigdecimal::num_traits::ToPrimitive;
+    (percent * BigDecimal::from(100))
+        .with_scale_round(0, bigdecimal::RoundingMode::HalfUp)
+        .to_i32()
+        .unwrap_or(0)
+}
+
 /// Currency of an amount. Mirrors the CHECK constraint in migration 0153.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum Currency {

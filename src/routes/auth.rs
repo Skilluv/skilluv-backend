@@ -833,7 +833,15 @@ pub async fn register(
         .set_ex(&key, user.id.to_string(), 24 * 60 * 60) // 24h
         .await?;
 
-    state
+    // Best-effort, deliberately. The account exists, the token is stored and
+    // `/auth/resend-verification` is there for exactly this — so a mail server
+    // having a bad minute must not be the reason somebody cannot sign up.
+    //
+    // With `?` the failure was worse than it looked: the row was already
+    // written and the session already created, so the caller got a 500, tried
+    // again, and was told the email was taken. An account they could neither
+    // use nor recreate.
+    if let Err(e) = state
         .email
         .send_email_verification(
             &user.email,
@@ -841,7 +849,14 @@ pub async fn register(
             &verify_token,
             &state.config.frontend_url,
         )
-        .await?;
+        .await
+    {
+        tracing::error!(
+            user_id = %user.id, error = %e,
+            "verification email not sent — the account exists and the token is              valid; the person can ask for it again"
+        );
+        sentry::capture_error(&e);
+    }
 
     // Generate tokens
     let access_token =

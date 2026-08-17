@@ -296,3 +296,41 @@ async fn the_ai_award_categories_join_the_existing_ceremony() {
         .unwrap();
     assert_eq!(total, 14, "eight code categories plus six AI ones");
 }
+
+#[tokio::test]
+async fn every_ai_guide_exists_in_both_languages() {
+    let app = TestApp::spawn().await;
+
+    // F-01, F-05 and G-01 each say "FR + EN". A slug with no English row does
+    // not 404 — it falls back to French — which is why nothing would have
+    // surfaced half a domain being untranslated.
+    let untranslated: Vec<String> = sqlx::query_scalar(
+        "SELECT fr.slug FROM content_guides fr
+          LEFT JOIN content_guides en
+                 ON en.slug = fr.slug AND en.locale = 'en'
+          WHERE fr.skill_domain = 'ai' AND fr.locale = 'fr' AND en.id IS NULL",
+    )
+    .fetch_all(&app.db)
+    .await
+    .unwrap();
+
+    assert!(untranslated.is_empty(), "French only: {untranslated:?}");
+}
+
+#[tokio::test]
+async fn an_english_reader_gets_the_english_guide() {
+    let app = TestApp::spawn().await;
+
+    let resp = app
+        .client
+        .get(format!("{}/api/guides/onboarding-ai-safety", app.addr))
+        .header("Accept-Language", "en")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status().as_u16(), 200);
+
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(body["data"]["locale"], "en");
+    assert_eq!(body["data"]["title"], "Getting started in safety");
+}

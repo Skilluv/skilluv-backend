@@ -333,10 +333,71 @@ pub async fn sync_stale(db: &PgPool, client: &reqwest::Client) -> Result<usize, 
         record(db, slice_id, &package, outcome).await?;
         if !failed {
             refreshed += 1;
+            // The registry answered, so the package exists and is installable
+            // — which is what "published" means and the only moment we can
+            // honestly say it. Idempotent on the slice, so the weekly sweep
+            // does not repost it.
+            if let Err(err) = announce_publication(db, slice_id, &package).await {
+                tracing::warn!(slice = %slice_id, %err, "publication not announced on the public feed");
+            }
         }
     }
 
     Ok(refreshed)
+}
+
+/// Put a published package on the public feed.
+///
+/// Already public elsewhere — anybody can install it — so this repeats
+/// something rather than publishing it, and defaults to visible for that
+/// reason.
+async fn announce_publication(
+    db: &PgPool,
+    slice_id: Uuid,
+    package: &PackageRef,
+) -> Result<(), AppError> {
+    let row: Option<(Uuid, String, String)> = sqlx::query_as(
+        "SELECT d.user_id, u.username, ps.code_package_registry_url
+           FROM project_slices ps
+           JOIN deliverables d ON d.slice_id = ps.id
+           JOIN users u ON u.id = d.user_id
+          WHERE ps.id = $1
+            AND d.verification_status = 'verified'
+            AND d.revoked_at IS NULL
+          ORDER BY d.verified_at ASC
+          LIMIT 1",
+    )
+    .bind(slice_id)
+    .fetch_optional(db)
+    .await?;
+    // Nobody has a verified deliverable against it yet: the package may exist
+    // and nothing on Skilluv says who published it.
+    let Some((user_id, username, url)) = row else {
+        return Ok(());
+    };
+
+    crate::services::public_feed::emit(
+        db,
+        crate::services::public_feed::Emission {
+            kind: "library_published",
+            subject_type: "user",
+            subject_id: user_id,
+            subject_label: &username,
+            headline: format!(
+                "bibliothèque publiée sur {} — {}",
+                package.registry, package.name
+            ),
+            artifact_url: url,
+            repository: None,
+            amount: None,
+            currency: None,
+            source_type: "slice_package",
+            source_id: slice_id,
+        },
+    )
+    .await?;
+
+    Ok(())
 }
 
 #[cfg(test)]

@@ -319,7 +319,10 @@ pub async fn create(
         // human already; passing it through beats replacing it with
         // something vaguer.
         let message = e.to_string();
-        for marker in ["cannot promise client ownership", "must be released under it"] {
+        for marker in [
+            "cannot promise client ownership",
+            "must be released under it",
+        ] {
             if message.contains(marker) {
                 // The whole exception line, which already names the licence
                 // and carries its caveat.
@@ -489,9 +492,71 @@ pub async fn set_status(
     // happens whichever way the mission is closed.
     if to == "closed" {
         crate::services::mission_billing::release_all(db, mission_id).await?;
+
+        // A delivered mission on the public feed, with no figure: the work
+        // happening is public, what it paid is not. Best-effort — a feed
+        // line must never fail a closure that genuinely happened.
+        if let Err(err) = announce_delivery(db, mission_id).await {
+            tracing::warn!(%err, mission = %mission_id, "mission not announced on the public feed");
+        }
     }
 
     by_id(db, mission_id).await
+}
+
+/// Put a delivered mission on the public feed.
+///
+/// One writer, in code that already knows the wording, so this is emitted
+/// here rather than by a trigger — unlike the two kinds that are written from
+/// half a dozen places.
+///
+/// The figure is deliberately absent. That the work happened is public; what
+/// it paid is the contractor's business, and `mission_delivered` is barred
+/// from carrying an amount at all.
+async fn announce_delivery(db: &PgPool, mission_id: Uuid) -> Result<(), AppError> {
+    let row: Option<(Uuid, String, String, String)> = sqlx::query_as(
+        "SELECT m.assigned_user_id, u.username, m.title, mt.name
+           FROM missions m
+           JOIN users u ON u.id = m.assigned_user_id
+           JOIN mission_types mt ON mt.id = m.mission_type_id
+          WHERE m.id = $1 AND m.assigned_user_id IS NOT NULL",
+    )
+    .bind(mission_id)
+    .fetch_optional(db)
+    .await?;
+    let Some((user_id, username, title, kind_name)) = row else {
+        return Ok(());
+    };
+
+    // The mission's public page. A line with nowhere to go is a claim, and
+    // the feed refuses those.
+    let url = format!(
+        "{}/missions/{}",
+        std::env::var("SKILLUV_FRONTEND_URL")
+            .unwrap_or_else(|_| "https://skill-uv.com".into())
+            .trim_end_matches('/'),
+        by_id(db, mission_id).await?.slug
+    );
+
+    crate::services::public_feed::emit(
+        db,
+        crate::services::public_feed::Emission {
+            kind: "mission_delivered",
+            subject_type: "user",
+            subject_id: user_id,
+            subject_label: &username,
+            headline: format!("mission livrée — {kind_name} : {title}"),
+            artifact_url: url,
+            repository: None,
+            amount: None,
+            currency: None,
+            source_type: "mission",
+            source_id: mission_id,
+        },
+    )
+    .await?;
+
+    Ok(())
 }
 
 // ═══════════════════════════════════════════════════════════════════

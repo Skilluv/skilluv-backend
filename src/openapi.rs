@@ -217,6 +217,11 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::sponsored_challenges::admin_link_challenge,
         crate::routes::sponsored_challenges::public_active,
         crate::routes::sponsored_challenges::sponsor_view_submissions,
+        // ─── public artefact feed ─────────────────────────────────
+        crate::routes::public_feed::read_feed,
+        crate::routes::public_feed::my_preferences,
+        crate::routes::public_feed::set_preference,
+        crate::routes::public_feed::withdraw,
         // ─── code profile: craft score + tiers ────────────────────
         crate::routes::code_profile::code_profile,
         crate::routes::code_profile::recompute_mine,
@@ -966,6 +971,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
             crate::routes::sponsored_challenges::SponsorSubmissionsResponse,
             // orientations
             crate::routes::code_profile::ClaimBody,
+            crate::routes::public_feed::PreferenceBody,
             crate::routes::missions::StatusBody,
             crate::routes::missions::DecisionBody,
             crate::routes::awards::NominateBody,

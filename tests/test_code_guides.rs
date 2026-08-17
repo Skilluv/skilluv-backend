@@ -181,12 +181,7 @@ async fn a_copyleft_mission_cannot_promise_client_ownership() {
             &a_mission("gpl-open", Some("GPL-3.0-only"), "open_source_output"),
         )
         .await;
-    assert_eq!(
-        accepted.status(),
-        200,
-        "{}",
-        accepted.text().await.unwrap()
-    );
+    assert_eq!(accepted.status(), 200, "{}", accepted.text().await.unwrap());
 }
 
 #[tokio::test]
@@ -205,7 +200,12 @@ async fn a_permissive_licence_permits_ownership() {
                 ),
             )
             .await;
-        assert_eq!(resp.status(), 200, "{licence}: {}", resp.text().await.unwrap());
+        assert_eq!(
+            resp.status(),
+            200,
+            "{licence}: {}",
+            resp.text().await.unwrap()
+        );
     }
 }
 
@@ -265,23 +265,21 @@ async fn a_verified_artefact_with_nothing_declared_is_asked() {
     .await
     .unwrap();
 
-    let deadline: Option<chrono::DateTime<chrono::Utc>> = sqlx::query_scalar(
-        "SELECT ai_disclosure_deadline_at FROM deliverables WHERE id = $1",
-    )
-    .bind(deliverable)
-    .fetch_one(&app.db)
-    .await
-    .unwrap();
+    let deadline: Option<chrono::DateTime<chrono::Utc>> =
+        sqlx::query_scalar("SELECT ai_disclosure_deadline_at FROM deliverables WHERE id = $1")
+            .bind(deliverable)
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
     assert!(deadline.is_some(), "nobody was asked");
 
     // Inside the window it still counts.
-    let counted: bool = sqlx::query_scalar(
-        "SELECT EXISTS (SELECT 1 FROM countable_deliverables WHERE id = $1)",
-    )
-    .bind(deliverable)
-    .fetch_one(&app.db)
-    .await
-    .unwrap();
+    let counted: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM countable_deliverables WHERE id = $1)")
+            .bind(deliverable)
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
     assert!(counted, "the window has not closed yet");
 
     // Past the deadline with nothing declared, it stops counting — and it is
@@ -292,13 +290,12 @@ async fn a_verified_artefact_with_nothing_declared_is_asked() {
         .execute(&app.db)
         .await
         .unwrap();
-    let counted: bool = sqlx::query_scalar(
-        "SELECT EXISTS (SELECT 1 FROM countable_deliverables WHERE id = $1)",
-    )
-    .bind(deliverable)
-    .fetch_one(&app.db)
-    .await
-    .unwrap();
+    let counted: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM countable_deliverables WHERE id = $1)")
+            .bind(deliverable)
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
     assert!(!counted);
     let revoked: Option<chrono::DateTime<chrono::Utc>> =
         sqlx::query_scalar("SELECT revoked_at FROM deliverables WHERE id = $1")
@@ -314,13 +311,12 @@ async fn a_verified_artefact_with_nothing_declared_is_asked() {
         .execute(&app.db)
         .await
         .unwrap();
-    let counted: bool = sqlx::query_scalar(
-        "SELECT EXISTS (SELECT 1 FROM countable_deliverables WHERE id = $1)",
-    )
-    .bind(deliverable)
-    .fetch_one(&app.db)
-    .await
-    .unwrap();
+    let counted: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM countable_deliverables WHERE id = $1)")
+            .bind(deliverable)
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
     assert!(counted);
 }
 
@@ -394,7 +390,9 @@ async fn skipping_is_recorded_as_skipping() {
     app.login("wizard_skipper").await;
 
     assert_eq!(
-        app.post("/api/code/onboarding/skip", &json!({})).await.status(),
+        app.post("/api/code/onboarding/skip", &json!({}))
+            .await
+            .status(),
         200
     );
 

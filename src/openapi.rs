@@ -217,6 +217,13 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::sponsored_challenges::admin_link_challenge,
         crate::routes::sponsored_challenges::public_active,
         crate::routes::sponsored_challenges::sponsor_view_submissions,
+        // ─── enterprise products ──────────────────────────────────
+        crate::routes::enterprise_products::list_types,
+        crate::routes::enterprise_products::my_products,
+        crate::routes::enterprise_products::products_of,
+        crate::routes::enterprise_products::record_product,
+        crate::routes::enterprise_products::set_status,
+        crate::routes::enterprise_products::renewals,
         // ─── revenue streams ──────────────────────────────────────
         crate::routes::revenue::list_streams,
         crate::routes::revenue::by_pillar,
@@ -974,6 +981,9 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
             crate::routes::code_profile::ClaimBody,
             crate::routes::public_feed::PreferenceBody,
             crate::routes::revenue::RevenueStream,
+            crate::routes::enterprise_products::EnterpriseProduct,
+            crate::routes::enterprise_products::RecordProductBody,
+            crate::routes::enterprise_products::ProductStatusBody,
             crate::routes::missions::StatusBody,
             crate::routes::missions::DecisionBody,
             crate::routes::awards::NominateBody,

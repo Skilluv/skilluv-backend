@@ -166,6 +166,25 @@ pub async fn callback(
         if let Err(err) = github::sync_repos_for(&db, &jwt, user_id).await {
             tracing::warn!(%user_id, error = %err, "initial github sync failed");
         }
+
+        // And the contribution graph, which is the one figure that reads as
+        // effort rather than outcome. Fetched now rather than at the next
+        // weekly sweep: somebody who has just connected expects to see it.
+        match reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(20))
+            .build()
+        {
+            Ok(client) => {
+                if let Err(err) = crate::services::code_portfolio::sync_contribution_graph(
+                    &db, &client, &jwt, user_id,
+                )
+                .await
+                {
+                    tracing::warn!(%user_id, error = %err, "contribution graph not imported");
+                }
+            }
+            Err(err) => tracing::warn!(error = %err, "no HTTP client for the contribution graph"),
+        }
     });
 
     if analytics_consent(&headers) {

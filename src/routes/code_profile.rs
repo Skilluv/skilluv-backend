@@ -222,6 +222,13 @@ pub async fn code_profile(
                 "repos_count": p.repos_count,
                 "stars_received": p.stars_received,
                 "followers_count": p.followers_count,
+                "contributions_last_year": p.contributions_last_year,
+                // A year of daily counts, when the account was connected.
+                // The one figure here that reads as effort rather than
+                // outcome: it shows somebody who turned up on Tuesdays for a
+                // year, which no count of merged pull requests does.
+                "contribution_graph": p.metadata.get("contribution_graph"),
+                "longest_streak_days": p.metadata.get("longest_streak_days"),
                 "last_synced_at": p.last_synced_at,
             })
         })

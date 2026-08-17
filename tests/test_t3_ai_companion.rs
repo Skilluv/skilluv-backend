@@ -35,7 +35,7 @@ async fn unavailable_worker_still_records_the_interaction() {
 
     let resp = app
         .post(
-            "/api/ai/companion/ask",
+            "/api/assistant/ask",
             &json!({
                 "interaction_type": "explain",
                 "prompt": "Explique-moi le borrow checker",
@@ -75,7 +75,7 @@ async fn failed_calls_do_not_consume_quota() {
     for i in 0..3 {
         let resp = app
             .post(
-                "/api/ai/companion/ask",
+                "/api/assistant/ask",
                 &json!({
                     "interaction_type": "debug_help",
                     "prompt": format!("question numero {i}"),
@@ -86,7 +86,7 @@ async fn failed_calls_do_not_consume_quota() {
     }
 
     let body: Value = app
-        .get("/api/users/me/ai-companion/quota")
+        .get("/api/users/me/assistant-quota")
         .await
         .json()
         .await
@@ -128,7 +128,7 @@ async fn quota_blocks_once_the_daily_allowance_is_spent() {
     }
 
     let body: Value = app
-        .get("/api/users/me/ai-companion/quota")
+        .get("/api/users/me/assistant-quota")
         .await
         .json()
         .await
@@ -137,7 +137,7 @@ async fn quota_blocks_once_the_daily_allowance_is_spent() {
 
     let resp = app
         .post(
-            "/api/ai/companion/ask",
+            "/api/assistant/ask",
             &json!({ "interaction_type": "explain", "prompt": "one more please" }),
         )
         .await;
@@ -157,7 +157,7 @@ async fn quota_blocks_once_the_daily_allowance_is_spent() {
     .await
     .unwrap();
     let body: Value = app
-        .get("/api/users/me/ai-companion/quota")
+        .get("/api/users/me/assistant-quota")
         .await
         .json()
         .await
@@ -182,7 +182,7 @@ async fn request_validation_happens_before_anything_is_spent() {
     ];
 
     for case in cases {
-        let resp = app.post("/api/ai/companion/ask", &case).await;
+        let resp = app.post("/api/assistant/ask", &case).await;
         assert_eq!(
             resp.status(),
             StatusCode::BAD_REQUEST,
@@ -219,7 +219,7 @@ async fn the_ledger_is_readable_by_its_own_user() {
 
     app.login("ailedger").await;
     let body: Value = app
-        .get("/api/users/me/ai-interactions")
+        .get("/api/users/me/assistant-interactions")
         .await
         .json()
         .await
@@ -236,7 +236,7 @@ async fn the_ledger_is_readable_by_its_own_user() {
     app.register_user("aisnooper").await;
     app.login("aisnooper").await;
     let body: Value = app
-        .get("/api/users/me/ai-interactions")
+        .get("/api/users/me/assistant-interactions")
         .await
         .json()
         .await
@@ -343,7 +343,7 @@ async fn disclosure_attaches_recent_interactions_to_a_deliverable() {
     // The stale interaction is still undisclosed and shows up as such.
     app.login("aidisclose").await;
     let body: Value = app
-        .get("/api/users/me/ai-interactions?undisclosed_only=true")
+        .get("/api/users/me/assistant-interactions?undisclosed_only=true")
         .await
         .json()
         .await
@@ -357,12 +357,12 @@ async fn companion_requires_authentication() {
     let app = TestApp::spawn().await;
     let resp = app
         .post(
-            "/api/ai/companion/ask",
+            "/api/assistant/ask",
             &json!({ "interaction_type": "explain", "prompt": "hello" }),
         )
         .await;
     assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
 
-    let resp = app.get("/api/users/me/ai-companion/quota").await;
+    let resp = app.get("/api/users/me/assistant-quota").await;
     assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
 }

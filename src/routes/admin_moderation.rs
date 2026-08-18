@@ -9,8 +9,8 @@ use uuid::Uuid;
 use crate::AppState;
 use crate::errors::AppError;
 use crate::middleware::{AuthUser, extract_ip};
-use crate::services::{AuthService, LeaderboardService, SessionService};
 use crate::routes::admin::require_admin;
+use crate::services::{AuthService, LeaderboardService, SessionService};
 
 pub fn admin_moderation_routes() -> Router<AppState> {
     Router::new()
@@ -33,7 +33,6 @@ fn build_response(data: serde_json::Value) -> serde_json::Value {
         }
     })
 }
-
 
 async fn write_audit_log(
     db: &PgPool,

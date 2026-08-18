@@ -436,11 +436,10 @@ async fn the_jury_decides_a_juried_contest_and_the_win_leaves_a_proof() {
 
     // And the win leaves something on the profile. Before migration 0411,
     // winning a contest moved nothing at all.
-    let report = skilluv_backend::services::design_attestations::award_contest_podium(
-        &app.db, contest,
-    )
-    .await
-    .unwrap();
+    let report =
+        skilluv_backend::services::design_attestations::award_contest_podium(&app.db, contest)
+            .await
+            .unwrap();
     assert_eq!(report.deliverables_written, 2);
     assert_eq!(report.attestations_issued, 2);
 
@@ -464,11 +463,10 @@ async fn the_jury_decides_a_juried_contest_and_the_win_leaves_a_proof() {
     assert_eq!(verified, 1, "a contest win is a proof like any other");
 
     // Awarding twice must not pay twice.
-    let again = skilluv_backend::services::design_attestations::award_contest_podium(
-        &app.db, contest,
-    )
-    .await
-    .unwrap();
+    let again =
+        skilluv_backend::services::design_attestations::award_contest_podium(&app.db, contest)
+            .await
+            .unwrap();
     assert_eq!(again.deliverables_written, 0);
     assert_eq!(again.attestations_issued, 0);
 }
@@ -514,11 +512,10 @@ async fn taking_part_is_not_an_achievement() {
     skilluv_backend::services::tournament::conclude_tournament(&app.db, contest)
         .await
         .unwrap();
-    let report = skilluv_backend::services::design_attestations::award_contest_podium(
-        &app.db, contest,
-    )
-    .await
-    .unwrap();
+    let report =
+        skilluv_backend::services::design_attestations::award_contest_podium(&app.db, contest)
+            .await
+            .unwrap();
 
     // Podium only. A proof that means "showed up" devalues every other row.
     assert_eq!(report.deliverables_written, 3);
@@ -622,10 +619,9 @@ async fn a_vote_spike_is_reported_not_punished() {
         .await;
     }
 
-    let bursts =
-        skilluv_backend::services::contest::detect_vote_bursts(&app.db, contest, 60, 3)
-            .await
-            .unwrap();
+    let bursts = skilluv_backend::services::contest::detect_vote_bursts(&app.db, contest, 60, 3)
+        .await
+        .unwrap();
     assert_eq!(bursts.len(), 1);
     assert_eq!(bursts[0].0, entry);
     assert_eq!(bursts[0].1, 3);
@@ -649,14 +645,26 @@ async fn a_vote_spike_is_reported_not_punished() {
 async fn the_contest_list_narrows_in_sql_not_in_the_browser() {
     let app = TestApp::spawn().await;
 
-    a_contest(&app, "brief-design-a", "brief_contest", json!({"brief": a_brief()})).await;
+    a_contest(
+        &app,
+        "brief-design-a",
+        "brief_contest",
+        json!({"brief": a_brief()}),
+    )
+    .await;
     let duel = a_contest(&app, "duel-design-a", "duel", json!({"brief": a_brief()})).await;
     sqlx::query("UPDATE tournaments SET skill_domain = NULL WHERE slug = 'duel-design-a'")
         .execute(&app.db)
         .await
         .unwrap();
     let _ = duel;
-    a_contest(&app, "brief-code-a", "brief_contest", json!({"brief": a_brief()})).await;
+    a_contest(
+        &app,
+        "brief-code-a",
+        "brief_contest",
+        json!({"brief": a_brief()}),
+    )
+    .await;
     sqlx::query("UPDATE tournaments SET skill_domain = 'code' WHERE slug = 'brief-code-a'")
         .execute(&app.db)
         .await
@@ -679,7 +687,10 @@ async fn the_contest_list_narrows_in_sql_not_in_the_browser() {
         .collect();
 
     assert!(slugs.contains(&"brief-design-a"), "{slugs:?}");
-    assert!(!slugs.contains(&"brief-code-a"), "another domain: {slugs:?}");
+    assert!(
+        !slugs.contains(&"brief-code-a"),
+        "another domain: {slugs:?}"
+    );
     assert!(!slugs.contains(&"duel-design-a"), "another kind: {slugs:?}");
 }
 
@@ -687,7 +698,13 @@ async fn the_contest_list_narrows_in_sql_not_in_the_browser() {
 async fn a_domain_filter_keeps_the_contests_open_to_everyone() {
     let app = TestApp::spawn().await;
 
-    a_contest(&app, "brief-open", "brief_contest", json!({"brief": a_brief()})).await;
+    a_contest(
+        &app,
+        "brief-open",
+        "brief_contest",
+        json!({"brief": a_brief()}),
+    )
+    .await;
     sqlx::query("UPDATE tournaments SET skill_domain = NULL WHERE slug = 'brief-open'")
         .execute(&app.db)
         .await
@@ -802,7 +819,10 @@ async fn a_deleted_account_leaves_a_nameless_line_not_a_hole() {
 async fn submit(app: &TestApp, slug: &str, username: &str, n: u32) {
     app.login(username).await;
     let resp = app
-        .post(&format!("/api/tournaments/{slug}/submissions"), &an_entry(n))
+        .post(
+            &format!("/api/tournaments/{slug}/submissions"),
+            &an_entry(n),
+        )
         .await;
     assert!(resp.status().is_success(), "{:?}", resp.text().await);
 }

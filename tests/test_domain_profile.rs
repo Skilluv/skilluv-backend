@@ -284,7 +284,10 @@ async fn a_family_that_names_no_trade_is_refused() {
     assert_eq!(resp.status().as_u16(), 400);
     let body = resp.text().await.unwrap();
     assert!(body.contains("design-tapisserie"), "{body}");
-    assert!(!body.contains("design-web"), "only the bad one is named: {body}");
+    assert!(
+        !body.contains("design-web"),
+        "only the bad one is named: {body}"
+    );
 }
 
 #[tokio::test]
@@ -328,7 +331,10 @@ async fn a_field_is_refused_on_a_domain_it_does_not_belong_to() {
         .await;
     assert_eq!(ai_field_on_design.status().as_u16(), 400);
     let body = ai_field_on_design.text().await.unwrap();
-    assert!(body.contains("ai"), "the message says which domain owns it: {body}");
+    assert!(
+        body.contains("ai"),
+        "the message says which domain owns it: {body}"
+    );
 }
 
 #[tokio::test]

@@ -222,13 +222,8 @@ async fn issue_attestation(
     let citation = format!("Semaine du {week}. {reason}");
     match domain {
         "code" => {
-            crate::services::code_attestations::featured_coder(
-                db,
-                user_id,
-                profile_url,
-                &citation,
-            )
-            .await?;
+            crate::services::code_attestations::featured_coder(db, user_id, profile_url, &citation)
+                .await?;
         }
         "design" => {
             crate::services::design_attestations::featured_designer(

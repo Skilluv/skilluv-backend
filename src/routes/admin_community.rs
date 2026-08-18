@@ -10,8 +10,8 @@ use crate::AppState;
 use crate::api_response::ApiResponse;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
-use crate::routes::admin::require_admin;
 use crate::models::ChallengeTemplate;
+use crate::routes::admin::require_admin;
 
 pub fn admin_community_routes() -> Router<AppState> {
     Router::new()
@@ -19,7 +19,6 @@ pub fn admin_community_routes() -> Router<AppState> {
         .route("/admin/community/{id}/approve", post(approve_challenge))
         .route("/admin/community/{id}/reject", post(reject_challenge))
 }
-
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct RejectRequest {

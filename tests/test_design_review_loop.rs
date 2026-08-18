@@ -168,7 +168,8 @@ async fn three_rounds_then_validated_leaves_a_full_proof() {
     let reviewer = user_id(&app, "brand_reviewer").await;
     grant(&app, reviewer, "design_reviewer:brand").await;
 
-    let slice = a_claimed_challenge(&app, designer, "design-brand-identity", "brand_kit", 120).await;
+    let slice =
+        a_claimed_challenge(&app, designer, "design-brand-identity", "brand_kit", 120).await;
 
     for round in 1..=3u32 {
         app.login("brand_designer").await;
@@ -211,8 +212,7 @@ async fn three_rounds_then_validated_leaves_a_full_proof() {
     assert_eq!(rounds[0]["decision"], "iterate");
     assert_eq!(rounds[2]["decision"], "approve");
     assert_eq!(
-        rounds[2]["reviewed_artifact_url"],
-        "https://figma.test/file/abc?version=3",
+        rounds[2]["reviewed_artifact_url"], "https://figma.test/file/abc?version=3",
         "the accepted version is the last one, not the first"
     );
 
@@ -414,8 +414,7 @@ async fn the_fifth_round_is_the_last_one() {
     let reviewer = user_id(&app, "patient_reviewer").await;
     grant(&app, reviewer, "design_reviewer:brand").await;
 
-    let slice =
-        a_claimed_challenge(&app, designer, "design-brand-identity", "brand_kit", 0).await;
+    let slice = a_claimed_challenge(&app, designer, "design-brand-identity", "brand_kit", 0).await;
 
     for round in 1..=5u32 {
         app.login("persistent_designer").await;
@@ -473,8 +472,7 @@ async fn the_queue_shows_only_the_trades_a_reviewer_can_judge() {
     grant(&app, reviewer, "design_reviewer:motion").await;
 
     let motion = a_claimed_challenge(&app, designer, "design-motion-2d", "motion", 0).await;
-    let brand =
-        a_claimed_challenge(&app, designer, "design-brand-identity", "brand_kit", 0).await;
+    let brand = a_claimed_challenge(&app, designer, "design-brand-identity", "brand_kit", 0).await;
 
     app.login("q_designer").await;
     for slice in [motion, brand] {
@@ -534,8 +532,7 @@ async fn design_proofs_move_the_platform_rank_like_code_ones() {
     // Four validated design deliverables and nothing else. Ranger's threshold
     // is four verified deliverables, whatever discipline produced them.
     for i in 0..4 {
-        let slice =
-            a_claimed_challenge(&app, designer, "design-iconography", "icon_set", 0).await;
+        let slice = a_claimed_challenge(&app, designer, "design-iconography", "icon_set", 0).await;
         app.login("ranked_designer").await;
         app.post(
             &format!("/api/design/slices/{slice}/versions"),
@@ -577,7 +574,8 @@ async fn design_proofs_move_the_platform_rank_like_code_ones() {
 /// Runs `rounds` critiques on one challenge, approving the last.
 async fn a_challenge_that_took(app: &TestApp, designer: &str, reviewer: &str, rounds: u32) -> Uuid {
     let designer_id = user_id(app, designer).await;
-    let slice = a_claimed_challenge(app, designer_id, "design-brand-identity", "brand_kit", 60).await;
+    let slice =
+        a_claimed_challenge(app, designer_id, "design-brand-identity", "brand_kit", 60).await;
 
     for round in 1..=rounds {
         app.login(designer).await;
@@ -735,8 +733,7 @@ async fn an_unreadable_host_is_recorded_as_unchecked_not_as_passing() {
     let app = TestApp::spawn().await;
     app.register_user("checks_designer").await;
     let designer = user_id(&app, "checks_designer").await;
-    let slice =
-        a_claimed_challenge(&app, designer, "design-brand-identity", "brand_kit", 40).await;
+    let slice = a_claimed_challenge(&app, designer, "design-brand-identity", "brand_kit", 40).await;
 
     app.login("checks_designer").await;
     let resp = app
@@ -759,7 +756,10 @@ async fn an_unreadable_host_is_recorded_as_unchecked_not_as_passing() {
             .json()
             .await
             .unwrap();
-        checks = body["data"]["checks"].as_array().cloned().unwrap_or_default();
+        checks = body["data"]["checks"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
         if !checks.is_empty() {
             break;
         }

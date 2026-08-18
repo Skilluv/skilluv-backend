@@ -116,11 +116,7 @@ pub fn parse_hex(value: &str) -> Option<(u8, u8, u8)> {
         .collect::<Option<Vec<u8>>>()?;
 
     match digits.len() {
-        3 => Some((
-            digits[0] * 17,
-            digits[1] * 17,
-            digits[2] * 17,
-        )),
+        3 => Some((digits[0] * 17, digits[1] * 17, digits[2] * 17)),
         6 | 8 => Some((
             digits[0] * 16 + digits[1],
             digits[2] * 16 + digits[3],
@@ -253,7 +249,9 @@ pub fn check_tokens(tokens: &Value) -> Vec<CheckResult> {
             && let Some(number) = value.as_f64()
             && !(0.0..=1.0).contains(&number)
         {
-            problems.push(format!("{path} = {number} : une opacité tient entre 0 et 1"));
+            problems.push(format!(
+                "{path} = {number} : une opacité tient entre 0 et 1"
+            ));
         }
 
         if (path.contains("radius") || path.contains("rayon"))
@@ -275,7 +273,9 @@ pub fn check_tokens(tokens: &Value) -> Vec<CheckResult> {
         // A name in two conventions at once is the sign of two people, or of
         // one person and one copy-paste.
         if leaf.contains('_') && leaf.contains('-') {
-            problems.push(format!("{path} : mélange tiret et souligné dans le même nom"));
+            problems.push(format!(
+                "{path} : mélange tiret et souligné dans le même nom"
+            ));
         }
     }
 
@@ -773,7 +773,8 @@ mod tests {
 
     #[test]
     fn mixed_stroke_widths_in_one_drawing_are_flagged() {
-        let svg = r#"<svg viewBox="0 0 24 24"><path stroke-width="1.5"/><path stroke-width="2"/></svg>"#;
+        let svg =
+            r#"<svg viewBox="0 0 24 24"><path stroke-width="1.5"/><path stroke-width="2"/></svg>"#;
         let results = check_svg(svg);
         assert!(results.iter().any(|r| r.severity == Severity::Warning));
     }

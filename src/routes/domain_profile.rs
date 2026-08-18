@@ -277,7 +277,6 @@ async fn check_preferred_families(
     Ok(Some(deduped))
 }
 
-
 fn check_domain(domain: &str) -> Result<(), AppError> {
     if !DOMAINS.contains(&domain) {
         return Err(AppError::Validation(format!(
@@ -363,7 +362,12 @@ pub async fn put_profile(
     // vocabulary is looked at: "compute belongs to ai" is the useful message,
     // not "compute must be one of ...".
     belongs_to("compute", body.compute.is_some(), "ai", &domain)?;
-    belongs_to("main_frameworks", body.main_frameworks.is_some(), "ai", &domain)?;
+    belongs_to(
+        "main_frameworks",
+        body.main_frameworks.is_some(),
+        "ai",
+        &domain,
+    )?;
     belongs_to(
         "huggingface_username",
         body.huggingface_username.is_some(),

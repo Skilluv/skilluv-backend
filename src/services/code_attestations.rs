@@ -159,7 +159,6 @@ pub async fn issue(
     crate::services::artefact_attestations::issue(db, user_id, basis, evidence, &DOMAIN).await
 }
 
-
 // ═══════════════════════════════════════════════════════════════════
 // The seven generators
 // ═══════════════════════════════════════════════════════════════════

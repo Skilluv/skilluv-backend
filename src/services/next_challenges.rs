@@ -302,16 +302,22 @@ async fn load_profile(db: &PgPool, user_id: Uuid, domain: &str) -> Result<Profil
 /// dashboard look broken.
 /// One open challenge, as the query returns it: id, title, trade slug,
 /// reviewer family, difficulty, estimated hours.
-type OpenChallengeRow = (Uuid, String, Option<String>, Option<String>, i16, Option<i32>);
+type OpenChallengeRow = (
+    Uuid,
+    String,
+    Option<String>,
+    Option<String>,
+    i16,
+    Option<i32>,
+);
 
 async fn open_challenges(
     db: &PgPool,
     user_id: Uuid,
     domain: &str,
 ) -> Result<Vec<Suggestion>, AppError> {
-    let rows: Vec<OpenChallengeRow> =
-        sqlx::query_as(
-            r#"
+    let rows: Vec<OpenChallengeRow> = sqlx::query_as(
+        r#"
             SELECT s.id, s.title, o.slug, o.reviewer_group, s.difficulty, s.estimated_hours
               FROM project_slices s
               LEFT JOIN orientations o ON o.id = s.orientation_id
@@ -330,11 +336,11 @@ async fn open_challenges(
              ORDER BY s.created_at DESC
              LIMIT 100
             "#,
-        )
-        .bind(user_id)
-        .bind(domain)
-        .fetch_all(db)
-        .await?;
+    )
+    .bind(user_id)
+    .bind(domain)
+    .fetch_all(db)
+    .await?;
 
     Ok(rows
         .into_iter()
@@ -499,7 +505,10 @@ mod tests {
             profile.challenge_preference = Some("both".into());
             score(&mut candidate, &profile);
             assert!(
-                !candidate.reasons.iter().any(|r| r.contains("format que tu")),
+                !candidate
+                    .reasons
+                    .iter()
+                    .any(|r| r.contains("format que tu")),
                 "{:?}",
                 candidate.reasons
             );

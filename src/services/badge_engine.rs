@@ -141,14 +141,8 @@ async fn count_matching_proofs(
         .proof_types
         .iter()
         .any(|t| t == "onboarding_bonjour_completed");
-    let want_tournament_podium = conds
-        .proof_types
-        .iter()
-        .any(|t| t == "tournament_podium");
-    let want_tournament_judged = conds
-        .proof_types
-        .iter()
-        .any(|t| t == "tournament_judged");
+    let want_tournament_podium = conds.proof_types.iter().any(|t| t == "tournament_podium");
+    let want_tournament_judged = conds.proof_types.iter().any(|t| t == "tournament_judged");
     let want_mentees_led = conds
         .proof_types
         .iter()

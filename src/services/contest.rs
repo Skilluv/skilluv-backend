@@ -43,8 +43,13 @@ pub const VALID_SUBMISSION_STATUSES: &[&str] =
 
 /// Kinds that expect a submission. The others are scored from activity
 /// elsewhere on the platform, and asking for a link would be theatre.
-pub const KINDS_WITH_SUBMISSIONS: &[&str] =
-    &["hackathon", "code_golf", "tdd_contest", "brief_contest", "duel"];
+pub const KINDS_WITH_SUBMISSIONS: &[&str] = &[
+    "hackathon",
+    "code_golf",
+    "tdd_contest",
+    "brief_contest",
+    "duel",
+];
 
 /// Kinds whose result is decided by people rather than by a measured number,
 /// and which therefore need a panel before they can be closed.
@@ -956,7 +961,10 @@ async fn community_vote_enabled_by_rules(
             .fetch_optional(db)
             .await?
             .flatten();
-    Ok(matches!(mode.as_deref(), Some("community") | Some("hybrid")))
+    Ok(matches!(
+        mode.as_deref(),
+        Some("community") | Some("hybrid")
+    ))
 }
 
 /// The live standing by vote count.
@@ -1245,15 +1253,11 @@ mod tests {
     #[test]
     fn a_duel_is_bounded_in_time() {
         assert!(validate_rules("duel", &json!({"task": "Un logo"})).is_err());
-        assert!(
-            validate_rules("duel", &json!({"task": "Un logo", "duration_hours": 0})).is_err()
-        );
+        assert!(validate_rules("duel", &json!({"task": "Un logo", "duration_hours": 0})).is_err());
         assert!(
             validate_rules("duel", &json!({"task": "Un logo", "duration_hours": 500})).is_err()
         );
-        assert!(
-            validate_rules("duel", &json!({"task": "Un logo", "duration_hours": 48})).is_ok()
-        );
+        assert!(validate_rules("duel", &json!({"task": "Un logo", "duration_hours": 48})).is_ok());
     }
 
     #[test]

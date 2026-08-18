@@ -133,8 +133,7 @@ pub async fn fund(
     .bind(tournament_id)
     .fetch_optional(db)
     .await?;
-    let (state, _) =
-        existing.ok_or_else(|| AppError::NotFound("tournament not found".into()))?;
+    let (state, _) = existing.ok_or_else(|| AppError::NotFound("tournament not found".into()))?;
 
     if state != "none" {
         return Err(AppError::Conflict(format!(
@@ -261,7 +260,10 @@ pub async fn award(db: &PgPool, tournament_id: Uuid) -> Result<Option<AwardRepor
             Posting::new(
                 "contest_prize_award",
                 vec![
-                    Leg::debit(escrow_account(tournament_id, currency), share.amount.clone()),
+                    Leg::debit(
+                        escrow_account(tournament_id, currency),
+                        share.amount.clone(),
+                    ),
                     Leg::credit(
                         owed(*user_id, State::Pending, currency),
                         share.amount.clone(),

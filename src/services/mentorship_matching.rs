@@ -496,8 +496,15 @@ mod tests {
         assert_ne!(CODE.domain, AI.domain);
         assert_ne!(CODE.tools_key, AI.tools_key);
         // AI carries fewer mentees per mentor: reading somebody's training
-        // run is not reviewing a pull request.
-        assert!(AI.max_active_mentees < CODE.max_active_mentees);
+        // run is not reviewing a pull request. Ops fewer still, because an
+        // ops mentee often arrives with a system that is on fire.
+        let (ai, code, ops) = (
+            AI.max_active_mentees,
+            CODE.max_active_mentees,
+            OPS.max_active_mentees,
+        );
+        assert!(ai < code);
+        assert!(ops < code);
     }
 
     #[test]

@@ -403,18 +403,18 @@ pub async fn next_challenges(
             crate::validators::validate_skill_domain(&domain, "domain")?;
             domain
         }
-        None => sqlx::query_scalar::<_, Option<String>>(
-            "SELECT skill_domain FROM users WHERE id = $1",
-        )
-        .bind(auth.user_id)
-        .fetch_optional(&state.db)
-        .await?
-        .flatten()
-        .ok_or_else(|| {
-            AppError::Validation(
-                "name a domain: this account has not finished onboarding".into(),
-            )
-        })?,
+        None => {
+            sqlx::query_scalar::<_, Option<String>>("SELECT skill_domain FROM users WHERE id = $1")
+                .bind(auth.user_id)
+                .fetch_optional(&state.db)
+                .await?
+                .flatten()
+                .ok_or_else(|| {
+                    AppError::Validation(
+                        "name a domain: this account has not finished onboarding".into(),
+                    )
+                })?
+        }
     };
 
     let limit = q.limit.unwrap_or(next_challenges_service::SUGGESTION_COUNT);
@@ -423,15 +423,12 @@ pub async fn next_challenges(
 
     // Cached for an hour. The inputs move over days, and a list that changed
     // on every page load would stop reading as advice.
-    if let Ok(Some(cached)) =
-        crate::services::cache::get_json::<Vec<next_challenges_service::Suggestion>>(
-            &mut redis, &key,
-        )
-        .await
+    if let Ok(Some(cached)) = crate::services::cache::get_json::<
+        Vec<next_challenges_service::Suggestion>,
+    >(&mut redis, &key)
+    .await
     {
-        return Ok(Json(wrap(
-            json!({ "suggestions": cached, "cached": true }),
-        )));
+        return Ok(Json(wrap(json!({ "suggestions": cached, "cached": true }))));
     }
 
     let suggestions =

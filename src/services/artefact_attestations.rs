@@ -106,8 +106,8 @@ pub async fn issue(
     crate::validators::check_max_len(&evidence.title, "title", 200)?;
 
     let url = evidence.url.trim();
-    let scheme_ok = url.starts_with("https://")
-        || (domain.allows_stored_objects && url.starts_with("s3://"));
+    let scheme_ok =
+        url.starts_with("https://") || (domain.allows_stored_objects && url.starts_with("s3://"));
     if !scheme_ok {
         return Err(AppError::Validation(if domain.allows_stored_objects {
             "the evidence URL must be an https link or a stored object — an \

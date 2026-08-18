@@ -427,7 +427,10 @@ mod enum_matches_sql {
     #[test]
     fn design_subtype_variants_match_the_sql_check() {
         let sql = check_values("ADD CONSTRAINT project_slices_design_subtype_values");
-        let rust: Vec<String> = DesignSubtype::ALL.iter().map(|t| t.as_str().into()).collect();
+        let rust: Vec<String> = DesignSubtype::ALL
+            .iter()
+            .map(|t| t.as_str().into())
+            .collect();
         assert_eq!(sql, rust, "design_subtype drifted between SQL and Rust");
     }
 }

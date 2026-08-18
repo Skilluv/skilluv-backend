@@ -32,10 +32,7 @@ const MAX_ARTEFACTS: i64 = 20;
 pub fn design_profile_routes() -> Router<AppState> {
     Router::new()
         .route("/users/{username}/design-profile", get(design_profile))
-        .route(
-            "/users/me/design-profile/recompute",
-            post(recompute_mine),
-        )
+        .route("/users/me/design-profile/recompute", post(recompute_mine))
         .route("/design/tiers", get(list_tiers))
 }
 

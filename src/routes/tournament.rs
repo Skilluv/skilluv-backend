@@ -62,7 +62,10 @@ pub fn admin_tournament_routes() -> Router<AppState> {
         .route("/admin/tournaments/{id}/score", post(admin_set_score))
         .route("/admin/tournaments/{id}/conclude", post(admin_conclude))
         .route("/admin/tournaments/{id}/jury", post(admin_invite_juror))
-        .route("/admin/tournaments/{id}/vote-bursts", get(admin_vote_bursts))
+        .route(
+            "/admin/tournaments/{id}/vote-bursts",
+            get(admin_vote_bursts),
+        )
         .route(
             "/admin/tournaments/prizes/outstanding",
             get(admin_outstanding_prizes),

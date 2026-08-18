@@ -106,9 +106,7 @@ async fn a_category_happens_once_in_an_edition() {
 
     let first = a_contest(&app, "awards-brand-1").await;
     let second = a_contest(&app, "awards-brand-2").await;
-    let attach = |id: Uuid| {
-        json!({ "tournament_id": id, "category": "brand" })
-    };
+    let attach = |id: Uuid| json!({ "tournament_id": id, "category": "brand" });
 
     assert_eq!(
         app.post(

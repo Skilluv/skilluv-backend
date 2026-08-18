@@ -497,7 +497,11 @@ impl TestApp {
             .json()
             .await
             .expect("Failed to parse register response");
-        assert_eq!(status, StatusCode::CREATED, "register {username} said: {body}");
+        assert_eq!(
+            status,
+            StatusCode::CREATED,
+            "register {username} said: {body}"
+        );
 
         // Short-circuit the email-verification hop for tests — real users have
         // to click the link in the verification email before AuthUserComplete

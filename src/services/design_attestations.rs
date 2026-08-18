@@ -88,7 +88,6 @@ pub async fn issue(
     crate::services::artefact_attestations::issue(db, user_id, basis, evidence, &DOMAIN).await
 }
 
-
 // ═══════════════════════════════════════════════════════════════════
 // Generators
 // ═══════════════════════════════════════════════════════════════════
@@ -194,12 +193,11 @@ pub async fn award_contest_podium(
     db: &PgPool,
     tournament_id: Uuid,
 ) -> Result<PodiumReport, AppError> {
-    let contest: Option<(String, Option<String>, String)> = sqlx::query_as(
-        "SELECT name, skill_domain, status FROM tournaments WHERE id = $1",
-    )
-    .bind(tournament_id)
-    .fetch_optional(db)
-    .await?;
+    let contest: Option<(String, Option<String>, String)> =
+        sqlx::query_as("SELECT name, skill_domain, status FROM tournaments WHERE id = $1")
+            .bind(tournament_id)
+            .fetch_optional(db)
+            .await?;
     let (name, domain, status) =
         contest.ok_or_else(|| AppError::NotFound("tournament not found".into()))?;
 

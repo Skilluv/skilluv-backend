@@ -39,7 +39,6 @@ pub fn admin_content_ops_routes() -> Router<AppState> {
         )
 }
 
-
 #[derive(Debug, Serialize, ToSchema)]
 pub struct MirrorFailedDetail {
     pub id: Uuid,

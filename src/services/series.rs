@@ -72,9 +72,7 @@ pub async fn create(db: &PgPool, input: CreateSeries, by: Uuid) -> Result<Series
     crate::validators::check_max_len(&input.slug, "slug", 80)?;
     crate::validators::check_max_len(&input.name, "name", 160)?;
     if input.ends_at <= input.starts_at {
-        return Err(AppError::Validation(
-            "a series ends after it starts".into(),
-        ));
+        return Err(AppError::Validation("a series ends after it starts".into()));
     }
 
     let series = sqlx::query_as::<_, Series>(
@@ -134,9 +132,9 @@ pub async fn attach(
     .execute(db)
     .await
     .map_err(|e| match e {
-        sqlx::Error::Database(ref db_err) if db_err.is_unique_violation() => AppError::Conflict(
-            "this series already has a contest in that category".into(),
-        ),
+        sqlx::Error::Database(ref db_err) if db_err.is_unique_violation() => {
+            AppError::Conflict("this series already has a contest in that category".into())
+        }
         other => AppError::from(other),
     })?;
 
@@ -215,14 +213,14 @@ type ContestRow = (
 /// them above somebody who won the only one they work in.
 pub async fn standings(db: &PgPool, series_id: Uuid) -> Result<Vec<CategoryStanding>, AppError> {
     let contests: Vec<ContestRow> = sqlx::query_as(
-            "SELECT id, slug, name, status, ends_at, series_category
+        "SELECT id, slug, name, status, ends_at, series_category
                FROM tournaments
               WHERE series_id = $1
               ORDER BY series_category NULLS FIRST, starts_at ASC",
-        )
-        .bind(series_id)
-        .fetch_all(db)
-        .await?;
+    )
+    .bind(series_id)
+    .fetch_all(db)
+    .await?;
 
     let mut out = Vec::with_capacity(contests.len());
     for (id, slug, name, status, ends_at, category) in contests {

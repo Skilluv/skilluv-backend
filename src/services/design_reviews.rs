@@ -326,7 +326,10 @@ pub async fn review(
     require_reviewer_for_orientation(db, reviewer_id, &orientation).await?;
 
     let feedback = input.feedback_md.map(str::trim).filter(|s| !s.is_empty());
-    let blocking_reason = input.blocking_reason.map(str::trim).filter(|s| !s.is_empty());
+    let blocking_reason = input
+        .blocking_reason
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
 
     match input.verdict {
         Verdict::Approve => {
@@ -438,13 +441,15 @@ pub async fn review(
         .fetch_one(&mut *tx)
         .await?;
 
-        let deliverable_id = record_deliverable(&mut tx, &state, slice_id, designer, reviewer_id).await?;
+        let deliverable_id =
+            record_deliverable(&mut tx, &state, slice_id, designer, reviewer_id).await?;
         tx.commit().await?;
 
         // Outside the transaction: an attestation that fails to write is a
         // re-runnable problem, whereas a half-written validation is not. The
         // proof — the deliverable — is already committed.
-        if let (Some(deliverable_id), Some(url)) = (deliverable_id, state.design_external_url.as_deref())
+        if let (Some(deliverable_id), Some(url)) =
+            (deliverable_id, state.design_external_url.as_deref())
         {
             crate::services::design_attestations::deliverable_validated(
                 db,

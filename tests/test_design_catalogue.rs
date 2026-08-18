@@ -337,15 +337,17 @@ async fn design_badge_rules_name_only_things_the_engine_can_read() {
         "mentorship_mentees_led",
     ];
 
-    let rules: Vec<(String, serde_json::Value)> = sqlx::query_as(
-        "SELECT slug, conditions FROM badge_rules WHERE slug LIKE 'design-%'",
-    )
-    .fetch_all(&app.db)
-    .await
-    .unwrap();
+    let rules: Vec<(String, serde_json::Value)> =
+        sqlx::query_as("SELECT slug, conditions FROM badge_rules WHERE slug LIKE 'design-%'")
+            .fetch_all(&app.db)
+            .await
+            .unwrap();
 
     for (slug, conditions) in rules {
-        let types = conditions["proof_types"].as_array().cloned().unwrap_or_default();
+        let types = conditions["proof_types"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
         for t in types {
             let name = t.as_str().unwrap_or_default();
             assert!(

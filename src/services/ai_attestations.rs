@@ -166,7 +166,17 @@ async fn announce(
     title: &str,
     deliverable_id: Uuid,
 ) {
-    let context: Result<Option<(String, Option<String>, Option<String>)>, _> = sqlx::query_as(
+    /// Who published it and where it can be seen. Named rather than left as
+    /// a three-tuple: two of the three are optional URLs, and a caller
+    /// reading `.2` instead of `.1` would attach the wrong link.
+    #[derive(sqlx::FromRow)]
+    struct Context {
+        username: String,
+        external_hosting_url: Option<String>,
+        artifact_url: Option<String>,
+    }
+
+    let context: Result<Option<Context>, _> = sqlx::query_as(
         r#"
         SELECT u.username, ps.ai_external_hosting_url, d.artifact_url
           FROM deliverables d
@@ -179,7 +189,12 @@ async fn announce(
     .fetch_optional(db)
     .await;
 
-    let Ok(Some((username, hosting_url, artifact_url))) = context else {
+    let Ok(Some(Context {
+        username,
+        external_hosting_url: hosting_url,
+        artifact_url,
+    })) = context
+    else {
         return;
     };
     // The hub address first: it is where the thing actually is. The

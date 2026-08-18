@@ -47,7 +47,6 @@ pub fn season_routes() -> Router<AppState> {
         .route("/users/me/stewardships", get(my_stewardships))
 }
 
-
 // ═══════════════════════════════════════════════════════════════════
 // Response wrappers
 // ═══════════════════════════════════════════════════════════════════

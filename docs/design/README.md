@@ -73,6 +73,25 @@ métiers les plus proches du reste de la plateforme ; les dix-huit autres sont
 ouverts en base et attendent des relecteurs. C'est écrit plutôt que caché :
 une promesse d'écosystème vide est pire qu'un domaine annoncé comme jeune.
 
+## D'où vient le travail
+
+Trois sources, et l'équilibre entre elles est une décision, pas un hasard.
+
+| Source | Part visée | Pourquoi |
+| --- | --- | --- |
+| **Briefs curés** | la majorité | Le design n'a pas d'équivalent de l'issue GitHub. Quelqu'un écrit un brief, quelqu'un le lit, ça devient du travail. C'est la source principale, et n'importe qui peut en proposer. |
+| **Projets partenaires** | une part importante | Penpot, tldraw, Storybook, Excalidraw. Du travail dont le résultat est public et vérifiable par un inconnu. |
+| **Nos propres surfaces** | ~15 %, volontairement minoritaire | Une plateforme dont les designers ne travaillent que sur la plateforme produit un portfolio que personne d'extérieur ne peut lire, et une communauté dont le seul client est nous est une communauté qui se parle à elle-même. |
+
+Ce que nos surfaces font bien, c'est le **premier** challenge : le brief est court,
+le contexte est public, et on peut voir la chose qu'on redessine sans demander
+un accès à personne.
+
+Trois des dix briefs Skilluv sont posés en concours plutôt qu'en travail
+individuel — le design system, le PDF d'attestation et la page de confiance —
+parce que ce sont les trois où plusieurs réponses valent la peine d'être
+comparées.
+
 ## Ce que la plateforme ne fera pas
 
 - **Importer votre portfolio.** Un compte Behance ou Dribbble se déclare et

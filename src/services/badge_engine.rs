@@ -9,7 +9,8 @@
 //!   {
 //!     "proof_types": ["deliverable_verified" | "attestation_received"
 //!                     | "onboarding_bonjour_completed"
-//!                     | "slice_merged_upstream" | "deliverable_featured"],
+//!                     | "slice_merged_upstream" | "deliverable_featured"
+//!                     | "design_briefs_published"],
 //!     "min_count":   integer (obligatoire, default 1),
 //!     "skill_tag":   "react"      // filtre : deliverables/attestations sur ce skill
 //!                                   // (via user_skills touchées)
@@ -150,6 +151,10 @@ async fn count_matching_proofs(
         .proof_types
         .iter()
         .any(|t| t == "mentorship_mentees_led");
+    let want_briefs_published = conds
+        .proof_types
+        .iter()
+        .any(|t| t == "design_briefs_published");
     let want_merged_upstream = conds
         .proof_types
         .iter()
@@ -421,6 +426,20 @@ async fn count_matching_proofs(
               FROM mentorship_sessions
              WHERE mentor_user_id = $1 AND status = 'completed'
             "#,
+        )
+        .bind(user_id)
+        .fetch_one(db)
+        .await?;
+        total += matched;
+    }
+
+    if want_briefs_published {
+        // Setting work for other people leaves no deliverable and earns no
+        // craft score. Without a proof type of its own it is invisible, which
+        // is how a community runs out of briefs.
+        let matched: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM design_brief_proposals
+              WHERE proposed_by = $1 AND status = 'published'",
         )
         .bind(user_id)
         .fetch_one(db)

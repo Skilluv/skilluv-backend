@@ -457,6 +457,15 @@ pub async fn review(
             .await?;
         }
 
+        // The brief's author, if this slice came from one. Their reward for
+        // setting work is the only signal that separates a good brief from a
+        // plausible one, and it can only be known now.
+        if let Err(e) =
+            crate::services::design_briefs::reward_author_on_first_validation(db, slice_id).await
+        {
+            tracing::warn!(%slice_id, error = %e, "brief author not rewarded");
+        }
+
         notify_designer(
             db,
             designer,

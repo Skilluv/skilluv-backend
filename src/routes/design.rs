@@ -42,6 +42,7 @@ pub fn design_routes() -> Router<AppState> {
         .route("/design/slices/{id}/versions/{round}", get(version_at))
         .route("/design/slices/{id}/auto-checks", get(auto_checks))
         .route("/design/reviews/queue", get(reviewer_queue))
+        .route("/design/mentors/for-me", get(mentor_matches))
         .route("/users/me/next-challenges", get(next_challenges))
         .route(
             "/design/users/{username}/iteration-stories",
@@ -447,4 +448,55 @@ pub async fn next_challenges(
     Ok(Json(wrap(
         json!({ "suggestions": suggestions, "cached": false }),
     )))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// GET /design/mentors/for-me
+// ═══════════════════════════════════════════════════════════════════
+
+/// Mentors worth an hour of your time, with the reasoning attached.
+///
+/// The scoring is the platform's — same five questions in every domain, in
+/// `services::mentorship_matching`. What is design's own is where the families
+/// come from: **declared** for you, from the onboarding answers, and
+/// **proven** for a mentor, from the trades they have verified work in.
+///
+/// That asymmetry is deliberate. You are looking towards where you want to go;
+/// a mentor is worth listening to for where they have already been. Somebody
+/// who declared an interest in motion and never delivered any is not a motion
+/// mentor, and an hour would teach that the expensive way.
+///
+/// The `because` list travels with each suggestion, because a mentee who can
+/// read why somebody was suggested can tell us it was wrong.
+#[utoipa::path(
+    get, path = "/api/design/mentors/for-me", tag = "design",
+    params(QueueQuery),
+    responses(
+        (status = 200, description = "mentors, best first, each with its reasoning"),
+        (status = 400, description = "the design onboarding has not been answered",
+         body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn mentor_matches(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Query(q): Query<QueueQuery>,
+) -> Result<impl IntoResponse, AppError> {
+    let limit = q.limit.unwrap_or(10).clamp(1, 50);
+    let mentors =
+        crate::services::design_mentorship::matches_for(&state.db, auth.user_id, limit).await?;
+
+    // Whether the person looks stuck enough that a suggestion is worth
+    // showing at all. Returned rather than pushed: telling somebody "you seem
+    // to be struggling" unprompted lands badly however it is worded, and this
+    // way the suggestion appears beside their work because they opened the
+    // page.
+    let suggested =
+        crate::services::design_mentorship::could_use_a_mentor(&state.db, auth.user_id).await?;
+
+    Ok(Json(wrap(json!({
+        "mentors": mentors,
+        "suggested": suggested,
+    }))))
 }

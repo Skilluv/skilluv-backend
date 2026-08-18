@@ -645,7 +645,7 @@ mod tests {
         // too, at four times the round trips. It is the round trips.
         let five_gb = 5i64 * 1024 * 1024 * 1024;
         assert_eq!(part_count_for(five_gb), 320);
-        assert!(PART_SIZE >= MIN_PART_SIZE);
+        const { assert!(PART_SIZE >= MIN_PART_SIZE) };
     }
 
     #[test]

@@ -50,6 +50,12 @@ pub const DELIVERABLE_FORMATS: &[&str] = &[
     "repository_handover",
     "library_published",
     "consulting_report",
+    // Ops (migration 0251). A runbook is the deliverable here rather than
+    // documentation accompanying one.
+    "iac_repository",
+    "runbooks",
+    "dashboards",
+    "migration_executed",
 ];
 
 /// The statuses a mission can be moved to, from each status.
@@ -101,6 +107,14 @@ pub struct Mission {
     pub created_at: chrono::DateTime<chrono::Utc>,
     /// Absent on the public listing, present for the enterprise that owns it.
     pub application_count: Option<i64>,
+
+    pub target_platforms: Vec<String>,
+    pub includes_oncall: bool,
+    pub oncall_window: Option<String>,
+    pub oncall_response_minutes: Option<i16>,
+    pub oncall_has_backup: bool,
+    pub production_access_required: bool,
+    pub compliance_frameworks: Vec<String>,
 }
 
 const MISSION_SELECT: &str = r#"
@@ -115,7 +129,10 @@ const MISSION_SELECT: &str = r#"
            m.status, m.assigned_user_id, m.applications_close_at,
            m.published_at, m.created_at,
            (SELECT count(*) FROM mission_applications a WHERE a.mission_id = m.id)
-               AS application_count
+               AS application_count,
+           m.target_platforms, m.includes_oncall, m.oncall_window,
+           m.oncall_response_minutes, m.oncall_has_backup,
+           m.production_access_required, m.compliance_frameworks
       FROM missions m
       JOIN mission_types mt ON mt.id = m.mission_type_id
       LEFT JOIN orientations o ON o.id = m.orientation_id
@@ -159,6 +176,31 @@ pub struct CreateMissionInput {
     /// Optional, and checked against the IP terms when given (migration 0202).
     #[serde(default)]
     pub upstream_license_spdx: Option<String>,
+
+    /// `aws`, `gcp`, `azure`, `on-prem`. Empty means the work does not depend
+    /// on one.
+    #[serde(default)]
+    pub target_platforms: Vec<String>,
+    /// Whether the person is expected to be reachable. True requires a
+    /// window, a response time and a monthly retainer — the schema refuses
+    /// anything else, because unpaid availability is the most common way this
+    /// trade is exploited.
+    #[serde(default)]
+    pub includes_oncall: bool,
+    #[serde(default)]
+    pub oncall_window: Option<String>,
+    /// Time to acknowledge, not to resolve.
+    #[serde(default)]
+    pub oncall_response_minutes: Option<i16>,
+    #[serde(default)]
+    pub oncall_has_backup: bool,
+    /// Whether the work needs credentials on the client's live estate.
+    #[serde(default)]
+    pub production_access_required: bool,
+    /// `soc2`, `iso27001`, `hipaa`. Named so an applicant learns about the
+    /// background check before applying rather than after being refused.
+    #[serde(default)]
+    pub compliance_frameworks: Vec<String>,
 }
 
 fn yes() -> bool {
@@ -280,9 +322,12 @@ pub async fn create(
              deliverable_format, nda_required, ip_terms, payment_model,
              budget_eur, hourly_rate_eur, revenue_share_percent,
              remote_only, urgency, estimated_days, applications_close_at, created_by,
-             upstream_license_spdx)
+             upstream_license_spdx,
+             target_platforms, includes_oncall, oncall_window,
+             oncall_response_minutes, oncall_has_backup,
+             production_access_required, compliance_frameworks)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,
-                $23)
+                $23,$24,$25,$26,$27,$28,$29,$30)
         RETURNING id
         "#,
     )
@@ -309,16 +354,44 @@ pub async fn create(
     .bind(input.applications_close_at)
     .bind(author)
     .bind(input.upstream_license_spdx.as_deref())
+    .bind(&input.target_platforms)
+    .bind(input.includes_oncall)
+    .bind(input.oncall_window.as_deref())
+    .bind(input.oncall_response_minutes)
+    .bind(input.oncall_has_backup)
+    .bind(input.production_access_required)
+    .bind(&input.compliance_frameworks)
     .fetch_one(db)
     .await
     .map_err(|e| {
         if is_unique_violation(&e) {
             return AppError::Validation(format!("a mission already uses the slug '{slug}'"));
         }
+        let message = e.to_string();
+
+        // The two ops constraints from migration 0251 are positions rather
+        // than data errors, and a constraint name in a 500 would hide the
+        // position behind a stack trace.
+        if message.contains("oncall_missions_state_their_terms") {
+            return AppError::Validation(
+                "a mission that includes on-call states the window, the response \
+                 time to acknowledge, and a monthly retainer. Being reachable is \
+                 work whether or not anything happens, and this platform does not \
+                 publish it unpaid."
+                    .into(),
+            );
+        }
+        if message.contains("production_access_requires_an_nda") {
+            return AppError::Validation(
+                "a mission needing credentials on your live estate requires an \
+                 NDA. Set nda_required."
+                    .into(),
+            );
+        }
+
         // The licence trigger from migration 0202 raises text written for a
         // human already; passing it through beats replacing it with
         // something vaguer.
-        let message = e.to_string();
         for marker in [
             "cannot promise client ownership",
             "must be released under it",
@@ -638,6 +711,13 @@ pub struct ApplyInput {
     pub past_similar_missions: Option<String>,
     #[serde(default)]
     pub availability_hours_per_week: Option<i16>,
+    /// Whether this person can hold the rotation the mission describes.
+    /// Answered before selection, because answering after is how somebody
+    /// agrees to a rotation they cannot hold.
+    #[serde(default)]
+    pub oncall_available: Option<bool>,
+    #[serde(default)]
+    pub oncall_experience: Option<String>,
 }
 
 pub async fn apply(
@@ -692,18 +772,49 @@ pub async fn apply(
         ));
     }
 
+    if let Some(experience) = input.oncall_experience.as_deref()
+        && !crate::services::ops_onboarding::ONCALL_EXPERIENCE.contains(&experience)
+    {
+        return Err(AppError::Validation(format!(
+            "'{experience}' is not an on-call answer"
+        )));
+    }
+
+    // A mission that includes on-call cannot be applied to without answering
+    // whether the rotation is holdable. Asked here rather than left to the
+    // enterprise to ask later, because "later" is after selection, when
+    // saying no costs the applicant the mission.
+    let includes_oncall: bool =
+        sqlx::query_scalar("SELECT includes_oncall FROM missions WHERE id = $1")
+            .bind(mission_id)
+            .fetch_optional(db)
+            .await?
+            .ok_or_else(|| AppError::NotFound("mission not found".into()))?;
+
+    if includes_oncall && input.oncall_available.is_none() {
+        return Err(AppError::Validation(
+            "this mission includes on-call: say whether you can hold the rotation \
+             it describes. Answering after selection is how somebody agrees to a \
+             rotation they cannot hold."
+                .into(),
+        ));
+    }
+
     let id: Uuid = sqlx::query_scalar(
         r#"
         INSERT INTO mission_applications
             (mission_id, user_id, cover_letter, portfolio_urls, expertise,
-             past_similar_missions, availability_hours_per_week)
-        VALUES ($1,$2,$3,$4,$5,$6,$7)
+             past_similar_missions, availability_hours_per_week,
+             oncall_available, oncall_experience)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
         ON CONFLICT (mission_id, user_id) DO UPDATE
             SET cover_letter = EXCLUDED.cover_letter,
                 portfolio_urls = EXCLUDED.portfolio_urls,
                 expertise = EXCLUDED.expertise,
                 past_similar_missions = EXCLUDED.past_similar_missions,
                 availability_hours_per_week = EXCLUDED.availability_hours_per_week,
+                oncall_available = EXCLUDED.oncall_available,
+                oncall_experience = EXCLUDED.oncall_experience,
                 status = 'submitted'
         RETURNING id
         "#,
@@ -715,6 +826,8 @@ pub async fn apply(
     .bind(&expertise)
     .bind(input.past_similar_missions.as_deref().map(str::trim))
     .bind(input.availability_hours_per_week)
+    .bind(input.oncall_available)
+    .bind(input.oncall_experience.as_deref())
     .fetch_one(db)
     .await
     .map_err(open_mission_error)?;

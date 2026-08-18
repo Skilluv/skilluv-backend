@@ -172,13 +172,13 @@ async fn announce(
     #[derive(sqlx::FromRow)]
     struct Context {
         username: String,
-        external_hosting_url: Option<String>,
+        published_artifact_url: Option<String>,
         artifact_url: Option<String>,
     }
 
     let context: Result<Option<Context>, _> = sqlx::query_as(
         r#"
-        SELECT u.username, ps.ai_external_hosting_url, d.artifact_url
+        SELECT u.username, ps.published_artifact_url, d.artifact_url
           FROM deliverables d
           JOIN users u ON u.id = d.user_id
           LEFT JOIN project_slices ps ON ps.id = d.slice_id
@@ -191,7 +191,7 @@ async fn announce(
 
     let Ok(Some(Context {
         username,
-        external_hosting_url: hosting_url,
+        published_artifact_url: hosting_url,
         artifact_url,
     })) = context
     else {

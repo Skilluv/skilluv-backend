@@ -30,7 +30,7 @@ async fn a_safety_slice(app: &TestApp, owner: Uuid) -> Uuid {
     let slice: Uuid = sqlx::query_scalar(
         "INSERT INTO project_slices
             (project_id, title, description, primary_domain, slice_type,
-             ai_subtype, ai_external_hosting_url, difficulty, orientation_id)
+             ai_subtype, published_artifact_url, difficulty, orientation_id)
          VALUES ($1, 'Red-team', 'x', 'ai', 'ai_artifact', 'ai_research_paper',
                  'https://arxiv.org/abs/0000.00000', 4,
                  (SELECT id FROM orientations WHERE slug = 'ai-safety-researcher'))

@@ -1,9 +1,20 @@
 //! Reading a public registry or hub to see whether published work is used.
 //!
-//! Covers package registries — crates.io, npm, PyPI — and the model and
-//! dataset hubs, HuggingFace and Kaggle. The question is the same in both
-//! cases and so is the answer: which registry, what it is called there, how
-//! many downloads, and when we last asked.
+//! Covers package registries — crates.io, npm, PyPI — the model and dataset
+//! hubs, HuggingFace and Kaggle, and the infrastructure registries a
+//! published ops artefact lives on: Terraform, Ansible Galaxy, ArtifactHub,
+//! Docker Hub. The question is the same in all three cases and so is the
+//! answer: which registry, what it is called there, how many downloads, and
+//! when we last asked.
+//!
+//! ## What each one is willing to say
+//!
+//! Not all of them answer "how many". The Terraform registry and Docker Hub
+//! publish a lifetime count; ArtifactHub publishes stars and no count at all;
+//! Galaxy publishes a count whose field name has moved twice. So a figure is
+//! stored where it belongs — stars in `likes_count`, never in a downloads
+//! column — and absent where it is genuinely absent. Filling a downloads
+//! column with an approval count would claim use the hub never measured.
 //!
 //! ## What is testable and what is not
 //!
@@ -136,6 +147,55 @@ pub fn identify(url: &str) -> Option<PackageRef> {
             ["datasets", owner, name, ..] => named("kaggle_datasets", format!("{owner}/{name}")),
             _ => None,
         },
+        // The Terraform registry holds two different things at two paths, and
+        // they are not interchangeable: a module is code somebody calls, a
+        // provider is a plugin somebody configures. Both are kept, prefixed,
+        // because the API path differs and the name alone would not say which.
+        //   https://registry.terraform.io/modules/terraform-aws-modules/vpc/aws
+        //   https://registry.terraform.io/providers/hashicorp/aws
+        "registry.terraform.io" | "registry.opentofu.org" => match segments.as_slice() {
+            ["modules", namespace, name, provider, ..] => named(
+                "terraform_registry",
+                format!("modules/{namespace}/{name}/{provider}"),
+            ),
+            ["providers", namespace, name, ..] => named(
+                "terraform_registry",
+                format!("providers/{namespace}/{name}"),
+            ),
+            _ => None,
+        },
+        // Galaxy moved its collections behind a `/ui/repo/published/` prefix
+        // and kept the old two-segment form working. Both arrive from real
+        // people, so both are read.
+        //   https://galaxy.ansible.com/ui/repo/published/community/general/
+        //   https://galaxy.ansible.com/community/general
+        "galaxy.ansible.com" => match segments.as_slice() {
+            ["ui", "repo", _repo, namespace, name, ..] => {
+                named("ansible_galaxy", format!("{namespace}/{name}"))
+            }
+            [namespace, name, ..] if *namespace != "ui" => {
+                named("ansible_galaxy", format!("{namespace}/{name}"))
+            }
+            _ => None,
+        },
+        // https://artifacthub.io/packages/helm/bitnami/postgresql
+        // The kind is part of the identity: a Helm chart and an OLM operator
+        // called `postgresql` are different things from different publishers.
+        "artifacthub.io" => match segments.as_slice() {
+            ["packages", kind, repo, name, ..] => {
+                named("artifacthub", format!("{kind}/{repo}/{name}"))
+            }
+            _ => None,
+        },
+        // https://hub.docker.com/r/grafana/grafana  (a user or organisation)
+        // https://hub.docker.com/_/postgres         (an official image)
+        // Official images live under the `library` namespace in the API, and
+        // storing them that way means one fetch path instead of two.
+        "hub.docker.com" => match segments.as_slice() {
+            ["r", owner, name, ..] => named("docker_hub", format!("{owner}/{name}")),
+            ["_", name, ..] => named("docker_hub", format!("library/{name}")),
+            _ => None,
+        },
         _ => None,
     }
 }
@@ -167,6 +227,10 @@ pub async fn fetch(
         "pypi" => fetch_pypi(client, &package.name).await,
         "huggingface_models" => fetch_huggingface(client, "models", &package.name).await,
         "huggingface_datasets" => fetch_huggingface(client, "datasets", &package.name).await,
+        "terraform_registry" => fetch_terraform(client, &package.name).await,
+        "ansible_galaxy" => fetch_ansible_galaxy(client, &package.name).await,
+        "artifacthub" => fetch_artifacthub(client, &package.name).await,
+        "docker_hub" => fetch_docker_hub(client, &package.name).await,
         // Recognised, and honest about having nothing to report.
         _ => Ok(PackageStats::default()),
     }
@@ -315,6 +379,162 @@ async fn fetch_huggingface(
     })
 }
 
+#[derive(Deserialize)]
+struct TerraformArtifact {
+    /// Lifetime downloads. The registry publishes this for both modules and
+    /// providers, which makes it the only infrastructure registry of the four
+    /// that answers the question directly.
+    downloads: Option<i64>,
+    version: Option<String>,
+}
+
+/// Ask the Terraform registry about a module or a provider.
+///
+/// The name carries its own path — `modules/ns/name/provider` or
+/// `providers/ns/name` — because the two live at different endpoints and a
+/// bare name would not say which to call.
+async fn fetch_terraform(client: &reqwest::Client, name: &str) -> Result<PackageStats, AppError> {
+    let body: TerraformArtifact = client
+        .get(format!("https://registry.terraform.io/v1/{name}"))
+        .header("User-Agent", "skilluv (https://skill-uv.com)")
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("Terraform registry unreachable: {e}")))?
+        .error_for_status()
+        .map_err(|e| AppError::Internal(format!("Terraform registry refused: {e}")))?
+        .json()
+        .await
+        .map_err(|e| {
+            AppError::Internal(format!("Terraform registry sent something unexpected: {e}"))
+        })?;
+
+    Ok(PackageStats {
+        latest_version: body.version,
+        downloads_total: body.downloads,
+        downloads_recent: None,
+        dependents_count: None,
+        likes_count: None,
+    })
+}
+
+#[derive(Deserialize)]
+struct GalaxyCollection {
+    download_count: Option<i64>,
+    highest_version: Option<GalaxyVersion>,
+}
+
+#[derive(Deserialize)]
+struct GalaxyVersion {
+    version: Option<String>,
+}
+
+/// Ask Ansible Galaxy about a collection.
+///
+/// Every field is optional on purpose. Galaxy has changed its API shape twice
+/// and will again; a rename upstream should cost us a NULL, which reads as
+/// "not measured", rather than a hard error that marks the artefact broken
+/// when the only thing broken is our guess about a field name.
+async fn fetch_ansible_galaxy(
+    client: &reqwest::Client,
+    name: &str,
+) -> Result<PackageStats, AppError> {
+    let (namespace, collection) = name
+        .split_once('/')
+        .ok_or_else(|| AppError::Internal(format!("'{name}' is not namespace/collection")))?;
+
+    let body: GalaxyCollection = client
+        .get(format!(
+            "https://galaxy.ansible.com/api/v3/plugin/ansible/content/published/collections/index/{namespace}/{collection}/"
+        ))
+        .header("User-Agent", "skilluv (https://skill-uv.com)")
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("Ansible Galaxy unreachable: {e}")))?
+        .error_for_status()
+        .map_err(|e| AppError::Internal(format!("Ansible Galaxy refused: {e}")))?
+        .json()
+        .await
+        .map_err(|e| AppError::Internal(format!("Ansible Galaxy sent something unexpected: {e}")))?;
+
+    Ok(PackageStats {
+        latest_version: body.highest_version.and_then(|v| v.version),
+        downloads_total: body.download_count,
+        downloads_recent: None,
+        dependents_count: None,
+        likes_count: None,
+    })
+}
+
+#[derive(Deserialize)]
+struct ArtifactHubPackage {
+    version: Option<String>,
+    stars: Option<i32>,
+}
+
+/// Ask ArtifactHub about a chart, an operator or a policy.
+///
+/// It publishes stars and no download count, so the figure lands in
+/// `likes_count`. Putting stars in a downloads column would claim use where
+/// the hub only knows about approval, which is the distinction migration 0216
+/// added the column for.
+async fn fetch_artifacthub(client: &reqwest::Client, name: &str) -> Result<PackageStats, AppError> {
+    let body: ArtifactHubPackage = client
+        .get(format!("https://artifacthub.io/api/v1/packages/{name}"))
+        .header("User-Agent", "skilluv (https://skill-uv.com)")
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("ArtifactHub unreachable: {e}")))?
+        .error_for_status()
+        .map_err(|e| AppError::Internal(format!("ArtifactHub refused: {e}")))?
+        .json()
+        .await
+        .map_err(|e| AppError::Internal(format!("ArtifactHub sent something unexpected: {e}")))?;
+
+    Ok(PackageStats {
+        latest_version: body.version,
+        downloads_total: None,
+        downloads_recent: None,
+        dependents_count: None,
+        likes_count: body.stars,
+    })
+}
+
+#[derive(Deserialize)]
+struct DockerHubRepository {
+    pull_count: Option<i64>,
+    star_count: Option<i32>,
+}
+
+/// Ask Docker Hub about an image.
+///
+/// `pull_count` is lifetime pulls, and it is worth reading with the same
+/// caution as an npm figure: automated builds pull too, so a large number
+/// says the image is wired into pipelines rather than that people chose it.
+/// It is still the only usage figure the hub publishes.
+async fn fetch_docker_hub(client: &reqwest::Client, name: &str) -> Result<PackageStats, AppError> {
+    let body: DockerHubRepository = client
+        .get(format!("https://hub.docker.com/v2/repositories/{name}/"))
+        .header("User-Agent", "skilluv (https://skill-uv.com)")
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("Docker Hub unreachable: {e}")))?
+        .error_for_status()
+        .map_err(|e| AppError::Internal(format!("Docker Hub refused: {e}")))?
+        .json()
+        .await
+        .map_err(|e| AppError::Internal(format!("Docker Hub sent something unexpected: {e}")))?;
+
+    Ok(PackageStats {
+        // The hub versions by tag, and an image has many at once. Naming one
+        // would be picking a favourite.
+        latest_version: None,
+        downloads_total: body.pull_count,
+        downloads_recent: None,
+        dependents_count: None,
+        likes_count: body.star_count,
+    })
+}
+
 /// Record what a registry said, keeping the previous figures on failure.
 ///
 /// A failed fetch writes the error and leaves the numbers alone. An old
@@ -390,16 +610,14 @@ pub async fn record(
 pub async fn sync_stale(db: &PgPool, client: &reqwest::Client) -> Result<usize, AppError> {
     let rows: Vec<(Uuid, String)> = sqlx::query_as(
         r#"
-        SELECT ps.id,
-               COALESCE(ps.code_package_registry_url, ps.ai_external_hosting_url) AS url
+        SELECT ps.id, ps.published_artifact_url AS url
           FROM project_slices ps
           LEFT JOIN published_artifact_stats st ON st.slice_id = ps.id
-         WHERE (
-                 (ps.code_subtype = 'library_published'
-                  AND ps.code_package_registry_url IS NOT NULL)
-              OR (ps.ai_subtype IN ('ml_model', 'dataset')
-                  AND ps.ai_external_hosting_url IS NOT NULL)
-               )
+         WHERE ps.published_artifact_url IS NOT NULL
+           -- Any slice that named a published artefact, whatever domain it
+           -- came from. The subtype list this used to carry had to be edited
+           -- every time a domain arrived, and the edit was forgotten once:
+           -- ops artefacts were storable and never fetched.
            AND (st.fetched_at IS NULL OR st.fetched_at < NOW() - INTERVAL '7 days')
          LIMIT 500
         "#,
@@ -446,7 +664,7 @@ async fn announce_publication(
     package: &PackageRef,
 ) -> Result<(), AppError> {
     let row: Option<(Uuid, String, String)> = sqlx::query_as(
-        "SELECT d.user_id, u.username, ps.code_package_registry_url
+        "SELECT d.user_id, u.username, ps.published_artifact_url
            FROM project_slices ps
            JOIN deliverables d ON d.slice_id = ps.id
            JOIN users u ON u.id = d.user_id
@@ -618,5 +836,79 @@ mod tests {
             ident("https://www.npmjs.com/package/svelte?activeTab=readme"),
             Some(("npm", "svelte".into()))
         );
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // The infrastructure registries
+    // ═══════════════════════════════════════════════════════════════
+
+    #[test]
+    fn a_terraform_module_and_a_provider_are_told_apart() {
+        // The path is kept in the name because the API endpoint differs, and
+        // `hashicorp/aws` alone would not say which of the two to call.
+        assert_eq!(
+            ident("https://registry.terraform.io/modules/terraform-aws-modules/vpc/aws"),
+            Some((
+                "terraform_registry",
+                "modules/terraform-aws-modules/vpc/aws".into()
+            ))
+        );
+        assert_eq!(
+            ident("https://registry.terraform.io/providers/hashicorp/aws"),
+            Some(("terraform_registry", "providers/hashicorp/aws".into()))
+        );
+        // OpenTofu's registry mirrors the same layout, and somebody who left
+        // Terraform over the licence should not lose their figures for it.
+        assert_eq!(
+            ident("https://registry.opentofu.org/providers/hashicorp/aws"),
+            Some(("terraform_registry", "providers/hashicorp/aws".into()))
+        );
+        // A module URL missing its provider segment is not a module.
+        assert_eq!(
+            ident("https://registry.terraform.io/modules/terraform-aws-modules"),
+            None
+        );
+    }
+
+    #[test]
+    fn both_shapes_of_galaxy_url_reach_the_same_collection() {
+        assert_eq!(
+            ident("https://galaxy.ansible.com/ui/repo/published/community/general/"),
+            Some(("ansible_galaxy", "community/general".into()))
+        );
+        assert_eq!(
+            ident("https://galaxy.ansible.com/community/general"),
+            Some(("ansible_galaxy", "community/general".into()))
+        );
+    }
+
+    #[test]
+    fn an_artifacthub_package_carries_its_kind() {
+        // A Helm chart and an OLM operator can share a name and come from
+        // different publishers; the kind is part of the identity.
+        assert_eq!(
+            ident("https://artifacthub.io/packages/helm/bitnami/postgresql"),
+            Some(("artifacthub", "helm/bitnami/postgresql".into()))
+        );
+        assert_eq!(
+            ident("https://artifacthub.io/packages/olm/community-operators/postgresql"),
+            Some(("artifacthub", "olm/community-operators/postgresql".into()))
+        );
+    }
+
+    #[test]
+    fn an_official_docker_image_is_stored_under_library() {
+        // That is where the API keeps it, so storing it that way means one
+        // fetch path rather than two.
+        assert_eq!(
+            ident("https://hub.docker.com/_/postgres"),
+            Some(("docker_hub", "library/postgres".into()))
+        );
+        assert_eq!(
+            ident("https://hub.docker.com/r/grafana/grafana"),
+            Some(("docker_hub", "grafana/grafana".into()))
+        );
+        // The search page is not an image.
+        assert_eq!(ident("https://hub.docker.com/search?q=postgres"), None);
     }
 }

@@ -139,18 +139,17 @@ pub struct ProjectSlice {
     /// AI: what the finished artefact is (migration 0214).
     #[serde(default)]
     pub ai_subtype: Option<String>,
-    /// AI: where the weights, dataset or paper actually live.
-    #[serde(default)]
-    pub ai_external_hosting_url: Option<String>,
 
     /// Design: what the finished artefact is (migration 0405).
     /// See [`DesignSubtype`].
     #[serde(default)]
     pub design_subtype: Option<String>,
-    /// Design: where the current version lives — a Figma node, a hosted
-    /// board, a published project, or a stored object.
+    /// Where the finished artefact can be found, whatever domain produced it
+    /// (migration 0428): a package registry, a model hub, an infrastructure
+    /// registry, a Figma node, or an object path in our storage for the
+    /// source formats that have no public home.
     #[serde(default)]
-    pub design_external_url: Option<String>,
+    pub published_artifact_url: Option<String>,
     /// Design: what the author says changed since the previous version.
     /// Copied into the decision row when somebody reviews it.
     #[serde(default)]

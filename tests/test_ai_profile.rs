@@ -30,7 +30,7 @@ async fn a_verified_model(app: &TestApp, user: Uuid, orientation: &str) -> Uuid 
     let slice: Uuid = sqlx::query_scalar(
         "INSERT INTO project_slices
             (project_id, title, description, primary_domain, slice_type,
-             ai_subtype, ai_external_hosting_url, difficulty, orientation_id)
+             ai_subtype, published_artifact_url, difficulty, orientation_id)
          VALUES ($1, 'Modèle', 'x', 'ai', 'ai_artifact', 'ml_model',
                  'https://huggingface.co/skilluv/demo', 3,
                  (SELECT id FROM orientations WHERE slug = $2))

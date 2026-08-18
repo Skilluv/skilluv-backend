@@ -116,7 +116,7 @@ struct DesignSliceState {
     slice_type: String,
     claimed_by_user_id: Option<Uuid>,
     orientation_slug: Option<String>,
-    design_external_url: Option<String>,
+    published_artifact_url: Option<String>,
     design_version_notes_md: Option<String>,
     fragments_reward: i32,
     design_subtype: Option<String>,
@@ -127,7 +127,7 @@ async fn load_design_slice(db: &PgPool, slice_id: Uuid) -> Result<DesignSliceSta
         r#"
         SELECT s.title, s.status, s.slice_type, s.claimed_by_user_id,
                o.slug AS orientation_slug,
-               s.design_external_url, s.design_version_notes_md,
+               s.published_artifact_url, s.design_version_notes_md,
                s.fragments_reward, s.design_subtype
           FROM project_slices s
           LEFT JOIN orientations o ON o.id = s.orientation_id
@@ -189,7 +189,7 @@ pub async fn submit_version(
     let slice = sqlx::query_as::<_, ProjectSlice>(
         r#"
         UPDATE project_slices
-           SET design_external_url = $2,
+           SET published_artifact_url = $2,
                design_version_notes_md = $3,
                status = 'pending_validation',
                updated_at = NOW()
@@ -420,7 +420,7 @@ pub async fn review(
     .bind(input.verdict.as_decision())
     .bind(feedback)
     .bind(blocking_reason)
-    .bind(state.design_external_url.as_deref())
+    .bind(state.published_artifact_url.as_deref())
     .bind(state.design_version_notes_md.as_deref())
     .bind(&input.grid_scores)
     .execute(&mut *tx)
@@ -449,7 +449,7 @@ pub async fn review(
         // re-runnable problem, whereas a half-written validation is not. The
         // proof — the deliverable — is already committed.
         if let (Some(deliverable_id), Some(url)) =
-            (deliverable_id, state.design_external_url.as_deref())
+            (deliverable_id, state.published_artifact_url.as_deref())
         {
             crate::services::design_attestations::deliverable_validated(
                 db,
@@ -561,7 +561,7 @@ async fn record_deliverable(
     }
 
     let url = state
-        .design_external_url
+        .published_artifact_url
         .clone()
         .ok_or_else(|| AppError::Validation("no version to record as a deliverable".into()))?;
 

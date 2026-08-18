@@ -34,7 +34,7 @@ async fn a_model_slice(app: &TestApp, project: Uuid) -> Uuid {
     sqlx::query_scalar(
         "INSERT INTO project_slices
             (project_id, title, description, primary_domain, slice_type,
-             ai_subtype, ai_frameworks, ai_external_hosting_url, difficulty,
+             ai_subtype, ai_frameworks, published_artifact_url, difficulty,
              orientation_id)
          VALUES ($1, 'Modèle', 'x', 'ai', 'ai_artifact', 'ml_model',
                  ARRAY['pytorch'], 'https://huggingface.co/skilluv/demo', 3,
@@ -116,7 +116,7 @@ async fn a_model_says_where_it_lives() {
     let accepted = sqlx::query(
         "INSERT INTO project_slices
             (project_id, title, description, primary_domain, slice_type, ai_subtype,
-             ai_external_hosting_url, difficulty)
+             published_artifact_url, difficulty)
          VALUES ($1, 'Modèle', 'x', 'ai', 'ai_artifact', 'ml_model',
                  'https://huggingface.co/skilluv/demo', 3)",
     )

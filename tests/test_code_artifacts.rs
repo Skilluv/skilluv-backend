@@ -94,7 +94,7 @@ async fn a_published_library_says_where_it_was_published() {
     let accepted = sqlx::query(
         "INSERT INTO project_slices
             (project_id, title, description, primary_domain, slice_type, code_subtype,
-             code_package_registry_url, difficulty)
+             published_artifact_url, difficulty)
          VALUES ($1, 'Biblio', 'x', 'code', 'code_artifact', 'library_published',
                  'https://crates.io/crates/exemple', 3)",
     )

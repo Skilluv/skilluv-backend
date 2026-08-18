@@ -150,7 +150,7 @@ async fn the_artifact_feed_shows_only_verified_public_work() {
         let slice: Uuid = sqlx::query_scalar(
             "INSERT INTO project_slices
                 (project_id, title, description, primary_domain, slice_type,
-                 ai_subtype, ai_frameworks, ai_external_hosting_url, difficulty,
+                 ai_subtype, ai_frameworks, published_artifact_url, difficulty,
                  orientation_id)
              VALUES ($1, $2, 'x', 'ai', 'ai_artifact', 'ml_model', ARRAY['pytorch'],
                      'https://huggingface.co/skilluv/demo', 3,

@@ -25,7 +25,7 @@ async fn a_published_library(app: &TestApp, url: &str) -> Uuid {
     sqlx::query_scalar(
         "INSERT INTO project_slices
             (project_id, title, description, primary_domain, slice_type, code_subtype,
-             code_package_registry_url, difficulty)
+             published_artifact_url, difficulty)
          VALUES ($1, 'Biblio', 'x', 'code', 'code_artifact', 'library_published', $2, 3)
          RETURNING id",
     )
@@ -242,7 +242,7 @@ async fn a_published_model(app: &TestApp, url: &str) -> Uuid {
     sqlx::query_scalar(
         "INSERT INTO project_slices
             (project_id, title, description, primary_domain, slice_type, ai_subtype,
-             ai_external_hosting_url, difficulty)
+             published_artifact_url, difficulty)
          VALUES ($1, 'Modele', 'x', 'ai', 'ai_artifact', 'ml_model', $2, 3)
          RETURNING id",
     )

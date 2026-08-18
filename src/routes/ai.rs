@@ -323,7 +323,7 @@ pub async fn artifacts(
                ps.title,
                ps.ai_subtype,
                ps.ai_frameworks,
-               ps.ai_external_hosting_url AS hosting_url,
+               ps.published_artifact_url AS hosting_url,
                ps.ai_model_size_params AS model_size_params,
                u.username AS author_username,
                o.slug AS orientation_slug,

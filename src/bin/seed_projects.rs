@@ -656,8 +656,192 @@ const AI_REPOS: &[SeedProject] = &[
     },
 ];
 
+/// The infrastructure the rest of the industry runs on.
+///
+/// Chosen against one filter the ops domain makes unavoidable: a contributor
+/// has to be able to run the thing. A cloud provider's control plane is not
+/// on this list however much ops work it represents, because nobody can
+/// reproduce it on a laptop; a Terraform provider, an operator and a
+/// database engine all can.
+///
+/// Documentation labels are curated as deliberately as code ones here. In
+/// this domain the documentation *is* the artefact half the time — a runbook
+/// that reads correctly at three in the morning is worth more than a patch —
+/// and the review grid says so.
+const OPS_REPOS: &[SeedProject] = &[
+    SeedProject {
+        slug: "terraform-provider-aws",
+        name: "Terraform AWS Provider",
+        description: "Le fournisseur le plus utilisé du plus utilisé des outils d'infrastructure. Une ressource mal décrite ici casse des milliers de plans.",
+        github_owner: "hashicorp",
+        github_repo: "terraform-provider-aws",
+        skill_domains: &["ops", "code"],
+        tech_stack: &["go", "terraform"],
+        curated_labels: &["good first issue"],
+        label_orientations: &[("good first issue", "devops-engineer")],
+        curated: true,
+    },
+    SeedProject {
+        slug: "terraform-provider-google",
+        name: "Terraform Google Provider",
+        description: "Même métier, autre nuage. Un bon terrain pour qui veut apprendre les deux sans réapprendre l'outil.",
+        github_owner: "hashicorp",
+        github_repo: "terraform-provider-google",
+        skill_domains: &["ops", "code"],
+        tech_stack: &["go", "terraform"],
+        curated_labels: &["good first issue"],
+        label_orientations: &[("good first issue", "devops-engineer")],
+        curated: true,
+    },
+    SeedProject {
+        slug: "opentofu",
+        name: "OpenTofu",
+        description: "L'embranchement communautaire de Terraform. Petit assez pour qu'une contribution se voie, sérieux assez pour tourner en production.",
+        github_owner: "opentofu",
+        github_repo: "opentofu",
+        skill_domains: &["ops", "code"],
+        tech_stack: &["go"],
+        curated_labels: &["good first issue"],
+        label_orientations: &[("good first issue", "devops-engineer")],
+        curated: true,
+    },
+    SeedProject {
+        slug: "kubernetes",
+        name: "Kubernetes",
+        description: "Grand, lent à relire, et la référence du métier. À aborder par la documentation ou par un SIG précis, pas par le cœur.",
+        github_owner: "kubernetes",
+        github_repo: "kubernetes",
+        skill_domains: &["ops", "code"],
+        tech_stack: &["go"],
+        curated_labels: &["good first issue"],
+        label_orientations: &[("good first issue", "kubernetes-specialist")],
+        curated: true,
+    },
+    SeedProject {
+        slug: "kubebuilder",
+        name: "Kubebuilder",
+        description: "L'outil avec lequel on écrit un opérateur. Contribuer ici, c'est améliorer la façon dont les autres écrivent les leurs.",
+        github_owner: "kubernetes-sigs",
+        github_repo: "kubebuilder",
+        skill_domains: &["ops", "code"],
+        tech_stack: &["go"],
+        curated_labels: &["good first issue"],
+        label_orientations: &[("good first issue", "kubernetes-specialist")],
+        curated: true,
+    },
+    SeedProject {
+        slug: "argo-cd",
+        name: "Argo CD",
+        description: "GitOps, c'est-à-dire un cluster qui se rapproche tout seul de ce qui est écrit dans un dépôt.",
+        github_owner: "argoproj",
+        github_repo: "argo-cd",
+        skill_domains: &["ops", "code"],
+        tech_stack: &["go", "kubernetes"],
+        curated_labels: &["good first issue"],
+        label_orientations: &[("good first issue", "kubernetes-specialist")],
+        curated: true,
+    },
+    SeedProject {
+        slug: "flux2",
+        name: "Flux",
+        description: "L'autre réconciliateur GitOps, plus petit et plus abordable pour une première contribution.",
+        github_owner: "fluxcd",
+        github_repo: "flux2",
+        skill_domains: &["ops", "code"],
+        tech_stack: &["go", "kubernetes"],
+        curated_labels: &["good first issue"],
+        label_orientations: &[("good first issue", "kubernetes-specialist")],
+        curated: true,
+    },
+    SeedProject {
+        slug: "prometheus",
+        name: "Prometheus",
+        description: "La base de données de séries temporelles que presque toute la surveillance utilise.",
+        github_owner: "prometheus",
+        github_repo: "prometheus",
+        skill_domains: &["ops", "code"],
+        tech_stack: &["go"],
+        curated_labels: &["good first issue"],
+        label_orientations: &[("good first issue", "observability-engineer")],
+        curated: true,
+    },
+    SeedProject {
+        slug: "grafana",
+        name: "Grafana",
+        description: "Ce que les gens regardent pendant un incident. Un tableau de bord communautaire est une contribution à part entière.",
+        github_owner: "grafana",
+        github_repo: "grafana",
+        skill_domains: &["ops", "code"],
+        tech_stack: &["go", "typescript"],
+        curated_labels: &["good first issue"],
+        label_orientations: &[("good first issue", "observability-engineer")],
+        curated: true,
+    },
+    SeedProject {
+        slug: "opentelemetry-collector",
+        name: "OpenTelemetry Collector",
+        description: "Le tuyau par lequel passent métriques, journaux et traces. Beaucoup de contributions utiles y sont des exportateurs.",
+        github_owner: "open-telemetry",
+        github_repo: "opentelemetry-collector",
+        skill_domains: &["ops", "code"],
+        tech_stack: &["go"],
+        curated_labels: &["good first issue"],
+        label_orientations: &[("good first issue", "observability-engineer")],
+        curated: true,
+    },
+    SeedProject {
+        slug: "postgres",
+        name: "PostgreSQL",
+        description: "Le moteur sous Skilluv, et l'un des rares projets où une contribution se relit sur plusieurs mois. Les extensions sont la porte d'entrée.",
+        github_owner: "postgres",
+        github_repo: "postgres",
+        skill_domains: &["ops", "code"],
+        tech_stack: &["c"],
+        curated_labels: &[],
+        label_orientations: &[],
+        curated: true,
+    },
+    SeedProject {
+        slug: "clickhouse",
+        name: "ClickHouse",
+        description: "Analytique en colonnes. Rapide, exigeant, et un terrain sérieux pour qui veut faire de l'exploitation de bases un métier.",
+        github_owner: "ClickHouse",
+        github_repo: "ClickHouse",
+        skill_domains: &["ops", "code"],
+        tech_stack: &["c++"],
+        curated_labels: &["easy task"],
+        label_orientations: &[("easy task", "database-administrator")],
+        curated: true,
+    },
+    SeedProject {
+        slug: "vault",
+        name: "Vault",
+        description: "La gestion des secrets, c'est-à-dire le premier motif de refus en relecture ops.",
+        github_owner: "hashicorp",
+        github_repo: "vault",
+        skill_domains: &["ops", "security"],
+        tech_stack: &["go"],
+        curated_labels: &[],
+        label_orientations: &[],
+        curated: true,
+    },
+    SeedProject {
+        slug: "ansible",
+        name: "Ansible",
+        description: "Configuration sans agent. Les collections communautaires acceptent des contributions de taille raisonnable.",
+        github_owner: "ansible",
+        github_repo: "ansible",
+        skill_domains: &["ops", "code"],
+        tech_stack: &["python"],
+        curated_labels: &["easyfix"],
+        label_orientations: &[("easyfix", "devops-engineer")],
+        curated: true,
+    },
+];
+
 /// Everything, in the order it should be seeded.
-const ALL_PROJECTS: &[&[SeedProject]] = &[SKILLUV_REPOS, PARTNER_REPOS, ECOSYSTEM_REPOS, AI_REPOS];
+const ALL_PROJECTS: &[&[SeedProject]] =
+    &[SKILLUV_REPOS, PARTNER_REPOS, ECOSYSTEM_REPOS, AI_REPOS, OPS_REPOS];
 
 #[tokio::main]
 async fn main() -> Result<()> {

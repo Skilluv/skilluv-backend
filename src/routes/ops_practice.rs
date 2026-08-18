@@ -17,6 +17,8 @@ use crate::services::ops_practice;
 pub fn ops_routes() -> Router<AppState> {
     Router::new()
         .route("/ops/reference", get(reference))
+        .route("/users/{username}/ops-profile", get(ops_profile))
+        .route("/ops/toolkit", get(toolkit))
         // Service objectives.
         .route(
             "/ops/objectives",
@@ -37,6 +39,8 @@ pub fn admin_ops_practice_routes() -> Router<AppState> {
         .route("/admin/ops/objectives/{id}/verify", post(verify_objective))
         .route("/admin/ops/cost-work/{id}/verify", post(verify_cost_work))
         .route("/admin/ops/overdue-actions", get(overdue_actions))
+        .route("/admin/ops/attestations/artefact", post(attest_artefact))
+        .route("/admin/ops/attestations/featured", post(attest_featured))
 }
 
 fn build_response(data: Value) -> Value {
@@ -394,4 +398,150 @@ pub async fn verify_cost_work(
         "verified": true,
         "attestation_issued": attested,
     }))))
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct ArtefactAttestationBody {
+    pub user_id: Uuid,
+    /// `ops_infra_shipped`, `ops_observability_stack_shipped` or
+    /// `ops_migration_completed`.
+    pub basis: String,
+    pub deliverable_id: Uuid,
+    pub title: String,
+    pub evidence_url: String,
+}
+
+/// Attest an ops artefact somebody delivered.
+///
+/// The basis and the artefact's subtype have to agree — a migration
+/// attestation cannot be issued from a dashboard — which is checked in the
+/// service rather than here, because it is a statement about the domain and
+/// not about the request.
+#[utoipa::path(
+    post, path = "/api/admin/ops/attestations/artefact", tag = "admin",
+    request_body = ArtefactAttestationBody,
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 400, description = "Unknown basis, or an artefact the basis does not accept", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn attest_artefact(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Json(body): Json<ArtefactAttestationBody>,
+) -> Result<Json<Value>, AppError> {
+    crate::routes::admin::require_admin(&state, &auth).await?;
+    ops_practice::attest_artefact(
+        &state.db,
+        body.user_id,
+        &body.basis,
+        body.deliverable_id,
+        &body.title,
+        &body.evidence_url,
+    )
+    .await?;
+    Ok(Json(build_response(json!({ "issued": true }))))
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct FeaturedBody {
+    pub user_id: Uuid,
+    pub reason: String,
+}
+
+/// The community attestation, which rests on a decision rather than a file.
+#[utoipa::path(
+    post, path = "/api/admin/ops/attestations/featured", tag = "admin",
+    request_body = FeaturedBody,
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 400, description = "No reason given", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn attest_featured(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Json(body): Json<FeaturedBody>,
+) -> Result<Json<Value>, AppError> {
+    crate::routes::admin::require_admin(&state, &auth).await?;
+    ops_practice::attest_featured(&state.db, body.user_id, &body.reason).await?;
+    Ok(Json(build_response(json!({ "issued": true }))))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// GET /users/{username}/ops-profile
+// ═══════════════════════════════════════════════════════════════════
+
+/// What one person has to show in the ops trades, and a score for it.
+///
+/// Derived on every call rather than read from a stored total. The backlog
+/// asked for a `craft_score_ops` column; a column keeps the points of a
+/// revoked attestation until somebody remembers to recompute, and this is a
+/// platform that sells the opposite of that.
+#[utoipa::path(
+    get, path = "/api/users/{username}/ops-profile", tag = "profile",
+    params(("username" = String, Path, description = "Username")),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 404, description = "No such person", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn ops_profile(
+    State(state): State<AppState>,
+    Path(username): Path<String>,
+) -> Result<Json<Value>, AppError> {
+    let profile = crate::services::ops_profile::build(&state.db, &username).await?;
+    Ok(Json(build_response(json!({ "profile": profile }))))
+}
+
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+pub struct ToolkitQuery {
+    pub category: Option<String>,
+    pub orientation: Option<String>,
+}
+
+/// The curated ops toolkit, including where to practise without a budget.
+///
+/// The `access_note` on every row is the point of the list. A page that names
+/// Terraform, Kubernetes and Datadog without saying what each one costs to
+/// reach is a page that tells somebody in Cotonou the trade is not for them.
+#[utoipa::path(
+    get, path = "/api/ops/toolkit", tag = "work",
+    params(ToolkitQuery),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 400, description = "Invalid filter", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn toolkit(
+    State(state): State<AppState>,
+    axum::extract::Query(q): axum::extract::Query<ToolkitQuery>,
+) -> Result<Json<Value>, AppError> {
+    crate::validators::check_max_len_opt(&q.category, "category", 20)?;
+    crate::validators::check_max_len_opt(&q.orientation, "orientation", 60)?;
+
+    let resources: Vec<Value> = sqlx::query_scalar(
+        "SELECT jsonb_build_object(
+                    'slug', slug, 'display_name', display_name,
+                    'category', category, 'url', url, 'summary', summary,
+                    'access_note', access_note,
+                    'orientation_slugs', orientation_slugs)
+           FROM external_resources
+          WHERE is_curated = TRUE AND domain = 'ops'
+            AND ($1::TEXT IS NULL OR category = $1)
+            -- A resource tagged for no trade serves every trade: excluding it
+            -- would hide Docker from somebody who asked for the SRE toolkit.
+            AND ($2::TEXT IS NULL
+                 OR cardinality(orientation_slugs) = 0
+                 OR $2 = ANY(orientation_slugs))
+          ORDER BY category, sort_order, display_name",
+    )
+    .bind(q.category.as_deref())
+    .bind(q.orientation.as_deref())
+    .fetch_all(&state.db)
+    .await?;
+
+    Ok(Json(build_response(json!({ "resources": resources }))))
 }

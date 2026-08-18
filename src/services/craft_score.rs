@@ -222,53 +222,41 @@ pub fn points_for(kind: &str, weight: f64, baseline: Option<f64>, measured: f64)
     raw.round().max(0.0) as i32
 }
 
-/// Compute the score without storing it.
-pub async fn compute(db: &PgPool, user_id: Uuid) -> Result<CraftScore, AppError> {
+/// Turn a domain's weight rows and one domain's measurements into a score.
+///
+/// The half of a craft score that is identical for every domain: read the
+/// rows, apply the kind, cap the total, resolve the tier. What differs is
+/// what each term counts, and that is the closure — `None` means the term was
+/// not measured, which is not the same as measured zero. An unmeasured
+/// `offset_scaled` term counted as zero would subtract its whole baseline.
+///
+/// Extracted when the ops domain arrived: the alternative was a second copy
+/// of the tier lookup, and two copies of a formula is how two domains end up
+/// disagreeing about what "Senior" means.
+pub async fn assemble(
+    db: &PgPool,
+    domain: &str,
+    measure_term: impl Fn(&str) -> Option<f64>,
+) -> Result<CraftScore, AppError> {
     let weights = sqlx::query_as::<_, WeightRow>(
         "SELECT term, weight, kind, baseline, explanation
            FROM craft_score_weights
           WHERE skill_domain = $1 AND is_active = TRUE
           ORDER BY sort_order, term",
     )
-    .bind(DOMAIN)
+    .bind(domain)
     .fetch_all(db)
     .await?;
-
-    let m = measure(db, user_id).await?;
 
     let mut breakdown = Vec::new();
     let mut total: i64 = 0;
 
     for w in weights {
-        let measured: f64 = match w.term.as_str() {
-            "attestations_code" => m.attestations_code as f64,
-            "prs_merged_upstream" => m.prs_merged_upstream as f64,
-            "projects_shipped" => m.projects_shipped as f64,
-            "libraries_published" => m.libraries_published as f64,
-            "library_downloads" => m.library_downloads as f64,
-            "rfcs_accepted" => m.rfcs_accepted as f64,
-            "standard_contributions" => m.standard_contributions as f64,
-            "devtools_adopted" => m.devtools_adopted as f64,
-            "missions_completed" => m.missions_completed as f64,
-            "review_grid_average" => match &m.review_grid_average {
-                Some(avg) => avg.to_f64().unwrap_or(0.0),
-                // Nobody has scored this person's work. Skipped entirely
-                // rather than counted as zero: an unscored average would
-                // otherwise subtract the whole baseline from the total.
-                None => continue,
-            },
-            "languages_distinct" => m.languages_distinct as f64,
-            "years_active" => m.years_active as f64,
-            "featured_times" => m.featured_times as f64,
-            unknown => {
-                // Somebody added a row proposing a term. The answer to an
-                // unimplemented proposal is silence in the total.
-                tracing::warn!(
-                    term = unknown,
-                    "craft_score_weights names a term nothing knows how to count"
-                );
-                continue;
-            }
+        let Some(measured) = measure_term(&w.term) else {
+            // Either nothing knows how to count this term, or nobody has
+            // produced a figure for this person yet. Both are silence in the
+            // total rather than a zero.
+            continue;
         };
 
         if measured == 0.0 {
@@ -309,12 +297,12 @@ pub async fn compute(db: &PgPool, user_id: Uuid) -> Result<CraftScore, AppError>
           LIMIT 1",
     )
     .bind(score)
-    .bind(DOMAIN)
+    .bind(domain)
     .fetch_optional(db)
     .await?;
 
     let (tier_slug, tier_name, tier_description, next_tier_at) = tier
-        .ok_or_else(|| AppError::Internal(format!("no {DOMAIN} tier covers a score of {score}")))?;
+        .ok_or_else(|| AppError::Internal(format!("no {domain} tier covers a score of {score}")))?;
 
     Ok(CraftScore {
         score,
@@ -325,6 +313,44 @@ pub async fn compute(db: &PgPool, user_id: Uuid) -> Result<CraftScore, AppError>
         breakdown,
         capped,
     })
+}
+
+/// Compute the score without storing it.
+pub async fn compute(db: &PgPool, user_id: Uuid) -> Result<CraftScore, AppError> {
+    let m = measure(db, user_id).await?;
+
+    assemble(db, DOMAIN, |term| {
+        Some(match term {
+            "attestations_code" => m.attestations_code as f64,
+            "prs_merged_upstream" => m.prs_merged_upstream as f64,
+            "projects_shipped" => m.projects_shipped as f64,
+            "libraries_published" => m.libraries_published as f64,
+            "library_downloads" => m.library_downloads as f64,
+            "rfcs_accepted" => m.rfcs_accepted as f64,
+            "standard_contributions" => m.standard_contributions as f64,
+            "devtools_adopted" => m.devtools_adopted as f64,
+            "missions_completed" => m.missions_completed as f64,
+            // Nobody has scored this person's work. Skipped entirely rather
+            // than counted as zero: an unscored average would otherwise
+            // subtract the whole baseline from the total.
+            "review_grid_average" => {
+                return m.review_grid_average.as_ref().and_then(|a| a.to_f64());
+            }
+            "languages_distinct" => m.languages_distinct as f64,
+            "years_active" => m.years_active as f64,
+            "featured_times" => m.featured_times as f64,
+            unknown => {
+                // Somebody added a row proposing a term. The answer to an
+                // unimplemented proposal is silence in the total.
+                tracing::warn!(
+                    term = unknown,
+                    "craft_score_weights names a term nothing knows how to count"
+                );
+                return None;
+            }
+        })
+    })
+    .await
 }
 
 /// Compute and store, with the tier resolved in the same write.

@@ -654,6 +654,140 @@ pub async fn verify_cost_work(
 // Attestations
 // ═══════════════════════════════════════════════════════════════════
 
+/// The three ops bases that rest on a delivered artefact, and the artefact
+/// subtypes each one accepts.
+///
+/// This pairing is the whole check. Without it, `ops_migration_completed`
+/// could be issued from a Grafana dashboard and nobody reading the
+/// attestation later would be able to tell. The database constraint from
+/// migration 0243 only says these three name a deliverable; which deliverable
+/// is a question only the domain can answer.
+const ARTEFACT_BASES: &[(&str, &[&str])] = &[
+    (
+        "ops_infra_shipped",
+        &["iac_terraform", "kubernetes_manifests", "cicd_pipeline"],
+    ),
+    ("ops_observability_stack_shipped", &["observability_config"]),
+    ("ops_migration_completed", &["db_migration_scheme"]),
+];
+
+/// Issue one of the three artefact attestations from a verified deliverable.
+///
+/// Three conditions, and each one exists because of a way this could
+/// otherwise be wrong: the deliverable is this person's and verified, so an
+/// attestation cannot be built on somebody else's work or on work still under
+/// review; it is not revoked, so a withdrawn artefact does not keep paying;
+/// and its slice is an ops artefact of a subtype the basis accepts, so the
+/// statement matches the thing.
+pub async fn attest_artefact(
+    db: &PgPool,
+    user_id: Uuid,
+    basis: &str,
+    deliverable_id: Uuid,
+    title: &str,
+    evidence_url: &str,
+) -> Result<(), AppError> {
+    let accepted = ARTEFACT_BASES
+        .iter()
+        .find(|(b, _)| *b == basis)
+        .map(|(_, subtypes)| *subtypes)
+        .ok_or_else(|| {
+            AppError::Validation(format!(
+                "'{basis}' is not one of the ops bases that rest on an artefact"
+            ))
+        })?;
+
+    if title.trim().is_empty() {
+        return Err(AppError::Validation("an attestation needs a title".into()));
+    }
+    crate::validators::check_max_len(title, "title", 200)?;
+    if !evidence_url.trim().starts_with("https://") {
+        return Err(AppError::Validation(
+            "the evidence URL must be a public https link — an attestation \
+             nobody can open is worth nothing"
+                .into(),
+        ));
+    }
+
+    let subtype: Option<Option<String>> = sqlx::query_scalar(
+        "SELECT s.ops_subtype
+           FROM deliverables d
+           JOIN project_slices s ON s.id = d.slice_id
+          WHERE d.id = $1 AND d.user_id = $2
+            AND d.verification_status = 'verified'
+            AND d.revoked_at IS NULL
+            AND s.slice_type = 'ops_artifact'",
+    )
+    .bind(deliverable_id)
+    .bind(user_id)
+    .fetch_optional(db)
+    .await?;
+
+    let subtype = subtype
+        .ok_or_else(|| {
+            AppError::Validation(
+                "that deliverable is not a verified ops artefact of this \
+                 person's"
+                    .into(),
+            )
+        })?
+        .unwrap_or_default();
+
+    if !accepted.contains(&subtype.as_str()) {
+        return Err(AppError::Validation(format!(
+            "a {basis} attestation rests on one of {accepted:?}, and that \
+             artefact is a '{subtype}'"
+        )));
+    }
+
+    let code = crate::services::attestations::AttestationsService::generate_verification_code();
+    sqlx::query(
+        "INSERT INTO attestations
+            (user_id, attestation_type, basis, title, description,
+             linked_deliverable_ids, verification_code)
+         VALUES ($1, 'artefact', $2, $3, $4, ARRAY[$5]::UUID[], $6)",
+    )
+    .bind(user_id)
+    .bind(basis)
+    .bind(title.trim())
+    .bind(evidence_url.trim())
+    .bind(deliverable_id)
+    .bind(&code)
+    .execute(db)
+    .await?;
+
+    metrics::counter!(
+        "skilluv_ops_attestations_total",
+        "basis" => basis.to_string()
+    )
+    .increment(1);
+    Ok(())
+}
+
+/// The community one. It rests on nobody's artefact and everybody's opinion,
+/// which is why it is issued by hand and carries no deliverable.
+pub async fn attest_featured(
+    db: &PgPool,
+    user_id: Uuid,
+    reason: &str,
+) -> Result<(), AppError> {
+    if reason.trim().len() < 40 {
+        return Err(AppError::Validation(
+            "say why in a sentence somebody outside the decision would \
+             understand — at least forty characters"
+                .into(),
+        ));
+    }
+    issue_ops_attestation(
+        db,
+        user_id,
+        "featured_ops_engineer",
+        "Mise en avant par la communauté ops",
+        reason.trim(),
+    )
+    .await
+}
+
 /// One attestation resting on an ops fact.
 async fn issue_ops_attestation(
     db: &PgPool,

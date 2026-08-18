@@ -134,8 +134,9 @@ pub async fn toolkit(
         r#"
         SELECT slug, display_name, category, url, summary, access_note,
                orientation_slugs
-          FROM external_ai_resources
+          FROM external_resources
          WHERE is_curated = TRUE
+           AND domain = 'ai'
            AND ($1::TEXT IS NULL OR category = $1)
            -- A resource tagged for no trade serves every trade, so it stays
            -- in a filtered listing. Excluding it would hide HuggingFace from

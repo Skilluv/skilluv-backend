@@ -224,6 +224,7 @@ async fn async_main(config: AppConfig) {
     spawn_artifact_stats_worker(state.clone());
     spawn_craft_score_worker(state.clone());
     spawn_contest_reminder_worker(state.clone());
+    spawn_design_upload_sweeper(state.clone());
     spawn_code_portfolio_worker(state.clone());
     spawn_release_sweep_worker(state.clone());
     spawn_payout_reconciliation_worker(state.clone());
@@ -389,6 +390,41 @@ fn spawn_code_portfolio_worker(state: skilluv_backend::AppState) {
 /// the column the sorted lists read. Hourly, bounded per pass: a sweep that
 /// tries to do the whole table at once is one that times out and never
 /// reaches the end of the alphabet.
+/// Give up on the large uploads nobody finished.
+///
+/// An abandoned multipart upload keeps the parts already sent, and the object
+/// store bills for them whether or not anybody ever completes it. Nightly,
+/// because the sessions live a week and nothing is urgent — but it is the only
+/// thing standing between a slow month and a storage invoice nobody can
+/// explain.
+fn spawn_design_upload_sweeper(state: skilluv_backend::AppState) {
+    tokio::spawn(async move {
+        if std::env::var("SKILLUV_DESIGN_UPLOAD_SWEEP_ENABLED").as_deref() != Ok("1") {
+            tracing::info!("design_upload_sweeper : disabled (env flag absent)");
+            return;
+        }
+
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(24 * 60 * 60));
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+            match skilluv_backend::services::design_uploads::sweep_expired(
+                &state.db,
+                &state.storage,
+            )
+            .await
+            {
+                Ok(0) => tracing::debug!("design_upload_sweeper : nothing abandoned"),
+                Ok(n) => tracing::info!(swept = n, "design_upload_sweeper : uploads abandoned"),
+                Err(e) => tracing::error!(
+                    error = %e,
+                    "design_upload_sweeper : sweep failed, the next pass retries"
+                ),
+            }
+        }
+    });
+}
+
 /// Warn people before a contest deadline passes, and tell them when it has.
 ///
 /// Hourly, which is the coarsest cadence that still lands a forty-eight hour

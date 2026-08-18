@@ -103,6 +103,7 @@ pub fn build_router(state: AppState) -> Router {
         )
         .nest("/api", routes::deliverable_routes())
         .nest("/api", routes::design_routes())
+        .nest("/api", routes::design_upload_routes())
         .nest("/api", routes::featured_routes())
         .nest("/api", routes::series_routes())
         .nest("/api", routes::design_profile_routes())

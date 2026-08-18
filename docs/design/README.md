@@ -42,6 +42,7 @@ Quatre conséquences, visibles dans les documents qui suivent :
 | [Trames de brief](BRIEF-TEMPLATES.md) | Qui écrit un challenge ou un concours. Treize modèles. |
 | [Trames d'écrit](WRITEUP-TEMPLATES.md) | Note de version, critique, étude de cas. |
 | [Devenir relecteur](REVIEWER-ONBOARDING.md) | Qui veut relire, et l'équipe qui recrute. |
+| [Rendre un fichier lourd](LARGE-FILES.md) | Une scène de 4 Go, un projet After Effects : comment, et pourquoi ainsi. |
 | [Vérifications automatiques](AUTO-CHECKS.md) | Ce que la machine dit d'une version, et ce qu'elle ne dira jamais. |
 | [Gouvernance](GOVERNANCE.md) | Qui décide quoi, et comment on conteste. |
 | [Propriété intellectuelle](IP-AND-COPYRIGHT.md) | Qui possède quoi. Concours, droit moral, éléments tiers, données personnelles. |

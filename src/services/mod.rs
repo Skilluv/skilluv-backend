@@ -35,6 +35,7 @@ pub mod deliverables;
 pub mod design_attestations;
 pub mod design_auto_checks;
 pub mod design_craft_score;
+pub mod design_uploads;
 pub mod design_reviews;
 pub mod digest;
 pub mod disputes;

@@ -261,7 +261,10 @@ COMMENT ON COLUMN talent_intelligence_reports.minimum_cohort_size IS
     'from four people in one town names those four, whatever the header '
     'says.';
 
-CREATE INDEX idx_reports_status ON talent_intelligence_reports (status, created_at DESC);
+-- Not `idx_reports_status`: migration 0013 took that name for the moderation
+-- reports, and index names are database-wide even when the tables are not.
+CREATE INDEX idx_intelligence_reports_status
+    ON talent_intelligence_reports (status, created_at DESC);
 
 CREATE OR REPLACE FUNCTION touch_data_updated_at()
 RETURNS TRIGGER AS $$

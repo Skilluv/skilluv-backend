@@ -125,7 +125,7 @@ async fn paying_does_not_certify() {
 
     // And the database refuses an issue with no audit behind it.
     let forced = sqlx::query(
-        "UPDATE certifications SET status = 'issued', issued_at = NOW(),
+        "UPDATE program_certifications SET status = 'issued', issued_at = NOW(),
                 expires_at = NOW() + INTERVAL '1 year'
           WHERE id = $1::uuid",
     )
@@ -325,7 +325,7 @@ async fn a_lapsed_certification_stops_being_live() {
     let enterprise = an_enterprise(&app, owner, "Perime SA").await;
 
     let id: Uuid = sqlx::query_scalar(
-        "INSERT INTO certifications
+        "INSERT INTO program_certifications
             (program, subject_enterprise_id, fee, audit_score, audited_at,
              status, issued_at, expires_at)
          VALUES ('enterprise_partner_bronze', $1, 5000.00, 80.00, NOW() - INTERVAL '2 years',
@@ -355,7 +355,7 @@ async fn a_lapsed_certification_stops_being_live() {
 
     // A status that lags reality shows up in every export, and somebody
     // eventually trusts one of those.
-    let status: String = sqlx::query_scalar("SELECT status FROM certifications WHERE id = $1")
+    let status: String = sqlx::query_scalar("SELECT status FROM program_certifications WHERE id = $1")
         .bind(id)
         .fetch_one(&app.db)
         .await

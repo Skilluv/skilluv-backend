@@ -130,7 +130,7 @@ pub struct Certification {
 const CERT_SELECT: &str = r#"
     SELECT id, program, subject_user_id, subject_enterprise_id, subject_org_name,
            fee, currency, scope, audit_score, issued_at, expires_at, renewals, status
-      FROM certifications
+      FROM program_certifications
 "#;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -179,7 +179,7 @@ pub async fn request_certification(
     let fee = input.fee.unwrap_or_else(|| program.annual_fee.clone());
 
     let id: Uuid = sqlx::query_scalar(
-        "INSERT INTO certifications
+        "INSERT INTO program_certifications
             (program, subject_user_id, subject_enterprise_id, subject_org_name,
              subject_org_url, scope, fee, currency)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
@@ -330,7 +330,7 @@ pub async fn audit(
 
     if passed {
         sqlx::query(
-            "UPDATE certifications
+            "UPDATE program_certifications
                 SET audit_score = $2, audit_notes = $3, audit_by = $4, audited_at = NOW(),
                     status = 'issued', issued_at = NOW(),
                     expires_at = NOW() + ($5 || ' months')::INTERVAL,
@@ -362,7 +362,7 @@ pub async fn audit(
         }
     } else {
         sqlx::query(
-            "UPDATE certifications
+            "UPDATE program_certifications
                 SET audit_score = $2, audit_notes = $3, audit_by = $4, audited_at = NOW(),
                     status = 'failed',
                     failure_reason = $5
@@ -394,7 +394,7 @@ pub async fn revoke(db: &PgPool, id: Uuid, reason: &str) -> Result<(), AppError>
         ));
     }
     sqlx::query(
-        "UPDATE certifications
+        "UPDATE program_certifications
             SET status = 'revoked', revoked_at = NOW(), revoked_reason = $2
           WHERE id = $1 AND status = 'issued'",
     )
@@ -412,7 +412,7 @@ pub async fn revoke(db: &PgPool, id: Uuid, reason: &str) -> Result<(), AppError>
 /// admin list, and somebody eventually trusts one of those.
 pub async fn expire_lapsed(db: &PgPool) -> Result<u64, AppError> {
     let done = sqlx::query(
-        "UPDATE certifications SET status = 'expired'
+        "UPDATE program_certifications SET status = 'expired'
           WHERE status = 'issued' AND expires_at <= NOW()",
     )
     .execute(db)

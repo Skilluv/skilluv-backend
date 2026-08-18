@@ -91,7 +91,13 @@ VALUES
      'enterprise', 8000.00, 12, 70.00, 'certification_program')
 ON CONFLICT (slug) DO NOTHING;
 
-CREATE TABLE certifications (
+-- `program_certifications` and not `certifications`: migration 0043 took that
+-- name for the paid-exam product, where somebody buys a slot, sits challenges
+-- against a clock and receives a diploma. This is a different thing under the
+-- same noun — an audit of an organisation or a reviewer against a programme —
+-- and the two must not share a table any more than they share a meaning.
+
+CREATE TABLE program_certifications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     program VARCHAR(40) NOT NULL REFERENCES certification_programs(slug) ON DELETE RESTRICT,
 
@@ -159,12 +165,12 @@ CREATE TABLE certifications (
     )
 );
 
-COMMENT ON TABLE certifications IS
+COMMENT ON TABLE program_certifications IS
     'One row per thing somebody pays to be called. Four tables would have '
     'been four renewal jobs and four places to forget that a certification '
     'lapses.';
 
-COMMENT ON CONSTRAINT nothing_is_issued_without_an_audit ON certifications IS
+COMMENT ON CONSTRAINT nothing_is_issued_without_an_audit ON program_certifications IS
     'Paying does not certify; passing does. A bought badge misleads the '
     'contributor who took the job because of it, and they have no way to '
     'know.';
@@ -172,14 +178,14 @@ COMMENT ON CONSTRAINT nothing_is_issued_without_an_audit ON certifications IS
 -- One live certification per subject per programme. Two would let somebody
 -- hold a lapsed one and a current one and show whichever suits.
 CREATE UNIQUE INDEX idx_one_live_certification_per_person
-    ON certifications (program, subject_user_id)
+    ON program_certifications (program, subject_user_id)
     WHERE subject_user_id IS NOT NULL AND status IN ('requested', 'auditing', 'issued');
 CREATE UNIQUE INDEX idx_one_live_certification_per_enterprise
-    ON certifications (program, subject_enterprise_id)
+    ON program_certifications (program, subject_enterprise_id)
     WHERE subject_enterprise_id IS NOT NULL AND status IN ('requested', 'auditing', 'issued');
 
 CREATE INDEX idx_certifications_expiring
-    ON certifications (expires_at)
+    ON program_certifications (expires_at)
     WHERE status = 'issued';
 
 CREATE OR REPLACE FUNCTION touch_ecosystem_updated_at()
@@ -191,14 +197,14 @@ END;
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER trg_certifications_updated_at
-    BEFORE UPDATE ON certifications
+    BEFORE UPDATE ON program_certifications
     FOR EACH ROW EXECUTE FUNCTION touch_ecosystem_updated_at();
 
 -- What an enterprise audit actually looked at, so the score can be argued
 -- with rather than only believed.
 CREATE TABLE certification_audit_findings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    certification_id UUID NOT NULL REFERENCES certifications(id) ON DELETE CASCADE,
+    certification_id UUID NOT NULL REFERENCES program_certifications(id) ON DELETE CASCADE,
 
     criterion VARCHAR(60) NOT NULL,
     score NUMERIC(5,2) NOT NULL CHECK (score >= 0 AND score <= 100),

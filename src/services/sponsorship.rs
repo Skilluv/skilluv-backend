@@ -274,7 +274,7 @@ pub async fn for_enterprise(
 
 /// Sign it, and grant what the tier promised.
 ///
-/// The credits go through the entitlement machinery from migration 0229
+/// The credits go through the entitlement machinery from migration 0403
 /// rather than a counter here, because there is already one place that
 /// answers "what does this company have the right to do", and a second one
 /// would eventually disagree with it.

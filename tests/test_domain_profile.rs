@@ -234,3 +234,123 @@ async fn the_two_wizards_do_not_share_a_row() {
     assert!(code["data"]["completed_at"].is_null());
     assert!(!code["data"]["skipped_at"].is_null());
 }
+
+#[tokio::test]
+async fn the_designer_wizard_saves_all_seven_of_its_answers() {
+    let app = TestApp::spawn().await;
+    app.register_user("wiz_design").await;
+
+    let resp = app
+        .put(
+            "/api/users/me/domain-profile/design",
+            &json!({
+                "level": "apprentissage",
+                "weekly_hours": "3_10",
+                "goal": "portfolio",
+                "preferred_families": ["design-web", "design-motion-ui"],
+                "challenge_preference": "contest",
+                "main_tool": "figma"
+            }),
+        )
+        .await;
+    assert_eq!(resp.status().as_u16(), 200, "{:?}", resp.text().await);
+
+    let body: serde_json::Value = app
+        .get("/api/users/me/domain-profile/design")
+        .await
+        .json()
+        .await
+        .unwrap();
+    let answers = &body["data"]["answers"];
+    assert_eq!(answers["challenge_preference"], "contest");
+    assert_eq!(answers["main_tool"], "figma");
+    assert_eq!(answers["preferred_families"][0], "design-web");
+    assert_eq!(answers["preferred_families"][1], "design-motion-ui");
+}
+
+#[tokio::test]
+async fn a_family_that_names_no_trade_is_refused() {
+    let app = TestApp::spawn().await;
+    app.register_user("wiz_family_bad").await;
+
+    // Checked against the catalogue rather than a list in the handler: the
+    // twenty-six trades arrive by migration and a hard-coded copy goes stale.
+    let resp = app
+        .put(
+            "/api/users/me/domain-profile/design",
+            &json!({"preferred_families": ["design-web", "design-tapisserie"]}),
+        )
+        .await;
+    assert_eq!(resp.status().as_u16(), 400);
+    let body = resp.text().await.unwrap();
+    assert!(body.contains("design-tapisserie"), "{body}");
+    assert!(!body.contains("design-web"), "only the bad one is named: {body}");
+}
+
+#[tokio::test]
+async fn a_fourth_family_is_refused() {
+    let app = TestApp::spawn().await;
+    app.register_user("wiz_family_cap").await;
+
+    // Same cap as `user_orientations`. An answer listing everything sorts
+    // nothing.
+    let resp = app
+        .put(
+            "/api/users/me/domain-profile/design",
+            &json!({"preferred_families": [
+                "design-web", "design-mobile", "design-motion-ui", "design-illustration"
+            ]}),
+        )
+        .await;
+    assert_eq!(resp.status().as_u16(), 400);
+}
+
+#[tokio::test]
+async fn a_field_is_refused_on_a_domain_it_does_not_belong_to() {
+    let app = TestApp::spawn().await;
+    app.register_user("wiz_wrong_domain").await;
+
+    // Stored, it would sit in an object read by a recommender that has no
+    // branch for it — a save that looks like it worked and does nothing.
+    let design_field_on_ai = app
+        .put(
+            "/api/users/me/domain-profile/ai",
+            &json!({"main_tool": "figma"}),
+        )
+        .await;
+    assert_eq!(design_field_on_ai.status().as_u16(), 400);
+
+    let ai_field_on_design = app
+        .put(
+            "/api/users/me/domain-profile/design",
+            &json!({"compute": "personal_gpu"}),
+        )
+        .await;
+    assert_eq!(ai_field_on_design.status().as_u16(), 400);
+    let body = ai_field_on_design.text().await.unwrap();
+    assert!(body.contains("ai"), "the message says which domain owns it: {body}");
+}
+
+#[tokio::test]
+async fn no_family_in_particular_is_an_answer() {
+    let app = TestApp::spawn().await;
+    app.register_user("wiz_family_none").await;
+
+    // An empty array is a wizard answer; an absent key is an unanswered
+    // question. A reader has to be able to tell them apart.
+    let resp = app
+        .put(
+            "/api/users/me/domain-profile/design",
+            &json!({"preferred_families": []}),
+        )
+        .await;
+    assert_eq!(resp.status().as_u16(), 200, "{:?}", resp.text().await);
+
+    let body: serde_json::Value = app
+        .get("/api/users/me/domain-profile/design")
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(body["data"]["answers"]["preferred_families"], json!([]));
+}

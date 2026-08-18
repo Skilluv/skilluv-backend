@@ -1,13 +1,19 @@
-//! Code contests — what each format asks for, and what a participant hands in.
+//! Contests — what each format asks for, and what a participant hands in.
 //!
-//! Three formats sit on top of the `tournaments` machinery (migration 0189):
+//! Five formats sit on top of the `tournaments` machinery (migrations 0189
+//! and 0235):
 //!
 //!   * a **hackathon** on code — a `hackathon` with `skill_domain = 'code'`,
 //!     a theme, and a project plus a writeup at the end;
 //!   * **code golf** — the shortest working solution to a stated problem, one
 //!     language at a time, ranked ascending;
 //!   * a **TDD contest** — the same problem for everybody, judged on the tests
-//!     as much as on the code that passes them.
+//!     as much as on the code that passes them;
+//!   * a **brief contest** — one written brief, N answers, a jury ranks them.
+//!     Not a hackathon: nobody builds against a clock. Design uses it most,
+//!     but an agency briefing three copywriters is the same event, so the
+//!     kind carries no domain in its name;
+//!   * a **duel** — two people, one task, the room votes.
 //!
 //! Rules live in a JSONB column rather than in columns of their own: the keys
 //! differ per format and a table with a `theme` column that is NULL for two
@@ -19,15 +25,34 @@ use uuid::Uuid;
 
 use crate::errors::AppError;
 
-pub const VALID_ARTIFACT_TYPES: &[&str] =
-    &["repository", "pull_request", "gist", "writeup", "demo"];
+pub const VALID_ARTIFACT_TYPES: &[&str] = &[
+    "repository",
+    "pull_request",
+    "gist",
+    "writeup",
+    "demo",
+    // Migration 0235: answers that are not a repository.
+    "design_file",
+    "image_set",
+    "video",
+    "audio",
+];
 
 pub const VALID_SUBMISSION_STATUSES: &[&str] =
     &["submitted", "accepted", "rejected", "disqualified"];
 
 /// Kinds that expect a submission. The others are scored from activity
 /// elsewhere on the platform, and asking for a link would be theatre.
-pub const KINDS_WITH_SUBMISSIONS: &[&str] = &["hackathon", "code_golf", "tdd_contest"];
+pub const KINDS_WITH_SUBMISSIONS: &[&str] =
+    &["hackathon", "code_golf", "tdd_contest", "brief_contest", "duel"];
+
+/// Kinds whose result is decided by people rather than by a measured number,
+/// and which therefore need a panel before they can be closed.
+pub const JURIED_KINDS: &[&str] = &["hackathon", "tdd_contest", "brief_contest"];
+
+/// Kinds where the room votes. `duel` is the pure case; a brief contest can
+/// opt in through its rules.
+pub const COMMUNITY_VOTED_KINDS: &[&str] = &["duel"];
 
 /// Kinds ranked by a number the submitter measures rather than a judge's
 /// opinion.
@@ -61,6 +86,12 @@ pub fn validate_rules(kind: &str, rules: &serde_json::Value) -> Result<(), AppEr
         // The number of merged pull requests somebody commits to, over the
         // window the contest runs for.
         "marathon" => &["target_merged_prs"],
+        // The brief itself, and what the jury will weigh. A brief contest
+        // with a vague brief is how a contest becomes unpaid guesswork, and
+        // the moment to catch that is before anybody spends a weekend on it.
+        "brief_contest" => &["brief", "judging_criteria"],
+        // What the two of them are being asked to do, and how long they have.
+        "duel" => &["task", "duration_hours"],
         _ => &[],
     };
 
@@ -76,6 +107,34 @@ pub fn validate_rules(kind: &str, rules: &serde_json::Value) -> Result<(), AppEr
             return Err(AppError::Validation(format!(
                 "a {kind} must state '{key}' in its rules"
             )));
+        }
+    }
+
+    if kind == "brief_contest" {
+        // Long enough to be a brief. Under this it is a subject line, and the
+        // answers will differ on things nobody stated.
+        let brief_len = rules
+            .get("brief")
+            .and_then(|v| v.as_str())
+            .map(|s| s.trim().chars().count())
+            .unwrap_or(0);
+        if brief_len < 200 {
+            return Err(AppError::Validation(
+                "a brief contest needs at least 200 characters of brief: below that, the answers differ on things nobody stated"
+                    .into(),
+            ));
+        }
+    }
+
+    if kind == "duel" {
+        let hours = rules.get("duration_hours").and_then(|v| v.as_i64());
+        match hours {
+            Some(n) if (1..=168).contains(&n) => {}
+            _ => {
+                return Err(AppError::Validation(
+                    "duration_hours must be a whole number of hours between 1 and 168".into(),
+                ));
+            }
         }
     }
 
@@ -306,19 +365,106 @@ fn check_url(url: &str, field: &str) -> Result<(), AppError> {
     crate::validators::check_max_len(url, field, 2000)
 }
 
+/// Who is reading the entries.
+///
+/// Only meaningful while a blind contest is still open; after the deadline
+/// every reader is the same reader. Modelled as a type rather than an
+/// `Option<Uuid>` because "anonymous", "an entrant" and "a juror" are three
+/// different answers and a bare Option can only carry two.
+#[derive(Debug, Clone, Copy)]
+pub enum Reader {
+    /// Nobody is logged in.
+    Anonymous,
+    /// Somebody logged in, entrant or not.
+    User(Uuid),
+    /// A juror or a member of staff. Never blinded: a panel that cannot read
+    /// the entries cannot judge them.
+    Unblinded,
+}
+
+/// Every entry in a contest.
+///
+/// Public by default, and that is the point: a contest whose entries cannot
+/// be read is a contest whose result cannot be questioned.
+///
+/// A contest may declare a blind submission window (`blind_until_close`). It
+/// narrows *when*, not *whether*: while the window is open a reader sees only
+/// their own entry, and at the deadline the full field opens permanently. The
+/// result stays as contestable as before — what is withheld is the ability to
+/// read other people's work while there is still time to copy it, which is
+/// the format's known failure and not something contestability needed.
 pub async fn list_submissions(
     db: &PgPool,
     tournament_id: Uuid,
+    reader: Reader,
 ) -> Result<Vec<Submission>, AppError> {
+    // `blind_until_close` is inert once the contest is no longer open, which
+    // is why the status is read here rather than trusting the flag alone.
+    let blind: bool = sqlx::query_scalar(
+        "SELECT blind_until_close AND status IN ('upcoming', 'registration', 'active')
+           FROM tournaments WHERE id = $1",
+    )
+    .bind(tournament_id)
+    .fetch_optional(db)
+    .await?
+    .unwrap_or(false);
+
+    let own_only = match reader {
+        _ if !blind => None,
+        Reader::Unblinded => None,
+        Reader::User(id) => Some(id),
+        // Nobody to show an own entry to, so the window shows nothing.
+        Reader::Anonymous => Some(Uuid::nil()),
+    };
+
     let rows = sqlx::query_as::<_, Submission>(
         "SELECT * FROM tournament_submissions
           WHERE tournament_id = $1
+            AND ($2::uuid IS NULL
+                 OR (participant_type = 'user' AND participant_id = $2))
           ORDER BY submitted_at ASC",
     )
     .bind(tournament_id)
+    .bind(own_only)
     .fetch_all(db)
     .await?;
     Ok(rows)
+}
+
+/// Whether this account reads a blind contest unblinded.
+///
+/// A juror who was invited and has not declined, or anybody who may arbitrate
+/// contests. Being an entrant grants nothing: that is the whole point.
+pub async fn reads_unblinded(
+    db: &PgPool,
+    tournament_id: Uuid,
+    user_id: Uuid,
+) -> Result<bool, AppError> {
+    let juror: bool = sqlx::query_scalar(
+        "SELECT EXISTS (
+             SELECT 1 FROM tournament_juries
+              WHERE tournament_id = $1 AND juror_user_id = $2 AND declined_at IS NULL
+         )",
+    )
+    .bind(tournament_id)
+    .bind(user_id)
+    .fetch_one(db)
+    .await?;
+    if juror {
+        return Ok(true);
+    }
+
+    // `jury_tournament` is the capability that already means "may sit on and
+    // run a panel"; `admin` arbitrates. No new capability is invented for
+    // this, because a third name for the same authority is how a permission
+    // model rots.
+    Ok(crate::middleware::capabilities::require_any_capability(
+        db,
+        user_id,
+        &["admin", "jury_tournament"],
+    )
+    .await
+    .is_ok())
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -554,6 +700,446 @@ pub async fn grant_marathon_badges(
     Ok(granted.rows_affected())
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// Juries
+// ═══════════════════════════════════════════════════════════════════
+//
+// `judged_by` on a submission records who scored one entry. It does not say
+// who was asked, who agreed, or who never answered — and a panel that never
+// answered is the problem an organiser needs to see before the deadline
+// rather than after it.
+
+#[derive(Debug, Clone, Serialize, sqlx::FromRow, utoipa::ToSchema)]
+pub struct JuryInvitation {
+    pub tournament_id: Uuid,
+    pub juror_user_id: Uuid,
+    pub invited_by_user_id: Option<Uuid>,
+    pub invited_at: chrono::DateTime<chrono::Utc>,
+    pub accepted_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub declined_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub decline_reason: Option<String>,
+}
+
+/// Ask somebody to judge.
+///
+/// A juried contest whose panel cannot judge the craft produces a result that
+/// means nothing, so the invitee has to hold review rights for the contest's
+/// domain. For a domain scoped by family — design is the only one so far —
+/// that is checked against the trade the contest is about.
+pub async fn invite_juror(
+    db: &PgPool,
+    tournament_id: Uuid,
+    inviter_id: Uuid,
+    juror_id: Uuid,
+) -> Result<JuryInvitation, AppError> {
+    let contest: Option<(String, Option<String>)> =
+        sqlx::query_as("SELECT kind, skill_domain FROM tournaments WHERE id = $1")
+            .bind(tournament_id)
+            .fetch_optional(db)
+            .await?;
+    let (kind, domain) =
+        contest.ok_or_else(|| AppError::NotFound("tournament not found".into()))?;
+
+    if !JURIED_KINDS.contains(&kind.as_str()) {
+        return Err(AppError::Validation(format!(
+            "a {kind} is not decided by a jury"
+        )));
+    }
+
+    // Competence is checked against the contest's domain. Refusing an
+    // invitation nobody could act on is cheaper than discovering it at
+    // deliberation, when the deadline is a week away.
+    if let Some(domain) = domain.as_deref() {
+        let wildcard = format!("{domain}_reviewer:all");
+        let legacy = format!("challenge_validator:{domain}");
+        let holds_any_group: bool = sqlx::query_scalar(
+            r#"
+            SELECT EXISTS (
+                SELECT 1 FROM user_capabilities
+                 WHERE user_id = $1
+                   AND capability LIKE $2
+                   AND revoked_at IS NULL
+                   AND (expires_at IS NULL OR expires_at > NOW()))
+            "#,
+        )
+        .bind(juror_id)
+        .bind(format!("{domain}_reviewer:%"))
+        .fetch_one(db)
+        .await?;
+
+        if !holds_any_group {
+            crate::middleware::capabilities::require_any_capability(
+                db,
+                juror_id,
+                &[wildcard.as_str(), legacy.as_str(), "admin"],
+            )
+            .await
+            .map_err(|e| match e {
+                AppError::Forbidden => AppError::Validation(
+                    "this person holds no review rights in this contest's domain".into(),
+                ),
+                other => other,
+            })?;
+        }
+    }
+
+    let jury: JuryInvitation = sqlx::query_as(
+        r#"
+        INSERT INTO tournament_juries (tournament_id, juror_user_id, invited_by_user_id)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (tournament_id, juror_user_id) DO UPDATE
+            SET invited_at = NOW(), declined_at = NULL, decline_reason = NULL
+        RETURNING *
+        "#,
+    )
+    .bind(tournament_id)
+    .bind(juror_id)
+    .bind(inviter_id)
+    .fetch_one(db)
+    .await
+    .map_err(map_guard_error)?;
+
+    // An invitation expires, so it travels further than the app — the same
+    // reasoning `guild.invitation` follows. Failure to deliver is logged and
+    // not raised: the invitation is recorded, and an organiser retrying it
+    // would only produce a second row.
+    let contest_name: Option<String> =
+        sqlx::query_scalar("SELECT name FROM tournaments WHERE id = $1")
+            .bind(tournament_id)
+            .fetch_optional(db)
+            .await?;
+    if let Some(name) = contest_name
+        && let Err(e) = crate::services::notify::send(
+            crate::services::notify::Ctx::db_only(db),
+            crate::services::notify::Recipient::User(juror_id),
+            "contest.jury_invited",
+        )
+        .arg("contest", name)
+        .payload(serde_json::json!({ "tournament_id": tournament_id }))
+        .execute()
+        .await
+    {
+        tracing::warn!(%tournament_id, error = %e, "jury invitation notification not delivered");
+    }
+
+    Ok(jury)
+}
+
+/// Accept or decline. Declining because the subject is outside your
+/// competence is the right answer, and saying so is what lets the organiser
+/// widen the panel in time.
+pub async fn respond_to_invitation(
+    db: &PgPool,
+    tournament_id: Uuid,
+    juror_id: Uuid,
+    accept: bool,
+    decline_reason: Option<&str>,
+) -> Result<JuryInvitation, AppError> {
+    let reason = decline_reason.map(str::trim).filter(|s| !s.is_empty());
+    if let Some(reason) = reason {
+        crate::validators::check_max_len(reason, "decline_reason", 2000)?;
+    }
+
+    let jury: JuryInvitation = sqlx::query_as(
+        r#"
+        UPDATE tournament_juries
+           SET accepted_at    = CASE WHEN $3 THEN NOW() ELSE NULL END,
+               declined_at    = CASE WHEN $3 THEN NULL ELSE NOW() END,
+               decline_reason = CASE WHEN $3 THEN NULL ELSE $4 END
+         WHERE tournament_id = $1 AND juror_user_id = $2
+     RETURNING *
+        "#,
+    )
+    .bind(tournament_id)
+    .bind(juror_id)
+    .bind(accept)
+    .bind(reason)
+    .fetch_optional(db)
+    .await
+    .map_err(map_guard_error)?
+    .ok_or_else(|| AppError::NotFound("no jury invitation for this contest".into()))?;
+    Ok(jury)
+}
+
+/// The panel as an organiser needs to read it: who accepted, who declined,
+/// who has not answered.
+pub async fn list_jury(db: &PgPool, tournament_id: Uuid) -> Result<Vec<JuryInvitation>, AppError> {
+    let rows = sqlx::query_as::<_, JuryInvitation>(
+        "SELECT * FROM tournament_juries WHERE tournament_id = $1 ORDER BY invited_at ASC",
+    )
+    .bind(tournament_id)
+    .fetch_all(db)
+    .await?;
+    Ok(rows)
+}
+
+/// Only somebody who accepted may score.
+///
+/// Checked here rather than inside `judge`, which also serves the formats
+/// scored by an admin where there is no panel at all.
+pub async fn require_accepted_juror(
+    db: &PgPool,
+    tournament_id: Uuid,
+    juror_id: Uuid,
+) -> Result<(), AppError> {
+    let accepted: bool = sqlx::query_scalar(
+        "SELECT EXISTS (
+             SELECT 1 FROM tournament_juries
+              WHERE tournament_id = $1 AND juror_user_id = $2 AND accepted_at IS NOT NULL)",
+    )
+    .bind(tournament_id)
+    .bind(juror_id)
+    .fetch_one(db)
+    .await?;
+    if !accepted {
+        return Err(AppError::Forbidden);
+    }
+    Ok(())
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// The room
+// ═══════════════════════════════════════════════════════════════════
+//
+// A jury answers "is this good craft". The community answers "does this
+// land". Neither replaces the other, and a contest says in its rules which
+// one decides, or in what proportion.
+
+/// One vote per account per contest, moved rather than stacked.
+///
+/// Eligibility — the account age floor, the self-vote, the withdrawn entry —
+/// is enforced by the trigger from migration 0409, because a vote arrives
+/// from more places than this function.
+pub async fn cast_community_vote(
+    db: &PgPool,
+    tournament_id: Uuid,
+    voter_id: Uuid,
+    submission_id: Uuid,
+) -> Result<(), AppError> {
+    let kind: Option<String> = sqlx::query_scalar("SELECT kind FROM tournaments WHERE id = $1")
+        .bind(tournament_id)
+        .fetch_optional(db)
+        .await?;
+    let kind = kind.ok_or_else(|| AppError::NotFound("tournament not found".into()))?;
+    if !COMMUNITY_VOTED_KINDS.contains(&kind.as_str())
+        && !community_vote_enabled_by_rules(db, tournament_id).await?
+    {
+        return Err(AppError::Validation(format!(
+            "a {kind} is not open to a community vote unless its rules say so"
+        )));
+    }
+
+    sqlx::query(
+        r#"
+        INSERT INTO tournament_community_votes (tournament_id, voter_user_id, submission_id)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (tournament_id, voter_user_id) DO UPDATE
+            SET submission_id = EXCLUDED.submission_id, voted_at = NOW()
+        "#,
+    )
+    .bind(tournament_id)
+    .bind(voter_id)
+    .bind(submission_id)
+    .execute(db)
+    .await
+    .map_err(map_guard_error)?;
+    Ok(())
+}
+
+async fn community_vote_enabled_by_rules(
+    db: &PgPool,
+    tournament_id: Uuid,
+) -> Result<bool, AppError> {
+    let mode: Option<String> =
+        sqlx::query_scalar("SELECT rules ->> 'voting_mode' FROM tournaments WHERE id = $1")
+            .bind(tournament_id)
+            .fetch_optional(db)
+            .await?
+            .flatten();
+    Ok(matches!(mode.as_deref(), Some("community") | Some("hybrid")))
+}
+
+/// The live standing by vote count.
+pub async fn community_ranking(
+    db: &PgPool,
+    tournament_id: Uuid,
+) -> Result<Vec<(Uuid, i64)>, AppError> {
+    let rows: Vec<(Uuid, i64)> = sqlx::query_as(
+        r#"
+        SELECT s.id, count(v.voter_user_id)::bigint
+          FROM tournament_submissions s
+          LEFT JOIN tournament_community_votes v ON v.submission_id = s.id
+         WHERE s.tournament_id = $1
+           AND s.status NOT IN ('rejected', 'disqualified')
+         GROUP BY s.id, s.submitted_at
+         ORDER BY count(v.voter_user_id) DESC, s.submitted_at ASC
+        "#,
+    )
+    .bind(tournament_id)
+    .fetch_all(db)
+    .await?;
+    Ok(rows)
+}
+
+/// Votes cast on one entry inside a short window.
+///
+/// A spike is the cheap signal that a vote is being bought or botted. It is a
+/// reason to look, never a verdict: this reports, it does not disqualify.
+pub async fn detect_vote_bursts(
+    db: &PgPool,
+    tournament_id: Uuid,
+    window_minutes: i32,
+    threshold: i64,
+) -> Result<Vec<(Uuid, i64)>, AppError> {
+    let rows: Vec<(Uuid, i64)> = sqlx::query_as(
+        r#"
+        SELECT submission_id, count(*)::bigint AS n
+          FROM tournament_community_votes
+         WHERE tournament_id = $1
+           AND voted_at > NOW() - make_interval(mins => $2)
+         GROUP BY submission_id
+        HAVING count(*) >= $3
+         ORDER BY n DESC
+        "#,
+    )
+    .bind(tournament_id)
+    .bind(window_minutes.clamp(1, 1440))
+    .bind(threshold.max(1))
+    .fetch_all(db)
+    .await?;
+    Ok(rows)
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Scoring
+// ═══════════════════════════════════════════════════════════════════
+
+/// Weight of the jury half when a contest does not say otherwise. Craft is
+/// judged by people who do the work, reach is judged by the audience, and
+/// craft carries more.
+pub const DEFAULT_JURY_WEIGHT: f64 = 0.60;
+
+/// Turn jury scores and community votes into the participant score that
+/// `tournament::conclude_tournament` ranks and pays on.
+///
+/// Nothing new decides the winner: the existing conclusion assigns ranks from
+/// `tournament_participants.score` and distributes the prize pool 50/30/20.
+/// This only computes the number it reads.
+pub async fn recompute_contest_scores(db: &PgPool, tournament_id: Uuid) -> Result<u64, AppError> {
+    let contest: Option<(String, serde_json::Value)> =
+        sqlx::query_as("SELECT kind, rules FROM tournaments WHERE id = $1")
+            .bind(tournament_id)
+            .fetch_optional(db)
+            .await?;
+    let (kind, rules) = contest.ok_or_else(|| AppError::NotFound("tournament not found".into()))?;
+
+    if !KINDS_WITH_SUBMISSIONS.contains(&kind.as_str()) {
+        return Err(AppError::Validation(format!(
+            "a {kind} is not scored from submissions"
+        )));
+    }
+
+    let default_mode = if COMMUNITY_VOTED_KINDS.contains(&kind.as_str()) {
+        "community"
+    } else {
+        "jury"
+    };
+    let mode = rules
+        .get("voting_mode")
+        .and_then(|v| v.as_str())
+        .unwrap_or(default_mode)
+        .to_string();
+    let jury_weight = rules
+        .get("jury_weight")
+        .and_then(|v| v.as_f64())
+        .filter(|w| (0.0..=1.0).contains(w))
+        .unwrap_or(DEFAULT_JURY_WEIGHT);
+
+    // Entries still in the running, with both halves of what decides them.
+    let entries: Vec<(String, Uuid, Option<i16>, i64)> = sqlx::query_as(
+        r#"
+        SELECT s.participant_type, s.participant_id, s.judge_score,
+               (SELECT count(*)::bigint FROM tournament_community_votes v
+                 WHERE v.submission_id = s.id)
+          FROM tournament_submissions s
+         WHERE s.tournament_id = $1
+           AND s.status NOT IN ('rejected', 'disqualified')
+        "#,
+    )
+    .bind(tournament_id)
+    .fetch_all(db)
+    .await?;
+
+    if entries.is_empty() {
+        return Ok(0);
+    }
+
+    // Normalised against the best entry in this contest, not an absolute
+    // maximum: a contest whose best answer drew forty votes and one whose
+    // best drew four thousand must rank the same way.
+    let best_votes = entries.iter().map(|(_, _, _, v)| *v).max().unwrap_or(0);
+    let mut updated = 0u64;
+
+    for (ptype, pid, judge_score, votes) in &entries {
+        let score = blended_score(&mode, jury_weight, *judge_score, *votes, best_votes);
+        let affected = sqlx::query(
+            r#"
+            UPDATE tournament_participants
+               SET score = $1
+             WHERE tournament_id = $2 AND participant_type = $3 AND participant_id = $4
+            "#,
+        )
+        .bind(score)
+        .bind(tournament_id)
+        .bind(ptype)
+        .bind(pid)
+        .execute(db)
+        .await?;
+        updated += affected.rows_affected();
+    }
+
+    Ok(updated)
+}
+
+/// The score a participant is ranked on, from 0 to 100.
+///
+/// Pure, so the blending rules are testable without a database.
+///
+/// An entry nobody scored gets zero from the jury half rather than being
+/// excluded: a submission the panel never opened must not outrank one they
+/// looked at and found weak.
+pub fn blended_score(
+    mode: &str,
+    jury_weight: f64,
+    judge_score: Option<i16>,
+    votes: i64,
+    best_votes: i64,
+) -> i32 {
+    let jury = judge_score.unwrap_or(0) as f64 / 100.0;
+    let community = if best_votes > 0 {
+        votes as f64 / best_votes as f64
+    } else {
+        0.0
+    };
+    let blended = match mode {
+        "community" => community,
+        "hybrid" => jury_weight * jury + (1.0 - jury_weight) * community,
+        // "jury" and anything unrecognised: a contest that does not say is a
+        // juried contest, which is the format's default.
+        _ => jury,
+    };
+    (blended * 100.0).round().clamp(0.0, 100.0) as i32
+}
+
+/// Constraint violations raised by migration 0409 are written for humans on
+/// purpose; passing them through is more useful than a generic 500.
+fn map_guard_error(e: sqlx::Error) -> AppError {
+    match &e {
+        sqlx::Error::Database(db_err) => AppError::Conflict(db_err.message().to_string()),
+        _ => AppError::from(e),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -625,6 +1211,116 @@ mod tests {
         assert_eq!(scoring_direction_for("code_golf"), "lower_is_better");
         for kind in ["hackathon", "tdd_contest", "marathon", "individual"] {
             assert_eq!(scoring_direction_for(kind), "higher_is_better");
+        }
+    }
+
+    #[test]
+    fn a_brief_contest_needs_a_real_brief() {
+        // A subject line is not a brief: the answers would differ on things
+        // nobody stated, and the jury would be arbitrating a question that
+        // was never asked.
+        assert!(
+            validate_rules(
+                "brief_contest",
+                &json!({"brief": "Fais un logo.", "judging_criteria": ["distinction"]})
+            )
+            .is_err()
+        );
+        let long_brief = "a".repeat(250);
+        assert!(
+            validate_rules(
+                "brief_contest",
+                &json!({"brief": long_brief, "judging_criteria": ["distinction"]})
+            )
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn a_brief_contest_says_what_it_weighs_before_it_weighs_it() {
+        let long_brief = "a".repeat(250);
+        assert!(validate_rules("brief_contest", &json!({"brief": long_brief})).is_err());
+    }
+
+    #[test]
+    fn a_duel_is_bounded_in_time() {
+        assert!(validate_rules("duel", &json!({"task": "Un logo"})).is_err());
+        assert!(
+            validate_rules("duel", &json!({"task": "Un logo", "duration_hours": 0})).is_err()
+        );
+        assert!(
+            validate_rules("duel", &json!({"task": "Un logo", "duration_hours": 500})).is_err()
+        );
+        assert!(
+            validate_rules("duel", &json!({"task": "Un logo", "duration_hours": 48})).is_ok()
+        );
+    }
+
+    #[test]
+    fn jury_mode_ignores_the_room() {
+        // Ninety from the panel and no votes beats zero from the panel and
+        // every vote in the building.
+        assert_eq!(blended_score("jury", 0.6, Some(90), 0, 1000), 90);
+        assert_eq!(blended_score("jury", 0.6, Some(0), 1000, 1000), 0);
+    }
+
+    #[test]
+    fn community_mode_ignores_the_panel() {
+        assert_eq!(blended_score("community", 0.6, Some(100), 0, 10), 0);
+        assert_eq!(blended_score("community", 0.6, None, 10, 10), 100);
+    }
+
+    #[test]
+    fn hybrid_blends_in_the_declared_proportion() {
+        // Perfect panel, no votes: exactly the jury weight.
+        assert_eq!(blended_score("hybrid", 0.6, Some(100), 0, 10), 60);
+        // No panel score, every vote: exactly the remainder.
+        assert_eq!(blended_score("hybrid", 0.6, Some(0), 10, 10), 40);
+        // Flip the weight and the balance flips with it.
+        assert_eq!(blended_score("hybrid", 0.3, Some(100), 0, 10), 30);
+    }
+
+    #[test]
+    fn votes_are_normalised_against_the_best_entry() {
+        // The same relative standing must score the same whether the contest
+        // drew ten votes or ten thousand.
+        assert_eq!(
+            blended_score("community", 0.6, None, 5, 10),
+            blended_score("community", 0.6, None, 5_000, 10_000)
+        );
+    }
+
+    #[test]
+    fn a_contest_nobody_voted_in_does_not_divide_by_zero() {
+        assert_eq!(blended_score("community", 0.6, None, 0, 0), 0);
+    }
+
+    #[test]
+    fn an_unscored_entry_does_not_outrank_a_scored_one() {
+        // A submission the panel never opened must not beat one they looked
+        // at and found weak.
+        assert!(blended_score("jury", 0.6, None, 0, 0) < blended_score("jury", 0.6, Some(1), 0, 0));
+    }
+
+    #[test]
+    fn an_unknown_voting_mode_falls_back_to_the_jury() {
+        // A rules typo must not silently hand the contest to the room.
+        assert_eq!(blended_score("populaire", 0.6, Some(80), 0, 10), 80);
+    }
+
+    #[test]
+    fn juried_and_community_kinds_do_not_overlap_by_accident() {
+        for kind in COMMUNITY_VOTED_KINDS {
+            assert!(
+                !JURIED_KINDS.contains(kind),
+                "{kind} cannot default to both a jury and the room"
+            );
+        }
+        for kind in JURIED_KINDS.iter().chain(COMMUNITY_VOTED_KINDS.iter()) {
+            assert!(
+                KINDS_WITH_SUBMISSIONS.contains(kind),
+                "{kind} is decided on entries it never collects"
+            );
         }
     }
 }

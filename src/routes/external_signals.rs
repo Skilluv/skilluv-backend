@@ -79,7 +79,8 @@ fn split_buckets(signals: Vec<external_signals::ExternalSignal>) -> serde_json::
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CreateSignalBody {
-    /// `github` | `medium` | `dev_to` | `conf_ref`
+    /// `github` | `medium` | `dev_to` | `conf_ref` | `behance` |
+    /// `dribbble` | `artstation` | `vimeo` | `foundry`
     pub provider: String,
     pub url: String,
     pub title: String,

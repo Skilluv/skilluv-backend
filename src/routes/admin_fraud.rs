@@ -19,6 +19,7 @@ use uuid::Uuid;
 use crate::AppState;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
+use crate::routes::admin::require_admin;
 use crate::services::{fingerprint, plagiarism};
 
 pub fn admin_fraud_routes() -> Router<AppState> {
@@ -64,12 +65,6 @@ fn build_response(data: Value) -> Value {
     })
 }
 
-// P21.1 : délègue à user_capabilities (source de vérité canonique).
-// Note: signature devient async, tous les call sites `require_admin(&state, &auth).await?`
-// ont été mis à jour en `require_admin(&state, &auth).await?`.
-pub async fn require_admin(state: &AppState, auth: &AuthUser) -> Result<(), AppError> {
-    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await
-}
 
 // ═══════════════════════════════════════════════════════════════════
 // GET /admin/fraud/queue

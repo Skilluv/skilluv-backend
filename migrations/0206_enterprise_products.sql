@@ -187,10 +187,10 @@ BEGIN
       FROM enterprise_product_types WHERE slug = NEW.product_type;
 
     IF is_recurring AND NEW.status = 'active' AND NEW.renews_at IS NULL THEN
-        -- The placeholder needs its argument. Without it PL/pgSQL refuses to
-        -- compile the function at all, which took the whole migration — and
-        -- therefore every migration after it — down with a message naming
-        -- `check_raise_parameters` rather than the line that was wrong.
+        -- The product type fills the placeholder. Without the argument
+        -- PostgreSQL refuses to compile the function body at CREATE time
+        -- ("too few parameters for RAISE"), which made this migration — and
+        -- therefore every one after it — impossible to apply.
         RAISE EXCEPTION 'a % renews — say when', NEW.product_type
             USING HINT = 'without a renewal date it never appears on a renewal list, '
                          'and it lapses because nobody was told to ask';

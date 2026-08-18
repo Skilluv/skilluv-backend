@@ -387,7 +387,7 @@ CREATE TRIGGER trg_marketplace_rating_rolls_up
 -- ═══════════════════════════════════════════════════════════════════
 --
 -- A company pays for a cohort to be trained and commits to hiring from it.
--- Close to the growth financing of migration 0236 and deliberately separate:
+-- Close to the growth financing of migration 0410 and deliberately separate:
 -- there the company funds and hopes, here it commits to a share up front and
 -- pays a fee per hire. The obligations differ, so the tables do.
 

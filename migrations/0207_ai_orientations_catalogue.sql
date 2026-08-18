@@ -30,6 +30,35 @@
 -- listing it at all.
 
 -- ═══════════════════════════════════════════════════════════════════
+-- A domain arriving has to be a domain challenges can belong to
+-- ═══════════════════════════════════════════════════════════════════
+--
+-- `challenge_templates.skill_domain` still enumerated the four domains of
+-- migration 0003 — code, design, game, security — while `skill_nodes` and
+-- `orientations` have known seven since 0056 and 0088. Nothing noticed,
+-- because until now no migration inserted a template outside the original
+-- four; 0219 seeds forty-one AI challenges and is refused by this constraint,
+-- which makes every later migration unreachable.
+--
+-- Widened here rather than in 0219 because the constraint enumerates domains,
+-- and this is the migration where the `ai` domain arrives. A template
+-- inserted between the two would otherwise fail for the same reason.
+--
+-- Two sibling constraints stay narrow on purpose, being nobody's blocker
+-- today and both carrying product questions this migration should not answer:
+-- `sponsored_challenge_requests.skill_domain`, and `users.skill_domain` —
+-- which currently means somebody cannot declare `ai`, `ops` or `soft_skills`
+-- as their domain at signup.
+
+ALTER TABLE challenge_templates DROP CONSTRAINT IF EXISTS challenges_skill_domain_check;
+
+ALTER TABLE challenge_templates
+    ADD CONSTRAINT challenges_skill_domain_check
+    CHECK (skill_domain IN (
+        'code', 'design', 'game', 'security', 'soft_skills', 'ai', 'ops'
+    ));
+
+-- ═══════════════════════════════════════════════════════════════════
 -- The six new trades
 -- ═══════════════════════════════════════════════════════════════════
 

@@ -885,10 +885,10 @@ fn validate_skill_domains(domains: Option<&[String]>) -> Result<(), AppError> {
         return Ok(());
     };
     for d in list {
-        if !crate::services::validator_applications::VALID_DOMAINS.contains(&d.as_str()) {
+        if !crate::validators::SKILL_DOMAINS.contains(&d.as_str()) {
             return Err(AppError::Validation(format!(
                 "unknown skill_domain: {d}; allowed: {:?}",
-                crate::services::validator_applications::VALID_DOMAINS
+                crate::validators::SKILL_DOMAINS
             )));
         }
     }

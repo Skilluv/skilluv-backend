@@ -232,7 +232,7 @@ ALTER TABLE attestations
         'ai_benchmark_result',
         'ai_safety_finding_validated',
         'featured_ai_researcher',
-        -- Contests (migration 0234)
+        -- Contests (migration 0408)
         'contest_finalist',
         'contest_hired',
         -- Ops (this migration)

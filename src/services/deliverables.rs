@@ -485,7 +485,11 @@ impl DeliverablesService {
     /// - `weighted_proven_count` += weight
     /// - Recompute `proficiency_level` via formule log2 (voir models::UserSkill)
     /// - Update `last_proven_at`, ensure `first_proven_at`
-    async fn propagate_skills(
+    ///
+    /// Public so the design validation path (`design_reviews.rs`) can call
+    /// it: a validated design deliverable must move the designer's skill
+    /// graph exactly as a merged pull request moves a developer's.
+    pub async fn propagate_skills(
         tx: &mut Transaction<'_, Postgres>,
         slice_id: Uuid,
         user_id: Uuid,

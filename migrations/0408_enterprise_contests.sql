@@ -364,7 +364,7 @@ CREATE TRIGGER trg_interviews_updated_at
 -- ═══════════════════════════════════════════════════════════════════
 --
 -- The guarantee, the pro-rated refund and the departure tracking are already
--- built in migration 0226. A contest hire is the same fee out of a different
+-- built in migration 0400. A contest hire is the same fee out of a different
 -- door, so it gets a column rather than a table.
 
 ALTER TABLE recruitment_success_fees

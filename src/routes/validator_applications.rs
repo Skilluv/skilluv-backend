@@ -226,7 +226,7 @@ pub async fn list_applications_admin(
         return Err(AppError::Validation("origin invalid".into()));
     }
     if let Some(d) = &q.domain
-        && !validator_applications::VALID_DOMAINS.contains(&d.as_str())
+        && !crate::validators::SKILL_DOMAINS.contains(&d.as_str())
     {
         return Err(AppError::Validation("domain invalid".into()));
     }

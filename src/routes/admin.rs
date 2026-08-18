@@ -53,6 +53,10 @@ pub fn admin_routes() -> Router<AppState> {
         )
         // ADM-M3.1 — CRUD orientations + orientation_skill_map.
         .merge(crate::routes::admin_orientation_routes())
+        // Editorial: who the platform puts forward, one per domain per week.
+        .merge(crate::routes::admin_featured_routes())
+        // Contests read as one event: an awards edition, a run of sprints.
+        .merge(crate::routes::admin_series_routes())
         .merge(crate::routes::revenue_routes())
         .merge(crate::routes::admin_enterprise_product_routes())
         .merge(crate::routes::admin_recruitment_routes())

@@ -154,6 +154,13 @@ pub enum Recipient {
     /// Everyone holding a capability — `admin`, `kyc_reviewer`, … Used for
     /// queues that someone has to work.
     Capability(&'static str),
+    /// Everyone holding any one of several capabilities.
+    ///
+    /// Owned strings because the capability is often built at runtime:
+    /// `design_reviewer:{group}` names one of thirteen families, and the
+    /// family is read from the slice being reviewed. Duplicates are removed,
+    /// so somebody holding two of them is notified once.
+    AnyCapability(Vec<String>),
 }
 
 /// A delivery channel.
@@ -948,12 +955,30 @@ async fn resolve_recipients(db: &PgPool, recipient: &Recipient) -> Result<Vec<Uu
                     .await?;
             Ok(rows.into_iter().map(|(id,)| id).collect())
         }
+        // `expires_at` is checked as well as `revoked_at`: a capability that
+        // has run out is not held, and the guards that let somebody *act* on
+        // these queues have always read both. Notifying on the looser of the
+        // two rules meant sending people work they would then be refused.
         Recipient::Capability(capability) => {
             let rows: Vec<(Uuid,)> = sqlx::query_as(
-                "SELECT user_id FROM user_capabilities WHERE capability = $1
-                   AND (revoked_at IS NULL)",
+                "SELECT user_id FROM user_capabilities
+                  WHERE capability = $1
+                    AND revoked_at IS NULL
+                    AND (expires_at IS NULL OR expires_at > NOW())",
             )
             .bind(capability)
+            .fetch_all(db)
+            .await?;
+            Ok(rows.into_iter().map(|(id,)| id).collect())
+        }
+        Recipient::AnyCapability(capabilities) => {
+            let rows: Vec<(Uuid,)> = sqlx::query_as(
+                "SELECT DISTINCT user_id FROM user_capabilities
+                  WHERE capability = ANY($1)
+                    AND revoked_at IS NULL
+                    AND (expires_at IS NULL OR expires_at > NOW())",
+            )
+            .bind(capabilities)
             .fetch_all(db)
             .await?;
             Ok(rows.into_iter().map(|(id,)| id).collect())

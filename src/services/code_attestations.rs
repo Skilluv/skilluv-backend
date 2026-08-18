@@ -31,13 +31,24 @@
 //! to be true before it is called, and that is exactly what each function
 //! here states.
 
-use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::errors::AppError;
 
 /// The seven bases, as the CHECK constraint in migration 0178 spells them.
+/// What this domain may issue, and under what rules.
+///
+/// The issuing itself lives in `services::artefact_attestations`: a code artefact is a repository, so evidence must be a public https
+/// link — an `s3://` address would mean the proof is a copy we made of it.
+const DOMAIN: crate::services::artefact_attestations::Domain =
+    crate::services::artefact_attestations::Domain {
+        name: "code",
+        bases: BASES,
+        artifact_bases: ARTIFACT_BASES,
+        allows_stored_objects: false,
+    };
+
 pub const BASES: &[&str] = &[
     "code_pr_merged_upstream",
     "code_project_shipped",
@@ -127,27 +138,7 @@ pub fn is_proposal_url(url: &str) -> bool {
 // Issuing
 // ═══════════════════════════════════════════════════════════════════
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct Evidence {
-    /// The public link a reader follows to check the claim.
-    pub url: String,
-    pub title: String,
-    pub description: String,
-    /// The verified deliverable behind it, where the basis requires one.
-    #[serde(default)]
-    pub deliverable_id: Option<Uuid>,
-    #[serde(default)]
-    pub project_id: Option<Uuid>,
-    #[serde(default)]
-    pub skill_node_ids: Vec<Uuid>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct Issued {
-    pub id: Uuid,
-    pub basis: String,
-    pub verification_code: String,
-}
+pub use crate::services::artefact_attestations::{Evidence, Issued};
 
 /// Write the attestation.
 ///
@@ -165,97 +156,9 @@ pub async fn issue(
     basis: &str,
     evidence: &Evidence,
 ) -> Result<Issued, AppError> {
-    if !BASES.contains(&basis) {
-        return Err(AppError::Validation(format!(
-            "'{basis}' is not one of the code attestation bases"
-        )));
-    }
-    if ARTIFACT_BASES.contains(&basis) && evidence.deliverable_id.is_none() {
-        return Err(AppError::Validation(format!(
-            "a {basis} attestation must name the verified deliverable it rests on"
-        )));
-    }
-    if evidence.title.trim().is_empty() {
-        return Err(AppError::Validation("an attestation needs a title".into()));
-    }
-    crate::validators::check_max_len(&evidence.title, "title", 200)?;
-    if !evidence.url.trim().starts_with("https://") {
-        return Err(AppError::Validation(
-            "the evidence URL must be a public https link — an attestation nobody can check is worth nothing"
-                .into(),
-        ));
-    }
-
-    // The deliverable must be this person's, verified, and not revoked.
-    // Otherwise an attestation could be issued from somebody else's work, or
-    // from work the platform has already taken back.
-    if let Some(deliverable_id) = evidence.deliverable_id {
-        let ok: bool = sqlx::query_scalar(
-            "SELECT EXISTS (
-                 SELECT 1 FROM deliverables
-                  WHERE id = $1 AND user_id = $2
-                    AND verification_status = 'verified'
-                    AND revoked_at IS NULL)",
-        )
-        .bind(deliverable_id)
-        .bind(user_id)
-        .fetch_one(db)
-        .await?;
-        if !ok {
-            return Err(AppError::Validation(
-                "that deliverable is not a verified artefact of this person's".into(),
-            ));
-        }
-    }
-
-    let description = format!("{}\n\n{}", evidence.description.trim(), evidence.url.trim());
-    let projects: Vec<Uuid> = evidence.project_id.into_iter().collect();
-    let deliverables: Vec<Uuid> = evidence.deliverable_id.into_iter().collect();
-
-    let row: (Uuid, String) = sqlx::query_as(
-        r#"
-        INSERT INTO attestations
-            (user_id, attestation_type, title, description, basis,
-             linked_deliverable_ids, linked_project_ids, linked_skill_node_ids,
-             verification_code)
-        VALUES ($1, 'artefact', $2, $3, $4, $5, $6, $7, $8)
-        RETURNING id, verification_code
-        "#,
-    )
-    .bind(user_id)
-    .bind(evidence.title.trim())
-    .bind(&description)
-    .bind(basis)
-    .bind(&deliverables)
-    .bind(&projects)
-    .bind(&evidence.skill_node_ids)
-    .bind(verification_code())
-    .fetch_one(db)
-    .await?;
-
-    metrics::counter!("skilluv_code_attestations_issued_total", "basis" => basis.to_string())
-        .increment(1);
-
-    Ok(Issued {
-        id: row.0,
-        basis: basis.to_string(),
-        verification_code: row.1,
-    })
+    crate::services::artefact_attestations::issue(db, user_id, basis, evidence, &DOMAIN).await
 }
 
-/// Ten base32 characters, fifty bits. Same shape as everywhere else an
-/// attestation is issued, because the public verification page reads them all
-/// through one route.
-fn verification_code() -> String {
-    use base32::Alphabet;
-    use rand_core::RngCore;
-    let mut bytes = [0u8; 8];
-    rand_core::OsRng.fill_bytes(&mut bytes);
-    base32::encode(Alphabet::Rfc4648 { padding: false }, &bytes)
-        .chars()
-        .take(10)
-        .collect()
-}
 
 // ═══════════════════════════════════════════════════════════════════
 // The seven generators

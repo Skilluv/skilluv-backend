@@ -99,7 +99,11 @@ pub async fn list_streams(
           FROM revenue_streams s
           LEFT JOIN platform_revenues r
                  ON r.source = s.slug
-                AND r.created_at > NOW() - ($1 || ' days')::INTERVAL
+                -- `occurred_at`, not `created_at`: migration 0100 named the
+                -- column after when the money moved rather than when the row
+                -- was written, and the two differ whenever a flow is
+                -- reconciled after the fact.
+                AND r.occurred_at > NOW() - ($1 || ' days')::INTERVAL
          GROUP BY s.slug, s.pillar, s.label, s.description, s.recurring, s.is_live
          ORDER BY sum(r.amount_credits) DESC NULLS LAST, s.pillar, s.slug
         "#,
@@ -148,7 +152,11 @@ pub async fn by_pillar(
           FROM revenue_streams s
           LEFT JOIN platform_revenues r
                  ON r.source = s.slug
-                AND r.created_at > NOW() - ($1 || ' days')::INTERVAL
+                -- `occurred_at`, not `created_at`: migration 0100 named the
+                -- column after when the money moved rather than when the row
+                -- was written, and the two differ whenever a flow is
+                -- reconciled after the fact.
+                AND r.occurred_at > NOW() - ($1 || ' days')::INTERVAL
          GROUP BY s.pillar
          ORDER BY sum(r.amount_credits) DESC NULLS LAST, s.pillar
         "#,

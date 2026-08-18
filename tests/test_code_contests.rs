@@ -558,7 +558,7 @@ async fn an_edition(app: &TestApp, year: i16, status: &str) -> Uuid {
 }
 
 #[tokio::test]
-async fn the_eight_categories_are_public() {
+async fn every_category_is_public_and_says_what_it_is() {
     let app = TestApp::spawn().await;
     let body: Value = app
         .get("/api/awards/categories")
@@ -567,7 +567,29 @@ async fn the_eight_categories_are_public() {
         .await
         .unwrap();
     let categories = body["data"]["categories"].as_array().unwrap();
-    assert_eq!(categories.len(), 8);
+
+    // Named rather than counted. This test asserted "eight" and started
+    // failing the day migration 0303 added the AI categories to the same
+    // ceremony — a count is a number every domain changes, and what the test
+    // is actually about is that the code ones are offered and that nobody can
+    // nominate into a category with no description.
+    let slugs: Vec<&str> = categories
+        .iter()
+        .map(|c| c["slug"].as_str().unwrap())
+        .collect();
+    for expected in [
+        "best-oss-contribution",
+        "best-library-published",
+        "best-devtool-created",
+        "best-web-project",
+        "best-mobile-app",
+        "best-systems-project",
+        "best-blockchain-project",
+        "rookie-coder",
+    ] {
+        assert!(slugs.contains(&expected), "{expected} is no longer offered");
+    }
+
     for c in categories {
         assert!(!c["description"].as_str().unwrap().is_empty());
     }

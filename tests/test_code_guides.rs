@@ -52,12 +52,16 @@ async fn every_family_of_trades_has_a_guide_in_both_languages() {
     }
 }
 
+/// The listing moved to `/api/guides` when a second domain got rows: the old
+/// path ignored `skill_domain`, so an AI onboarding guide answered under the
+/// code path. These assertions are about code, which is what `domain=code` now
+/// says out loud instead of relying on code being the only content there.
 #[tokio::test]
 async fn the_listing_answers_in_the_requested_language() {
     let app = TestApp::spawn().await;
 
     let english: Value = reqwest::Client::new()
-        .get(format!("{}/api/code/guides?kind=onboarding", app.addr))
+        .get(format!("{}/api/guides?domain=code&kind=onboarding", app.addr))
         .header("Accept-Language", "en")
         .send()
         .await
@@ -71,7 +75,7 @@ async fn the_listing_answers_in_the_requested_language() {
 
     // No header at all: French, the language these are written in first.
     let default: Value = app
-        .get("/api/code/guides?kind=onboarding")
+        .get("/api/guides?domain=code&kind=onboarding")
         .await
         .json()
         .await
@@ -84,7 +88,7 @@ async fn a_guide_carries_a_body_somebody_can_act_on() {
     let app = TestApp::spawn().await;
 
     let body: Value = app
-        .get("/api/code/guides/onboarding-systems")
+        .get("/api/guides/onboarding-systems")
         .await
         .json()
         .await
@@ -105,7 +109,7 @@ async fn the_toolkit_and_the_twelve_templates_are_served() {
     let app = TestApp::spawn().await;
 
     let toolkit: Value = app
-        .get("/api/code/guides?kind=toolkit")
+        .get("/api/guides?domain=code&kind=toolkit")
         .await
         .json()
         .await
@@ -113,7 +117,7 @@ async fn the_toolkit_and_the_twelve_templates_are_served() {
     assert_eq!(toolkit["data"].as_array().unwrap().len(), 1);
 
     let templates: Value = app
-        .get("/api/code/guides?kind=writeup_template")
+        .get("/api/guides?domain=code&kind=writeup_template")
         .await
         .json()
         .await
@@ -431,7 +435,7 @@ async fn a_github_username_given_to_the_wizard_is_claimed_not_proved() {
     );
 
     let row: Option<(String, Option<chrono::DateTime<chrono::Utc>>)> = sqlx::query_as(
-        "SELECT p.handle, p.verified_at FROM user_code_portfolios p
+        "SELECT p.handle, p.verified_at FROM user_external_portfolios p
            JOIN users u ON u.id = p.user_id
           WHERE u.username = 'wizard_github' AND p.platform = 'github'",
     )

@@ -25,13 +25,7 @@ use uuid::Uuid;
 use crate::errors::AppError;
 
 /// The five families of ops review. Mirrors `orientations.reviewer_group`.
-pub const REVIEWER_GROUPS: &[&str] = &[
-    "infra",
-    "reliability",
-    "cloud",
-    "observability",
-    "data",
-];
+pub const REVIEWER_GROUPS: &[&str] = &["infra", "reliability", "cloud", "observability", "data"];
 
 pub const SUBTYPES: &[&str] = &[
     "iac_terraform",
@@ -65,7 +59,11 @@ pub fn error_budget_consumed(target: &BigDecimal, achieved: &BigDecimal) -> Opti
     let budget = 100.0 - target;
     if budget <= 0.0 {
         // A hundred per cent target has no budget. Any failure exhausts it.
-        return Some(if achieved >= 100.0 { 0.0 } else { f64::INFINITY });
+        return Some(if achieved >= 100.0 {
+            0.0
+        } else {
+            f64::INFINITY
+        });
     }
     Some(((100.0 - achieved) / budget * 100.0).max(0.0))
 }
@@ -76,8 +74,7 @@ pub fn error_budget_consumed(target: &BigDecimal, achieved: &BigDecimal) -> Opti
 /// against, and stating the monthly one alone makes a large piece of work
 /// look small.
 pub fn annual_saving(before: &BigDecimal, after: &BigDecimal) -> BigDecimal {
-    ((before - after) * BigDecimal::from(12))
-        .with_scale_round(2, bigdecimal::RoundingMode::Down)
+    ((before - after) * BigDecimal::from(12)).with_scale_round(2, bigdecimal::RoundingMode::Down)
 }
 
 /// The share of a bill removed.
@@ -222,11 +219,7 @@ pub async fn close_objective(
 
 /// A reviewer confirms a closed window, and a met objective earns its
 /// attestation.
-pub async fn verify_objective(
-    db: &PgPool,
-    id: Uuid,
-    reviewer: Uuid,
-) -> Result<bool, AppError> {
+pub async fn verify_objective(db: &PgPool, id: Uuid, reviewer: Uuid) -> Result<bool, AppError> {
     let objective = objective(db, id).await?;
     let Some(achieved) = objective.achieved_percent.clone() else {
         return Err(AppError::Validation(
@@ -257,10 +250,7 @@ pub async fn verify_objective(
         &format!("Objectif tenu — {}", objective.service_name),
         &format!(
             "{} a tenu {}% sur {} jours, pour un objectif de {}%.",
-            objective.service_name,
-            achieved,
-            objective.window_days,
-            objective.target_percent
+            objective.service_name, achieved, objective.window_days, objective.target_percent
         ),
     )
     .await?;
@@ -341,8 +331,7 @@ pub async fn incident(db: &PgPool, id: Uuid) -> Result<Incident, AppError> {
 }
 
 pub async fn incidents_for(db: &PgPool, commander: Uuid) -> Result<Vec<Incident>, AppError> {
-    let sql =
-        format!("{INCIDENT_SELECT} WHERE commander_user_id = $1 ORDER BY started_at DESC");
+    let sql = format!("{INCIDENT_SELECT} WHERE commander_user_id = $1 ORDER BY started_at DESC");
     let rows = sqlx::query_as::<_, Incident>(sqlx::AssertSqlSafe(sql))
         .bind(commander)
         .fetch_all(db)
@@ -388,9 +377,7 @@ pub async fn add_action(
     due_on: Option<chrono::NaiveDate>,
 ) -> Result<Uuid, AppError> {
     if description.trim().is_empty() {
-        return Err(AppError::Validation(
-            "say what will be done".into(),
-        ));
+        return Err(AppError::Validation("say what will be done".into()));
     }
 
     let id: Uuid = sqlx::query_scalar(
@@ -434,12 +421,11 @@ pub async fn publish_postmortem(
         tracing::debug!(incident = %id, "post-mortem mentions blame");
     }
 
-    let actions: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM ops_incident_actions WHERE incident_id = $1",
-    )
-    .bind(id)
-    .fetch_one(db)
-    .await?;
+    let actions: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM ops_incident_actions WHERE incident_id = $1")
+            .bind(id)
+            .fetch_one(db)
+            .await?;
 
     if actions == 0 {
         return Err(AppError::Validation(
@@ -584,9 +570,7 @@ pub async fn record_cost_work(
     .await
     .map_err(|e| {
         if e.to_string().contains("a_reduction_reduces") {
-            AppError::Validation(
-                "the figure after is not smaller than the figure before".into(),
-            )
+            AppError::Validation("the figure after is not smaller than the figure before".into())
         } else {
             AppError::from(e)
         }
@@ -766,11 +750,7 @@ pub async fn attest_artefact(
 
 /// The community one. It rests on nobody's artefact and everybody's opinion,
 /// which is why it is issued by hand and carries no deliverable.
-pub async fn attest_featured(
-    db: &PgPool,
-    user_id: Uuid,
-    reason: &str,
-) -> Result<(), AppError> {
+pub async fn attest_featured(db: &PgPool, user_id: Uuid, reason: &str) -> Result<(), AppError> {
     if reason.trim().len() < 40 {
         return Err(AppError::Validation(
             "say why in a sentence somebody outside the decision would \
@@ -866,7 +846,10 @@ mod tests {
     fn a_saving_is_stated_annually() {
         // A hundred a month looks small; twelve hundred a year is the figure
         // the decision was made against.
-        assert_eq!(annual_saving(&dec("500.00"), &dec("400.00")), dec("1200.00"));
+        assert_eq!(
+            annual_saving(&dec("500.00"), &dec("400.00")),
+            dec("1200.00")
+        );
     }
 
     #[test]

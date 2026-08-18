@@ -68,6 +68,7 @@ pub fn admin_routes() -> Router<AppState> {
         .merge(crate::routes::admin_additional_product_routes())
         .merge(crate::routes::admin_sales_routes())
         .merge(crate::routes::admin_ops_practice_routes())
+        .merge(crate::routes::admin_credential_routes())
         .merge(crate::routes::admin_event_routes())
         .merge(crate::routes::admin_talent_line_routes())
         // ADM-M3.2 — CRUD badge_rules (proof engine editor).

@@ -351,6 +351,10 @@ pub async fn list_guides(
         SELECT slug, kind, reviewer_group, locale, title, summary
           FROM content_guides
          WHERE is_published = TRUE
+           -- This route is the code catalogue. Without the domain the ops
+           -- guides would appear here the day they were written, under a
+           -- path that says code.
+           AND skill_domain = 'code'
            AND locale = $1
            AND ($2::TEXT IS NULL OR kind = $2)
            AND ($3::TEXT IS NULL OR reviewer_group = $3)
@@ -408,7 +412,7 @@ pub async fn get_guide(
 
 /// French is the base locale for this content, unlike the orientation
 /// catalogue: these are written here first and translated after.
-fn guide_locale(headers: &axum::http::HeaderMap) -> String {
+pub fn guide_locale(headers: &axum::http::HeaderMap) -> String {
     let resolved = crate::routes::resolve_from_accept_language(
         headers
             .get(axum::http::header::ACCEPT_LANGUAGE)

@@ -61,9 +61,7 @@ async fn ops_has_eight_trades_in_five_review_families() {
     // Three from migration 0088, five added.
     assert_eq!(orientations.len(), 8);
     assert!(
-        orientations
-            .iter()
-            .all(|o| o["reviewer_group"].is_string()),
+        orientations.iter().all(|o| o["reviewer_group"].is_string()),
         "every trade belongs to a review family, or nobody can be given rights over it"
     );
 
@@ -104,7 +102,10 @@ async fn the_new_trades_are_grouped_by_competence_not_by_org_chart() {
     };
 
     // Somebody who reads a Terraform plan reads a Helm chart.
-    assert_eq!(group_of("devops-engineer"), group_of("kubernetes-specialist"));
+    assert_eq!(
+        group_of("devops-engineer"),
+        group_of("kubernetes-specialist")
+    );
     // Somebody who has run incidents judges a post-mortem.
     assert_eq!(group_of("sre"), group_of("incident-commander"));
     // And has no opinion worth having on an index.
@@ -131,13 +132,12 @@ async fn the_ops_reviewer_capabilities_are_grantable() {
         "challenge_validator:ops",
         "mentor",
     ] {
-        let granted = sqlx::query(
-            "INSERT INTO user_capabilities (user_id, capability) VALUES ($1, $2)",
-        )
-        .bind(user)
-        .bind(capability)
-        .execute(&app.db)
-        .await;
+        let granted =
+            sqlx::query("INSERT INTO user_capabilities (user_id, capability) VALUES ($1, $2)")
+                .bind(user)
+                .bind(capability)
+                .execute(&app.db)
+                .await;
         assert!(granted.is_ok(), "{capability} became ungrantable");
     }
 }
@@ -186,7 +186,10 @@ async fn closing_a_window_needs_the_figure_and_its_source() {
         .await;
     assert_eq!(resp.status(), 200, "{}", resp.text().await.unwrap());
     let created: Value = resp.json().await.unwrap();
-    let id = created["data"]["objective"]["id"].as_str().unwrap().to_string();
+    let id = created["data"]["objective"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
 
     // A number with no source is a claim.
     let resp = app
@@ -210,7 +213,9 @@ async fn closing_a_window_needs_the_figure_and_its_source() {
     let body: Value = resp.json().await.unwrap();
     assert_eq!(body["data"]["met"], true);
     // Half the error budget spent. Uptime alone would hide how close it was.
-    let consumed = body["data"]["error_budget_consumed_percent"].as_f64().unwrap();
+    let consumed = body["data"]["error_budget_consumed_percent"]
+        .as_f64()
+        .unwrap();
     assert!((consumed - 50.0).abs() < 0.01);
 }
 
@@ -234,7 +239,10 @@ async fn a_near_miss_earns_nothing() {
         )
         .await;
     let created: Value = resp.json().await.unwrap();
-    let id = created["data"]["objective"]["id"].as_str().unwrap().to_string();
+    let id = created["data"]["objective"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
 
     // 99.94 against 99.95. Rounding would have made this a pass.
     let resp = app
@@ -251,7 +259,10 @@ async fn a_near_miss_earns_nothing() {
 
     app.login("sloadmin").await;
     let resp = app
-        .post(&format!("/api/admin/ops/objectives/{id}/verify"), &json!({}))
+        .post(
+            &format!("/api/admin/ops/objectives/{id}/verify"),
+            &json!({}),
+        )
         .await;
     assert_eq!(resp.status(), 200, "{}", resp.text().await.unwrap());
     let body: Value = resp.json().await.unwrap();
@@ -286,7 +297,10 @@ async fn a_met_objective_earns_its_attestation() {
         )
         .await;
     let created: Value = resp.json().await.unwrap();
-    let id = created["data"]["objective"]["id"].as_str().unwrap().to_string();
+    let id = created["data"]["objective"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
 
     app.post(
         &format!("/api/ops/objectives/{id}/close"),
@@ -299,18 +313,19 @@ async fn a_met_objective_earns_its_attestation() {
 
     app.login("metadmin").await;
     let resp = app
-        .post(&format!("/api/admin/ops/objectives/{id}/verify"), &json!({}))
+        .post(
+            &format!("/api/admin/ops/objectives/{id}/verify"),
+            &json!({}),
+        )
         .await;
     let body: Value = resp.json().await.unwrap();
     assert_eq!(body["data"]["attestation_issued"], true);
 
-    let basis: String = sqlx::query_scalar(
-        "SELECT basis FROM attestations WHERE user_id = $1",
-    )
-    .bind(owner)
-    .fetch_one(&app.db)
-    .await
-    .unwrap();
+    let basis: String = sqlx::query_scalar("SELECT basis FROM attestations WHERE user_id = $1")
+        .bind(owner)
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
     assert_eq!(basis, "ops_uptime_achievement");
 }
 
@@ -332,7 +347,10 @@ async fn a_resolved_incident(app: &TestApp, username: &str) -> String {
         .await;
     assert_eq!(resp.status(), 200, "{}", resp.text().await.unwrap());
     let created: Value = resp.json().await.unwrap();
-    let id = created["data"]["incident"]["id"].as_str().unwrap().to_string();
+    let id = created["data"]["incident"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
 
     let resp = app
         .post(
@@ -411,12 +429,11 @@ async fn a_published_post_mortem_earns_its_attestation() {
         .await;
     assert_eq!(resp.status(), 200, "{}", resp.text().await.unwrap());
 
-    let basis: String =
-        sqlx::query_scalar("SELECT basis FROM attestations WHERE user_id = $1")
-            .bind(commander)
-            .fetch_one(&app.db)
-            .await
-            .unwrap();
+    let basis: String = sqlx::query_scalar("SELECT basis FROM attestations WHERE user_id = $1")
+        .bind(commander)
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
     assert_eq!(basis, "ops_incident_led");
 }
 
@@ -462,7 +479,12 @@ async fn an_incident_has_nowhere_to_name_who_caused_it() {
     .await
     .unwrap();
 
-    for forbidden in ["caused_by", "responsible_user_id", "at_fault", "blamed_user_id"] {
+    for forbidden in [
+        "caused_by",
+        "responsible_user_id",
+        "at_fault",
+        "blamed_user_id",
+    ] {
         assert!(
             !columns.iter().any(|c| c == forbidden),
             "{forbidden} exists — a post-mortem naming a person is one nobody writes \
@@ -547,11 +569,17 @@ async fn a_cost_reduction_is_attested_only_if_the_service_still_works() {
         .await;
     assert_eq!(resp.status(), 200, "{}", resp.text().await.unwrap());
     let created: Value = resp.json().await.unwrap();
-    let id = created["data"]["cost_work"]["id"].as_str().unwrap().to_string();
+    let id = created["data"]["cost_work"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
 
     // 2500 a month is 30 000 a year — the figure the decision was made
     // against.
-    assert_eq!(created["data"]["annual_saving"].as_str().unwrap(), "30000.00");
+    assert_eq!(
+        created["data"]["annual_saving"].as_str().unwrap(),
+        "30000.00"
+    );
     assert!((created["data"]["reduction_percent"].as_f64().unwrap() - 62.5).abs() < 0.01);
 
     app.login("costadmin").await;

@@ -355,11 +355,12 @@ async fn a_lapsed_certification_stops_being_live() {
 
     // A status that lags reality shows up in every export, and somebody
     // eventually trusts one of those.
-    let status: String = sqlx::query_scalar("SELECT status FROM program_certifications WHERE id = $1")
-        .bind(id)
-        .fetch_one(&app.db)
-        .await
-        .unwrap();
+    let status: String =
+        sqlx::query_scalar("SELECT status FROM program_certifications WHERE id = $1")
+            .bind(id)
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
     assert_eq!(status, "expired");
 }
 

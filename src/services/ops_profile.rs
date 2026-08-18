@@ -53,6 +53,10 @@ pub struct OpsProfile {
     pub incidents: Vec<serde_json::Value>,
     pub cost_work: Vec<serde_json::Value>,
     pub attestations: Vec<serde_json::Value>,
+    /// Certifications somebody else issued, verified and still valid. Listed
+    /// after the attestations and never mixed into them: one is a thing
+    /// Skilluv stands behind, the other is a thing Skilluv checked a link to.
+    pub credentials: Vec<serde_json::Value>,
 }
 
 /// Everything the ops formula counts, in one round-trip.
@@ -70,6 +74,7 @@ struct Measurements {
     review_grid_average: Option<BigDecimal>,
     years_active: i64,
     featured_times: i64,
+    credentials_current: i64,
 }
 
 async fn measure(db: &PgPool, user_id: Uuid) -> Result<Measurements, AppError> {
@@ -166,7 +171,15 @@ async fn measure(db: &PgPool, user_id: Uuid) -> Result<Measurements, AppError> {
             (SELECT count(*) FROM attestations
               WHERE user_id = $1 AND revoked_at IS NULL
                 AND basis = 'featured_ops_engineer')
-                AS featured_times
+                AS featured_times,
+
+            -- Verified and still valid. A lapsed certification scores
+            -- nothing, and an unverified one has not been checked by anybody.
+            (SELECT count(*) FROM external_credentials
+              WHERE user_id = $1
+                AND verified_at IS NOT NULL
+                AND is_current = TRUE)
+                AS credentials_current
         "#,
     )
     .bind(user_id)
@@ -197,6 +210,7 @@ pub async fn compute(db: &PgPool, user_id: Uuid) -> Result<CraftScore, AppError>
             }
             "years_active" => m.years_active as f64,
             "featured_times" => m.featured_times as f64,
+            "credentials_current" => m.credentials_current as f64,
             unknown => {
                 tracing::warn!(
                     term = unknown,
@@ -303,9 +317,23 @@ pub async fn build(db: &PgPool, username: &str) -> Result<OpsProfile, AppError> 
     .fetch_all(db)
     .await?;
 
+    let credentials: Vec<serde_json::Value> = sqlx::query_scalar(
+        "SELECT jsonb_build_object(
+                    'issuer', issuer, 'name', name, 'level', level,
+                    'evidence_url', evidence_url,
+                    'issued_on', issued_on, 'expires_on', expires_on)
+           FROM external_credentials
+          WHERE user_id = $1 AND verified_at IS NOT NULL AND is_current = TRUE
+          ORDER BY issued_on DESC",
+    )
+    .bind(user_id)
+    .fetch_all(db)
+    .await?;
+
     Ok(OpsProfile {
         username,
         display_name,
+        credentials,
         orientations,
         score: compute(db, user_id).await?,
         objectives,

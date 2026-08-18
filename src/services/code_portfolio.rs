@@ -165,7 +165,7 @@ pub async fn claim(db: &PgPool, user_id: Uuid, profile_url: &str) -> Result<Port
     // and the one who proved it wins.
     let taken: bool = sqlx::query_scalar(
         "SELECT EXISTS (
-             SELECT 1 FROM user_code_portfolios
+             SELECT 1 FROM user_portfolios
               WHERE platform = $1 AND lower(handle) = lower($2)
                 AND verified_at IS NOT NULL AND user_id <> $3)",
     )
@@ -182,7 +182,7 @@ pub async fn claim(db: &PgPool, user_id: Uuid, profile_url: &str) -> Result<Port
 
     let row: Portfolio = sqlx::query_as(
         r#"
-        INSERT INTO user_code_portfolios (user_id, platform, handle, profile_url)
+        INSERT INTO user_portfolios (user_id, platform, handle, profile_url)
         VALUES ($1, $2, $3, $4)
         ON CONFLICT (user_id, platform, handle) DO UPDATE
             SET profile_url = EXCLUDED.profile_url, sync_enabled = TRUE
@@ -222,12 +222,12 @@ pub async fn record_verified(
 
     sqlx::query(
         r#"
-        INSERT INTO user_code_portfolios
+        INSERT INTO user_portfolios
             (user_id, platform, handle, profile_url, verified_at, verification_method)
         VALUES ($1, $2, $3, $4, NOW(), $5)
         ON CONFLICT (user_id, platform, handle) DO UPDATE
             SET profile_url = EXCLUDED.profile_url,
-                verified_at = COALESCE(user_code_portfolios.verified_at, NOW()),
+                verified_at = COALESCE(user_portfolios.verified_at, NOW()),
                 verification_method = EXCLUDED.verification_method,
                 sync_enabled = TRUE
         "#,
@@ -249,7 +249,7 @@ pub async fn for_user(db: &PgPool, user_id: Uuid) -> Result<Vec<Portfolio>, AppE
                 repos_count, stars_received, followers_count,
                 contributions_last_year, packages_count, downloads_total,
                 metadata, last_synced_at, last_error
-           FROM user_code_portfolios
+           FROM user_portfolios
           WHERE user_id = $1
           ORDER BY verified_at NULLS LAST, platform, handle",
     )
@@ -556,7 +556,7 @@ pub async fn sync_contribution_graph(
     user_id: Uuid,
 ) -> Result<Option<ContributionGraph>, AppError> {
     let handle: Option<String> = sqlx::query_scalar(
-        "SELECT handle FROM user_code_portfolios
+        "SELECT handle FROM user_portfolios
           WHERE user_id = $1 AND platform = 'github' AND verified_at IS NOT NULL",
     )
     .bind(user_id)
@@ -575,7 +575,7 @@ pub async fn sync_contribution_graph(
     let graph = fetch_contribution_graph(client, &token, &handle).await?;
 
     sqlx::query(
-        "UPDATE user_code_portfolios
+        "UPDATE user_portfolios
             SET contributions_last_year = $2,
                 metadata = metadata || jsonb_build_object(
                     'contribution_graph', $3::JSONB,
@@ -629,7 +629,7 @@ pub async fn sync_one(
     portfolio_id: Uuid,
 ) -> Result<(), AppError> {
     let row: Option<(Uuid, String, String)> =
-        sqlx::query_as("SELECT user_id, platform, handle FROM user_code_portfolios WHERE id = $1")
+        sqlx::query_as("SELECT user_id, platform, handle FROM user_portfolios WHERE id = $1")
             .bind(portfolio_id)
             .fetch_optional(db)
             .await?;
@@ -643,7 +643,7 @@ pub async fn sync_one(
                 _ => profile.stars_received,
             };
             sqlx::query(
-                "UPDATE user_code_portfolios
+                "UPDATE user_portfolios
                     SET repos_count = COALESCE($2, repos_count),
                         followers_count = COALESCE($3, followers_count),
                         stars_received = COALESCE($4, stars_received),
@@ -662,7 +662,7 @@ pub async fn sync_one(
         }
         Err(e) => {
             sqlx::query(
-                "UPDATE user_code_portfolios
+                "UPDATE user_portfolios
                     SET last_error = $2, last_synced_at = last_synced_at
                   WHERE id = $1",
             )
@@ -694,7 +694,7 @@ pub async fn sync_stale(
         // The graph is per person rather than per portfolio row: one call
         // covers somebody however many accounts they have listed.
         let connected: Vec<Uuid> = sqlx::query_scalar(
-            "SELECT p.user_id FROM user_code_portfolios p
+            "SELECT p.user_id FROM user_portfolios p
                JOIN github_connections g ON g.user_id = p.user_id
               WHERE p.platform = 'github' AND p.verified_at IS NOT NULL
                 AND p.sync_enabled = TRUE
@@ -718,7 +718,7 @@ pub async fn sync_stale(
 
 async fn sync_stale_profiles(db: &PgPool, client: &reqwest::Client) -> Result<u64, AppError> {
     let stale: Vec<Uuid> = sqlx::query_scalar(
-        "SELECT id FROM user_code_portfolios
+        "SELECT id FROM user_portfolios
           WHERE sync_enabled = TRUE
             AND (last_synced_at IS NULL OR last_synced_at < NOW() - INTERVAL '7 days')
           ORDER BY last_synced_at NULLS FIRST

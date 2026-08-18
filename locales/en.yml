@@ -53,6 +53,15 @@ email:
 
 # ─── Notifications ───────────────────────────────────────────────
 notification:
+  credential:
+    refused:
+      title: "A certification could not be confirmed"
+      body: "{reason}"
+      cta: "See my certifications"
+    expiring:
+      title: "{name} expires on {date}"
+      body: "It stops counting on your profile that day. Renewing means booking an exam slot, which is why this arrives a month early."
+      cta: "See my certifications"
   payout:
     sent:
       title: "Your payout is on its way"

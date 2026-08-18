@@ -225,6 +225,7 @@ async fn async_main(config: AppConfig) {
     spawn_craft_score_worker(state.clone());
     spawn_code_portfolio_worker(state.clone());
     spawn_release_sweep_worker(state.clone());
+    spawn_credential_expiry_worker(state.clone());
     spawn_payout_reconciliation_worker(state.clone());
     spawn_profile_readme_sync_worker(state.clone());
 
@@ -255,6 +256,32 @@ async fn async_main(config: AppConfig) {
 /// notices their money arriving at 14:07 instead of 14:00 — and a short
 /// interval keeps the backlog small enough that one failing hold cannot bury
 /// the rest.
+/// Tells people their certifications are about to lapse, a month ahead.
+///
+/// Daily, because the query selects exactly one day of the notice window: a
+/// shorter interval would send the same notice several times, and a longer
+/// one would skip days entirely.
+fn spawn_credential_expiry_worker(state: skilluv_backend::AppState) {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(24 * 60 * 60));
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+            match skilluv_backend::services::credentials::notify_expiring(&state).await {
+                Ok(sent) if sent > 0 => {
+                    tracing::info!(sent, "credential expiry notices sent");
+                }
+                Ok(_) => {}
+                Err(e) => tracing::error!(
+                    error = %e,
+                    "credential expiry sweep failed - somebody's certification \
+                     will lapse without warning"
+                ),
+            }
+        }
+    });
+}
+
 fn spawn_release_sweep_worker(state: skilluv_backend::AppState) {
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(10 * 60));

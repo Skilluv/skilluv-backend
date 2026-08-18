@@ -52,6 +52,15 @@ email:
 # de titre de push : trois formulations pour la meme chose divergeraient au
 # premier changement.
 notification:
+  credential:
+    refused:
+      title: "Une certification n'a pas pu être confirmée"
+      body: "{reason}"
+      cta: "Voir mes certifications"
+    expiring:
+      title: "{name} expire le {date}"
+      body: "Elle cessera de compter sur ton profil ce jour-là. Repasser l'examen suppose de réserver un créneau : c'est pourquoi ce message arrive un mois avant."
+      cta: "Voir mes certifications"
   payout:
     sent:
       title: "Ton paiement est parti"

@@ -186,7 +186,7 @@ async fn a_claimed_account_is_not_evidence() {
     score(&app, claimed, "code", 1000, "engineer").await;
 
     sqlx::query(
-        "INSERT INTO user_code_portfolios
+        "INSERT INTO user_portfolios
             (user_id, platform, handle, profile_url, verified_at, verification_method)
          VALUES ($1, 'github', 'proved', 'https://github.com/proved', NOW(), 'oauth')",
     )
@@ -195,7 +195,7 @@ async fn a_claimed_account_is_not_evidence() {
     .await
     .unwrap();
     sqlx::query(
-        "INSERT INTO user_code_portfolios (user_id, platform, handle, profile_url)
+        "INSERT INTO user_portfolios (user_id, platform, handle, profile_url)
          VALUES ($1, 'github', 'claimed', 'https://github.com/claimed')",
     )
     .bind(claimed)

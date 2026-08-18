@@ -452,7 +452,7 @@ pub async fn drop_portfolio(
     auth: AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Value>, AppError> {
-    let done = sqlx::query("DELETE FROM user_code_portfolios WHERE id = $1 AND user_id = $2")
+    let done = sqlx::query("DELETE FROM user_portfolios WHERE id = $1 AND user_id = $2")
         .bind(id)
         .bind(auth.user_id)
         .execute(&state.db)

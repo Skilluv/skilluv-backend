@@ -426,7 +426,7 @@ async fn a_github_username_given_to_the_wizard_is_claimed_not_proved() {
     );
 
     let row: Option<(String, Option<chrono::DateTime<chrono::Utc>>)> = sqlx::query_as(
-        "SELECT p.handle, p.verified_at FROM user_code_portfolios p
+        "SELECT p.handle, p.verified_at FROM user_portfolios p
            JOIN users u ON u.id = p.user_id
           WHERE u.username = 'wizard_github' AND p.platform = 'github'",
     )

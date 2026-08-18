@@ -640,3 +640,338 @@ async fn a_vote_spike_is_reported_not_punished() {
             .unwrap();
     assert_eq!(status, "submitted");
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// Reading the contests back
+// ═══════════════════════════════════════════════════════════════════
+
+#[tokio::test]
+async fn the_contest_list_narrows_in_sql_not_in_the_browser() {
+    let app = TestApp::spawn().await;
+
+    a_contest(&app, "brief-design-a", "brief_contest", json!({"brief": a_brief()})).await;
+    let duel = a_contest(&app, "duel-design-a", "duel", json!({"brief": a_brief()})).await;
+    sqlx::query("UPDATE tournaments SET skill_domain = NULL WHERE slug = 'duel-design-a'")
+        .execute(&app.db)
+        .await
+        .unwrap();
+    let _ = duel;
+    a_contest(&app, "brief-code-a", "brief_contest", json!({"brief": a_brief()})).await;
+    sqlx::query("UPDATE tournaments SET skill_domain = 'code' WHERE slug = 'brief-code-a'")
+        .execute(&app.db)
+        .await
+        .unwrap();
+
+    // Without this filter the design contest page asked for two hundred rows
+    // and sorted them client-side, which stops working at the two hundred and
+    // first tournament — silently, by dropping the oldest.
+    let body: Value = app
+        .get("/api/tournaments?kind=brief_contest&skill_domain=design")
+        .await
+        .json()
+        .await
+        .unwrap();
+    let slugs: Vec<&str> = body["data"]["tournaments"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["slug"].as_str().unwrap())
+        .collect();
+
+    assert!(slugs.contains(&"brief-design-a"), "{slugs:?}");
+    assert!(!slugs.contains(&"brief-code-a"), "another domain: {slugs:?}");
+    assert!(!slugs.contains(&"duel-design-a"), "another kind: {slugs:?}");
+}
+
+#[tokio::test]
+async fn a_domain_filter_keeps_the_contests_open_to_everyone() {
+    let app = TestApp::spawn().await;
+
+    a_contest(&app, "brief-open", "brief_contest", json!({"brief": a_brief()})).await;
+    sqlx::query("UPDATE tournaments SET skill_domain = NULL WHERE slug = 'brief-open'")
+        .execute(&app.db)
+        .await
+        .unwrap();
+
+    // A cross-domain contest is exactly the one that wants the widest field.
+    // Hiding it from the design page would be the opposite of the intent.
+    let body: Value = app
+        .get("/api/tournaments?skill_domain=design")
+        .await
+        .json()
+        .await
+        .unwrap();
+    let slugs: Vec<&str> = body["data"]["tournaments"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["slug"].as_str().unwrap())
+        .collect();
+    assert!(slugs.contains(&"brief-open"), "{slugs:?}");
+}
+
+#[tokio::test]
+async fn a_podium_names_the_people_on_it() {
+    let app = TestApp::spawn().await;
+    app.register_user("podium_first").await;
+    app.register_user("podium_second").await;
+    let first = user_id(&app, "podium_first").await;
+    let second = user_id(&app, "podium_second").await;
+
+    let contest = a_contest(
+        &app,
+        "brief-podium",
+        "brief_contest",
+        json!({"brief": a_brief()}),
+    )
+    .await;
+    enter(&app, contest, first).await;
+    enter(&app, contest, second).await;
+    sqlx::query(
+        "UPDATE tournament_participants SET rank = CASE WHEN participant_id = $2 THEN 1 ELSE 2 END,
+                                            score = CASE WHEN participant_id = $2 THEN 90 ELSE 70 END
+          WHERE tournament_id = $1",
+    )
+    .bind(contest)
+    .bind(first)
+    .execute(&app.db)
+    .await
+    .unwrap();
+
+    // A ranking that can only print UUIDs is not a podium.
+    let body: Value = app
+        .get("/api/tournaments/brief-podium/leaderboard")
+        .await
+        .json()
+        .await
+        .unwrap();
+    let rows = body["data"]["leaderboard"].as_array().unwrap();
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0]["username"], "podium_first");
+    assert_eq!(rows[0]["rank"], 1);
+    assert!(rows[0]["display_name"].is_string());
+    assert_eq!(rows[1]["username"], "podium_second");
+}
+
+#[tokio::test]
+async fn a_deleted_account_leaves_a_nameless_line_not_a_hole() {
+    let app = TestApp::spawn().await;
+    app.register_user("podium_ghost").await;
+    app.register_user("podium_stays").await;
+    let ghost = user_id(&app, "podium_ghost").await;
+    let stays = user_id(&app, "podium_stays").await;
+
+    let contest = a_contest(
+        &app,
+        "brief-ghost",
+        "brief_contest",
+        json!({"brief": a_brief()}),
+    )
+    .await;
+    enter(&app, contest, ghost).await;
+    enter(&app, contest, stays).await;
+
+    // The participation outlives the account on purpose: removing the line
+    // would rewrite the standing of everybody ranked below it.
+    sqlx::query("DELETE FROM users WHERE id = $1")
+        .bind(ghost)
+        .execute(&app.db)
+        .await
+        .unwrap();
+
+    let resp = app.get("/api/tournaments/brief-ghost/leaderboard").await;
+    assert_eq!(resp.status().as_u16(), 200);
+    let body: Value = resp.json().await.unwrap();
+    let rows = body["data"]["leaderboard"].as_array().unwrap();
+    assert_eq!(rows.len(), 2, "the ranking keeps its shape");
+    let nameless = rows
+        .iter()
+        .find(|r| r["participant_id"] == json!(ghost.to_string()))
+        .expect("the line is still there");
+    assert!(nameless["username"].is_null());
+    assert!(nameless["display_name"].is_null());
+    let _ = stays;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// The blind submission window
+// ═══════════════════════════════════════════════════════════════════
+
+/// Enter a contest properly, through the endpoint, so the submission row
+/// exists the way a real entry would.
+async fn submit(app: &TestApp, slug: &str, username: &str, n: u32) {
+    app.login(username).await;
+    let resp = app
+        .post(&format!("/api/tournaments/{slug}/submissions"), &an_entry(n))
+        .await;
+    assert!(resp.status().is_success(), "{:?}", resp.text().await);
+}
+
+#[tokio::test]
+async fn a_blind_window_shows_an_entrant_their_own_work_and_nobody_elses() {
+    let app = TestApp::spawn().await;
+    app.register_user("blind_one").await;
+    app.register_user("blind_two").await;
+    let one = user_id(&app, "blind_one").await;
+    let two = user_id(&app, "blind_two").await;
+
+    let contest = a_contest(
+        &app,
+        "brief-blind",
+        "brief_contest",
+        json!({"brief": a_brief()}),
+    )
+    .await;
+    sqlx::query("UPDATE tournaments SET blind_until_close = TRUE WHERE id = $1")
+        .bind(contest)
+        .execute(&app.db)
+        .await
+        .unwrap();
+    enter(&app, contest, one).await;
+    enter(&app, contest, two).await;
+    submit(&app, "brief-blind", "blind_one", 1).await;
+    submit(&app, "brief-blind", "blind_two", 2).await;
+
+    // Mimicry is the format's known failure: the first strong answer pulls
+    // every later one towards it, and it is invisible in the result.
+    app.login("blind_one").await;
+    let body: Value = app
+        .get("/api/tournaments/brief-blind/submissions")
+        .await
+        .json()
+        .await
+        .unwrap();
+    let rows = body["data"]["submissions"].as_array().unwrap();
+    assert_eq!(rows.len(), 1, "only their own");
+    assert_eq!(rows[0]["participant_id"], json!(one.to_string()));
+
+    // And the reader is told, because a gallery showing one entry without
+    // saying the rest are withheld reads as a contest nobody entered.
+    assert_eq!(body["data"]["blinded"], json!(true));
+    assert!(body["data"]["blind_until"].is_string());
+}
+
+#[tokio::test]
+async fn the_panel_is_never_blinded() {
+    let app = TestApp::spawn().await;
+    app.register_user("blind_juror").await;
+    app.register_user("blind_entrant").await;
+    let juror = user_id(&app, "blind_juror").await;
+    let entrant = user_id(&app, "blind_entrant").await;
+    grant(&app, juror, "jury_tournament").await;
+
+    let contest = a_contest(
+        &app,
+        "brief-blind-jury",
+        "brief_contest",
+        json!({"brief": a_brief()}),
+    )
+    .await;
+    sqlx::query("UPDATE tournaments SET blind_until_close = TRUE WHERE id = $1")
+        .bind(contest)
+        .execute(&app.db)
+        .await
+        .unwrap();
+    enter(&app, contest, entrant).await;
+    submit(&app, "brief-blind-jury", "blind_entrant", 3).await;
+
+    // Blinding the panel too would not be a flag, it would be a different
+    // contest calendar — judging could only start after the deadline.
+    sqlx::query(
+        "INSERT INTO tournament_juries (tournament_id, juror_user_id, accepted_at)
+         VALUES ($1, $2, NOW())",
+    )
+    .bind(contest)
+    .bind(juror)
+    .execute(&app.db)
+    .await
+    .unwrap();
+
+    app.login("blind_juror").await;
+    let body: Value = app
+        .get("/api/tournaments/brief-blind-jury/submissions")
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(body["data"]["submissions"].as_array().unwrap().len(), 1);
+    assert_eq!(body["data"]["blinded"], json!(false));
+}
+
+#[tokio::test]
+async fn the_field_opens_at_the_deadline_and_stays_open() {
+    let app = TestApp::spawn().await;
+    app.register_user("blind_closer").await;
+    let entrant = user_id(&app, "blind_closer").await;
+
+    let contest = a_contest(
+        &app,
+        "brief-blind-closed",
+        "brief_contest",
+        json!({"brief": a_brief()}),
+    )
+    .await;
+    sqlx::query("UPDATE tournaments SET blind_until_close = TRUE WHERE id = $1")
+        .bind(contest)
+        .execute(&app.db)
+        .await
+        .unwrap();
+    enter(&app, contest, entrant).await;
+    submit(&app, "brief-blind-closed", "blind_closer", 4).await;
+
+    // A result nobody can check against the whole field is not a result. The
+    // window narrows *when*, never *whether* — including for a reader who
+    // never had an account.
+    sqlx::query("UPDATE tournaments SET status = 'concluded' WHERE id = $1")
+        .bind(contest)
+        .execute(&app.db)
+        .await
+        .unwrap();
+
+    let body: Value = reqwest::Client::new()
+        .get(format!(
+            "{}/api/tournaments/brief-blind-closed/submissions",
+            app.addr
+        ))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(body["data"]["submissions"].as_array().unwrap().len(), 1);
+    assert_eq!(body["data"]["blinded"], json!(false));
+}
+
+#[tokio::test]
+async fn a_contest_that_did_not_ask_for_blindness_is_public_throughout() {
+    let app = TestApp::spawn().await;
+    app.register_user("open_entrant").await;
+    let entrant = user_id(&app, "open_entrant").await;
+
+    let contest = a_contest(
+        &app,
+        "brief-open-field",
+        "brief_contest",
+        json!({"brief": a_brief()}),
+    )
+    .await;
+    enter(&app, contest, entrant).await;
+    submit(&app, "brief-open-field", "open_entrant", 5).await;
+
+    // The default is unchanged by migration 0244: nothing becomes less
+    // readable because the option now exists.
+    let body: Value = reqwest::Client::new()
+        .get(format!(
+            "{}/api/tournaments/brief-open-field/submissions",
+            app.addr
+        ))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(body["data"]["submissions"].as_array().unwrap().len(), 1);
+    assert_eq!(body["data"]["blinded"], json!(false));
+}

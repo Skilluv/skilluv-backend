@@ -289,6 +289,74 @@ impl DesignSubtype {
         Self::CopyDeck,
         Self::ResearchDocument,
     ];
+
+    /// Read a subtype back from the string the database stores.
+    ///
+    /// Returns `None` for an unknown value rather than falling back to a
+    /// variant: a subtype nobody recognises must not silently be treated as
+    /// an interface, which would offer a pixel diff of a sound file.
+    pub fn parse(value: &str) -> Option<Self> {
+        Self::ALL.iter().copied().find(|s| s.as_str() == value)
+    }
+
+    /// How two versions of this kind of artefact can usefully be compared.
+    ///
+    /// The backend does not compute the diff — it has neither the pixels nor
+    /// the fonts, and rendering a Figma node server-side would mean holding
+    /// somebody's design account. What it does own is the subtype, so it
+    /// answers the question the subtype decides: *which* comparison is
+    /// meaningful here.
+    ///
+    /// Without this the client has to keep its own copy of the twelve
+    /// subtypes and guess. It would guess wrong on the interesting ones —
+    /// an icon set is SVG and an illustration set is not, and both are
+    /// "images" to anybody reading the names.
+    pub fn diff_strategy(&self) -> DiffStrategy {
+        match self {
+            // Raster output: overlay them and highlight what moved.
+            Self::Interface | Self::IllustrationSet | Self::ThreeDScene => DiffStrategy::Pixel,
+            // Vector output, where a structural diff says something a pixel
+            // diff cannot: which path changed, not which pixels did.
+            Self::IconSet | Self::TypeFamily => DiffStrategy::Vector,
+            // Structured text: tokens, component APIs, copy.
+            Self::DesignSystem | Self::CopyDeck => DiffStrategy::Structured,
+            // Time-based: there is no honest still-frame diff, so the two run
+            // side by side and a person judges.
+            Self::Motion | Self::Video | Self::Sound => DiffStrategy::SideBySide,
+            // Mixed bags — a brand kit is marks, type and a document; a
+            // research document is prose with images. Neither has one right
+            // comparison, and pretending otherwise hides half of what changed.
+            Self::BrandKit | Self::ResearchDocument => DiffStrategy::SideBySide,
+        }
+    }
+}
+
+/// The comparison that is meaningful for an artefact, decided by its subtype.
+///
+/// Named by what a reader gets, not by a library: `Pixel` is a promise that
+/// overlaying is informative, and stays true whichever tool the client uses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DiffStrategy {
+    /// Overlay and highlight the regions that changed.
+    Pixel,
+    /// Structural comparison of the drawing itself.
+    Vector,
+    /// A keyed diff of tokens, properties or lines.
+    Structured,
+    /// No automatic diff is honest; show both and let a person read them.
+    SideBySide,
+}
+
+impl DiffStrategy {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Pixel => "pixel",
+            Self::Vector => "vector",
+            Self::Structured => "structured",
+            Self::SideBySide => "side_by_side",
+        }
+    }
 }
 
 #[cfg(test)]

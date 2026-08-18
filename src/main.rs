@@ -223,6 +223,7 @@ async fn async_main(config: AppConfig) {
     spawn_hello_wall_mirror_worker(state.clone());
     spawn_artifact_stats_worker(state.clone());
     spawn_craft_score_worker(state.clone());
+    spawn_contest_reminder_worker(state.clone());
     spawn_code_portfolio_worker(state.clone());
     spawn_release_sweep_worker(state.clone());
     spawn_payout_reconciliation_worker(state.clone());
@@ -388,6 +389,42 @@ fn spawn_code_portfolio_worker(state: skilluv_backend::AppState) {
 /// the column the sorted lists read. Hourly, bounded per pass: a sweep that
 /// tries to do the whole table at once is one that times out and never
 /// reaches the end of the alphabet.
+/// Warn people before a contest deadline passes, and tell them when it has.
+///
+/// Hourly, which is the coarsest cadence that still lands a forty-eight hour
+/// warning inside its window. Enabled by env like the other sweeps: a second
+/// process running this would double every reminder, and the flag is what
+/// makes "which box sends the mail" an explicit answer.
+fn spawn_contest_reminder_worker(state: skilluv_backend::AppState) {
+    tokio::spawn(async move {
+        if std::env::var("SKILLUV_CONTEST_REMINDERS_ENABLED").as_deref() != Ok("1") {
+            tracing::info!("contest_reminders worker : disabled (env flag absent)");
+            return;
+        }
+
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(60 * 60));
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+            match skilluv_backend::services::contest_reminders::sweep(&state.db).await {
+                Ok(report) if report.total() == 0 => {
+                    tracing::debug!("contest_reminders worker : no deadline in the window")
+                }
+                Ok(report) => tracing::info!(
+                    deadlines = report.deadline_warnings,
+                    juries = report.jury_warnings,
+                    closures = report.closures_announced,
+                    "contest_reminders worker : reminders sent"
+                ),
+                Err(e) => tracing::error!(
+                    error = %e,
+                    "contest_reminders worker : sweep failed, the next pass retries"
+                ),
+            }
+        }
+    });
+}
+
 fn spawn_craft_score_worker(state: skilluv_backend::AppState) {
     tokio::spawn(async move {
         if std::env::var("SKILLUV_CRAFT_SCORE_ENABLED").as_deref() != Ok("1") {

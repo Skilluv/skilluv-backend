@@ -23,6 +23,7 @@ use crate::AppState;
 use crate::api_response::ApiResponse;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
+use crate::routes::admin::require_admin;
 use crate::services::{badge_engine, hello_wall_mirror, profile_readme_sync};
 
 pub fn admin_content_ops_routes() -> Router<AppState> {
@@ -38,9 +39,6 @@ pub fn admin_content_ops_routes() -> Router<AppState> {
         )
 }
 
-async fn require_admin(state: &AppState, auth: &AuthUser) -> Result<(), AppError> {
-    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await
-}
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct MirrorFailedDetail {

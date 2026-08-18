@@ -212,7 +212,7 @@ async fn check_preferred_families(
     if !deduped.is_empty() {
         let known: Vec<String> = sqlx::query_scalar(
             "SELECT slug FROM orientations
-              WHERE slug = ANY($1) AND primary_domain = 'design' AND archived_at IS NULL",
+              WHERE slug = ANY($1) AND primary_domain = 'design' AND is_archived = FALSE",
         )
         .bind(&deduped)
         .fetch_all(db)

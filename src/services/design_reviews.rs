@@ -206,7 +206,92 @@ pub async fn submit_version(
     .await?
     .ok_or_else(|| AppError::Conflict("the slice moved underneath".into()))?;
 
+    notify_reviewers_of(db, &slice).await;
+    run_auto_checks_in_background(db, slice_id, url);
     Ok(slice)
+}
+
+/// Ask the machine what it can say about this version, without making the
+/// designer wait for it.
+///
+/// Spawned rather than awaited because the checks fetch somebody else's host,
+/// and a submission that hangs for fifteen seconds on a slow CDN is a worse
+/// experience than a panel that fills in a moment later. A failure is the
+/// panel saying so, never a failed submission.
+fn run_auto_checks_in_background(db: &PgPool, slice_id: Uuid, artifact_url: &str) {
+    let db = db.clone();
+    let url = artifact_url.to_string();
+    tokio::spawn(async move {
+        // The round this version will be reviewed as. The decision journal's
+        // trigger numbers rounds on insert, and no decision exists yet — so
+        // the next one is one past the highest recorded.
+        let round: i16 = sqlx::query_scalar(
+            "SELECT COALESCE(MAX(round), 0::SMALLINT) + 1
+               FROM slice_validation_decisions WHERE slice_id = $1",
+        )
+        .bind(slice_id)
+        .fetch_one(&db)
+        .await
+        .unwrap_or(1);
+
+        // A sixth version cannot be reviewed — the ceiling is five — and the
+        // results table says so too. Nothing to record.
+        if !(1..=5).contains(&round) {
+            return;
+        }
+
+        if let Err(e) =
+            crate::services::design_auto_checks::run_for_version(&db, slice_id, round, &url).await
+        {
+            tracing::warn!(%slice_id, round, error = %e, "automatic checks did not run");
+        }
+    });
+}
+
+/// Tell the people competent in this trade that a version is waiting.
+///
+/// Addressed to the trade's own reviewers plus the domain wildcard, rather
+/// than to everybody holding any design capability: a type designer being
+/// pinged about a motion brief is how a queue gets muted. No email by
+/// default — a reviewer opens the queue on purpose.
+///
+/// A slice with no trade reaches nobody, which is correct: it is the
+/// condition `review()` refuses on, and inventing a recipient would only
+/// forward the problem.
+async fn notify_reviewers_of(db: &PgPool, slice: &ProjectSlice) {
+    let Some(orientation_id) = slice.orientation_id else {
+        return;
+    };
+    let group: Option<String> =
+        match sqlx::query_scalar("SELECT reviewer_group FROM orientations WHERE id = $1")
+            .bind(orientation_id)
+            .fetch_optional(db)
+            .await
+        {
+            Ok(row) => row.flatten(),
+            Err(e) => {
+                tracing::warn!(error = %e, "could not resolve the reviewer group");
+                return;
+            }
+        };
+
+    let mut capabilities = vec!["design_reviewer:all".to_string()];
+    if let Some(group) = group {
+        capabilities.push(format!("design_reviewer:{group}"));
+    }
+
+    if let Err(e) = crate::services::notify::send(
+        crate::services::notify::Ctx::db_only(db),
+        crate::services::notify::Recipient::AnyCapability(capabilities),
+        "design.version_submitted",
+    )
+    .arg("slice", slice.title.clone())
+    .payload(serde_json::json!({ "slice_id": slice.id }))
+    .execute()
+    .await
+    {
+        tracing::warn!(slice_id = %slice.id, error = %e, "reviewer notification not delivered");
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -342,8 +427,12 @@ pub async fn review(
         let designer = state.claimed_by_user_id.ok_or_else(|| {
             AppError::Validation("a design challenge nobody claimed cannot be validated".into())
         })?;
+        // The literal is cast: `round` is SMALLINT, and an uncast `1` makes
+        // PostgreSQL widen the whole COALESCE to INT4, which then refuses to
+        // decode into `i16` — a 500 on the round that approves the work.
         let rounds: i16 = sqlx::query_scalar(
-            "SELECT COALESCE(MAX(round), 1) FROM slice_validation_decisions WHERE slice_id = $1",
+            "SELECT COALESCE(MAX(round), 1::SMALLINT)
+               FROM slice_validation_decisions WHERE slice_id = $1",
         )
         .bind(slice_id)
         .fetch_one(&mut *tx)
@@ -368,6 +457,16 @@ pub async fn review(
             .await?;
         }
 
+        notify_designer(
+            db,
+            designer,
+            "design.validated",
+            slice_id,
+            &state.title,
+            Some(("rounds", rounds.to_string())),
+        )
+        .await;
+
         let db_clone = db.clone();
         tokio::spawn(async move {
             if let Err(e) =
@@ -384,7 +483,50 @@ pub async fn review(
     }
 
     tx.commit().await?;
+
+    // A critique nobody reads is a round nobody takes. The designer cannot
+    // act until they have read it, and the reviewer cannot finish until the
+    // designer does — so both verdicts travel, and `iterate` is the one that
+    // buzzes.
+    if let Some(designer) = state.claimed_by_user_id {
+        let kind = match input.verdict {
+            Verdict::Iterate => "design.iteration_requested",
+            Verdict::Reject => "design.rejected",
+            // Handled above, with the round count.
+            Verdict::Approve => return Ok(slice),
+        };
+        notify_designer(db, designer, kind, slice_id, &state.title, None).await;
+    }
+
     Ok(slice)
+}
+
+/// Tell a designer what happened to their version.
+///
+/// Failures are logged and swallowed: the critique is committed, and a
+/// notification that could not be delivered must not turn a recorded review
+/// into a 500 that invites the reviewer to write it again.
+async fn notify_designer(
+    db: &PgPool,
+    designer_id: Uuid,
+    kind: &str,
+    slice_id: Uuid,
+    title: &str,
+    extra: Option<(&str, String)>,
+) {
+    let mut builder = crate::services::notify::send(
+        crate::services::notify::Ctx::db_only(db),
+        crate::services::notify::Recipient::User(designer_id),
+        kind,
+    )
+    .arg("slice", title)
+    .payload(serde_json::json!({ "slice_id": slice_id }));
+    if let Some((name, value)) = extra {
+        builder = builder.arg(name, value);
+    }
+    if let Err(e) = builder.execute().await {
+        tracing::warn!(kind, %slice_id, error = %e, "design notification not delivered");
+    }
 }
 
 /// Turn a validated design challenge into a row of the proof table.
@@ -582,4 +724,195 @@ mod unit {
             );
         }
     }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Comparing two rounds
+// ═══════════════════════════════════════════════════════════════════
+
+/// One version, as it was when somebody reviewed it.
+///
+/// The URL comes from the decision row rather than from the slice: the slice
+/// carries only the current version, and reading the trail from it would show
+/// the same file at every round — the exact thing this endpoint exists to
+/// disprove.
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow, utoipa::ToSchema)]
+pub struct VersionAtRound {
+    pub round: i16,
+    /// Where that version lived. NULL on rounds recorded before the trail
+    /// snapshotted it, and on those the comparison is honestly unavailable
+    /// rather than quietly wrong.
+    pub artifact_url: Option<String>,
+    /// What the designer said changed, written when the version was handed in.
+    pub author_notes_md: Option<String>,
+    pub decision: String,
+    pub blocking_reason: Option<String>,
+    /// The critique that closed this round.
+    pub reason: Option<String>,
+    pub grid_scores: Option<serde_json::Value>,
+    pub decided_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Two versions and everything said between them.
+#[derive(Debug, Clone, serde::Serialize, utoipa::ToSchema)]
+pub struct Comparison {
+    pub slice_id: Uuid,
+    pub design_subtype: Option<String>,
+    /// Which comparison is meaningful for this kind of artefact. The diff
+    /// itself is computed by whoever has the pixels; this says which one to
+    /// compute.
+    pub diff_strategy: Option<String>,
+    pub from: VersionAtRound,
+    pub to: VersionAtRound,
+    /// The critiques that ran between the two, in order — the reason the
+    /// second version looks the way it does.
+    pub critiques_between: Vec<ReviewRound>,
+}
+
+/// One reviewed version.
+pub async fn version_at(
+    db: &PgPool,
+    slice_id: Uuid,
+    round: i16,
+) -> Result<VersionAtRound, AppError> {
+    sqlx::query_as::<_, VersionAtRound>(
+        r#"
+        SELECT round,
+               reviewed_artifact_url        AS artifact_url,
+               reviewed_artifact_notes_md   AS author_notes_md,
+               decision, blocking_reason, reason, grid_scores, decided_at
+          FROM slice_validation_decisions
+         WHERE slice_id = $1 AND round = $2
+        "#,
+    )
+    .bind(slice_id)
+    .bind(round)
+    .fetch_optional(db)
+    .await?
+    .ok_or_else(|| AppError::NotFound(format!("this slice has no round {round}")))
+}
+
+/// Round `from` against round `to`, with the critiques in between.
+///
+/// Refuses a comparison of a round with itself, and refuses `from` after
+/// `to`: both are answerable, and both mean the caller built the request
+/// wrong. Answering them would return something that looks like a result.
+pub async fn compare(
+    db: &PgPool,
+    slice_id: Uuid,
+    from: i16,
+    to: i16,
+) -> Result<Comparison, AppError> {
+    if from >= to {
+        return Err(AppError::Validation(
+            "compare an earlier round to a later one: from must be before to".into(),
+        ));
+    }
+
+    let earlier = version_at(db, slice_id, from).await?;
+    let later = version_at(db, slice_id, to).await?;
+
+    let subtype: Option<String> =
+        sqlx::query_scalar("SELECT design_subtype FROM project_slices WHERE id = $1")
+            .bind(slice_id)
+            .fetch_optional(db)
+            .await?
+            .flatten();
+
+    let diff_strategy = subtype
+        .as_deref()
+        .and_then(crate::models::DesignSubtype::parse)
+        .map(|s| s.diff_strategy().as_str().to_string());
+
+    // The rounds strictly between the two: what was asked for, which is the
+    // reason the later version differs. `from`'s own critique is included
+    // because it is the one that produced `to`.
+    let critiques_between = sqlx::query_as::<_, ReviewRound>(
+        r#"
+        SELECT round, decision, blocking_reason, reason,
+               reviewed_artifact_url, reviewed_artifact_notes_md,
+               grid_scores, decided_at
+          FROM slice_validation_decisions
+         WHERE slice_id = $1 AND round >= $2 AND round < $3
+         ORDER BY round ASC
+        "#,
+    )
+    .bind(slice_id)
+    .bind(from)
+    .bind(to)
+    .fetch_all(db)
+    .await?;
+
+    Ok(Comparison {
+        slice_id,
+        design_subtype: subtype,
+        diff_strategy,
+        from: earlier,
+        to: later,
+        critiques_between,
+    })
+}
+
+/// A validated piece of work that took at least three rounds.
+///
+/// The most convincing thing on a design profile is not the final image, it
+/// is the distance between the first version and the last one. A first
+/// attempt that was approved immediately says less — so this reads only the
+/// work that was argued about and still got there.
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow, utoipa::ToSchema)]
+pub struct IterationStory {
+    pub slice_id: Uuid,
+    pub title: String,
+    pub design_subtype: Option<String>,
+    pub orientation_slug: Option<String>,
+    pub rounds: i64,
+    pub first_artifact_url: Option<String>,
+    pub final_artifact_url: Option<String>,
+    pub validated_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+/// How many rounds a piece of work has to have survived to tell a story.
+///
+/// Three. Two is one critique and a fix, which happens to everybody; three is
+/// where a direction was questioned and the person came back.
+pub const STORY_MIN_ROUNDS: i64 = 3;
+
+pub async fn iteration_stories(
+    db: &PgPool,
+    user_id: Uuid,
+    limit: i64,
+) -> Result<Vec<IterationStory>, AppError> {
+    let stories = sqlx::query_as::<_, IterationStory>(
+        r#"
+        SELECT s.id            AS slice_id,
+               s.title,
+               s.design_subtype,
+               o.slug          AS orientation_slug,
+               count(d.round)  AS rounds,
+               (array_agg(d.reviewed_artifact_url ORDER BY d.round ASC)
+                    FILTER (WHERE d.reviewed_artifact_url IS NOT NULL))[1]
+                               AS first_artifact_url,
+               (array_agg(d.reviewed_artifact_url ORDER BY d.round DESC)
+                    FILTER (WHERE d.reviewed_artifact_url IS NOT NULL))[1]
+                               AS final_artifact_url,
+               max(d.decided_at) FILTER (WHERE d.decision = 'approve')
+                               AS validated_at
+          FROM project_slices s
+          JOIN slice_validation_decisions d ON d.slice_id = s.id
+          LEFT JOIN orientations o ON o.id = s.orientation_id
+         WHERE s.claimed_by_user_id = $1
+           AND s.slice_type = 'design_artifact'
+           AND s.status = 'validated'
+         GROUP BY s.id, s.title, s.design_subtype, o.slug
+        HAVING count(d.round) >= $2
+         ORDER BY max(d.decided_at) DESC
+         LIMIT $3
+        "#,
+    )
+    .bind(user_id)
+    .bind(STORY_MIN_ROUNDS)
+    .bind(limit)
+    .fetch_all(db)
+    .await?;
+    Ok(stories)
 }

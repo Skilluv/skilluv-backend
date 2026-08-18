@@ -195,7 +195,62 @@ notification:
       title: "أصبحت الآن {rank}"
       body: "عملك على المنصة رفعك إلى رتبة {rank}."
       cta: "عرض ملفي"
+  design:
+    iteration_requested:
+      title: "مطلوب جولة أخرى"
+      body: "قرأ {reviewer} نسختك ويطلب جولة إضافية على {slice}."
+      cta: "اقرأ الملاحظات"
+    version_submitted:
+      title: "نسخة تنتظر المراجعة"
+      body: "تم تسليم نسخة على {slice}."
+      cta: "افتح القائمة"
+    validated:
+      title: "تم اعتماد عملك"
+      body: "تم اعتماد {slice} بعد {rounds} جولات مراجعة."
+      cta: "اعرض التسليم"
+    rejected:
+      title: "لم يُقبل العمل"
+      body: "لم يُقبل {slice}. الملاحظات تشرح السبب."
+      cta: "اقرأ الملاحظات"
+  talent:
+    featured:
+      title: "تم إبرازك"
+      body: "عملك مُبرز على المنصة هذا الأسبوع."
+      cta: "اعرض ملفي"
+  contest:
+    published:
+      title: "مسابقة جديدة"
+      body: "{contest} مفتوحة، في مهنة أعلنت عنها."
+      cta: "اقرأ الموجز"
+    deadline_soon:
+      title: "الموعد النهائي يقترب"
+      body: "تغلق {contest} خلال {hours} ساعة."
+      cta: "سلّم مشاركتي"
+    closed:
+      title: "أُغلقت المسابقة"
+      body: "لم تعد {contest} تستقبل مشاركات. بدأ التحكيم."
+      cta: "اعرض المشاركات"
+    jury_invited:
+      title: "دعوة إلى لجنة التحكيم"
+      body: "طُلب منك تحكيم {contest}."
+      cta: "اقبل أو اعتذر"
+    jury_deadline_soon:
+      title: "بقي وقت قليل للتحكيم"
+      body: "ينتهي تحكيم {contest} خلال {hours} ساعة."
+      cta: "حكّم"
+    concluded:
+      title: "انتهت المسابقة"
+      body: "نُشر ترتيب {contest}."
+      cta: "اعرض الترتيب"
+    participation_recorded:
+      title: "سُجّلت مشاركتك"
+      body: "مشاركتك في {contest} مسجّلة على ملفك."
+      cta: "اعرض ملفي"
   mission:
+    matching_published:
+      title: "مهمة تناسبك"
+      body: "مهمة جديدة تطابق المهن التي أعلنت عنها."
+      cta: "اعرض المهمة"
     application_received:
       title: "طلب جديد"
       body: "تقدّم أحدهم لمهمة {mission}."

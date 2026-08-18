@@ -10,6 +10,7 @@ use crate::AppState;
 use crate::errors::AppError;
 use crate::middleware::{AuthUser, extract_ip};
 use crate::services::{AuthService, LeaderboardService, SessionService};
+use crate::routes::admin::require_admin;
 
 pub fn admin_moderation_routes() -> Router<AppState> {
     Router::new()
@@ -33,10 +34,6 @@ fn build_response(data: serde_json::Value) -> serde_json::Value {
     })
 }
 
-// P21.1 : délègue à user_capabilities (source de vérité canonique).
-async fn require_admin(state: &AppState, auth: &AuthUser) -> Result<(), AppError> {
-    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await
-}
 
 async fn write_audit_log(
     db: &PgPool,

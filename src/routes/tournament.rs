@@ -10,9 +10,10 @@ use uuid::Uuid;
 
 use crate::AppState;
 use crate::errors::AppError;
-use crate::middleware::AuthUser;
+use crate::middleware::{AuthUser, OptionalAuth};
 use crate::routes::analytics_consent;
 use crate::services::analytics::props;
+use crate::services::contest;
 use crate::services::tournament;
 
 pub fn tournament_routes() -> Router<AppState> {
@@ -159,6 +160,15 @@ pub async fn admin_close_season(
 pub struct ListTournamentsQuery {
     #[param(max_length = 50)]
     pub status: Option<String>,
+    /// `brief_contest`, `duel`, `code_golf`… Narrowing here rather than in the
+    /// caller is what lets a contest page stay correct past two hundred
+    /// tournaments.
+    #[param(max_length = 50)]
+    pub kind: Option<String>,
+    /// Returns contests scoped to this domain *and* those open to every
+    /// domain, which are the ones that most want a wide field.
+    #[param(max_length = 30)]
+    pub skill_domain: Option<String>,
     pub upcoming: Option<bool>,
     #[param(minimum = 1, maximum = 200)]
     pub limit: Option<i64>,
@@ -175,12 +185,18 @@ pub async fn list_tournaments(
     Query(q): Query<ListTournamentsQuery>,
 ) -> Result<Json<Value>, AppError> {
     crate::validators::check_max_len_opt(&q.status, "status", 50)?;
+    crate::validators::check_max_len_opt(&q.kind, "kind", 50)?;
+    crate::validators::check_max_len_opt(&q.skill_domain, "skill_domain", 30)?;
     crate::validators::check_range_opt(q.limit, "limit", 1, 200)?;
     let rows = tournament::list_tournaments(
         &state.db,
-        q.status.as_deref(),
-        q.upcoming.unwrap_or(false),
-        q.limit.unwrap_or(50),
+        tournament::TournamentFilter {
+            status: q.status.as_deref(),
+            kind: q.kind.as_deref(),
+            skill_domain: q.skill_domain.as_deref(),
+            upcoming_or_active_only: q.upcoming.unwrap_or(false),
+            limit: q.limit.unwrap_or(50),
+        },
     )
     .await?;
     Ok(Json(build_response(json!({ "tournaments": rows }))))
@@ -297,6 +313,15 @@ pub async fn submit_entry(
 
 /// Every entry in a contest. Public: a contest whose entries cannot be read
 /// is a contest whose result cannot be questioned.
+///
+/// A contest may declare a blind submission window, which narrows *when* and
+/// not *whether*: while it is open a reader sees only their own entry, and at
+/// the deadline the whole field opens permanently. Jurors and staff read
+/// everything throughout, because a panel that cannot read the entries cannot
+/// judge them.
+///
+/// The response says which of the two it is, so a reader is never shown a
+/// partial field that looks complete.
 #[utoipa::path(
     get, path = "/api/tournaments/{slug}/submissions", tag = "tournament",
     params(("slug" = String, Path, description = "Tournament slug")),
@@ -307,11 +332,34 @@ pub async fn submit_entry(
 )]
 pub async fn list_submissions(
     State(state): State<AppState>,
+    OptionalAuth(auth): OptionalAuth,
     Path(slug): Path<String>,
 ) -> Result<Json<Value>, AppError> {
     let t = tournament::by_slug(&state.db, &slug).await?;
-    let submissions = crate::services::contest::list_submissions(&state.db, t.id).await?;
-    Ok(Json(build_response(json!({ "submissions": submissions }))))
+
+    let open = matches!(t.status.as_str(), "upcoming" | "registration" | "active");
+    let blind_window = t.blind_until_close && open;
+
+    let reader = match auth {
+        None => contest::Reader::Anonymous,
+        Some(user) => {
+            if blind_window && contest::reads_unblinded(&state.db, t.id, user.user_id).await? {
+                contest::Reader::Unblinded
+            } else {
+                contest::Reader::User(user.user_id)
+            }
+        }
+    };
+
+    let blinded = blind_window && !matches!(reader, contest::Reader::Unblinded);
+    let submissions = contest::list_submissions(&state.db, t.id, reader).await?;
+    Ok(Json(build_response(json!({
+        "submissions": submissions,
+        // Not cosmetic: a gallery that showed one entry without saying the
+        // rest are withheld would read as a contest nobody entered.
+        "blinded": blinded,
+        "blind_until": if blinded { Some(t.ends_at) } else { None },
+    }))))
 }
 
 /// Record a judgement and carry it onto the leaderboard.
@@ -555,7 +603,15 @@ pub async fn admin_conclude(
     responses((status = 200, body = serde_json::Value)),
 )]
 pub async fn events_feed(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
-    let upcoming = tournament::list_tournaments(&state.db, None, true, 20).await?;
+    let upcoming = tournament::list_tournaments(
+        &state.db,
+        tournament::TournamentFilter {
+            upcoming_or_active_only: true,
+            limit: 20,
+            ..Default::default()
+        },
+    )
+    .await?;
     let current = tournament::current_season(&state.db).await?;
     Ok(Json(build_response(json!({
         "current_season": current,

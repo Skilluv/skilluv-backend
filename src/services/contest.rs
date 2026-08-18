@@ -365,19 +365,106 @@ fn check_url(url: &str, field: &str) -> Result<(), AppError> {
     crate::validators::check_max_len(url, field, 2000)
 }
 
+/// Who is reading the entries.
+///
+/// Only meaningful while a blind contest is still open; after the deadline
+/// every reader is the same reader. Modelled as a type rather than an
+/// `Option<Uuid>` because "anonymous", "an entrant" and "a juror" are three
+/// different answers and a bare Option can only carry two.
+#[derive(Debug, Clone, Copy)]
+pub enum Reader {
+    /// Nobody is logged in.
+    Anonymous,
+    /// Somebody logged in, entrant or not.
+    User(Uuid),
+    /// A juror or a member of staff. Never blinded: a panel that cannot read
+    /// the entries cannot judge them.
+    Unblinded,
+}
+
+/// Every entry in a contest.
+///
+/// Public by default, and that is the point: a contest whose entries cannot
+/// be read is a contest whose result cannot be questioned.
+///
+/// A contest may declare a blind submission window (`blind_until_close`). It
+/// narrows *when*, not *whether*: while the window is open a reader sees only
+/// their own entry, and at the deadline the full field opens permanently. The
+/// result stays as contestable as before — what is withheld is the ability to
+/// read other people's work while there is still time to copy it, which is
+/// the format's known failure and not something contestability needed.
 pub async fn list_submissions(
     db: &PgPool,
     tournament_id: Uuid,
+    reader: Reader,
 ) -> Result<Vec<Submission>, AppError> {
+    // `blind_until_close` is inert once the contest is no longer open, which
+    // is why the status is read here rather than trusting the flag alone.
+    let blind: bool = sqlx::query_scalar(
+        "SELECT blind_until_close AND status IN ('upcoming', 'registration', 'active')
+           FROM tournaments WHERE id = $1",
+    )
+    .bind(tournament_id)
+    .fetch_optional(db)
+    .await?
+    .unwrap_or(false);
+
+    let own_only = match reader {
+        _ if !blind => None,
+        Reader::Unblinded => None,
+        Reader::User(id) => Some(id),
+        // Nobody to show an own entry to, so the window shows nothing.
+        Reader::Anonymous => Some(Uuid::nil()),
+    };
+
     let rows = sqlx::query_as::<_, Submission>(
         "SELECT * FROM tournament_submissions
           WHERE tournament_id = $1
+            AND ($2::uuid IS NULL
+                 OR (participant_type = 'user' AND participant_id = $2))
           ORDER BY submitted_at ASC",
     )
     .bind(tournament_id)
+    .bind(own_only)
     .fetch_all(db)
     .await?;
     Ok(rows)
+}
+
+/// Whether this account reads a blind contest unblinded.
+///
+/// A juror who was invited and has not declined, or anybody who may arbitrate
+/// contests. Being an entrant grants nothing: that is the whole point.
+pub async fn reads_unblinded(
+    db: &PgPool,
+    tournament_id: Uuid,
+    user_id: Uuid,
+) -> Result<bool, AppError> {
+    let juror: bool = sqlx::query_scalar(
+        "SELECT EXISTS (
+             SELECT 1 FROM tournament_juries
+              WHERE tournament_id = $1 AND juror_user_id = $2 AND declined_at IS NULL
+         )",
+    )
+    .bind(tournament_id)
+    .bind(user_id)
+    .fetch_one(db)
+    .await?;
+    if juror {
+        return Ok(true);
+    }
+
+    // `jury_tournament` is the capability that already means "may sit on and
+    // run a panel"; `admin` arbitrates. No new capability is invented for
+    // this, because a third name for the same authority is how a permission
+    // model rots.
+    Ok(crate::middleware::capabilities::require_any_capability(
+        db,
+        user_id,
+        &["admin", "jury_tournament"],
+    )
+    .await
+    .is_ok())
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -711,6 +798,30 @@ pub async fn invite_juror(
     .fetch_one(db)
     .await
     .map_err(map_guard_error)?;
+
+    // An invitation expires, so it travels further than the app — the same
+    // reasoning `guild.invitation` follows. Failure to deliver is logged and
+    // not raised: the invitation is recorded, and an organiser retrying it
+    // would only produce a second row.
+    let contest_name: Option<String> =
+        sqlx::query_scalar("SELECT name FROM tournaments WHERE id = $1")
+            .bind(tournament_id)
+            .fetch_optional(db)
+            .await?;
+    if let Some(name) = contest_name
+        && let Err(e) = crate::services::notify::send(
+            crate::services::notify::Ctx::db_only(db),
+            crate::services::notify::Recipient::User(juror_id),
+            "contest.jury_invited",
+        )
+        .arg("contest", name)
+        .payload(serde_json::json!({ "tournament_id": tournament_id }))
+        .execute()
+        .await
+    {
+        tracing::warn!(%tournament_id, error = %e, "jury invitation notification not delivered");
+    }
+
     Ok(jury)
 }
 

@@ -199,7 +199,62 @@ notification:
       title: "Tu passes {rank}"
       body: "Ton travail sur la plateforme t'a fait passer au rang de {rank}."
       cta: "Voir mon profil"
+  design:
+    iteration_requested:
+      title: "Un nouveau tour est demande"
+      body: "{reviewer} a lu ta version et demande un tour de plus sur {slice}."
+      cta: "Lire la critique"
+    version_submitted:
+      title: "Une version attend une critique"
+      body: "Une version vient d'etre rendue sur {slice}."
+      cta: "Ouvrir la file"
+    validated:
+      title: "Ton travail est valide"
+      body: "{slice} est valide apres {rounds} tours de critique."
+      cta: "Voir le livrable"
+    rejected:
+      title: "Travail non retenu"
+      body: "{slice} n'a pas ete retenu. La critique explique pourquoi."
+      cta: "Lire la critique"
+  talent:
+    featured:
+      title: "Tu es mis en avant"
+      body: "Ton travail est mis en avant par la plateforme cette semaine."
+      cta: "Voir mon profil"
+  contest:
+    published:
+      title: "Un nouveau concours"
+      body: "{contest} est ouvert, dans un metier que tu as declare."
+      cta: "Lire le brief"
+    deadline_soon:
+      title: "La cloture approche"
+      body: "{contest} ferme dans {hours} heures."
+      cta: "Rendre ma proposition"
+    closed:
+      title: "Le concours est ferme"
+      body: "{contest} ne recoit plus de propositions. Le jugement commence."
+      cta: "Voir les propositions"
+    jury_invited:
+      title: "Tu es invite au jury"
+      body: "On te propose de juger {contest}."
+      cta: "Accepter ou decliner"
+    jury_deadline_soon:
+      title: "Il reste peu de temps pour juger"
+      body: "Le jugement de {contest} se termine dans {hours} heures."
+      cta: "Juger"
+    concluded:
+      title: "Le concours est termine"
+      body: "Le classement de {contest} est publie."
+      cta: "Voir le classement"
+    participation_recorded:
+      title: "Ta participation est enregistree"
+      body: "Ta proposition a {contest} est inscrite sur ton profil."
+      cta: "Voir mon profil"
   mission:
+    matching_published:
+      title: "Une mission pour toi"
+      body: "Une nouvelle mission correspond aux metiers que tu as declares."
+      cta: "Voir la mission"
     application_received:
       title: "Nouvelle candidature"
       body: "Quelqu'un a candidate a la mission {mission}."

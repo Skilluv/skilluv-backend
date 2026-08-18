@@ -323,6 +323,67 @@ pub async fn issue_for_user(db: &PgPool, user_id: Uuid) -> Result<Vec<String>, A
     Ok(issued)
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// Featured
+// ═══════════════════════════════════════════════════════════════════
+//
+// `featured_ai_researcher` has been a legal basis since the AI catalogue
+// landed, is counted by `ai_profile`, and until now **no code path could
+// issue it**. Dead schema: a column of a table nothing writes.
+//
+// It does not fit this module's other generators, and that is the reason it
+// was missed. They write `skill` attestations, which need exactly one skill
+// node — and being put forward by the platform names no skill. So this one is
+// an `artefact` attestation like its two siblings in the code and design
+// domains, and it goes through the shared door.
+
+/// What this domain may issue editorially.
+///
+/// Only the one basis: everything else AI issues is a `skill` attestation
+/// with a skill node, written by the generators above. `artifact_bases` is
+/// empty because a featuring rests on nobody's deliverable — it rests on
+/// somebody's judgement, and says so.
+const EDITORIAL: crate::services::artefact_attestations::Domain =
+    crate::services::artefact_attestations::Domain {
+        name: "ai",
+        bases: &["featured_ai_researcher"],
+        artifact_bases: &[],
+        allows_stored_objects: false,
+    };
+
+/// Featured.
+///
+/// Editorial, and named as such. There is no formula behind it, and inventing
+/// one would make it a worse version of the craft score rather than the thing
+/// it is: somebody chose to put this person forward, and put their name to it.
+pub async fn featured_ai_researcher(
+    db: &PgPool,
+    user_id: Uuid,
+    profile_url: &str,
+    citation: &str,
+) -> Result<crate::services::artefact_attestations::Issued, AppError> {
+    if citation.trim().is_empty() {
+        return Err(AppError::Validation(
+            "featuring somebody without saying why is a decision nobody can question".into(),
+        ));
+    }
+    crate::services::artefact_attestations::issue(
+        db,
+        user_id,
+        "featured_ai_researcher",
+        &crate::services::artefact_attestations::Evidence {
+            url: profile_url.to_string(),
+            title: "Chercheur IA mis en avant".into(),
+            description: citation.trim().to_string(),
+            deliverable_id: None,
+            project_id: None,
+            skill_node_ids: vec![],
+        },
+        &EDITORIAL,
+    )
+    .await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

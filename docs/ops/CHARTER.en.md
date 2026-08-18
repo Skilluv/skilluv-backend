@@ -60,7 +60,36 @@ Two requirements:
 Promised actions that are overdue are visible. That is what separates a
 post-mortem practice from an archive of post-mortems.
 
-## 4. Cost is a skill
+## 4. What Skilluv reads, and what it will never read
+
+An objective closes with a figure its own author typed, and an address where
+that figure can be checked. The obvious way to automate the checking would be
+an API key to the client's monitoring — Datadog, Instana, a private Grafana.
+**Skilluv will not do that.**
+
+Such a key does not give "was the service up". It gives the map of their
+services and how they depend on each other, their incident history, their
+traffic volumes, and often user identifiers in the logs. That is word for word
+what the reinforced NDA protects. Holding it for several clients at once would
+make this platform worth attacking for what it knows about other people rather
+than for what it knows about itself.
+
+So the rule is simple:
+
+- **what is already public is read automatically.** A status page anybody can
+  open is queried with no credential at all, and what it published is shown
+  next to the declaration;
+- **anything behind a credential stays declared, sourced, and read by a
+  person.**
+
+What is read publicly does not replace the declared figure and does not claim
+to: a status page shows only the outages its operator chose to publish. What
+it gives a reviewer is the other half of the conversation. Somebody announcing
+99.99% over a window in which their own public page shows eleven hours of
+major outage has not lied to a machine — they have written something a reader
+can now see does not add up.
+
+## 5. Cost is a skill
 
 Cutting a bill by 60% is engineering work, exactly as holding an availability
 objective is. Skilluv attests it, on one condition: that somebody verified
@@ -69,7 +98,7 @@ the service still stands.
 A cost reduction that broke the service is an outage with a spreadsheet. The
 verification covers both halves or neither.
 
-## 5. What Skilluv expects
+## 6. What Skilluv expects
 
 **Security by default.** A module that opens a port for convenience, a secret
 in a repository, a role too wide "for now": all three are refused at review,
@@ -83,7 +112,7 @@ was met does not.
 it is the deliverable. The test is the one in section 2: somebody else, at
 three in the morning, without its author.
 
-## 6. What Skilluv owes
+## 7. What Skilluv owes
 
 **Bounded access.** An ops mission grants access to production
 infrastructure. That access is temporary, logged, and removed at the end —
@@ -102,7 +131,7 @@ towards them.
 
 ---
 
-## 7. What is left to do
+## 8. What is left to do
 
 - draft the reinforced NDAs for missions with production access, and the
   on-call retainer contracts (ticket L-01);

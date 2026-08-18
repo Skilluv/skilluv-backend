@@ -61,7 +61,36 @@ Deux exigences :
 Les actions promises et en retard sont visibles. C'est ce qui sépare une
 pratique de post-mortem d'une archive de post-mortems.
 
-## 4. Le coût est une compétence
+## 4. Ce que Skilluv lit, et ce qu'il ne lira jamais
+
+Un objectif se ferme avec un chiffre que son auteur écrit lui-même, et une
+adresse où ce chiffre se vérifie. La façon évidente d'automatiser la
+vérification serait une clé API vers la supervision du client — Datadog,
+Instana, un Grafana privé. **Skilluv ne le fera pas.**
+
+Une telle clé ne donne pas « le service était debout ou pas ». Elle donne la
+carte des services et leurs dépendances, l'historique des pannes, les volumes
+de trafic, et souvent des identifiants d'utilisateurs dans les journaux. C'est
+mot pour mot ce que le NDA renforcé protège. Détenir ça pour plusieurs clients
+à la fois rendrait cette plateforme intéressante à attaquer pour ce qu'elle
+sait des autres, et non pour ce qu'elle sait d'elle-même.
+
+La règle est donc simple :
+
+- **ce qui est déjà public est lu automatiquement.** Une page d'état ouverte à
+  tous est interrogée sans aucun identifiant, et ce qu'elle a publié est
+  affiché à côté de la déclaration ;
+- **tout ce qui est derrière un identifiant reste déclaré, sourcé et relu par
+  une personne.**
+
+Ce qui est lu publiquement ne remplace pas le chiffre annoncé, et ne le
+prétend pas : une page d'état ne montre que les pannes que son exploitant a
+choisi de publier. Ce que ça donne au relecteur, c'est l'autre moitié de la
+conversation. Quelqu'un qui annonce 99,99 % sur une fenêtre où sa propre page
+publique affiche onze heures de panne majeure n'a pas menti à une machine — il
+a écrit quelque chose qu'un lecteur voit maintenant ne pas tenir.
+
+## 5. Le coût est une compétence
 
 Réduire une facture de 60 % est un travail d'ingénierie, au même titre que
 tenir un objectif de disponibilité. Skilluv l'atteste, à une condition : que
@@ -70,7 +99,7 @@ quelqu'un ait vérifié que le service tient toujours.
 Une réduction de coûts qui a cassé le service est une panne avec un tableur.
 La vérification porte sur les deux moitiés ou sur aucune.
 
-## 5. Ce que Skilluv attend
+## 6. Ce que Skilluv attend
 
 **La sécurité par défaut.** Un module qui ouvre un port par commodité, un
 secret dans un dépôt, un rôle trop large « en attendant » : ces trois-là sont
@@ -84,7 +113,7 @@ qu'il soit tenu ne se fait pas.
 d'accompagnement, c'est le livrable. Le test est celui de la section 2 :
 quelqu'un d'autre, à trois heures du matin, sans l'auteur.
 
-## 6. Ce que Skilluv doit
+## 7. Ce que Skilluv doit
 
 **Un accès délimité.** Une mission ops donne accès à une infrastructure de
 production. Cet accès est temporaire, tracé, et retiré à la fin — pas quand
@@ -103,7 +132,7 @@ Skilluv le tient sur lui.
 
 ---
 
-## 7. Ce qu'il reste à faire
+## 8. Ce qu'il reste à faire
 
 - rédiger les NDA renforcés propres aux missions avec accès production, et
   les contrats d'astreinte (ticket L-01) ;

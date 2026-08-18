@@ -111,6 +111,7 @@ pub mod projects;
 pub mod promotion_notify;
 pub mod proof_hooks;
 pub mod public_feed;
+pub mod public_status;
 pub mod push_sender;
 pub mod queue;
 pub mod ranks;

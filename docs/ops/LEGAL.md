@@ -90,6 +90,25 @@ behalf of a client, and never brokers them.** If a mission asks for that, it
 is refused. This is the clearest line in the domain and it should stay
 clear.
 
+### The same line, applied to monitoring
+
+A read-only key to a client's observability stack looks like a lesser thing
+than a production credential, and it is not. It carries the service map, the
+dependency graph, the incident history, the traffic volumes, and — because
+logs and traces carry user identifiers — personal data. That is the same list
+this section exists to protect, obtained more quietly.
+
+So the platform reads **only what the operator already published to the whole
+internet**: a public status page, queried with no credential. Anything behind
+an authentication prompt stays declared, sourced and reviewed by a person, and
+what is read publicly is shown beside the claim rather than in place of it.
+
+If an enterprise ever asks for the authenticated integration, the answer is
+not automatically no — but it is a conversation with a real case in front of
+it, a data-processing agreement, and someone who can say who rotates the key
+and who is accountable if it leaks. Until then the feature does not exist, and
+its absence is a position rather than a gap.
+
 ---
 
 ## 4. Compliance frameworks

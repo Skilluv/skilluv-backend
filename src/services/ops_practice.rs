@@ -103,11 +103,16 @@ pub struct Objective {
     pub started_on: chrono::NaiveDate,
     pub closed_at: Option<chrono::DateTime<chrono::Utc>>,
     pub verified_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// What the evidence URL published, when it is a public status page.
+    /// Beside the claim, never instead of it.
+    pub public_observation: Option<serde_json::Value>,
+    pub public_observed_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 const OBJECTIVE_SELECT: &str = r#"
     SELECT id, owner_user_id, service_name, target_percent, window_days,
-           achieved_percent, evidence_url, started_on, closed_at, verified_at
+           achieved_percent, evidence_url, started_on, closed_at, verified_at,
+           public_observation, public_observed_at
       FROM ops_service_objectives
 "#;
 
@@ -227,6 +232,15 @@ pub async fn verify_objective(db: &PgPool, id: Uuid, reviewer: Uuid) -> Result<b
         ));
     };
 
+    // If the source happens to be a public status page, read it and put what
+    // it published next to the claim. Best-effort by design: a page that is
+    // down, moved, or not a status page after all leaves the objective as it
+    // was — declared, sourced, read by a person — which is the normal path
+    // rather than a degraded one.
+    if let Err(err) = observe_public_status(db, &objective).await {
+        tracing::debug!(objective = %id, %err, "no public observation attached");
+    }
+
     sqlx::query(
         "UPDATE ops_service_objectives SET verified_by = $2, verified_at = NOW()
           WHERE id = $1",
@@ -256,6 +270,61 @@ pub async fn verify_objective(db: &PgPool, id: Uuid, reviewer: Uuid) -> Result<b
     .await?;
 
     Ok(true)
+}
+
+/// Read the objective's own evidence URL, if it is a public status page.
+///
+/// Nothing here uses a credential. The whole reason this is limited to public
+/// pages is in `docs/ops/LEGAL.md`: an API key to somebody's monitoring
+/// carries their service map and incident history, and this platform does not
+/// hold that for anybody.
+async fn observe_public_status(db: &PgPool, objective: &Objective) -> Result<(), AppError> {
+    let Some(url) = objective.evidence_url.as_deref() else {
+        return Ok(());
+    };
+    let Some(page) = crate::services::public_status::identify(url) else {
+        return Ok(());
+    };
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| AppError::Internal(format!("http client: {e}")))?;
+
+    let observation =
+        crate::services::public_status::fetch(&client, &page, objective.window_days as i64).await?;
+
+    sqlx::query(
+        "UPDATE ops_service_objectives
+            SET public_observation = $2, public_observed_at = NOW()
+          WHERE id = $1",
+    )
+    .bind(objective.id)
+    .bind(serde_json::to_value(&observation).unwrap_or_default())
+    .execute(db)
+    .await?;
+
+    // Logged rather than refused. A disagreement between a claim and its own
+    // public record is exactly what a reviewer is there to weigh, and the
+    // platform deciding it silently would take that judgement away.
+    if let (Some(implied), Some(achieved)) = (
+        observation.implied_availability_percent,
+        objective.achieved_percent.as_ref().and_then(|a| {
+            use bigdecimal::num_traits::ToPrimitive;
+            a.to_f64()
+        }),
+    ) && achieved > implied + 0.05
+    {
+        tracing::warn!(
+            objective = %objective.id,
+            claimed = achieved,
+            implied,
+            downtime_minutes = observation.major_downtime_minutes,
+            "a closed window claims more than its own public status page published"
+        );
+    }
+
+    Ok(())
 }
 
 // ═══════════════════════════════════════════════════════════════════

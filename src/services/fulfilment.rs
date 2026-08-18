@@ -266,6 +266,26 @@ async fn deliver(db: &PgPool, paid: &Paid) -> Result<(), AppError> {
             Ok(())
         }
 
+        "ats_subscription" => {
+            // The subject is the subscription row, chosen before checkout —
+            // the same shape as every other recurring product here. A plan
+            // change takes effect when it is paid for and not a moment
+            // earlier, which is the only version a company can dispute.
+            crate::services::ats::activate(db, paid.subject_id).await?;
+
+            // The platform is the seller and nobody else is owed anything.
+            crate::services::ledger::capture_platform_revenue(
+                db,
+                &paid.currency,
+                paid.amount.clone(),
+                "ats_subscription",
+                paid.subject_id,
+                format!("ats:{}", paid.id),
+            )
+            .await?;
+            Ok(())
+        }
+
         "audience_subscription" => {
             sqlx::query(
                 "UPDATE audience_subscriptions

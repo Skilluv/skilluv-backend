@@ -53,6 +53,7 @@ pub mod design_profile;
 pub mod featured;
 pub mod series;
 // PR #39 — dev helper endpoints (verify-token peek), gated by SKILLUV_DEV_MODE
+pub mod ats;
 pub mod code_profile;
 pub mod code_stats;
 pub mod credentials;
@@ -172,6 +173,7 @@ pub use ai_companion::ai_companion_routes;
 pub use ai_jobs::ai_job_routes;
 pub use ai_safety::ai_safety_routes;
 pub use apprentice_verifications::apprentice_verification_routes;
+pub use ats::ats_routes;
 pub use attestations::attestation_routes;
 pub use attestations_public::{attestations_public_api_routes, attestations_public_routes};
 pub use auth::{auth_routes, is_admin_origin};

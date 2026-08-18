@@ -975,7 +975,7 @@ pub async fn decide(
         .map_err(AppError::from)
 }
 
-fn is_unique_violation(e: &sqlx::Error) -> bool {
+pub fn is_unique_violation(e: &sqlx::Error) -> bool {
     matches!(e, sqlx::Error::Database(db) if db.code().as_deref() == Some("23505"))
 }
 

@@ -227,6 +227,7 @@ async fn async_main(config: AppConfig) {
     spawn_code_portfolio_worker(state.clone());
     spawn_release_sweep_worker(state.clone());
     spawn_credential_expiry_worker(state.clone());
+    spawn_ats_erasure_worker(state.clone());
     spawn_payout_reconciliation_worker(state.clone());
     spawn_profile_readme_sync_worker(state.clone());
 
@@ -257,6 +258,31 @@ async fn async_main(config: AppConfig) {
 /// notices their money arriving at 14:07 instead of 14:00 — and a short
 /// interval keeps the backlog small enough that one failing hold cannot bury
 /// the rest.
+/// Erases applicant records past their retention date.
+///
+/// Not behind a feature flag, and not optional. The retention date is a
+/// promise made to people who never signed up to this platform, and a date
+/// nobody acts on is a comment. Daily is enough: the promise is "not kept
+/// beyond N days", not "deleted at midnight exactly".
+fn spawn_ats_erasure_worker(state: skilluv_backend::AppState) {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(24 * 60 * 60));
+        loop {
+            interval.tick().await;
+            match skilluv_backend::services::ats::erase_expired(&state.db).await {
+                Ok(erased) if erased > 0 => {
+                    tracing::info!(erased, "applicant records past their retention erased");
+                }
+                Ok(_) => {}
+                Err(e) => tracing::error!(
+                    error = %e,
+                    "applicant erasure failed - records are being kept past what was promised"
+                ),
+            }
+        }
+    });
+}
+
 /// Tells people their certifications are about to lapse, a month ahead.
 ///
 /// Daily, because the query selects exactly one day of the notice window: a

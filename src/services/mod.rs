@@ -10,6 +10,7 @@ pub mod api_metering;
 pub mod apprentice_verification;
 pub mod artefact_attestations;
 pub mod artifact_registry;
+pub mod ats;
 pub mod attestations;
 pub mod audit;
 mod auth;

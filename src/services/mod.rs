@@ -72,6 +72,7 @@ pub mod mobile_push;
 pub mod next_challenges;
 pub mod featured;
 pub mod notify;
+pub mod series;
 pub mod oauth;
 pub mod og_card;
 pub mod orientations_playlist;

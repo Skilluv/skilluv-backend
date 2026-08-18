@@ -55,6 +55,8 @@ pub fn admin_routes() -> Router<AppState> {
         .merge(crate::routes::admin_orientation_routes())
         // Editorial: who the platform puts forward, one per domain per week.
         .merge(crate::routes::admin_featured_routes())
+        // Contests read as one event: an awards edition, a run of sprints.
+        .merge(crate::routes::admin_series_routes())
         .merge(crate::routes::revenue_routes())
         .merge(crate::routes::admin_enterprise_product_routes())
         // ADM-M3.2 — CRUD badge_rules (proof engine editor).

@@ -128,6 +128,10 @@ impl PayoutProvider for MomoPayout {
                 currency: request.currency.as_str(),
                 amount: request.amount,
                 note: request.note,
+                // The same key the rest of the payout path uses. A retry
+                // after a timeout reaches the operator's existing record
+                // rather than sending the money a second time.
+                idempotency_key: request.idempotency_key,
             })
             .await?;
 
@@ -139,7 +143,11 @@ impl PayoutProvider for MomoPayout {
                 // now and confirms later, over a webhook.
                 PayoutStatus::Pending => PayoutState::Pending,
                 PayoutStatus::Completed => PayoutState::Completed,
-                PayoutStatus::Rejected => PayoutState::Rejected,
+                // `Unconfigured` never arrives here — the provider returns an
+                // error rather than a result when it holds no credentials —
+                // but treating it as a rejection is the safe reading if it
+                // ever does.
+                PayoutStatus::Failed | PayoutStatus::Unconfigured => PayoutState::Rejected,
             },
             message: result.message,
         })

@@ -108,6 +108,7 @@ pub mod reverse_recruitment;
 pub mod review_queue;
 pub mod reviews;
 pub mod rls;
+pub mod sales_pipeline;
 pub mod sandbox;
 pub mod saved_items;
 pub mod scim;

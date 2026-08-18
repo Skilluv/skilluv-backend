@@ -213,6 +213,101 @@ async fn deliver(db: &PgPool, paid: &Paid) -> Result<(), AppError> {
             Ok(())
         }
 
+        // ── Products where paying is what starts the thing ──────────
+        //
+        // Each is the same shape: a row waiting on money, moved to the state
+        // its own service treats as live. They are here rather than in their
+        // services because this is the one place that knows a payment
+        // succeeded, and a handler somewhere else would be a second answer to
+        // "has this been paid for".
+        "event_sponsorship" => {
+            // Signing grants the entitlements; paying is what makes the
+            // signature real. The service does both, and is idempotent on
+            // the sponsorship's own status.
+            crate::services::sponsorship::sign(db, paid.subject_id).await?;
+            Ok(())
+        }
+
+        "beta_program" => {
+            sqlx::query(
+                "UPDATE beta_programs SET status = 'recruiting'
+                  WHERE id = $1 AND status = 'recruiting'",
+            )
+            .bind(paid.subject_id)
+            .execute(db)
+            .await?;
+            Ok(())
+        }
+
+        "enterprise_contest" => {
+            sqlx::query(
+                "UPDATE enterprise_contests SET status = 'published'
+                  WHERE id = $1 AND status = 'draft'",
+            )
+            .bind(paid.subject_id)
+            .execute(db)
+            .await?;
+            Ok(())
+        }
+
+        "corporate_learning" => {
+            // The period runs from the payment, not from the order. A
+            // company that pays a week late gets a full month, which is the
+            // only reading that does not quietly shorten what they bought.
+            sqlx::query(
+                "UPDATE corporate_learning_subscriptions
+                    SET current_period_end = GREATEST(current_period_end, NOW())
+                                             + INTERVAL '30 days'
+                  WHERE id = $1",
+            )
+            .bind(paid.subject_id)
+            .execute(db)
+            .await?;
+            Ok(())
+        }
+
+        "audience_subscription" => {
+            sqlx::query(
+                "UPDATE audience_subscriptions
+                    SET expires_at = GREATEST(expires_at, NOW()) + INTERVAL '30 days'
+                  WHERE id = $1",
+            )
+            .bind(paid.subject_id)
+            .execute(db)
+            .await?;
+            Ok(())
+        }
+
+        "payment_guarantee" => {
+            sqlx::query(
+                "UPDATE payment_guarantee_subscriptions
+                    SET expires_at = GREATEST(expires_at, NOW()) + INTERVAL '30 days',
+                        cancelled_at = NULL
+                  WHERE user_id = $1",
+            )
+            .bind(paid.subject_id)
+            .execute(db)
+            .await?;
+            Ok(())
+        }
+
+        "marketplace_item" => {
+            // The sale was already recorded and the creator already paid: a
+            // marketplace purchase settles synchronously. Reaching here means
+            // the money arrived on a slower rail, and the delivery is the
+            // download window starting now rather than at the click.
+            sqlx::query(
+                "UPDATE marketplace_purchases
+                    SET token_expires_at = GREATEST(token_expires_at, NOW())
+                                           + INTERVAL '48 hours'
+                  WHERE id = $1",
+            )
+            .bind(paid.subject_id)
+            .execute(db)
+            .await?;
+            Ok(())
+        }
+
         other => {
             // Loud, not silent. A payment for something nothing delivers is
             // money taken for nothing, and the only way anyone finds out is

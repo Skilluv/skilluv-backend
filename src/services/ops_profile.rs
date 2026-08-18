@@ -175,7 +175,7 @@ async fn measure(db: &PgPool, user_id: Uuid) -> Result<Measurements, AppError> {
 
             -- Verified and still valid. A lapsed certification scores
             -- nothing, and an unverified one has not been checked by anybody.
-            (SELECT count(*) FROM external_credentials
+            (SELECT count(*) FROM credentials_with_currency
               WHERE user_id = $1
                 AND verified_at IS NOT NULL
                 AND is_current = TRUE)
@@ -322,7 +322,7 @@ pub async fn build(db: &PgPool, username: &str) -> Result<OpsProfile, AppError> 
                     'issuer', issuer, 'name', name, 'level', level,
                     'evidence_url', evidence_url,
                     'issued_on', issued_on, 'expires_on', expires_on)
-           FROM external_credentials
+           FROM credentials_with_currency
           WHERE user_id = $1 AND verified_at IS NOT NULL AND is_current = TRUE
           ORDER BY issued_on DESC",
     )

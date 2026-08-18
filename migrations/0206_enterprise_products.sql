@@ -187,7 +187,7 @@ BEGIN
       FROM enterprise_product_types WHERE slug = NEW.product_type;
 
     IF is_recurring AND NEW.status = 'active' AND NEW.renews_at IS NULL THEN
-        RAISE EXCEPTION 'a % renews — say when'
+        RAISE EXCEPTION 'a % renews — say when', NEW.product_type
             USING HINT = 'without a renewal date it never appears on a renewal list, '
                          'and it lapses because nobody was told to ask';
     END IF;

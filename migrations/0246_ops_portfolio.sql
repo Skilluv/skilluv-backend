@@ -140,12 +140,6 @@ CREATE TABLE external_credentials (
     -- different depending on what was actually opened.
     verification_note TEXT,
 
-    -- Derived, so a lapsed credential cannot be displayed as current by a
-    -- reader that forgot to compare dates.
-    is_current BOOLEAN GENERATED ALWAYS AS (
-        expires_on IS NULL OR expires_on >= CURRENT_DATE
-    ) STORED,
-
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
@@ -166,12 +160,28 @@ COMMENT ON TABLE external_credentials IS
     'HashiCorp. Recorded, never issued: Skilluv cannot revoke these and must '
     'not present them with the weight of an attestation it stands behind.';
 
-COMMENT ON COLUMN external_credentials.is_current IS
-    'Derived from expires_on. A profile showing a lapsed certification as '
-    'current makes a false claim on somebody''s behalf.';
+-- ## Why "still valid" is not a column
+--
+-- It was one, briefly: a stored generated column over `expires_on >=
+-- CURRENT_DATE`. PostgreSQL refuses that, and it is right to — the value
+-- would be computed once at write time and then be wrong from the following
+-- midnight onwards, which is precisely the failure this table exists to
+-- avoid. A credential that lapsed last night must not read as current
+-- because nobody wrote to the row.
+--
+-- So it is a view, computed on read, and every reader goes through it.
+
+CREATE VIEW credentials_with_currency AS
+    SELECT c.*,
+           (c.expires_on IS NULL OR c.expires_on >= CURRENT_DATE) AS is_current
+      FROM external_credentials c;
+
+COMMENT ON VIEW credentials_with_currency IS
+    'external_credentials with `is_current` computed on read. A stored column '
+    'would be right on the day it was written and wrong the morning after.';
 
 CREATE INDEX idx_external_credentials_user
-    ON external_credentials (user_id, is_current DESC, issued_on DESC);
+    ON external_credentials (user_id, expires_on DESC NULLS FIRST, issued_on DESC);
 
 CREATE INDEX idx_external_credentials_unverified
     ON external_credentials (created_at)

@@ -77,7 +77,7 @@ pub struct CredentialInput {
 const SELECT: &str = r#"
     SELECT id, issuer, name, level, credential_id, evidence_url,
            issued_on, expires_on, verified_at, is_current
-      FROM external_credentials
+      FROM credentials_with_currency
 "#;
 
 /// Record a credential somebody holds.
@@ -164,7 +164,7 @@ pub async fn awaiting_review(db: &PgPool, limit: i64) -> Result<Vec<serde_json::
                     'evidence_url', c.evidence_url,
                     'issued_on', c.issued_on, 'expires_on', c.expires_on,
                     'is_current', c.is_current)
-           FROM external_credentials c
+           FROM credentials_with_currency c
            JOIN users u ON u.id = c.user_id
           WHERE c.verified_at IS NULL
           ORDER BY c.created_at

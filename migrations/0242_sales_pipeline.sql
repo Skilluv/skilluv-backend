@@ -152,7 +152,7 @@ CREATE OR REPLACE VIEW upcoming_renewals AS
 
     SELECT
         'certification', c.subject_enterprise_id, c.id, c.expires_at, c.fee, c.currency
-      FROM certifications c
+      FROM program_certifications c
      WHERE c.status = 'issued' AND c.subject_enterprise_id IS NOT NULL
 
     UNION ALL

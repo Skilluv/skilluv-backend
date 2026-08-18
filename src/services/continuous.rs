@@ -1015,7 +1015,9 @@ mod tests {
     fn facilitation_is_the_small_share() {
         // The team found the problem, wrote the approach and convinced the
         // client. Skilluv held the meeting.
-        assert!(FACILITATION_PERCENT <= 15.0);
-        assert!(MENTOR_SHARE >= 50.0);
+        let facilitation = FACILITATION_PERCENT;
+        let mentor = MENTOR_SHARE;
+        assert!(facilitation <= 15.0);
+        assert!(mentor >= 50.0);
     }
 }

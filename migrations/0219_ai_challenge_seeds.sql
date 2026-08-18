@@ -1,5 +1,14 @@
 -- Forty-one challenges, one set per AI trade.
 --
+-- ## The constraint that would have refused every one of them
+--
+-- `challenge_templates` still carried the CHECK written in migration 0003,
+-- back when the platform had four domains. `orientations` was widened long
+-- ago (0088 lists 'ai' and 'ops'); this table was not, so a fresh database
+-- stopped here. A CHECK cannot be extended, only replaced, so every value is
+-- restated — dropping one silently is how two tournament kinds disappeared in
+-- migration 0223.
+--
 -- ## Why they are drafts
 --
 -- The title and the intent come from the backlog; the full brief — the
@@ -23,6 +32,21 @@
 -- Measured on data the model has not seen, and obtainable again. Those two
 -- sentences are the difference between a result and a claim, and they are the
 -- two most common reasons an AI submission comes back.
+
+ALTER TABLE challenge_templates
+    DROP CONSTRAINT IF EXISTS challenges_skill_domain_check;
+
+ALTER TABLE challenge_templates
+    DROP CONSTRAINT IF EXISTS challenge_templates_skill_domain_check;
+
+ALTER TABLE challenge_templates
+    ADD CONSTRAINT challenge_templates_skill_domain_check
+    CHECK (skill_domain IN (
+        -- Migration 0003, the original four.
+        'code', 'design', 'game', 'security',
+        -- Migration 0088 already listed these on `orientations`.
+        'soft_skills', 'ai', 'ops'
+    ));
 
 INSERT INTO challenge_templates
     (title, description, instructions, skill_domain, difficulty, language,

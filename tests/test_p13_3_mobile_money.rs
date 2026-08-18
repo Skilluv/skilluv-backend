@@ -50,9 +50,10 @@ async fn orange_rejects_non_e164_phone() {
             currency: "XOF",
             amount: &amt,
             note: "test",
+            idempotency_key: "test:e164",
         })
         .await;
-    assert!(res.is_err(), "phone sans + refuse");
+    assert!(res.is_err(), "a number without a + is refused");
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -69,36 +70,47 @@ async fn orange_rejects_non_xof_currency() {
             currency: "EUR",
             amount: &amt,
             note: "test",
+            idempotency_key: "test:currency",
         })
         .await;
-    assert!(res.is_err(), "EUR refuse par Orange");
+    assert!(res.is_err(), "Orange refuses EUR");
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Sans credentials env, Orange retourne Pending + message dev
+// With no credentials, the provider says so instead of inventing a receipt
 // ═══════════════════════════════════════════════════════════════════
 
 #[tokio::test]
-async fn orange_returns_pending_stub_in_dev_mode() {
+async fn orange_refuses_when_it_holds_no_credentials() {
     // SAFETY: single-threaded env removal.
     unsafe {
         std::env::remove_var("ORANGE_MONEY_API_KEY");
     }
     let amt = BigDecimal::from(1000);
-    let res = OrangeMoneyProvider
+    let err = OrangeMoneyProvider
         .initiate_payout(&PayoutParams {
             user_id: Uuid::new_v4(),
             phone: "+22507222222",
             currency: "XOF",
             amount: &amt,
             note: "test",
+            idempotency_key: "test:unconfigured",
         })
         .await
-        .expect("dev stub OK");
-    assert_eq!(res.provider, ProviderName::Orange);
-    assert_eq!(res.status, mobile_money::PayoutStatus::Pending);
-    assert!(res.provider_txn_id.starts_with("orange:dev:"));
-    assert!(res.message.unwrap().contains("dev mode"));
+        .expect_err("an unconfigured operator cannot accept a payout");
+
+    // The old behaviour returned Pending with a synthetic reference, which
+    // is the one failure mode a payout path must not have: it says money is
+    // on its way when nothing was called.
+    let message = err.to_string();
+    assert!(
+        message.contains("not configured"),
+        "the error must say why, got: {message}"
+    );
+    assert!(
+        message.contains("ORANGE_MONEY_API_KEY"),
+        "and name what is missing, got: {message}"
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -122,11 +134,17 @@ async fn factory_returns_correct_provider() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// End-to-end : register phone → withdraw XOF réussi
+// End-to-end: a withdrawal on a deployment with no operator credentials
 // ═══════════════════════════════════════════════════════════════════
+//
+// This test used to assert a 200 and a decremented balance, against a
+// provider that called nothing. What it proved was that the stub returned
+// what the stub returned. What matters instead is that the money stays where
+// it is: the ledger is reversed, the payout is recorded as failed with the
+// reason, and the caller is told rather than thanked.
 
 #[tokio::test]
-async fn momo_withdraw_full_flow_from_wallet() {
+async fn momo_withdraw_leaves_the_money_alone_when_the_operator_is_unreachable() {
     let app = TestApp::spawn().await;
     let body = app.register_user("u_momo").await;
     let user_id = Uuid::parse_str(body["data"]["user"]["id"].as_str().unwrap()).unwrap();
@@ -159,12 +177,36 @@ async fn momo_withdraw_full_flow_from_wallet() {
         .await;
     let status = resp.status();
     let jv: serde_json::Value = resp.json().await.unwrap();
-    assert_eq!(status, 200, "body: {jv}");
-    assert_eq!(jv["data"]["currency"], "XOF");
+    assert_eq!(
+        status, 500,
+        "an operator that cannot be reached is a server-side failure, not a \
+         user error — body: {jv}"
+    );
 
-    // The ledger is what a withdrawal moves. The wallet column it used to
-    // decrement is gone from this path entirely.
-    assert_eq!(available_xof(&app, user_id).await, BigDecimal::from(3000));
+    // The ledger is what a withdrawal moves, and nothing moved: the debit
+    // posted before the call was reversed when the call failed.
+    assert_eq!(
+        available_xof(&app, user_id).await,
+        BigDecimal::from(5000),
+        "the balance must be exactly what it was before"
+    );
+
+    // And the attempt is not silent. A payout nobody recorded is one nobody
+    // will ever chase.
+    let (payout_status, reason): (String, Option<String>) = sqlx::query_as(
+        "SELECT status, failure_reason FROM payouts
+          WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1",
+    )
+    .bind(user_id)
+    .fetch_one(&app.db)
+    .await
+    .expect("the attempt left a row");
+
+    assert_eq!(payout_status, "failed");
+    assert!(
+        reason.unwrap_or_default().contains("not configured"),
+        "the reason names the missing configuration"
+    );
 
     drop(app);
 }

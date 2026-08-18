@@ -86,6 +86,7 @@ pub mod orientations_playlist;
 pub mod outbox;
 pub mod payment_poller;
 pub mod payment_webhook_sources;
+pub mod ops_practice;
 pub mod payment_webhooks;
 pub mod payout;
 pub mod payout_adapters;

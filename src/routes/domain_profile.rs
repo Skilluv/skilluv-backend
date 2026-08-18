@@ -332,6 +332,66 @@ pub async fn get_profile(
     })))
 }
 
+/// Turn the handles the wizard collected into linked portfolio rows.
+///
+/// Ticket O-01 asked the audio wizard to trigger the portfolio import when
+/// somebody gives a SoundCloud or Bandcamp handle. Storing the handle and
+/// doing nothing with it is the shape this codebase keeps removing: an answer
+/// that reads as collected and is used by nothing.
+///
+/// The row is `figures_are_declared` with no counts, because a handle is not
+/// an audience. What it gives a reader is a link they can follow, and what it
+/// gives the person is one less form to fill in; the play counts come later,
+/// from them, through `/api/audio/portfolios`.
+///
+/// Failures are logged and dropped. Somebody answering a wizard is not to be
+/// shown an error because a convenience did not fire, and the endpoint that
+/// does this properly is one click away.
+async fn link_declared_handles(
+    db: &sqlx::PgPool,
+    user_id: uuid::Uuid,
+    answers: &serde_json::Map<String, serde_json::Value>,
+) {
+    for (key, platform, base) in [
+        (
+            "soundcloud_username",
+            "soundcloud",
+            "https://soundcloud.com/",
+        ),
+        ("bandcamp_username", "bandcamp", "https://bandcamp.com/"),
+    ] {
+        let Some(handle) = answers.get(key).and_then(|v| v.as_str()) else {
+            continue;
+        };
+        let handle = handle.trim();
+        // A handle with a slash in it is a pasted URL rather than a name, and
+        // concatenating it would produce a link that goes nowhere.
+        if handle.is_empty() || handle.contains('/') {
+            continue;
+        }
+
+        let outcome = sqlx::query(
+            r#"
+            INSERT INTO user_external_portfolios
+                (user_id, platform, handle, profile_url, figures_are_declared, sync_enabled)
+            VALUES ($1, $2, $3, $4, TRUE, FALSE)
+            ON CONFLICT (user_id, platform, handle) DO UPDATE
+                SET profile_url = EXCLUDED.profile_url, updated_at = NOW()
+            "#,
+        )
+        .bind(user_id)
+        .bind(platform)
+        .bind(handle)
+        .bind(format!("{base}{handle}"))
+        .execute(db)
+        .await;
+
+        if let Err(e) = outcome {
+            tracing::warn!(user = %user_id, platform, error = %e, "handle not linked");
+        }
+    }
+}
+
 /// Save the wizard's answers.
 ///
 /// Replaces the whole object rather than merging. A wizard sends every
@@ -424,6 +484,12 @@ pub async fn put_profile(
     }
 
     let answers = serde_json::Value::Object(answers);
+
+    if domain == "audio" {
+        if let serde_json::Value::Object(map) = &answers {
+            link_declared_handles(&state.db, auth.user_id, map).await;
+        }
+    }
 
     sqlx::query(
         r#"

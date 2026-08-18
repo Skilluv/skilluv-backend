@@ -65,6 +65,7 @@ pub fn audio_routes() -> Router<AppState> {
         .route("/audio/castings/{casting_id}/select", post(select_voice))
         .route("/audio/deliverables/{deliverable_id}/credit", post(credit))
         .route("/audio/mentors/for-me", get(mentor_matches))
+        .route("/projects/{slug}/credits", get(project_credits))
         .route(
             "/audio/portfolios",
             get(my_portfolios).post(declare_portfolio),
@@ -168,6 +169,10 @@ pub struct FileRow {
     pub loudness_range_lu: Option<f64>,
     pub analysis_status: String,
     pub analysis_error: Option<String>,
+    /// Peaks for drawing, 0..100, four hundred of them. Absent until the
+    /// analysis has run, or where ffmpeg is not installed.
+    #[schema(value_type = Option<Vec<u8>>)]
+    pub waveform_peaks: Option<serde_json::Value>,
 }
 
 /// The files of one delivery.
@@ -194,7 +199,7 @@ pub async fn list_files(
                 loudness_lufs::FLOAT8 AS loudness_lufs,
                 true_peak_dbfs::FLOAT8 AS true_peak_dbfs,
                 loudness_range_lu::FLOAT8 AS loudness_range_lu,
-                analysis_status, analysis_error
+                analysis_status, analysis_error, waveform_peaks
            FROM audio_artifact_files
           WHERE slice_id = $1
           ORDER BY role, sort_order, created_at",
@@ -1253,4 +1258,56 @@ pub async fn drop_portfolio(
         return Err(AppError::NotFound("portfolio not found".into()));
     }
     Ok(Json(ApiResponse::new(json!({ "removed": true }))))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Credits
+// ═══════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Serialize, sqlx::FromRow, ToSchema)]
+pub struct CreditRow {
+    pub username: String,
+    pub display_name: Option<String>,
+    /// The words the attestation was issued with.
+    pub credit_title: String,
+    /// What was made, when the slice said.
+    pub audio_subtype: Option<String>,
+    /// The public attestation, so a reader can check the credit rather than
+    /// take the page's word for it.
+    pub verification_code: String,
+    pub issued_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Who is credited on a project.
+///
+/// Public and unauthenticated: a credits list that needs an account is a
+/// credits list nobody outside reads, and being readable from outside is the
+/// entire point of a credit.
+///
+/// Reads `work_credits` (migration 0423), which excludes revoked attestations
+/// and revoked deliverables — a credit the platform has retracted leaves the
+/// page it was printed on, without anybody editing the page.
+#[utoipa::path(
+    get, path = "/api/projects/{slug}/credits", tag = "audio",
+    params(("slug" = String, Path, description = "Project slug")),
+    responses(
+        (status = 200, description = "Credits", body = ApiResponse<Vec<CreditRow>>),
+    ),
+)]
+pub async fn project_credits(
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+) -> Result<Json<ApiResponse<Vec<CreditRow>>>, AppError> {
+    let rows: Vec<CreditRow> = sqlx::query_as(
+        "SELECT username, display_name, credit_title, audio_subtype,
+                verification_code, issued_at
+           FROM work_credits
+          WHERE project_slug = $1
+          ORDER BY issued_at",
+    )
+    .bind(&slug)
+    .fetch_all(&state.db)
+    .await?;
+
+    Ok(Json(ApiResponse::new(rows)))
 }

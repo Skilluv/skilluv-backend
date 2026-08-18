@@ -394,7 +394,9 @@ async fn every_audio_challenge_says_what_will_be_looked_at() {
             .fetch_one(&app.db)
             .await
             .unwrap();
-    assert_eq!(total, 24);
+    // Twenty-four per trade (0417) plus the ten the platform commissions for
+    // its own games (0423).
+    assert_eq!(total, 34);
 
     let without_rubric: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM challenge_templates
@@ -597,4 +599,235 @@ async fn seed_audio_slice(app: &TestApp, subtype: &str) -> Uuid {
     .fetch_one(&app.db)
     .await
     .unwrap()
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// The five gaps the first pass left open
+// ═══════════════════════════════════════════════════════════════════
+
+async fn user_id_of(app: &TestApp, username: &str) -> Uuid {
+    sqlx::query_scalar("SELECT id FROM users WHERE username = $1")
+        .bind(username)
+        .fetch_one(&app.db)
+        .await
+        .unwrap()
+}
+
+/// The four badges tickets C-01 and O-02 named, and the fifth C-02 implied.
+///
+/// Seeded with real rules rather than `manual`: the engine can see a contest
+/// win and a mentee since migration 0422, and a badge nobody earns without an
+/// operator noticing is a badge nobody earns.
+#[tokio::test]
+async fn the_battle_and_mentor_badges_are_counted_not_decided() {
+    let app = TestApp::spawn().await;
+
+    let manual: Vec<String> = sqlx::query_scalar(
+        "SELECT slug FROM badge_rules
+          WHERE slug IN ('audio-sound-battler-winner', 'audio-battler-legend',
+                         'audio-mentor-active', 'audio-mentor-veteran',
+                         'audio-composition-contest-winner')
+            AND conditions ? 'manual'",
+    )
+    .fetch_all(&app.db)
+    .await
+    .unwrap();
+    assert!(manual.is_empty(), "still decided by hand: {manual:?}");
+
+    let seeded: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM badge_rules
+          WHERE slug IN ('audio-sound-battler-winner', 'audio-battler-legend',
+                         'audio-mentor-active', 'audio-mentor-veteran',
+                         'audio-composition-contest-winner')",
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert_eq!(seeded, 5);
+}
+
+/// Winning a sound battle earns the badge, and coming second does not.
+#[tokio::test]
+async fn a_battle_is_won_by_the_first_and_nobody_else() {
+    let app = TestApp::spawn().await;
+    app.register_user("battlewinner").await;
+    app.register_user("battlesecond").await;
+    let winner = user_id_of(&app, "battlewinner").await;
+    let second = user_id_of(&app, "battlesecond").await;
+
+    let rules = serde_json::json!({
+        "brief": "une porte qui grince",
+        "duration_hours": 48,
+        "entrants": 2
+    });
+
+    let tournament: Uuid = sqlx::query_scalar(
+        "INSERT INTO tournaments
+            (slug, name, kind, skill_domain, status, starts_at, ends_at, rules)
+         VALUES ('duel-test', 'Duel', 'audio_sound_battle', 'audio', 'concluded',
+                 NOW() - INTERVAL '3 days', NOW() - INTERVAL '1 day', $1)
+         RETURNING id",
+    )
+    .bind(&rules)
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+
+    for (user, rank) in [(winner, 1_i32), (second, 2_i32)] {
+        sqlx::query(
+            "INSERT INTO tournament_participants
+                (tournament_id, participant_type, participant_id, rank)
+             VALUES ($1, 'user', $2, $3)",
+        )
+        .bind(tournament)
+        .bind(user)
+        .bind(rank)
+        .execute(&app.db)
+        .await
+        .unwrap();
+    }
+
+    for (user, expected, who) in [(winner, true, "the winner"), (second, false, "second place")] {
+        skilluv_backend::services::badge_engine::recompute_badges_for_user(&app.db, user)
+            .await
+            .unwrap();
+
+        let has: bool = sqlx::query_scalar(
+            "SELECT EXISTS (SELECT 1 FROM user_badges ub
+                              JOIN badge_rules r ON r.id = ub.rule_id
+                             WHERE ub.user_id = $1
+                               AND r.slug = 'audio-sound-battler-winner')",
+        )
+        .bind(user)
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
+
+        assert_eq!(has, expected, "{who} got the wrong answer");
+    }
+}
+
+/// The waveform column exists to receive what the analysis draws.
+///
+/// The arithmetic is unit-tested in `services::audio_files`; this asserts the
+/// storage end, because a reducer whose output has nowhere to go is a function
+/// nobody calls.
+#[tokio::test]
+async fn a_file_can_carry_the_peaks_a_page_draws() {
+    let app = TestApp::spawn().await;
+    let slice_id = seed_audio_slice(&app, "composition").await;
+
+    let peaks = serde_json::json!([0, 42, 100, 7]);
+
+    sqlx::query(
+        "INSERT INTO audio_artifact_files
+            (slice_id, role, storage_key, original_filename, byte_size, container,
+             waveform_peaks, analysis_status)
+         VALUES ($1, 'master', 'audio/probe/1.wav', 'theme.wav', 4096, 'wav', $2, 'done')",
+    )
+    .bind(slice_id)
+    .bind(&peaks)
+    .execute(&app.db)
+    .await
+    .expect("a master carries its waveform");
+
+    let stored: Option<serde_json::Value> =
+        sqlx::query_scalar("SELECT waveform_peaks FROM audio_artifact_files WHERE slice_id = $1")
+            .bind(slice_id)
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
+
+    assert_eq!(stored.unwrap().as_array().unwrap().len(), 4);
+}
+
+/// A handle typed into the wizard becomes a linked account.
+///
+/// Ticket O-01. Collecting the handle and using it for nothing is the shape
+/// this codebase keeps removing.
+#[tokio::test]
+async fn the_wizard_links_the_handle_it_asked_for() {
+    let app = TestApp::spawn().await;
+    app.register_user("wizardhandle").await;
+
+    let saved = app
+        .put(
+            "/api/users/me/domain-profile/audio",
+            &serde_json::json!({
+                "level": "apprentissage",
+                "soundcloud_username": "someone",
+            }),
+        )
+        .await;
+    assert_eq!(saved.status(), 200);
+
+    let row: Option<(String, bool)> = sqlx::query_as(
+        "SELECT p.profile_url, p.figures_are_declared
+           FROM user_external_portfolios p
+           JOIN users u ON u.id = p.user_id
+          WHERE u.username = 'wizardhandle' AND p.platform = 'soundcloud'",
+    )
+    .fetch_optional(&app.db)
+    .await
+    .unwrap();
+
+    let (url, declared) = row.expect("the handle was collected and never used");
+    assert_eq!(url, "https://soundcloud.com/someone");
+    assert!(declared, "nothing checked this account, and it should say so");
+}
+
+/// A pasted URL is not a handle.
+///
+/// Concatenating one onto the base would produce a link that goes nowhere, and
+/// a dead link on a profile is worse than an absent one.
+#[tokio::test]
+async fn a_pasted_url_is_not_linked_as_a_handle() {
+    let app = TestApp::spawn().await;
+    app.register_user("wizardpaste").await;
+
+    let saved = app
+        .put(
+            "/api/users/me/domain-profile/audio",
+            &serde_json::json!({
+                "soundcloud_username": "https://soundcloud.com/someone",
+            }),
+        )
+        .await;
+    assert_eq!(saved.status(), 200, "the answer is still saved");
+
+    let linked: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM user_external_portfolios p
+           JOIN users u ON u.id = p.user_id
+          WHERE u.username = 'wizardpaste'",
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert_eq!(linked, 0);
+}
+
+/// Ten challenges for the platform's own games, and a credits list that can
+/// put names on the pages they ship on.
+#[tokio::test]
+async fn the_platform_asks_for_its_own_audio_and_credits_it() {
+    let app = TestApp::spawn().await;
+
+    let canvas: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM challenge_templates
+          WHERE skill_domain = 'audio' AND title LIKE 'Skilluv%'",
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert_eq!(canvas, 10, "the terrain where the platform is the client");
+
+    // Public and unauthenticated: a credits list that needs an account is one
+    // nobody outside reads, and being readable from outside is the point.
+    let response = app.get("/api/projects/skilluv-canvas/credits").await;
+    assert_eq!(response.status(), 200);
+    let body: serde_json::Value = response.json().await.unwrap();
+    assert!(
+        body["data"].as_array().unwrap().is_empty(),
+        "nobody has been credited yet, and the answer is an empty list rather than an error"
+    );
 }

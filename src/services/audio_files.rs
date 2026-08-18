@@ -46,6 +46,14 @@ pub const LISTEN_URL_TTL_SECONDS: u32 = 15 * 60;
 /// How much of a master the generated preview keeps.
 pub const PREVIEW_SECONDS: u32 = 30;
 
+/// How many peaks a stored waveform holds.
+///
+/// Four hundred. A waveform is drawn a few hundred pixels wide at most, and a
+/// peak per pixel is the point past which extra resolution is bytes nobody
+/// renders — stored on every master of every delivery, then sent again on
+/// every profile page that draws one.
+pub const WAVEFORM_PEAKS: usize = 400;
+
 /// Containers this service will accept, and whether the analysis can read them.
 ///
 /// `zip`, `pdf` and `md` are accepted as parts of a delivery — an FMOD project,
@@ -393,6 +401,75 @@ pub async fn measure_path(path: &std::path::Path) -> Result<Measured, String> {
     Ok(measured)
 }
 
+/// Reduce raw mono samples to a fixed number of peaks.
+///
+/// The loudest absolute sample per bucket, scaled to 0..100. Loudest rather
+/// than average because a waveform is read for shape: averaging turns a snare
+/// into a bump and makes every percussive track look like a pad.
+///
+/// Pure, so the arithmetic that decides what a reader sees is testable without
+/// ffmpeg on the machine.
+pub fn peaks_from_samples(samples: &[i16], buckets: usize) -> Vec<u8> {
+    if samples.is_empty() || buckets == 0 {
+        return Vec::new();
+    }
+
+    // A file shorter than the bucket count still gets a waveform, just a
+    // coarser one: one bucket per sample rather than empty buckets that would
+    // draw as silence in the middle of a sound.
+    let buckets = buckets.min(samples.len());
+    let per_bucket = samples.len().div_ceil(buckets);
+
+    samples
+        .chunks(per_bucket)
+        .map(|chunk| {
+            let peak = chunk
+                .iter()
+                .map(|s| s.unsigned_abs() as u32)
+                .max()
+                .unwrap_or(0);
+            // i16::MIN negated does not fit in i16, which is why the maximum
+            // here is 32768 and not 32767. Clamped rather than wrapped.
+            ((peak.min(32_768) * 100) / 32_768) as u8
+        })
+        .collect()
+}
+
+/// Decode a file to mono 16-bit samples and reduce them to peaks.
+///
+/// Downsampled to 8 kHz first: the shape of a waveform does not need the
+/// treble, and decoding a five-minute master at 48 kHz to throw away
+/// five sixths of it is four times the memory for the same picture.
+pub async fn waveform_for(path: &std::path::Path) -> Result<Vec<u8>, String> {
+    if !tool_available("ffmpeg").await {
+        return Err("ffmpeg is not installed on this host".into());
+    }
+
+    let out = tokio::process::Command::new("ffmpeg")
+        .arg("-v")
+        .arg("quiet")
+        .arg("-i")
+        .arg(path)
+        .args([
+            "-ac", "1", "-ar", "8000", "-f", "s16le", "-acodec", "pcm_s16le", "-",
+        ])
+        .output()
+        .await
+        .map_err(|e| format!("ffmpeg failed to run: {e}"))?;
+
+    if !out.status.success() || out.stdout.is_empty() {
+        return Err("ffmpeg decoded nothing".into());
+    }
+
+    let samples: Vec<i16> = out
+        .stdout
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]))
+        .collect();
+
+    Ok(peaks_from_samples(&samples, WAVEFORM_PEAKS))
+}
+
 /// Write what was measured, or why it was not.
 pub async fn record_measurement(
     db: &PgPool,
@@ -521,7 +598,32 @@ async fn analyse_one(
 ) -> Result<(), AppError> {
     let bytes = storage.get_private(storage_key).await?;
     let scratch = temp_copy(&bytes, container)?;
+
     let measured = measure_path(scratch.path()).await;
+
+    // Drawn in the same pass, because the expensive part is having the file
+    // here: a second pass would download it again to run ffmpeg again.
+    //
+    // A failure is logged and dropped rather than propagated. A waveform is
+    // how a page looks; the loudness is what a review reads, and losing the
+    // second because the first did not decode would be the wrong trade.
+    match waveform_for(scratch.path()).await {
+        Ok(peaks) if !peaks.is_empty() => {
+            if let Err(e) = sqlx::query(
+                "UPDATE audio_artifact_files SET waveform_peaks = $2 WHERE id = $1",
+            )
+            .bind(file_id)
+            .bind(serde_json::json!(peaks))
+            .execute(db)
+            .await
+            {
+                tracing::warn!(file = %file_id, error = %e, "waveform measured but not stored");
+            }
+        }
+        Ok(_) => {}
+        Err(reason) => tracing::debug!(file = %file_id, reason, "no waveform drawn"),
+    }
+
     record_measurement(db, file_id, measured).await
 }
 
@@ -716,6 +818,40 @@ mod tests {
         assert_eq!(m.loudness_lufs, Some(-14.2));
         assert_eq!(m.loudness_range_lu, Some(7.4));
         assert_eq!(m.true_peak_dbfs, Some(-1.1));
+    }
+
+    #[test]
+    fn peaks_follow_the_loudest_sample_of_each_bucket() {
+        // Loudest, not average: averaging turns a snare into a bump and makes
+        // every percussive track look like a pad.
+        let samples = vec![0, 32_767, 0, 0, 0, 0, 0, 0];
+        let peaks = peaks_from_samples(&samples, 2);
+        assert_eq!(peaks.len(), 2);
+        assert_eq!(peaks[0], 99, "the transient survives the reduction");
+        assert_eq!(peaks[1], 0, "and the silence stays silent");
+    }
+
+    #[test]
+    fn the_most_negative_sample_does_not_overflow() {
+        // `i16::MIN.abs()` does not fit in an i16, which is the classic way
+        // this function panics in debug and wraps in release.
+        let peaks = peaks_from_samples(&[i16::MIN], 1);
+        assert_eq!(peaks, vec![100]);
+    }
+
+    #[test]
+    fn a_file_shorter_than_the_bucket_count_still_draws() {
+        // Four samples into four hundred buckets: four peaks, not four hundred
+        // with three hundred and ninety-six of silence drawn in the middle of
+        // a sound.
+        let peaks = peaks_from_samples(&[100, 200, 300, 400], 400);
+        assert_eq!(peaks.len(), 4);
+    }
+
+    #[test]
+    fn nothing_in_makes_nothing_out() {
+        assert!(peaks_from_samples(&[], 400).is_empty());
+        assert!(peaks_from_samples(&[1, 2, 3], 0).is_empty());
     }
 
     #[test]

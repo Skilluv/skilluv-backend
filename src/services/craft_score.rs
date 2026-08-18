@@ -305,6 +305,74 @@ pub fn points_for(kind: &str, weight: f64, baseline: Option<f64>, measured: f64)
     raw.round().max(0.0) as i32
 }
 
+/// Turn a set of weights and a way of measuring each term into a score.
+///
+/// Extracted when audio became the third domain to score. Everything up to
+/// here differs per domain — each one counts different tables — and everything
+/// from here does not: skip the unmeasured, apply the weight for its kind,
+/// drop the zeroes, cap, resolve the tier. Three copies of that loop is three
+/// places for the cap or the skip-on-zero to drift, and the drift would be
+/// invisible because each domain's score is only ever compared to itself.
+///
+/// `measured` returns `None` for a term this domain does not know how to
+/// count, and for one it counts as "not measured" — the review-grid average of
+/// somebody nobody has reviewed. Both must be skipped rather than counted as
+/// zero: an `offset_scaled` term at zero subtracts its whole baseline.
+pub async fn assemble(
+    db: &PgPool,
+    domain: &str,
+    weights: Vec<WeightRow>,
+    measured: impl Fn(&str) -> Option<f64>,
+) -> Result<CraftScore, AppError> {
+    let mut breakdown = Vec::new();
+    let mut total: i64 = 0;
+
+    for w in weights {
+        let Some(value) = measured(w.term.as_str()) else {
+            // Either the term is not measured for this person, or nobody has
+            // implemented it. The second deserves a line in the log; the first
+            // is normal and would drown it, so the caller distinguishes them.
+            continue;
+        };
+        if value == 0.0 {
+            continue;
+        }
+
+        let points = points_for(
+            &w.kind,
+            w.weight.to_f64().unwrap_or(0.0),
+            w.baseline.as_ref().and_then(|b| b.to_f64()),
+            value,
+        );
+        if points == 0 {
+            continue;
+        }
+
+        total += points as i64;
+        breakdown.push(Term {
+            term: w.term,
+            measured: value,
+            points,
+            explanation: w.explanation,
+        });
+    }
+
+    let capped = total > CAP as i64;
+    let score = total.min(CAP as i64) as i32;
+    let (tier_slug, tier_name, tier_description, next_tier_at) =
+        resolve_tier(db, domain, score).await?;
+
+    Ok(CraftScore {
+        score,
+        tier_slug,
+        tier_name,
+        tier_description,
+        next_tier_at,
+        breakdown,
+        capped,
+    })
+}
+
 /// Compute the score without storing it.
 pub async fn compute(db: &PgPool, user_id: Uuid) -> Result<CraftScore, AppError> {
     let weights = weights_for(db, DOMAIN).await?;

@@ -104,16 +104,7 @@ pub async fn require_challenge_validator_for(
 ) -> Result<(), AppError> {
     // Guard against unknown domains rather than delegating a malformed
     // capability string that would never match.
-    const VALID_DOMAINS: &[&str] = &[
-        "code",
-        "design",
-        "game",
-        "security",
-        "ops",
-        "ai",
-        "soft_skills",
-    ];
-    if !VALID_DOMAINS.contains(&domain) {
+    if !crate::validators::SKILL_DOMAINS.contains(&domain) {
         return Err(AppError::Validation(format!(
             "unknown challenge validator domain: {domain}"
         )));

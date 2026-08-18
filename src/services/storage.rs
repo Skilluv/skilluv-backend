@@ -217,6 +217,21 @@ impl StorageService {
             .map_err(|e| AppError::Internal(format!("presign failed: {e}")))
     }
 
+    /// Read an object back out of the private bucket.
+    ///
+    /// Used by the workers that have to look inside a file rather than hand it
+    /// to somebody — measuring an audio master, for one. A presigned URL plus
+    /// an HTTP client would work and would mean the service talking to itself
+    /// through a signature it just made.
+    pub async fn get_private(&self, key: &str) -> Result<Vec<u8>, AppError> {
+        let response = self
+            .private_bucket
+            .get_object(key)
+            .await
+            .map_err(|e| AppError::Internal(format!("read {key} failed: {e}")))?;
+        Ok(response.bytes().to_vec())
+    }
+
     pub async fn delete_private(&self, key: &str) -> Result<(), AppError> {
         self.private_bucket
             .delete_object(key)

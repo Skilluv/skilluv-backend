@@ -25,6 +25,35 @@ pub const SENIOR_REVIEWER_REPUTATION_THRESHOLD: f64 = 0.7;
 
 pub struct AttestationsService;
 
+/// The words an attestation on this basis is issued with.
+///
+/// Read from `attestation_bases` (migration 0406) rather than from a constant
+/// per domain: an attestation copies these onto its own row at issue and keeps
+/// them, so the table is the source and never the display. What the table adds
+/// is that a typo in a title somebody reads on a public profile is fixed by an
+/// operator instead of by a deployment.
+///
+/// Falls back to a generic pair rather than failing. An attestation that was
+/// earned must not be lost because the wording of its basis was deleted, and a
+/// foreign key already guarantees the basis itself exists.
+pub async fn basis_wording(db: &PgPool, basis: &str) -> (String, String) {
+    let row: Option<(String, String)> =
+        sqlx::query_as("SELECT title, description FROM attestation_bases WHERE basis = $1")
+            .bind(basis)
+            .fetch_optional(db)
+            .await
+            .unwrap_or(None);
+
+    row.unwrap_or_else(|| {
+        tracing::warn!(basis, "no wording for this attestation basis");
+        (
+            "Contribution vérifiée".to_string(),
+            "Un travail vérifié sur la plateforme.".to_string(),
+        )
+    })
+}
+
+
 /// Ligne attestations (calquée sur le schéma SQL).
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, utoipa::ToSchema)]
 pub struct Attestation {

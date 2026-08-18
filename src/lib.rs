@@ -107,6 +107,7 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::skill_routes())
         .nest("/api", routes::orientation_routes())
         .nest("/api", routes::ai_routes())
+        .nest("/api", routes::audio_routes())
         .nest("/api", routes::ai_safety_routes())
         .nest("/api", routes::benchmark_routes())
         .nest("/api", routes::domain_profile_routes())

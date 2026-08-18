@@ -19,7 +19,7 @@ pub use deliverable::{AiAssistanceLevel, Deliverable, VerifiableBy, Verification
 pub use enterprise::{Enterprise, EnterpriseMember, EnterprisePublic};
 pub use notification::Notification;
 pub use project_slice::{ProjectSlice, SliceSkill, SliceType};
-pub use skill_node::{SkillDomain, SkillNode};
+pub use skill_node::SkillNode;
 pub use talent_list::{EnterpriseBookmark, TalentList};
 pub use team_role_slot::TeamRoleSlot;
 pub use user::{User, UserPrivate, UserPublic};

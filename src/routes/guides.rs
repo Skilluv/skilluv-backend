@@ -43,7 +43,12 @@ pub struct GuideQuery {
     /// reader wants and always what an operator does.
     #[param(max_length = 30)]
     pub domain: Option<String>,
-    /// `onboarding`, `toolkit` or `writeup_template`. Absent means all three.
+    /// `onboarding`, `toolkit`, `writeup_template` or `brief_template`.
+    /// Absent means all of them.
+    ///
+    /// The last is written by whoever commissions the work rather than by
+    /// whoever does it (migration 0419), which is why a listing meant for
+    /// contributors usually asks for the other three.
     #[param(max_length = 30)]
     pub kind: Option<String>,
     /// Restrict onboarding guides to one family of trades.

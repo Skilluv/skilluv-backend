@@ -11,6 +11,54 @@ pub const MAX_CODE_BYTES: usize = 100 * 1024;
 /// 2 MB max for avatar uploads (cf. `user_profile.rs::MAX_AVATAR_SIZE`).
 pub const MAX_AVATAR_BYTES: usize = 2 * 1024 * 1024;
 
+/// Every domain somebody can currently choose, work in or be filtered on.
+///
+/// The authority is the `skill_domains` table (migration 0400), and this is a
+/// mirror of the rows where `is_active`. It exists because eight modules
+/// validated a domain against a list of their own — three of which had gone
+/// stale, so `ai` was accepted by the skill tree and refused by the explore
+/// filter for a year.
+///
+/// Kept as a constant rather than read from the database because these are
+/// request-path guards that run before any query and must not add a
+/// round-trip to reject a typo. The test
+/// `the_rust_domain_list_matches_the_table` fails when the two drift, which is
+/// the only thing a mirror needs.
+pub const SKILL_DOMAINS: &[&str] = &[
+    "code",
+    "design",
+    "game",
+    "security",
+    "ops",
+    "ai",
+    "soft_skills",
+    "audio",
+];
+
+/// Refuse a domain nothing knows, naming what was allowed.
+///
+/// An unknown domain is never passed through: downstream it becomes a filter
+/// that matches nothing or a capability string nobody can hold, and both read
+/// as an empty platform rather than as a bad request.
+pub fn check_skill_domain(value: &str, field: &str) -> Result<(), AppError> {
+    if !SKILL_DOMAINS.contains(&value) {
+        return Err(AppError::Validation(format!(
+            "{field} must be one of: {}",
+            SKILL_DOMAINS.join(", ")
+        )));
+    }
+    Ok(())
+}
+
+/// The same check on an optional filter. `None` is not an error: a listing
+/// with no domain filter is every domain.
+pub fn check_skill_domain_opt(value: &Option<String>, field: &str) -> Result<(), AppError> {
+    match value {
+        Some(v) => check_skill_domain(v, field),
+        None => Ok(()),
+    }
+}
+
 /// Reject strings containing ASCII control characters (other than common whitespace).
 /// Useful for display names, titles, slugs.
 pub fn no_control_chars(value: &str, field: &str) -> Result<(), AppError> {

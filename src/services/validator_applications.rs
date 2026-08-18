@@ -17,15 +17,7 @@ use uuid::Uuid;
 
 use crate::errors::AppError;
 
-pub const VALID_DOMAINS: &[&str] = &[
-    "code",
-    "design",
-    "game",
-    "security",
-    "ops",
-    "ai",
-    "soft_skills",
-];
+pub use crate::validators::SKILL_DOMAINS as VALID_DOMAINS;
 
 /// Minimum thresholds a self-nominated candidate must meet on a domain.
 pub const MIN_RANK: &str = "artisan";

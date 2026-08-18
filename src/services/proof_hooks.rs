@@ -108,6 +108,22 @@ async fn recompute_inner(
         }
     }
 
+    // 1ter. Audio attestations, for the same reason and in the same place.
+    //
+    // Separate from the AI pass rather than folded into a loop over domains:
+    // each generator knows which tables carry its evidence, and a shared loop
+    // would have to know all of them.
+    match crate::services::audio_attestations::issue_for_user(db, user_id).await {
+        Ok(issued) if !issued.is_empty() => {
+            tracing::info!(user_id = %user_id, ?issued, "audio attestations issued");
+        }
+        Ok(_) => {}
+        Err(e) => {
+            tracing::warn!(user_id = %user_id, error = %e, "P19: audio attestations failed");
+            errors.push(format!("audio_attestations: {e}"));
+        }
+    }
+
     // 2. Badges
     let badges = match badge_engine::recompute_badges_for_user(db, user_id).await {
         Ok(r) => r,

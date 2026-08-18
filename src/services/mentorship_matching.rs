@@ -80,6 +80,16 @@ pub const AI: DomainRules = DomainRules {
     tools_label: "outils",
 };
 
+/// Three, like AI and for a related reason: the domain is small and the
+/// session is long. Listening to somebody's mix and saying something useful
+/// about it is not a fifteen-minute pass over a diff.
+pub const AUDIO: DomainRules = DomainRules {
+    domain: "audio",
+    tools_key: "main_daws",
+    max_active_mentees: 3,
+    tools_label: "stations",
+};
+
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct Match {
     pub mentor_user_id: Uuid,

@@ -52,15 +52,7 @@ pub struct SkillTreeQuery {
     pub domain: Option<String>,
 }
 
-const ALLOWED_DOMAINS: &[&str] = &[
-    "code",
-    "design",
-    "game",
-    "security",
-    "soft_skills",
-    "ai",
-    "ops",
-];
+use crate::validators::SKILL_DOMAINS as ALLOWED_DOMAINS;
 
 async fn user_skill_tree(
     State(state): State<AppState>,

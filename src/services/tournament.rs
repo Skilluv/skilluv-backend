@@ -7,33 +7,16 @@ use uuid::Uuid;
 
 use crate::errors::AppError;
 
-pub const VALID_KINDS: &[&str] = &[
-    "individual",
-    "guild_war",
-    "hackathon",
-    "marathon",       // Format 1 Grande Epreuve : saisons impaires, cooperatif
-    "defi_solitaire", // Format 3 : background permanent, defi ultime solo
-    // Code contests (migration 0189). A code hackathon is a `hackathon` with
-    // `skill_domain = 'code'`, not a fourth kind: the difference is subject,
-    // not machinery.
-    "code_golf",
-    "tdd_contest",
-    // AI contests, on the same machinery and distinguished by `skill_domain`.
-    "benchmark_rush", // 48h to move a public benchmark, ladder-scored
-    "prompt_battle",  // head to head on one task, community vote
-];
 pub const VALID_FORMATS: &[&str] = &["swiss", "bracket", "ladder"];
 pub const VALID_PARTICIPANT_TYPES: &[&str] = &["user", "guild"];
 
-/// Kinds where the smallest number wins.
+/// The end of the scale a format is won at.
 ///
-/// Only code golf, and that is the whole point of it. Anything ranked by
-/// character count and sorted descending crowns the worst entry.
-pub const LOWER_IS_BETTER_KINDS: &[&str] = &["code_golf"];
-
-/// The end of the scale a kind is won at.
-pub fn scoring_direction_for(kind: &str) -> &'static str {
-    if LOWER_IS_BETTER_KINDS.contains(&kind) {
+/// Read from the format's row rather than from a list here. Getting it wrong
+/// crowns the worst entry — a code golf sorted descending rewards the longest
+/// program — which is why it is never a caller's choice.
+pub fn scoring_direction_for(spec: &crate::services::contest::KindSpec) -> &'static str {
+    if spec.lower_is_better {
         "lower_is_better"
     } else {
         "higher_is_better"
@@ -279,12 +262,7 @@ pub async fn create_tournament(
     creator_id: Uuid,
     input: CreateTournamentInput,
 ) -> Result<Tournament, AppError> {
-    if !VALID_KINDS.contains(&input.kind.as_str()) {
-        return Err(AppError::Validation(format!(
-            "kind must be one of: {}",
-            VALID_KINDS.join(", ")
-        )));
-    }
+    let kind_spec = crate::services::contest::load_kind(db, &input.kind).await?;
     let format = input.format.unwrap_or_else(|| "ladder".into());
     if !VALID_FORMATS.contains(&format.as_str()) {
         return Err(AppError::Validation(format!(
@@ -312,11 +290,11 @@ pub async fn create_tournament(
         ));
     }
     let rules = input.rules.unwrap_or_else(|| serde_json::json!({}));
-    crate::services::contest::validate_rules(&input.kind, &rules)?;
+    crate::services::contest::validate_rules(&kind_spec, &rules)?;
     // Not a caller's choice: code golf is won at the bottom of the scale
     // whatever anybody types, and letting an admin invert it once would
     // silently crown the longest solution.
-    let scoring_direction = scoring_direction_for(&input.kind);
+    let scoring_direction = scoring_direction_for(&kind_spec);
 
     let t: Tournament = sqlx::query_as(
         r#"
@@ -712,12 +690,9 @@ mod tests {
 
     #[test]
     fn valid_enums() {
-        assert!(VALID_KINDS.contains(&"individual"));
-        assert!(VALID_KINDS.contains(&"guild_war"));
-        assert!(VALID_KINDS.contains(&"hackathon"));
-        // Grande Epreuve Formats 1 + 3 (migration 0114).
-        assert!(VALID_KINDS.contains(&"marathon"));
-        assert!(VALID_KINDS.contains(&"defi_solitaire"));
+        // The kinds moved to `tournament_kinds` (migration 0416) and are
+        // asserted in `tests/test_contest_kinds.rs`, where a database exists
+        // to read them from.
         assert!(VALID_FORMATS.contains(&"swiss"));
         assert!(VALID_FORMATS.contains(&"bracket"));
         assert!(VALID_FORMATS.contains(&"ladder"));

@@ -20,6 +20,13 @@
 //! A model whose slice was never tagged is still attested; what it rests on
 //! is the model, not a skill somebody chose for it.
 //!
+//! ## The words
+//!
+//! Held in `attestation_bases` (migration 0406) rather than here, so an
+//! operator can fix a title somebody reads on a public profile without a
+//! deployment. The attestation copies them onto its own row at issue, which is
+//! what makes it keep the words it was issued with.
+//!
 //! ## Re-running is free
 //!
 //! `uniq_attestations_artefact_per_deliverable` makes (user, basis,
@@ -47,39 +54,6 @@ fn basis_for_subtype(subtype: &str) -> Option<&'static str> {
         "llm_agent" => Some("ai_agent_system_deployed"),
         "ai_research_paper" => Some("ai_paper_published"),
         _ => None,
-    }
-}
-
-/// Human-readable title and description for a basis, in the reader's default
-/// language. Written here rather than in the database because an attestation
-/// keeps the words it was issued with.
-fn wording(basis: &str) -> (&'static str, &'static str) {
-    match basis {
-        "ai_model_shipped" => (
-            "Modèle mis en service",
-            "Un modèle publié à une adresse où un inconnu peut l'obtenir et l'exécuter.",
-        ),
-        "ai_dataset_published" => (
-            "Jeu de données publié",
-            "Un jeu de données publié avec sa fiche : provenance, licence et limites.",
-        ),
-        "ai_agent_system_deployed" => (
-            "Système d'agents déployé",
-            "Un système d'agents en service, avec ses évaluations et ses garde-fous.",
-        ),
-        "ai_paper_published" => (
-            "Article publié",
-            "Un article paru, préprint ou conférence, avec le code qui le soutient.",
-        ),
-        "ai_benchmark_result" => (
-            "Résultat de banc reproduit",
-            "Un résultat mesuré sur un banc public, qu'un relecteur a rejoué et retrouvé.",
-        ),
-        "ai_safety_finding_validated" => (
-            "Trouvaille de sûreté validée",
-            "Une trouvaille reproduite, évaluée en gravité et divulguée dans les règles.",
-        ),
-        _ => ("Contribution IA", "Un travail IA vérifié."),
     }
 }
 
@@ -117,7 +91,8 @@ async fn issue(
     deliverable_id: Uuid,
     skill_node_ids: &[Uuid],
 ) -> Result<Option<Uuid>, AppError> {
-    let (title, description) = wording(basis);
+    let (title, description) =
+        crate::services::attestations::basis_wording(db, basis).await;
     let code = crate::services::attestations::AttestationsService::generate_verification_code();
 
     let id: Option<Uuid> = sqlx::query_scalar(
@@ -133,8 +108,8 @@ async fn issue(
         "#,
     )
     .bind(user_id)
-    .bind(title)
-    .bind(description)
+    .bind(&title)
+    .bind(&description)
     .bind(deliverable_id)
     .bind(skill_node_ids)
     .bind(&code)
@@ -143,7 +118,7 @@ async fn issue(
     .await?;
 
     if let Some(id) = id {
-        announce(db, user_id, id, basis, title, deliverable_id).await;
+        announce(db, user_id, id, basis, &title, deliverable_id).await;
     }
 
     Ok(id)
@@ -379,25 +354,5 @@ mod tests {
         // it, and inventing one would attest a repository twice.
         assert_eq!(basis_for_subtype("data_pipeline"), None);
         assert_eq!(basis_for_subtype("something-else"), None);
-    }
-
-    #[test]
-    fn every_basis_has_wording_of_its_own() {
-        let bases = [
-            "ai_model_shipped",
-            "ai_dataset_published",
-            "ai_agent_system_deployed",
-            "ai_paper_published",
-            "ai_benchmark_result",
-            "ai_safety_finding_validated",
-        ];
-        let mut titles: Vec<&str> = bases.iter().map(|b| wording(b).0).collect();
-        titles.sort_unstable();
-        titles.dedup();
-        assert_eq!(
-            titles.len(),
-            bases.len(),
-            "two bases sharing a title means one of them fell through to the default"
-        );
     }
 }

@@ -223,6 +223,7 @@ async fn async_main(config: AppConfig) {
     spawn_hello_wall_mirror_worker(state.clone());
     spawn_artifact_stats_worker(state.clone());
     spawn_craft_score_worker(state.clone());
+    spawn_audio_analysis_worker(state.clone());
     spawn_code_portfolio_worker(state.clone());
     spawn_release_sweep_worker(state.clone());
     spawn_payout_reconciliation_worker(state.clone());
@@ -389,6 +390,40 @@ fn spawn_code_portfolio_worker(state: skilluv_backend::AppState) {
     });
 }
 
+/// Measure the audio files that arrived, and give every master a preview.
+///
+/// Every two minutes rather than hourly: an uploader is waiting for the
+/// waveform and the loudness figures their own review grid asks about, and an
+/// hour of "pending" reads as broken.
+///
+/// Not gated behind an env flag, unlike the craft-score sweep. That flag
+/// exists because recomputing every score is expensive whether or not anything
+/// changed; this pass does nothing at all when nothing is pending, and where
+/// ffmpeg is absent it marks the queue `skipped` once and then finds it empty.
+fn spawn_audio_analysis_worker(state: skilluv_backend::AppState) {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(120));
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+            match skilluv_backend::services::audio_files::analyse_pending(
+                &state.db,
+                &state.storage,
+                25,
+            )
+            .await
+            {
+                Ok(0) => {}
+                Ok(n) => tracing::info!(analysed = n, "audio worker : files measured"),
+                Err(e) => tracing::error!(
+                    error = %e,
+                    "audio worker : pass failed, the files stay pending"
+                ),
+            }
+        }
+    });
+}
+
 /// Keep the stored craft scores fresh.
 ///
 /// The score is computed live on the profile page, so this exists only for
@@ -417,6 +452,10 @@ fn spawn_craft_score_worker(state: skilluv_backend::AppState) {
                 (
                     "ai",
                     skilluv_backend::services::ai_profile::sweep(&state.db, 500).await,
+                ),
+                (
+                    "audio",
+                    skilluv_backend::services::audio_profile::sweep(&state.db, 500).await,
                 ),
             ] {
                 match outcome {

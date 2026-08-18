@@ -69,6 +69,21 @@ async fn a_verified_artifact(
     slice
 }
 
+/// A client company, owned by somebody other than the person being tested.
+async fn a_client(app: &TestApp) -> Uuid {
+    let slug = format!("ent-{}", Uuid::new_v4().simple());
+    let owner = a_user(app, &format!("cli{}", &slug[4..12])).await;
+    sqlx::query_scalar(
+        "INSERT INTO enterprises (owner_id, company_name, slug, company_size, verified)
+         VALUES ($1, 'Cliente', $2, '1-10', TRUE) RETURNING id",
+    )
+    .bind(owner)
+    .bind(&slug)
+    .fetch_one(&app.db)
+    .await
+    .unwrap()
+}
+
 async fn bases_held_by(app: &TestApp, user: Uuid) -> Vec<String> {
     sqlx::query_scalar(
         "SELECT basis FROM attestations
@@ -130,8 +145,8 @@ async fn two_models_in_one_project_both_count() {
         .await
         .unwrap();
 
-    // The index from 0068 allowed one skill attestation per skill node, so
-    // the second one used to vanish. Two models is two pieces of work.
+    // Uniqueness is per artefact, not per skill or per project: two models
+    // is two pieces of work, whichever project they were built in.
     assert_eq!(issued, vec!["ai_model_shipped"]);
     assert_eq!(bases_held_by(&app, user).await.len(), 2);
 }
@@ -391,6 +406,145 @@ async fn the_proof_orchestrator_issues_them() {
 }
 
 #[tokio::test]
+async fn an_ai_attestation_counts_towards_the_global_rank() {
+    let app = TestApp::spawn().await;
+    let user = a_user(&app, "att_rank").await;
+    let project = a_project(&app, user).await;
+    a_verified_artifact(&app, project, user, "ml_model", "ml-engineer").await;
+
+    skilluv_backend::services::proof_hooks::recompute_all_for_user(&app.db, user)
+        .await
+        .unwrap();
+
+    // The rank counts deliverables and attestations without asking which
+    // domain they came from, which is the whole point of a rank: somebody
+    // who ships models and somebody who ships libraries are both craftspeople
+    // here. Asserted rather than assumed — nothing else would have caught a
+    // filter added to that query later.
+    let counted: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM attestations
+          WHERE user_id = $1 AND revoked_at IS NULL",
+    )
+    .bind(user)
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert_eq!(counted, 1);
+
+    let (_, rank, _) = skilluv_backend::services::ranks::recompute_rank_for_user(&app.db, user)
+        .await
+        .unwrap();
+    assert!(!rank.is_empty(), "the recompute must produce a rank");
+}
+
+#[tokio::test]
+async fn ten_closed_ai_missions_earn_the_veteran_badge() {
+    let app = TestApp::spawn().await;
+    let user = a_user(&app, "att_missions").await;
+
+    let enterprise = a_client(&app).await;
+
+    let mission_type: Uuid =
+        sqlx::query_scalar("SELECT id FROM mission_types WHERE slug = 'ai_model_training'")
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
+
+    for n in 0..10 {
+        sqlx::query(
+            "INSERT INTO missions
+                (enterprise_id, mission_type_id, skill_domain, slug, title, description,
+                 acceptance_criteria, deliverable_format, budget_eur, status,
+                 assigned_user_id, assigned_at, delivered_at, closed_at)
+             VALUES ($1, $2, 'ai', 'mission-ai-' || $3, $3, 'x',
+                     'Le modèle est livré avec sa fiche.', 'model_weights',
+                     1000, 'closed', $4, NOW(), NOW(), NOW())",
+        )
+        .bind(enterprise)
+        .bind(mission_type)
+        .bind(format!("Mission {n}"))
+        .bind(user)
+        .execute(&app.db)
+        .await
+        .unwrap();
+    }
+
+    skilluv_backend::services::proof_hooks::recompute_all_for_user(&app.db, user)
+        .await
+        .unwrap();
+
+    // Migration 0211 had to mark this one manual: paid missions had no table,
+    // and a rule counting something else would have awarded it to people who
+    // never did the thing it names. They have one now.
+    let awarded: Vec<String> = sqlx::query_scalar(
+        "SELECT r.slug FROM user_badges b
+           JOIN badge_rules r ON r.id = b.rule_id
+          WHERE b.user_id = $1 AND b.revoked_at IS NULL",
+    )
+    .bind(user)
+    .fetch_all(&app.db)
+    .await
+    .unwrap();
+
+    assert!(
+        awarded.contains(&"ai-mission-veteran".to_string()),
+        "ten closed AI missions must earn it, got {awarded:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_code_mission_does_not_earn_the_ai_badge() {
+    let app = TestApp::spawn().await;
+    let user = a_user(&app, "att_wrongdomain").await;
+
+    let enterprise = a_client(&app).await;
+
+    let mission_type: Uuid =
+        sqlx::query_scalar("SELECT id FROM mission_types WHERE skill_domain = 'code' LIMIT 1")
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
+
+    for n in 0..10 {
+        sqlx::query(
+            "INSERT INTO missions
+                (enterprise_id, mission_type_id, skill_domain, slug, title, description,
+                 acceptance_criteria, deliverable_format, budget_eur, status,
+                 assigned_user_id, assigned_at, delivered_at, closed_at)
+             VALUES ($1, $2, 'code', 'mission-code-' || $3, $3, 'x',
+                     'La pull request est fusionnée.', 'github_pr',
+                     1000, 'closed', $4, NOW(), NOW(), NOW())",
+        )
+        .bind(enterprise)
+        .bind(mission_type)
+        .bind(format!("Mission code {n}"))
+        .bind(user)
+        .execute(&app.db)
+        .await
+        .unwrap();
+    }
+
+    skilluv_backend::services::proof_hooks::recompute_all_for_user(&app.db, user)
+        .await
+        .unwrap();
+
+    let awarded: Vec<String> = sqlx::query_scalar(
+        "SELECT r.slug FROM user_badges b
+           JOIN badge_rules r ON r.id = b.rule_id
+          WHERE b.user_id = $1 AND b.revoked_at IS NULL",
+    )
+    .bind(user)
+    .fetch_all(&app.db)
+    .await
+    .unwrap();
+
+    assert!(
+        !awarded.contains(&"ai-mission-veteran".to_string()),
+        "the domain filter must hold, got {awarded:?}"
+    );
+}
+
+#[tokio::test]
 async fn the_badge_follows_the_attestation_in_the_same_pass() {
     let app = TestApp::spawn().await;
     let user = a_user(&app, "att_badge").await;
@@ -415,4 +569,55 @@ async fn the_badge_follows_the_attestation_in_the_same_pass() {
         awarded.contains(&"ai-model-shipped".to_string()),
         "the attestation and its badge must land together, got {awarded:?}"
     );
+}
+
+#[tokio::test]
+async fn an_ai_attestation_reaches_the_public_feed() {
+    let app = TestApp::spawn().await;
+    let user = a_user(&app, "att_feed").await;
+    let project = a_project(&app, user).await;
+    let slice = a_verified_artifact(&app, project, user, "ml_model", "ml-engineer").await;
+
+    ai_attestations::issue_for_slice(&app.db, slice)
+        .await
+        .unwrap();
+
+    // The landing page ticker is a projection written by whatever issues the
+    // proof. A feed line with nothing to open is the fabricated social proof
+    // migration 0203 exists to replace, so the artefact address is carried.
+    let row: Option<(String, String)> = sqlx::query_as(
+        "SELECT kind, artifact_url FROM public_artifact_events
+          WHERE subject_id = $1 AND source_type = 'attestation'",
+    )
+    .bind(user)
+    .fetch_optional(&app.db)
+    .await
+    .unwrap();
+
+    let (kind, url) = row.expect("the attestation must reach the feed");
+    assert_eq!(kind, "attestation_issued");
+    assert_eq!(url, "https://huggingface.co/skilluv/demo");
+}
+
+#[tokio::test]
+async fn issuing_the_same_attestation_twice_writes_one_feed_line() {
+    let app = TestApp::spawn().await;
+    let user = a_user(&app, "att_feed_once").await;
+    let project = a_project(&app, user).await;
+    let slice = a_verified_artifact(&app, project, user, "dataset", "data-engineer").await;
+
+    ai_attestations::issue_for_slice(&app.db, slice)
+        .await
+        .unwrap();
+    ai_attestations::issue_for_slice(&app.db, slice)
+        .await
+        .unwrap();
+
+    let lines: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM public_artifact_events WHERE subject_id = $1")
+            .bind(user)
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
+    assert_eq!(lines, 1);
 }

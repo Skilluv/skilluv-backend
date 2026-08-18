@@ -433,13 +433,33 @@ fn spawn_craft_score_worker(state: skilluv_backend::AppState) {
         interval.tick().await;
         loop {
             interval.tick().await;
-            match skilluv_backend::services::craft_score::sweep(&state.db, 500).await {
-                Ok(0) => tracing::debug!("craft_score worker : nothing stale"),
-                Ok(n) => tracing::info!(recomputed = n, "craft_score worker : scores refreshed"),
-                Err(e) => tracing::error!(
-                    error = %e,
-                    "craft_score worker : sweep failed, scores stay as they were"
+            // One worker, one sweep per domain. A second worker per domain
+            // would mean a second env flag somebody forgets to set, and the
+            // symptom is a domain whose listings quietly never sort.
+            for (domain, outcome) in [
+                (
+                    "code",
+                    skilluv_backend::services::craft_score::sweep(&state.db, 500).await,
                 ),
+                (
+                    "ai",
+                    skilluv_backend::services::ai_profile::sweep(&state.db, 500).await,
+                ),
+            ] {
+                match outcome {
+                    Ok(0) => tracing::debug!(domain, "craft_score worker : nothing stale"),
+                    Ok(n) => {
+                        tracing::info!(
+                            domain,
+                            recomputed = n,
+                            "craft_score worker : scores refreshed"
+                        )
+                    }
+                    Err(e) => tracing::error!(
+                        domain, error = %e,
+                        "craft_score worker : sweep failed, scores stay as they were"
+                    ),
+                }
             }
         }
     });

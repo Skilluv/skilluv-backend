@@ -29,7 +29,7 @@ async fn the_answers_come_back_as_they_went_in() {
                 "weekly_hours": "3_10",
                 "goal": "portfolio",
                 "compute": "none",
-                "main_framework": "pytorch",
+                "main_frameworks": ["pytorch"],
                 "huggingface_username": "quelquun"
             }),
         )
@@ -43,7 +43,7 @@ async fn the_answers_come_back_as_they_went_in() {
         .await
         .unwrap();
     assert_eq!(body["data"]["answers"]["compute"], "none");
-    assert_eq!(body["data"]["answers"]["main_framework"], "pytorch");
+    assert_eq!(body["data"]["answers"]["main_frameworks"][0], "pytorch");
     assert_eq!(body["data"]["answers"]["huggingface_username"], "quelquun");
 }
 
@@ -115,7 +115,7 @@ async fn two_domains_do_not_overwrite_each_other() {
 
     app.put(
         "/api/users/me/domain-profile/ai",
-        &json!({"main_framework": "jax"}),
+        &json!({"main_frameworks": ["jax"]}),
     )
     .await;
     app.put(
@@ -130,7 +130,7 @@ async fn two_domains_do_not_overwrite_each_other() {
         .json()
         .await
         .unwrap();
-    assert_eq!(ai["data"]["answers"]["main_framework"], "jax");
+    assert_eq!(ai["data"]["answers"]["main_frameworks"][0], "jax");
 }
 
 #[tokio::test]
@@ -142,4 +142,95 @@ async fn the_wizard_needs_an_account() {
         .await
         .unwrap();
     assert_eq!(resp.status().as_u16(), 401);
+}
+
+#[tokio::test]
+async fn skipping_is_not_the_same_as_answering_nothing() {
+    let app = TestApp::spawn().await;
+    app.register_user("wiz_skip").await;
+
+    let before: serde_json::Value = app
+        .get("/api/users/me/domain-profile/ai")
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert!(before["data"]["skipped_at"].is_null());
+    assert!(before["data"]["completed_at"].is_null());
+
+    let resp = app
+        .post("/api/users/me/domain-profile/ai/skip", &json!({}))
+        .await;
+    assert_eq!(resp.status().as_u16(), 200, "{:?}", resp.text().await);
+
+    // Without this distinction the wizard reappears forever for exactly the
+    // people who least wanted it.
+    let after: serde_json::Value = app
+        .get("/api/users/me/domain-profile/ai")
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert!(!after["data"]["skipped_at"].is_null());
+    assert!(after["data"]["completed_at"].is_null());
+}
+
+#[tokio::test]
+async fn answering_after_skipping_undoes_the_skip() {
+    let app = TestApp::spawn().await;
+    app.register_user("wiz_unskip").await;
+
+    app.post("/api/users/me/domain-profile/ai/skip", &json!({}))
+        .await;
+    app.put(
+        "/api/users/me/domain-profile/ai",
+        &json!({"level": "practitioner"}),
+    )
+    .await;
+
+    // Somebody who said "stop asking" and then answered has changed their
+    // mind; leaving the old timestamp would keep the profile reading as
+    // skipped forever.
+    let after: serde_json::Value = app
+        .get("/api/users/me/domain-profile/ai")
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert!(after["data"]["skipped_at"].is_null());
+    assert!(!after["data"]["completed_at"].is_null());
+}
+
+#[tokio::test]
+async fn the_two_wizards_do_not_share_a_row() {
+    let app = TestApp::spawn().await;
+    app.register_user("wiz_both").await;
+
+    app.put(
+        "/api/users/me/domain-profile/ai",
+        &json!({"main_frameworks": ["jax"]}),
+    )
+    .await;
+    app.post("/api/users/me/domain-profile/code/skip", &json!({}))
+        .await;
+
+    // Migration 0235 brought the code answers into this table. One row per
+    // person per domain: answering one wizard must not mark the other done.
+    let ai: serde_json::Value = app
+        .get("/api/users/me/domain-profile/ai")
+        .await
+        .json()
+        .await
+        .unwrap();
+    let code: serde_json::Value = app
+        .get("/api/users/me/domain-profile/code")
+        .await
+        .json()
+        .await
+        .unwrap();
+
+    assert_eq!(ai["data"]["answers"]["main_frameworks"][0], "jax");
+    assert!(!ai["data"]["completed_at"].is_null());
+    assert!(code["data"]["completed_at"].is_null());
+    assert!(!code["data"]["skipped_at"].is_null());
 }

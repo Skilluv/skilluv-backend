@@ -12,17 +12,12 @@
 -- validated in the handler where the vocabulary lives, not in a CHECK that
 -- would need a migration every time an option is reworded.
 --
--- ## What is deliberately not in here
+-- ## The disagreement that used to be here
 --
--- The trades somebody claims. `user_orientations` has held those since 0089,
--- with a cap and a history, and a second copy in a JSONB blob is how the two
--- start disagreeing. The wizard writes there.
---
--- ## Declared, not proven
---
--- Everything here is self-reported, and it is used to recommend rather than
--- to credit: nothing in this table reaches a rank, a badge or a craft score.
--- Someone writing "researcher" gets shown harder challenges, not a title.
+-- Migration 0201 made the opposite choice for the code domain: eight
+-- `users.code_*` columns. Both shapes coexisted for a while and this comment
+-- recorded why. Migration 0306 settles it — the code answers moved here and
+-- the columns are gone — and states the reasoning.
 
 CREATE TABLE user_domain_profiles (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

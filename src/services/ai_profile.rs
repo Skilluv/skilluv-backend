@@ -1,134 +1,343 @@
-//! What somebody has actually done in the AI trades, and a single number for
-//! it.
+//! The AI craft score (migration 0300).
 //!
-//! ## Why nothing is stored
+//! The second domain to score, and deliberately a second module rather than a
+//! branch in [`crate::services::craft_score`] — which is what that module
+//! says should happen. The formula, the tiers and the storage are shared and
+//! keyed by domain; only the measuring differs, because it reads different
+//! tables.
 //!
-//! The backlog asked for a `craft_score_ai` column. A stored score is wrong
-//! within minutes of the next attestation and has no way of knowing it — and
-//! when a proof is revoked, the column keeps the points unless somebody
-//! remembers to recompute. Every count here derives from proofs that are
-//! already immutable, the same rule the badge engine follows. The endpoint
-//! caches for a few minutes; the database holds no duplicate of the truth.
+//! ## What is stored and what is not
+//!
+//! The number and its tier, in `craft_scores`, so a recruiter listing can
+//! sort without recomputing fourteen counts per row. Everything else —
+//! including the breakdown — is derived on read, and the endpoint recomputes
+//! rather than reading the stored figure: a profile page showing a score an
+//! hour out of date is showing a revoked attestation still counting.
 //!
 //! ## What the score is made of, and what it is not
 //!
-//! Each term is something a stranger can go and check: an attestation with a
-//! basis, a benchmark somebody re-ran, a download count fetched from a hub.
-//!
-//! Two terms the backlog listed are absent, and their absence is the honest
-//! answer rather than an omission:
-//!
-//!   * *paid missions* — there is no missions table. A term reading zero for
-//!     everybody would suggest the platform measures something it does not.
-//!   * *average review grade* — reviews record a verdict and a body, not a
-//!     score. Inventing one from `approve`/`reject` would turn a binary into
-//!     a grade nobody gave.
+//! Each term counts something a stranger can go and check: an attestation
+//! with a basis, a benchmark somebody re-ran, a download figure fetched from
+//! a hub. The weights live in `craft_score_weights` so the ratios can be
+//! argued with in the admin panel instead of in a pull request.
 //!
 //! ## Why revoked work scores nothing
 //!
-//! Every query filters `revoked_at IS NULL`. A score that survives the
-//! revocation of what it rests on is the exact failure this platform sells
-//! against.
+//! Every count reads `countable_deliverables` or filters `revoked_at IS
+//! NULL`. A score that survives the revocation of what it rests on is the
+//! exact failure this platform sells against.
 
+use bigdecimal::{BigDecimal, ToPrimitive};
 use serde::Serialize;
 use sqlx::PgPool;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::errors::AppError;
+use crate::services::craft_score::{self, CraftScore, Term};
 
-// ═══════════════════════════════════════════════════════════════════
-// Weights
-// ═══════════════════════════════════════════════════════════════════
-//
-// Ordered by what the work costs. A verified artefact is a week; a published
-// model with a card is several; a paper is months. The ratios say that, and
-// nothing here is tuned against data we do not have yet — these are a stated
-// editorial position, not a measurement.
+/// The domain this module scores.
+pub const DOMAIN: &str = "ai";
 
-/// Any verified AI deliverable. Deliberately small: the specific attestations
-/// below are where shipped work earns its weight, and counting both would pay
-/// twice for one piece of work.
-const PER_VERIFIED_ARTIFACT: i64 = 5;
-const PER_MODEL_SHIPPED: i64 = 60;
-const PER_DATASET_PUBLISHED: i64 = 40;
-const PER_AGENT_SYSTEM: i64 = 50;
-const PER_PAPER: i64 = 100;
-/// Only reproduced benchmarks score. An unverified SOTA claim is the single
-/// easiest thing to overstate in this domain, and paying for it would make
-/// the score reward the claim rather than the result.
-const PER_BENCHMARK_REPRODUCED: i64 = 150;
-const PER_SAFETY_FINDING: i64 = 80;
-const PER_FEATURED: i64 = 200;
-/// Per year since the first verified AI artefact. Small, because time is not
-/// work — it is only evidence that the work was not a single burst.
-const PER_YEAR_ACTIVE: i64 = 30;
-
-/// Bonus for total monthly downloads across every published model and
-/// dataset, in steps rather than proportionally.
+/// The same ceiling as every other domain, and deliberately.
 ///
-/// Capped, and the cap is the point: downloads measure reach, which depends
-/// on the subject as much as on the craft. One model that goes around the
-/// world should not outweigh a career.
-fn downloads_bonus(downloads: i64) -> i64 {
-    match downloads {
-        d if d >= 100_000 => 400,
-        d if d >= 10_000 => 200,
-        d if d >= 1_000 => 75,
-        d if d >= 100 => 25,
-        _ => 0,
-    }
+/// Migration 0204 shares one set of tiers across all of them, because a tier
+/// is a position on a scale and each scale is calibrated by its own weights.
+/// A domain-specific cap breaks that as surely as domain-specific names
+/// would: a ceiling of six thousand puts `principal`, which starts at seven,
+/// permanently out of reach.
+///
+/// What makes AI score differently is the weights, which are lower in
+/// aggregate. That is the whole mechanism.
+pub const CAP: i32 = craft_score::CAP;
+
+/// Everything the formula counts, in one round-trip.
+///
+/// One query rather than thirteen: this runs for every profile on a sweep,
+/// and thirteen round-trips per person is the difference between a sweep that
+/// finishes and one that does not.
+#[derive(sqlx::FromRow)]
+struct Measurements {
+    attestations_ai: i64,
+    models_shipped: i64,
+    datasets_published: i64,
+    agent_systems_deployed: i64,
+    papers_published: i64,
+    benchmarks_reproduced: i64,
+    safety_findings_validated: i64,
+    missions_completed: i64,
+    hub_downloads: i64,
+    review_grid_average: Option<BigDecimal>,
+    orientations_distinct: i64,
+    years_active: i64,
+    featured_times: i64,
 }
 
-/// Where a score places somebody. The names are the ones the trade uses.
-fn tier_for(score: i64) -> &'static str {
-    match score {
-        s if s >= 3_500 => "researcher",
-        s if s >= 1_500 => "senior",
-        s if s >= 500 => "engineer",
-        s if s >= 100 => "practitioner",
-        _ => "apprentice",
-    }
+/// The seven AI bases, as a SQL list. Written once so a basis added to the
+/// schema and forgotten here shows up as a term that stops counting rather
+/// than as a silent undercount spread across four queries.
+const AI_BASES: &str = "'ai_model_shipped', 'ai_dataset_published', \
+                        'ai_agent_system_deployed', 'ai_paper_published', \
+                        'ai_benchmark_result', 'ai_safety_finding_validated', \
+                        'featured_ai_researcher'";
+
+async fn measure(db: &PgPool, user_id: Uuid) -> Result<Measurements, AppError> {
+    // The basis list is a compile-time constant, never anything a caller
+    // supplies: it reaches SQL as text because a bound array would need a
+    // cast in seven places for no gain.
+    let sql = format!(
+        r#"
+        SELECT
+            (SELECT count(*) FROM attestations
+              WHERE user_id = $1 AND revoked_at IS NULL AND basis IN ({AI_BASES}))
+                AS attestations_ai,
+
+            (SELECT count(*) FROM attestations
+              WHERE user_id = $1 AND revoked_at IS NULL
+                AND basis = 'ai_model_shipped')
+                AS models_shipped,
+
+            (SELECT count(*) FROM attestations
+              WHERE user_id = $1 AND revoked_at IS NULL
+                AND basis = 'ai_dataset_published')
+                AS datasets_published,
+
+            (SELECT count(*) FROM attestations
+              WHERE user_id = $1 AND revoked_at IS NULL
+                AND basis = 'ai_agent_system_deployed')
+                AS agent_systems_deployed,
+
+            (SELECT count(*) FROM attestations
+              WHERE user_id = $1 AND revoked_at IS NULL
+                AND basis = 'ai_paper_published')
+                AS papers_published,
+
+            -- Only reproduced benchmarks. An unverified record is the single
+            -- easiest thing to overstate in this domain, and paying for it
+            -- would make the score reward the claim rather than the result.
+            (SELECT count(DISTINCT br.id)
+               FROM benchmark_results br
+               JOIN countable_deliverables d ON d.slice_id = br.slice_id
+              WHERE d.user_id = $1 AND br.reproduced_at IS NOT NULL)
+                AS benchmarks_reproduced,
+
+            (SELECT count(*) FROM attestations
+              WHERE user_id = $1 AND revoked_at IS NULL
+                AND basis = 'ai_safety_finding_validated')
+                AS safety_findings_validated,
+
+            (SELECT count(*) FROM missions
+              WHERE assigned_user_id = $1 AND status = 'closed'
+                AND skill_domain = 'ai')
+                AS missions_completed,
+
+            -- Monthly downloads across published models and datasets. NULL
+            -- stays out of the sum: a hub that measures nothing must not read
+            -- as zero. Cast because summing bigints gives a NUMERIC, which
+            -- fails to decode into an i64 at runtime rather than at compile
+            -- time.
+            (SELECT COALESCE(sum(COALESCE(ps.downloads_recent, ps.downloads_total)), 0)::BIGINT
+               FROM published_artifact_stats ps
+               JOIN countable_deliverables d ON d.slice_id = ps.slice_id
+              WHERE d.user_id = $1
+                AND ps.registry IN ('huggingface_models', 'huggingface_datasets',
+                                    'kaggle_datasets'))
+                AS hub_downloads,
+
+            -- Only scorings made against an AI grid. Averaging every grid a
+            -- person has ever been scored on would let a strong code reviewer
+            -- lift an AI score, and the term claims to measure AI work.
+            (SELECT avg(rgs.average)
+               FROM review_grid_scores rgs
+               JOIN review_grids g ON g.id = rgs.grid_id
+               JOIN reviews r ON r.id = rgs.review_id
+               JOIN deliverables d ON d.id = r.deliverable_id
+              WHERE d.user_id = $1 AND d.revoked_at IS NULL
+                AND g.domain = 'ai')
+                AS review_grid_average,
+
+            (SELECT count(DISTINCT o.id)
+               FROM countable_deliverables d
+               JOIN project_slices ps ON ps.id = d.slice_id
+               JOIN orientations o ON o.id = ps.orientation_id
+              WHERE d.user_id = $1 AND o.primary_domain = 'ai')
+                AS orientations_distinct,
+
+            -- Whole years, floored: somebody eleven months in has been active
+            -- for zero, which stops the term paying out on the first day.
+            (SELECT COALESCE(
+                      floor(EXTRACT(EPOCH FROM (NOW() - min(d.created_at)))
+                            / (365.25 * 86400)), 0)::BIGINT
+               FROM countable_deliverables d
+               LEFT JOIN challenge_templates ct ON ct.id = d.challenge_id
+               LEFT JOIN project_slices ps ON ps.id = d.slice_id
+               LEFT JOIN orientations o ON o.id = ps.orientation_id
+              WHERE d.user_id = $1
+                AND (ct.skill_domain = 'ai' OR o.primary_domain = 'ai'))
+                AS years_active,
+
+            (SELECT count(*) FROM attestations
+              WHERE user_id = $1 AND revoked_at IS NULL
+                AND basis = 'featured_ai_researcher')
+                AS featured_times
+        "#
+    );
+
+    Ok(sqlx::query_as::<_, Measurements>(sqlx::AssertSqlSafe(sql))
+        .bind(user_id)
+        .fetch_one(db)
+        .await?)
 }
 
-#[derive(Debug, Serialize, ToSchema, Default)]
-pub struct AiProofCounts {
-    /// Verified deliverables in the AI domain, whatever they produced.
-    pub verified_artifacts: i64,
-    pub models_shipped: i64,
-    pub datasets_published: i64,
-    pub agent_systems_deployed: i64,
-    pub papers_published: i64,
-    /// Benchmarks a reviewer re-ran and confirmed. Claims nobody checked are
-    /// not counted here and score nothing.
-    pub benchmarks_reproduced: i64,
-    pub safety_findings_validated: i64,
-    pub featured_times: i64,
+/// The score, its tier and what it is made of. Nothing is written.
+pub async fn compute(db: &PgPool, user_id: Uuid) -> Result<CraftScore, AppError> {
+    let weights = craft_score::weights_for(db, DOMAIN).await?;
+    let m = measure(db, user_id).await?;
+
+    let mut breakdown = Vec::new();
+    let mut total: i64 = 0;
+
+    for w in weights {
+        let measured: f64 = match w.term.as_str() {
+            "attestations_ai" => m.attestations_ai as f64,
+            "models_shipped" => m.models_shipped as f64,
+            "datasets_published" => m.datasets_published as f64,
+            "agent_systems_deployed" => m.agent_systems_deployed as f64,
+            "papers_published" => m.papers_published as f64,
+            "benchmarks_reproduced" => m.benchmarks_reproduced as f64,
+            "safety_findings_validated" => m.safety_findings_validated as f64,
+            "missions_completed" => m.missions_completed as f64,
+            "hub_downloads" => m.hub_downloads as f64,
+            "review_grid_average" => match &m.review_grid_average {
+                Some(avg) => avg.to_f64().unwrap_or(0.0),
+                // Nobody has scored this person's AI work. Skipped rather
+                // than counted as zero: an unscored average would subtract
+                // the whole baseline from the total.
+                None => continue,
+            },
+            "orientations_distinct" => m.orientations_distinct as f64,
+            "years_active" => m.years_active as f64,
+            "featured_times" => m.featured_times as f64,
+            unknown => {
+                // Somebody added a row proposing a term. The answer to an
+                // unimplemented proposal is silence in the total.
+                tracing::warn!(
+                    term = unknown,
+                    "craft_score_weights names an AI term nothing knows how to count"
+                );
+                continue;
+            }
+        };
+
+        if measured == 0.0 {
+            continue;
+        }
+
+        let points = craft_score::points_for(
+            &w.kind,
+            w.weight.to_f64().unwrap_or(0.0),
+            w.baseline.as_ref().and_then(|b| b.to_f64()),
+            measured,
+        );
+        if points == 0 {
+            continue;
+        }
+
+        total += points as i64;
+        breakdown.push(Term {
+            term: w.term,
+            measured,
+            points,
+            explanation: w.explanation,
+        });
+    }
+
+    let capped = total > CAP as i64;
+    let score = total.min(CAP as i64) as i32;
+    let (tier_slug, tier_name, tier_description, next_tier_at) =
+        craft_score::resolve_tier(db, DOMAIN, score).await?;
+
+    Ok(CraftScore {
+        score,
+        tier_slug,
+        tier_name,
+        tier_description,
+        next_tier_at,
+        breakdown,
+        capped,
+    })
 }
+
+/// Compute and store, so a listing can sort without recomputing.
+pub async fn recompute(db: &PgPool, user_id: Uuid) -> Result<CraftScore, AppError> {
+    let computed = compute(db, user_id).await?;
+    craft_score::store(db, user_id, DOMAIN, computed.score, &computed.tier_slug).await?;
+    Ok(computed)
+}
+
+/// Recompute everybody whose AI score is stale or was never computed.
+///
+/// Bounded per pass and oldest first, like the code sweep: one that tries the
+/// whole table at once never reaches the end of the alphabet.
+pub async fn sweep(db: &PgPool, batch: i64) -> Result<u64, AppError> {
+    let stale: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT u.id FROM users u
+           LEFT JOIN craft_scores cs
+                  ON cs.user_id = u.id AND cs.skill_domain = $2
+          WHERE u.is_banned = FALSE
+            AND (cs.computed_at IS NULL
+                 OR cs.computed_at < NOW() - INTERVAL '1 hour')
+          ORDER BY cs.computed_at NULLS FIRST
+          LIMIT $1",
+    )
+    .bind(batch)
+    .bind(DOMAIN)
+    .fetch_all(db)
+    .await?;
+
+    let mut done = 0u64;
+    for user_id in stale {
+        // One failure must not stop the sweep: the next pass picks it up, and
+        // stopping would leave everybody after it stale forever.
+        match recompute(db, user_id).await {
+            Ok(_) => done += 1,
+            Err(e) => {
+                tracing::error!(user = %user_id, error = %e, "AI craft score recompute failed")
+            }
+        }
+    }
+    metrics::counter!("skilluv_ai_craft_score_recomputed_total").increment(done);
+    Ok(done)
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// The public profile
+// ═══════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct AiProfile {
     pub username: String,
-    pub craft_score: i64,
-    /// `apprentice`, `practitioner`, `engineer`, `senior`, `researcher`.
-    pub tier: &'static str,
-    pub counts: AiProofCounts,
+    pub craft_score: i32,
+    /// `apprentice`, `contributor`, `engineer`, `senior`, `staff`,
+    /// `principal` — the same six every domain uses, so somebody can compare
+    /// their own two profiles.
+    pub tier: String,
+    pub tier_name: String,
+    pub tier_description: String,
+    pub next_tier_at: Option<i32>,
+    /// What was counted and what each count was worth. A score with no
+    /// explanation is a number somebody has to trust.
+    pub breakdown: Vec<Term>,
+    pub capped: bool,
     /// Trades this person has verified work in, by slug.
     pub orientations: Vec<String>,
-    /// Monthly downloads summed across published models and datasets. NULL is
-    /// impossible here — no published artefact reads as zero, which is true.
-    pub hub_downloads_recent: i64,
-    pub hub_likes: i64,
-    /// Whole years since the first verified AI artefact.
-    pub years_active: i64,
 }
 
 /// Everything one person has to show in the AI trades.
 ///
-/// Six queries rather than one join: the counts come from different tables
-/// with different revocation rules, and folding them together produced a
-/// query nobody could read and whose `count(DISTINCT …)` were easy to get
-/// silently wrong.
+/// Recomputes rather than reading the stored figure: the sweep runs hourly,
+/// and a profile page showing an hour-old score is a page showing a revoked
+/// attestation still counting.
 pub async fn build(db: &PgPool, username: &str) -> Result<AiProfile, AppError> {
     let user_id: Option<Uuid> = sqlx::query_scalar("SELECT id FROM users WHERE username = $1")
         .bind(username)
@@ -138,193 +347,29 @@ pub async fn build(db: &PgPool, username: &str) -> Result<AiProfile, AppError> {
         return Err(AppError::NotFound(format!("user '{username}' not found")));
     };
 
-    // A deliverable is AI work if its challenge says so, or if the slice it
-    // came from belongs to an AI trade. Both, because the two paths into the
-    // platform — a challenge and an ingested issue — carry the domain in
-    // different places, and reading only one would lose half the work.
-    let verified_artifacts = sqlx::query_scalar(
-        r#"
-        SELECT count(DISTINCT d.id)
-          FROM deliverables d
-          LEFT JOIN challenge_templates ct ON ct.id = d.challenge_id
-          LEFT JOIN project_slices ps ON ps.id = d.slice_id
-          LEFT JOIN orientations o ON o.id = ps.orientation_id
-         WHERE d.user_id = $1
-           AND d.verification_status = 'verified'
-           AND d.revoked_at IS NULL
-           AND (ct.skill_domain = 'ai' OR o.primary_domain = 'ai')
-        "#,
-    )
-    .bind(user_id)
-    .fetch_one(db)
-    .await?;
-
-    let mut counts = AiProofCounts {
-        verified_artifacts,
-        ..Default::default()
-    };
-
-    let by_basis: Vec<(String, i64)> = sqlx::query_as(
-        r#"
-        SELECT basis, count(*)
-          FROM attestations
-         WHERE user_id = $1
-           AND revoked_at IS NULL
-           AND basis IN ('ai_model_shipped', 'ai_dataset_published',
-                         'ai_agent_system_deployed', 'ai_paper_published',
-                         'ai_safety_finding_validated', 'featured_ai_researcher')
-         GROUP BY basis
-        "#,
-    )
-    .bind(user_id)
-    .fetch_all(db)
-    .await?;
-
-    for (basis, n) in by_basis {
-        match basis.as_str() {
-            "ai_model_shipped" => counts.models_shipped = n,
-            "ai_dataset_published" => counts.datasets_published = n,
-            "ai_agent_system_deployed" => counts.agent_systems_deployed = n,
-            "ai_paper_published" => counts.papers_published = n,
-            "ai_safety_finding_validated" => counts.safety_findings_validated = n,
-            "featured_ai_researcher" => counts.featured_times = n,
-            // The IN clause above is the list. A value reaching here means
-            // somebody widened one of the two without the other.
-            other => tracing::warn!(basis = %other, "unhandled AI attestation basis"),
-        }
-    }
-
-    counts.benchmarks_reproduced = sqlx::query_scalar(
-        r#"
-        SELECT count(DISTINCT br.id)
-          FROM benchmark_results br
-          JOIN deliverables d ON d.slice_id = br.slice_id
-         WHERE d.user_id = $1
-           AND d.verification_status = 'verified'
-           AND d.revoked_at IS NULL
-           AND br.reproduced_at IS NOT NULL
-        "#,
-    )
-    .bind(user_id)
-    .fetch_one(db)
-    .await?;
-
-    let (hub_downloads_recent, hub_likes): (i64, i64) = sqlx::query_as(
-        r#"
-        SELECT COALESCE(sum(st.downloads_recent), 0)::BIGINT,
-               COALESCE(sum(st.likes_count), 0)::BIGINT
-          FROM published_artifact_stats st
-          JOIN deliverables d ON d.slice_id = st.slice_id
-         WHERE d.user_id = $1
-           AND d.verification_status = 'verified'
-           AND d.revoked_at IS NULL
-           AND st.registry IN ('huggingface_models', 'huggingface_datasets',
-                               'kaggle_datasets')
-        "#,
-    )
-    .bind(user_id)
-    .fetch_one(db)
-    .await?;
+    let score = recompute(db, user_id).await?;
 
     let orientations: Vec<String> = sqlx::query_scalar(
-        r#"
-        SELECT DISTINCT o.slug
-          FROM deliverables d
-          JOIN project_slices ps ON ps.id = d.slice_id
-          JOIN orientations o ON o.id = ps.orientation_id
-         WHERE d.user_id = $1
-           AND d.verification_status = 'verified'
-           AND d.revoked_at IS NULL
-           AND o.primary_domain = 'ai'
-         ORDER BY o.slug
-        "#,
+        "SELECT DISTINCT o.slug
+           FROM countable_deliverables d
+           JOIN project_slices ps ON ps.id = d.slice_id
+           JOIN orientations o ON o.id = ps.orientation_id
+          WHERE d.user_id = $1 AND o.primary_domain = 'ai'
+          ORDER BY o.slug",
     )
     .bind(user_id)
     .fetch_all(db)
     .await?;
-
-    // Whole years, floored. Somebody eleven months in has been active for
-    // zero years, which is the honest reading and stops the term from paying
-    // out on the first day.
-    let years_active: i64 = sqlx::query_scalar(
-        r#"
-        SELECT COALESCE(
-                 floor(EXTRACT(EPOCH FROM (NOW() - min(d.created_at)))
-                       / (365.25 * 86400)),
-                 0)::BIGINT
-          FROM deliverables d
-          LEFT JOIN challenge_templates ct ON ct.id = d.challenge_id
-          LEFT JOIN project_slices ps ON ps.id = d.slice_id
-          LEFT JOIN orientations o ON o.id = ps.orientation_id
-         WHERE d.user_id = $1
-           AND d.verification_status = 'verified'
-           AND d.revoked_at IS NULL
-           AND (ct.skill_domain = 'ai' OR o.primary_domain = 'ai')
-        "#,
-    )
-    .bind(user_id)
-    .fetch_one(db)
-    .await?;
-
-    let craft_score = counts.verified_artifacts * PER_VERIFIED_ARTIFACT
-        + counts.models_shipped * PER_MODEL_SHIPPED
-        + counts.datasets_published * PER_DATASET_PUBLISHED
-        + counts.agent_systems_deployed * PER_AGENT_SYSTEM
-        + counts.papers_published * PER_PAPER
-        + counts.benchmarks_reproduced * PER_BENCHMARK_REPRODUCED
-        + counts.safety_findings_validated * PER_SAFETY_FINDING
-        + counts.featured_times * PER_FEATURED
-        + years_active * PER_YEAR_ACTIVE
-        + downloads_bonus(hub_downloads_recent);
 
     Ok(AiProfile {
         username: username.to_string(),
-        craft_score,
-        tier: tier_for(craft_score),
-        counts,
+        craft_score: score.score,
+        tier: score.tier_slug,
+        tier_name: score.tier_name,
+        tier_description: score.tier_description,
+        next_tier_at: score.next_tier_at,
+        breakdown: score.breakdown,
+        capped: score.capped,
         orientations,
-        hub_downloads_recent,
-        hub_likes,
-        years_active,
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_tiers_do_not_overlap_or_leave_a_gap() {
-        assert_eq!(tier_for(0), "apprentice");
-        assert_eq!(tier_for(99), "apprentice");
-        assert_eq!(tier_for(100), "practitioner");
-        assert_eq!(tier_for(499), "practitioner");
-        assert_eq!(tier_for(500), "engineer");
-        assert_eq!(tier_for(1_499), "engineer");
-        assert_eq!(tier_for(1_500), "senior");
-        assert_eq!(tier_for(3_499), "senior");
-        assert_eq!(tier_for(3_500), "researcher");
-    }
-
-    #[test]
-    fn reach_is_bounded() {
-        // A model that goes around the world is worth noticing and must not
-        // outweigh everything else somebody has done.
-        assert_eq!(downloads_bonus(0), 0);
-        assert_eq!(downloads_bonus(99), 0);
-        assert_eq!(downloads_bonus(100), 25);
-        assert_eq!(downloads_bonus(1_000), 75);
-        assert_eq!(downloads_bonus(10_000), 200);
-        assert_eq!(downloads_bonus(100_000), 400);
-        assert_eq!(downloads_bonus(50_000_000), 400);
-    }
-
-    // The ordering is the editorial position; a change that inverts it should
-    // have to change this and say why. Compile-time, because both sides are
-    // constants — a build that gets the ordering wrong should not produce a
-    // binary at all.
-    const _: () = assert!(PER_PAPER > PER_MODEL_SHIPPED);
-    const _: () = assert!(PER_MODEL_SHIPPED > PER_DATASET_PUBLISHED);
-    const _: () = assert!(PER_DATASET_PUBLISHED > PER_VERIFIED_ARTIFACT);
-    const _: () = assert!(PER_BENCHMARK_REPRODUCED > PER_PAPER);
 }

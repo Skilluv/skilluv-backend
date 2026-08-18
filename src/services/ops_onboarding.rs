@@ -282,27 +282,31 @@ pub async fn complete(
         }
     }
 
+    // One row per person per domain (migration 0306). Replaces the whole
+    // answer object rather than merging: the wizard sends every question it
+    // asked, and merging would keep an answer the person has just cleared.
+    let stored = serde_json::json!({
+        "level": answers.level,
+        "trades": answers.trades,
+        "cloud_experience": answers.cloud_experience,
+        "weekly_hours": answers.weekly_hours,
+        "objective": answers.objective,
+        "oncall_experience": answers.oncall_experience,
+    });
+
     sqlx::query(
         r#"
-        UPDATE users
-           SET ops_onboarding_completed_at = NOW(),
-               ops_onboarding_skipped_at = NULL,
-               ops_level = $2,
-               ops_trades = $3,
-               ops_cloud_experience = $4,
-               ops_weekly_hours = $5,
-               ops_objective = $6,
-               ops_oncall_experience = $7
-         WHERE id = $1
+        INSERT INTO user_domain_profiles (user_id, domain, answers, completed_at)
+        VALUES ($1, 'ops', $2, NOW())
+        ON CONFLICT (user_id, domain) DO UPDATE
+            SET answers      = EXCLUDED.answers,
+                completed_at = NOW(),
+                -- Answering is un-skipping.
+                skipped_at   = NULL
         "#,
     )
     .bind(user_id)
-    .bind(&answers.level)
-    .bind(&answers.trades)
-    .bind(&answers.cloud_experience)
-    .bind(&answers.weekly_hours)
-    .bind(&answers.objective)
-    .bind(&answers.oncall_experience)
+    .bind(&stored)
     .execute(db)
     .await?;
 
@@ -311,10 +315,16 @@ pub async fn complete(
 
 /// Stop asking.
 pub async fn skip(db: &PgPool, user_id: Uuid) -> Result<(), AppError> {
-    sqlx::query("UPDATE users SET ops_onboarding_skipped_at = NOW() WHERE id = $1")
-        .bind(user_id)
-        .execute(db)
-        .await?;
+    sqlx::query(
+        r#"
+        INSERT INTO user_domain_profiles (user_id, domain, skipped_at)
+        VALUES ($1, 'ops', NOW())
+        ON CONFLICT (user_id, domain) DO UPDATE SET skipped_at = NOW()
+        "#,
+    )
+    .bind(user_id)
+    .execute(db)
+    .await?;
     Ok(())
 }
 

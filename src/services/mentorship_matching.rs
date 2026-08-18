@@ -1,10 +1,20 @@
-//! Matching a code mentee with a code mentor.
+//! Matching a mentee with a mentor, in whichever domain they work in.
 //!
 //! Generic mentorship matching asks "who is available and knows this area".
-//! For code that is not enough: thirty-three trades and a dozen ecosystems
-//! mean "knows this area" can be true and useless — a kernel engineer is not
-//! the right person to review somebody's first React component, and both of
-//! them would find that out an hour into a paid session.
+//! That is not enough: thirty-three code trades and ten AI ones mean "knows
+//! this area" can be true and useless — a kernel engineer is not the right
+//! person to review somebody's first React component, an MLOps engineer is
+//! not the right person to read an alignment experiment, and both pairs would
+//! find that out an hour into a paid session.
+//!
+//! ## One module, two domains
+//!
+//! Everything that decides the ordering is domain-agnostic: shared families,
+//! shared tools, the score gap, the timezone, the load. What differs is a
+//! handful of strings — which domain to score, which answer key holds the
+//! tools, how many mentees is too many — so they are a [`DomainRules`] value
+//! rather than a second copy of four hundred lines that would drift within a
+//! month.
 //!
 //! ## What the score is made of, and why each part is there
 //!
@@ -36,21 +46,69 @@ pub const MIN_SCORE_GAP: i32 = 500;
 /// Beyond three hours, "let us find an hour" means somebody's midnight.
 pub const MAX_TIMEZONE_GAP_HOURS: i32 = 3;
 
-/// More than five active mentees and the sixth gets what is left over.
-/// Higher than the other domains' because this is the most populated one, and
-/// a lower cap would leave most people unmatched.
-pub const MAX_ACTIVE_MENTEES: i64 = 5;
+/// What differs between domains, and nothing else does.
+#[derive(Debug, Clone, Copy)]
+pub struct DomainRules {
+    /// The `skill_domain` whose craft score and profile answers are read.
+    pub domain: &'static str,
+    /// The key in `user_domain_profiles.answers` holding what somebody works
+    /// with — languages for code, frameworks for AI. Both are arrays, because
+    /// nobody uses exactly one.
+    pub tools_key: &'static str,
+    /// The key holding what they picked to work on. `preferred_families` for
+    /// code and AI, whose wizards ask for review families; `trades` for ops,
+    /// whose wizard asks for the job. Same role, different word, and using
+    /// one word for both would make one of the two wizards read wrong.
+    pub families_key: &'static str,
+    /// Past this, a mentor has nothing left to give the next person.
+    pub max_active_mentees: i64,
+    /// What the tools are called when the reasoning is written out. "Partage
+    /// tes langages" reads wrong to somebody who answered PyTorch.
+    pub tools_label: &'static str,
+}
 
-#[derive(Debug, Clone, Serialize)]
+/// Five, because this is the most populated domain and a lower cap would
+/// leave most people unmatched.
+pub const CODE: DomainRules = DomainRules {
+    domain: "code",
+    tools_key: "main_languages",
+    families_key: "preferred_families",
+    max_active_mentees: 5,
+    tools_label: "langages",
+};
+
+/// Three, because the domain is smaller and a session is longer: reading
+/// somebody's training run is not reviewing a pull request.
+pub const AI: DomainRules = DomainRules {
+    domain: "ai",
+    tools_key: "main_frameworks",
+    families_key: "preferred_families",
+    max_active_mentees: 3,
+    tools_label: "outils",
+};
+
+/// Four, lower than code's five: an ops mentee often arrives with a system
+/// that is on fire, and a mentor carrying four of those is carrying four
+/// emergencies rather than four conversations.
+pub const OPS: DomainRules = DomainRules {
+    domain: "ops",
+    tools_key: "cloud_experience",
+    families_key: "trades",
+    max_active_mentees: 4,
+    tools_label: "plateformes",
+};
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct Match {
     pub mentor_user_id: Uuid,
     pub username: String,
     pub headline: String,
-    pub craft_score_code: i32,
+    pub craft_score: i32,
     pub score: i32,
     /// Which families you have in common.
     pub shared_families: Vec<String>,
-    pub shared_languages: Vec<String>,
+    /// Languages for code, frameworks for AI.
+    pub shared_tools: Vec<String>,
     pub timezone_gap_hours: Option<i32>,
     pub active_mentees: i64,
     /// The reasoning, in sentences. A mentee who can read why somebody was
@@ -61,9 +119,9 @@ pub struct Match {
 /// What the person looking for a mentor said about themselves.
 #[derive(sqlx::FromRow)]
 struct Mentee {
-    craft_score_code: i32,
-    code_preferred_families: Vec<String>,
-    code_main_languages: Vec<String>,
+    craft_score: i32,
+    preferred_families: Vec<String>,
+    tools: Vec<String>,
     timezone: Option<String>,
 }
 
@@ -72,9 +130,9 @@ struct Candidate {
     user_id: Uuid,
     username: String,
     headline: String,
-    craft_score_code: i32,
+    craft_score: i32,
     families: Vec<String>,
-    languages: Vec<String>,
+    tools: Vec<String>,
     timezone: Option<String>,
     active_mentees: i64,
 }
@@ -109,10 +167,11 @@ pub fn timezone_gap(a: Option<&str>, b: Option<&str>) -> Option<i32> {
 #[allow(clippy::too_many_arguments)]
 pub fn score_candidate(
     shared_families: usize,
-    shared_languages: usize,
+    shared_tools: usize,
     score_gap: i32,
     timezone_gap: Option<i32>,
     active_mentees: i64,
+    max_active_mentees: i64,
 ) -> i32 {
     // Nothing in common in the family is not a match at any price.
     if shared_families == 0 {
@@ -123,12 +182,12 @@ pub fn score_candidate(
         return 0;
     }
     // Already carrying as many as they can.
-    if active_mentees >= MAX_ACTIVE_MENTEES {
+    if active_mentees >= max_active_mentees {
         return 0;
     }
 
     let mut score = 100 * shared_families as i32;
-    score += 40 * shared_languages as i32;
+    score += 40 * shared_tools as i32;
 
     // The gap helps, with diminishing returns: three thousand points ahead is
     // not six times better than five hundred, and past a point the
@@ -145,39 +204,57 @@ pub fn score_candidate(
     }
 
     // Room left. A mentor with nobody has more attention to give.
-    score += 10 * (MAX_ACTIVE_MENTEES - active_mentees) as i32;
+    score += 10 * (max_active_mentees - active_mentees) as i32;
 
     score.max(0)
 }
 
 /// Mentors worth suggesting to this person, best first.
-pub async fn matches_for(db: &PgPool, mentee_id: Uuid, limit: i64) -> Result<Vec<Match>, AppError> {
+pub async fn matches_for(
+    db: &PgPool,
+    rules: DomainRules,
+    mentee_id: Uuid,
+    limit: i64,
+) -> Result<Vec<Match>, AppError> {
     // A mentee with no computed score reads as zero here, which is the right
     // answer: the gap to a mentor is then the mentor's whole score, and
     // somebody with nothing proved has the most to learn.
     let mentee: Option<Mentee> = sqlx::query_as(
-        "SELECT COALESCE(cs.score, 0) AS craft_score_code,
-                u.code_preferred_families, u.code_main_languages, u.timezone
+        // The answers live in `user_domain_profiles` since migration 0306.
+        // COALESCE to an empty array rather than NULL: somebody who never
+        // answered the wizard has no families, which the check below turns
+        // into a message telling them to answer it.
+        "SELECT COALESCE(cs.score, 0) AS craft_score,
+                COALESCE(ARRAY(SELECT jsonb_array_elements_text(
+                            p.answers -> $4)), '{}') AS preferred_families,
+                COALESCE(ARRAY(SELECT jsonb_array_elements_text(
+                            p.answers -> $3)), '{}') AS tools,
+                u.timezone
            FROM users u
            LEFT JOIN craft_scores cs ON cs.user_id = u.id AND cs.skill_domain = $2
+           LEFT JOIN user_domain_profiles p
+                  ON p.user_id = u.id AND p.domain = $2
           WHERE u.id = $1",
     )
     .bind(mentee_id)
-    .bind(crate::services::craft_score::DOMAIN)
+    .bind(rules.domain)
+    .bind(rules.tools_key)
+    .bind(rules.families_key)
     .fetch_optional(db)
     .await?;
+
     let Mentee {
-        craft_score_code: mentee_score,
-        code_preferred_families: mentee_families,
-        code_main_languages: mentee_languages,
+        craft_score: mentee_score,
+        preferred_families: mentee_families,
+        tools: mentee_tools,
         timezone: mentee_timezone,
     } = mentee.ok_or_else(|| AppError::NotFound("user not found".into()))?;
 
     if mentee_families.is_empty() {
-        return Err(AppError::Validation(
-            "answer the code onboarding first — without a family there is nothing to match on"
-                .into(),
-        ));
+        return Err(AppError::Validation(format!(
+            "answer the {} onboarding first — without a family there is nothing to match on",
+            rules.domain
+        )));
     }
 
     let candidates = sqlx::query_as::<_, Candidate>(
@@ -185,15 +262,19 @@ pub async fn matches_for(db: &PgPool, mentee_id: Uuid, limit: i64) -> Result<Vec
         SELECT u.id AS user_id,
                u.username,
                m.headline,
-               cs.score AS craft_score_code,
-               u.code_preferred_families AS families,
+               cs.score AS craft_score,
+               COALESCE(ARRAY(SELECT jsonb_array_elements_text(
+                   p.answers -> $5)), '{}') AS families,
                -- What the mentor works in: their declared languages, and the
                -- expertise they wrote on their mentor profile. Both, because
                -- somebody who filled in one rarely filled in the other.
                ARRAY(
                    SELECT DISTINCT lower(l)
-                     FROM unnest(u.code_main_languages || m.expertise_areas) AS l
-               ) AS languages,
+                     FROM unnest(
+                        COALESCE(ARRAY(SELECT jsonb_array_elements_text(
+                            p.answers -> $4)), '{}')
+                        || m.expertise_areas) AS l
+               ) AS tools,
                u.timezone,
                (SELECT count(DISTINCT s.mentee_user_id)
                   FROM mentorship_sessions s
@@ -210,6 +291,8 @@ pub async fn matches_for(db: &PgPool, mentee_id: Uuid, limit: i64) -> Result<Vec
           -- nothing in this domain, and suggesting them would be suggesting
           -- somebody on the strength of having a mentor profile.
           JOIN craft_scores cs ON cs.user_id = u.id AND cs.skill_domain = $3
+          LEFT JOIN user_domain_profiles p
+                 ON p.user_id = u.id AND p.domain = $3
          WHERE m.active = TRUE
            AND u.is_banned = FALSE
            AND u.id <> $1
@@ -218,11 +301,13 @@ pub async fn matches_for(db: &PgPool, mentee_id: Uuid, limit: i64) -> Result<Vec
     )
     .bind(mentee_id)
     .bind(mentee_score + MIN_SCORE_GAP)
-    .bind(crate::services::craft_score::DOMAIN)
+    .bind(rules.domain)
+    .bind(rules.tools_key)
+    .bind(rules.families_key)
     .fetch_all(db)
     .await?;
 
-    let mentee_languages: Vec<String> = mentee_languages.iter().map(|l| l.to_lowercase()).collect();
+    let mentee_tools: Vec<String> = mentee_tools.iter().map(|l| l.to_lowercase()).collect();
 
     let mut matches: Vec<Match> = candidates
         .into_iter()
@@ -233,21 +318,22 @@ pub async fn matches_for(db: &PgPool, mentee_id: Uuid, limit: i64) -> Result<Vec
                 .filter(|f| mentee_families.contains(f))
                 .cloned()
                 .collect();
-            let shared_languages: Vec<String> = c
-                .languages
+            let shared_tools: Vec<String> = c
+                .tools
                 .iter()
-                .filter(|l| mentee_languages.contains(l))
+                .filter(|l| mentee_tools.contains(l))
                 .cloned()
                 .collect();
             let gap = timezone_gap(mentee_timezone.as_deref(), c.timezone.as_deref());
-            let score_gap = c.craft_score_code - mentee_score;
+            let score_gap = c.craft_score - mentee_score;
 
             let score = score_candidate(
                 shared_families.len(),
-                shared_languages.len(),
+                shared_tools.len(),
                 score_gap,
                 gap,
                 c.active_mentees,
+                rules.max_active_mentees,
             );
 
             let mut because = Vec::new();
@@ -257,10 +343,11 @@ pub async fn matches_for(db: &PgPool, mentee_id: Uuid, limit: i64) -> Result<Vec
                     shared_families.join(", ")
                 ));
             }
-            if !shared_languages.is_empty() {
+            if !shared_tools.is_empty() {
                 because.push(format!(
-                    "Partage tes langages : {}.",
-                    shared_languages.join(", ")
+                    "Partage tes {} : {}.",
+                    rules.tools_label,
+                    shared_tools.join(", ")
                 ));
             }
             because.push(format!(
@@ -283,10 +370,10 @@ pub async fn matches_for(db: &PgPool, mentee_id: Uuid, limit: i64) -> Result<Vec
                 mentor_user_id: c.user_id,
                 username: c.username,
                 headline: c.headline,
-                craft_score_code: c.craft_score_code,
+                craft_score: c.craft_score,
                 score,
                 shared_families,
-                shared_languages,
+                shared_tools,
                 timezone_gap_hours: gap,
                 active_mentees: c.active_mentees,
                 because,
@@ -331,25 +418,52 @@ mod tests {
 
     #[test]
     fn no_shared_family_is_not_a_match_at_any_price() {
-        assert_eq!(score_candidate(0, 3, 5000, Some(0), 0), 0);
+        assert_eq!(
+            score_candidate(0, 3, 5000, Some(0), 0, CODE.max_active_mentees),
+            0
+        );
     }
 
     #[test]
     fn somebody_adjacent_has_nothing_to_teach_yet() {
-        assert_eq!(score_candidate(1, 1, 100, Some(0), 0), 0);
-        assert!(score_candidate(1, 1, MIN_SCORE_GAP, Some(0), 0) > 0);
+        assert_eq!(
+            score_candidate(1, 1, 100, Some(0), 0, CODE.max_active_mentees),
+            0
+        );
+        assert!(score_candidate(1, 1, MIN_SCORE_GAP, Some(0), 0, CODE.max_active_mentees) > 0);
     }
 
     #[test]
     fn a_full_mentor_is_not_available_whatever_their_calendar_says() {
-        assert_eq!(score_candidate(2, 2, 2000, Some(0), MAX_ACTIVE_MENTEES), 0);
-        assert!(score_candidate(2, 2, 2000, Some(0), MAX_ACTIVE_MENTEES - 1) > 0);
+        assert_eq!(
+            score_candidate(
+                2,
+                2,
+                2000,
+                Some(0),
+                CODE.max_active_mentees,
+                CODE.max_active_mentees
+            ),
+            0
+        );
+        assert!(
+            score_candidate(
+                2,
+                2,
+                2000,
+                Some(0),
+                CODE.max_active_mentees - 1,
+                CODE.max_active_mentees
+            ) > 0
+        );
     }
 
     #[test]
     fn a_shared_language_helps_and_does_not_decide() {
-        let same_language_one_family = score_candidate(1, 1, 1000, Some(0), 0);
-        let two_families_no_language = score_candidate(2, 0, 1000, Some(0), 0);
+        let same_language_one_family =
+            score_candidate(1, 1, 1000, Some(0), 0, CODE.max_active_mentees);
+        let two_families_no_language =
+            score_candidate(2, 0, 1000, Some(0), 0, CODE.max_active_mentees);
         assert!(
             two_families_no_language > same_language_one_family,
             "a good mentor in a neighbouring language beats a mediocre one in the same"
@@ -358,9 +472,9 @@ mod tests {
 
     #[test]
     fn the_gap_has_diminishing_returns() {
-        let modest = score_candidate(1, 0, 500, None, 0);
-        let large = score_candidate(1, 0, 5000, None, 0);
-        let enormous = score_candidate(1, 0, 50_000, None, 0);
+        let modest = score_candidate(1, 0, 500, None, 0, CODE.max_active_mentees);
+        let large = score_candidate(1, 0, 5000, None, 0, CODE.max_active_mentees);
+        let enormous = score_candidate(1, 0, 50_000, None, 0, CODE.max_active_mentees);
         assert!(modest < large && large < enormous);
         // Ten times the gap is not ten times the score.
         assert!(large - modest < (modest - 100) * 10);
@@ -368,10 +482,31 @@ mod tests {
 
     #[test]
     fn an_unknown_timezone_is_neither_rewarded_nor_punished() {
-        let unknown = score_candidate(1, 1, 1000, None, 0);
-        let close = score_candidate(1, 1, 1000, Some(1), 0);
-        let far = score_candidate(1, 1, 1000, Some(9), 0);
+        let unknown = score_candidate(1, 1, 1000, None, 0, CODE.max_active_mentees);
+        let close = score_candidate(1, 1, 1000, Some(1), 0, CODE.max_active_mentees);
+        let far = score_candidate(1, 1, 1000, Some(9), 0, CODE.max_active_mentees);
         assert!(close > unknown, "a known close timezone should win");
         assert!(unknown > far, "a known far timezone should lose");
+    }
+
+    #[test]
+    fn the_two_domains_differ_only_where_they_should() {
+        // If a third domain is added and this fails, the thing to change is
+        // the constant — not to copy the module.
+        assert_ne!(CODE.domain, AI.domain);
+        assert_ne!(CODE.tools_key, AI.tools_key);
+        // AI carries fewer mentees per mentor: reading somebody's training
+        // run is not reviewing a pull request.
+        assert!(AI.max_active_mentees < CODE.max_active_mentees);
+    }
+
+    #[test]
+    fn a_full_ai_mentor_is_full_earlier_than_a_code_one() {
+        let load = AI.max_active_mentees;
+        assert_eq!(
+            score_candidate(2, 2, 2000, Some(0), load, AI.max_active_mentees),
+            0
+        );
+        assert!(score_candidate(2, 2, 2000, Some(0), load, CODE.max_active_mentees) > 0);
     }
 }

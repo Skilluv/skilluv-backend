@@ -22,8 +22,6 @@ pub fn ops_routes() -> Router<AppState> {
         .route("/ops/mentors/for-me", get(ops_mentor_matches))
         .route("/ops/onboarding", post(complete_onboarding))
         .route("/ops/onboarding/skip", post(skip_onboarding))
-        .route("/ops/guides", get(list_guides))
-        .route("/ops/guides/{slug}", get(get_guide))
         // Service objectives.
         .route(
             "/ops/objectives",
@@ -564,91 +562,6 @@ pub async fn skip_onboarding(
 ) -> Result<Json<Value>, AppError> {
     crate::services::ops_onboarding::skip(&state.db, auth.user_id).await?;
     Ok(Json(build_response(json!({ "skipped": true }))))
-}
-
-#[derive(Debug, Deserialize, utoipa::IntoParams)]
-pub struct GuideQuery {
-    /// `onboarding` or `writeup_template`.
-    pub kind: Option<String>,
-    pub reviewer_group: Option<String>,
-}
-
-/// The ops guides and templates on offer, without their bodies.
-///
-/// The locale follows `Accept-Language` and falls back to French, like every
-/// other piece of written content on the platform.
-#[utoipa::path(
-    get, path = "/api/ops/guides", tag = "work",
-    params(GuideQuery),
-    responses((status = 200, body = serde_json::Value)),
-)]
-pub async fn list_guides(
-    State(state): State<AppState>,
-    headers: axum::http::HeaderMap,
-    axum::extract::Query(q): axum::extract::Query<GuideQuery>,
-) -> Result<Json<Value>, AppError> {
-    crate::validators::check_max_len_opt(&q.kind, "kind", 30)?;
-    crate::validators::check_max_len_opt(&q.reviewer_group, "reviewer_group", 30)?;
-    let locale = crate::routes::code::guide_locale(&headers);
-
-    let guides: Vec<Value> = sqlx::query_scalar(
-        "SELECT jsonb_build_object(
-                    'slug', slug, 'kind', kind, 'reviewer_group', reviewer_group,
-                    'locale', locale, 'title', title, 'summary', summary)
-           FROM content_guides
-          WHERE is_published = TRUE
-            AND skill_domain = 'ops'
-            AND locale = $1
-            AND ($2::TEXT IS NULL OR kind = $2)
-            AND ($3::TEXT IS NULL OR reviewer_group = $3)
-          ORDER BY sort_order, slug",
-    )
-    .bind(&locale)
-    .bind(q.kind.as_deref())
-    .bind(q.reviewer_group.as_deref())
-    .fetch_all(&state.db)
-    .await?;
-
-    Ok(Json(build_response(json!({ "guides": guides }))))
-}
-
-/// One guide, with its body.
-///
-/// Falls back to French when the requested locale has no version: a
-/// half-translated catalogue should show the untranslated page rather than a
-/// 404 that reads as "this guide does not exist".
-#[utoipa::path(
-    get, path = "/api/ops/guides/{slug}", tag = "work",
-    params(("slug" = String, Path, description = "Guide slug")),
-    responses(
-        (status = 200, body = serde_json::Value),
-        (status = 404, description = "No such guide", body = crate::api_response::ErrorResponse),
-    ),
-)]
-pub async fn get_guide(
-    State(state): State<AppState>,
-    headers: axum::http::HeaderMap,
-    Path(slug): Path<String>,
-) -> Result<Json<Value>, AppError> {
-    let locale = crate::routes::code::guide_locale(&headers);
-
-    let guide: Option<Value> = sqlx::query_scalar(
-        "SELECT jsonb_build_object(
-                    'slug', slug, 'kind', kind, 'reviewer_group', reviewer_group,
-                    'locale', locale, 'title', title, 'summary', summary,
-                    'body_md', body_md)
-           FROM content_guides
-          WHERE slug = $1 AND is_published = TRUE AND skill_domain = 'ops'
-          ORDER BY (locale = $2) DESC, (locale = 'fr') DESC
-          LIMIT 1",
-    )
-    .bind(&slug)
-    .bind(&locale)
-    .fetch_optional(&state.db)
-    .await?;
-
-    let guide = guide.ok_or_else(|| AppError::NotFound(format!("no guide '{slug}'")))?;
-    Ok(Json(build_response(json!({ "guide": guide }))))
 }
 
 #[derive(Debug, Deserialize, utoipa::IntoParams)]

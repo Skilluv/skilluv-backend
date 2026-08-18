@@ -8,6 +8,18 @@
 -- somebody is learning, and cannot be joined against anything. An operator
 -- edits rows in the admin panel; nobody redeploys to fix a dead link.
 --
+-- ## Why this is not a `content_guides` toolkit page
+--
+-- Migration 0199 has a `toolkit` kind, and the code domain uses it: one
+-- markdown page describing the landscape. That is the right shape for a page
+-- somebody reads once.
+--
+-- This is a catalogue, not a page. Each row carries what it costs to reach
+-- the thing and which trades it serves, and both are filters — `GET
+-- /api/ai/toolkit?orientation=nlp-engineer` answers a question a document
+-- cannot. If the two ever merge, this is the shape that survives, because a
+-- page can be generated from rows and rows cannot be extracted from a page.
+--
 -- ## Why one table for tools, communities and courses
 --
 -- They are the same row: something outside Skilluv, with an address, a

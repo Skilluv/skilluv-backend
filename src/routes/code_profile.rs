@@ -171,7 +171,7 @@ pub async fn code_profile(
         SELECT DISTINCT ON (ps.registry, ps.package_name)
                ps.registry, ps.package_name, ps.latest_version,
                ps.downloads_recent, ps.downloads_total, ps.fetched_at
-          FROM code_package_stats ps
+          FROM published_artifact_stats ps
           JOIN deliverables d ON d.slice_id = ps.slice_id
          WHERE d.user_id = $1
            AND d.verification_status = 'verified'
@@ -352,8 +352,13 @@ pub async fn mentor_matches(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
-    let matches =
-        crate::services::code_mentorship::matches_for(&state.db, auth.user_id, 10).await?;
+    let matches = crate::services::mentorship_matching::matches_for(
+        &state.db,
+        crate::services::mentorship_matching::CODE,
+        auth.user_id,
+        10,
+    )
+    .await?;
     Ok(Json(build_response(json!({ "mentors": matches }))))
 }
 

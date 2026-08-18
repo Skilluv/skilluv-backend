@@ -21,6 +21,9 @@
 //!     "attestation_basis": "ai_model_shipped" // filtre : ce sur quoi
 //!                                   // l'attestation se fonde. Rend comptable
 //!                                   // ce qui était une appréciation.
+//!     "mission_completed"           // proof_type : une mission cloturee.
+//!                                   // Le domaine est porte par la mission
+//!                                   // elle-meme, pas par un challenge.
 //!     "manual": true              // le moteur n'attribue jamais : un opérateur
 //!                                   // décide, et la raison est enregistrée
 //!   }
@@ -129,6 +132,7 @@ async fn count_matching_proofs(
         .proof_types
         .iter()
         .any(|t| t == "slice_merged_upstream");
+    let want_mission_completed = conds.proof_types.iter().any(|t| t == "mission_completed");
     // A variant of the deliverable count rather than a source of its own:
     // being featured is a property of a deliverable, not a different proof.
     let featured_only = conds
@@ -236,6 +240,43 @@ async fn count_matching_proofs(
               AND ps.merged_at IS NOT NULL
               AND d.revoked_at IS NULL
               AND ($2::VARCHAR IS NULL OR ct.skill_domain = $2)
+            LIMIT 25
+            "#,
+        )
+        .bind(user_id)
+        .bind(conds.skill_domain.as_deref())
+        .fetch_all(db)
+        .await?;
+
+        total += matched;
+        sources.extend(ids);
+    }
+
+    if want_mission_completed {
+        // A closed mission is money that changed hands for work somebody
+        // accepted. `skill_domain` sits on the mission itself, so this is the
+        // one proof type that does not have to reach through a challenge to
+        // find out which domain it belongs to.
+        let matched: i64 = sqlx::query_scalar(
+            r#"
+            SELECT count(*) FROM missions
+            WHERE assigned_user_id = $1
+              AND status = 'closed'
+              AND ($2::VARCHAR IS NULL OR skill_domain = $2)
+            "#,
+        )
+        .bind(user_id)
+        .bind(conds.skill_domain.as_deref())
+        .fetch_one(db)
+        .await?;
+
+        let ids: Vec<Uuid> = sqlx::query_scalar(
+            r#"
+            SELECT id FROM missions
+            WHERE assigned_user_id = $1
+              AND status = 'closed'
+              AND ($2::VARCHAR IS NULL OR skill_domain = $2)
+            ORDER BY id
             LIMIT 25
             "#,
         )

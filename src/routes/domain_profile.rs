@@ -37,10 +37,15 @@ use crate::errors::AppError;
 use crate::middleware::AuthUser;
 
 pub fn domain_profile_routes() -> Router<AppState> {
-    Router::new().route(
-        "/users/me/domain-profile/{domain}",
-        get(get_profile).put(put_profile),
-    )
+    Router::new()
+        .route(
+            "/users/me/domain-profile/{domain}",
+            get(get_profile).put(put_profile),
+        )
+        .route(
+            "/users/me/domain-profile/{domain}/skip",
+            axum::routing::post(skip_profile),
+        )
 }
 
 const DOMAINS: &[&str] = &[
@@ -82,6 +87,45 @@ const COMPUTE: &[&str] = &[
 ];
 const FRAMEWORKS: &[&str] = &["pytorch", "jax", "tensorflow", "candle", "mlx", "other"];
 
+/// At most three. Somebody who selects everything has told us nothing while
+/// believing they answered — the same cap the code wizard uses.
+const MAX_SELECTIONS: usize = 3;
+
+/// The families a mentee wants to be matched in, per domain: reviewer groups,
+/// the same ones the guides and the review capabilities use.
+///
+/// Read by the mentor matching, which is why an unknown one is refused rather
+/// than stored: it would match nobody, silently, and look like an empty
+/// platform.
+async fn check_families(
+    db: &sqlx::PgPool,
+    domain: &str,
+    families: &[String],
+) -> Result<(), AppError> {
+    if families.len() > MAX_SELECTIONS {
+        return Err(AppError::Validation(format!(
+            "at most {MAX_SELECTIONS} families — picking everything says nothing"
+        )));
+    }
+    let known: Vec<String> = sqlx::query_scalar(
+        "SELECT DISTINCT reviewer_group FROM orientations
+          WHERE reviewer_group IS NOT NULL AND primary_domain = $1",
+    )
+    .bind(domain)
+    .fetch_all(db)
+    .await?;
+
+    for family in families {
+        if !known.contains(family) {
+            return Err(AppError::Validation(format!(
+                "'{family}' is not a {domain} family — expected one of: {}",
+                known.join(", ")
+            )));
+        }
+    }
+    Ok(())
+}
+
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct DomainProfileBody {
@@ -91,8 +135,12 @@ pub struct DomainProfileBody {
     /// AI only: `none`, `personal_gpu`, `cloud_small`, `cloud_large`,
     /// `enterprise`.
     pub compute: Option<String>,
-    /// AI only: `pytorch`, `jax`, `tensorflow`, `candle`, `mlx`, `other`.
-    pub main_framework: Option<String>,
+    /// The families to be matched in — reviewer groups of this domain. Read
+    /// by the mentor matching; at most three.
+    pub preferred_families: Option<Vec<String>>,
+    /// AI only, and plural: nobody uses exactly one. `pytorch`, `jax`,
+    /// `tensorflow`, `candle`, `mlx`, `other`.
+    pub main_frameworks: Option<Vec<String>>,
     /// AI only. A link, not an import: models count when they arrive as
     /// reviewed work.
     #[schema(max_length = 60)]
@@ -104,6 +152,11 @@ pub struct DomainProfileResponse {
     pub domain: String,
     #[schema(value_type = Object)]
     pub answers: serde_json::Value,
+    /// When the wizard was answered. Absent means never.
+    pub completed_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// When somebody said stop asking. Different from having answered
+    /// nothing: the first means "stop", the second means "ask again".
+    pub skipped_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// Refuse an answer outside the vocabulary, naming what was allowed.
@@ -153,17 +206,27 @@ pub async fn get_profile(
 ) -> Result<Json<ApiResponse<DomainProfileResponse>>, AppError> {
     check_domain(&domain)?;
 
-    let answers: Option<serde_json::Value> = sqlx::query_scalar(
-        "SELECT answers FROM user_domain_profiles WHERE user_id = $1 AND domain = $2",
+    type Row = (
+        serde_json::Value,
+        Option<chrono::DateTime<chrono::Utc>>,
+        Option<chrono::DateTime<chrono::Utc>>,
+    );
+    let row: Option<Row> = sqlx::query_as(
+        "SELECT answers, completed_at, skipped_at
+           FROM user_domain_profiles WHERE user_id = $1 AND domain = $2",
     )
     .bind(auth.user_id)
     .bind(&domain)
     .fetch_optional(&state.db)
     .await?;
 
+    let (answers, completed_at, skipped_at) = row.unwrap_or((json!({}), None, None));
+
     Ok(Json(ApiResponse::new(DomainProfileResponse {
         domain,
-        answers: answers.unwrap_or_else(|| json!({})),
+        answers,
+        completed_at,
+        skipped_at,
     })))
 }
 
@@ -196,7 +259,17 @@ pub async fn put_profile(
     let weekly_hours = checked("weekly_hours", body.weekly_hours.as_ref(), WEEKLY_HOURS)?;
     let goal = checked("goal", body.goal.as_ref(), GOALS)?;
     let compute = checked("compute", body.compute.as_ref(), COMPUTE)?;
-    let framework = checked("main_framework", body.main_framework.as_ref(), FRAMEWORKS)?;
+    let frameworks = body.main_frameworks.clone().unwrap_or_default();
+    if frameworks.len() > MAX_SELECTIONS {
+        return Err(AppError::Validation(format!(
+            "at most {MAX_SELECTIONS} frameworks — picking everything says nothing"
+        )));
+    }
+    for framework in &frameworks {
+        checked("main_frameworks", Some(framework), FRAMEWORKS)?;
+    }
+    let families = body.preferred_families.clone().unwrap_or_default();
+    check_families(&state.db, &domain, &families).await?;
     crate::validators::check_max_len_opt(&body.huggingface_username, "huggingface_username", 60)?;
 
     // Only the answers actually given. A key present with a null value and an
@@ -208,20 +281,33 @@ pub async fn put_profile(
         ("weekly_hours", weekly_hours),
         ("goal", goal),
         ("compute", compute),
-        ("main_framework", framework),
         ("huggingface_username", body.huggingface_username.as_ref()),
     ] {
         if let Some(v) = value {
             answers.insert(key.to_string(), json!(v));
         }
     }
+    // Empty lists stay out, for the same reason an unanswered question does:
+    // a key present with nothing in it and an absent key read the same to a
+    // recommender, and one of them claims the question was asked.
+    if !frameworks.is_empty() {
+        answers.insert("main_frameworks".to_string(), json!(frameworks));
+    }
+    if !families.is_empty() {
+        answers.insert("preferred_families".to_string(), json!(families));
+    }
     let answers = serde_json::Value::Object(answers);
 
     sqlx::query(
         r#"
-        INSERT INTO user_domain_profiles (user_id, domain, answers)
-        VALUES ($1, $2, $3)
-        ON CONFLICT (user_id, domain) DO UPDATE SET answers = EXCLUDED.answers
+        INSERT INTO user_domain_profiles (user_id, domain, answers, completed_at)
+        VALUES ($1, $2, $3, NOW())
+        ON CONFLICT (user_id, domain) DO UPDATE
+            SET answers      = EXCLUDED.answers,
+                completed_at = NOW(),
+                -- Answering is un-skipping: somebody who said "stop asking"
+                -- and then answered has changed their mind.
+                skipped_at   = NULL
         "#,
     )
     .bind(auth.user_id)
@@ -233,6 +319,51 @@ pub async fn put_profile(
     Ok(Json(ApiResponse::new(DomainProfileResponse {
         domain,
         answers,
+        completed_at: Some(chrono::Utc::now()),
+        skipped_at: None,
+    })))
+}
+
+/// Stop asking.
+///
+/// Recorded separately from "answered nothing". Without the distinction the
+/// wizard reappears forever for exactly the people who least wanted it, and a
+/// missing key cannot carry that difference — which is why 0235 keeps these
+/// two as columns while the answers stay a blob.
+#[utoipa::path(
+    post, path = "/api/users/me/domain-profile/{domain}/skip", tag = "profile",
+    params(("domain" = String, Path, description = "Domain slug")),
+    responses(
+        (status = 200, description = "Recorded", body = ApiResponse<DomainProfileResponse>),
+        (status = 400, description = "Unknown domain", body = crate::api_response::ErrorResponse),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn skip_profile(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(domain): Path<String>,
+) -> Result<Json<ApiResponse<DomainProfileResponse>>, AppError> {
+    check_domain(&domain)?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO user_domain_profiles (user_id, domain, skipped_at)
+        VALUES ($1, $2, NOW())
+        ON CONFLICT (user_id, domain) DO UPDATE SET skipped_at = NOW()
+        "#,
+    )
+    .bind(auth.user_id)
+    .bind(&domain)
+    .execute(&state.db)
+    .await?;
+
+    Ok(Json(ApiResponse::new(DomainProfileResponse {
+        domain,
+        answers: json!({}),
+        completed_at: None,
+        skipped_at: Some(chrono::Utc::now()),
     })))
 }
 

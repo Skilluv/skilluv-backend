@@ -134,3 +134,57 @@ async fn the_code_capabilities_are_still_grantable() {
         assert!(!user.is_nil());
     }
 }
+
+#[tokio::test]
+async fn every_derivable_reviewer_capability_is_grantable() {
+    let app = TestApp::spawn().await;
+
+    // `require_reviewer_for_orientation` builds the capability name from the
+    // orientation row at runtime, so a value dropped from the CHECK does not
+    // fail to compile. It produces a grant the database refuses, with an
+    // error naming a constraint rather than the trade nobody can review.
+    //
+    // Five migrations have restated that list — 0098, 0117, 0120, 0176, 0210
+    // — and the sixth will be whichever domain gets review rights next. This
+    // is the guard that fails then, here, instead of in production.
+    let derivable: Vec<String> = sqlx::query_scalar(
+        "SELECT DISTINCT primary_domain || '_reviewer:' || reviewer_group
+           FROM orientations
+          WHERE reviewer_group IS NOT NULL AND NOT is_archived
+          UNION
+         SELECT DISTINCT primary_domain || '_reviewer:all'
+           FROM orientations
+          WHERE reviewer_group IS NOT NULL AND NOT is_archived
+          ORDER BY 1",
+    )
+    .fetch_all(&app.db)
+    .await
+    .unwrap();
+
+    assert!(
+        !derivable.is_empty(),
+        "no orientation carries a reviewer group at all"
+    );
+
+    let mut refused = Vec::new();
+    for (n, capability) in derivable.iter().enumerate() {
+        let user = user_with(&app, &format!("capderiv{n}"), None).await;
+        let granted = sqlx::query(
+            "INSERT INTO user_capabilities (user_id, capability, granted_reason)
+             VALUES ($1, $2, 'test')",
+        )
+        .bind(user)
+        .bind(capability)
+        .execute(&app.db)
+        .await;
+
+        if granted.is_err() {
+            refused.push(capability.clone());
+        }
+    }
+
+    assert!(
+        refused.is_empty(),
+        "these trades exist and nobody can be granted review rights over them: {refused:?}"
+    );
+}

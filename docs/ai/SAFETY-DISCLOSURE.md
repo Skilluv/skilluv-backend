@@ -97,5 +97,5 @@ même s'il fonctionne.
 
 ---
 
-*Voir aussi : la [charte du domaine](./CHARTER.md) et le modèle de
-[rapport de red-team](./WRITEUP-TEMPLATES.md).*
+*Voir aussi : la [charte du domaine](./CHARTER.md) et le modèle de rapport de
+red-team, servi par `GET /api/guides/template-red-team-report`.*

@@ -36,7 +36,7 @@ pub const CAP: i32 = 10_000;
 /// branch in this one.
 pub const DOMAIN: &str = "code";
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct Term {
     pub term: String,
     /// What was counted. A whole number for `count` terms, the raw figure for
@@ -61,12 +61,91 @@ pub struct CraftScore {
 }
 
 #[derive(sqlx::FromRow)]
-struct WeightRow {
-    term: String,
-    weight: BigDecimal,
-    kind: String,
-    baseline: Option<BigDecimal>,
-    explanation: String,
+pub struct WeightRow {
+    pub term: String,
+    pub weight: BigDecimal,
+    pub kind: String,
+    pub baseline: Option<BigDecimal>,
+    pub explanation: String,
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// What every domain shares
+// ═══════════════════════════════════════════════════════════════════
+//
+// The formula, the tiers and the storage are keyed by domain; only the
+// measuring is domain-specific, because it reads different tables. These
+// three take the domain so a second module — `ai_profile` is the first —
+// reuses them instead of copying the queries and drifting.
+
+/// The active formula for one domain, in display order.
+pub async fn weights_for(db: &PgPool, domain: &str) -> Result<Vec<WeightRow>, AppError> {
+    Ok(sqlx::query_as::<_, WeightRow>(
+        "SELECT term, weight, kind, baseline, explanation
+           FROM craft_score_weights
+          WHERE skill_domain = $1 AND is_active = TRUE
+          ORDER BY sort_order, term",
+    )
+    .bind(domain)
+    .fetch_all(db)
+    .await?)
+}
+
+/// Where a score lands, and where the next tier starts.
+///
+/// An error rather than a default when no tier covers the score: a domain
+/// whose tiers do not span it is a seeding mistake, and quietly calling
+/// somebody an apprentice would hide it.
+pub async fn resolve_tier(
+    db: &PgPool,
+    domain: &str,
+    score: i32,
+) -> Result<(String, String, String, Option<i32>), AppError> {
+    sqlx::query_as(
+        "SELECT slug, name, description,
+                (SELECT min(t2.min_score) FROM craft_score_tiers t2
+                  WHERE t2.skill_domain = $2 AND t2.min_score > $1)
+           FROM craft_score_tiers
+          WHERE skill_domain = $2
+            AND min_score <= $1
+            AND (max_score IS NULL OR max_score >= $1)
+          ORDER BY min_score DESC
+          LIMIT 1",
+    )
+    .bind(score)
+    .bind(domain)
+    .fetch_optional(db)
+    .await?
+    .ok_or_else(|| AppError::Internal(format!("no {domain} tier covers a score of {score}")))
+}
+
+/// Write a score and its tier, in one statement.
+///
+/// The tier duplicates what the score and the thresholds imply. Written here
+/// so there is exactly one place that can get the duplicate wrong, rather
+/// than a search endpoint recomputing it per row.
+pub async fn store(
+    db: &PgPool,
+    user_id: Uuid,
+    domain: &str,
+    score: i32,
+    tier_slug: &str,
+) -> Result<(), AppError> {
+    sqlx::query(
+        "INSERT INTO craft_scores (user_id, skill_domain, score, tier_slug, computed_at)
+         VALUES ($1, $2, $3, $4, NOW())
+         ON CONFLICT (user_id, skill_domain) DO UPDATE
+             SET score = EXCLUDED.score,
+                 tier_slug = EXCLUDED.tier_slug,
+                 computed_at = NOW()",
+    )
+    .bind(user_id)
+    .bind(domain)
+    .bind(score)
+    .bind(tier_slug)
+    .execute(db)
+    .await?;
+    Ok(())
 }
 
 /// Everything the formula counts, gathered in one round-trip.
@@ -95,8 +174,12 @@ async fn measure(db: &PgPool, user_id: Uuid) -> Result<Measurements, AppError> {
     sqlx::query_as::<_, Measurements>(
         r#"
         SELECT
+            -- Code bases only. `basis IS NOT NULL` counted every artefact
+            -- attestation there is, so once the AI domain started issuing
+            -- them a published model was paying into the code craft score.
             (SELECT count(*) FROM attestations
-              WHERE user_id = $1 AND revoked_at IS NULL AND basis IS NOT NULL)
+              WHERE user_id = $1 AND revoked_at IS NULL
+                AND (basis LIKE 'code\_%' OR basis = 'featured_coder'))
                 AS attestations_code,
 
             (SELECT count(*) FROM attestations
@@ -121,7 +204,7 @@ async fn measure(db: &PgPool, user_id: Uuid) -> Result<Measurements, AppError> {
             -- Cast: summing bigints gives a NUMERIC, and decoding that into
             -- an i64 fails at runtime rather than at compile time.
             (SELECT COALESCE(sum(COALESCE(ps.downloads_recent, ps.downloads_total)), 0)::BIGINT
-               FROM code_package_stats ps
+               FROM published_artifact_stats ps
                -- The disclosure view rather than the table: an artefact
                -- whose author never said whether an assistant helped stops
                -- counting when its window closes.
@@ -222,31 +305,24 @@ pub fn points_for(kind: &str, weight: f64, baseline: Option<f64>, measured: f64)
     raw.round().max(0.0) as i32
 }
 
+/// Compute the score without storing it.
 /// Turn a domain's weight rows and one domain's measurements into a score.
 ///
-/// The half of a craft score that is identical for every domain: read the
-/// rows, apply the kind, cap the total, resolve the tier. What differs is
-/// what each term counts, and that is the closure — `None` means the term was
-/// not measured, which is not the same as measured zero. An unmeasured
-/// `offset_scaled` term counted as zero would subtract its whole baseline.
+/// The half that is identical everywhere: read the rows, apply the kind, cap
+/// the total, resolve the tier. What differs is what each term counts, and
+/// that is the closure — `None` means the term was not measured, which is not
+/// the same as measured zero. An unmeasured `offset_scaled` term counted as
+/// zero would subtract its whole baseline from the total.
 ///
-/// Extracted when the ops domain arrived: the alternative was a second copy
-/// of the tier lookup, and two copies of a formula is how two domains end up
-/// disagreeing about what "Senior" means.
+/// Extracted when the third domain arrived and the loop was about to be
+/// written a third time. Three copies of a formula is how three domains come
+/// to disagree about what "Senior" means.
 pub async fn assemble(
     db: &PgPool,
     domain: &str,
     measure_term: impl Fn(&str) -> Option<f64>,
 ) -> Result<CraftScore, AppError> {
-    let weights = sqlx::query_as::<_, WeightRow>(
-        "SELECT term, weight, kind, baseline, explanation
-           FROM craft_score_weights
-          WHERE skill_domain = $1 AND is_active = TRUE
-          ORDER BY sort_order, term",
-    )
-    .bind(domain)
-    .fetch_all(db)
-    .await?;
+    let weights = weights_for(db, domain).await?;
 
     let mut breakdown = Vec::new();
     let mut total: i64 = 0;
@@ -257,6 +333,83 @@ pub async fn assemble(
             // produced a figure for this person yet. Both are silence in the
             // total rather than a zero.
             continue;
+        };
+        if measured == 0.0 {
+            continue;
+        }
+
+        let points = points_for(
+            &w.kind,
+            w.weight.to_f64().unwrap_or(0.0),
+            w.baseline.as_ref().and_then(|b| b.to_f64()),
+            measured,
+        );
+        if points == 0 {
+            continue;
+        }
+
+        total += points as i64;
+        breakdown.push(Term {
+            term: w.term,
+            measured,
+            points,
+            explanation: w.explanation,
+        });
+    }
+
+    let capped = total > CAP as i64;
+    let score = total.min(CAP as i64) as i32;
+    let (tier_slug, tier_name, tier_description, next_tier_at) =
+        resolve_tier(db, domain, score).await?;
+
+    Ok(CraftScore {
+        score,
+        tier_slug,
+        tier_name,
+        tier_description,
+        next_tier_at,
+        breakdown,
+        capped,
+    })
+}
+
+pub async fn compute(db: &PgPool, user_id: Uuid) -> Result<CraftScore, AppError> {
+    let weights = weights_for(db, DOMAIN).await?;
+    let m = measure(db, user_id).await?;
+
+    let mut breakdown = Vec::new();
+    let mut total: i64 = 0;
+
+    for w in weights {
+        let measured: f64 = match w.term.as_str() {
+            "attestations_code" => m.attestations_code as f64,
+            "prs_merged_upstream" => m.prs_merged_upstream as f64,
+            "projects_shipped" => m.projects_shipped as f64,
+            "libraries_published" => m.libraries_published as f64,
+            "library_downloads" => m.library_downloads as f64,
+            "rfcs_accepted" => m.rfcs_accepted as f64,
+            "standard_contributions" => m.standard_contributions as f64,
+            "devtools_adopted" => m.devtools_adopted as f64,
+            "missions_completed" => m.missions_completed as f64,
+            "review_grid_average" => match &m.review_grid_average {
+                Some(avg) => avg.to_f64().unwrap_or(0.0),
+                // Nobody has scored this person's work. Skipped entirely
+                // rather than counted as zero: an unscored average would
+                // otherwise subtract the whole baseline from the total.
+                None => continue,
+            },
+            "languages_distinct" => m.languages_distinct as f64,
+            "years_active" => m.years_active as f64,
+            "featured_times" => m.featured_times as f64,
+            unknown => {
+                // Somebody added a row proposing a term. The answer to an
+                // unimplemented proposal is silence in the total.
+                tracing::warn!(
+                    term = unknown,
+                    "craft_score_weights names a term nothing knows how to count"
+                );
+                continue;
+            }
         };
 
         if measured == 0.0 {
@@ -285,24 +438,8 @@ pub async fn assemble(
     let capped = total > CAP as i64;
     let score = total.min(CAP as i64) as i32;
 
-    let tier: Option<(String, String, String, Option<i32>)> = sqlx::query_as(
-        "SELECT slug, name, description,
-                (SELECT min(t2.min_score) FROM craft_score_tiers t2
-                  WHERE t2.skill_domain = $2 AND t2.min_score > $1)
-           FROM craft_score_tiers
-          WHERE skill_domain = $2
-            AND min_score <= $1
-            AND (max_score IS NULL OR max_score >= $1)
-          ORDER BY min_score DESC
-          LIMIT 1",
-    )
-    .bind(score)
-    .bind(domain)
-    .fetch_optional(db)
-    .await?;
-
-    let (tier_slug, tier_name, tier_description, next_tier_at) = tier
-        .ok_or_else(|| AppError::Internal(format!("no {domain} tier covers a score of {score}")))?;
+    let (tier_slug, tier_name, tier_description, next_tier_at) =
+        resolve_tier(db, DOMAIN, score).await?;
 
     Ok(CraftScore {
         score,
@@ -315,44 +452,6 @@ pub async fn assemble(
     })
 }
 
-/// Compute the score without storing it.
-pub async fn compute(db: &PgPool, user_id: Uuid) -> Result<CraftScore, AppError> {
-    let m = measure(db, user_id).await?;
-
-    assemble(db, DOMAIN, |term| {
-        Some(match term {
-            "attestations_code" => m.attestations_code as f64,
-            "prs_merged_upstream" => m.prs_merged_upstream as f64,
-            "projects_shipped" => m.projects_shipped as f64,
-            "libraries_published" => m.libraries_published as f64,
-            "library_downloads" => m.library_downloads as f64,
-            "rfcs_accepted" => m.rfcs_accepted as f64,
-            "standard_contributions" => m.standard_contributions as f64,
-            "devtools_adopted" => m.devtools_adopted as f64,
-            "missions_completed" => m.missions_completed as f64,
-            // Nobody has scored this person's work. Skipped entirely rather
-            // than counted as zero: an unscored average would otherwise
-            // subtract the whole baseline from the total.
-            "review_grid_average" => {
-                return m.review_grid_average.as_ref().and_then(|a| a.to_f64());
-            }
-            "languages_distinct" => m.languages_distinct as f64,
-            "years_active" => m.years_active as f64,
-            "featured_times" => m.featured_times as f64,
-            unknown => {
-                // Somebody added a row proposing a term. The answer to an
-                // unimplemented proposal is silence in the total.
-                tracing::warn!(
-                    term = unknown,
-                    "craft_score_weights names a term nothing knows how to count"
-                );
-                return None;
-            }
-        })
-    })
-    .await
-}
-
 /// Compute and store, with the tier resolved in the same write.
 ///
 /// The tier duplicates what the score and the thresholds imply. Written here
@@ -360,20 +459,7 @@ pub async fn compute(db: &PgPool, user_id: Uuid) -> Result<CraftScore, AppError>
 /// than a search endpoint recomputing it per row.
 pub async fn recompute(db: &PgPool, user_id: Uuid) -> Result<CraftScore, AppError> {
     let computed = compute(db, user_id).await?;
-    sqlx::query(
-        "INSERT INTO craft_scores (user_id, skill_domain, score, tier_slug, computed_at)
-         VALUES ($1, $2, $3, $4, NOW())
-         ON CONFLICT (user_id, skill_domain) DO UPDATE
-             SET score = EXCLUDED.score,
-                 tier_slug = EXCLUDED.tier_slug,
-                 computed_at = NOW()",
-    )
-    .bind(user_id)
-    .bind(DOMAIN)
-    .bind(computed.score)
-    .bind(&computed.tier_slug)
-    .execute(db)
-    .await?;
+    store(db, user_id, DOMAIN, computed.score, &computed.tier_slug).await?;
     Ok(computed)
 }
 

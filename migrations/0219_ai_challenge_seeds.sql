@@ -1,14 +1,47 @@
--- Forty-one challenges, one set per AI trade.
+-- Seven domains everywhere, and forty-one challenges, one set per AI trade.
 --
--- ## The constraint that would have refused every one of them
+-- ## A gap that has been open since 0088
 --
--- `challenge_templates` still carried the CHECK written in migration 0003,
--- back when the platform had four domains. `orientations` was widened long
--- ago (0088 lists 'ai' and 'ops'); this table was not, so a fresh database
--- stopped here. A CHECK cannot be extended, only replaced, so every value is
--- restated — dropping one silently is how two tournament kinds disappeared in
--- migration 0223.
+-- `orientations` has declared seven domains since migration 0088. Three of
+-- them — `ai`, `ops`, `soft_skills` — could never carry a challenge, a user
+-- or a sponsored challenge, because those three tables still hold the CHECK
+-- written in 0002 and 0003 when there were four.
 --
+-- Nothing surfaced it. No migration had tried to insert a challenge outside
+-- the original four until this one, and the failure it produces names a
+-- constraint inherited through a table rename — `challenges_skill_domain_check`
+-- on `challenge_templates` — rather than the thing that is actually wrong.
+--
+-- The widening is not AI-specific, and it is here because this is the first
+-- migration that needed it. A later one would not work: this file runs first
+-- and would fail before reaching it.
+
+ALTER TABLE challenge_templates
+    DROP CONSTRAINT IF EXISTS challenges_skill_domain_check;
+ALTER TABLE challenge_templates
+    ADD CONSTRAINT challenge_templates_skill_domain_check
+    CHECK (skill_domain IN (
+        'code', 'design', 'game', 'security', 'soft_skills', 'ai', 'ops'
+    ));
+
+ALTER TABLE users
+    DROP CONSTRAINT IF EXISTS users_skill_domain_check;
+ALTER TABLE users
+    ADD CONSTRAINT users_skill_domain_check
+    CHECK (skill_domain IN (
+        'code', 'design', 'game', 'security', 'soft_skills', 'ai', 'ops'
+    ));
+
+-- `sponsored_challenge_requests`, not `sponsored_challenges`: the route
+-- module is named after the feature and the table after the row it holds.
+ALTER TABLE sponsored_challenge_requests
+    DROP CONSTRAINT IF EXISTS sponsored_challenge_requests_skill_domain_check;
+ALTER TABLE sponsored_challenge_requests
+    ADD CONSTRAINT sponsored_challenge_requests_skill_domain_check
+    CHECK (skill_domain IN (
+        'code', 'design', 'game', 'security', 'soft_skills', 'ai', 'ops'
+    ));
+
 -- ## Why they are drafts
 --
 -- The title and the intent come from the backlog; the full brief — the
@@ -32,21 +65,6 @@
 -- Measured on data the model has not seen, and obtainable again. Those two
 -- sentences are the difference between a result and a claim, and they are the
 -- two most common reasons an AI submission comes back.
-
-ALTER TABLE challenge_templates
-    DROP CONSTRAINT IF EXISTS challenges_skill_domain_check;
-
-ALTER TABLE challenge_templates
-    DROP CONSTRAINT IF EXISTS challenge_templates_skill_domain_check;
-
-ALTER TABLE challenge_templates
-    ADD CONSTRAINT challenge_templates_skill_domain_check
-    CHECK (skill_domain IN (
-        -- Migration 0003, the original four.
-        'code', 'design', 'game', 'security',
-        -- Migration 0088 already listed these on `orientations`.
-        'soft_skills', 'ai', 'ops'
-    ));
 
 INSERT INTO challenge_templates
     (title, description, instructions, skill_domain, difficulty, language,

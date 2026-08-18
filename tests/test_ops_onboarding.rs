@@ -35,20 +35,23 @@ async fn six_answers_produce_a_recommendation_and_are_kept() {
     // budget reason rather than a skill one.
     assert!(!rec["practise_at"].as_str().unwrap().is_empty());
 
-    let (level, trades, skipped): (
-        Option<String>,
-        Vec<String>,
-        Option<chrono::DateTime<chrono::Utc>>,
-    ) = sqlx::query_as(
-        "SELECT ops_level, ops_trades, ops_onboarding_skipped_at
-               FROM users WHERE username = 'ops_wizard'",
-    )
-    .fetch_one(&app.db)
-    .await
-    .unwrap();
+    // The answers live in `user_domain_profiles` (migration 0306), not in
+    // columns on `users`: seven domains asking for eight columns each is
+    // fifty-six columns on the table every query already touches.
+    let (answers, skipped): (serde_json::Value, Option<chrono::DateTime<chrono::Utc>>) =
+        sqlx::query_as(
+            "SELECT p.answers, p.skipped_at
+               FROM user_domain_profiles p
+               JOIN users u ON u.id = p.user_id
+              WHERE u.username = 'ops_wizard' AND p.domain = 'ops'",
+        )
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
 
-    assert_eq!(level.as_deref(), Some("junior"));
-    assert_eq!(trades, vec!["sre".to_string()]);
+    assert_eq!(answers["level"], "junior");
+    assert_eq!(answers["trades"][0], "sre");
+    assert_eq!(answers["oncall_experience"], "never");
     assert!(skipped.is_none(), "answering clears any earlier skip");
 
     drop(app);
@@ -121,7 +124,9 @@ async fn skipping_is_recorded_so_the_wizard_stops_asking() {
     assert_eq!(resp.status(), 200);
 
     let skipped: Option<chrono::DateTime<chrono::Utc>> = sqlx::query_scalar(
-        "SELECT ops_onboarding_skipped_at FROM users WHERE username = 'ops_skipper'",
+        "SELECT p.skipped_at FROM user_domain_profiles p
+           JOIN users u ON u.id = p.user_id
+          WHERE u.username = 'ops_skipper' AND p.domain = 'ops'",
     )
     .fetch_one(&app.db)
     .await
@@ -170,7 +175,7 @@ async fn every_trade_has_a_guide_in_both_languages() {
 async fn the_ops_guides_do_not_leak_into_the_code_catalogue() {
     let app = TestApp::spawn().await;
 
-    let resp = app.get("/api/code/guides?kind=onboarding").await;
+    let resp = app.get("/api/guides?kind=onboarding&domain=code").await;
     assert_eq!(resp.status(), 200);
     let jv: serde_json::Value = resp.json().await.unwrap();
     let guides = jv["data"].as_array().unwrap();
@@ -217,16 +222,12 @@ async fn a_guide_falls_back_to_french_rather_than_disappearing() {
     // Arabic has no ops guides. A half-translated catalogue should show the
     // untranslated page rather than a 404 that reads as "does not exist".
     let resp = app
-        .get_with_header(
-            "/api/ops/guides/ops-onboarding-sre",
-            "accept-language",
-            "ar",
-        )
+        .get_with_header("/api/guides/ops-onboarding-sre", "accept-language", "ar")
         .await;
     assert_eq!(resp.status(), 200);
 
     let jv: serde_json::Value = resp.json().await.unwrap();
-    assert_eq!(jv["data"]["guide"]["locale"], "fr");
+    assert_eq!(jv["data"]["locale"], "fr");
 
     drop(app);
 }

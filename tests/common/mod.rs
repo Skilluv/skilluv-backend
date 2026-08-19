@@ -530,22 +530,43 @@ impl TestApp {
     /// real, and a login that fails for any other reason still fails.
     pub async fn login(&self, identifier: &str) -> Value {
         let resp = self.try_login(identifier).await;
-        if resp.status() == StatusCode::FORBIDDEN {
-            sqlx::query("UPDATE users SET totp_enabled = FALSE WHERE username = $1 OR email = $1")
-                .bind(identifier)
-                .execute(&self.db)
-                .await
-                .expect("clear totp for test login");
-            let resp = self.try_login(identifier).await;
-            sqlx::query("UPDATE users SET totp_enabled = TRUE WHERE username = $1 OR email = $1")
-                .bind(identifier)
-                .execute(&self.db)
-                .await
-                .expect("restore totp after test login");
+        if resp.status() != StatusCode::FORBIDDEN {
             assert_eq!(resp.status(), StatusCode::OK);
             return resp.json().await.expect("Failed to parse login response");
         }
 
+        // A 403 is only stepped around when the account actually has TOTP on.
+        // Checking first matters: a 403 for any other reason — a banned
+        // account, say — would otherwise be retried and then left with
+        // `totp_enabled = TRUE` on a user who never had a second factor,
+        // which is a lie the next assertion in that test would inherit.
+        let has_totp: bool = sqlx::query_scalar(
+            "SELECT COALESCE(BOOL_OR(totp_enabled), FALSE) FROM users
+              WHERE username = $1 OR email = $1",
+        )
+        .bind(identifier)
+        .fetch_one(&self.db)
+        .await
+        .expect("read totp state for test login");
+
+        if !has_totp {
+            let body = resp.text().await.unwrap_or_default();
+            panic!(
+                "login as {identifier} was refused with 403, and not for a second factor: {body}"
+            );
+        }
+
+        sqlx::query("UPDATE users SET totp_enabled = FALSE WHERE username = $1 OR email = $1")
+            .bind(identifier)
+            .execute(&self.db)
+            .await
+            .expect("clear totp for test login");
+        let resp = self.try_login(identifier).await;
+        sqlx::query("UPDATE users SET totp_enabled = TRUE WHERE username = $1 OR email = $1")
+            .bind(identifier)
+            .execute(&self.db)
+            .await
+            .expect("restore totp after test login");
         assert_eq!(resp.status(), StatusCode::OK);
         resp.json().await.expect("Failed to parse login response")
     }

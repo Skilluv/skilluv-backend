@@ -11,6 +11,8 @@
 //! written again here.
 
 use axum::extract::{Path, Query, State};
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::Deserialize;
@@ -38,6 +40,17 @@ pub fn mission_routes() -> Router<AppState> {
         )
         .route("/mission-invoices/{id}/checkout", post(pay_invoice))
         .route("/users/me/missions", get(my_missions))
+        .route(
+            "/missions/{slug}/deliveries",
+            get(list_rounds).post(deliver_round),
+        )
+        .route("/missions/{slug}/deliveries/accept", post(accept_round))
+        .route(
+            "/missions/{slug}/deliveries/request-changes",
+            post(request_changes),
+        )
+        .route("/missions/{slug}/ratings", get(list_ratings).post(rate))
+        .route("/users/{username}/mission-standing", get(standing))
 }
 
 fn build_response(data: Value) -> Value {
@@ -584,4 +597,235 @@ pub async fn my_missions(
     Ok(Json(build_response(json!({
         "applications": applications
     }))))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Delivery rounds
+// ═══════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DeliverBody {
+    /// Where the work is: an https link or a stored object.
+    pub artifact_url: String,
+    /// What changed since the previous round, and what to look at.
+    #[serde(default)]
+    pub notes_md: Option<String>,
+}
+
+/// Hand in a round.
+///
+/// Two or three rounds is the normal case for design work, not a failure. The
+/// mission stays `in_progress` until a round is accepted — nothing about the
+/// mission regresses, because the rounds live on the delivery.
+#[utoipa::path(
+    post, path = "/api/missions/{slug}/deliveries", tag = "missions",
+    params(("slug" = String, Path)),
+    request_body = DeliverBody,
+    responses(
+        (status = 201, description = "round handed in"),
+        (status = 403, description = "not the person this mission is assigned to",
+         body = crate::api_response::ErrorResponse),
+        (status = 409, description = "not in progress, or a round is already waiting",
+         body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn deliver_round(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(slug): Path<String>,
+    Json(body): Json<DeliverBody>,
+) -> Result<impl IntoResponse, AppError> {
+    let mission = missions::by_slug(&state.db, &slug).await?;
+    let delivery = crate::services::mission_delivery::deliver(
+        &state.db,
+        mission.id,
+        auth.user_id,
+        &body.artifact_url,
+        body.notes_md.as_deref(),
+    )
+    .await?;
+    Ok((
+        StatusCode::CREATED,
+        Json(build_response(json!({ "delivery": delivery }))),
+    ))
+}
+
+/// Every round of a mission, oldest first — the trail an arbitration reads.
+#[utoipa::path(
+    get, path = "/api/missions/{slug}/deliveries", tag = "missions",
+    params(("slug" = String, Path)),
+    responses((status = 200, description = "the rounds, oldest first")),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_rounds(
+    State(state): State<AppState>,
+    _auth: AuthUser,
+    Path(slug): Path<String>,
+) -> Result<Json<Value>, AppError> {
+    let mission = missions::by_slug(&state.db, &slug).await?;
+    let rounds = crate::services::mission_delivery::rounds_of(&state.db, mission.id).await?;
+    Ok(Json(build_response(json!({ "rounds": rounds }))))
+}
+
+/// Accept the waiting round. The mission becomes `delivered`.
+#[utoipa::path(
+    post, path = "/api/missions/{slug}/deliveries/accept", tag = "missions",
+    params(("slug" = String, Path)),
+    responses(
+        (status = 200, description = "accepted, and the mission is delivered"),
+        (status = 403, description = "not a member of the enterprise that published it",
+         body = crate::api_response::ErrorResponse),
+        (status = 409, description = "no round is waiting",
+         body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn accept_round(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(slug): Path<String>,
+) -> Result<Json<Value>, AppError> {
+    let mission = missions::by_slug(&state.db, &slug).await?;
+    let delivery =
+        crate::services::mission_delivery::accept(&state.db, mission.id, auth.user_id).await?;
+    Ok(Json(build_response(json!({ "delivery": delivery }))))
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RequestChangesBody {
+    /// What is wrong. At least twenty characters: "not quite" costs a round
+    /// and teaches nothing.
+    pub reason: String,
+}
+
+/// Ask for another round.
+#[utoipa::path(
+    post, path = "/api/missions/{slug}/deliveries/request-changes", tag = "missions",
+    params(("slug" = String, Path)),
+    request_body = RequestChangesBody,
+    responses(
+        (status = 200, description = "changes requested, and the mission stays in progress"),
+        (status = 400, description = "no reason given", body = crate::api_response::ErrorResponse),
+        (status = 409, description = "no round is waiting",
+         body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn request_changes(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(slug): Path<String>,
+    Json(body): Json<RequestChangesBody>,
+) -> Result<Json<Value>, AppError> {
+    let mission = missions::by_slug(&state.db, &slug).await?;
+    let delivery = crate::services::mission_delivery::request_changes(
+        &state.db,
+        mission.id,
+        auth.user_id,
+        &body.reason,
+    )
+    .await?;
+    Ok(Json(build_response(json!({ "delivery": delivery }))))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Ratings
+// ═══════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RateBody {
+    /// 1 to 5.
+    pub rating: i16,
+    #[serde(default)]
+    pub comment_md: Option<String>,
+}
+
+/// Rate the other side.
+///
+/// Written blind: nothing is readable until both sides have written, or until
+/// fourteen days have passed. A rating one side can read before writing their
+/// own is a negotiation, and a rating a silent client can suppress for ever is
+/// worse.
+#[utoipa::path(
+    post, path = "/api/missions/{slug}/ratings", tag = "missions",
+    params(("slug" = String, Path)),
+    request_body = RateBody,
+    responses(
+        (status = 201, description = "recorded, and hidden until the other side writes"),
+        (status = 403, description = "neither side of this mission",
+         body = crate::api_response::ErrorResponse),
+        (status = 409, description = "not delivered yet, or already rated",
+         body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn rate(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(slug): Path<String>,
+    Json(body): Json<RateBody>,
+) -> Result<impl IntoResponse, AppError> {
+    let mission = missions::by_slug(&state.db, &slug).await?;
+    let rating = crate::services::mission_delivery::rate(
+        &state.db,
+        mission.id,
+        auth.user_id,
+        body.rating,
+        body.comment_md.as_deref(),
+    )
+    .await?;
+    Ok((
+        StatusCode::CREATED,
+        Json(build_response(json!({ "rating": rating }))),
+    ))
+}
+
+/// The ratings on a mission, once they are readable.
+///
+/// An empty list while they are still blind: "nobody has said anything yet"
+/// and "it is not your turn to read" look the same from outside, and the
+/// difference is not worth leaking.
+#[utoipa::path(
+    get, path = "/api/missions/{slug}/ratings", tag = "missions",
+    params(("slug" = String, Path)),
+    responses((status = 200, description = "the ratings, or nothing while they are blind")),
+)]
+pub async fn list_ratings(
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+) -> Result<Json<Value>, AppError> {
+    let mission = missions::by_slug(&state.db, &slug).await?;
+    let ratings = crate::services::mission_delivery::ratings_of(&state.db, mission.id).await?;
+    Ok(Json(build_response(json!({ "ratings": ratings }))))
+}
+
+/// What somebody's received ratings average to.
+///
+/// `average` is null rather than zero when there is nothing revealed yet: an
+/// unrated person is not a badly rated one, and a zero on a profile would say
+/// the opposite.
+#[utoipa::path(
+    get, path = "/api/users/{username}/mission-standing", tag = "missions",
+    params(("username" = String, Path)),
+    responses(
+        (status = 200, description = "how many revealed ratings, and their average"),
+        (status = 404, description = "no such account", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn standing(
+    State(state): State<AppState>,
+    Path(username): Path<String>,
+) -> Result<Json<Value>, AppError> {
+    let user_id: Uuid = sqlx::query_scalar("SELECT id FROM users WHERE username = $1")
+        .bind(&username)
+        .fetch_optional(&state.db)
+        .await?
+        .ok_or_else(|| AppError::NotFound(format!("user '{username}' not found")))?;
+
+    let standing = crate::services::mission_delivery::standing_of(&state.db, user_id).await?;
+    Ok(Json(build_response(json!({ "standing": standing }))))
 }

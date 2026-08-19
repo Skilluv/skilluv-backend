@@ -69,6 +69,7 @@ pub mod llm_verifier;
 pub mod maintainer_digest;
 pub mod mentions;
 pub mod mission_billing;
+pub mod mission_delivery;
 pub mod missions;
 pub mod mobile_money;
 pub mod mobile_push;

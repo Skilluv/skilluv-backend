@@ -45,11 +45,29 @@ pub const IP_TERMS: &[&str] = &[
     "dual_license",
 ];
 
+/// What a finished mission is handed over as.
+///
+/// The first four are code shapes and were the whole list. A design mission
+/// delivers none of them: a brand identity is not a pull request, and calling
+/// it `consulting_report` would have made every design mission lie about what
+/// it produced. The rest are the shapes design actually hands over.
 pub const DELIVERABLE_FORMATS: &[&str] = &[
     "github_pr",
     "repository_handover",
     "library_published",
     "consulting_report",
+    // Editable sources plus whatever is needed to reopen them. The default
+    // for most design work: a deliverable nobody can reopen is not delivered.
+    "design_source_files",
+    // Marks, palette, type and the rules for using them.
+    "brand_package",
+    // A rendered animation and the project behind it.
+    "motion_package",
+    // A prototype somebody can walk through at a link.
+    "prototype_link",
+    // Tokens, components and their documentation, handed to a team that will
+    // build on them.
+    "design_system_handover",
 ];
 
 /// The statuses a mission can be moved to, from each status.

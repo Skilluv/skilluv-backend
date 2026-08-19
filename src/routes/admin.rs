@@ -1,4 +1,4 @@
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::{get, post, put};
@@ -588,9 +588,47 @@ pub async fn create_challenge(
     ))
 }
 
-/// List all challenges (any status).
+/// Filters for the admin challenge list.
+///
+/// All optional, and all narrowing: sending none returns the first page of
+/// everything, which is what the endpoint did before it had any.
+#[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
+pub struct ChallengeListQuery {
+    /// One of the seven skill domains.
+    #[param(max_length = 30)]
+    pub skill_domain: Option<String>,
+    /// `draft`, `published`, `archived`.
+    #[param(max_length = 20)]
+    pub status: Option<String>,
+    /// Free text over the title.
+    #[param(max_length = 200)]
+    pub q: Option<String>,
+    #[serde(default = "default_challenge_page")]
+    #[param(minimum = 1)]
+    pub page: i64,
+    #[serde(default = "default_challenge_per_page")]
+    #[param(minimum = 1, maximum = 200)]
+    pub per_page: i64,
+}
+
+fn default_challenge_page() -> i64 {
+    1
+}
+fn default_challenge_per_page() -> i64 {
+    50
+}
+
+/// List challenges (any status), filtered and paginated.
+///
+/// It used to `SELECT *` the whole table with no filters and no limit, and
+/// report `pagination.total` as the length of what it had just returned — a
+/// number that agreed with itself and with nothing else. A curator opening a
+/// domain's challenges was served every challenge on the platform.
 #[utoipa::path(
     get, path = "/api/admin/challenges", tag = "admin",
+    params(ChallengeListQuery),
     responses((status = 200, body = ChallengeListResponse), (status = 403, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
 )]
@@ -598,21 +636,74 @@ pub async fn list_all_challenges(
     _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
+    Query(q): Query<ChallengeListQuery>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     require_admin(&state, &auth).await?;
 
-    let challenges: Vec<ChallengeTemplate> =
-        sqlx::query_as("SELECT * FROM challenge_templates ORDER BY created_at DESC")
-            .fetch_all(&state.db)
-            .await?;
+    if let Some(domain) = &q.skill_domain {
+        crate::validators::validate_skill_domain(domain, "skill_domain")?;
+    }
+    if let Some(status) = &q.status
+        && !matches!(status.as_str(), "draft" | "published" | "archived")
+    {
+        return Err(AppError::Validation(
+            "status must be draft, published or archived".into(),
+        ));
+    }
+    crate::validators::check_max_len_opt(&q.q, "q", 200)?;
+    if q.page < 1 {
+        return Err(AppError::Validation("page must be at least 1".into()));
+    }
+    if !(1..=200).contains(&q.per_page) {
+        return Err(AppError::Validation(
+            "per_page must be between 1 and 200".into(),
+        ));
+    }
+
+    // The total is counted, not inferred from the page. A page of fifty that
+    // reports fifty tells an admin the list is fifty long.
+    let total: i64 = sqlx::query_scalar(
+        r#"
+        SELECT count(*) FROM challenge_templates
+         WHERE ($1::TEXT IS NULL OR skill_domain = $1)
+           AND ($2::TEXT IS NULL OR status = $2)
+           AND ($3::TEXT IS NULL OR title ILIKE '%' || $3 || '%')
+        "#,
+    )
+    .bind(q.skill_domain.as_deref())
+    .bind(q.status.as_deref())
+    .bind(q.q.as_deref())
+    .fetch_one(&state.db)
+    .await?;
+
+    let challenges: Vec<ChallengeTemplate> = sqlx::query_as(
+        r#"
+        SELECT * FROM challenge_templates
+         WHERE ($1::TEXT IS NULL OR skill_domain = $1)
+           AND ($2::TEXT IS NULL OR status = $2)
+           AND ($3::TEXT IS NULL OR title ILIKE '%' || $3 || '%')
+         ORDER BY created_at DESC, id DESC
+         LIMIT $4 OFFSET $5
+        "#,
+    )
+    .bind(q.skill_domain.as_deref())
+    .bind(q.status.as_deref())
+    .bind(q.q.as_deref())
+    .bind(q.per_page)
+    .bind((q.page - 1) * q.per_page)
+    .fetch_all(&state.db)
+    .await?;
 
     // Trello rQLFhAmG — flat `{data: T[], pagination}` convention (comme
     // MshrIOYf pour /admin/sso/sessions). L'ancienne shape
     // `{data: {challenges: [...], total: N}}` est droppée.
-    let total = challenges.len();
     Ok(Json(json!({
         "data": challenges,
-        "pagination": { "total": total },
+        "pagination": {
+            "total": total,
+            "page": q.page,
+            "per_page": q.per_page,
+        },
         "meta": {
             "request_id": Uuid::new_v4().to_string(),
             "timestamp": chrono::Utc::now().to_rfc3339(),

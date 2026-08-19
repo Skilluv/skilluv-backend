@@ -23,12 +23,15 @@ pub fn admin_dashboard_routes() -> Router<AppState> {
         .route("/admin/dashboard/health", get(ops_health))
 }
 
-fn ensure_admin(auth: &AuthUser) -> Result<(), AppError> {
-    if auth.role == "admin" {
-        Ok(())
-    } else {
-        Err(AppError::Forbidden)
-    }
+/// The one admin check, delegated.
+///
+/// This file used to read `auth.role` out of the JWT, which stopped being the
+/// answer at P21 when the gate moved to `user_capabilities`. The two disagreed
+/// in both directions: somebody granted `admin` was refused here, and somebody
+/// whose capability had been revoked still got in as long as the column and
+/// their token said `admin`. Revoking a capability has to close every door.
+async fn ensure_admin(state: &AppState, auth: &AuthUser) -> Result<(), AppError> {
+    crate::routes::admin::require_admin(state, auth).await
 }
 
 // ─── Types de réponse ────────────────────────────────────────────
@@ -103,7 +106,7 @@ pub async fn overview(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<ApiResponse<AdminOverviewResponse>>, AppError> {
-    ensure_admin(&auth)?;
+    ensure_admin(&state, &auth).await?;
     let signups_today: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM users WHERE created_at >= date_trunc('day', NOW())",
     )
@@ -178,7 +181,7 @@ pub async fn financial(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<ApiResponse<AdminFinancialResponse>>, AppError> {
-    ensure_admin(&auth)?;
+    ensure_admin(&state, &auth).await?;
     // Revenue this month (from invoices)
     let month_revenue: (i64, i64, String) = sqlx::query_as(
         r#"
@@ -239,7 +242,7 @@ pub async fn moderation_queue(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<ApiResponse<ModerationQueueResponse>>, AppError> {
-    ensure_admin(&auth)?;
+    ensure_admin(&state, &auth).await?;
     let reports_pending: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM reports WHERE status = 'pending'")
             .fetch_one(&state.db)
@@ -288,7 +291,7 @@ pub async fn ops_health(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<ApiResponse<OpsHealthResponse>>, AppError> {
-    ensure_admin(&auth)?;
+    ensure_admin(&state, &auth).await?;
     let pool_size = state.db.size();
     let pool_idle = state.db.num_idle();
     let ws_stats = state.ws.stats().await;

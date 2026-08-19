@@ -99,7 +99,7 @@ pub async fn list_streams(
           FROM revenue_streams s
           LEFT JOIN platform_revenues r
                  ON r.source = s.slug
-                AND r.created_at > NOW() - ($1 || ' days')::INTERVAL
+                AND r.occurred_at > NOW() - ($1 || ' days')::INTERVAL
          GROUP BY s.slug, s.pillar, s.label, s.description, s.recurring, s.is_live
          ORDER BY sum(r.amount_credits) DESC NULLS LAST, s.pillar, s.slug
         "#,
@@ -148,7 +148,7 @@ pub async fn by_pillar(
           FROM revenue_streams s
           LEFT JOIN platform_revenues r
                  ON r.source = s.slug
-                AND r.created_at > NOW() - ($1 || ' days')::INTERVAL
+                AND r.occurred_at > NOW() - ($1 || ' days')::INTERVAL
          GROUP BY s.pillar
          ORDER BY sum(r.amount_credits) DESC NULLS LAST, s.pillar
         "#,

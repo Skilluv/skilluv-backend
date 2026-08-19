@@ -9,6 +9,7 @@
 //! Voir docs/challenges-target-model-and-roadmap.md sections B.12, G.3, 6.3-6.5.
 
 use axum::extract::{Path, State};
+use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
@@ -26,6 +27,11 @@ pub fn attestation_routes() -> Router<AppState> {
     Router::new()
         .route("/users/{user_id}/attestations", get(list_user_attestations))
         .route("/attestations/verify/{code}", get(verify_attestation))
+        .route("/attestations/verify/{code}/card.png", get(verify_card))
+        .route(
+            "/attestations/verify/{code}/certificate.svg",
+            get(verify_certificate),
+        )
         .route("/attestations/compagnonnage", post(issue_compagnonnage))
         .route("/attestations/{id}/revoke", post(revoke_attestation))
 }
@@ -270,4 +276,147 @@ pub async fn revoke_attestation(
         attestation_id: id,
         revoked: true,
     })))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// What an attestation looks like when somebody shows it
+// ═══════════════════════════════════════════════════════════════════
+
+/// What both surfaces need, in one query.
+type CertificateRow = (
+    String,                          // title
+    String,                          // basis
+    chrono::DateTime<chrono::Utc>,   // issued_at
+    Option<chrono::DateTime<chrono::Utc>>, // revoked_at
+    Option<String>,                  // username
+    Option<String>,                  // display_name
+);
+
+async fn load_certificate(
+    state: &AppState,
+    code: &str,
+) -> Result<Option<crate::services::attestation_certificate::CertificateData>, AppError> {
+    let row: Option<CertificateRow> = sqlx::query_as(
+        r#"
+        SELECT a.title, a.basis, a.issued_at, a.revoked_at, u.username, u.display_name
+          FROM attestations a
+          LEFT JOIN users u ON u.id = a.user_id
+         WHERE a.verification_code = $1
+        "#,
+    )
+    .bind(code)
+    .fetch_optional(&state.db)
+    .await?;
+
+    let Some((title, basis, issued_at, revoked_at, username, display_name)) = row else {
+        return Ok(None);
+    };
+
+    let username = username.unwrap_or_else(|| "compte supprimé".to_string());
+    Ok(Some(
+        crate::services::attestation_certificate::CertificateData {
+            display_name: display_name.unwrap_or_else(|| username.clone()),
+            username,
+            title,
+            basis,
+            issued_on: Some(issued_at.format("%d/%m/%Y").to_string()),
+            verification_code: code.to_string(),
+            verify_url: format!(
+                "{}/attestations/verify/{}",
+                state.config.base_url.trim_end_matches('/'),
+                code
+            ),
+            revoked: revoked_at.is_some(),
+        },
+    ))
+}
+
+/// The share card: what a link to this attestation looks like when pasted.
+///
+/// Public and unauthenticated — the callers are the crawlers of X, LinkedIn
+/// and Facebook, which follow `og:image` without cookies.
+///
+/// An unknown code is a 404 here, unlike the slice card. The difference is
+/// deliberate: that one is fetched by a crawler racing a page being
+/// published, where a generic image beats no preview. This one is fetched
+/// from a page that already knows the code exists.
+#[utoipa::path(
+    get,
+    path = "/api/attestations/verify/{code}/card.png",
+    tag = "profile",
+    params(("code" = String, Path, description = "Verification code")),
+    responses(
+        (status = 200, description = "PNG share card, 1200x630", content_type = "image/png"),
+        (status = 404, description = "No such attestation", body = crate::api_response::ErrorResponse),
+    ),
+    security(),
+)]
+pub async fn verify_card(
+    State(state): State<AppState>,
+    Path(code): Path<String>,
+) -> Result<axum::response::Response, AppError> {
+    let data = load_certificate(&state, &code)
+        .await?
+        .ok_or_else(|| AppError::NotFound("unknown verification code".into()))?;
+
+    let png = crate::services::attestation_certificate::render_card_png(&data)?;
+
+    let mut headers = axum::http::HeaderMap::new();
+    headers.insert(
+        axum::http::header::CONTENT_TYPE,
+        axum::http::HeaderValue::from_static("image/png"),
+    );
+    // Short rather than immutable: an attestation can be revoked, and a card
+    // cached for a year would keep saying it holds long after it stopped.
+    headers.insert(
+        axum::http::header::CACHE_CONTROL,
+        axum::http::HeaderValue::from_static("public, max-age=3600"),
+    );
+
+    Ok((axum::http::StatusCode::OK, headers, png).into_response())
+}
+
+/// The printable sheet, as A4 SVG.
+///
+/// Printed to PDF by the browser, losslessly, with the vectors and the fonts
+/// intact. That is a better PDF than a rasterised one, and it needs no
+/// external renderer — the slice attestation's PDF path posts HTML to
+/// `PDF_RENDERER_URL`, which is a second service to run and which returns 503
+/// today because nobody runs it.
+///
+/// A revoked attestation still renders, and says so across the top: somebody
+/// holding an old copy has to be able to find out that it no longer holds,
+/// and a 404 would leave them believing it.
+#[utoipa::path(
+    get,
+    path = "/api/attestations/verify/{code}/certificate.svg",
+    tag = "profile",
+    params(("code" = String, Path, description = "Verification code")),
+    responses(
+        (status = 200, description = "A4 certificate, printable to PDF", content_type = "image/svg+xml"),
+        (status = 404, description = "No such attestation", body = crate::api_response::ErrorResponse),
+    ),
+    security(),
+)]
+pub async fn verify_certificate(
+    State(state): State<AppState>,
+    Path(code): Path<String>,
+) -> Result<axum::response::Response, AppError> {
+    let data = load_certificate(&state, &code)
+        .await?
+        .ok_or_else(|| AppError::NotFound("unknown verification code".into()))?;
+
+    let svg = crate::services::attestation_certificate::build_certificate_svg(&data);
+
+    let mut headers = axum::http::HeaderMap::new();
+    headers.insert(
+        axum::http::header::CONTENT_TYPE,
+        axum::http::HeaderValue::from_static("image/svg+xml; charset=utf-8"),
+    );
+    headers.insert(
+        axum::http::header::CACHE_CONTROL,
+        axum::http::HeaderValue::from_static("public, max-age=3600"),
+    );
+
+    Ok((axum::http::StatusCode::OK, headers, svg).into_response())
 }

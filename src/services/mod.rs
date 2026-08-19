@@ -6,6 +6,7 @@ pub mod ai_queue;
 pub mod analytics;
 pub mod apprentice_verification;
 pub mod artefact_attestations;
+pub mod attestation_certificate;
 pub mod attestations;
 pub mod audit;
 mod auth;

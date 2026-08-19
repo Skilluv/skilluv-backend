@@ -384,17 +384,23 @@ pub async fn activate(db: &PgPool, program_id: Uuid) -> Result<BigDecimal, AppEr
     .execute(&mut *tx)
     .await?;
 
+    // `renews_at` is the programme's own end date. `corporate_ambassador` is a
+    // recurring product, and 0206 refuses a recurring row that does not say
+    // when — a renewal nobody was told to ask for is one that lapses because
+    // nobody asked. The programme already knows the date; not passing it was
+    // how the activation 500'd.
     let product_id: Uuid = sqlx::query_scalar(
         "INSERT INTO enterprise_products
             (enterprise_id, product_type, source_table, source_id,
-             contract_value, currency)
-         VALUES ($1, 'corporate_ambassador', 'ambassador_programs', $2, $3, $4)
+             contract_value, currency, renews_at)
+         VALUES ($1, 'corporate_ambassador', 'ambassador_programs', $2, $3, $4, $5)
          RETURNING id",
     )
     .bind(program.enterprise_id)
     .bind(program_id)
     .bind(&program.activation_fee)
     .bind(&program.currency)
+    .bind(ends)
     .fetch_one(&mut *tx)
     .await?;
     let _ = product_id;

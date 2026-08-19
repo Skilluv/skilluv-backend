@@ -522,6 +522,21 @@ async fn settling_pays_everybody_currently_consenting_and_nobody_who_withdrew() 
     let created: Value = resp.json().await.unwrap();
     let licence = created["data"]["licence"]["id"].as_str().unwrap();
 
+    // A licence is created `negotiating`, and settling one refuses — paying
+    // royalties out of a contract nobody signed is the thing that check
+    // exists to stop. There is no sign endpoint yet, so the test signs it the
+    // only way there is, and `an_active_contract_is_signed` means the date
+    // and the status have to move together.
+    sqlx::query(
+        "UPDATE data_licensing_contracts
+            SET status = 'signed', signed_at = NOW()
+          WHERE id = $1::uuid",
+    )
+    .bind(licence)
+    .execute(&app.db)
+    .await
+    .unwrap();
+
     // One of them changes their mind before the settlement.
     sqlx::query(
         "UPDATE talent_data_consent SET revoked_at = NOW()
@@ -578,6 +593,21 @@ async fn settling_the_same_period_twice_does_not_pay_twice() {
         .await;
     let created: Value = resp.json().await.unwrap();
     let licence = created["data"]["licence"]["id"].as_str().unwrap();
+
+    // A licence is created `negotiating`, and settling one refuses — paying
+    // royalties out of a contract nobody signed is the thing that check
+    // exists to stop. There is no sign endpoint yet, so the test signs it the
+    // only way there is, and `an_active_contract_is_signed` means the date
+    // and the status have to move together.
+    sqlx::query(
+        "UPDATE data_licensing_contracts
+            SET status = 'signed', signed_at = NOW()
+          WHERE id = $1::uuid",
+    )
+    .bind(licence)
+    .execute(&app.db)
+    .await
+    .unwrap();
 
     let period = json!({ "period_start": "2027-01-01", "period_end": "2027-04-01" });
     app.post(

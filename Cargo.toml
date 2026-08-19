@@ -182,6 +182,10 @@ name = "skilluv-seed-admin"
 path = "src/bin/seed_admin.rs"
 
 [[bin]]
+name = "skilluv-seed-design-canvas"
+path = "src/bin/seed_design_canvas.rs"
+
+[[bin]]
 name = "skilluv-github-ingest"
 path = "src/bin/github_ingest.rs"
 

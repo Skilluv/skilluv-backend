@@ -417,6 +417,9 @@ async fn booking_revenue_marks_a_stream_live() {
     .unwrap();
     assert!(!live_before, "nothing has earned there yet");
 
+    // `fee_rate_bps` has no default on purpose: a revenue line that cannot
+    // say what rate produced it is not auditable. 1000 bps is the ten percent
+    // the mission marketplace takes.
     sqlx::query(
         // `fee_rate_bps` has been NOT NULL since migration 0100: a revenue line
         // that does not say what share the platform took is a number nobody can
@@ -460,4 +463,281 @@ async fn the_revenue_figures_are_not_public() {
     app.login("revenue_nosy").await;
 
     assert_eq!(app.get("/api/admin/revenue/streams").await.status(), 403);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// What somebody has done, not only what they are
+// ═══════════════════════════════════════════════════════════════════
+
+/// A concluded contest in which `winner` came first and `runner_up` second.
+async fn a_contest_won_by(app: &TestApp, slug: &str, winner: Uuid, runner_up: Option<Uuid>) {
+    let tournament: Uuid = sqlx::query_scalar(
+        "INSERT INTO tournaments (slug, name, skill_domain, kind, format, status,
+                                  starts_at, ends_at)
+         VALUES ($1, 'Concours', 'design', 'individual', 'ladder', 'concluded',
+                 NOW() - INTERVAL '30 days', NOW() - INTERVAL '2 days')
+         RETURNING id",
+    )
+    .bind(slug)
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+
+    for (user, rank) in [Some((winner, 1)), runner_up.map(|u| (u, 2))]
+        .into_iter()
+        .flatten()
+    {
+        sqlx::query(
+            "INSERT INTO tournament_participants
+                 (tournament_id, participant_type, participant_id, rank)
+             VALUES ($1, 'user', $2, $3)",
+        )
+        .bind(tournament)
+        .bind(user)
+        .bind(rank)
+        .execute(&app.db)
+        .await
+        .unwrap();
+    }
+}
+
+#[tokio::test]
+async fn a_family_narrows_to_a_group_of_trades() {
+    let app = TestApp::spawn().await;
+    let brand = a_talent(&app, "fam_brand").await;
+    let motion = a_talent(&app, "fam_motion").await;
+
+    // Two trades in two families. `reviewer_group` is the grouping the
+    // platform maintains for drawing reviewers, which makes it the one a
+    // recruiter can rely on being current.
+    declares(&app, brand, "design-brand-identity", true).await;
+    declares(&app, motion, "design-motion-2d", true).await;
+
+    let found = usernames(&search(&app, "?family=brand").await);
+    assert!(found.contains(&"fam_brand".to_string()), "{found:?}");
+    assert!(!found.contains(&"fam_motion".to_string()), "{found:?}");
+}
+
+#[tokio::test]
+async fn a_family_a_recruiter_invents_returns_nobody_not_everybody() {
+    let app = TestApp::spawn().await;
+    let someone = a_talent(&app, "fam_nobody").await;
+    declares(&app, someone, "design-brand-identity", true).await;
+
+    // Silently dropping an unmatched filter is how a recruiter concludes the
+    // platform has nobody in a family, having actually been shown everybody.
+    let body = search(&app, "?family=does-not-exist").await;
+    assert!(usernames(&body).is_empty(), "{body}");
+}
+
+#[tokio::test]
+async fn a_podium_is_not_a_win() {
+    let app = TestApp::spawn().await;
+    let first = a_talent(&app, "won_first").await;
+    let second = a_talent(&app, "won_second").await;
+    a_contest_won_by(&app, "concours-un", first, Some(second)).await;
+
+    let found = usernames(&search(&app, "?min_contests_won=1").await);
+    assert!(found.contains(&"won_first".to_string()), "{found:?}");
+    assert!(
+        !found.contains(&"won_second".to_string()),
+        "second place is not a win: {found:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_contest_still_running_has_no_result_to_report() {
+    let app = TestApp::spawn().await;
+    let leading = a_talent(&app, "won_running").await;
+
+    let tournament: Uuid = sqlx::query_scalar(
+        "INSERT INTO tournaments (slug, name, skill_domain, kind, format, status,
+                                  starts_at, ends_at)
+         VALUES ('concours-en-cours', 'Concours', 'design', 'individual', 'ladder',
+                 'active', NOW() - INTERVAL '2 days', NOW() + INTERVAL '5 days')
+         RETURNING id",
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO tournament_participants
+             (tournament_id, participant_type, participant_id, rank)
+         VALUES ($1, 'user', $2, 1)",
+    )
+    .bind(tournament)
+    .bind(leading)
+    .execute(&app.db)
+    .await
+    .unwrap();
+
+    // Leading a contest that has not finished is not having won one.
+    let found = usernames(&search(&app, "?min_contests_won=1").await);
+    assert!(!found.contains(&"won_running".to_string()), "{found:?}");
+}
+
+#[tokio::test]
+async fn a_design_portfolio_counts_as_a_proved_platform() {
+    let app = TestApp::spawn().await;
+    let designer = a_talent(&app, "plat_behance").await;
+
+    // Design portfolios live in `external_signals`, confirmed by a moderator
+    // rather than by OAuth — the platform will not fetch arbitrary
+    // user-supplied URLs. The search read only the forges and registries, so
+    // a recruiter filtering on Behance was shown nobody.
+    sqlx::query(
+        "INSERT INTO external_signals (user_id, provider, url, title, verified_at,
+                                       verification_method)
+         VALUES ($1, 'behance', 'https://behance.net/exemple', 'Portfolio',
+                 NOW(), 'manual_review')",
+    )
+    .bind(designer)
+    .execute(&app.db)
+    .await
+    .unwrap();
+
+    let body = search(&app, "?platform=behance").await;
+    assert!(
+        usernames(&body).contains(&"plat_behance".to_string()),
+        "{body}"
+    );
+    assert!(
+        body["data"]["talents"][0]["verified_platforms"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|p| p == "behance"),
+        "{body}"
+    );
+}
+
+#[tokio::test]
+async fn an_unconfirmed_portfolio_is_still_not_evidence() {
+    let app = TestApp::spawn().await;
+    let claimer = a_talent(&app, "plat_claimed").await;
+    sqlx::query(
+        "INSERT INTO external_signals (user_id, provider, url, title)
+         VALUES ($1, 'dribbble', 'https://dribbble.com/quelquun', 'Portfolio')",
+    )
+    .bind(claimer)
+    .execute(&app.db)
+    .await
+    .unwrap();
+
+    // Anybody can type anybody's handle. The rule that holds for the forges
+    // holds here.
+    let found = usernames(&search(&app, "?platform=dribbble").await);
+    assert!(found.is_empty(), "{found:?}");
+}
+
+#[tokio::test]
+async fn sorting_by_wins_reorders_and_paginates_on_wins() {
+    let app = TestApp::spawn().await;
+    let strong = a_talent(&app, "sort_strong").await;
+    let winner = a_talent(&app, "sort_winner").await;
+
+    // The high scorer has never won; the winner scores nothing. Under the
+    // default sort the first leads, under `contests_won` the second does.
+    score(&app, strong, "design", 4000, "senior").await;
+    a_contest_won_by(&app, "concours-deux", winner, None).await;
+
+    let by_score = usernames(&search(&app, "?limit=2").await);
+    assert_eq!(by_score.first().unwrap(), "sort_strong", "{by_score:?}");
+
+    let by_wins = search(&app, "?sort=contests_won&limit=1").await;
+    assert_eq!(usernames(&by_wins).first().unwrap(), "sort_winner");
+
+    // The cursor carries the key that was sorted on. Carrying the craft score
+    // instead would skip or repeat rows here, silently.
+    let cursor = by_wins["data"]["next_cursor"].as_str().unwrap().to_string();
+    assert!(
+        cursor.starts_with("1|"),
+        "cursor holds the win count: {cursor}"
+    );
+
+    let page_two =
+        usernames(&search(&app, &format!("?sort=contests_won&limit=5&after={cursor}")).await);
+    assert!(
+        !page_two.contains(&"sort_winner".to_string()),
+        "{page_two:?}"
+    );
+}
+
+#[tokio::test]
+async fn never_featured_sorts_below_everybody_who_ever_was() {
+    let app = TestApp::spawn().await;
+    let featured = a_talent(&app, "feat_yes").await;
+    let never = a_talent(&app, "feat_no").await;
+    score(&app, never, "design", 9000, "principal").await;
+
+    sqlx::query(
+        "INSERT INTO featured_talents (skill_domain, week_of, user_id, reason_md)
+         VALUES ('design', date_trunc('week', CURRENT_DATE)::DATE, $1,
+                 'Une identité qui tient sur un tampon encreur, et qui reste lisible gravée dans le bois.')",
+    )
+    .bind(featured)
+    .execute(&app.db)
+    .await
+    .unwrap();
+
+    // Never featured is not "featured in 1970". A high score does not buy a
+    // place in an editorial ranking.
+    let ordered = usernames(&search(&app, "?sort=recently_featured&limit=5").await);
+    assert_eq!(ordered.first().unwrap(), "feat_yes", "{ordered:?}");
+}
+
+#[tokio::test]
+async fn a_featuring_ages_out_of_the_filter() {
+    let app = TestApp::spawn().await;
+    let old = a_talent(&app, "feat_old").await;
+    sqlx::query(
+        "INSERT INTO featured_talents (skill_domain, week_of, user_id, reason_md)
+         VALUES ('design', (CURRENT_DATE - INTERVAL '400 days')::DATE, $1,
+                 'Une mise en avant qui date, gardée pour montrer que le filtre par ancienneté fonctionne.')",
+    )
+    .bind(old)
+    .execute(&app.db)
+    .await
+    .unwrap();
+
+    // A featuring is somebody's judgement on a given week. Two years later it
+    // says what they thought then.
+    assert!(
+        !usernames(&search(&app, "?featured_within_days=30").await)
+            .contains(&"feat_old".to_string())
+    );
+    assert!(
+        usernames(&search(&app, "?featured_within_days=3000").await)
+            .contains(&"feat_old".to_string())
+    );
+}
+
+#[tokio::test]
+async fn a_sort_nobody_defined_is_refused_rather_than_ignored() {
+    let app = TestApp::spawn().await;
+    // Falling back to the default would answer a different question than the
+    // one asked, and look like it answered the right one.
+    let resp = app.get("/api/talents/search?sort=whatever").await;
+    assert_eq!(resp.status(), 400);
+
+    let resp = app.get("/api/talents/search?min_contests_won=0").await;
+    assert_eq!(resp.status(), 400, "at least nothing is not a filter");
+}
+
+#[tokio::test]
+async fn the_track_record_is_in_every_row() {
+    let app = TestApp::spawn().await;
+    let person = a_talent(&app, "record_all").await;
+    declares(&app, person, "design-brand-identity", true).await;
+    a_contest_won_by(&app, "concours-trois", person, None).await;
+
+    let body = search(&app, "?q=record_all").await;
+    let row = &body["data"]["talents"][0];
+    assert_eq!(row["contests_won"], 1, "{body}");
+    assert_eq!(row["missions_delivered"], 0);
+    assert!(row["last_featured_on"].is_null());
+    assert_eq!(row["families"][0], "brand", "{body}");
+    // The sort key is pagination machinery, not something a caller reasons
+    // about; it stays out of the answer.
+    assert!(row.get("sort_key").is_none(), "{body}");
 }

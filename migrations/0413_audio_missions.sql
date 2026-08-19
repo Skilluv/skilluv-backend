@@ -70,6 +70,20 @@ INSERT INTO mission_deliverable_formats (slug, skill_domain, name, description, 
      'Un service en fonctionnement, avec la documentation de son API.', 130),
     ('evaluation_report', 'ai', 'Rapport d''évaluation',
      'Un audit ou une évaluation, avec son protocole.', 140),
+    -- Migration 0254. Design was on its own branch when this table was
+    -- written; its five formats had been added to the CHECK this replaces,
+    -- and dropping the CHECK without carrying them would have made every
+    -- design mission unpublishable.
+    ('design_source_files', 'design', 'Sources ouvrables',
+     'Les fichiers sources et ce qu''il faut pour les rouvrir. Un livrable que personne ne peut rouvrir n''est pas livré.', 150),
+    ('brand_package', 'design', 'Identité de marque',
+     'Les marques, la palette, la typographie, et les règles qui disent comment s''en servir.', 160),
+    ('motion_package', 'design', 'Animation et projet',
+     'Une animation rendue et le projet qui la produit.', 170),
+    ('prototype_link', 'design', 'Prototype navigable',
+     'Un prototype que quelqu''un peut parcourir depuis un lien.', 180),
+    ('design_system_handover', 'design', 'Design system remis',
+     'Les tokens, les composants et leur documentation, remis à une équipe qui va construire dessus.', 190),
     -- Audio
     ('audio_master_stems', 'audio', 'Master et stems',
      'La pièce finale plus ses pistes séparées, alignées et nommées. Sans les stems, le client ne peut plus rien ajuster sans revenir vers l''auteur.', 210),

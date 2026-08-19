@@ -42,6 +42,7 @@ Quatre conséquences, visibles dans les documents qui suivent :
 | [Trames de brief](BRIEF-TEMPLATES.md) | Qui écrit un challenge ou un concours. Treize modèles. |
 | [Trames d'écrit](WRITEUP-TEMPLATES.md) | Note de version, critique, étude de cas. |
 | [Devenir relecteur](REVIEWER-ONBOARDING.md) | Qui veut relire, et l'équipe qui recrute. |
+| [Rendre un fichier lourd](LARGE-FILES.md) | Une scène de 4 Go, un projet After Effects : comment, et pourquoi ainsi. |
 | [Vérifications automatiques](AUTO-CHECKS.md) | Ce que la machine dit d'une version, et ce qu'elle ne dira jamais. |
 | [Gouvernance](GOVERNANCE.md) | Qui décide quoi, et comment on conteste. |
 | [Propriété intellectuelle](IP-AND-COPYRIGHT.md) | Qui possède quoi. Concours, droit moral, éléments tiers, données personnelles. |
@@ -71,6 +72,25 @@ Quatre conséquences, visibles dans les documents qui suivent :
 métiers les plus proches du reste de la plateforme ; les dix-huit autres sont
 ouverts en base et attendent des relecteurs. C'est écrit plutôt que caché :
 une promesse d'écosystème vide est pire qu'un domaine annoncé comme jeune.
+
+## D'où vient le travail
+
+Trois sources, et l'équilibre entre elles est une décision, pas un hasard.
+
+| Source | Part visée | Pourquoi |
+| --- | --- | --- |
+| **Briefs curés** | la majorité | Le design n'a pas d'équivalent de l'issue GitHub. Quelqu'un écrit un brief, quelqu'un le lit, ça devient du travail. C'est la source principale, et n'importe qui peut en proposer. |
+| **Projets partenaires** | une part importante | Penpot, tldraw, Storybook, Excalidraw. Du travail dont le résultat est public et vérifiable par un inconnu. |
+| **Nos propres surfaces** | ~15 %, volontairement minoritaire | Une plateforme dont les designers ne travaillent que sur la plateforme produit un portfolio que personne d'extérieur ne peut lire, et une communauté dont le seul client est nous est une communauté qui se parle à elle-même. |
+
+Ce que nos surfaces font bien, c'est le **premier** challenge : le brief est court,
+le contexte est public, et on peut voir la chose qu'on redessine sans demander
+un accès à personne.
+
+Trois des dix briefs Skilluv sont posés en concours plutôt qu'en travail
+individuel — le design system, le PDF d'attestation et la page de confiance —
+parce que ce sont les trois où plusieurs réponses valent la peine d'être
+comparées.
 
 ## Ce que la plateforme ne fera pas
 

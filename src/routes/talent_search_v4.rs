@@ -26,6 +26,19 @@
 //! re-run the same search across a session, and none of the inputs — scores,
 //! orientations, capabilities — moves faster than the hourly sweep that
 //! writes them.
+//!
+//! ## What somebody is, and what they have done
+//!
+//! The filters above describe a person: their trade, their skills, their
+//! country. A recruiter also asks the other question — *what have they
+//! finished* — and until now the endpoint could not answer it: contests won,
+//! missions delivered and editorial featurings were all recorded and none of
+//! them was reachable from a search.
+//!
+//! They are filters here, and sort keys, on the one endpoint. Not a second
+//! endpoint per domain: a design track record and a security one are the same
+//! four facts about different work, and the moment there are two queries the
+//! filters start disagreeing — which is the whole reason v4 exists.
 
 use axum::extract::{Path, Query, State};
 use axum::routing::get;
@@ -99,6 +112,12 @@ pub struct SearchQuery {
     /// Only people for whom this is their primary trade.
     #[serde(default)]
     pub only_primary: bool,
+    /// Family within a trade — `brand`, `motion`, `systems`, `llm-nlp`. It is
+    /// the grouping reviewers are drawn from, which makes it the one grouping
+    /// the platform actually maintains; a recruiter looking for "somebody in
+    /// motion" is asking exactly this.
+    #[param(max_length = 40)]
+    pub family: Option<String>,
     /// CSV of skill slugs. Every one must be proved at `min_proficiency`.
     #[param(max_length = 500)]
     pub skills: Option<String>,
@@ -134,6 +153,24 @@ pub struct SearchQuery {
     /// Tag slug.
     #[param(max_length = 100)]
     pub tag: Option<String>,
+    /// Contests concluded and won outright. A podium is not a win: the
+    /// distinction is the whole point of a ranking.
+    #[param(minimum = 1)]
+    pub min_contests_won: Option<i64>,
+    /// Missions handed in and accepted. Cancelled and in-flight ones do not
+    /// count — an unfinished mission says nothing about finishing.
+    #[param(minimum = 1)]
+    pub min_missions_delivered: Option<i64>,
+    /// Only people featured within this many days. A featuring is editorial,
+    /// and an old one says what somebody thought two years ago.
+    #[param(minimum = 1, maximum = 3650)]
+    pub featured_within_days: Option<i32>,
+    /// `craft_score` (default), `contests_won`, `missions_delivered` or
+    /// `recently_featured`. Always descending: nobody searches for the worst
+    /// match first.
+    #[serde(default = "default_sort")]
+    #[param(pattern = r"^(craft_score|contests_won|missions_delivered|recently_featured)$")]
+    pub sort: String,
     /// From the previous page's `next_cursor`: a score and a user id. The
     /// shape is in the contract because a cursor the handler cannot decode is
     /// refused rather than read as "from the beginning", and a caller has to
@@ -154,6 +191,9 @@ fn default_min_proficiency() -> i16 {
 fn default_limit() -> i64 {
     DEFAULT_LIMIT
 }
+fn default_sort() -> String {
+    "craft_score".into()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
 pub struct Talent {
@@ -170,6 +210,9 @@ pub struct Talent {
     pub scored_domain: Option<String>,
     /// The trades this person declares, active ones first.
     pub orientations: Vec<String>,
+    /// The families those trades belong to, deduplicated. Somebody doing
+    /// brand identity and illustration reads as `["brand", "illustration"]`.
+    pub families: Vec<String>,
     /// Platforms whose ownership was proved. Claimed ones are absent: this is
     /// a recruiter surface, and an unproved handle is not evidence.
     pub verified_platforms: Vec<String>,
@@ -179,6 +222,18 @@ pub struct Talent {
     /// into the craft score: an endorsement is somebody's opinion, and it
     /// must not be able to masquerade as verified work.
     pub vouched_by_count: i64,
+    /// Contests won outright, across every domain.
+    pub contests_won: i64,
+    /// Missions handed in and accepted.
+    pub missions_delivered: i64,
+    /// The Monday of the most recent week this person was featured, if ever.
+    /// A date rather than a boolean: "featured" without a when is a claim
+    /// that never expires.
+    pub last_featured_on: Option<chrono::NaiveDate>,
+    /// The value this page was ordered by, so the cursor is derivable from
+    /// the last row without the caller knowing which sort was asked for.
+    #[serde(skip)]
+    pub sort_key: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -189,23 +244,32 @@ pub struct SearchResponse {
     pub filters_applied: Vec<String>,
 }
 
-/// Where a page stopped. `(craft_score, user_id)` — the order rows come back
-/// in, so the next page resumes exactly where this one ended.
+/// Where a page stopped. `(sort_key, user_id)` — the order rows come back in,
+/// so the next page resumes exactly where this one ended.
+///
+/// The key is whatever was sorted on, not always the craft score: a cursor
+/// that always carried the score would skip and repeat rows the moment a
+/// recruiter sorted by anything else, silently, which is the failure keyset
+/// pagination exists to prevent.
+///
+/// It carries no sort name. Feeding a cursor from one sort into another
+/// paginates nonsense either way, and encoding the name would only let the
+/// endpoint pretend it had checked.
 #[derive(Debug, Clone, Copy)]
 pub struct Cursor {
-    pub score: i32,
+    pub key: i64,
     pub user_id: Uuid,
 }
 
 impl Cursor {
     pub fn encode(&self) -> String {
-        format!("{}|{}", self.score, self.user_id)
+        format!("{}|{}", self.key, self.user_id)
     }
 
     pub fn decode(raw: &str) -> Option<Self> {
-        let (score, user_id) = raw.split_once('|')?;
+        let (key, user_id) = raw.split_once('|')?;
         Some(Cursor {
-            score: score.parse().ok()?,
+            key: key.parse().ok()?,
             user_id: user_id.parse().ok()?,
         })
     }
@@ -300,6 +364,7 @@ pub async fn search(
 
     let talents = sqlx::query_as::<_, Talent>(
         r#"
+        SELECT * FROM (
         SELECT u.id AS user_id,
                u.username,
                u.display_name,
@@ -310,10 +375,28 @@ pub async fn search(
                best.tier_slug AS craft_tier,
                best.skill_domain AS scored_domain,
                COALESCE(orient.slugs, ARRAY[]::TEXT[]) AS orientations,
+               COALESCE(orient.families, ARRAY[]::TEXT[]) AS families,
                COALESCE(plat.platforms, ARRAY[]::TEXT[]) AS verified_platforms,
                u.available_for_hire AS available_for_work,
                COALESCE(badges.n, 0) AS badge_count,
-               COALESCE(vouches.n, 0) AS vouched_by_count
+               COALESCE(vouches.n, 0) AS vouched_by_count,
+               COALESCE(wins.n, 0) AS contests_won,
+               COALESCE(delivered.n, 0) AS missions_delivered,
+               feat.week_of AS last_featured_on,
+
+               -- The value the page is ordered and paginated by. Computed
+               -- once here rather than repeated in ORDER BY and in the cursor
+               -- comparison, where the two could drift apart.
+               CASE $21::TEXT
+                   WHEN 'contests_won' THEN COALESCE(wins.n, 0)
+                   WHEN 'missions_delivered' THEN COALESCE(delivered.n, 0)
+                   -- Days since the epoch. Never featured sorts below anybody
+                   -- who ever was, rather than alongside 1970.
+                   WHEN 'recently_featured'
+                       THEN COALESCE(feat.week_of - DATE '1970-01-01', -1)
+                   ELSE COALESCE(best.score, 0)
+               END::BIGINT AS sort_key
+
           FROM users u
 
           -- The score in the searched domain, or the best one when no domain
@@ -329,18 +412,33 @@ pub async fn search(
           ) AS best ON TRUE
 
           LEFT JOIN LATERAL (
-              SELECT array_agg(o.slug ORDER BY uo.is_primary DESC, o.slug) AS slugs
+              SELECT array_agg(o.slug ORDER BY uo.is_primary DESC, o.slug) AS slugs,
+                     array_agg(DISTINCT o.reviewer_group)
+                         FILTER (WHERE o.reviewer_group IS NOT NULL) AS families
                 FROM user_orientations uo
                 JOIN orientations o ON o.id = uo.orientation_id
                WHERE uo.user_id = u.id AND uo.ended_at IS NULL
           ) AS orient ON TRUE
 
-          -- Proved accounts only. A claimed handle is not evidence, and this
-          -- is the surface where that distinction matters most.
+          -- Proved accounts only, from both places one lives: the forges and
+          -- registries of `user_code_portfolios`, and the design and film
+          -- portfolios of `external_signals`. A claimed handle is not
+          -- evidence, and this is the surface where that matters most.
           LEFT JOIN LATERAL (
-              SELECT array_agg(DISTINCT p.platform) AS platforms
-                FROM user_external_portfolios p
-               WHERE p.user_id = u.id AND p.verified_at IS NOT NULL
+              -- Two tables, because 0415 renamed `user_code_portfolios` to
+              -- `user_external_portfolios` without absorbing
+              -- `external_signals`: registries and forges are in the first,
+              -- the design platforms in the second. A recruiter filtering on
+              -- `platform` means one thing by it, so both are read.
+              SELECT array_agg(DISTINCT name) AS platforms FROM (
+                  SELECT p.platform AS name
+                    FROM user_external_portfolios p
+                   WHERE p.user_id = u.id AND p.verified_at IS NOT NULL
+                  UNION
+                  SELECT es.provider
+                    FROM external_signals es
+                   WHERE es.user_id = u.id AND es.verified_at IS NOT NULL
+              ) AS both_kinds
           ) AS plat ON TRUE
 
           LEFT JOIN LATERAL (
@@ -357,6 +455,33 @@ pub async fn search(
                  AND v.broken_at IS NULL
                  AND v.active_until > NOW()
           ) AS vouches ON TRUE
+
+          -- Won outright, in a contest that finished. Second place is not a
+          -- win, and a contest still running has no result to report.
+          LEFT JOIN LATERAL (
+              SELECT count(*) AS n
+                FROM tournament_participants tp
+                JOIN tournaments t ON t.id = tp.tournament_id
+               WHERE tp.participant_type = 'user'
+                 AND tp.participant_id = u.id
+                 AND tp.rank = 1
+                 AND t.status = 'concluded'
+          ) AS wins ON TRUE
+
+          -- Handed in and accepted. `cancelled` and everything before
+          -- `delivered` say nothing about finishing.
+          LEFT JOIN LATERAL (
+              SELECT count(*) AS n
+                FROM missions m
+               WHERE m.assigned_user_id = u.id
+                 AND m.status IN ('delivered', 'closed')
+          ) AS delivered ON TRUE
+
+          LEFT JOIN LATERAL (
+              SELECT max(ft.week_of) AS week_of
+                FROM featured_talents ft
+               WHERE ft.user_id = u.id
+          ) AS feat ON TRUE
 
          WHERE u.profile_active = TRUE
            AND u.is_banned = FALSE
@@ -393,10 +518,14 @@ pub async fn search(
 
            AND ($9::INTEGER IS NULL OR COALESCE(best.score, 0) >= $9)
 
-           AND ($10::TEXT IS NULL OR EXISTS (
-                   SELECT 1 FROM user_external_portfolios p2
-                    WHERE p2.user_id = u.id AND p2.platform = $10
-                      AND p2.verified_at IS NOT NULL))
+           -- Both tables, for the same reason the column above reads both.
+           AND ($10::TEXT IS NULL
+                OR EXISTS (SELECT 1 FROM user_external_portfolios p2
+                            WHERE p2.user_id = u.id AND p2.platform = $10
+                              AND p2.verified_at IS NOT NULL)
+                OR EXISTS (SELECT 1 FROM external_signals es2
+                            WHERE es2.user_id = u.id AND es2.provider = $10
+                              AND es2.verified_at IS NOT NULL))
 
            AND ($11::TEXT IS NULL OR u.country_iso2 = $11)
            -- B2 and above. Below that somebody can read the language, not
@@ -415,15 +544,31 @@ pub async fn search(
                       AND ub2.revoked_at IS NULL))
            AND ($16::TEXT IS NULL OR EXISTS (
                    SELECT 1 FROM tag_map tm
-                     JOIN tags t ON t.id = tm.tag_id
+                     JOIN tags t2 ON t2.id = tm.tag_id
                     WHERE tm.target_type = 'user' AND tm.target_id = u.id
-                      AND t.slug = $16))
+                      AND t2.slug = $16))
 
-           AND ($17::INTEGER IS NULL
-                OR (COALESCE(best.score, 0), u.id) < ($17::INTEGER, $18::UUID))
+           -- The family is read through the same active-orientation rule as
+           -- the trade filter: somebody who has left a trade has left its
+           -- family with it.
+           AND ($17::TEXT IS NULL OR EXISTS (
+                   SELECT 1 FROM user_orientations uo2
+                     JOIN orientations o2 ON o2.id = uo2.orientation_id
+                    WHERE uo2.user_id = u.id
+                      AND uo2.ended_at IS NULL
+                      AND o2.reviewer_group = $17))
 
-         ORDER BY COALESCE(best.score, 0) DESC, u.id DESC
-         LIMIT $19
+           AND ($18::BIGINT IS NULL OR COALESCE(wins.n, 0) >= $18)
+           AND ($19::BIGINT IS NULL OR COALESCE(delivered.n, 0) >= $19)
+           AND ($20::INTEGER IS NULL
+                OR feat.week_of >= (CURRENT_DATE - ($20::INTEGER * INTERVAL '1 day')))
+        ) AS ranked
+
+         WHERE ($22::BIGINT IS NULL
+                OR (ranked.sort_key, ranked.user_id) < ($22::BIGINT, $23::UUID))
+
+         ORDER BY ranked.sort_key DESC, ranked.user_id DESC
+         LIMIT $24
         "#,
     )
     .bind(q.q.as_deref())
@@ -442,7 +587,12 @@ pub async fn search(
     .bind(q.available_only)
     .bind(q.badge.as_deref())
     .bind(q.tag.as_deref())
-    .bind(cursor.map(|c| c.score))
+    .bind(q.family.as_deref())
+    .bind(q.min_contests_won)
+    .bind(q.min_missions_delivered)
+    .bind(q.featured_within_days)
+    .bind(&q.sort)
+    .bind(cursor.map(|c| c.key))
     .bind(cursor.map(|c| c.user_id))
     .bind(q.limit)
     .fetch_all(&state.db)
@@ -455,7 +605,7 @@ pub async fn search(
         .flatten()
         .map(|last| {
             Cursor {
-                score: last.craft_score,
+                key: last.sort_key,
                 user_id: last.user_id,
             }
             .encode()
@@ -482,6 +632,7 @@ fn validate(q: &SearchQuery) -> Result<(), AppError> {
     crate::validators::check_max_len_opt(&q.platform, "platform", 30)?;
     crate::validators::check_max_len_opt(&q.badge, "badge", 100)?;
     crate::validators::check_max_len_opt(&q.tag, "tag", 100)?;
+    crate::validators::check_max_len_opt(&q.family, "family", 40)?;
     crate::validators::check_max_len_opt(&q.after, "after", 100)?;
 
     if !matches!(q.mode.as_str(), "active" | "learning" | "both") {
@@ -498,6 +649,37 @@ fn validate(q: &SearchQuery) -> Result<(), AppError> {
         return Err(AppError::Validation(format!(
             "limit must be between 1 and {MAX_LIMIT}"
         )));
+    }
+    if !matches!(
+        q.sort.as_str(),
+        "craft_score" | "contests_won" | "missions_delivered" | "recently_featured"
+    ) {
+        return Err(AppError::Validation(
+            "sort must be craft_score, contests_won, missions_delivered or recently_featured"
+                .into(),
+        ));
+    }
+    // Floors, so zero is not a filter — asking for at least nothing is asking
+    // for nothing, and a caller who sends it means they left the field blank.
+    for (name, value) in [
+        ("min_contests_won", q.min_contests_won),
+        ("min_missions_delivered", q.min_missions_delivered),
+    ] {
+        if let Some(v) = value
+            && v < 1
+        {
+            return Err(AppError::Validation(format!("{name} must be at least 1")));
+        }
+    }
+    // Ten years. Beyond that the filter is not narrowing anything, and the
+    // ceiling keeps a caller from writing a number that overflows the
+    // interval it becomes.
+    if let Some(days) = q.featured_within_days
+        && !(1..=3650).contains(&days)
+    {
+        return Err(AppError::Validation(
+            "featured_within_days must be between 1 and 3650".into(),
+        ));
     }
     Ok(())
 }
@@ -559,6 +741,24 @@ fn filters_applied(q: &SearchQuery, skills: &[String]) -> Vec<String> {
     if q.tag.is_some() {
         note("tag");
     }
+    if q.family.is_some() {
+        note("family");
+    }
+    if q.min_contests_won.is_some() {
+        note("min_contests_won");
+    }
+    if q.min_missions_delivered.is_some() {
+        note("min_missions_delivered");
+    }
+    if q.featured_within_days.is_some() {
+        note("featured_within_days");
+    }
+    // The sort is not a filter, but it changes which rows a page holds as
+    // surely as one does, and a recruiter comparing two pages needs to know
+    // it moved.
+    if q.sort != "craft_score" {
+        note(&format!("sort:{}", q.sort));
+    }
     applied
 }
 
@@ -567,7 +767,7 @@ fn filters_applied(q: &SearchQuery, skills: &[String]) -> Vec<String> {
 fn cache_key_for(state: &AppState, q: &SearchQuery) -> String {
     let field = |value: &Option<String>| value.as_deref().unwrap_or("-").to_string();
     format!(
-        "talents:v4:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}",
+        "talents:v4:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}",
         state.db.connect_options().get_database().unwrap_or("db"),
         field(&q.q),
         field(&q.skill_domain),
@@ -586,6 +786,11 @@ fn cache_key_for(state: &AppState, q: &SearchQuery) -> String {
         q.available_only,
         field(&q.badge),
         field(&q.tag),
+        field(&q.family),
+        q.min_contests_won.unwrap_or(-1),
+        q.min_missions_delivered.unwrap_or(-1),
+        q.featured_within_days.unwrap_or(-1),
+        q.sort,
         format_args!("{}:{}", field(&q.after), q.limit),
     )
 }
@@ -716,20 +921,21 @@ mod tests {
     #[test]
     fn a_cursor_survives_the_round_trip() {
         let cursor = Cursor {
-            score: 1420,
+            key: 1420,
             user_id: Uuid::parse_str("11111111-2222-3333-4444-555555555555").unwrap(),
         };
         let decoded = Cursor::decode(&cursor.encode()).expect("round trip");
-        assert_eq!(decoded.score, cursor.score);
+        assert_eq!(decoded.key, cursor.key);
         assert_eq!(decoded.user_id, cursor.user_id);
     }
 
     #[test]
-    fn a_score_of_zero_still_paginates() {
-        // Everybody unscored shares a score, so the id is what separates
-        // them. A cursor that dropped it would loop on the first page.
+    fn a_key_of_zero_still_paginates() {
+        // Everybody with no contest win shares a key, as does everybody
+        // unscored, so the id is what separates them. A cursor that dropped
+        // it would loop on the first page.
         let cursor = Cursor {
-            score: 0,
+            key: 0,
             user_id: Uuid::nil(),
         };
         assert!(Cursor::decode(&cursor.encode()).is_some());
@@ -748,6 +954,11 @@ mod tests {
             q: None,
             skill_domain: None,
             orientation: None,
+            family: None,
+            min_contests_won: None,
+            min_missions_delivered: None,
+            featured_within_days: None,
+            sort: default_sort(),
             mode: "active".into(),
             only_primary: false,
             skills: None,

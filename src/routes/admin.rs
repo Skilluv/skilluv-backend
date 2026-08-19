@@ -57,6 +57,8 @@ pub fn admin_routes() -> Router<AppState> {
         .merge(crate::routes::admin_featured_routes())
         // Contests read as one event: an awards edition, a run of sprints.
         .merge(crate::routes::admin_series_routes())
+        // Design has no ingestion source: briefs are curated by hand.
+        .merge(crate::routes::admin_design_brief_routes())
         .merge(crate::routes::revenue_routes())
         .merge(crate::routes::admin_enterprise_product_routes())
         .merge(crate::routes::admin_recruitment_routes())

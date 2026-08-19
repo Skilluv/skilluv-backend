@@ -65,6 +65,13 @@ pub struct DomainRules {
     /// What the tools are called when the reasoning is written out. "Partage
     /// tes langages" reads wrong to somebody who answered PyTorch.
     pub tools_label: &'static str,
+    /// Whether the wizard stores trade slugs where the mentor side stores
+    /// reviewer families. Design's wizard asks which trades interest you —
+    /// `design-brand-identity` — while a mentor is known by the family behind
+    /// it, `brand`. Where this is set the answers are resolved through
+    /// `orientations.reviewer_group` before anything is compared; where it is
+    /// not, the two sides already speak the same words.
+    pub families_are_trade_slugs: bool,
 }
 
 /// Five, because this is the most populated domain and a lower cap would
@@ -75,6 +82,7 @@ pub const CODE: DomainRules = DomainRules {
     families_key: "preferred_families",
     max_active_mentees: 5,
     tools_label: "langages",
+    families_are_trade_slugs: false,
 };
 
 /// Three, because the domain is smaller and a session is longer: reading
@@ -85,6 +93,7 @@ pub const AI: DomainRules = DomainRules {
     families_key: "preferred_families",
     max_active_mentees: 3,
     tools_label: "outils",
+    families_are_trade_slugs: false,
 };
 
 /// Four, lower than code's five: an ops mentee often arrives with a system
@@ -96,6 +105,7 @@ pub const OPS: DomainRules = DomainRules {
     families_key: "trades",
     max_active_mentees: 4,
     tools_label: "plateformes",
+    families_are_trade_slugs: false,
 };
 
 /// Three, like AI and for a related reason: the domain is small and the
@@ -107,6 +117,23 @@ pub const AUDIO: DomainRules = DomainRules {
     families_key: "preferred_families",
     max_active_mentees: 3,
     tools_label: "stations",
+    families_are_trade_slugs: false,
+};
+
+/// Three, like AI. A design session is a critique over an artefact, which is
+/// slower and more attentive than reading a diff; a designer carrying five is
+/// carrying them badly.
+///
+/// `main_tool` is the one answer here that is a string rather than an array —
+/// the wizard asks which tool you work in, singular — and the query below
+/// reads either shape.
+pub const DESIGN: DomainRules = DomainRules {
+    domain: "design",
+    tools_key: "main_tool",
+    families_key: "preferred_families",
+    max_active_mentees: 3,
+    tools_label: "outils",
+    families_are_trade_slugs: true,
 };
 
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
@@ -235,11 +262,13 @@ pub async fn matches_for(
         // COALESCE to an empty array rather than NULL: somebody who never
         // answered the wizard has no families, which the check below turns
         // into a message telling them to answer it.
+        // `answer_texts` reads an answer that may be an array of strings or a
+        // single string: design's wizard asks for one tool, the others ask
+        // for several, and a `jsonb_array_elements_text` over a bare string
+        // errors rather than returning nothing.
         "SELECT COALESCE(cs.score, 0) AS craft_score,
-                COALESCE(ARRAY(SELECT jsonb_array_elements_text(
-                            p.answers -> $4)), '{}') AS preferred_families,
-                COALESCE(ARRAY(SELECT jsonb_array_elements_text(
-                            p.answers -> $3)), '{}') AS tools,
+                answer_texts(p.answers, $4) AS preferred_families,
+                answer_texts(p.answers, $3) AS tools,
                 u.timezone
            FROM users u
            LEFT JOIN craft_scores cs ON cs.user_id = u.id AND cs.skill_domain = $2
@@ -268,23 +297,61 @@ pub async fn matches_for(
         )));
     }
 
+    // A mentee who named trades is compared on the families behind them: the
+    // mentor side is keyed by family, and `design-brand-identity` matches
+    // `brand` nowhere without this step. Resolved in SQL rather than from a
+    // table in Rust, so a twenty-seventh trade needs no code change.
+    let mentee_families = if rules.families_are_trade_slugs {
+        let resolved: Vec<String> = sqlx::query_scalar(
+            "SELECT DISTINCT reviewer_group FROM orientations
+              WHERE slug = ANY($1) AND reviewer_group IS NOT NULL",
+        )
+        .bind(&mentee_families)
+        .fetch_all(db)
+        .await?;
+        if resolved.is_empty() {
+            return Err(AppError::Validation(format!(
+                "answer the {} onboarding first — without a family there is nothing to match on",
+                rules.domain
+            )));
+        }
+        resolved
+    } else {
+        mentee_families
+    };
+
     let candidates = sqlx::query_as::<_, Candidate>(
         r#"
         SELECT u.id AS user_id,
                u.username,
                m.headline,
                cs.score AS craft_score,
-               COALESCE(ARRAY(SELECT jsonb_array_elements_text(
-                   p.answers -> $5)), '{}') AS families,
-               -- What the mentor works in: their declared languages, and the
+               -- Proven, not declared. The families of the trades this person
+               -- has verified work in, rather than the ones they told the
+               -- wizard interest them. A mentor who said they were interested
+               -- in motion and never delivered any is not a motion mentor,
+               -- and an hour with them teaches that the expensive way.
+               --
+               -- The mentee side stays declared, and deliberately: somebody
+               -- looking for a mentor is looking towards where they want to
+               -- go, not where they have already been.
+               ARRAY(
+                   SELECT DISTINCT o.reviewer_group
+                     FROM deliverables d
+                     JOIN project_slices ps ON ps.id = d.slice_id
+                     JOIN orientations o ON o.id = ps.orientation_id
+                    WHERE d.user_id = u.id
+                      AND d.verification_status = 'verified'
+                      AND d.revoked_at IS NULL
+                      AND o.primary_domain = $3
+                      AND o.reviewer_group IS NOT NULL
+               ) AS families,
+               -- What the mentor works in: their declared tools, and the
                -- expertise they wrote on their mentor profile. Both, because
                -- somebody who filled in one rarely filled in the other.
                ARRAY(
                    SELECT DISTINCT lower(l)
-                     FROM unnest(
-                        COALESCE(ARRAY(SELECT jsonb_array_elements_text(
-                            p.answers -> $4)), '{}')
-                        || m.expertise_areas) AS l
+                     FROM unnest(answer_texts(p.answers, $4) || m.expertise_areas) AS l
                ) AS tools,
                u.timezone,
                (SELECT count(DISTINCT s.mentee_user_id)
@@ -314,7 +381,6 @@ pub async fn matches_for(
     .bind(mentee_score + MIN_SCORE_GAP)
     .bind(rules.domain)
     .bind(rules.tools_key)
-    .bind(rules.families_key)
     .fetch_all(db)
     .await?;
 

@@ -12,22 +12,27 @@
 -- 1. What gets handed over
 -- ═══════════════════════════════════════════════════════════════════
 --
--- A pull request is not the deliverable here. Every value restated, because
--- a CHECK cannot be extended.
+-- A pull request is not the deliverable here. Four rows rather than a
+-- restated CHECK: 0413 made these a table precisely so that the fifth domain
+-- would be an INSERT, and restating the constraint here would have dropped
+-- everything AI, audio and design had added to it.
 
-ALTER TABLE missions
-    DROP CONSTRAINT IF EXISTS missions_deliverable_format_check;
-
-ALTER TABLE missions
-    ADD CONSTRAINT missions_deliverable_format_check
-    CHECK (deliverable_format IN (
-        -- Migration 0192.
-        'github_pr', 'repository_handover', 'library_published',
-        'consulting_report',
-        -- Ops. A runbook is a deliverable rather than documentation
-        -- accompanying one: in this domain it is often the whole artefact.
-        'iac_repository', 'runbooks', 'dashboards', 'migration_executed'
-    ));
+INSERT INTO mission_deliverable_formats
+    (slug, skill_domain, name, description, sort_order)
+VALUES
+    ('iac_repository', 'ops', 'Infrastructure as code',
+     'Un dépôt Terraform, Pulumi ou Ansible livré avec ses modules, ses '
+     'variables documentées et son plan appliqué.', 310),
+    ('runbooks', 'ops', 'Runbooks',
+     'Les procédures qu''une astreinte suit à trois heures du matin. Ici '
+     'c''est le livrable lui-même, pas la documentation qui l''accompagne.', 320),
+    ('dashboards', 'ops', 'Tableaux de bord',
+     'Les tableaux et les alertes qui vont avec, avec ce que chaque seuil '
+     'veut dire et qui il réveille.', 330),
+    ('migration_executed', 'ops', 'Migration menée',
+     'Une migration exécutée de bout en bout, avec son plan de retour '
+     'arrière et ce qui a été vérifié après.', 340)
+ON CONFLICT (slug) DO NOTHING;
 
 -- ═══════════════════════════════════════════════════════════════════
 -- 2. Where it runs

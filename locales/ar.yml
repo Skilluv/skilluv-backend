@@ -224,6 +224,14 @@ notification:
       body: "تم ترشيحك لوظيفة {role}. أجب لتعرف عن أي شركة يتعلق الأمر."
       cta: "عرض العرض"
   design:
+    brief_published:
+      title: "نُشر موجزك"
+      body: "{brief} مفتوح: يمكن لأحدهم أخذه."
+      cta: "اعرض التحدي"
+    brief_rejected:
+      title: "لم يُقبل الموجز"
+      body: "لم يُقبل {brief}. السبب مكتوب."
+      cta: "اقرأ السبب"
     iteration_requested:
       title: "مطلوب جولة أخرى"
       body: "قرأ {reviewer} نسختك ويطلب جولة إضافية على {slice}."

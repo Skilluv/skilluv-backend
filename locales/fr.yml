@@ -228,6 +228,14 @@ notification:
       body: "Tu as ete propose pour un poste de {role}. Reponds pour savoir de qui il s'agit."
       cta: "Voir la proposition"
   design:
+    brief_published:
+      title: "Ton brief est publie"
+      body: "{brief} est ouvert : quelqu'un peut le prendre."
+      cta: "Voir le challenge"
+    brief_rejected:
+      title: "Brief non retenu"
+      body: "{brief} n'a pas ete retenu. La raison est ecrite."
+      cta: "Lire la raison"
     iteration_requested:
       title: "Un nouveau tour est demande"
       body: "{reviewer} a lu ta version et demande un tour de plus sur {slice}."

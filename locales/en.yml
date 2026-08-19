@@ -229,6 +229,14 @@ notification:
       body: "You have been put forward for a {role} role. Answer to find out who."
       cta: "See the proposal"
   design:
+    brief_published:
+      title: "Your brief is published"
+      body: "{brief} is open: somebody can claim it."
+      cta: "See the challenge"
+    brief_rejected:
+      title: "Brief not accepted"
+      body: "{brief} was not accepted. The reason is written down."
+      cta: "Read the reason"
     iteration_requested:
       title: "Another round is asked for"
       body: "{reviewer} read your version and asks for one more round on {slice}."

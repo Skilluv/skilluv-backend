@@ -1006,3 +1006,73 @@ async fn a_contest_that_did_not_ask_for_blindness_is_public_throughout() {
     assert_eq!(body["data"]["submissions"].as_array().unwrap().len(), 1);
     assert_eq!(body["data"]["blinded"], json!(false));
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// A duel is two people
+// ═══════════════════════════════════════════════════════════════════
+
+#[tokio::test]
+async fn a_third_entrant_is_refused_in_a_duel() {
+    let app = TestApp::spawn().await;
+    app.register_user("duel_one").await;
+    app.register_user("duel_two").await;
+    app.register_user("duel_three").await;
+    let one = user_id(&app, "duel_one").await;
+    let two = user_id(&app, "duel_two").await;
+    let three = user_id(&app, "duel_three").await;
+
+    let duel = a_contest(
+        &app,
+        "duel-head-to-head",
+        "duel",
+        json!({
+            "task": "Une icône d'application, deux directions.",
+            "duration_hours": 48
+        }),
+    )
+    .await;
+
+    enter(&app, duel, one).await;
+    enter(&app, duel, two).await;
+
+    // A third turns it into a small contest judged by the room with no jury
+    // and no brief — a worse format than either of the two it sits between.
+    let third = sqlx::query(
+        "INSERT INTO tournament_participants (tournament_id, participant_type, participant_id)
+         VALUES ($1, 'user', $2)",
+    )
+    .bind(duel)
+    .bind(three)
+    .execute(&app.db)
+    .await;
+    assert!(third.is_err(), "a duel took a third entrant");
+}
+
+#[tokio::test]
+async fn a_brief_contest_takes_as_many_as_turn_up() {
+    let app = TestApp::spawn().await;
+    let contest = a_contest(
+        &app,
+        "brief-crowded",
+        "brief_contest",
+        json!({"brief": a_brief(), "judging_criteria": ["lisibilité", "monochromie"]}),
+    )
+    .await;
+
+    // The rule is the duel's alone. A brief contest with forty answers is the
+    // format working.
+    for n in 0..5 {
+        let name = format!("crowd_{n}");
+        app.register_user(&name).await;
+        let who = user_id(&app, &name).await;
+        enter(&app, contest, who).await;
+    }
+
+    let entrants: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM tournament_participants WHERE tournament_id = $1")
+            .bind(contest)
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
+    assert_eq!(entrants, 5);
+}

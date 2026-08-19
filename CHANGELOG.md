@@ -464,6 +464,38 @@ address KYC full, live AI wiring in prod, and RLS enforcement.
 
 ### Fixed
 
+- **fix(openapi)** — Every operation and every schema now has a name of its
+  own. utoipa derives `operationId` from the handler's function name and a
+  component name from the Rust type alone, and neither was unique: 126
+  handlers collapsed onto 56 operation ids and 51 structs onto 18 component
+  names, each collision quietly overwriting the last. `POST
+  /api/legal/consent` documented the data-line consent body — a fuzzer sent
+  the documented `{"agree": true}` and the endpoint refused it. Two unit
+  tests in `src/openapi.rs` now fail on the next collision.
+- **fix(openapi)** — `/api/admin/ai/churn` and `/api/admin/ai/hidden-gems`
+  were documented at paths the router never served; the handlers are at
+  `/api/admin/assistant/…`. A documented path nothing routes answers 404, and
+  404 is an allowed answer to nearly every contract check, so the gap was
+  invisible from the outside.
+- **fix(openapi)** — `EcosystemRow.community_links` and `notable_events` are
+  JSONB arrays declared as `object`, so a generated client could not iterate
+  what it was handed. Both now have real item schemas.
+- **fix(openapi)** — Query parameters that the handler validated against a
+  closed vocabulary said `string` in the contract: `looking_for` on the
+  talent search and `urgency` on the mission board are enums, and the
+  keyset cursors on `/api/feed/public` and `/api/talents/search` carry the
+  pattern they are actually parsed with. A schema-compliant request is now
+  one the API accepts.
+- **fix(routes)** — Removed the `my_mentions` handler in `routes/social.rs`,
+  left behind when SKI-293 unregistered `/api/social/mentions/me`.
+- **fix(ci)** — Integration test shards ran the runner out of disk while
+  linking: 184 test binaries each statically linking the whole dependency
+  graph, with full DWARF. Three shards died with ENOSPC and the fourth with a
+  linker SIGBUS, which is the same disk with a different error message.
+  `debug = "line-tables-only"` on the dev and test profiles, and the job now
+  reclaims the ~25 GB of preinstalled SDKs it never uses.
+
+
 - **fix(routes)** — Route conflict on `/api/seasons` between `routes/tournament.rs`
   (Phase 2 Sprint 6) and `routes/seasons.rs` (P6). The tournament module now
   only registers the `/admin/seasons/*` endpoints.

@@ -139,6 +139,7 @@ pub async fn create_studio(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = EngagementsMemberBody)]
 pub struct MemberBody {
     pub user_id: Uuid,
     pub role: String,
@@ -200,6 +201,7 @@ pub async fn activate_studio(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = EngagementsReasonBody)]
 pub struct ReasonBody {
     pub reason: String,
 }
@@ -385,6 +387,7 @@ pub async fn accept_milestone(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = EngagementsRespondBody)]
 pub struct RespondBody {
     pub accept: bool,
 }
@@ -399,6 +402,7 @@ pub struct RespondBody {
         (status = 404, description = "Not on this engagement", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "engagementsRespond",
 )]
 pub async fn respond(
     State(state): State<AppState>,
@@ -419,6 +423,7 @@ pub async fn respond(
         (status = 400, description = "Empty role or an impossible share", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "engagementsAddMember",
 )]
 pub async fn add_member(
     State(state): State<AppState>,
@@ -496,6 +501,7 @@ pub async fn add_milestone(
         (status = 400, description = "Somebody has not agreed, or the shares or milestones do not total 100%", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "engagementsStart",
 )]
 pub async fn start(
     State(state): State<AppState>,
@@ -508,6 +514,7 @@ pub async fn start(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = EngagementsReviewBody)]
 pub struct ReviewBody {
     pub passed: bool,
     pub notes: String,
@@ -556,6 +563,7 @@ pub struct OpenProgramsQuery {
     get, path = "/api/beta-programs/open", tag = "work",
     params(("test_type" = Option<String>, Query, description = "Narrow to one kind of test")),
     responses((status = 200, body = serde_json::Value)),
+    operation_id = "engagementsOpenPrograms",
 )]
 pub async fn open_programs(
     State(state): State<AppState>,
@@ -574,6 +582,7 @@ pub async fn open_programs(
         (status = 403, description = "Not acting for an enterprise", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "engagementsOpenProgram",
 )]
 pub async fn open_program(
     State(state): State<AppState>,

@@ -57,6 +57,7 @@ pub struct ListQuery {
     get, path = "/api/series", tag = "challenges",
     params(ListQuery),
     responses((status = 200, description = "series, newest first")),
+    operation_id = "seriesList",
 )]
 pub async fn list(
     State(state): State<AppState>,
@@ -118,6 +119,7 @@ pub async fn standings(
         (status = 409, description = "the slug is taken", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "seriesCreate",
 )]
 pub async fn create(
     State(state): State<AppState>,

@@ -54,6 +54,7 @@ fn build_response(data: Value) -> Value {
 #[utoipa::path(
     get, path = "/api/missions/types", tag = "missions",
     responses((status = 200, body = serde_json::Value)),
+    operation_id = "missionsListTypes",
 )]
 pub async fn list_types(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
     let types: Vec<(String, String, String, String)> = sqlx::query_as(
@@ -76,6 +77,25 @@ pub async fn list_types(State(state): State<AppState>) -> Result<Json<Value>, Ap
     Ok(Json(build_response(json!({ "mission_types": types }))))
 }
 
+/// Mirrors the CHECK on `missions.urgency` (migration 0192).
+#[derive(Debug, Clone, Copy, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Urgency {
+    Normal,
+    Soon,
+    Urgent,
+}
+
+impl Urgency {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Normal => "normal",
+            Self::Soon => "soon",
+            Self::Urgent => "urgent",
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, IntoParams)]
 #[into_params(parameter_in = Query)]
 #[serde(deny_unknown_fields)]
@@ -96,8 +116,10 @@ pub struct MissionQuery {
     pub payment_model: Option<String>,
     pub min_budget_eur: Option<f64>,
     pub remote_only: Option<bool>,
-    #[param(max_length = 20)]
-    pub urgency: Option<String>,
+    /// One of the three the column allows. A free string here silently
+    /// matches nothing, which reads to a caller as an empty board.
+    #[param(inline)]
+    pub urgency: Option<Urgency>,
     #[serde(default = "default_limit")]
     #[param(minimum = 1, maximum = 100)]
     pub limit: i64,
@@ -146,7 +168,7 @@ pub async fn list_missions(
             .min_budget_eur
             .and_then(|v| bigdecimal::BigDecimal::try_from(v).ok()),
         remote_only: q.remote_only,
-        urgency: q.urgency,
+        urgency: q.urgency.map(|u| u.as_str().to_string()),
     };
     let rows = missions::list_open(&state.db, &filter, q.limit, q.offset).await?;
     Ok(Json(build_response(json!({ "missions": rows }))))
@@ -197,6 +219,7 @@ pub async fn create_mission(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = MissionsStatusBody)]
 pub struct StatusBody {
     #[schema(max_length = 30)]
     pub status: String,
@@ -290,6 +313,7 @@ pub async fn apply_to_mission(
         (status = 403, description = "Not this mission's enterprise", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "missionsListApplications",
 )]
 pub async fn list_applications(
     State(state): State<AppState>,
@@ -308,6 +332,7 @@ pub async fn list_applications(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = MissionsDecisionBody)]
 pub struct DecisionBody {
     /// `shortlisted`, `selected` or `rejected`.
     #[schema(max_length = 20)]
@@ -328,6 +353,7 @@ pub struct DecisionBody {
         (status = 403, description = "Not this mission's enterprise", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "missionsDecide",
 )]
 pub async fn decide(
     State(state): State<AppState>,
@@ -396,6 +422,7 @@ pub async fn decide(
         (status = 403, description = "Not a party to this mission", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "missionsListInvoices",
 )]
 pub async fn list_invoices(
     State(state): State<AppState>,

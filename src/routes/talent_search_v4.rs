@@ -52,6 +52,31 @@ pub fn talent_search_v4_routes() -> Router<AppState> {
         .route("/talents/{username}/card", get(talent_card))
 }
 
+/// Mirrors the CHECK on `users.looking_for`. Spelled out in the contract
+/// rather than checked in the handler, so a client generated from the spec
+/// cannot compile a search that will be refused.
+#[derive(Debug, Clone, Copy, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum LookingFor {
+    Cdi,
+    Cdd,
+    Freelance,
+    Internship,
+    Contract,
+}
+
+impl LookingFor {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Cdi => "cdi",
+            Self::Cdd => "cdd",
+            Self::Freelance => "freelance",
+            Self::Internship => "internship",
+            Self::Contract => "contract",
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, IntoParams)]
 #[into_params(parameter_in = Query)]
 #[serde(deny_unknown_fields)]
@@ -98,9 +123,9 @@ pub struct SearchQuery {
     /// Two-letter code, matched at B2 or above.
     #[param(pattern = r"^[a-zA-Z]{2}$")]
     pub language_spoken: Option<String>,
-    /// `cdi`, `cdd`, `freelance`, `internship`, `contract`.
-    #[param(max_length = 20)]
-    pub looking_for: Option<String>,
+    /// What kind of engagement the person is open to.
+    #[param(inline)]
+    pub looking_for: Option<LookingFor>,
     #[serde(default)]
     pub available_only: bool,
     /// Badge slug.
@@ -109,8 +134,11 @@ pub struct SearchQuery {
     /// Tag slug.
     #[param(max_length = 100)]
     pub tag: Option<String>,
-    /// From the previous page's `next_cursor`.
-    #[param(max_length = 100)]
+    /// From the previous page's `next_cursor`: a score and a user id. The
+    /// shape is in the contract because a cursor the handler cannot decode is
+    /// refused rather than read as "from the beginning", and a caller has to
+    /// be able to tell a malformed cursor from an empty result.
+    #[param(pattern = r"^-?\d+\|[0-9a-fA-F-]{36}$", max_length = 100)]
     pub after: Option<String>,
     #[serde(default = "default_limit")]
     #[param(minimum = 1, maximum = 100)]
@@ -198,6 +226,7 @@ impl Cursor {
         (status = 200, description = "Matching talents", body = ApiResponse<SearchResponse>),
         (status = 400, description = "Invalid filter or cursor", body = crate::api_response::ErrorResponse),
     ),
+    operation_id = "talentSearchV4Search",
 )]
 pub async fn search(
     State(state): State<AppState>,
@@ -409,7 +438,7 @@ pub async fn search(
     .bind(q.platform.as_deref())
     .bind(q.country_iso2.as_deref())
     .bind(q.language_spoken.as_deref())
-    .bind(q.looking_for.as_deref())
+    .bind(q.looking_for.map(LookingFor::as_str))
     .bind(q.available_only)
     .bind(q.badge.as_deref())
     .bind(q.tag.as_deref())
@@ -469,16 +498,6 @@ fn validate(q: &SearchQuery) -> Result<(), AppError> {
         return Err(AppError::Validation(format!(
             "limit must be between 1 and {MAX_LIMIT}"
         )));
-    }
-    if let Some(looking_for) = &q.looking_for
-        && !matches!(
-            looking_for.as_str(),
-            "cdi" | "cdd" | "freelance" | "internship" | "contract"
-        )
-    {
-        return Err(AppError::Validation(
-            "looking_for must be cdi, cdd, freelance, internship or contract".into(),
-        ));
     }
     Ok(())
 }
@@ -563,7 +582,7 @@ fn cache_key_for(state: &AppState, q: &SearchQuery) -> String {
         field(&q.platform),
         field(&q.country_iso2),
         field(&q.language_spoken),
-        field(&q.looking_for),
+        q.looking_for.map(LookingFor::as_str).unwrap_or("-"),
         q.available_only,
         field(&q.badge),
         field(&q.tag),

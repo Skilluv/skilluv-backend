@@ -55,6 +55,7 @@ pub struct FeaturedChallengesResponse {
     responses(
         (status = 200, description = "Tags with usage counts", body = ApiResponse<TagsResponse>),
     ),
+    operation_id = "challengeTagsListTags",
 )]
 pub async fn list_tags(
     State(state): State<AppState>,
@@ -82,6 +83,7 @@ pub async fn list_tags(
     responses(
         (status = 200, description = "Tag categories", body = ApiResponse<CategoriesResponse>),
     ),
+    operation_id = "challengeTagsListCategories",
 )]
 pub async fn list_categories(
     State(state): State<AppState>,

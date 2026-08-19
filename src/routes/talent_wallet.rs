@@ -482,6 +482,7 @@ struct WithdrawBody {
         (status = 401, description = "Not authenticated", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "talentWalletWithdraw",
 )]
 pub async fn withdraw(
     State(state): State<AppState>,

@@ -76,6 +76,7 @@ pub async fn plans(State(state): State<AppState>) -> Result<Json<Value>, AppErro
 }
 
 #[derive(Deserialize, ToSchema)]
+#[schema(as = AtsSubscribeBody)]
 pub struct SubscribeBody {
     pub plan: String,
 }
@@ -93,6 +94,7 @@ pub struct SubscribeBody {
         (status = 400, description = "Not a plan, or not a company account", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "atsSubscribe",
 )]
 pub async fn subscribe(
     State(state): State<AppState>,
@@ -180,6 +182,7 @@ pub async fn close_position(
         (status = 404, description = "Not an opening of yours", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "atsPipeline",
 )]
 pub async fn pipeline(
     State(state): State<AppState>,

@@ -405,6 +405,7 @@ pub struct UnsubscribeQuery {
         (status = 400, description = "Unsupported unsubscribe kind or kind/token mismatch", body = crate::api_response::ErrorResponse),
         (status = 401, description = "Invalid or forged token", body = crate::api_response::ErrorResponse),
     ),
+    operation_id = "emailPrefsUnsubscribe",
 )]
 pub async fn unsubscribe(
     State(state): State<AppState>,

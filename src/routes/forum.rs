@@ -48,6 +48,7 @@ fn build_response(data: Value) -> Value {
     responses(
         (status = 200, description = "Categories", body = serde_json::Value),
     ),
+    operation_id = "forumListCategories",
 )]
 pub async fn list_categories(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
     let cats = forum::list_categories(&state.db).await?;
@@ -436,6 +437,7 @@ pub struct SearchQuery {
     responses(
         (status = 200, description = "Search hits", body = serde_json::Value),
     ),
+    operation_id = "forumSearch",
 )]
 pub async fn search(
     State(state): State<AppState>,

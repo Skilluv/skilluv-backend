@@ -416,6 +416,7 @@ pub async fn delete_education(
     get, path = "/api/profile/me/languages", tag = "profile",
     responses((status = 200, body = serde_json::Value)),
     security(("cookie_auth" = [])),
+    operation_id = "profileExtrasListLanguages",
 )]
 pub async fn list_languages(
     State(state): State<AppState>,

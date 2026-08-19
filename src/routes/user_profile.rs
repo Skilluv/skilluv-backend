@@ -99,6 +99,7 @@ pub struct PrivacySettings {
     request_body = UpdateProfileRequest,
     responses((status = 200, body = serde_json::Value), (status = 401, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
+    operation_id = "userProfileUpdateProfile",
 )]
 pub async fn update_profile(
     State(state): State<AppState>,

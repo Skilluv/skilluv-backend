@@ -778,6 +778,7 @@ pub async fn redeem_promo(
     get, path = "/api/enterprise/invoices", tag = "enterprise",
     responses((status = 200, body = serde_json::Value)),
     security(("cookie_auth" = [])),
+    operation_id = "enterpriseCreditsListInvoices",
 )]
 pub async fn list_invoices(
     State(state): State<AppState>,

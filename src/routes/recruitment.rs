@@ -79,6 +79,7 @@ fn build_response(data: Value) -> Value {
         (status = 403, description = "Not acting for an enterprise", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "recruitmentOpenCampaign",
 )]
 pub async fn open_campaign(
     State(state): State<AppState>,
@@ -127,6 +128,7 @@ pub async fn open_campaign(
         (status = 403, description = "Not acting for an enterprise", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "recruitmentMyCampaigns",
 )]
 pub async fn my_campaigns(
     State(state): State<AppState>,
@@ -199,6 +201,7 @@ struct CampaignQueueRow {
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = RecruitmentHireBody)]
 pub struct HireBody {
     pub talent_user_id: Uuid,
     /// As agreed with the person hired. Declared, not verified.
@@ -291,6 +294,7 @@ pub async fn talent_response(
         (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "recruitmentMyInvitations",
 )]
 pub async fn my_invitations(
     State(state): State<AppState>,
@@ -420,6 +424,7 @@ pub async fn assign(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = RecruitmentShortlistBody)]
 pub struct ShortlistBody {
     pub talent_user_id: Uuid,
     /// Why this person, with links. Required.

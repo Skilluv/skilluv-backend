@@ -106,6 +106,7 @@ pub struct LeaderboardPageResponse {
         (status = 200, description = "Ranked entries", body = LeaderboardPageResponse),
         (status = 400, description = "Invalid domain or period", body = crate::api_response::ErrorResponse),
     ),
+    operation_id = "leaderboardGetLeaderboard",
 )]
 pub async fn get_leaderboard(
     State(state): State<AppState>,

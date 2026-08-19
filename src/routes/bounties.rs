@@ -514,6 +514,7 @@ pub struct SubmitPrBody {
     request_body = SubmitPrBody,
     responses((status = 200, body = serde_json::Value)),
     security(("cookie_auth" = [])),
+    operation_id = "bountiesSubmitPr",
 )]
 pub async fn submit_pr(
     State(state): State<AppState>,

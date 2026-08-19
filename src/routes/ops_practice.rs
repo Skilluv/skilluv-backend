@@ -537,6 +537,7 @@ pub async fn ops_mentor_matches(
         (status = 400, description = "An answer outside the vocabulary, or more than two trades", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "opsPracticeCompleteOnboarding",
 )]
 pub async fn complete_onboarding(
     State(state): State<AppState>,
@@ -555,6 +556,7 @@ pub async fn complete_onboarding(
     post, path = "/api/ops/onboarding/skip", tag = "work",
     responses((status = 200, body = serde_json::Value)),
     security(("cookie_auth" = [])),
+    operation_id = "opsPracticeSkipOnboarding",
 )]
 pub async fn skip_onboarding(
     State(state): State<AppState>,
@@ -582,6 +584,7 @@ pub struct ToolkitQuery {
         (status = 200, body = serde_json::Value),
         (status = 400, description = "Invalid filter", body = crate::api_response::ErrorResponse),
     ),
+    operation_id = "opsPracticeToolkit",
 )]
 pub async fn toolkit(
     State(state): State<AppState>,

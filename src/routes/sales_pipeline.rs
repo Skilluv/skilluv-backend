@@ -119,6 +119,7 @@ pub async fn open_opportunity(
     get, path = "/api/admin/sales/opportunities", tag = "admin",
     responses((status = 200, body = serde_json::Value)),
     security(("cookie_auth" = [])),
+    operation_id = "salesPipelinePipeline",
 )]
 pub async fn pipeline(
     State(state): State<AppState>,
@@ -242,6 +243,7 @@ pub struct RenewalQuery {
     params(RenewalQuery),
     responses((status = 200, body = serde_json::Value)),
     security(("cookie_auth" = [])),
+    operation_id = "salesPipelineRenewals",
 )]
 pub async fn renewals(
     State(state): State<AppState>,

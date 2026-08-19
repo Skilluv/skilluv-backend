@@ -370,6 +370,7 @@ pub async fn appoint(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = EventsStatusBody)]
 pub struct StatusBody {
     pub status: String,
 }
@@ -383,6 +384,7 @@ pub struct StatusBody {
         (status = 400, description = "Not a status, or an onsite event with no address", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "eventsSetStatus",
 )]
 pub async fn set_status(
     State(state): State<AppState>,

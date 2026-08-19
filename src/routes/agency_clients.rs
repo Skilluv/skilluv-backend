@@ -98,6 +98,7 @@ pub struct TypeConfigUpdatedResponse {
         (status = 403, description = "Caller has no enterprise", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "agencyClientsGetTypeConfig",
 )]
 pub async fn get_type_config(
     State(state): State<AppState>,
@@ -244,6 +245,7 @@ pub struct AgencyClientDeactivatedResponse {
         (status = 403, description = "Caller has no enterprise", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "agencyClientsList",
 )]
 pub async fn list(
     State(state): State<AppState>,
@@ -289,6 +291,7 @@ pub struct CreateBody {
         (status = 403, description = "Caller has no enterprise", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "agencyClientsCreate",
 )]
 pub async fn create(
     State(state): State<AppState>,
@@ -316,6 +319,7 @@ pub async fn create(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = AgencyClientsUpdateBody)]
 pub struct UpdateBody {
     #[serde(default)]
     #[schema(max_length = 10000)]

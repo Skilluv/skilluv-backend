@@ -103,6 +103,7 @@ pub async fn my_onboardings(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = ContinuousRespondBody)]
 pub struct RespondBody {
     pub accept: bool,
 }
@@ -329,6 +330,7 @@ pub async fn judge_contribution(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = ContinuousSettleBody)]
 pub struct SettleBody {
     /// Any day in the month; the first of it is what is used.
     pub month: chrono::NaiveDate,
@@ -409,6 +411,7 @@ pub async fn visible_proposals(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = ContinuousMemberBody)]
 pub struct MemberBody {
     pub user_id: Uuid,
     pub role: String,
@@ -423,6 +426,7 @@ pub struct MemberBody {
         (status = 404, description = "Not your proposal", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "continuousAddMember",
 )]
 pub async fn add_member(
     State(state): State<AppState>,

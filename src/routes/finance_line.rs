@@ -237,6 +237,7 @@ pub async fn activate_partnership(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = FinanceLineDecisionBody)]
 pub struct DecisionBody {
     pub approved: bool,
     #[serde(default)]
@@ -346,6 +347,7 @@ pub async fn write_off(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = FinanceLineClaimBody)]
 pub struct ClaimBody {
     pub user_id: Uuid,
     #[serde(default)]

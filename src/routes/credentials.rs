@@ -88,6 +88,7 @@ pub async fn pending(
 }
 
 #[derive(Deserialize, ToSchema)]
+#[schema(as = CredentialsReviewBody)]
 pub struct ReviewBody {
     /// What was opened, and what it said.
     pub note: String,

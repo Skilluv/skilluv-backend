@@ -74,6 +74,7 @@ fn build_response(data: Value) -> Value {
         (status = 401, body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "projectsCreateProject",
 )]
 pub async fn create_project(
     State(state): State<AppState>,

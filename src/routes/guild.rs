@@ -204,6 +204,7 @@ pub async fn get_by_slug(
     get, path = "/api/guilds/{id}/members", tag = "guilds",
     params(("id" = uuid::Uuid, Path)),
     responses((status = 200, body = serde_json::Value)),
+    operation_id = "guildListMembers",
 )]
 pub async fn list_members(
     State(state): State<AppState>,
@@ -410,6 +411,7 @@ pub async fn create_token_link(
     params(("id" = uuid::Uuid, Path)),
     responses((status = 200, body = serde_json::Value)),
     security(("cookie_auth" = [])),
+    operation_id = "guildAcceptInvite",
 )]
 pub async fn accept_invite(
     State(state): State<AppState>,
@@ -691,6 +693,7 @@ pub async fn list_invitations(
         (status = 403, description = "Not an officer of the guild", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "guildListApplications",
 )]
 pub async fn list_applications(
     State(state): State<AppState>,
@@ -755,6 +758,7 @@ pub async fn list_applications(
 /// guess, and fails on first real use.
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
+#[schema(as = GuildDecideBody)]
 pub struct DecideBody {
     /// `true` accepts the applicant into the guild, `false` rejects it.
     pub accept: bool,

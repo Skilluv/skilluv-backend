@@ -147,6 +147,7 @@ pub async fn audit(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = EcosystemReasonBody)]
 pub struct ReasonBody {
     pub reason: String,
 }
@@ -319,6 +320,7 @@ pub async fn download(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = EcosystemRatingBody)]
 pub struct RatingBody {
     pub rating: i16,
     #[serde(default)]
@@ -336,6 +338,7 @@ pub struct RatingBody {
         (status = 404, description = "No purchase of yours here", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "ecosystemRate",
 )]
 pub async fn rate(
     State(state): State<AppState>,

@@ -601,6 +601,7 @@ pub async fn register_enterprise(
     get, path = "/api/enterprise/profile", tag = "enterprise",
     responses((status = 200, body = serde_json::Value)),
     security(("cookie_auth" = [])),
+    operation_id = "enterpriseGetProfile",
 )]
 pub async fn get_profile(
     State(state): State<AppState>,
@@ -628,6 +629,7 @@ pub async fn get_profile(
     request_body = UpdateProfileRequest,
     responses((status = 200, body = serde_json::Value)),
     security(("cookie_auth" = [])),
+    operation_id = "enterpriseUpdateProfile",
 )]
 pub async fn update_profile(
     State(state): State<AppState>,
@@ -867,6 +869,7 @@ pub async fn invite_recruiter(
     request_body = AcceptInviteRequest,
     responses((status = 200, body = serde_json::Value)),
     security(("cookie_auth" = [])),
+    operation_id = "enterpriseAcceptInvite",
 )]
 pub async fn accept_invite(
     State(state): State<AppState>,
@@ -1149,6 +1152,7 @@ pub async fn invite_register_and_accept(
     get, path = "/api/enterprise/members", tag = "enterprise",
     responses((status = 200, body = serde_json::Value)),
     security(("cookie_auth" = [])),
+    operation_id = "enterpriseListMembers",
 )]
 pub async fn list_members(
     State(state): State<AppState>,

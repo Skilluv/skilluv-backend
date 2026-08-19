@@ -114,6 +114,7 @@ pub async fn admin_create_season(
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+#[schema(as = TournamentStatusBody)]
 pub struct StatusBody {
     #[schema(max_length = 10000)]
     pub status: String,
@@ -228,6 +229,7 @@ pub async fn get_tournament(
     get, path = "/api/tournaments/{slug}/leaderboard", tag = "challenges",
     params(("slug" = String, Path)),
     responses((status = 200, body = serde_json::Value), (status = 404, body = crate::api_response::ErrorResponse)),
+    operation_id = "tournamentGetLeaderboard",
 )]
 pub async fn get_leaderboard(
     State(state): State<AppState>,
@@ -245,6 +247,7 @@ pub async fn get_leaderboard(
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+#[schema(as = TournamentRegisterBody)]
 pub struct RegisterBody {
     /// Required for guild_war tournaments; ignored otherwise.
     pub guild_id: Option<Uuid>,
@@ -259,6 +262,7 @@ pub struct RegisterBody {
         (status = 400, body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "tournamentRegister",
 )]
 pub async fn register(
     State(state): State<AppState>,

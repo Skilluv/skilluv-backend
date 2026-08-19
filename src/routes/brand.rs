@@ -349,6 +349,7 @@ pub async fn honour_sponsorship(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = BrandReasonBody)]
 pub struct ReasonBody {
     pub reason: String,
 }
@@ -432,6 +433,7 @@ pub async fn publish_content(
         (status = 403, description = "Not acting for an enterprise", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "brandOpenCampaign",
 )]
 pub async fn open_campaign(
     State(state): State<AppState>,
@@ -468,6 +470,7 @@ pub async fn open_campaign(
         (status = 403, description = "Not acting for an enterprise", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "brandMyCampaigns",
 )]
 pub async fn my_campaigns(
     State(state): State<AppState>,
@@ -553,6 +556,7 @@ pub async fn read_pieces_as_sponsor(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = BrandDecisionBody)]
 pub struct DecisionBody {
     pub accept: bool,
     #[serde(default)]
@@ -730,6 +734,7 @@ pub async fn open_ambassador_programs(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = BrandRespondBody)]
 pub struct RespondBody {
     pub accept: bool,
 }
@@ -779,6 +784,7 @@ pub async fn record_deliverable(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = BrandInviteBody)]
 pub struct InviteBody {
     pub user_id: Uuid,
 }
@@ -876,6 +882,7 @@ pub async fn list_audience_plans(State(state): State<AppState>) -> Result<Json<V
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = BrandSubscribeBody)]
 pub struct SubscribeBody {
     pub plan: String,
     #[serde(default)]
@@ -890,6 +897,7 @@ pub struct SubscribeBody {
         (status = 404, description = "No such plan", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "brandSubscribe",
 )]
 pub async fn subscribe(
     State(state): State<AppState>,
@@ -916,6 +924,7 @@ pub struct CancelBody {
     request_body = CancelBody,
     responses((status = 200, body = serde_json::Value)),
     security(("cookie_auth" = [])),
+    operation_id = "brandCancelSubscription",
 )]
 pub async fn cancel_subscription(
     State(state): State<AppState>,

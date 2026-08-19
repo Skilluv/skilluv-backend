@@ -206,6 +206,24 @@ name = "skilluv-discord-bot"
 path = "src/bin/discord_bot.rs"
 required-features = ["discord-bot"]
 
+# Debug info is the single largest thing this repository writes to disk. 184
+# integration test binaries each statically link the whole dependency graph,
+# and with full DWARF that is tens of gigabytes of `target/` — more than a
+# GitHub runner has. Every CI shard died while linking: three with ENOSPC and
+# the fourth with a SIGBUS from the linker writing through a mapping on a full
+# disk, which is the same failure wearing a different hat.
+#
+# `line-tables-only` keeps what a backtrace actually needs — file and line per
+# frame — and drops the variable and type descriptions only a debugger reads.
+# A failing test still names the line it failed on. Attaching gdb to a dev
+# build is the case that loses, and one flag on the command line brings it
+# back.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.test]
+debug = "line-tables-only"
+
 [build-dependencies]
 tonic-build = "0.14"
 tonic-prost-build = "0.14"

@@ -66,6 +66,7 @@ fn build_response(data: Value) -> Value {
         (status = 404, description = "No such mentor", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "mentoringProductsSubscribe",
 )]
 pub async fn subscribe(
     State(state): State<AppState>,
@@ -102,6 +103,7 @@ pub async fn my_subscriptions(
         (status = 404, description = "Not yours", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "mentoringProductsCancelSubscription",
 )]
 pub async fn cancel_subscription(
     State(state): State<AppState>,
@@ -280,6 +282,7 @@ pub async fn open_slots(
 #[utoipa::path(
     get, path = "/api/mentoring-programs", tag = "mentorship",
     responses((status = 200, body = serde_json::Value)),
+    operation_id = "mentoringProductsOpenPrograms",
 )]
 pub async fn open_programs(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
     let programs = mentoring_products::open_programs(&state.db).await?;
@@ -294,6 +297,7 @@ pub async fn open_programs(State(state): State<AppState>) -> Result<Json<Value>,
         (status = 400, description = "A kind priced the wrong way, or an empty brief", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "mentoringProductsOpenProgram",
 )]
 pub async fn open_program(
     State(state): State<AppState>,

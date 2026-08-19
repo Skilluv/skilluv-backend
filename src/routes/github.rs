@@ -78,6 +78,7 @@ fn github_oauth_env() -> Result<(String, String, String), AppError> {
         (status = 401, body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "githubStart",
 )]
 pub async fn start(State(state): State<AppState>, auth: AuthUser) -> Result<Redirect, AppError> {
     let (client_id, _, redirect_uri) = github_oauth_env()?;
@@ -107,6 +108,7 @@ pub struct CallbackQuery {
         (status = 302, description = "Redirect back to skill-uv.com"),
         (status = 400, body = crate::api_response::ErrorResponse),
     ),
+    operation_id = "githubCallback",
 )]
 pub async fn callback(
     State(state): State<AppState>,

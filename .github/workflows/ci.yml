@@ -264,6 +264,18 @@ jobs:
         with:
           persist-credentials: false
 
+      # A runner ships with ~25 GB of SDKs this repository never touches, and
+      # linking 46 test binaries per shard needs the space more than they do.
+      # Without this the shards die mid-link — ENOSPC on three of them and a
+      # linker SIGBUS on the fourth, which is the same disk with a different
+      # error message. `[profile.test] debug = "line-tables-only"` in
+      # Cargo.toml is the other half; either alone leaves no margin.
+      - name: Reclaim runner disk
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /usr/local/share/boost "$AGENT_TOOLSDIRECTORY"
+          df -h /
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4  # stable
 

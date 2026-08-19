@@ -110,6 +110,7 @@ pub async fn my_placements(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = AdditionalProductsRespondBody)]
 pub struct RespondBody {
     pub accept: bool,
 }
@@ -123,6 +124,7 @@ pub struct RespondBody {
         (status = 404, description = "Nothing waiting on your answer", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "additionalProductsRespond",
 )]
 pub async fn respond(
     State(state): State<AppState>,
@@ -392,6 +394,7 @@ pub async fn read_proposals(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = AdditionalProductsDecisionBody)]
 pub struct DecisionBody {
     pub selected: bool,
     #[serde(default)]
@@ -407,6 +410,7 @@ pub struct DecisionBody {
         (status = 400, description = "A refusal with no reason", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "additionalProductsDecide",
 )]
 pub async fn decide(
     State(state): State<AppState>,

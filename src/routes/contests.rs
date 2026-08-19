@@ -208,6 +208,7 @@ async fn owned_by_caller(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = ContestsStatusBody)]
 pub struct StatusBody {
     pub status: String,
 }
@@ -221,6 +222,7 @@ pub struct StatusBody {
         (status = 400, description = "Not a status", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "contestsSetStatus",
 )]
 pub async fn set_status(
     State(state): State<AppState>,
@@ -253,6 +255,7 @@ pub async fn read_submissions(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = ContestsInviteBody)]
 pub struct InviteBody {
     pub user_id: Uuid,
 }
@@ -309,6 +312,7 @@ pub async fn judge(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = ContestsHireBody)]
 pub struct HireBody {
     pub talent_user_id: Uuid,
     /// As agreed with the person hired. Declared, not verified.
@@ -398,6 +402,7 @@ pub async fn conclude(
 // ═══════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = ContestsRespondBody)]
 pub struct RespondBody {
     pub accept: bool,
 }
@@ -463,6 +468,7 @@ pub async fn submit(
     get, path = "/api/users/me/contest-invitations", tag = "work",
     responses((status = 200, body = serde_json::Value)),
     security(("cookie_auth" = [])),
+    operation_id = "contestsMyInvitations",
 )]
 pub async fn my_invitations(
     State(state): State<AppState>,

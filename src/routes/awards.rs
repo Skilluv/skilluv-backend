@@ -41,6 +41,7 @@ fn build_response(data: Value) -> Value {
 #[utoipa::path(
     get, path = "/api/awards/categories", tag = "awards",
     responses((status = 200, body = serde_json::Value)),
+    operation_id = "awardsListCategories",
 )]
 pub async fn list_categories(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
     let categories = awards::categories(&state.db).await?;
@@ -51,7 +52,10 @@ pub async fn list_categories(State(state): State<AppState>) -> Result<Json<Value
 /// count behind it.
 #[utoipa::path(
     get, path = "/api/awards/{year}", tag = "awards",
-    params(("year" = i32, Path, description = "Year the work happened in")),
+    // Bounded in the spec because the handler bounds it: an edition year is
+    // stored as a smallint, and an unbounded integer in the contract promises
+    // callers a range the database cannot hold.
+    params(("year" = i32, Path, description = "Year the work happened in", minimum = 2000, maximum = 3000)),
     responses(
         (status = 200, body = serde_json::Value),
         (status = 404, description = "No edition for that year", body = crate::api_response::ErrorResponse),
@@ -83,7 +87,10 @@ pub struct NominateBody {
 /// Put a piece of work forward, including your own.
 #[utoipa::path(
     post, path = "/api/awards/{year}/nominations", tag = "awards",
-    params(("year" = i32, Path, description = "Year the work happened in")),
+    // Bounded in the spec because the handler bounds it: an edition year is
+    // stored as a smallint, and an unbounded integer in the contract promises
+    // callers a range the database cannot hold.
+    params(("year" = i32, Path, description = "Year the work happened in", minimum = 2000, maximum = 3000)),
     request_body = NominateBody,
     responses(
         (status = 200, body = serde_json::Value),
@@ -162,6 +169,7 @@ pub async fn vote(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = AwardsShortlistBody)]
 pub struct ShortlistBody {
     pub nominee_ids: Vec<Uuid>,
 }

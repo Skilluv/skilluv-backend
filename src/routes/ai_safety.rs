@@ -109,6 +109,7 @@ pub struct DisclosureBody {
         (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "aiSafetyListReports",
 )]
 pub async fn list_reports(
     State(state): State<AppState>,

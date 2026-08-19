@@ -97,6 +97,7 @@ pub struct OpsHealthResponse {
         (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "adminDashboardOverview",
 )]
 pub async fn overview(
     _gate: crate::middleware::admin_gate::AdminGate,

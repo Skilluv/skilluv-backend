@@ -232,17 +232,35 @@ pub struct EcosystemQuery {
     pub language: Option<String>,
 }
 
+/// Where a language community actually talks to itself.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CommunityLink {
+    pub name: String,
+    pub url: String,
+}
+
+/// A recurring gathering, with the month it falls in so somebody can plan a
+/// year around it.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct NotableEvent {
+    pub name: String,
+    pub url: String,
+    pub month: String,
+    /// `global`, `regional` or `online`.
+    pub scope: String,
+}
+
 #[derive(Debug, Serialize, sqlx::FromRow, ToSchema)]
 pub struct EcosystemRow {
     pub language: String,
     pub display_name: String,
     pub community_url: String,
-    /// `[{"name", "url"}]`.
-    #[schema(value_type = Object)]
+    // Stored as JSONB and served through, so the Rust type is a `Value`; the
+    // schema still has to say array-of-what, or a generated client reads
+    // `object` and cannot iterate the thing it was given.
+    #[schema(value_type = Vec<CommunityLink>)]
     pub community_links: serde_json::Value,
-    /// `[{"name", "url", "month", "scope"}]` where scope is `global`,
-    /// `regional` or `online`.
-    #[schema(value_type = Object)]
+    #[schema(value_type = Vec<NotableEvent>)]
     pub notable_events: serde_json::Value,
     pub summary: String,
 }

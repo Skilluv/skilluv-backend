@@ -86,6 +86,7 @@ const PRODUCT_SELECT: &str = r#"
 #[utoipa::path(
     get, path = "/api/enterprise/product-types", tag = "enterprise",
     responses((status = 200, body = serde_json::Value)),
+    operation_id = "enterpriseProductsListTypes",
 )]
 pub async fn list_types(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
     let types: Vec<(String, String, String, Option<String>, bool)> = sqlx::query_as(
@@ -263,6 +264,7 @@ pub struct ProductStatusBody {
         (status = 400, description = "Unknown status, or cancelled with no reason", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "enterpriseProductsSetStatus",
 )]
 pub async fn set_status(
     State(state): State<AppState>,
@@ -341,6 +343,7 @@ fn default_horizon() -> i32 {
         (status = 403, description = "Not an administrator", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "enterpriseProductsRenewals",
 )]
 pub async fn renewals(
     State(state): State<AppState>,

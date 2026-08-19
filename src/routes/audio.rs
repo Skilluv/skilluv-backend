@@ -1081,6 +1081,7 @@ pub async fn credit(
         (status = 400, description = "Audio onboarding not answered", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "audioMentorMatches",
 )]
 pub async fn mentor_matches(
     State(state): State<AppState>,
@@ -1128,6 +1129,7 @@ pub struct PortfolioRow {
     get, path = "/api/audio/portfolios", tag = "audio",
     responses((status = 200, description = "Linked accounts", body = ApiResponse<Vec<PortfolioRow>>)),
     security(("cookie_auth" = [])),
+    operation_id = "audioMyPortfolios",
 )]
 pub async fn my_portfolios(
     State(state): State<AppState>,
@@ -1249,6 +1251,7 @@ pub async fn declare_portfolio(
         (status = 404, description = "Not the caller's", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "audioDropPortfolio",
 )]
 pub async fn drop_portfolio(
     State(state): State<AppState>,

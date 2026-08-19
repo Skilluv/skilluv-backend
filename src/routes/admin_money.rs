@@ -83,6 +83,7 @@ pub struct ProviderPosition {
         (status = 403, description = "Not an operator", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "adminMoneyOverview",
 )]
 pub async fn overview(
     State(state): State<AppState>,
@@ -403,6 +404,7 @@ pub struct MethodRow {
         (status = 403, description = "Not an operator", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "adminMoneyMethods",
 )]
 pub async fn methods(
     State(state): State<AppState>,

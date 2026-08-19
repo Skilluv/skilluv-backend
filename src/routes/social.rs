@@ -7,7 +7,6 @@
 //!   DELETE /api/social/comments/{id}
 //!   POST   /api/social/reactions
 //!   GET    /api/social/reactions/{target_type}/{target_id}/summary
-//!   GET    /api/social/mentions/me
 //!   GET    /api/tags
 //!   GET    /api/social/tag-map/{target_type}/{target_id}
 //!   POST   /api/social/tag-map
@@ -378,32 +377,6 @@ pub async fn reaction_summary(
     }))))
 }
 
-// ─── Mentions ─────────────────────────────────────────────────────
-
-#[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
-pub struct PaginationQuery {
-    pub page: Option<i64>,
-    pub per_page: Option<i64>,
-}
-
-/// List mentions received by the caller (paginated).
-#[utoipa::path(
-    get, path = "/api/social/mentions/me", tag = "social",
-    params(PaginationQuery),
-    responses((status = 200, body = serde_json::Value)),
-    security(("cookie_auth" = [])),
-)]
-pub async fn my_mentions(
-    State(state): State<AppState>,
-    auth: AuthUser,
-    Query(q): Query<PaginationQuery>,
-) -> Result<Json<Value>, AppError> {
-    let per_page = q.per_page.unwrap_or(50).clamp(1, 200);
-    let offset = (q.page.unwrap_or(1).max(1) - 1) * per_page;
-    let rows = social::list_mentions_for_user(&state.db, auth.user_id, per_page, offset).await?;
-    Ok(Json(build_response(json!({ "mentions": rows }))))
-}
-
 // ─── Tags ─────────────────────────────────────────────────────────
 
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
@@ -417,6 +390,7 @@ pub struct ListTagsQuery {
     get, path = "/api/tags", tag = "social",
     params(ListTagsQuery),
     responses((status = 200, body = serde_json::Value)),
+    operation_id = "socialListTags",
 )]
 pub async fn list_tags(
     State(state): State<AppState>,

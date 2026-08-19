@@ -1069,6 +1069,7 @@ struct ReviewBody {
     request_body(content = serde_json::Value),
     responses((status = 200, body = serde_json::Value)),
     security(("cookie_auth" = [])),
+    operation_id = "mentorshipSubmitReview",
 )]
 pub async fn submit_review(
     State(state): State<AppState>,

@@ -145,6 +145,7 @@ pub async fn read_consultation(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = ConsultationsRatingBody)]
 pub struct RatingBody {
     pub rating: i16,
 }
@@ -158,6 +159,7 @@ pub struct RatingBody {
         (status = 400, description = "Nothing delivered yet, or a rating outside 1 to 5", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "consultationsRate",
 )]
 pub async fn rate(
     State(state): State<AppState>,
@@ -172,6 +174,7 @@ pub async fn rate(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = ConsultationsInviteBody)]
 pub struct InviteBody {
     pub expert_user_id: Uuid,
 }
@@ -199,6 +202,7 @@ pub async fn invite_expert(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = ConsultationsRespondBody)]
 pub struct RespondBody {
     pub accept: bool,
     #[serde(default)]
@@ -215,6 +219,7 @@ pub struct RespondBody {
         (status = 404, description = "Not invited", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "consultationsRespond",
 )]
 pub async fn respond(
     State(state): State<AppState>,
@@ -284,6 +289,7 @@ pub async fn submit_opinion(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = ConsultationsDeliverBody)]
 pub struct DeliverBody {
     #[serde(default)]
     pub synthesis_md: Option<String>,

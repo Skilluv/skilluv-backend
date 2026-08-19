@@ -315,6 +315,7 @@ fn check_domain(domain: &str) -> Result<(), AppError> {
         (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "domainProfileGetProfile",
 )]
 pub async fn get_profile(
     State(state): State<AppState>,

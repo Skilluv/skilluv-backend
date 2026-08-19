@@ -57,6 +57,7 @@ pub struct SkillsListResponse {
     responses(
         (status = 200, description = "Skill nodes catalogue", body = ApiResponse<SkillsListResponse>),
     ),
+    operation_id = "skillsListSkills",
 )]
 pub async fn list_skills(
     State(state): State<AppState>,

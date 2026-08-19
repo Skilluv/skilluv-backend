@@ -76,6 +76,7 @@ pub struct FeatureFlagRemoved {
         (status = 403, body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "adminFeatureFlagsList",
 )]
 pub async fn list(
     _gate: crate::middleware::admin_gate::AdminGate,

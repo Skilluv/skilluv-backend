@@ -98,6 +98,7 @@ fn build_response(data: serde_json::Value) -> serde_json::Value {
     tag = "projects",
     params(ListQuery),
     responses((status = 200, body = serde_json::Value)),
+    operation_id = "slicesListOpen",
 )]
 pub async fn list_open(
     State(state): State<AppState>,
@@ -183,6 +184,7 @@ pub struct SubmitPrBody {
         (status = 400, description = "Malformed PR URL or slice not in a submittable state"),
         (status = 401, description = "Unauthenticated"),
     ),
+    operation_id = "slicesSubmitPr",
 )]
 pub async fn submit_pr(
     State(state): State<AppState>,

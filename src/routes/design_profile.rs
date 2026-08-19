@@ -217,6 +217,7 @@ pub async fn design_profile(
     post, path = "/api/users/me/design-profile/recompute", tag = "design",
     responses((status = 200, description = "the score, recomputed and stored")),
     security(("cookie_auth" = [])),
+    operation_id = "designProfileRecomputeMine",
 )]
 pub async fn recompute_mine(
     State(state): State<AppState>,
@@ -234,6 +235,7 @@ pub async fn recompute_mine(
 #[utoipa::path(
     get, path = "/api/design/tiers", tag = "design",
     responses((status = 200, description = "tiers, weights and the ceiling")),
+    operation_id = "designProfileListTiers",
 )]
 pub async fn list_tiers(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
     let tiers: Vec<(String, String, i32, Option<i32>, String)> = sqlx::query_as(

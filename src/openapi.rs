@@ -1399,7 +1399,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
             crate::routes::finance_line::DecisionBody,
             crate::routes::finance_line::WriteOffBody,
             crate::routes::finance_line::ClaimBody,
-            crate::routes::data_line::ConsentBody,
+            crate::routes::data_line::DataConsentBody,
             crate::routes::data_line::DeliverBody,
             crate::routes::data_line::SettleBody,
             crate::routes::contests::StatusBody,
@@ -1805,4 +1805,73 @@ where
 
 async fn openapi_json() -> impl IntoResponse {
     axum::Json(ApiDoc::openapi())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+    use utoipa::OpenApi;
+
+    /// utoipa names a component after the Rust type alone and an operation
+    /// after the handler's function name, and neither is unique in a codebase
+    /// this size: 51 structs collapsed onto 18 component names and 126
+    /// handlers onto 56 operation ids, each collision quietly overwriting the
+    /// last. Nothing failed — the spec simply described the wrong endpoint,
+    /// and a client generated from it called something else.
+    ///
+    /// Both are one `#[schema(as = ...)]` or `operation_id = "..."` away from
+    /// correct. This is what notices the next one.
+    #[test]
+    fn no_two_operations_share_an_id() {
+        // Read through the serialised document rather than utoipa's typed
+        // `PathItem`, whose per-method fields move between minor versions.
+        let doc = serde_json::to_value(ApiDoc::openapi()).unwrap();
+        let mut seen: HashMap<String, Vec<String>> = HashMap::new();
+        for (path, item) in doc["paths"].as_object().unwrap() {
+            for (method, op) in item.as_object().unwrap() {
+                if let Some(id) = op.get("operationId").and_then(|v| v.as_str()) {
+                    seen.entry(id.to_string())
+                        .or_default()
+                        .push(format!("{method} {path}"));
+                }
+            }
+        }
+        let clashes: Vec<_> = seen.iter().filter(|(_, v)| v.len() > 1).collect();
+        assert!(
+            seen.len() > 700,
+            "only {} operation ids read — the document is not being walked",
+            seen.len()
+        );
+        assert!(
+            clashes.is_empty(),
+            "operationId must be unique across the document: {clashes:#?}"
+        );
+    }
+
+    /// The same defect on the schema side is invisible from the document
+    /// alone — the loser of a collision is simply absent. What is checkable is
+    /// that every component another part of the document points at exists.
+    #[test]
+    fn every_referenced_schema_is_defined() {
+        let doc = ApiDoc::openapi();
+        let defined: std::collections::HashSet<String> = doc
+            .components
+            .as_ref()
+            .map(|c| c.schemas.keys().cloned().collect())
+            .unwrap_or_default();
+
+        let json = serde_json::to_string(&doc).unwrap();
+        let mut missing: Vec<String> = Vec::new();
+        for part in json.split("\"#/components/schemas/").skip(1) {
+            let name = part.split('"').next().unwrap_or_default().to_string();
+            if !name.is_empty() && !defined.contains(&name) && !missing.contains(&name) {
+                missing.push(name);
+            }
+        }
+        assert!(
+            missing.is_empty(),
+            "the document points at components it does not define: {missing:?}"
+        );
+    }
 }

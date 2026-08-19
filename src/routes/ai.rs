@@ -109,6 +109,7 @@ pub struct ToolkitResponse {
         (status = 200, description = "Curated AI resources", body = ApiResponse<ToolkitResponse>),
         (status = 400, description = "Invalid filter", body = crate::api_response::ErrorResponse),
     ),
+    operation_id = "aiToolkit",
 )]
 pub async fn toolkit(
     State(state): State<AppState>,
@@ -404,6 +405,7 @@ pub async fn user_ai_profile(
         (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "aiMentorMatches",
 )]
 pub async fn mentor_matches(
     State(state): State<AppState>,

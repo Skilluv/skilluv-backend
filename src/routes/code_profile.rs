@@ -269,6 +269,7 @@ pub async fn code_profile(
         (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "codeProfileRecomputeMine",
 )]
 pub async fn recompute_mine(
     State(state): State<AppState>,
@@ -293,6 +294,7 @@ pub async fn recompute_mine(
         (status = 400, description = "Unknown answer, or everything selected", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "codeProfileCompleteOnboarding",
 )]
 pub async fn complete_onboarding(
     State(state): State<AppState>,
@@ -330,6 +332,7 @@ pub async fn complete_onboarding(
         (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "codeProfileSkipOnboarding",
 )]
 pub async fn skip_onboarding(
     State(state): State<AppState>,
@@ -347,6 +350,7 @@ pub async fn skip_onboarding(
         (status = 400, description = "Onboarding not answered", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "codeProfileMentorMatches",
 )]
 pub async fn mentor_matches(
     State(state): State<AppState>,
@@ -365,6 +369,7 @@ pub async fn mentor_matches(
 // ─── Portfolios on other platforms ───────────────────────────────
 
 #[derive(Debug, serde::Deserialize, ToSchema)]
+#[schema(as = CodeProfileClaimBody)]
 pub struct ClaimBody {
     /// The profile page itself — `https://codeberg.org/someone`, not one of
     /// its repositories.
@@ -380,6 +385,7 @@ pub struct ClaimBody {
         (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "codeProfileMyPortfolios",
 )]
 pub async fn my_portfolios(
     State(state): State<AppState>,
@@ -451,6 +457,7 @@ pub async fn claim_portfolio(
         (status = 404, description = "Not the caller's", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "codeProfileDropPortfolio",
 )]
 pub async fn drop_portfolio(
     State(state): State<AppState>,
@@ -473,6 +480,7 @@ pub async fn drop_portfolio(
 #[utoipa::path(
     get, path = "/api/code/tiers", tag = "profile",
     responses((status = 200, body = serde_json::Value)),
+    operation_id = "codeProfileListTiers",
 )]
 pub async fn list_tiers(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
     let tiers: Vec<(String, String, i32, Option<i32>, String)> = sqlx::query_as(

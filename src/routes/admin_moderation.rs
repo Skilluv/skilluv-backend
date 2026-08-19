@@ -279,6 +279,7 @@ pub struct ModerationDashboard {
         (status = 403, body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "adminModerationListUsers",
 )]
 pub async fn list_users(
     _gate: crate::middleware::admin_gate::AdminGate,
@@ -403,6 +404,7 @@ pub struct AdminUserDetailData {
         (status = 404, body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "adminModerationGetUser",
 )]
 pub async fn get_user(
     _gate: crate::middleware::admin_gate::AdminGate,
@@ -641,6 +643,7 @@ pub async fn unban_user(
     get, path = "/api/admin/reports", tag = "admin",
     responses((status = 200, body = ReportListResponse), (status = 403, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
+    operation_id = "adminModerationListReports",
 )]
 pub async fn list_reports(
     _gate: crate::middleware::admin_gate::AdminGate,

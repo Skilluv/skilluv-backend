@@ -127,6 +127,7 @@ pub struct CreateSkillData {
         (status = 403, body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "adminSkillsListSkills",
 )]
 pub async fn list_skills(
     _gate: crate::middleware::admin_gate::AdminGate,

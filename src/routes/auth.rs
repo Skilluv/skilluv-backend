@@ -749,6 +749,7 @@ fn login_pending_2fa_key(user_id: Uuid) -> String {
         (status = 400, description = "Validation error (email, username, password policy, terms not accepted, duplicate)", body = crate::api_response::ErrorResponse),
         (status = 429, description = "Rate limit hit (5/h per IP)", body = crate::api_response::ErrorResponse),
     ),
+    operation_id = "authRegister",
 )]
 pub async fn register(
     State(state): State<AppState>,

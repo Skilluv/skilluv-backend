@@ -132,6 +132,7 @@ pub async fn history(
 
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
+#[schema(as = DesignReviewBody)]
 pub struct ReviewBody {
     /// `approve`, `iterate` or `reject`.
     pub verdict: String,

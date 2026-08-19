@@ -112,7 +112,7 @@ pub async fn my_consent(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
-pub struct ConsentBody {
+pub struct DataConsentBody {
     pub agree: bool,
 }
 
@@ -120,7 +120,7 @@ pub struct ConsentBody {
 #[utoipa::path(
     post, path = "/api/users/me/data-consent/{purpose}", tag = "profile",
     params(("purpose" = String, Path, description = "Purpose slug")),
-    request_body = ConsentBody,
+    request_body = DataConsentBody,
     responses(
         (status = 200, body = serde_json::Value),
         (status = 400, description = "Not a purpose we ask about", body = crate::api_response::ErrorResponse),
@@ -132,7 +132,7 @@ pub async fn set_consent(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(purpose): Path<String>,
-    Json(body): Json<ConsentBody>,
+    Json(body): Json<DataConsentBody>,
 ) -> Result<Json<Value>, AppError> {
     if body.agree {
         data_consent::grant(&state.db, auth.user_id, &purpose).await?;
@@ -322,6 +322,7 @@ pub async fn talent_attestations(
         (status = 200, body = serde_json::Value),
         (status = 401, description = "No or unknown API key", body = crate::api_response::ErrorResponse),
     ),
+    operation_id = "dataLineKeyUsage",
 )]
 pub async fn key_usage(
     State(state): State<AppState>,
@@ -344,6 +345,7 @@ pub async fn key_usage(
     get, path = "/api/admin/data/reports", tag = "admin",
     responses((status = 200, body = serde_json::Value)),
     security(("cookie_auth" = [])),
+    operation_id = "dataLineListReports",
 )]
 pub async fn list_reports(
     State(state): State<AppState>,
@@ -374,6 +376,7 @@ pub async fn commission_report(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = DataLineDeliverBody)]
 pub struct DeliverBody {
     pub document_url: String,
     /// Which consent the figures rest on. Named rather than assumed: a report
@@ -438,6 +441,7 @@ pub async fn open_licence(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = DataLineSettleBody)]
 pub struct SettleBody {
     pub period_start: chrono::NaiveDate,
     pub period_end: chrono::NaiveDate,

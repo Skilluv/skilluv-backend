@@ -119,6 +119,7 @@ pub struct AdminRequestsQuery {
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = SponsoredChallengesDecideBody)]
 pub struct DecideBody {
     /// `approve`, `reject`, `negotiate`.
     #[schema(max_length = 10000)]

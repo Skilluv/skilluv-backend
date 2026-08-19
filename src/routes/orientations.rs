@@ -152,6 +152,7 @@ pub struct MyOrientationsResponse {
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = OrientationsRegisterBody)]
 pub struct RegisterBody {
     #[schema(max_length = 10000)]
     pub slug: String,
@@ -183,6 +184,7 @@ pub struct RegisterOrientationResponse {
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = OrientationsUpdateBody)]
 pub struct UpdateBody {
     #[schema(max_length = 10000)]
     pub mode: Option<String>,

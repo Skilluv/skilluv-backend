@@ -33,6 +33,7 @@ pub fn enterprise_subscription_routes() -> Router<AppState> {
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = EnterpriseSubscriptionsSubscribeBody)]
 pub struct SubscribeBody {
     /// Slug of the subscription pack (see `packs` table where
     /// `kind = 'subscription'`).
@@ -45,6 +46,7 @@ pub struct SubscribeBody {
 /// populated; otherwise `checkout_url` + `session_id` for the Stripe
 /// flow.
 #[derive(Debug, Serialize, ToSchema)]
+#[schema(as = EnterpriseSubscriptionsSubscribeResponse)]
 pub struct SubscribeResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
@@ -219,6 +221,7 @@ pub async fn current_subscription(
         (status = 404, description = "No active subscription", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "enterpriseSubscriptionsCancelSubscription",
 )]
 pub async fn cancel_subscription(
     State(state): State<AppState>,

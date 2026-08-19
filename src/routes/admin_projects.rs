@@ -206,6 +206,7 @@ pub struct IngestRunReport {
         (status = 403, body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "adminProjectsCreateProject",
 )]
 pub async fn create_project(
     _gate: crate::middleware::admin_gate::AdminGate,

@@ -205,7 +205,7 @@ pub async fn get_job_result(
 /// is defined by skilluv-ia (talent pool + filters).
 #[utoipa::path(
     post,
-    path = "/api/admin/ai/hidden-gems",
+    path = "/api/admin/assistant/hidden-gems",
     tag = "admin",
     request_body(content = serde_json::Value, description = "Talents pool + filter parameters"),
     responses(
@@ -231,7 +231,7 @@ pub async fn admin_hidden_gems(
 /// Admin only: enqueue a churn-analysis job.
 #[utoipa::path(
     post,
-    path = "/api/admin/ai/churn",
+    path = "/api/admin/assistant/churn",
     tag = "admin",
     request_body(content = serde_json::Value, description = "Talents + horizon_days"),
     responses(

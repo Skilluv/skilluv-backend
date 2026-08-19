@@ -103,16 +103,7 @@ pub async fn list_open(
     State(state): State<AppState>,
     Query(query): Query<ListQuery>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    if let Some(d) = &query.domain
-        && !matches!(
-            d.as_str(),
-            "code" | "design" | "game" | "security" | "ops" | "ai" | "soft_skills"
-        )
-    {
-        return Err(AppError::Validation(
-            "domain must be one of: code, design, game, security, ops, ai, soft_skills".into(),
-        ));
-    }
+    crate::validators::check_skill_domain_opt(&query.domain, "domain")?;
     crate::validators::check_range_opt(query.difficulty.map(i64::from), "difficulty", 1, 5)?;
     crate::validators::check_range_opt(query.page, "page", 1, 100_000)?;
     crate::validators::check_range_opt(query.per_page, "per_page", 1, 100)?;

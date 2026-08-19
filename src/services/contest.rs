@@ -41,27 +41,56 @@ pub const VALID_ARTIFACT_TYPES: &[&str] = &[
 pub const VALID_SUBMISSION_STATUSES: &[&str] =
     &["submitted", "accepted", "rejected", "disqualified"];
 
-/// Kinds that expect a submission. The others are scored from activity
-/// elsewhere on the platform, and asking for a link would be theatre.
-pub const KINDS_WITH_SUBMISSIONS: &[&str] = &[
-    "hackathon",
-    "code_golf",
-    "tdd_contest",
-    "brief_contest",
-    "duel",
-];
+/// What a contest format is, read from `tournament_kinds` (migration 0516).
+///
+/// Three Rust constants used to hold these three answers — which kinds take a
+/// submission, which are measured, and which keys their rules must carry — and
+/// each had to agree with the database and with the other two. Migration 0228
+/// is the record of what happens when a list like that drifts: `code_golf`
+/// passed the Rust check and was refused by the database, with an error naming
+/// a constraint rather than the thing that was wrong.
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct KindSpec {
+    pub slug: String,
+    pub name: String,
+    pub expects_submission: bool,
+    pub is_measured: bool,
+    pub lower_is_better: bool,
+    pub required_rule_keys: Vec<String>,
+    /// A panel decides (migration 0438).
+    pub is_juried: bool,
+    /// Whoever shows up decides, unless the contest's rules say otherwise.
+    pub allows_community_vote: bool,
+}
 
-/// Kinds whose result is decided by people rather than by a measured number,
-/// and which therefore need a panel before they can be closed.
-pub const JURIED_KINDS: &[&str] = &["hackathon", "tdd_contest", "brief_contest"];
+/// One format, or a validation error naming the ones that exist.
+///
+/// A `Validation` rather than a `NotFound`: an unknown kind arrives from a
+/// request body, and the caller needs the list rather than a 404.
+pub async fn load_kind(db: &PgPool, kind: &str) -> Result<KindSpec, AppError> {
+    let found: Option<KindSpec> = sqlx::query_as(
+        "SELECT slug, name, expects_submission, is_measured, lower_is_better,
+                required_rule_keys, is_juried, allows_community_vote
+           FROM tournament_kinds WHERE slug = $1",
+    )
+    .bind(kind)
+    .fetch_optional(db)
+    .await?;
 
-/// Kinds where the room votes. `duel` is the pure case; a brief contest can
-/// opt in through its rules.
-pub const COMMUNITY_VOTED_KINDS: &[&str] = &["duel"];
-
-/// Kinds ranked by a number the submitter measures rather than a judge's
-/// opinion.
-pub const MEASURED_KINDS: &[&str] = &["code_golf"];
+    match found {
+        Some(spec) => Ok(spec),
+        None => {
+            let known: Vec<String> =
+                sqlx::query_scalar("SELECT slug FROM tournament_kinds ORDER BY sort_order")
+                    .fetch_all(db)
+                    .await?;
+            Err(AppError::Validation(format!(
+                "kind must be one of: {}",
+                known.join(", ")
+            )))
+        }
+    }
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // Rules
@@ -72,35 +101,14 @@ pub const MEASURED_KINDS: &[&str] = &["code_golf"];
 /// Checked at creation rather than at submission: a code golf with no problem
 /// link is not a contest with a missing field, it is an announcement nobody
 /// can act on, and the moment to catch that is before it is published.
-pub fn validate_rules(kind: &str, rules: &serde_json::Value) -> Result<(), AppError> {
+pub fn validate_rules(spec: &KindSpec, rules: &serde_json::Value) -> Result<(), AppError> {
     if !rules.is_object() {
         return Err(AppError::Validation("rules must be an object".into()));
     }
 
-    let required: &[&str] = match kind {
-        // The theme is the whole premise; without it the entries have nothing
-        // in common and there is nothing to compare.
-        "hackathon" => &["theme"],
-        // A golf without a language is not comparable, and without a problem
-        // there is nothing to solve.
-        "code_golf" => &["language", "problem_url"],
-        // The problem, and what the judges will actually look at — announced
-        // up front, because "judged on test quality" means nothing until it
-        // says which qualities.
-        "tdd_contest" => &["problem_url", "judging_criteria"],
-        // The number of merged pull requests somebody commits to, over the
-        // window the contest runs for.
-        "marathon" => &["target_merged_prs"],
-        // The brief itself, and what the jury will weigh. A brief contest
-        // with a vague brief is how a contest becomes unpaid guesswork, and
-        // the moment to catch that is before anybody spends a weekend on it.
-        "brief_contest" => &["brief", "judging_criteria"],
-        // What the two of them are being asked to do, and how long they have.
-        "duel" => &["task", "duration_hours"],
-        _ => &[],
-    };
+    let kind = spec.slug.as_str();
 
-    for key in required {
+    for key in &spec.required_rule_keys {
         let value = rules.get(key);
         let stated = match value {
             None | Some(serde_json::Value::Null) => false,
@@ -217,7 +225,8 @@ pub async fn submit(
             .await?
             .ok_or_else(|| AppError::NotFound("tournament not found".into()))?;
 
-    if !KINDS_WITH_SUBMISSIONS.contains(&kind.as_str()) {
+    let spec = load_kind(db, &kind).await?;
+    if !spec.expects_submission {
         return Err(AppError::Validation(format!(
             "a {kind} is scored from activity, not from a submission"
         )));
@@ -247,7 +256,7 @@ pub async fn submit(
     }
     crate::validators::check_max_len(&input.summary, "summary", 4000)?;
 
-    let measured = MEASURED_KINDS.contains(&kind.as_str());
+    let measured = spec.is_measured;
     match (measured, input.measured_value) {
         // Without the number there is nothing to rank a golf entry by.
         (true, None) => {
@@ -509,7 +518,7 @@ pub async fn judge(
     let (tournament_id, kind) =
         existing.ok_or_else(|| AppError::NotFound("submission not found".into()))?;
 
-    let measured = MEASURED_KINDS.contains(&kind.as_str());
+    let measured = load_kind(db, &kind).await?.is_measured;
     if measured && input.judge_score.is_some() {
         return Err(AppError::Validation(
             "a code golf is ranked by its measured value — a judge score would contradict it"
@@ -745,7 +754,7 @@ pub async fn invite_juror(
     let (kind, domain) =
         contest.ok_or_else(|| AppError::NotFound("tournament not found".into()))?;
 
-    if !JURIED_KINDS.contains(&kind.as_str()) {
+    if !load_kind(db, &kind).await?.is_juried {
         return Err(AppError::Validation(format!(
             "a {kind} is not decided by a jury"
         )));
@@ -913,7 +922,7 @@ pub async fn require_accepted_juror(
 /// One vote per account per contest, moved rather than stacked.
 ///
 /// Eligibility — the account age floor, the self-vote, the withdrawn entry —
-/// is enforced by the trigger from migration 0409, because a vote arrives
+/// is enforced by the trigger from migration 0509, because a vote arrives
 /// from more places than this function.
 pub async fn cast_community_vote(
     db: &PgPool,
@@ -926,7 +935,7 @@ pub async fn cast_community_vote(
         .fetch_optional(db)
         .await?;
     let kind = kind.ok_or_else(|| AppError::NotFound("tournament not found".into()))?;
-    if !COMMUNITY_VOTED_KINDS.contains(&kind.as_str())
+    if !load_kind(db, &kind).await?.allows_community_vote
         && !community_vote_enabled_by_rules(db, tournament_id).await?
     {
         return Err(AppError::Validation(format!(
@@ -1041,13 +1050,14 @@ pub async fn recompute_contest_scores(db: &PgPool, tournament_id: Uuid) -> Resul
             .await?;
     let (kind, rules) = contest.ok_or_else(|| AppError::NotFound("tournament not found".into()))?;
 
-    if !KINDS_WITH_SUBMISSIONS.contains(&kind.as_str()) {
+    let spec = load_kind(db, &kind).await?;
+    if !spec.expects_submission {
         return Err(AppError::Validation(format!(
             "a {kind} is not scored from submissions"
         )));
     }
 
-    let default_mode = if COMMUNITY_VOTED_KINDS.contains(&kind.as_str()) {
+    let default_mode = if spec.allows_community_vote {
         "community"
     } else {
         "jury"
@@ -1139,7 +1149,7 @@ pub fn blended_score(
     (blended * 100.0).round().clamp(0.0, 100.0) as i32
 }
 
-/// Constraint violations raised by migration 0409 are written for humans on
+/// Constraint violations raised by migration 0509 are written for humans on
 /// purpose; passing them through is more useful than a generic 500.
 fn map_guard_error(e: sqlx::Error) -> AppError {
     match &e {
@@ -1153,12 +1163,29 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    /// A format as the table describes it, built here so the rule checking
+    /// stays a pure function with pure tests. What the table actually holds is
+    /// asserted against these in `tests/test_contest_kinds.rs`.
+    fn spec(slug: &str, keys: &[&str]) -> KindSpec {
+        KindSpec {
+            slug: slug.to_string(),
+            name: slug.to_string(),
+            expects_submission: true,
+            is_measured: slug == "code_golf",
+            lower_is_better: slug == "code_golf",
+            required_rule_keys: keys.iter().map(|k| k.to_string()).collect(),
+            is_juried: matches!(slug, "hackathon" | "tdd_contest" | "brief_contest"),
+            allows_community_vote: slug == "duel",
+        }
+    }
+
     #[test]
     fn a_golf_without_a_problem_is_not_a_contest() {
-        assert!(validate_rules("code_golf", &json!({"language": "python"})).is_err());
+        let golf = spec("code_golf", &["language", "problem_url"]);
+        assert!(validate_rules(&golf, &json!({"language": "python"})).is_err());
         assert!(
             validate_rules(
-                "code_golf",
+                &golf,
                 &json!({"language": "python", "problem_url": "https://example.test/p"})
             )
             .is_ok()
@@ -1167,18 +1194,18 @@ mod tests {
 
     #[test]
     fn an_empty_string_is_not_a_stated_rule() {
-        assert!(validate_rules("hackathon", &json!({"theme": "   "})).is_err());
-        assert!(validate_rules("hackathon", &json!({"theme": "offline first"})).is_ok());
+        let hackathon = spec("hackathon", &["theme"]);
+        assert!(validate_rules(&hackathon, &json!({"theme": "   "})).is_err());
+        assert!(validate_rules(&hackathon, &json!({"theme": "offline first"})).is_ok());
     }
 
     #[test]
     fn a_tdd_contest_says_what_it_judges_before_it_judges() {
-        assert!(
-            validate_rules("tdd_contest", &json!({"problem_url": "https://x.test/p"})).is_err()
-        );
+        let tdd = spec("tdd_contest", &["problem_url", "judging_criteria"]);
+        assert!(validate_rules(&tdd, &json!({"problem_url": "https://x.test/p"})).is_err());
         assert!(
             validate_rules(
-                "tdd_contest",
+                &tdd,
                 &json!({
                     "problem_url": "https://x.test/p",
                     "judging_criteria": ["test coverage", "readability"]
@@ -1190,9 +1217,10 @@ mod tests {
 
     #[test]
     fn an_empty_criteria_list_says_nothing() {
+        let tdd = spec("tdd_contest", &["problem_url", "judging_criteria"]);
         assert!(
             validate_rules(
-                "tdd_contest",
+                &tdd,
                 &json!({"problem_url": "https://x.test/p", "judging_criteria": []})
             )
             .is_err()
@@ -1201,24 +1229,28 @@ mod tests {
 
     #[test]
     fn a_marathon_target_is_a_number_somebody_could_reach() {
-        assert!(validate_rules("marathon", &json!({"target_merged_prs": 5})).is_ok());
-        assert!(validate_rules("marathon", &json!({"target_merged_prs": 0})).is_err());
-        assert!(validate_rules("marathon", &json!({"target_merged_prs": 5000})).is_err());
-        assert!(validate_rules("marathon", &json!({"target_merged_prs": "beaucoup"})).is_err());
+        let marathon = spec("marathon", &["target_merged_prs"]);
+        assert!(validate_rules(&marathon, &json!({"target_merged_prs": 5})).is_ok());
+        assert!(validate_rules(&marathon, &json!({"target_merged_prs": 0})).is_err());
+        assert!(validate_rules(&marathon, &json!({"target_merged_prs": 5000})).is_err());
+        assert!(validate_rules(&marathon, &json!({"target_merged_prs": "beaucoup"})).is_err());
     }
 
     #[test]
     fn kinds_that_never_asked_for_rules_still_do_not() {
-        assert!(validate_rules("individual", &json!({})).is_ok());
-        assert!(validate_rules("guild_war", &json!({})).is_ok());
+        assert!(validate_rules(&spec("individual", &[]), &json!({})).is_ok());
+        assert!(validate_rules(&spec("guild_war", &[]), &json!({})).is_ok());
     }
 
     #[test]
-    fn golf_is_the_only_thing_won_at_the_bottom() {
+    fn the_direction_follows_the_row_rather_than_the_caller() {
         use crate::services::tournament::scoring_direction_for;
-        assert_eq!(scoring_direction_for("code_golf"), "lower_is_better");
+        assert_eq!(
+            scoring_direction_for(&spec("code_golf", &[])),
+            "lower_is_better"
+        );
         for kind in ["hackathon", "tdd_contest", "marathon", "individual"] {
-            assert_eq!(scoring_direction_for(kind), "higher_is_better");
+            assert_eq!(scoring_direction_for(&spec(kind, &[])), "higher_is_better");
         }
     }
 
@@ -1229,7 +1261,7 @@ mod tests {
         // was never asked.
         assert!(
             validate_rules(
-                "brief_contest",
+                &spec("brief_contest", &["brief", "judging_criteria"]),
                 &json!({"brief": "Fais un logo.", "judging_criteria": ["distinction"]})
             )
             .is_err()
@@ -1237,7 +1269,7 @@ mod tests {
         let long_brief = "a".repeat(250);
         assert!(
             validate_rules(
-                "brief_contest",
+                &spec("brief_contest", &["brief", "judging_criteria"]),
                 &json!({"brief": long_brief, "judging_criteria": ["distinction"]})
             )
             .is_ok()
@@ -1247,17 +1279,45 @@ mod tests {
     #[test]
     fn a_brief_contest_says_what_it_weighs_before_it_weighs_it() {
         let long_brief = "a".repeat(250);
-        assert!(validate_rules("brief_contest", &json!({"brief": long_brief})).is_err());
+        assert!(
+            validate_rules(
+                &spec("brief_contest", &["brief", "judging_criteria"]),
+                &json!({"brief": long_brief})
+            )
+            .is_err()
+        );
     }
 
     #[test]
     fn a_duel_is_bounded_in_time() {
-        assert!(validate_rules("duel", &json!({"task": "Un logo"})).is_err());
-        assert!(validate_rules("duel", &json!({"task": "Un logo", "duration_hours": 0})).is_err());
         assert!(
-            validate_rules("duel", &json!({"task": "Un logo", "duration_hours": 500})).is_err()
+            validate_rules(
+                &spec("duel", &["task", "closes_at"]),
+                &json!({"task": "Un logo"})
+            )
+            .is_err()
         );
-        assert!(validate_rules("duel", &json!({"task": "Un logo", "duration_hours": 48})).is_ok());
+        assert!(
+            validate_rules(
+                &spec("duel", &["task", "duration_hours"]),
+                &json!({"task": "Un logo", "duration_hours": 0})
+            )
+            .is_err()
+        );
+        assert!(
+            validate_rules(
+                &spec("duel", &["task", "duration_hours"]),
+                &json!({"task": "Un logo", "duration_hours": 500})
+            )
+            .is_err()
+        );
+        assert!(
+            validate_rules(
+                &spec("duel", &["task", "duration_hours"]),
+                &json!({"task": "Un logo", "duration_hours": 48})
+            )
+            .is_ok()
+        );
     }
 
     #[test]
@@ -1312,19 +1372,8 @@ mod tests {
         assert_eq!(blended_score("populaire", 0.6, Some(80), 0, 10), 80);
     }
 
-    #[test]
-    fn juried_and_community_kinds_do_not_overlap_by_accident() {
-        for kind in COMMUNITY_VOTED_KINDS {
-            assert!(
-                !JURIED_KINDS.contains(kind),
-                "{kind} cannot default to both a jury and the room"
-            );
-        }
-        for kind in JURIED_KINDS.iter().chain(COMMUNITY_VOTED_KINDS.iter()) {
-            assert!(
-                KINDS_WITH_SUBMISSIONS.contains(kind),
-                "{kind} is decided on entries it never collects"
-            );
-        }
-    }
+    // The invariant that used to live here — no format defaults to both a
+    // jury and the room, and neither is decided on entries it never collects
+    // — is a CHECK on `tournament_kinds` since migration 0438. A unit test
+    // over a Rust constant could only ever have checked the copy.
 }

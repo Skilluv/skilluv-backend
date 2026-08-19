@@ -50,7 +50,7 @@ pub const DELIVERABLE_FORMATS: &[&str] = &[
     "repository_handover",
     "library_published",
     "consulting_report",
-    // Ops (migration 0424). A runbook is the deliverable here rather than
+    // Ops (migration 0524). A runbook is the deliverable here rather than
     // documentation accompanying one.
     "iac_repository",
     "runbooks",
@@ -369,7 +369,7 @@ pub async fn create(
         }
         let message = e.to_string();
 
-        // The two ops constraints from migration 0424 are positions rather
+        // The two ops constraints from migration 0524 are positions rather
         // than data errors, and a constraint name in a 500 would hide the
         // position behind a stack trace.
         if message.contains("oncall_missions_state_their_terms") {

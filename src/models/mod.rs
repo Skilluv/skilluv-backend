@@ -19,7 +19,9 @@ pub use deliverable::{AiAssistanceLevel, Deliverable, VerifiableBy, Verification
 pub use enterprise::{Enterprise, EnterpriseMember, EnterprisePublic};
 pub use notification::Notification;
 pub use project_slice::{DesignSubtype, ProjectSlice, SliceSkill, SliceType};
-pub use skill_node::{SkillDomain, SkillNode};
+// `SkillDomain` is gone: the audio branch made domains rows, and an enum that
+// froze them was the thing standing in the way of an eighth.
+pub use skill_node::SkillNode;
 pub use talent_list::{EnterpriseBookmark, TalentList};
 pub use team_role_slot::TeamRoleSlot;
 pub use user::{User, UserPrivate, UserPublic};

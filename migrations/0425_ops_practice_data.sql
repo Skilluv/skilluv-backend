@@ -118,33 +118,31 @@ ON CONFLICT (slug) DO NOTHING;
 -- Ops contests
 -- ═══════════════════════════════════════════════════════════════════
 --
--- Two more kinds on `tournaments`. Every value restated, because a CHECK
--- cannot be extended — and migration 0223 already deleted two kinds this way
--- without anybody noticing until a test was written for it.
+-- Two rows on `tournament_kinds`. Migration 0516 made the formats a table
+-- because the CHECK had been rewritten three times and one rewrite deleted
+-- two of its predecessor's values — so a domain adding a format no longer
+-- retypes every other domain's.
+--
+-- Neither of these is measured by a jury. A chaos weekend is scored on what
+-- the exercise revealed, which entrants write up; a cost hunt is scored on
+-- money removed with the service still standing, which is a number and a
+-- verification. Both hand something in, and both have to say up front what
+-- system is in scope — a chaos contest with no named target is an invitation
+-- to break something that was not offered.
 
-ALTER TABLE tournaments
-    DROP CONSTRAINT IF EXISTS tournaments_kind_check;
-
-ALTER TABLE tournaments
-    ADD CONSTRAINT tournaments_kind_check CHECK (kind IN (
-        -- Migration 0030, the original three.
-        'individual',
-        'guild_war',
-        'hackathon',
-        -- Migration 0114, la Grande Épreuve.
-        'marathon',
-        'defi_solitaire',
-        -- Migration 0189, code contests.
-        'code_golf',
-        'tdd_contest',
-        -- Migration 0223, AI contests on a short clock.
-        'benchmark_rush',
-        'prompt_battle',
-        -- Migration 0244, ops. A weekend spent breaking a system on purpose,
-        -- and a week spent making a bill smaller without breaking one.
-        'chaos_weekend',
-        'cost_hunt'
-    ));
+INSERT INTO tournament_kinds
+    (slug, skill_domain, name, description, expects_submission, is_measured,
+     lower_is_better, required_rule_keys, sort_order) VALUES
+    ('chaos_weekend', 'ops', 'Week-end du chaos',
+     'Un système offert, un week-end, et ce que la panne provoquée a révélé. '
+     'Ce qui est jugé est le compte rendu, pas la casse.',
+     TRUE, FALSE, FALSE, '{target_system}', 110),
+    ('cost_hunt', 'ops', 'Chasse aux coûts',
+     'Une facture, une semaine, et le montant retiré — avec la preuve que le '
+     'service tient toujours. Une économie qui a cassé le service est une '
+     'panne avec un tableur.',
+     TRUE, TRUE, FALSE, '{target_system,baseline_bill}', 120)
+ON CONFLICT (slug) DO NOTHING;
 
 -- ═══════════════════════════════════════════════════════════════════
 -- Ops awards

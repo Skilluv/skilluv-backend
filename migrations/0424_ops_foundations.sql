@@ -74,58 +74,15 @@ ON CONFLICT (slug) DO NOTHING;
 -- judge a post-mortem and has no opinion worth having on an index. The
 -- groups are the shape of the competence.
 
-ALTER TABLE user_capabilities
-    DROP CONSTRAINT IF EXISTS user_capabilities_capability_check;
-
--- Every value, restated. A CHECK cannot be extended, only replaced, so this
--- carries everything 0094, 0098, 0117, 0120, 0176 and 0210 added — dropping
--- one would silently make that capability ungrantable and every guard
--- reading it would start refusing everybody.
-ALTER TABLE user_capabilities
-    ADD CONSTRAINT user_capabilities_capability_check
-    CHECK (capability IN (
-        -- P18 base
-        'challenger', 'mentor', 'project_steward', 'pr_reviewer',
-        'bounty_funder', 'issue_proposer', 'jury_tournament', 'admin',
-        'enterprise_recruiter',
-        -- P25 community moderation
-        'community_moderator', 'forum_moderator',
-        'plagiarism_reviewer', 'kyc_reviewer', 'community_curator',
-        -- P26 beginner sas (migration 0117)
-        'verified_apprentice', 'apprentice_verifier',
-        -- P26 v2 per-domain challenge validators (migration 0120)
-        'challenge_validator:code',
-        'challenge_validator:design',
-        'challenge_validator:game',
-        'challenge_validator:security',
-        'challenge_validator:ops',
-        'challenge_validator:ai',
-        'challenge_validator:soft_skills',
-        -- Code review, by family of trade (migration 0176)
-        'code_reviewer:web',
-        'code_reviewer:mobile',
-        'code_reviewer:systems',
-        'code_reviewer:blockchain',
-        'code_reviewer:compilers',
-        'code_reviewer:data',
-        'code_reviewer:scientific',
-        'code_reviewer:devtools-media',
-        'code_reviewer:all',
-        -- AI review, by family of trade (migration 0210)
-        'ai_reviewer:data',
-        'ai_reviewer:ml',
-        'ai_reviewer:llm-nlp',
-        'ai_reviewer:cv',
-        'ai_reviewer:safety',
-        'ai_reviewer:all',
-        -- Ops review, by family of trade (this migration)
-        'ops_reviewer:infra',
-        'ops_reviewer:reliability',
-        'ops_reviewer:cloud',
-        'ops_reviewer:observability',
-        'ops_reviewer:data',
-        'ops_reviewer:all'
-    ));
+-- Nothing to restate: migration 0404 made the capabilities rows, and gave
+-- `capability_catalog` a trigger that derives `{primary_domain}_reviewer:{group}`
+-- from the orientations themselves. The five reviewer capabilities this domain
+-- needs appear the moment the trades above name their families, which the
+-- UPDATE below does.
+--
+-- The block that used to be here restated forty-one values to add six, which
+-- is the failure 0404 removed: one omission made a capability ungrantable and
+-- every guard reading it started refusing everybody.
 
 UPDATE orientations SET reviewer_group = g.grp
   FROM (VALUES
@@ -154,17 +111,17 @@ UPDATE orientations SET reviewer_group = g.grp
 -- them is judged by whether somebody else can run it without the author in
 -- the room.
 
-ALTER TABLE project_slices
-    DROP CONSTRAINT IF EXISTS project_slices_slice_type_check;
-
-ALTER TABLE project_slices
-    ADD CONSTRAINT project_slices_slice_type_check
-    CHECK (slice_type IN (
-        'github_issue', 'figma_frame', 'game_level', 'game_asset',
-        'sec_target', 'cli_task', 'design_token', 'documentation',
-        'code_artifact', 'ai_artifact', 'ops_artifact',
-        'other'
-    ));
+-- A row, not a fifth restatement of the CHECK. Migration 0408 made the
+-- surfaces a table for the reason 0058, 0181 and 0214 each rediscovered:
+-- every domain that arrives restates the whole list to add one, and the
+-- omission that deletes somebody else's surface fails at nobody's desk.
+INSERT INTO slice_types (slug, skill_domain, name, description, sort_order)
+VALUES
+    ('ops_artifact', 'ops', 'Artefact ops',
+     'Un module, un chart, un pipeline, un tableau de bord, un runbook. Jugé '
+     'sur une question : quelqu''un d''autre peut-il s''en servir sans son '
+     'auteur dans la pièce.', 60)
+ON CONFLICT (slug) DO NOTHING;
 
 ALTER TABLE project_slices
     ADD COLUMN ops_subtype VARCHAR(30),
@@ -210,60 +167,41 @@ CREATE INDEX idx_slices_ops_subtype
 -- check. "Reliable" is not a basis; a service that met a stated SLO over a
 -- stated window is.
 
-ALTER TABLE attestations
-    DROP CONSTRAINT IF EXISTS attestations_basis_check;
+-- Seven rows, not a restatement. Migration 0506 made the bases a table with
+-- the words they are issued with and whether they need a deliverable, so
+-- adding a domain stopped meaning retyping every other domain's list.
+--
+-- `requires_deliverable` is where the ops shape differs from code and AI:
+-- three of these rest on an artefact somebody can open, and three rest on a
+-- period — a window held, an incident led, a bill reduced. A period is not a
+-- file, and demanding one would have made the honest half of this domain
+-- unattestable.
 
-ALTER TABLE attestations
-    ADD CONSTRAINT attestations_basis_check
-    CHECK (basis IS NULL OR basis IN (
-        -- Code (migration 0178)
-        'code_pr_merged_upstream',
-        'code_project_shipped',
-        'code_library_published',
-        'code_rfc_accepted',
-        'code_standard_contribution',
-        'code_devtool_adopted',
-        'featured_coder',
-        -- AI (migration 0213)
-        'ai_model_shipped',
-        'ai_dataset_published',
-        'ai_agent_system_deployed',
-        'ai_paper_published',
-        'ai_benchmark_result',
-        'ai_safety_finding_validated',
-        'featured_ai_researcher',
-        -- Contests (migration 0408)
-        'contest_finalist',
-        'contest_hired',
-        -- Ops (this migration)
-        'ops_infra_shipped',
-        'ops_uptime_achievement',
-        'ops_incident_led',
-        'ops_migration_completed',
-        'ops_observability_stack_shipped',
-        'ops_cost_optimization',
-        'featured_ops_engineer'
-    ));
-
--- The ones that rest on an artefact have to name it, like their code and AI
--- equivalents. The incident and uptime ones do not: they rest on a period,
--- which is recorded elsewhere in this migration.
-ALTER TABLE attestations
-    DROP CONSTRAINT IF EXISTS attestations_artifact_basis_links_a_deliverable;
-
-ALTER TABLE attestations
-    ADD CONSTRAINT attestations_artifact_basis_links_a_deliverable
-    CHECK (
-        basis IS NULL
-        OR basis NOT IN ('code_pr_merged_upstream', 'code_project_shipped',
-                         'code_library_published',
-                         'ai_model_shipped', 'ai_dataset_published',
-                         'ai_agent_system_deployed', 'ai_paper_published',
-                         'ai_benchmark_result', 'ai_safety_finding_validated',
-                         'ops_infra_shipped', 'ops_migration_completed',
-                         'ops_observability_stack_shipped')
-        OR cardinality(linked_deliverable_ids) >= 1
-    );
+INSERT INTO attestation_bases
+    (basis, skill_domain, title, description, requires_deliverable, sort_order)
+VALUES
+    ('ops_infra_shipped', 'ops', 'Infrastructure livrée',
+     'Un module, un chart ou un pipeline qu''une autre équipe fait tourner sans son auteur.',
+     TRUE, 10),
+    ('ops_migration_completed', 'ops', 'Migration menée',
+     'Une migration majeure — base, nuage, orchestrateur — menée à son terme.',
+     TRUE, 20),
+    ('ops_observability_stack_shipped', 'ops', 'Pile d''observabilité livrée',
+     'Une pile d''observabilité livrée et adoptée par ceux qui exploitent le système.',
+     TRUE, 30),
+    ('ops_uptime_achievement', 'ops', 'Objectif de service tenu',
+     'Une cible annoncée, mesurée sur sa fenêtre, et tenue. Le chiffre vient avec sa source.',
+     FALSE, 40),
+    ('ops_incident_led', 'ops', 'Incident conduit',
+     'Un incident conduit de bout en bout, avec ses deux durées et un post-mortem publié.',
+     FALSE, 50),
+    ('ops_cost_optimization', 'ops', 'Réduction de coûts vérifiée',
+     'Une facture allégée, avec la confirmation que le service tient toujours.',
+     FALSE, 60),
+    ('featured_ops_engineer', 'ops', 'Mise en avant par la communauté ops',
+     'Un travail ops retenu par la communauté pour son exemplarité.',
+     FALSE, 70)
+ON CONFLICT (basis) DO NOTHING;
 
 -- ═══════════════════════════════════════════════════════════════════
 -- Reliability, incidents and cost — the three things ops is measured on

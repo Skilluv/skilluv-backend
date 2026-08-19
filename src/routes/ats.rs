@@ -188,7 +188,13 @@ pub async fn pipeline(
 ) -> Result<Json<Value>, AppError> {
     let enterprise = enterprise_of(&state, &auth).await?;
     let stages = ats::pipeline(&state.db, id, enterprise).await?;
-    Ok(Json(build_response(json!({ "stages": stages }))))
+    // What the opening does not say, beside the people it is about. A
+    // recruiter reads this screen when deciding who to talk to, which is the
+    // moment a missing salary range still costs nothing to fix.
+    let gaps = ats::gaps(&state.db, id).await?;
+    Ok(Json(build_response(
+        json!({ "stages": stages, "gaps": gaps }),
+    )))
 }
 
 #[utoipa::path(

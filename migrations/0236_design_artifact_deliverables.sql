@@ -18,7 +18,7 @@
 -- length.
 --
 -- Design deliverables use `design_artifact`, and the shape lives on the slice
--- (`project_slices.design_subtype`, migration 0405). Same decision as the
+-- (`project_slices.design_subtype`, migration 0505). Same decision as the
 -- slice type, for the same reason.
 --
 -- The four legacy values stay: historical rows may use them, and removing a

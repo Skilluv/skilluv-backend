@@ -360,3 +360,37 @@ async fn no_family_in_particular_is_an_answer() {
         .unwrap();
     assert_eq!(body["data"]["answers"]["preferred_families"], json!([]));
 }
+
+#[tokio::test]
+async fn the_rust_domain_list_mirrors_the_active_catalogue() {
+    // `validators::SKILL_DOMAINS` guards every request path before a query
+    // runs, so it cannot read the table on each call. It is a copy, and a copy
+    // needs something that fails when it drifts.
+    //
+    // That check used to be a unit test reading a CHECK constraint out of a
+    // migration. Migration 0400 made the domains rows, and a domain becomes
+    // active in whichever later migration gives it a catalogue — 0401 for
+    // audio — so no single file holds the answer any more. Only a migrated
+    // database does, which is why the check lives here.
+    let app = TestApp::spawn().await;
+
+    let active: Vec<String> =
+        sqlx::query_scalar("SELECT slug FROM skill_domains WHERE is_active ORDER BY sort_order")
+            .fetch_all(&app.db)
+            .await
+            .unwrap();
+
+    let mirrored: Vec<String> = skilluv_backend::validators::SKILL_DOMAINS
+        .iter()
+        .map(|d| d.to_string())
+        .collect();
+
+    assert_eq!(
+        active, mirrored,
+        "a domain was activated in the catalogue without being added to \
+         SKILL_DOMAINS, or the other way round — one of the two would then \
+         accept what the other refuses"
+    );
+
+    drop(app);
+}

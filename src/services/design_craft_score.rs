@@ -1,4 +1,4 @@
-//! The craft score, for design (migration 0412).
+//! The craft score, for design (migration 0512).
 //!
 //! Same machinery as `craft_score`: weights are rows, tiers are rows, and the
 //! breakdown is returned with the number so a profile can show "3 identités

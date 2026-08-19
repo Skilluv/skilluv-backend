@@ -1,4 +1,4 @@
-//! The applicant tracker (migration 0430).
+//! The applicant tracker (migration 0530).
 //!
 //! A company opens a position, candidates arrive — from their own inbound or
 //! pushed across from a Skilluv shortlist — and move through stages until
@@ -574,6 +574,44 @@ pub async fn move_candidate(
     .increment(1);
 
     Ok(())
+}
+
+/// What the opening does not say, said where the recruiter is looking.
+///
+/// Only one entry today: an opening with no salary range. The range is
+/// optional, and it stays optional — the opening is private, so forcing a
+/// number into a box no candidate can see would be theatre rather than
+/// transparency. What is not optional is noticing.
+///
+/// So the gap is surfaced next to the pipeline, at the moment somebody is
+/// deciding who to talk to. It is a note, not a block, and the day an opening
+/// can be published the range stops being optional on the published version —
+/// at that point it reaches a candidate, and pay opacity is the mechanism by
+/// which the people this platform exists for get underpaid.
+#[derive(Debug, Clone, Serialize)]
+pub struct OpeningGap {
+    pub code: &'static str,
+    pub note: &'static str,
+}
+
+/// The gaps worth naming on one opening.
+pub async fn gaps(db: &PgPool, opening_id: Uuid) -> Result<Vec<OpeningGap>, AppError> {
+    let has_range: Option<bool> = sqlx::query_scalar(
+        "SELECT salary_min IS NOT NULL OR salary_max IS NOT NULL
+           FROM ats_openings WHERE id = $1",
+    )
+    .bind(opening_id)
+    .fetch_optional(db)
+    .await?;
+
+    let mut gaps = Vec::new();
+    if has_range == Some(false) {
+        gaps.push(OpeningGap {
+            code: "no_salary_range",
+            note: "Aucune fourchette de rémunération n'est renseignée. Ce poste                    n'est visible que par vous, donc rien ne l'exige — mais un                    candidat qui négocie sans fourchette négocie en aveugle, et                    c'est ce qui fait qu'on paie moins les gens qui viennent de                    loin.",
+        });
+    }
+    Ok(gaps)
 }
 
 /// The pipeline of one opening, stage by stage.

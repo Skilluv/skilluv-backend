@@ -31,7 +31,7 @@ pub const PROVIDER_MEDIUM: &str = "medium";
 pub const PROVIDER_DEV_TO: &str = "dev_to";
 pub const PROVIDER_CONF_REF: &str = "conf_ref";
 
-// Design portfolios (migration 0415). Declared and reviewed, never imported:
+// Design portfolios (migration 0515). Declared and reviewed, never imported:
 // Behance's public API was withdrawn in 2020 and Dribbble's needs a
 // partnership, so an "import" would mean fetching arbitrary user-supplied
 // URLs from the backend — and an imported portfolio must not count for

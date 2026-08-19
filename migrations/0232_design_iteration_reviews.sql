@@ -102,7 +102,7 @@ ALTER TABLE slice_validation_decisions
     -- the slice at review time so each round keeps both halves: the claim and
     -- the finding.
     ADD COLUMN reviewed_artifact_notes_md TEXT,
-    -- The filled grid, shaped like migration 0404's criteria:
+    -- The filled grid, shaped like migration 0504's criteria:
     --   {"grid": "motion",
     --    "scores": [{"criterion": "Rythme", "score": 4, "comment": "..."}],
     --    "average": 3.8}
@@ -114,7 +114,7 @@ COMMENT ON COLUMN slice_validation_decisions.reviewed_artifact_url IS
     'round four''s file, and without the address the trail cannot be checked.';
 
 COMMENT ON COLUMN slice_validation_decisions.grid_scores IS
-    'The review grid of migration 0404, filled in. Named criteria are what '
+    'The review grid of migration 0504, filled in. Named criteria are what '
     'turn a verdict into something the designer can act on.';
 
 -- The craft score (a designer's average across the grids they received) and

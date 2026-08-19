@@ -11,6 +11,54 @@ pub const MAX_CODE_BYTES: usize = 100 * 1024;
 /// 2 MB max for avatar uploads (cf. `user_profile.rs::MAX_AVATAR_SIZE`).
 pub const MAX_AVATAR_BYTES: usize = 2 * 1024 * 1024;
 
+/// Every domain somebody can currently choose, work in or be filtered on.
+///
+/// The authority is the `skill_domains` table (migration 0500), and this is a
+/// mirror of the rows where `is_active`. It exists because eight modules
+/// validated a domain against a list of their own — three of which had gone
+/// stale, so `ai` was accepted by the skill tree and refused by the explore
+/// filter for a year.
+///
+/// Kept as a constant rather than read from the database because these are
+/// request-path guards that run before any query and must not add a
+/// round-trip to reject a typo. The test
+/// `the_rust_domain_list_matches_the_table` fails when the two drift, which is
+/// the only thing a mirror needs.
+pub const SKILL_DOMAINS: &[&str] = &[
+    "code",
+    "design",
+    "game",
+    "security",
+    "ops",
+    "ai",
+    "soft_skills",
+    "audio",
+];
+
+/// Refuse a domain nothing knows, naming what was allowed.
+///
+/// An unknown domain is never passed through: downstream it becomes a filter
+/// that matches nothing or a capability string nobody can hold, and both read
+/// as an empty platform rather than as a bad request.
+pub fn check_skill_domain(value: &str, field: &str) -> Result<(), AppError> {
+    if !SKILL_DOMAINS.contains(&value) {
+        return Err(AppError::Validation(format!(
+            "{field} must be one of: {}",
+            SKILL_DOMAINS.join(", ")
+        )));
+    }
+    Ok(())
+}
+
+/// The same check on an optional filter. `None` is not an error: a listing
+/// with no domain filter is every domain.
+pub fn check_skill_domain_opt(value: &Option<String>, field: &str) -> Result<(), AppError> {
+    match value {
+        Some(v) => check_skill_domain(v, field),
+        None => Ok(()),
+    }
+}
+
 /// Reject strings containing ASCII control characters (other than common whitespace).
 /// Useful for display names, titles, slugs.
 pub fn no_control_chars(value: &str, field: &str) -> Result<(), AppError> {
@@ -202,32 +250,6 @@ pub fn validate_display_name(name: &str) -> Result<(), AppError> {
     Ok(())
 }
 
-/// The platform's skill domains, and the only list of them.
-///
-/// A domain is the widest unit of craft: it decides which validators may judge
-/// your work, which craft-score weights apply, which leaderboard you appear on
-/// and which rank ladder you climb. Migrations 0056 and 0088 have known seven
-/// since 2024.
-///
-/// This constant exists because there were six copies of this list and three
-/// of them had been left at the four domains of migration 0002 — so somebody
-/// could be granted `challenge_validator:ai`, be seeded AI challenges and
-/// still be refused `ai` at signup. A list that decides who may do what has to
-/// have one home; `skill_domains_match_the_database` below keeps it honest
-/// against the CHECK constraint that enforces it.
-///
-/// Ordered oldest-first: `code`, `design`, `game` and `security` shipped in
-/// 0002, `ops`, `ai` and `soft_skills` arrived with the orientation work.
-pub const SKILL_DOMAINS: &[&str] = &[
-    "code",
-    "design",
-    "game",
-    "security",
-    "ops",
-    "ai",
-    "soft_skills",
-];
-
 /// Reject anything that is not one of [`SKILL_DOMAINS`].
 ///
 /// `field` names the caller's parameter, because the same list is checked at
@@ -248,34 +270,15 @@ pub fn validate_skill_domain(domain: &str, field: &str) -> Result<(), AppError> 
 mod tests {
     use super::*;
 
-    /// The list above and the CHECK constraint that enforces it have to say
-    /// the same thing, and they live in different languages in different
-    /// files. This reads migration 0417 at compile time and compares them, so
-    /// adding a domain to one and forgetting the other fails here rather than
-    /// as a 500 at signup.
-    #[test]
-    fn skill_domains_match_the_database() {
-        const MIGRATION: &str = include_str!("../migrations/0243_skill_domains_everywhere.sql");
-
-        // The constraint body, as written: `'code', 'design', ...`. Both
-        // tables get the identical list, so finding it once is enough.
-        let in_clause = MIGRATION
-            .split("skill_domain IN (")
-            .nth(1)
-            .and_then(|rest| rest.split(')').next())
-            .expect("migration 0417 no longer spells its domain list as `skill_domain IN (...)`");
-
-        let from_sql: Vec<&str> = in_clause
-            .split(',')
-            .map(|token| token.trim().trim_matches('\'').trim())
-            .filter(|token| !token.is_empty())
-            .collect();
-
-        assert_eq!(
-            from_sql, SKILL_DOMAINS,
-            "SKILL_DOMAINS and migration 0417 disagree — a domain was added to one of them only"
-        );
-    }
+    // The mirror between `SKILL_DOMAINS` and the catalogue moved to
+    // `tests/test_domain_profile.rs`, where a database exists.
+    //
+    // It used to read a CHECK constraint out of migration 0243 at compile
+    // time. Migration 0400 made the domains rows, and a domain becomes active
+    // in whichever later migration gives it a catalogue — 0401 for audio — so
+    // no single file holds the answer any more. A compile-time test reading
+    // one of them is worse than none: it fails for the wrong reason and gets
+    // silenced.
 
     #[test]
     fn an_unknown_domain_is_named_in_the_error() {
@@ -287,7 +290,7 @@ mod tests {
 
     #[test]
     fn the_three_domains_that_used_to_be_refused_are_accepted() {
-        // The whole point of migration 0417: these were seeded, validated and
+        // The whole point of migration 0517: these were seeded, validated and
         // ranked long before anybody could declare them.
         for domain in ["ai", "ops", "soft_skills"] {
             assert!(

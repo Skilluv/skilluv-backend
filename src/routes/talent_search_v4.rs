@@ -310,7 +310,7 @@ pub async fn search(
           -- is the surface where that distinction matters most.
           LEFT JOIN LATERAL (
               SELECT array_agg(DISTINCT p.platform) AS platforms
-                FROM user_portfolios p
+                FROM user_external_portfolios p
                WHERE p.user_id = u.id AND p.verified_at IS NOT NULL
           ) AS plat ON TRUE
 
@@ -365,7 +365,7 @@ pub async fn search(
            AND ($9::INTEGER IS NULL OR COALESCE(best.score, 0) >= $9)
 
            AND ($10::TEXT IS NULL OR EXISTS (
-                   SELECT 1 FROM user_portfolios p2
+                   SELECT 1 FROM user_external_portfolios p2
                     WHERE p2.user_id = u.id AND p2.platform = $10
                       AND p2.verified_at IS NOT NULL))
 

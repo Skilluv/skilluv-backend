@@ -21,6 +21,12 @@
 //!     "attestation_basis": "ai_model_shipped" // filtre : ce sur quoi
 //!                                   // l'attestation se fonde. Rend comptable
 //!                                   // ce qui était une appréciation.
+//!     "contest_won"                 // proof_type : une premiere place dans un
+//!                                   // tournoi. `tournament_kind` restreint au
+//!                                   // format, `skill_domain` au domaine.
+//!     "mentee_guided"               // proof_type : une personne accompagnee
+//!                                   // jusqu'a une session terminee. Compte les
+//!                                   // personnes, jamais les seances.
 //!     "mission_completed"           // proof_type : une mission cloturee.
 //!                                   // Le domaine est porte par la mission
 //!                                   // elle-meme, pas par un challenge.
@@ -82,6 +88,13 @@ struct RuleConditions {
     /// them to filter by.
     #[serde(default)]
     attestation_basis: Option<String>,
+    /// Which contest format a win has to be in — `audio_sound_battle`,
+    /// `code_golf`. Only meaningful alongside the `contest_won` proof type.
+    ///
+    /// Without it "won a contest" counts a hackathon and a sound battle as the
+    /// same thing, and a badge named after one would be awarded for the other.
+    #[serde(default)]
+    tournament_kind: Option<String>,
     /// The engine never awards this one. Some distinctions are judgements —
     /// "shipped an audited contract to mainnet" is not a row count — and
     /// inventing a rule for them would award them to the wrong people.
@@ -152,6 +165,8 @@ async fn count_matching_proofs(
         .iter()
         .any(|t| t == "slice_merged_upstream");
     let want_mission_completed = conds.proof_types.iter().any(|t| t == "mission_completed");
+    let want_contest_won = conds.proof_types.iter().any(|t| t == "contest_won");
+    let want_mentee_guided = conds.proof_types.iter().any(|t| t == "mentee_guided");
     // A variant of the deliverable count rather than a source of its own:
     // being featured is a property of a deliverable, not a different proof.
     let featured_only = conds
@@ -307,6 +322,109 @@ async fn count_matching_proofs(
               AND ($2::VARCHAR IS NULL OR skill_domain = $2)
             ORDER BY id
             LIMIT 25
+            "#,
+        )
+        .bind(user_id)
+        .bind(conds.skill_domain.as_deref())
+        .fetch_all(db)
+        .await?;
+
+        total += matched;
+        sources.extend(ids);
+    }
+
+    if want_contest_won {
+        // First place, and only first. A podium is a result; a badge named
+        // "winner" that counted a second place would be a badge that lies.
+        //
+        // Guilds are excluded rather than credited to their members: a guild
+        // war is won by a guild, and spreading that win across everybody on
+        // the roster would award a personal distinction for somebody else's
+        // work.
+        //
+        // `concluded`, not `completed`. The word is the one migration 0030
+        // chose, and a rule spelled the other way counts nothing forever
+        // without ever failing — which is the whole class of bug the
+        // reference tables in this branch exist to remove.
+        let matched: i64 = sqlx::query_scalar(
+            r#"
+            SELECT count(*)
+              FROM tournament_participants tp
+              JOIN tournaments t ON t.id = tp.tournament_id
+             WHERE tp.participant_type = 'user'
+               AND tp.participant_id = $1
+               AND tp.rank = 1
+               AND t.status = 'concluded'
+               AND ($2::VARCHAR IS NULL OR t.kind = $2)
+               AND ($3::VARCHAR IS NULL OR t.skill_domain = $3)
+            "#,
+        )
+        .bind(user_id)
+        .bind(conds.tournament_kind.as_deref())
+        .bind(conds.skill_domain.as_deref())
+        .fetch_one(db)
+        .await?;
+
+        let ids: Vec<Uuid> = sqlx::query_scalar(
+            r#"
+            SELECT t.id
+              FROM tournament_participants tp
+              JOIN tournaments t ON t.id = tp.tournament_id
+             WHERE tp.participant_type = 'user'
+               AND tp.participant_id = $1
+               AND tp.rank = 1
+               AND t.status = 'concluded'
+               AND ($2::VARCHAR IS NULL OR t.kind = $2)
+               AND ($3::VARCHAR IS NULL OR t.skill_domain = $3)
+             ORDER BY t.ends_at DESC
+             LIMIT 25
+            "#,
+        )
+        .bind(user_id)
+        .bind(conds.tournament_kind.as_deref())
+        .bind(conds.skill_domain.as_deref())
+        .fetch_all(db)
+        .await?;
+
+        total += matched;
+        sources.extend(ids);
+    }
+
+    if want_mentee_guided {
+        // People, not sessions. Somebody who saw the same mentee eight times
+        // has helped one person, and a badge that counted the sessions would
+        // say they helped eight.
+        //
+        // `skill_domain` is read from the mentee's answers rather than from
+        // the session, which carries none: the matching that produced the
+        // pairing is per-domain, so somebody matched in audio has an audio
+        // profile. It is the truest signal the schema holds.
+        let matched: i64 = sqlx::query_scalar(
+            r#"
+            SELECT count(DISTINCT ms.mentee_user_id)
+              FROM mentorship_sessions ms
+             WHERE ms.mentor_user_id = $1
+               AND ms.status = 'completed'
+               AND ($2::VARCHAR IS NULL OR EXISTS (
+                     SELECT 1 FROM user_domain_profiles p
+                      WHERE p.user_id = ms.mentee_user_id AND p.domain = $2))
+            "#,
+        )
+        .bind(user_id)
+        .bind(conds.skill_domain.as_deref())
+        .fetch_one(db)
+        .await?;
+
+        let ids: Vec<Uuid> = sqlx::query_scalar(
+            r#"
+            SELECT DISTINCT ms.mentee_user_id
+              FROM mentorship_sessions ms
+             WHERE ms.mentor_user_id = $1
+               AND ms.status = 'completed'
+               AND ($2::VARCHAR IS NULL OR EXISTS (
+                     SELECT 1 FROM user_domain_profiles p
+                      WHERE p.user_id = ms.mentee_user_id AND p.domain = $2))
+             LIMIT 25
             "#,
         )
         .bind(user_id)

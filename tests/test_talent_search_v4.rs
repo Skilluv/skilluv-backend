@@ -186,7 +186,7 @@ async fn a_claimed_account_is_not_evidence() {
     score(&app, claimed, "code", 1000, "engineer").await;
 
     sqlx::query(
-        "INSERT INTO user_portfolios
+        "INSERT INTO user_external_portfolios
             (user_id, platform, handle, profile_url, verified_at, verification_method)
          VALUES ($1, 'github', 'proved', 'https://github.com/proved', NOW(), 'oauth')",
     )
@@ -195,7 +195,7 @@ async fn a_claimed_account_is_not_evidence() {
     .await
     .unwrap();
     sqlx::query(
-        "INSERT INTO user_portfolios (user_id, platform, handle, profile_url)
+        "INSERT INTO user_external_portfolios (user_id, platform, handle, profile_url)
          VALUES ($1, 'github', 'claimed', 'https://github.com/claimed')",
     )
     .bind(claimed)
@@ -376,12 +376,11 @@ async fn a_card_shows_every_domain_somebody_is_scored_in() {
 #[tokio::test]
 async fn the_catalogue_is_honest_about_what_is_live() {
     let app = TestApp::spawn().await;
-    app.register_user("revenue_admin").await;
-    sqlx::query("UPDATE users SET role = 'admin' WHERE username = 'revenue_admin'")
-        .execute(&app.db)
-        .await
-        .unwrap();
-    app.login("revenue_admin").await;
+    // `register_admin`, not a role update: migration P21.1 moved `require_admin`
+    // onto `user_capabilities`, so setting `users.role` alone has granted
+    // nothing since. The helper does both, plus the passkey the admin 2FA
+    // middleware wants.
+    app.register_admin("revenue_admin").await;
 
     let resp = app.get("/api/admin/revenue/streams").await;
     assert_eq!(resp.status(), 200, "{}", resp.text().await.unwrap());
@@ -419,8 +418,11 @@ async fn booking_revenue_marks_a_stream_live() {
     assert!(!live_before, "nothing has earned there yet");
 
     sqlx::query(
-        "INSERT INTO platform_revenues (source, amount_credits, notes)
-         VALUES ('mission_marketplace', 120.00, 'test')",
+        // `fee_rate_bps` has been NOT NULL since migration 0100: a revenue line
+        // that does not say what share the platform took is a number nobody can
+        // audit. 1500 bps is the commission `missions` defaults to.
+        "INSERT INTO platform_revenues (source, amount_credits, fee_rate_bps, notes)
+         VALUES ('mission_marketplace', 120.00, 1500, 'test')",
     )
     .execute(&app.db)
     .await

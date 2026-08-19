@@ -41,7 +41,7 @@ use crate::middleware::capabilities::require_reviewer_for_orientation;
 use crate::models::ProjectSlice;
 
 /// Blocking reasons a design review may give. Mirrors the CHECK added by
-/// migration 0406; the shared code reasons stay available because some of
+/// migration 0506; the shared code reasons stay available because some of
 /// them apply everywhere (`docs_missing`, `scope_mismatch`, `out_of_depth`).
 pub const DESIGN_BLOCKING_REASONS: &[&str] = &[
     "brief_unmet",
@@ -104,7 +104,7 @@ pub struct ReviewInput<'a> {
     /// without saying what to change wastes a round.
     pub blocking_reason: Option<&'a str>,
     pub feedback_md: Option<&'a str>,
-    /// The review grid of migration 0404, filled in.
+    /// The review grid of migration 0504, filled in.
     pub grid_scores: Option<serde_json::Value>,
 }
 

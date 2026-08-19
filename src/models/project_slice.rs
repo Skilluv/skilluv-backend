@@ -140,12 +140,12 @@ pub struct ProjectSlice {
     #[serde(default)]
     pub ai_subtype: Option<String>,
 
-    /// Design: what the finished artefact is (migration 0405).
+    /// Design: what the finished artefact is (migration 0505).
     /// See [`DesignSubtype`].
     #[serde(default)]
     pub design_subtype: Option<String>,
     /// Where the finished artefact can be found, whatever domain produced it
-    /// (migration 0428): a package registry, a model hub, an infrastructure
+    /// (migration 0528): a package registry, a model hub, an infrastructure
     /// registry, a Figma node, or an object path in our storage for the
     /// source formats that have no public home.
     #[serde(default)]
@@ -222,7 +222,7 @@ impl SliceType {
 }
 
 /// What a design challenge is expected to produce, mirroring the CHECK on
-/// `project_slices.design_subtype` (migration 0405).
+/// `project_slices.design_subtype` (migration 0505).
 ///
 /// The subtype is what lets one workflow serve twenty-six very different
 /// trades: it decides which preview is worth generating, which automatic
@@ -377,7 +377,7 @@ mod enum_matches_sql {
         let migration = MIGRATION.replace("\r\n", "\n");
         let start = migration
             .find(marker)
-            .unwrap_or_else(|| panic!("marker {marker} not found in migration 0405"));
+            .unwrap_or_else(|| panic!("marker {marker} not found in migration 0505"));
         let uncommented: String = migration[start..]
             .lines()
             .map(|line| match line.find("--") {

@@ -15,6 +15,67 @@ address KYC full, live AI wiring in prod, and RLS enforcement.
 
 ### Added
 
+- **Audio — a domain of its own.** Five trades (`audio-composer`,
+  `audio-music-implementer`, `audio-sound-designer`, `audio-voice-actor`,
+  `audio-programmer`) in four review families, 61 skill nodes, 24 seeded
+  challenges, 13 badges, 5 review grids, 7 mission types, 7 attestation
+  bases and a craft score. Migrations 0400-0421. The one legacy trade,
+  `game-sound-engineer`, is archived with a `replaced_by` lineage.
+- **Audio deliveries are files, and the files are measured.**
+  `audio_artifact_files` holds a master, its stems, a generated preview and
+  the project archive, with duration, sample rate, bit depth, channels,
+  integrated loudness, true peak and loudness range read out of the file by
+  `ffprobe`/`ffmpeg` — never taken from the uploader. Both tools are
+  optional: where they are absent, files are accepted and served and the
+  measurements stay NULL with `analysis_status = 'skipped'`.
+- **Source declarations gate the attestations that need them.**
+  `audio_source_licences` plus `project_slices.audio_sources_declared_at`.
+  A composition or a sound pack is not attested until the author states the
+  source list is complete — an empty list with a declaration means "all
+  original", an empty list without one means nobody filled the form in.
+- **Voice castings, blind by default.** `voice_castings` and
+  `voice_audition_submissions`: one brief, the same lines for everybody, one
+  choice at the end, and names withheld until it is made.
+- **Revision rounds, for every domain rather than for audio.**
+  `slice_revision_rounds` with a per-domain limit enforced in the database,
+  because the count is the one both sides quote. Audio: five.
+- **`mission_licensing_scopes`** — what the client may do with the work,
+  orthogonal to `ip_terms` which says who owns it. Required on audio
+  missions, optional elsewhere. Exactly one scope (`buyout`) takes the
+  creator's portfolio away, and it says so.
+
+### Changed
+
+- **The lists that could only be rewritten became rows.** Migrations 0228 and
+  0305 documented the failure mode — a CHECK cannot be extended, only
+  replaced, so every addition is a chance to silently delete somebody else's
+  value, and 0223 had already deleted two of 0189's. Five of those lists are
+  now tables with foreign keys: `skill_domains` (0400, replacing ten CHECK
+  constraints and closing ten columns that had none), `capability_catalog`
+  (0404, with the reviewer capabilities derived from `orientations` by
+  trigger), `attestation_bases` (0406, carrying `requires_deliverable` and the
+  wording each basis is issued with), `slice_types` (0408),
+  `mission_deliverable_formats` (0413) and `tournament_kinds` (0416, carrying
+  what three separate Rust constants held).
+- **`user_code_portfolios` is now `user_external_portfolios`**, with a
+  `portfolio_platforms` catalogue keyed by domain and a `figures_are_declared`
+  flag. A SoundCloud account is the same row, the same verification problem
+  and the same staleness problem as a GitHub one. Declared audience figures
+  are accepted, marked, and counted at half weight.
+- **The domain wizard asks questions from a registry** rather than from a
+  struct field per question, and publishes them at
+  `GET /api/users/me/domain-profile/{domain}/questions` so a front end renders
+  the form instead of shipping its own copy of the list. The wire format is
+  unchanged.
+- **`validators::SKILL_DOMAINS` is the only domain list in Rust.** There were
+  eight, three of them stale — `ai` was accepted by the skill tree and refused
+  by the explore filter for a year, and the leaderboard had offered four
+  domains since 2024. A test asserts the constant against the table.
+- **`craft_score::assemble`** extracted when audio became the third domain to
+  score: everything after the measuring is identical, and three copies is
+  three places for the cap or the skip-on-zero to drift.
+
+
 - **P25.3** — `middleware::capabilities::require_any_capability(db,
   user_id, &[caps])` — passes if any listed capability is active (not
   revoked, not expired). Empty list rejects (defense in depth). New

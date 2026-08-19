@@ -305,36 +305,36 @@ pub fn points_for(kind: &str, weight: f64, baseline: Option<f64>, measured: f64)
     raw.round().max(0.0) as i32
 }
 
-/// Compute the score without storing it.
-/// Turn a domain's weight rows and one domain's measurements into a score.
+/// Turn a set of weights and a way of measuring each term into a score.
 ///
-/// The half that is identical everywhere: read the rows, apply the kind, cap
-/// the total, resolve the tier. What differs is what each term counts, and
-/// that is the closure — `None` means the term was not measured, which is not
-/// the same as measured zero. An unmeasured `offset_scaled` term counted as
-/// zero would subtract its whole baseline from the total.
+/// Extracted when audio became the third domain to score. Everything up to
+/// here differs per domain — each one counts different tables — and everything
+/// from here does not: skip the unmeasured, apply the weight for its kind,
+/// drop the zeroes, cap, resolve the tier. Three copies of that loop is three
+/// places for the cap or the skip-on-zero to drift, and the drift would be
+/// invisible because each domain's score is only ever compared to itself.
 ///
-/// Extracted when the third domain arrived and the loop was about to be
-/// written a third time. Three copies of a formula is how three domains come
-/// to disagree about what "Senior" means.
+/// `measured` returns `None` for a term this domain does not know how to
+/// count, and for one it counts as "not measured" — the review-grid average of
+/// somebody nobody has reviewed. Both must be skipped rather than counted as
+/// zero: an `offset_scaled` term at zero subtracts its whole baseline.
 pub async fn assemble(
     db: &PgPool,
     domain: &str,
-    measure_term: impl Fn(&str) -> Option<f64>,
+    weights: Vec<WeightRow>,
+    measured: impl Fn(&str) -> Option<f64>,
 ) -> Result<CraftScore, AppError> {
-    let weights = weights_for(db, domain).await?;
-
     let mut breakdown = Vec::new();
     let mut total: i64 = 0;
 
     for w in weights {
-        let Some(measured) = measure_term(&w.term) else {
-            // Either nothing knows how to count this term, or nobody has
-            // produced a figure for this person yet. Both are silence in the
-            // total rather than a zero.
+        let Some(value) = measured(w.term.as_str()) else {
+            // Either the term is not measured for this person, or nobody has
+            // implemented it. The second deserves a line in the log; the first
+            // is normal and would drown it, so the caller distinguishes them.
             continue;
         };
-        if measured == 0.0 {
+        if value == 0.0 {
             continue;
         }
 
@@ -342,7 +342,7 @@ pub async fn assemble(
             &w.kind,
             w.weight.to_f64().unwrap_or(0.0),
             w.baseline.as_ref().and_then(|b| b.to_f64()),
-            measured,
+            value,
         );
         if points == 0 {
             continue;
@@ -351,7 +351,7 @@ pub async fn assemble(
         total += points as i64;
         breakdown.push(Term {
             term: w.term,
-            measured,
+            measured: value,
             points,
             explanation: w.explanation,
         });
@@ -373,6 +373,7 @@ pub async fn assemble(
     })
 }
 
+/// Compute the score without storing it.
 pub async fn compute(db: &PgPool, user_id: Uuid) -> Result<CraftScore, AppError> {
     let weights = weights_for(db, DOMAIN).await?;
     let m = measure(db, user_id).await?;

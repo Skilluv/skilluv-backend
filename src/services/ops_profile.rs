@@ -192,7 +192,9 @@ async fn measure(db: &PgPool, user_id: Uuid) -> Result<Measurements, AppError> {
 pub async fn compute(db: &PgPool, user_id: Uuid) -> Result<CraftScore, AppError> {
     let m = measure(db, user_id).await?;
 
-    craft_score::assemble(db, DOMAIN, |term| {
+    let weights = craft_score::weights_for(db, DOMAIN).await?;
+
+    craft_score::assemble(db, DOMAIN, weights, |term| {
         Some(match term {
             "attestations_ops" => m.attestations_ops as f64,
             "infra_artifacts_shipped" => m.infra_artifacts_shipped as f64,

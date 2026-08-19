@@ -1,4 +1,4 @@
-//! Issuing the seven design attestations (migration 0407).
+//! Issuing the seven design attestations (migration 0507).
 //!
 //! ## Why design gets one the other domains do not
 //!
@@ -38,7 +38,7 @@ use uuid::Uuid;
 
 use crate::errors::AppError;
 
-/// Every design basis accepted by migration 0407.
+/// Every design basis accepted by migration 0507.
 /// What this domain may issue, and under what rules.
 ///
 /// The issuing itself lives in `services::artefact_attestations`: a design artefact can be a five-gigabyte scene with no free home
@@ -182,9 +182,9 @@ pub struct PodiumReport {
 ///   1. a verified `deliverables` row, so the win moves the rank, the badges
 ///      and the public portfolio like every other proof;
 ///   2. a `design_contest_won` attestation, which needs that deliverable to
-///      exist — migration 0407 refuses an artefact basis without one.
+///      exist — migration 0507 refuses an artefact basis without one.
 ///
-/// Idempotent by construction: the unique index of migration 0411 means a
+/// Idempotent by construction: the unique index of migration 0511 means a
 /// second run writes no deliverable, and no attestation follows.
 ///
 /// Podium only. Taking part is not an achievement, and a proof that means

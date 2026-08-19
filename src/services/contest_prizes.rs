@@ -3,7 +3,7 @@
 //! ## The rule
 //!
 //! A contest promising money does not open until the money is held. That is
-//! enforced by a CHECK constraint (migration 0416), not here — the one time a
+//! enforced by a CHECK constraint (migration 0516), not here — the one time a
 //! handler is bypassed is the time it matters. This module is what moves the
 //! money into that escrow and out of it.
 //!

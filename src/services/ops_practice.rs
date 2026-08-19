@@ -713,7 +713,7 @@ pub async fn verify_cost_work(
 /// This pairing is the whole check. Without it, `ops_migration_completed`
 /// could be issued from a Grafana dashboard and nobody reading the
 /// attestation later would be able to tell. The database constraint from
-/// migration 0417 only says these three name a deliverable; which deliverable
+/// migration 0517 only says these three name a deliverable; which deliverable
 /// is a question only the domain can answer.
 const ARTEFACT_BASES: &[(&str, &[&str])] = &[
     (

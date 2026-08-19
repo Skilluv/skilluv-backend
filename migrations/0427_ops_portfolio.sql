@@ -7,9 +7,9 @@
 -- and a third JSONB-per-platform blob would mean a third reader parsing a
 -- third shape:
 --
---   * an *account* on a platform is `user_code_portfolios`, renamed here to
---     `user_portfolios` because it stopped being about code two registries
---     ago;
+--   * an *account* on a platform is `user_external_portfolios`, which
+--     migration 0415 renamed away from `user_code_portfolios` and gave a
+--     `portfolio_platforms` table — so a new registry is a row there;
 --   * a *published artefact* and its usage figures is
 --     `published_artifact_stats`, which migration 0216 already generalised
 --     away from `code_package_stats` for exactly this reason. A Terraform
@@ -22,35 +22,31 @@
 -- an API. That is the new table.
 
 -- ═══════════════════════════════════════════════════════════════════
--- Accounts: the table stops calling itself code
+-- Four registries an ops contributor publishes to
 -- ═══════════════════════════════════════════════════════════════════
+--
+-- Rows on `portfolio_platforms`, which carries what each one's numbers mean.
+-- That is the part a CHECK could not hold and the part that matters here:
+-- ArtifactHub counts stars and Docker Hub counts pulls, and printing either
+-- under the word "downloads" would claim something neither measured.
 
-ALTER TABLE user_code_portfolios RENAME TO user_portfolios;
-
-ALTER INDEX idx_code_portfolios_user RENAME TO idx_portfolios_user;
-ALTER INDEX idx_code_portfolios_stale RENAME TO idx_portfolios_stale;
-ALTER INDEX idx_code_portfolios_verified RENAME TO idx_portfolios_verified;
-
-ALTER TABLE user_portfolios
-    DROP CONSTRAINT IF EXISTS user_code_portfolios_platform_check;
-
-ALTER TABLE user_portfolios
-    ADD CONSTRAINT user_portfolios_platform_check
-    CHECK (platform IN (
-        -- Forges (migration 0197).
-        'github', 'gitlab', 'codeberg', 'sourcehut',
-        -- Package registries (migration 0197).
-        'crates_io', 'npm', 'pypi', 'go_modules', 'rubygems',
-        'maven_central', 'nuget', 'packagist', 'hex', 'homebrew',
-        -- Infrastructure registries (this migration). Where an ops
-        -- contributor publishes: a module, a collection, a chart, an image.
-        'terraform_registry', 'ansible_galaxy', 'artifacthub', 'docker_hub'
-    ));
-
-COMMENT ON TABLE user_portfolios IS
-    'Accounts on other platforms, whatever the domain. `verified_at` '
-    'separates what was proved through OAuth from what somebody typed; only '
-    'the first is countable.';
+INSERT INTO portfolio_platforms
+    (slug, skill_domain, name, profile_url_pattern, items_label, reach_label,
+     has_public_api, sort_order)
+VALUES
+    ('terraform_registry', 'ops', 'Terraform Registry',
+     'https://registry.terraform.io/namespaces/{handle}',
+     'modules', 'téléchargements', TRUE, 210),
+    ('ansible_galaxy', 'ops', 'Ansible Galaxy',
+     'https://galaxy.ansible.com/ui/standalone/namespaces/{handle}',
+     'collections', 'téléchargements', TRUE, 220),
+    ('artifacthub', 'ops', 'ArtifactHub',
+     'https://artifacthub.io/packages/search?user={handle}',
+     'paquets', 'étoiles', TRUE, 230),
+    ('docker_hub', 'ops', 'Docker Hub',
+     'https://hub.docker.com/u/{handle}',
+     'images', 'pulls', TRUE, 240)
+ON CONFLICT (slug) DO NOTHING;
 
 -- ═══════════════════════════════════════════════════════════════════
 -- Published artefacts: four more registries

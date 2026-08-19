@@ -29,7 +29,7 @@ pub fn tournament_routes() -> Router<AppState> {
             get(list_submissions).post(submit_entry),
         )
         .route("/submissions/{id}/judge", post(judge_entry))
-        // Juried and community-voted contests (migration 0409).
+        // Juried and community-voted contests (migration 0509).
         .route("/tournaments/{slug}/jury", get(list_jury))
         .route("/tournaments/{slug}/jury/respond", post(respond_to_jury))
         .route("/tournaments/{slug}/community-vote", post(community_vote))
@@ -509,9 +509,14 @@ pub async fn admin_conclude(
         .bind(id)
         .fetch_optional(&state.db)
         .await?;
-    let scored_from_entries = kind
-        .as_deref()
-        .is_some_and(|k| crate::services::contest::KINDS_WITH_SUBMISSIONS.contains(&k));
+    let scored_from_entries = match kind.as_deref() {
+        Some(k) => {
+            crate::services::contest::load_kind(&state.db, k)
+                .await?
+                .expects_submission
+        }
+        None => false,
+    };
     if scored_from_entries {
         crate::services::contest::recompute_contest_scores(&state.db, id).await?;
     }
@@ -623,7 +628,7 @@ pub async fn events_feed(State(state): State<AppState>) -> Result<Json<Value>, A
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Cash prizes (migration 0416)
+// Cash prizes (migration 0516)
 // ═══════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
@@ -783,7 +788,7 @@ pub async fn admin_outstanding_prizes(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Juries (migration 0409)
+// Juries (migration 0509)
 // ═══════════════════════════════════════════════════════════════════
 
 /// GET /tournaments/{slug}/jury — who was asked, and what they answered.
@@ -878,7 +883,7 @@ pub async fn admin_invite_juror(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// The room (migration 0409)
+// The room (migration 0509)
 // ═══════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]

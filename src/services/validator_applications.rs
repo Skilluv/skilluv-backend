@@ -17,6 +17,8 @@ use uuid::Uuid;
 
 use crate::errors::AppError;
 
+pub use crate::validators::SKILL_DOMAINS as VALID_DOMAINS;
+
 /// Minimum thresholds a self-nominated candidate must meet on a domain.
 pub const MIN_RANK: &str = "artisan";
 pub const MIN_MERGED_PRS: i64 = 10;

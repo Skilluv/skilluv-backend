@@ -73,7 +73,7 @@ INSERT INTO notification_kinds
     -- The winners also get `tournament.podium`, which is the one that buzzes.
     ('contest.concluded',          'learning', TRUE, TRUE, TRUE, TRUE, FALSE, TRUE,  FALSE),
     -- Taking part is recorded rather than celebrated: it is a line on a
-    -- profile, not an achievement, and migration 0408 says so.
+    -- profile, not an achievement, and migration 0508 says so.
     ('contest.participation_recorded', 'learning', TRUE, TRUE, TRUE, TRUE, FALSE, FALSE, FALSE),
 
     -- ── Recognition ────────────────────────────────────────────────

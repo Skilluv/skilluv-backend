@@ -8,15 +8,12 @@ use crate::errors::AppError;
 const WEEKLY_TTL: u64 = 8 * 24 * 60 * 60; // 8 days
 const MONTHLY_TTL: u64 = 35 * 24 * 60 * 60; // 35 days
 
-/// The scope of a board: every skill domain, plus `global` for the one that
-/// crosses them. Derived rather than listed, because the four domains written
-/// here by hand meant an AI or ops practitioner had no board to appear on.
+/// `global` plus every domain. Written as a check rather than a list because
+/// the list it used to be froze in 2024 at four domains: there has been an
+/// `ops`, an `ai` and a `soft_skills` leaderboard behind the API for a year,
+/// and asking for one returned "domain must be one of" naming four.
 fn is_valid_domain(domain: &str) -> bool {
     domain == "global" || crate::validators::SKILL_DOMAINS.contains(&domain)
-}
-
-fn valid_domains_listed() -> String {
-    format!("global, {}", crate::validators::SKILL_DOMAINS.join(", "))
 }
 const VALID_PERIODS: &[&str] = &["alltime", "weekly", "monthly"];
 
@@ -26,8 +23,8 @@ impl LeaderboardService {
     pub fn validate_domain(domain: &str) -> Result<(), AppError> {
         if !is_valid_domain(domain) {
             return Err(AppError::Validation(format!(
-                "domain must be one of: {}",
-                valid_domains_listed()
+                "domain must be one of: global, {}",
+                crate::validators::SKILL_DOMAINS.join(", ")
             )));
         }
         Ok(())

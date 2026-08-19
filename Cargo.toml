@@ -96,6 +96,10 @@ rand = "0.10"
 # S3/MinIO storage
 rust-s3 = { version = "0.37", features = ["tokio-rustls-tls"], default-features = false }
 
+# Scratch files for the audio analysis: ffprobe and ffmpeg read paths, not
+# pipes, and the containers that matter need to seek.
+tempfile = "3"
+
 # Monitoring
 metrics = "0.24"
 metrics-exporter-prometheus = "0.18"

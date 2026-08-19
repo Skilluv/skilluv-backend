@@ -107,20 +107,31 @@ async fn submission_id(app: &TestApp, contest: Uuid, user: Uuid) -> Uuid {
 async fn a_brief_contest_without_a_real_brief_is_not_publishable() {
     // A subject line is not a brief: the answers would differ on things
     // nobody stated, and a jury would be arbitrating an unasked question.
+    //
+    // The format is read from its own row rather than named by slug: since
+    // migration 0416 the required keys live in `tournament_kinds`, and a test
+    // holding its own copy would pass while the catalogue said otherwise.
+    let app = TestApp::spawn().await;
+    let spec = skilluv_backend::services::contest::load_kind(&app.db, "brief_contest")
+        .await
+        .expect("brief_contest is a format");
+
     assert!(
         skilluv_backend::services::contest::validate_rules(
-            "brief_contest",
+            &spec,
             &json!({"brief": "Un logo", "judging_criteria": ["distinction"]}),
         )
         .is_err()
     );
     assert!(
         skilluv_backend::services::contest::validate_rules(
-            "brief_contest",
+            &spec,
             &json!({"brief": a_brief(), "judging_criteria": ["distinction", "scalabilité"]}),
         )
         .is_ok()
     );
+
+    drop(app);
 }
 
 #[tokio::test]
@@ -434,7 +445,7 @@ async fn the_jury_decides_a_juried_contest_and_the_win_leaves_a_proof() {
     .unwrap();
     assert_eq!(winner_rank, 1);
 
-    // And the win leaves something on the profile. Before migration 0411,
+    // And the win leaves something on the profile. Before migration 0511,
     // winning a contest moved nothing at all.
     let report =
         skilluv_backend::services::design_attestations::award_contest_podium(&app.db, contest)
@@ -979,7 +990,7 @@ async fn a_contest_that_did_not_ask_for_blindness_is_public_throughout() {
     enter(&app, contest, entrant).await;
     submit(&app, "brief-open-field", "open_entrant", 5).await;
 
-    // The default is unchanged by migration 0418: nothing becomes less
+    // The default is unchanged by migration 0518: nothing becomes less
     // readable because the option now exists.
     let body: Value = reqwest::Client::new()
         .get(format!(

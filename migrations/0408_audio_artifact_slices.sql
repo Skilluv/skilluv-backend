@@ -69,10 +69,13 @@ INSERT INTO slice_types (slug, skill_domain, name, description, sort_order) VALU
      'Une bibliothèque, un outil, un service livré.', 30),
     ('cli_task', 'code', 'Tâche en ligne de commande',
      'Un exercice résolu au terminal.', 40),
-    ('figma_frame', 'design', 'Écran Figma',
-     'Une maquette à produire ou à reprendre.', 50),
-    ('design_token', 'design', 'Jeton de design',
-     'Un élément de système de design.', 60),
+    -- One row, not two. Migration 0231 folded `figma_frame` and
+    -- `design_token` into `design_artifact` and moved the existing rows
+    -- across; design was on its own branch when this table was written, and
+    -- listing the two it replaced would have left every design slice
+    -- referencing a slug that is not here.
+    ('design_artifact', 'design', 'Artefact de design',
+     'Une maquette, une identité, une animation, un système de design.', 50),
     ('game_level', 'game', 'Niveau de jeu',
      'Un niveau à concevoir ou à équilibrer.', 70),
     ('game_asset', 'game', 'Ressource de jeu',

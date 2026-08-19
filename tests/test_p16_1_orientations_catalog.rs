@@ -176,6 +176,15 @@ async fn orientation_skill_map_upserts_and_joins() {
 async fn archived_orientations_stay_visible_via_flag() {
     let (db, name) = setup_test_db().await;
 
+    // Count first: every domain added since archives its own legacy trades
+    // with a `replaced_by` lineage, so "how many are archived" is a number
+    // that grows, and asserting it means editing this test each time.
+    let archived_before: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM orientations WHERE is_archived = TRUE")
+            .fetch_one(&db)
+            .await
+            .expect("arch before");
+
     sqlx::query("UPDATE orientations SET is_archived = TRUE WHERE slug = 'smart-contract-dev'")
         .execute(&db)
         .await
@@ -193,7 +202,7 @@ async fn archived_orientations_stay_visible_via_flag() {
             .await
             .expect("arch");
 
-    assert_eq!(archived, 1);
+    assert_eq!(archived, archived_before + 1);
     assert!(active >= 29);
 
     db.close().await;

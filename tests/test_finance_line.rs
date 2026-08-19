@@ -11,13 +11,11 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 async fn an_admin(app: &TestApp, username: &str) {
-    app.register_user(username).await;
-    sqlx::query("UPDATE users SET role = 'admin' WHERE username = $1")
-        .bind(username)
-        .execute(&app.db)
-        .await
-        .unwrap();
-    app.login(username).await;
+    // `register_admin`, not `role = 'admin'`: since P21 the admin gate reads
+    // `user_capabilities`, and the column on its own opens nothing. The helper
+    // grants the capability and enrols the passkey the admin 2FA middleware
+    // wants, then logs in.
+    app.register_admin(username).await;
 }
 
 async fn a_talent(app: &TestApp, username: &str, rank: &str) -> Uuid {
@@ -43,8 +41,9 @@ async fn a_talent(app: &TestApp, username: &str, rank: &str) -> Uuid {
 /// point at.
 async fn an_issued_invoice(app: &TestApp, owner: Uuid, amount: &str) -> Uuid {
     let enterprise: Uuid = sqlx::query_scalar(
-        "INSERT INTO enterprises (owner_id, company_name, slug)
-         VALUES ($1, 'Facture SA', 'facture-sa-' || substr(gen_random_uuid()::text, 1, 8))
+        "INSERT INTO enterprises (owner_id, company_name, slug, company_size)
+         VALUES ($1, 'Facture SA',
+                 'facture-sa-' || substr(gen_random_uuid()::text, 1, 8), '11-50')
          RETURNING id",
     )
     .bind(owner)
@@ -589,8 +588,8 @@ async fn a_funded_trainee_can_never_be_made_to_owe_anything() {
     let app = TestApp::spawn().await;
     let owner = a_talent(&app, "growthowner", "artisan").await;
     let enterprise: Uuid = sqlx::query_scalar(
-        "INSERT INTO enterprises (owner_id, company_name, slug)
-         VALUES ($1, 'Financeur SA', 'financeur-sa') RETURNING id",
+        "INSERT INTO enterprises (owner_id, company_name, slug, company_size)
+         VALUES ($1, 'Financeur SA', 'financeur-sa', '11-50') RETURNING id",
     )
     .bind(owner)
     .fetch_one(&app.db)
@@ -628,8 +627,8 @@ async fn declining_the_job_at_the_end_is_a_normal_outcome() {
     let owner = a_talent(&app, "declineowner", "artisan").await;
     let trainee = a_talent(&app, "declinetrainee", "apprenti").await;
     let enterprise: Uuid = sqlx::query_scalar(
-        "INSERT INTO enterprises (owner_id, company_name, slug)
-         VALUES ($1, 'Financeur B', 'financeur-b') RETURNING id",
+        "INSERT INTO enterprises (owner_id, company_name, slug, company_size)
+         VALUES ($1, 'Financeur B', 'financeur-b', '11-50') RETURNING id",
     )
     .bind(owner)
     .fetch_one(&app.db)

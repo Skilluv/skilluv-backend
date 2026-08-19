@@ -99,6 +99,18 @@ INSERT INTO tournament_kinds
     ('prompt_battle', 'ai', 'Duel d''invites',
      'La même tâche, des invites différentes, jugées sur ce qu''elles obtiennent.', TRUE, FALSE, FALSE,
      '{task_description}', 90),
+    -- Migration 0235. Design was on its own branch when this table was
+    -- written; both formats are domain-agnostic, and leaving them out would
+    -- have made every duel and every brief contest fail the foreign key that
+    -- replaces the CHECK below.
+    ('duel', NULL, 'Duel',
+     'Deux personnes, une tâche, un vote. Le nombre de participants est dans '
+     'les règles du format, pas dans le genre.', TRUE, FALSE, FALSE,
+     '{task_description}', 100),
+    ('brief_contest', NULL, 'Concours sur brief',
+     'Un brief écrit, N réponses, un jury qui les classe. Le brief est la '
+     'moitié de l''épreuve : sans lui il n''y a rien à juger.', TRUE, FALSE, FALSE,
+     '{brief}', 105),
     -- Audio
     ('audio_sound_battle', 'audio', 'Duel de design sonore',
      'Un brief surprise, quarante-huit heures, et la communauté qui écoute. '

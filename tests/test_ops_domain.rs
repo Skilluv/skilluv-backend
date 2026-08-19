@@ -13,13 +13,11 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 async fn an_admin(app: &TestApp, username: &str) {
-    app.register_user(username).await;
-    sqlx::query("UPDATE users SET role = 'admin' WHERE username = $1")
-        .bind(username)
-        .execute(&app.db)
-        .await
-        .unwrap();
-    app.login(username).await;
+    // `register_admin`, not `role = 'admin'`: since P21 the admin gate reads
+    // `user_capabilities`, and the column on its own opens nothing. The helper
+    // grants the capability and enrols the passkey the admin 2FA middleware
+    // wants, then logs in.
+    app.register_admin(username).await;
 }
 
 async fn a_talent(app: &TestApp, username: &str) -> Uuid {
@@ -341,7 +339,10 @@ async fn a_resolved_incident(app: &TestApp, username: &str) -> String {
             &json!({
                 "title": "Coupure de la passerelle de paiement",
                 "severity": "sev1",
-                "started_at": "2027-03-01T02:00:00Z",
+                // Two hours ago, not a fixed date: an incident cannot start in
+                // the future, and a literal year is a test that starts failing
+                // on a particular morning.
+                "started_at": (chrono::Utc::now() - chrono::Duration::hours(2)).to_rfc3339(),
             }),
         )
         .await;

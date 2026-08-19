@@ -294,14 +294,26 @@ async fn recompute_is_idempotent() {
     .await;
     insert_verified_deliverable(&db, u, None).await;
 
+    // Named rather than counted: the seeded catalogue also has rules that a
+    // first verified deliverable satisfies, and it grows with every domain.
+    // What this test is about is the second run, not the size of the first.
     let r1 = badge_engine::recompute_badges_for_user(&db, u)
         .await
         .unwrap();
-    assert_eq!(r1.awarded.len(), 1);
+    assert!(
+        r1.awarded.contains(&"test-idem".to_string()),
+        "got {:?}",
+        r1.awarded
+    );
     let r2 = badge_engine::recompute_badges_for_user(&db, u)
         .await
         .unwrap();
-    assert_eq!(r2.awarded.len(), 0, "no re-award on idempotent recompute");
+    assert_eq!(
+        r2.awarded.len(),
+        0,
+        "no re-award on idempotent recompute, got {:?}",
+        r2.awarded
+    );
     assert!(r2.unchanged >= 1);
 
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM user_badges WHERE user_id = $1")

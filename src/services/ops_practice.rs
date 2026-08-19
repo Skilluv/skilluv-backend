@@ -373,6 +373,17 @@ pub async fn open_incident(
         )));
     }
 
+    // An incident that has not happened yet is a typo in the date. Left
+    // alone it is worse than that: resolving stamps `NOW()`, which lands
+    // before the start and trips `an_incident_runs_forward` — so the person
+    // recording it gets a 500 at the end of an outage, on the step that was
+    // supposed to close it.
+    if input.started_at > chrono::Utc::now() {
+        return Err(AppError::Validation(
+            "an incident cannot start in the future".into(),
+        ));
+    }
+
     let id: Uuid = sqlx::query_scalar(
         "INSERT INTO ops_incidents
             (project_id, commander_user_id, title, severity, started_at)

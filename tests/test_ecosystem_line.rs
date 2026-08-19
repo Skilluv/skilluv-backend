@@ -12,13 +12,11 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 async fn an_admin(app: &TestApp, username: &str) {
-    app.register_user(username).await;
-    sqlx::query("UPDATE users SET role = 'admin' WHERE username = $1")
-        .bind(username)
-        .execute(&app.db)
-        .await
-        .unwrap();
-    app.login(username).await;
+    // `register_admin`, not `role = 'admin'`: since P21 the admin gate reads
+    // `user_capabilities`, and the column on its own opens nothing. The helper
+    // grants the capability and enrols the passkey the admin 2FA middleware
+    // wants, then logs in.
+    app.register_admin(username).await;
 }
 
 async fn a_talent(app: &TestApp, username: &str) -> Uuid {
@@ -32,8 +30,11 @@ async fn a_talent(app: &TestApp, username: &str) -> Uuid {
 
 async fn an_enterprise(app: &TestApp, owner: Uuid, name: &str) -> Uuid {
     sqlx::query_scalar(
-        "INSERT INTO enterprises (owner_id, company_name, slug)
-         VALUES ($1, $2, $3) RETURNING id",
+        // `company_size` has been NOT NULL since migration 0006. Omitting it
+        // fails the insert rather than defaulting, which is the point: an
+        // enterprise nobody sized cannot be quoted for.
+        "INSERT INTO enterprises (owner_id, company_name, slug, company_size)
+         VALUES ($1, $2, $3, '11-50') RETURNING id",
     )
     .bind(owner)
     .bind(name)
@@ -491,9 +492,9 @@ async fn a_sale_splits_exactly_and_pays_the_creator() {
 
     // 15% of 99.99 is 14.9985, rounded down to 14.99; the creator takes the
     // rest, and the two add back exactly.
-    assert_eq!(split.0.to_string(), "99.99");
-    assert_eq!(split.1.to_string(), "14.99");
-    assert_eq!(split.2.to_string(), "85.00");
+    common::assert_decimal(&split.0, "99.99");
+    common::assert_decimal(&split.1, "14.99");
+    common::assert_decimal(&split.2, "85.00");
 
     let booked: sqlx::types::BigDecimal = sqlx::query_scalar(
         "SELECT amount_credits FROM platform_revenues

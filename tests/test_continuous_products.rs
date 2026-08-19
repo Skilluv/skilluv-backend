@@ -10,13 +10,11 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 async fn an_admin(app: &TestApp, username: &str) {
-    app.register_user(username).await;
-    sqlx::query("UPDATE users SET role = 'admin' WHERE username = $1")
-        .bind(username)
-        .execute(&app.db)
-        .await
-        .unwrap();
-    app.login(username).await;
+    // `register_admin`, not `role = 'admin'`: since P21 the admin gate reads
+    // `user_capabilities`, and the column on its own opens nothing. The helper
+    // grants the capability and enrols the passkey the admin 2FA middleware
+    // wants, then logs in.
+    app.register_admin(username).await;
 }
 
 async fn an_enterprise(app: &TestApp, company: &str) -> String {
@@ -123,7 +121,7 @@ async fn nothing_starts_and_nothing_is_paid_until_the_person_agrees() {
     .fetch_one(&app.db)
     .await
     .unwrap();
-    assert_eq!(booked.to_string(), "2400.00");
+    common::assert_decimal(&booked, "2400.00");
 }
 
 #[tokio::test]
@@ -529,8 +527,8 @@ async fn a_proposal_aimed_at_named_companies_is_invisible_to_the_others() {
     let app = TestApp::spawn().await;
     let owner = a_talent(&app, "targetowner", "artisan").await;
     let target: Uuid = sqlx::query_scalar(
-        "INSERT INTO enterprises (owner_id, company_name, slug)
-         VALUES ($1, 'Cible SA', 'cible-sa') RETURNING id",
+        "INSERT INTO enterprises (owner_id, company_name, slug, company_size)
+         VALUES ($1, 'Cible SA', 'cible-sa', '11-50') RETURNING id",
     )
     .bind(owner)
     .fetch_one(&app.db)
@@ -627,8 +625,8 @@ async fn a_signature_from_a_company_that_never_asked_is_refused() {
     a_talent(&app, "ghostproposer", "artisan").await;
     let owner = a_talent(&app, "ghostowner", "artisan").await;
     let stranger: Uuid = sqlx::query_scalar(
-        "INSERT INTO enterprises (owner_id, company_name, slug)
-         VALUES ($1, 'Fantome SA', 'fantome-sa') RETURNING id",
+        "INSERT INTO enterprises (owner_id, company_name, slug, company_size)
+         VALUES ($1, 'Fantome SA', 'fantome-sa', '11-50') RETURNING id",
     )
     .bind(owner)
     .fetch_one(&app.db)

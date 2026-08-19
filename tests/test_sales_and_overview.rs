@@ -10,13 +10,11 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 async fn an_admin(app: &TestApp, username: &str) {
-    app.register_user(username).await;
-    sqlx::query("UPDATE users SET role = 'admin' WHERE username = $1")
-        .bind(username)
-        .execute(&app.db)
-        .await
-        .unwrap();
-    app.login(username).await;
+    // `register_admin`, not `role = 'admin'`: since P21 the admin gate reads
+    // `user_capabilities`, and the column on its own opens nothing. The helper
+    // grants the capability and enrols the passkey the admin 2FA middleware
+    // wants, then logs in.
+    app.register_admin(username).await;
 }
 
 async fn an_enterprise(app: &TestApp, company: &str) -> String {
@@ -39,9 +37,14 @@ async fn a_company_sees_every_product_it_has_in_one_answer() {
 
     for product in ["credits_pack", "raas_campaign", "data_room"] {
         sqlx::query(
+            // `renews_at` on every row: a data room is a recurring product and
+            // the trigger from 0206 refuses one that does not say when. That
+            // is the point of the trigger — a renewal nobody was told to ask
+            // for lapses — so the test supplies a date rather than working
+            // around it.
             "INSERT INTO enterprise_products
-                (enterprise_id, product_type, contract_value, currency)
-             VALUES ($1, $2, 1000.00, 'EUR')",
+                (enterprise_id, product_type, contract_value, currency, renews_at)
+             VALUES ($1, $2, 1000.00, 'EUR', NOW() + INTERVAL '1 year')",
         )
         .bind(enterprise)
         .bind(product)
@@ -301,8 +304,8 @@ async fn renewals_are_read_from_the_products_themselves() {
         .unwrap();
 
     let enterprise: Uuid = sqlx::query_scalar(
-        "INSERT INTO enterprises (owner_id, company_name, slug)
-         VALUES ($1, 'Renouvelle SA', 'renouvelle-sa') RETURNING id",
+        "INSERT INTO enterprises (owner_id, company_name, slug, company_size)
+         VALUES ($1, 'Renouvelle SA', 'renouvelle-sa', '11-50') RETURNING id",
     )
     .bind(owner)
     .fetch_one(&app.db)

@@ -121,25 +121,32 @@ pub async fn declare(
         ));
     }
 
-    let sql = format!(
-        "WITH inserted AS (
-             INSERT INTO external_credentials
-                 (user_id, issuer, name, level, credential_id, evidence_url,
-                  issued_on, expires_on)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-             RETURNING id
-         )
-         {SELECT} WHERE id = (SELECT id FROM inserted)"
-    );
+    // Two statements, not a data-modifying CTE reading its own insert. A
+    // `WITH inserted AS (INSERT ...) SELECT ... WHERE id IN (SELECT id FROM
+    // inserted)` looks like it works and does not: every part of a statement
+    // sees the same snapshot, so the SELECT over the view finds no row and
+    // `fetch_one` fails on a credential that was, in fact, written.
+    let id: Uuid = sqlx::query_scalar(
+        "INSERT INTO external_credentials
+             (user_id, issuer, name, level, credential_id, evidence_url,
+              issued_on, expires_on)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING id",
+    )
+    .bind(user_id)
+    .bind(&input.issuer)
+    .bind(input.name.trim())
+    .bind(&level)
+    .bind(input.credential_id.as_deref())
+    .bind(input.evidence_url.trim())
+    .bind(input.issued_on)
+    .bind(input.expires_on)
+    .fetch_one(db)
+    .await?;
+
+    let sql = format!("{SELECT} WHERE id = $1");
     let credential: Credential = sqlx::query_as(sqlx::AssertSqlSafe(sql))
-        .bind(user_id)
-        .bind(&input.issuer)
-        .bind(input.name.trim())
-        .bind(&level)
-        .bind(input.credential_id.as_deref())
-        .bind(input.evidence_url.trim())
-        .bind(input.issued_on)
-        .bind(input.expires_on)
+        .bind(id)
         .fetch_one(db)
         .await?;
 

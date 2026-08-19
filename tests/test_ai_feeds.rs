@@ -290,11 +290,31 @@ async fn the_ai_award_categories_join_the_existing_ceremony() {
     .unwrap();
     assert_eq!(ai.len(), 6, "got {ai:?}");
 
+    // The claim is that the AI categories live in the same table as the code
+    // ones — one ceremony — not that the table has a particular size. Every
+    // domain added since brings its own, and a fixed total tests only that
+    // somebody ran the seed.
     let total: i64 = sqlx::query_scalar("SELECT count(*) FROM award_categories")
         .fetch_one(&app.db)
         .await
         .unwrap();
-    assert_eq!(total, 14, "eight code categories plus six AI ones");
+    assert!(
+        total >= 14,
+        "eight code categories plus six AI ones, at least: got {total}"
+    );
+
+    let inactive: Vec<String> = sqlx::query_scalar(
+        "SELECT slug FROM award_categories
+          WHERE (slug LIKE '%ai%' OR slug = 'best-dataset-published')
+            AND is_active = FALSE",
+    )
+    .fetch_all(&app.db)
+    .await
+    .unwrap();
+    assert!(
+        inactive.is_empty(),
+        "an AI category nobody can be nominated in is not on the evening: {inactive:?}"
+    );
 }
 
 #[tokio::test]

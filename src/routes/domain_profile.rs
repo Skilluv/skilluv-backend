@@ -214,20 +214,47 @@ async fn check_families(
             "at most {MAX_SELECTIONS} families — picking everything says nothing"
         )));
     }
-    let known: Vec<String> = sqlx::query_scalar(
-        "SELECT DISTINCT reviewer_group FROM orientations
-          WHERE reviewer_group IS NOT NULL AND primary_domain = $1",
-    )
+    // Which vocabulary this domain's wizard speaks. Design asks which trades
+    // interest you — `design-brand-identity` — where the others ask for the
+    // reviewer family directly. The matcher reads the answer through the same
+    // flag, so what the wizard accepts is what the matcher can use.
+    let by_trade = crate::services::mentorship_matching::rules_for(domain)
+        .is_some_and(|r| r.families_are_trade_slugs);
+
+    let known: Vec<String> = if by_trade {
+        sqlx::query_scalar(
+            "SELECT slug FROM orientations
+              WHERE primary_domain = $1 AND reviewer_group IS NOT NULL
+              ORDER BY slug",
+        )
+    } else {
+        sqlx::query_scalar(
+            "SELECT DISTINCT reviewer_group FROM orientations
+              WHERE reviewer_group IS NOT NULL AND primary_domain = $1",
+        )
+    }
     .bind(domain)
     .fetch_all(db)
     .await?;
 
     for family in families {
         if !known.contains(family) {
-            return Err(AppError::Validation(format!(
-                "'{family}' is not a {domain} family — expected one of: {}",
-                known.join(", ")
-            )));
+            // Only the offending value is named. The families are a list of
+            // thirteen worth printing; the trades are twenty-six, and a
+            // message that recites all of them buries the one thing the caller
+            // needs to see — including, if it happens to be in the list, the
+            // value they got right.
+            return Err(if by_trade {
+                AppError::Validation(format!(
+                    "'{family}' is not a {domain} trade — GET /api/orientations?domain={domain} \
+                     lists them"
+                ))
+            } else {
+                AppError::Validation(format!(
+                    "'{family}' is not a {domain} family — expected one of: {}",
+                    known.join(", ")
+                ))
+            });
         }
     }
     Ok(())

@@ -170,15 +170,15 @@ pub async fn validate_target(
                     "target_skill_id is only valid for kind=skill_level".into(),
                 ));
             }
-            // Validated against the live CHECK constraint rather than a
-            // hardcoded list, so capabilities added by a later migration
-            // become targetable without touching this file.
+            // Read from the catalogue, not from a hardcoded list — and no
+            // longer by pattern-matching the text of a CHECK constraint.
+            // Migration 0404 made the capabilities rows and dropped
+            // `user_capabilities_capability_check`, so that lookup answered
+            // false for every capability that exists: goals of this kind
+            // could not be created at all, and the message said the
+            // capability was unknown.
             let known: bool = sqlx::query_scalar(
-                "SELECT EXISTS(
-                     SELECT 1 FROM pg_constraint
-                      WHERE conname = 'user_capabilities_capability_check'
-                        AND pg_get_constraintdef(oid) LIKE '%''' || $1 || '''%'
-                 )",
+                "SELECT EXISTS(SELECT 1 FROM capability_catalog WHERE capability = $1)",
             )
             .bind(target_value)
             .fetch_one(db)

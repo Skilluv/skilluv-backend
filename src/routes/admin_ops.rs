@@ -39,7 +39,7 @@ pub fn admin_ops_routes() -> Router<AppState> {
         )
         // MVP.md Annexe A #8 — CRUD event (Hacktoberfest, Skilluv Fest).
         .route(
-            "/admin/events",
+            "/admin/badge-events",
             get(admin_list_badge_events).post(admin_create_badge_event),
         )
         // MVP.md §2.2 ligne 125 — recompute capabilities seul (scope réduit).
@@ -98,7 +98,7 @@ pub struct CapabilityRecomputeResult {
     pub already_active: Vec<String>,
 }
 
-/// One row of `GET /admin/events`.
+/// One row of `GET /admin/badge-events`.
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct BadgeEventRow {
     pub id: Uuid,
@@ -114,7 +114,7 @@ pub struct BadgeEventRow {
     pub created_at: String,
 }
 
-/// Response of `GET /admin/events`.
+/// Response of `GET /admin/badge-events`.
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct BadgeEventListResponse {
     pub data: Vec<BadgeEventRow>,
@@ -122,7 +122,7 @@ pub struct BadgeEventListResponse {
     pub meta: crate::api_response::MetaInfo,
 }
 
-/// The event echoed by `POST /admin/events`.
+/// The event echoed by `POST /admin/badge-events`.
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct CreatedBadgeEvent {
     pub id: Uuid,
@@ -134,7 +134,7 @@ pub struct CreatedBadgeEvent {
     pub is_partner: bool,
 }
 
-/// Payload of `POST /admin/events`.
+/// Payload of `POST /admin/badge-events`.
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct CreateBadgeEventData {
     pub event: CreatedBadgeEvent,
@@ -379,7 +379,7 @@ pub async fn admin_recompute_capabilities(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// GET /admin/events — liste paginée (filtres is_active + is_partner).
+// GET /admin/badge-events — liste paginée (filtres is_active + is_partner).
 // ═══════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
@@ -396,7 +396,7 @@ pub struct ListEventsQuery {
 
 /// Admin: list badge events (Hacktoberfest, Skilluv Fest, ...).
 #[utoipa::path(
-    get, path = "/api/admin/events", tag = "admin",
+    get, path = "/api/admin/badge-events", tag = "admin",
     params(ListEventsQuery),
     responses(
         (status = 200, body = BadgeEventListResponse),
@@ -477,7 +477,7 @@ pub async fn admin_list_badge_events(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// POST /admin/events — création d'un event (mig 0093).
+// POST /admin/badge-events — création d'un event (mig 0093).
 // ═══════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
@@ -522,7 +522,7 @@ pub struct CreateEventBody {
 
 /// Admin: create a new badge event.
 #[utoipa::path(
-    post, path = "/api/admin/events", tag = "admin",
+    post, path = "/api/admin/badge-events", tag = "admin",
     request_body = CreateEventBody,
     responses(
         (status = 200, body = crate::api_response::ApiResponse<CreateBadgeEventData>),

@@ -847,3 +847,37 @@ impl Drop for TestApp {
         });
     }
 }
+
+/// Assert a money field by value rather than by the scale its column happened
+/// to print.
+///
+/// `199`, `199.00` and `199.0000` are the same amount. A test that fails on
+/// the difference is asserting a NUMERIC's scale, which is a storage decision
+/// nobody promised a caller — and it breaks on the day somebody widens the
+/// column for a currency with three decimal places.
+#[track_caller]
+#[allow(dead_code)]
+pub fn assert_amount(actual: &Value, expected: &str) {
+    let raw = match actual {
+        Value::String(s) => s.clone(),
+        Value::Number(n) => n.to_string(),
+        other => panic!("not a decimal: {other}"),
+    };
+    let got: sqlx::types::BigDecimal = raw
+        .parse()
+        .unwrap_or_else(|e| panic!("{raw} is not a decimal: {e}"));
+    let want: sqlx::types::BigDecimal = expected
+        .parse()
+        .unwrap_or_else(|e| panic!("{expected} is not a decimal: {e}"));
+    assert_eq!(got, want, "expected {expected}, got {raw}");
+}
+
+/// The same comparison for a decimal read straight out of the database.
+#[track_caller]
+#[allow(dead_code)]
+pub fn assert_decimal(actual: &sqlx::types::BigDecimal, expected: &str) {
+    let want: sqlx::types::BigDecimal = expected
+        .parse()
+        .unwrap_or_else(|e| panic!("{expected} is not a decimal: {e}"));
+    assert_eq!(actual, &want, "expected {expected}, got {actual}");
+}

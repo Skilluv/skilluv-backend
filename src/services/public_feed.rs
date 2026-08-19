@@ -179,14 +179,30 @@ pub struct Cursor {
 }
 
 impl Cursor {
-    /// `<rfc3339>|<uuid>`. Opaque to the caller by convention, readable by a
-    /// person debugging, which matters more here than opacity.
+    /// `<rfc3339>|<uuid>`, base64url without padding.
+    ///
+    /// The encoding is not decoration. An RFC3339 timestamp carries a `+`
+    /// before its offset, and a `+` in a query string decodes as a space — so
+    /// a caller who takes `next_cursor` and puts it in a URL, which is the
+    /// only thing anybody does with it, gets a cursor the server cannot read
+    /// and a 400 on the second page. base64url has no character a URL treats
+    /// as anything.
     pub fn encode(&self) -> String {
-        format!("{}|{}", self.occurred_at.to_rfc3339(), self.id)
+        use base64::Engine;
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(format!(
+            "{}|{}",
+            self.occurred_at.to_rfc3339(),
+            self.id
+        ))
     }
 
     pub fn decode(raw: &str) -> Option<Self> {
-        let (time, id) = raw.split_once('|')?;
+        use base64::Engine;
+        let decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(raw.as_bytes())
+            .ok()?;
+        let decoded = String::from_utf8(decoded).ok()?;
+        let (time, id) = decoded.split_once('|')?;
         Some(Cursor {
             occurred_at: chrono::DateTime::parse_from_rfc3339(time)
                 .ok()?
@@ -404,6 +420,28 @@ mod tests {
         let decoded = Cursor::decode(&cursor.encode()).expect("round trip");
         assert_eq!(decoded.occurred_at, cursor.occurred_at);
         assert_eq!(decoded.id, cursor.id);
+    }
+
+    #[test]
+    fn a_cursor_goes_into_a_url_unchanged() {
+        // The only thing anybody does with `next_cursor` is put it in a query
+        // string. The first version of this encoding was `<rfc3339>|<uuid>`,
+        // and an RFC3339 offset carries a `+`, which a query string decodes as
+        // a space — so the second page answered 400 to a cursor the server had
+        // just handed out.
+        let cursor = Cursor {
+            occurred_at: chrono::DateTime::parse_from_rfc3339("2026-08-17T10:30:00+02:00")
+                .unwrap()
+                .with_timezone(&chrono::Utc),
+            id: Uuid::parse_str("11111111-2222-3333-4444-555555555555").unwrap(),
+        };
+        let encoded = cursor.encode();
+        assert!(
+            encoded
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'),
+            "a URL must not have to escape it: {encoded}"
+        );
     }
 
     #[test]

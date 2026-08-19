@@ -6,13 +6,11 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 async fn an_admin(app: &TestApp, username: &str) {
-    app.register_user(username).await;
-    sqlx::query("UPDATE users SET role = 'admin' WHERE username = $1")
-        .bind(username)
-        .execute(&app.db)
-        .await
-        .unwrap();
-    app.login(username).await;
+    // `register_admin`, not `role = 'admin'`: since P21 the admin gate reads
+    // `user_capabilities`, and the column on its own opens nothing. The helper
+    // grants the capability and enrols the passkey the admin 2FA middleware
+    // wants, then logs in.
+    app.register_admin(username).await;
 }
 
 async fn an_enterprise(app: &TestApp, company: &str) -> (String, Uuid) {
@@ -154,7 +152,7 @@ async fn spending_draws_down_the_oldest_engagement_first() {
     .execute(&app.db)
     .await
     .unwrap();
-    let new = an_engagement(&app, enterprise, "subscription_pipeline").await;
+    let new = an_engagement(&app, enterprise, "ats_subscription").await;
 
     for product in [old, new] {
         app.post(
@@ -219,7 +217,7 @@ async fn a_lapsed_engagement_stops_granting() {
     let app = TestApp::spawn().await;
     let (_, enterprise) = an_enterprise(&app, "Lapsedco").await;
     an_admin(&app, "lapsed_admin").await;
-    let product = an_engagement(&app, enterprise, "subscription_pipeline").await;
+    let product = an_engagement(&app, enterprise, "ats_subscription").await;
     app.post(
         &format!("/api/admin/enterprise-products/{product}/entitlements"),
         &json!({"kind": "credits", "granted": 100}),

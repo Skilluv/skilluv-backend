@@ -4,13 +4,17 @@ mod common;
 use common::TestApp;
 
 async fn insert_event(app: &TestApp, slug: &str, active: bool) -> uuid::Uuid {
+    // `is_active` is derived from `status` since migration 0357 — it is a
+    // generated column, and writing to one is an error rather than a silent
+    // no-op. Setting the status is now the only way to say an event is on,
+    // which is the point: the flag and the status could not disagree.
     sqlx::query_scalar(
-        "INSERT INTO events (slug, name, description, starts_at, is_active)
+        "INSERT INTO events (slug, name, description, starts_at, status)
          VALUES ($1, $2, 'd', NOW(), $3) RETURNING id",
     )
     .bind(slug)
     .bind(format!("Event {slug}"))
-    .bind(active)
+    .bind(if active { "published" } else { "draft" })
     .fetch_one(&app.db)
     .await
     .unwrap()

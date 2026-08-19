@@ -47,14 +47,12 @@ fn build_response(data: Value) -> Value {
 #[into_params(parameter_in = Query)]
 #[serde(deny_unknown_fields)]
 pub struct FeedQuery {
-    /// From the previous page's `next_cursor`: a timestamp and an event id.
-    /// The shape is in the contract because a cursor the handler cannot decode
-    /// is refused rather than read as "from the beginning", and a caller has
-    /// to be able to tell a malformed cursor from the end of the feed.
-    #[param(
-        pattern = r"^\d{4}-\d{2}-\d{2}T[0-9:.+\-Z]+\|[0-9a-fA-F-]{36}$",
-        max_length = 100
-    )]
+    /// Opaque cursor from the previous page's `next_cursor`. base64url, so it
+    /// goes into a URL unchanged. The pattern is in the contract because a
+    /// cursor the handler cannot decode is refused rather than read as "from
+    /// the beginning" — a caller has to be able to tell a malformed cursor
+    /// from the end of the feed.
+    #[param(pattern = r"^[A-Za-z0-9_-]+$", max_length = 100)]
     pub after: Option<String>,
     #[serde(default = "default_limit")]
     #[param(minimum = 1, maximum = 100)]

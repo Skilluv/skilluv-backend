@@ -6,13 +6,11 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 async fn an_admin(app: &TestApp, username: &str) {
-    app.register_user(username).await;
-    sqlx::query("UPDATE users SET role = 'admin' WHERE username = $1")
-        .bind(username)
-        .execute(&app.db)
-        .await
-        .unwrap();
-    app.login(username).await;
+    // `register_admin`, not `role = 'admin'`: since P21 the admin gate reads
+    // `user_capabilities`, and the column on its own opens nothing. The helper
+    // grants the capability and enrols the passkey the admin 2FA middleware
+    // wants, then logs in.
+    app.register_admin(username).await;
 }
 
 async fn an_enterprise(app: &TestApp, company: &str) -> Uuid {
@@ -63,7 +61,7 @@ async fn a_renewing_product_must_say_when() {
     let silent = app
         .post(
             &format!("/api/admin/enterprises/{enterprise}/products"),
-            &json!({"product_type": "subscription_pipeline"}),
+            &json!({"product_type": "ats_subscription"}),
         )
         .await;
     assert_eq!(silent.status(), 400, "{}", silent.text().await.unwrap());
@@ -72,7 +70,7 @@ async fn a_renewing_product_must_say_when() {
         .post(
             &format!("/api/admin/enterprises/{enterprise}/products"),
             &json!({
-                "product_type": "subscription_pipeline",
+                "product_type": "ats_subscription",
                 "renews_at": "2027-01-15T00:00:00Z",
                 "contract_value": "1080.00",
                 "currency": "EUR",
@@ -179,7 +177,7 @@ async fn the_renewal_list_puts_the_overdue_first() {
     an_admin(&app, "renewal_admin").await;
 
     for (product, renews) in [
-        ("subscription_pipeline", "2020-01-01T00:00:00Z"),
+        ("ats_subscription", "2020-01-01T00:00:00Z"),
         ("data_licensing", "2099-01-01T00:00:00Z"),
     ] {
         app.post(
@@ -200,7 +198,7 @@ async fn the_renewal_list_puts_the_overdue_first() {
     // The far-future one is outside the horizon; the overdue one is the case
     // somebody most needs to see.
     assert_eq!(renewals.len(), 1);
-    assert_eq!(renewals[0]["product_type"], "subscription_pipeline");
+    assert_eq!(renewals[0]["product_type"], "ats_subscription");
     assert_eq!(renewals[0]["overdue"], true);
 }
 

@@ -12,13 +12,11 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 async fn an_admin(app: &TestApp, username: &str) {
-    app.register_user(username).await;
-    sqlx::query("UPDATE users SET role = 'admin' WHERE username = $1")
-        .bind(username)
-        .execute(&app.db)
-        .await
-        .unwrap();
-    app.login(username).await;
+    // `register_admin`, not `role = 'admin'`: since P21 the admin gate reads
+    // `user_capabilities`, and the column on its own opens nothing. The helper
+    // grants the capability and enrols the passkey the admin 2FA middleware
+    // wants, then logs in.
+    app.register_admin(username).await;
 }
 
 async fn a_talent(app: &TestApp, username: &str) -> Uuid {
@@ -236,8 +234,8 @@ async fn a_commission_below_the_threshold_is_refused() {
     let mentor = a_mentor(&app, "shortmentor", "volunteer", None).await;
     let mentee = a_talent(&app, "shortmentee").await;
     let enterprise: Uuid = sqlx::query_scalar(
-        "INSERT INTO enterprises (owner_id, company_name, slug)
-         VALUES ($1, 'Embauche SA', 'embauche-sa') RETURNING id",
+        "INSERT INTO enterprises (owner_id, company_name, slug, company_size)
+         VALUES ($1, 'Embauche SA', 'embauche-sa', '11-50') RETURNING id",
     )
     .bind(mentee)
     .fetch_one(&app.db)
@@ -273,8 +271,8 @@ async fn a_mentor_who_charged_this_mentee_cannot_also_take_the_placement_reward(
     let mentor = a_mentor(&app, "hybridmentor", "hybrid", None).await;
     let mentee = a_talent(&app, "dipmentee").await;
     let enterprise: Uuid = sqlx::query_scalar(
-        "INSERT INTO enterprises (owner_id, company_name, slug)
-         VALUES ($1, 'Double SA', 'double-sa-dip') RETURNING id",
+        "INSERT INTO enterprises (owner_id, company_name, slug, company_size)
+         VALUES ($1, 'Double SA', 'double-sa-dip', '11-50') RETURNING id",
     )
     .bind(mentee)
     .fetch_one(&app.db)
@@ -326,8 +324,8 @@ async fn a_qualifying_mentor_is_paid_ten_per_cent_of_the_placement() {
     let mentor = a_mentor(&app, "paymentor", "volunteer", None).await;
     let mentee = a_talent(&app, "paymentee").await;
     let enterprise: Uuid = sqlx::query_scalar(
-        "INSERT INTO enterprises (owner_id, company_name, slug)
-         VALUES ($1, 'Placement SA', 'placement-sa') RETURNING id",
+        "INSERT INTO enterprises (owner_id, company_name, slug, company_size)
+         VALUES ($1, 'Placement SA', 'placement-sa', '11-50') RETURNING id",
     )
     .bind(mentee)
     .fetch_one(&app.db)
@@ -513,7 +511,7 @@ async fn a_cohort_is_priced_per_head_and_a_corporate_run_by_the_month() {
     assert_eq!(resp.status(), 200, "{}", resp.text().await.unwrap());
     let body: Value = resp.json().await.unwrap();
     assert_eq!(body["data"]["program"]["payer"], "mentee");
-    assert_eq!(body["data"]["program"]["commission_percent"], "20.00");
+    common::assert_amount(&body["data"]["program"]["commission_percent"], "20.00");
 }
 
 #[tokio::test]
@@ -521,8 +519,8 @@ async fn a_company_client_carries_the_higher_commission() {
     let app = TestApp::spawn().await;
     let mentor = a_mentor(&app, "corpmentor", "paid_session", None).await;
     let enterprise: Uuid = sqlx::query_scalar(
-        "INSERT INTO enterprises (owner_id, company_name, slug)
-         VALUES ($1, 'Corp SA', 'corp-sa') RETURNING id",
+        "INSERT INTO enterprises (owner_id, company_name, slug, company_size)
+         VALUES ($1, 'Corp SA', 'corp-sa', '11-50') RETURNING id",
     )
     .bind(mentor)
     .fetch_one(&app.db)
@@ -558,8 +556,8 @@ async fn a_corporate_run_is_not_on_the_public_list() {
     let app = TestApp::spawn().await;
     let mentor = a_mentor(&app, "hiddenmentor", "paid_session", None).await;
     let enterprise: Uuid = sqlx::query_scalar(
-        "INSERT INTO enterprises (owner_id, company_name, slug)
-         VALUES ($1, 'Prive SA', 'prive-sa') RETURNING id",
+        "INSERT INTO enterprises (owner_id, company_name, slug, company_size)
+         VALUES ($1, 'Prive SA', 'prive-sa', '11-50') RETURNING id",
     )
     .bind(mentor)
     .fetch_one(&app.db)

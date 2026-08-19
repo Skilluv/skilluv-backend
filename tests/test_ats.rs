@@ -62,7 +62,7 @@ async fn a_paid_plan_waits_for_its_payment() {
 
     let jv: Value = resp.json().await.unwrap();
     assert_eq!(jv["data"]["subscription"]["active"], false);
-    assert_eq!(jv["data"]["subscription"]["monthly_fee"], "199.00");
+    common::assert_amount(&jv["data"]["subscription"]["monthly_fee"], "199.00");
 
     // And the tracker is not usable yet: an upgrade takes effect when it is
     // paid for, which is the only version a company can dispute.

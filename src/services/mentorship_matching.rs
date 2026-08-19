@@ -136,6 +136,23 @@ pub const DESIGN: DomainRules = DomainRules {
     families_are_trade_slugs: true,
 };
 
+/// The rules for a domain named at runtime.
+///
+/// The wizard validates its answers against the same distinction the matcher
+/// reads them with, so a family the wizard accepts is one the matcher can use.
+/// Two lists would drift, and the drift is silent: an answer stored and never
+/// matched looks like an empty platform.
+pub fn rules_for(domain: &str) -> Option<DomainRules> {
+    match domain {
+        "code" => Some(CODE),
+        "ai" => Some(AI),
+        "ops" => Some(OPS),
+        "audio" => Some(AUDIO),
+        "design" => Some(DESIGN),
+        _ => None,
+    }
+}
+
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct Match {
     pub mentor_user_id: Uuid,

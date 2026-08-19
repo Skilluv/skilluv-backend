@@ -13,7 +13,7 @@ async fn get_catalog_lists_curated_orientations() {
     let list = body["data"]["orientations"].as_array().unwrap();
     assert!(list.len() >= 30, "seed should expose 30+ curated");
     // Vérifie qu'un slug attendu est présent
-    assert!(list.iter().any(|o| o["slug"] == "dev-frontend"));
+    assert!(list.iter().any(|o| o["slug"] == "web-frontend-developer"));
 }
 
 #[tokio::test]
@@ -57,7 +57,10 @@ async fn get_orientation_detail_includes_skills() {
     let resp = app.get("/api/orientations/dev-frontend").await;
     assert!(resp.status().is_success());
     let body: serde_json::Value = resp.json().await.unwrap();
-    assert_eq!(body["data"]["orientation"]["slug"], "dev-frontend");
+    assert_eq!(
+        body["data"]["orientation"]["slug"],
+        "web-frontend-developer"
+    );
     let skills = body["data"]["skills"].as_array().unwrap();
     assert!(!skills.is_empty());
     assert!(skills.iter().any(|s| s["slug"] == "component-composition"));
@@ -79,7 +82,7 @@ async fn register_orientation_auto_promotes_first_to_primary() {
     let resp = app
         .post(
             "/api/users/me/orientations",
-            &json!({ "slug": "dev-frontend", "mode": "learning" }),
+            &json!({ "slug": "web-frontend-developer", "mode": "learning" }),
         )
         .await;
     assert_eq!(resp.status().as_u16(), 201);
@@ -96,7 +99,11 @@ async fn cannot_register_more_than_three_active_orientations() {
     app.register_user("kim16r4").await;
     app.login("kim16r4").await;
 
-    for slug in ["dev-frontend", "dev-backend", "web-designer"] {
+    for slug in [
+        "web-frontend-developer",
+        "web-backend-developer",
+        "design-web",
+    ] {
         let r = app
             .post("/api/users/me/orientations", &json!({ "slug": slug }))
             .await;
@@ -119,7 +126,7 @@ async fn delete_orientation_historises_but_keeps_row() {
 
     app.post(
         "/api/users/me/orientations",
-        &json!({ "slug": "dev-backend" }),
+        &json!({ "slug": "web-backend-developer" }),
     )
     .await;
     let del = app.delete("/api/users/me/orientations/dev-backend").await;
@@ -130,7 +137,7 @@ async fn delete_orientation_historises_but_keeps_row() {
     let cnt: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM user_orientations uo
          JOIN orientations o ON o.id = uo.orientation_id
-         WHERE o.slug = 'dev-backend' AND uo.ended_at IS NOT NULL",
+         WHERE o.slug = 'web-backend-developer' AND uo.ended_at IS NOT NULL",
     )
     .fetch_one(&app.db)
     .await
@@ -141,7 +148,7 @@ async fn delete_orientation_historises_but_keeps_row() {
     let re = app
         .post(
             "/api/users/me/orientations",
-            &json!({ "slug": "dev-backend" }),
+            &json!({ "slug": "web-backend-developer" }),
         )
         .await;
     assert_eq!(re.status().as_u16(), 201, "re-registering after end works");
@@ -155,12 +162,12 @@ async fn patch_switches_primary_flag_atomically() {
 
     app.post(
         "/api/users/me/orientations",
-        &json!({ "slug": "dev-frontend" }),
+        &json!({ "slug": "web-frontend-developer" }),
     )
     .await; // auto-primary
     app.post(
         "/api/users/me/orientations",
-        &json!({ "slug": "web-designer" }),
+        &json!({ "slug": "design-web" }),
     )
     .await;
 

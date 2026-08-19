@@ -383,8 +383,10 @@ async fn reject_nul_in_json(
     }
 
     let (parts, body) = req.into_parts();
-    // The limit is the one the body would have been read under anyway; a
-    // larger body fails the same way it did before this middleware existed.
+    // 2 MiB is axum's own `DefaultBodyLimit`, which every `Json` extractor
+    // downstream already applies. Matching it means this middleware is not a
+    // new ceiling: a body too large to read here was already too large to
+    // deserialise.
     let bytes = match axum::body::to_bytes(body, 2 * 1024 * 1024).await {
         Ok(bytes) => bytes,
         Err(_) => {

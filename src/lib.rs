@@ -298,7 +298,7 @@ pub fn build_router(state: AppState) -> Router {
         // otherwise turn it into. Above the routes so no handler has to
         // remember, below the method allowlist so an exotic verb is still
         // refused before the body is read at all.
-        .layer(axum::middleware::from_fn(reject_nul_in_json))
+        .layer(axum::middleware::from_fn(reject_nul_in_request))
         // Convertit les reponses 4xx/5xx text/plain en JSON conforme au
         // schema d'erreur documente. Cible principale : rejections axum
         // built-in (Query, Json, Path, etc.) qui renvoient text/plain par
@@ -352,25 +352,47 @@ async fn reject_deprecated_methods(
     next.run(req).await
 }
 
-/// Refuse a JSON body containing a NUL byte, with a 400 rather than a 500.
+/// Refuse a request carrying a NUL byte, with a 400 rather than a 500.
 ///
 /// PostgreSQL cannot store `\0` in a `text` column at all — it is not an
 /// encoding we can widen, it is outside what the type accepts. So a NUL in any
-/// string field reaches the driver, fails there, and surfaces as
+/// string reaches the driver, fails there, and surfaces as
 /// `DATABASE_ERROR ... invalid byte sequence for encoding "UTF8": 0x00`: a 500
 /// that tells the caller our server broke, when in fact they sent something no
 /// text column anywhere will ever hold.
 ///
-/// Checked here rather than field by field because every endpoint that takes
-/// free text has the same exposure, and one of them will always be the one
-/// nobody remembered to validate. JSON only: a multipart upload is bytes by
-/// definition and a NUL in it is ordinary.
-async fn reject_nul_in_json(
+/// Both halves of the request, because a NUL arrives by two routes and the
+/// first version of this only closed one of them:
+///
+///   * the URI, where it is written `%00` and is still a literal NUL by the
+///     time a query or path parameter has been deserialised — which is how it
+///     kept reaching the database after the body was being checked;
+///   * a JSON body, checked as raw bytes before it is parsed.
+///
+/// Checked here rather than field by field because every endpoint taking free
+/// text has the same exposure, and one of them will always be the one nobody
+/// remembered. Multipart is left alone: an upload is bytes by definition and a
+/// NUL in one is ordinary.
+async fn reject_nul_in_request(
     req: axum::extract::Request,
     next: axum::middleware::Next,
 ) -> axum::response::Response {
     use axum::http::{StatusCode, header::CONTENT_TYPE};
     use axum::response::IntoResponse;
+
+    let uri = req.uri();
+    let has_encoded_nul = |s: &str| {
+        s.contains('\0')
+            || s.as_bytes()
+                .windows(3)
+                .any(|w| w[0] == b'%' && w[1] == b'0' && w[2] == b'0')
+    };
+    if has_encoded_nul(uri.path()) || uri.query().is_some_and(has_encoded_nul) {
+        return errors::AppError::Validation(
+            "the URL contains a NUL byte, which no text column can hold".into(),
+        )
+        .into_response();
+    }
 
     let is_json = req
         .headers()

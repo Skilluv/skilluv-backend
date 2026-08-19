@@ -77,3 +77,33 @@ async fn the_declared_parameters_are_still_accepted() {
         );
     }
 }
+
+#[tokio::test]
+async fn a_nul_byte_is_a_client_error_not_a_server_one() {
+    let app = TestApp::spawn().await;
+
+    // PostgreSQL cannot hold a NUL in a text column at all, so a NUL that
+    // reaches the driver comes back as DATABASE_ERROR — a 500 telling the
+    // caller our server broke, over input no text column anywhere will accept.
+    // It arrives percent-encoded and is a literal NUL by the time a parameter
+    // has been deserialised, which is why the check reads the raw URI.
+    let resp = app.get("/api/talents/search?q=%00").await;
+    assert_eq!(resp.status().as_u16(), 400, "{:?}", resp.text().await);
+
+    let resp = app.get("/api/feed/public?kind=a%00b").await;
+    assert_eq!(resp.status().as_u16(), 400, "{:?}", resp.text().await);
+}
+
+#[tokio::test]
+async fn a_declared_minimum_is_enforced_and_not_only_documented() {
+    let app = TestApp::spawn().await;
+
+    // `min_craft_score` is declared 0..=10000 in the contract. A negative
+    // floor matches everybody, so an unenforced bound answers 200 with what
+    // looks like a working search rather than saying the query meant nothing.
+    let resp = app.get("/api/talents/search?min_craft_score=-1").await;
+    assert_eq!(resp.status().as_u16(), 400, "{:?}", resp.text().await);
+
+    let resp = app.get("/api/talents/search?min_craft_score=0").await;
+    assert_eq!(resp.status().as_u16(), 200, "{:?}", resp.text().await);
+}

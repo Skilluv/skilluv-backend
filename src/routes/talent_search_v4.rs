@@ -650,6 +650,16 @@ fn validate(q: &SearchQuery) -> Result<(), AppError> {
             "limit must be between 1 and {MAX_LIMIT}"
         )));
     }
+    // Declared in the contract as 0..=10000 and, until now, enforced nowhere.
+    // A negative floor matches everybody, so the answer looked like a working
+    // search rather than a query that meant nothing.
+    if let Some(score) = q.min_craft_score
+        && !(0..=10_000).contains(&score)
+    {
+        return Err(AppError::Validation(
+            "min_craft_score must be between 0 and 10000".into(),
+        ));
+    }
     if !matches!(
         q.sort.as_str(),
         "craft_score" | "contests_won" | "missions_delivered" | "recently_featured"

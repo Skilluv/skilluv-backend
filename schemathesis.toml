@@ -1,0 +1,34 @@
+# Contract-fuzzing configuration.
+#
+# Picked up automatically by `schemathesis run` from the repository root. The
+# workflow (.github/workflows/contract-test.yml) passes `--checks all`; what is
+# here narrows that for the operations where a check asks for something the
+# API should not do.
+#
+# Every exclusion needs a written reason. The rule is the same one deny.toml
+# follows for advisories: an exception that nobody can explain later becomes an
+# exception nobody dares remove.
+
+[[operations]]
+include-name = "GET /api/feed/public"
+
+# `positive_data_acceptance` requires that anything matching the schema is
+# accepted. `after` is a keyset cursor — a token the server issued — and no
+# JSON Schema can say "a value I minted". The fuzzer generates a random string
+# matching the pattern, the handler cannot decode it, and 400 is the right
+# answer: treating an unreadable cursor as "from the beginning" makes a client
+# silently re-read the whole feed and never find out why.
+#
+# The 400 is documented in the operation's responses, so a caller reading the
+# contract knows it exists.
+[operations.checks.positive_data_acceptance]
+enabled = false
+
+[[operations]]
+include-name = "GET /api/talents/search"
+
+# Same cursor, same reasoning. Here it matters more: this is a recruiter's
+# tool, and a paginating client that silently restarts shows the first page
+# again as though it were the third.
+[operations.checks.positive_data_acceptance]
+enabled = false

@@ -1822,6 +1822,7 @@ mod tests {
     ///
     /// Both are one `#[schema(as = ...)]` or `operation_id = "..."` away from
     /// correct. This is what notices the next one.
+
     #[test]
     fn no_two_operations_share_an_id() {
         // Read through the serialised document rather than utoipa's typed

@@ -168,6 +168,21 @@ pub async fn list_missions(
             "offset must be between 0 and 10000".into(),
         ));
     }
+    // The lengths are declared in the contract, so they have to be enforced
+    // here: a filter longer than the column it matches finds nothing, and
+    // answering 200 with an empty list tells a caller the board is empty
+    // rather than that their query was malformed.
+    for (name, value, max) in [
+        ("skill_domain", &q.skill_domain, 30),
+        ("mission_type", &q.mission_type, 60),
+        ("language", &q.language, 40),
+        ("framework", &q.framework, 60),
+        ("orientation", &q.orientation, 100),
+        ("ip_terms", &q.ip_terms, 40),
+        ("payment_model", &q.payment_model, 30),
+    ] {
+        crate::validators::check_max_len_opt(value, name, max)?;
+    }
 
     let filter = missions::MissionFilter {
         skill_domain: q.skill_domain,

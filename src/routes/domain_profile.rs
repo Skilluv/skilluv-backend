@@ -179,12 +179,46 @@ const AI_QUESTIONS: &[Question] = &[
     free_text("huggingface_username", 60),
 ];
 
+/// Whether somebody wants to be handed work or to compete for it. A designer
+/// who only wants contests and is shown a queue of briefs reads the platform
+/// as empty, and the reverse is worse: an invitation to compete lands badly on
+/// somebody who came here to practise.
+const CHALLENGE_PREFERENCES: &[&str] = &["individual", "contest", "both", "undecided"];
+
+/// What they work in. A bonus in the matching, never a filter — a good mentor
+/// in a neighbouring tool beats a mediocre one in the same.
+const DESIGN_TOOLS: &[&str] = &[
+    "figma",
+    "adobe",
+    "sketch",
+    "blender",
+    "after_effects",
+    "other",
+];
+
+const DESIGN_QUESTIONS: &[Question] = &[
+    closed("challenge_preference", CHALLENGE_PREFERENCES),
+    closed("main_tool", DESIGN_TOOLS),
+];
+
 const AUDIO_QUESTIONS: &[Question] = &[
     closed("audio_destination", AUDIO_DESTINATIONS),
     closed_multi("main_daws", AUDIO_DAWS),
     free_text("soundcloud_username", 60),
     free_text("bandcamp_username", 60),
 ];
+
+/// Which wizard a field belongs to, for the message when it arrives on
+/// another one.
+///
+/// Derived from the same registry the validation reads, so a question added to
+/// a domain is attributable to it without a second list to keep in step.
+pub fn owning_domain(key: &str) -> Option<&'static str> {
+    crate::validators::SKILL_DOMAINS
+        .iter()
+        .find(|domain| questions_for(domain).iter().any(|q| q.key == key))
+        .copied()
+}
 
 /// What this domain asks, beyond the three everybody asks.
 ///
@@ -194,6 +228,7 @@ pub fn questions_for(domain: &str) -> &'static [Question] {
     match domain {
         "ai" => AI_QUESTIONS,
         "audio" => AUDIO_QUESTIONS,
+        "design" => DESIGN_QUESTIONS,
         _ => &[],
     }
 }
@@ -221,16 +256,23 @@ async fn check_families(
     let by_trade = crate::services::mentorship_matching::rules_for(domain)
         .is_some_and(|r| r.families_are_trade_slugs);
 
+    // Archived either way: a trade nobody should be starting is one the
+    // registration endpoint already refuses, and accepting it here would
+    // store an answer that reads as a live choice.
     let known: Vec<String> = if by_trade {
         sqlx::query_scalar(
             "SELECT slug FROM orientations
-              WHERE primary_domain = $1 AND reviewer_group IS NOT NULL
+              WHERE primary_domain = $1
+                AND reviewer_group IS NOT NULL
+                AND is_archived = FALSE
               ORDER BY slug",
         )
     } else {
         sqlx::query_scalar(
             "SELECT DISTINCT reviewer_group FROM orientations
-              WHERE reviewer_group IS NOT NULL AND primary_domain = $1",
+              WHERE reviewer_group IS NOT NULL
+                AND primary_domain = $1
+                AND is_archived = FALSE",
         )
     }
     .bind(domain)
@@ -477,13 +519,12 @@ pub async fn put_profile(
         if key == "preferred_families" {
             let families = as_string_list(key, value)?;
             check_families(&state.db, &domain, &families).await?;
-            // Empty lists stay out, for the same reason an unanswered question
-            // does: a key present with nothing in it and an absent key read
-            // the same to a recommender, and one of them claims the question
-            // was asked.
-            if !families.is_empty() {
-                answers.insert(key.clone(), json!(families));
-            }
+            // An empty list is stored, and it is not the same as an absent
+            // key. "No family in particular" is an answer somebody gave; never
+            // opening the wizard is not, and the two have to be tellable apart
+            // or the wizard reappears forever for the people who answered it
+            // that way.
+            answers.insert(key.clone(), json!(families));
             continue;
         }
 
@@ -492,6 +533,16 @@ pub async fn put_profile(
             .chain(asked.iter())
             .find(|q| q.key == key)
             .ok_or_else(|| {
+                // Naming the owner is the useful half. `compute` means
+                // something for AI and nothing for design; `main_tool` is the
+                // reverse. A caller who sent one to the wrong wizard has a
+                // typo in the path, not in the field, and listing this
+                // wizard's keys does not tell them that.
+                if let Some(owner) = owning_domain(key) {
+                    return AppError::Validation(format!(
+                        "'{key}' belongs to the {owner} wizard, not the {domain} one"
+                    ));
+                }
                 let known: Vec<&str> = COMMON_QUESTIONS
                     .iter()
                     .chain(asked.iter())

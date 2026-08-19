@@ -329,8 +329,11 @@ fn wizard(level: &str, family: &str, objective: &str) -> Value {
         "level": level,
         "preferred_families": [family],
         "weekly_hours": "5_to_15",
-        "objective": objective,
-        "main_languages": ["rust"],
+        // `goal`, not `objective`: the code wizard folded into the one
+        // endpoint every other domain already used, and two names for one
+        // question is how a reader ends up checking the wrong key.
+        "goal": objective,
+        "main_tools": ["rust"],
         "challenge_preference": "upstream_contributions",
     })
 }
@@ -342,7 +345,10 @@ async fn the_wizard_answers_with_a_first_month() {
     app.login("wizard_beginner").await;
 
     let resp = app
-        .post("/api/code/onboarding", &wizard("beginner", "web", "learn"))
+        .put(
+            "/api/users/me/domain-profile/code",
+            &wizard("beginner", "web", "learn"),
+        )
         .await;
     assert_eq!(resp.status(), 200, "{}", resp.text().await.unwrap());
     let body: Value = resp.json().await.unwrap();
@@ -357,7 +363,10 @@ async fn the_wizard_answers_with_a_first_month() {
     assert!(guides.iter().any(|g| g == "onboarding-web"));
 
     let stored: (Option<chrono::DateTime<chrono::Utc>>, Option<String>) = sqlx::query_as(
-        "SELECT code_onboarding_completed_at, code_level FROM users WHERE username = 'wizard_beginner'",
+        "SELECT p.completed_at, p.answers ->> 'level'
+           FROM user_domain_profiles p
+           JOIN users u ON u.id = p.user_id
+          WHERE u.username = 'wizard_beginner' AND p.domain = 'code'",
     )
     .fetch_one(&app.db)
     .await
@@ -375,8 +384,8 @@ async fn a_family_nobody_has_is_refused() {
     // A typo would send somebody to a guide that does not exist and quietly
     // recommend nothing.
     let resp = app
-        .post(
-            "/api/code/onboarding",
+        .put(
+            "/api/users/me/domain-profile/code",
             &wizard("junior", "quantique", "learn"),
         )
         .await;
@@ -390,10 +399,10 @@ async fn skipping_is_recorded_as_skipping() {
     app.login("wizard_skipper").await;
 
     assert_eq!(
-        app.post("/api/code/onboarding/skip", &json!({}))
+        app.post("/api/users/me/domain-profile/code/skip", &json!({}))
             .await
             .status(),
-        200
+        204
     );
 
     // Skipped is not unanswered: without the distinction the wizard would
@@ -402,8 +411,10 @@ async fn skipping_is_recorded_as_skipping() {
         Option<chrono::DateTime<chrono::Utc>>,
         Option<chrono::DateTime<chrono::Utc>>,
     ) = sqlx::query_as(
-        "SELECT code_onboarding_completed_at, code_onboarding_skipped_at
-           FROM users WHERE username = 'wizard_skipper'",
+        "SELECT p.completed_at, p.skipped_at
+           FROM user_domain_profiles p
+           JOIN users u ON u.id = p.user_id
+          WHERE u.username = 'wizard_skipper' AND p.domain = 'code'",
     )
     .fetch_one(&app.db)
     .await
@@ -421,7 +432,9 @@ async fn a_github_username_given_to_the_wizard_is_claimed_not_proved() {
     let mut answers = wizard("mid", "systems", "build_portfolio");
     answers["github_username"] = json!("torvalds");
     assert_eq!(
-        app.post("/api/code/onboarding", &answers).await.status(),
+        app.put("/api/users/me/domain-profile/code", &answers)
+            .await
+            .status(),
         200
     );
 
@@ -462,12 +475,17 @@ async fn a_mentor_is_suggested_with_the_reasoning_attached() {
 
     let mentee = a_user(&app, "match_mentee").await;
     sqlx::query(
-        "UPDATE users SET code_preferred_families = ARRAY['systems'],
-                          code_main_languages = ARRAY['rust'],
-                          timezone = '+01:00'
-          WHERE id = $1",
+        "INSERT INTO user_domain_profiles (user_id, domain, answers, completed_at)
+         VALUES ($1, 'code',
+                 '{\"preferred_families\": [\"systems\"], \"main_tools\": [\"rust\"]}'::jsonb,
+                 NOW())",
     )
     .bind(mentee)
+    .execute(&app.db)
+    .await
+    .unwrap();
+    sqlx::query("UPDATE users SET timezone = '+01:00' WHERE id = $1")
+        .bind(mentee)
     .execute(&app.db)
     .await
     .unwrap();
@@ -487,13 +505,19 @@ async fn a_mentor_is_suggested_with_the_reasoning_attached() {
     ] {
         let mentor = a_user(&app, name).await;
         sqlx::query(
-            "UPDATE users SET code_preferred_families = ARRAY[$2],
-                              code_main_languages = ARRAY['rust'],
-                              timezone = '+02:00'
-              WHERE id = $1",
+            "INSERT INTO user_domain_profiles (user_id, domain, answers, completed_at)
+             VALUES ($1, 'code',
+                     jsonb_build_object('preferred_families', jsonb_build_array($2),
+                                        'main_tools', jsonb_build_array('rust')),
+                     NOW())",
         )
         .bind(mentor)
         .bind(family)
+        .execute(&app.db)
+        .await
+        .unwrap();
+        sqlx::query("UPDATE users SET timezone = '+02:00' WHERE id = $1")
+            .bind(mentor)
         .execute(&app.db)
         .await
         .unwrap();

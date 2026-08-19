@@ -73,11 +73,19 @@ pub async fn matches_for(db: &PgPool, mentee_id: Uuid, limit: i64) -> Result<Vec
     // A mentee with no computed score reads as zero here, which is the right
     // answer: the gap to a mentor is then the mentor's whole score, and
     // somebody with nothing proved has the most to learn.
+    // The wizard answers moved off `users` and into `user_domain_profiles`,
+    // where every other domain already kept them. `->>` and the array
+    // unpacking below read the same two answers the columns used to hold.
     let mentee: Option<Mentee> = sqlx::query_as(
         "SELECT COALESCE(cs.score, 0) AS craft_score_code,
-                u.code_preferred_families, u.code_main_languages, u.timezone
+                COALESCE(wizard_list(p.answers, 'preferred_families'), ARRAY[]::TEXT[])
+                    AS code_preferred_families,
+                COALESCE(wizard_list(p.answers, 'main_tools'), ARRAY[]::TEXT[])
+                    AS code_main_languages,
+                u.timezone
            FROM users u
            LEFT JOIN craft_scores cs ON cs.user_id = u.id AND cs.skill_domain = $2
+           LEFT JOIN user_domain_profiles p ON p.user_id = u.id AND p.domain = $2
           WHERE u.id = $1",
     )
     .bind(mentee_id)
@@ -93,7 +101,7 @@ pub async fn matches_for(db: &PgPool, mentee_id: Uuid, limit: i64) -> Result<Vec
 
     if mentee_families.is_empty() {
         return Err(AppError::Validation(
-            "answer the code onboarding first — without a family there is nothing to match on"
+            "answer the code wizard first — without a family there is nothing to match on"
                 .into(),
         ));
     }
@@ -104,13 +112,17 @@ pub async fn matches_for(db: &PgPool, mentee_id: Uuid, limit: i64) -> Result<Vec
                u.username,
                m.headline,
                cs.score AS craft_score_code,
-               u.code_preferred_families AS families,
+               COALESCE(wizard_list(p.answers, 'preferred_families'), ARRAY[]::TEXT[])
+                   AS families,
                -- What the mentor works in: their declared languages, and the
                -- expertise they wrote on their mentor profile. Both, because
                -- somebody who filled in one rarely filled in the other.
                ARRAY(
                    SELECT DISTINCT lower(l)
-                     FROM unnest(u.code_main_languages || m.expertise_areas) AS l
+                     FROM unnest(
+                              COALESCE(wizard_list(p.answers, 'main_tools'), ARRAY[]::TEXT[])
+                              || m.expertise_areas
+                          ) AS l
                ) AS languages,
                u.timezone,
                (SELECT count(DISTINCT s.mentee_user_id)
@@ -128,6 +140,7 @@ pub async fn matches_for(db: &PgPool, mentee_id: Uuid, limit: i64) -> Result<Vec
           -- nothing in this domain, and suggesting them would be suggesting
           -- somebody on the strength of having a mentor profile.
           JOIN craft_scores cs ON cs.user_id = u.id AND cs.skill_domain = $3
+          LEFT JOIN user_domain_profiles p ON p.user_id = u.id AND p.domain = $3
          WHERE m.active = TRUE
            AND u.is_banned = FALSE
            AND u.id <> $1

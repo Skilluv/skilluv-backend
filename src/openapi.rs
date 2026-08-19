@@ -239,8 +239,6 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::code_profile::my_portfolios,
         crate::routes::code_profile::claim_portfolio,
         crate::routes::code_profile::drop_portfolio,
-        crate::routes::code_profile::complete_onboarding,
-        crate::routes::code_profile::skip_onboarding,
         crate::routes::code_profile::mentor_matches,
         // ─── missions marketplace ─────────────────────────────────
         crate::routes::missions::list_types,
@@ -274,6 +272,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         // ─── code: first-issue feed + language ecosystems ─────────
         crate::routes::domain_profile::get_profile,
         crate::routes::domain_profile::put_profile,
+        crate::routes::domain_profile::skip_profile,
         crate::routes::ai::toolkit,
         crate::routes::benchmarks::list_benchmarks,
         crate::routes::benchmarks::record_benchmark,
@@ -1007,6 +1006,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
             // orientations
             crate::routes::domain_profile::DomainProfileBody,
             crate::routes::domain_profile::DomainProfileResponse,
+            crate::services::onboarding_recommendation::Recommendation,
             crate::routes::ai::ToolkitRow,
             crate::routes::benchmarks::BenchmarkRow,
             crate::routes::benchmarks::RecordBenchmarkBody,

@@ -33,8 +33,6 @@ pub fn code_profile_routes() -> Router<AppState> {
             "/users/me/code-portfolios/{id}",
             axum::routing::delete(drop_portfolio),
         )
-        .route("/code/onboarding", post(complete_onboarding))
-        .route("/code/onboarding/skip", post(skip_onboarding))
         .route("/code/mentors/for-me", get(mentor_matches))
 }
 
@@ -272,65 +270,6 @@ pub async fn recompute_mine(
 }
 
 // ─── Onboarding ──────────────────────────────────────────────────
-
-/// Answer the seven questions and get a first month back.
-///
-/// The recommendation is returned rather than only stored: somebody who has
-/// just answered wants to see what it changed, and a wizard that ends on a
-/// confirmation screen is one people skip next time.
-#[utoipa::path(
-    post, path = "/api/code/onboarding", tag = "profile",
-    request_body(content = serde_json::Value, description = "WizardAnswers"),
-    responses(
-        (status = 200, body = serde_json::Value),
-        (status = 400, description = "Unknown answer, or everything selected", body = crate::api_response::ErrorResponse),
-    ),
-    security(("cookie_auth" = [])),
-)]
-pub async fn complete_onboarding(
-    State(state): State<AppState>,
-    auth: AuthUser,
-    Json(answers): Json<crate::services::code_onboarding::WizardAnswers>,
-) -> Result<Json<Value>, AppError> {
-    let recommendation =
-        crate::services::code_onboarding::complete(&state.db, auth.user_id, &answers).await?;
-
-    // A GitHub username given here means "import what I already have", and
-    // waiting for the next weekly sweep would make the wizard look inert.
-    // Claimed, not verified — typing a name proves nothing, and connecting
-    // the account is a separate, deliberate act.
-    if let Some(username) = answers.github_username.as_deref().map(str::trim)
-        && !username.is_empty()
-    {
-        let url = format!("https://github.com/{username}");
-        if let Err(err) =
-            crate::services::code_portfolio::claim(&state.db, auth.user_id, &url).await
-        {
-            tracing::info!(%err, "github username from onboarding not recorded");
-        }
-    }
-
-    Ok(Json(build_response(
-        json!({ "recommendation": recommendation }),
-    )))
-}
-
-/// Stop asking.
-#[utoipa::path(
-    post, path = "/api/code/onboarding/skip", tag = "profile",
-    responses(
-        (status = 200, body = serde_json::Value),
-        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
-    ),
-    security(("cookie_auth" = [])),
-)]
-pub async fn skip_onboarding(
-    State(state): State<AppState>,
-    auth: AuthUser,
-) -> Result<Json<Value>, AppError> {
-    crate::services::code_onboarding::skip(&state.db, auth.user_id).await?;
-    Ok(Json(build_response(json!({ "skipped": true }))))
-}
 
 /// Mentors worth suggesting, with the reasoning attached.
 #[utoipa::path(

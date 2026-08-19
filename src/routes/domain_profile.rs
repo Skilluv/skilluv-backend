@@ -25,6 +25,17 @@
 //! looked like a working save. A field now names the domain it belongs to,
 //! and arriving on another one is a 400 that says which.
 //!
+//! ## Why the vocabulary is per domain
+//!
+//! Code asks for a level in `beginner..staff` and design in
+//! `debutant..researcher`; code asks what languages you write and design what
+//! tools you draw in. These are the same six questions asked of different
+//! trades, not six different questions — so one endpoint, and a vocabulary
+//! that is looked up by domain.
+//!
+//! Flattening the two ladders into one would have meant inventing a word for
+//! a rank neither wizard asks about.
+//!
 //! ## HuggingFace
 //!
 //! The wizard collects a HuggingFace username, and does not import that
@@ -46,10 +57,15 @@ use crate::errors::AppError;
 use crate::middleware::AuthUser;
 
 pub fn domain_profile_routes() -> Router<AppState> {
-    Router::new().route(
-        "/users/me/domain-profile/{domain}",
-        get(get_profile).put(put_profile),
-    )
+    Router::new()
+        .route(
+            "/users/me/domain-profile/{domain}",
+            get(get_profile).put(put_profile),
+        )
+        .route(
+            "/users/me/domain-profile/{domain}/skip",
+            axum::routing::post(skip_profile),
+        )
 }
 
 /// The domains a profile can be filled in for — the platform's list, not a
@@ -58,7 +74,7 @@ pub fn domain_profile_routes() -> Router<AppState> {
 /// instead of by this handler as a 400.
 use crate::validators::SKILL_DOMAINS as DOMAINS;
 
-/// Domain-agnostic answers. Every domain asks these three.
+/// Every domain asks these three, in its own words.
 const LEVELS: &[&str] = &[
     "debutant",
     "apprentissage",
@@ -75,6 +91,53 @@ const GOALS: &[&str] = &[
     "startup",
 ];
 
+/// The code wizard's own ladder. Kept as it was rather than mapped onto the
+/// five above: `staff` is a rank the design ladder does not have a word for,
+/// and inventing one to make a single list would lose the distinction the
+/// question exists to draw.
+const CODE_LEVELS: &[&str] = &["beginner", "junior", "mid", "senior", "staff"];
+const CODE_WEEKLY_HOURS: &[&str] = &["under_5", "5_to_15", "15_to_40", "fulltime"];
+const CODE_GOALS: &[&str] = &[
+    "learn",
+    "build_portfolio",
+    "find_paid_work",
+    "contribute_upstream",
+    "publish_library",
+    "become_mentor",
+    "ship_own_product",
+];
+const CODE_CHALLENGE_PREFERENCES: &[&str] = &[
+    "upstream_contributions",
+    "solo_shipped_apps",
+    "published_libraries",
+    "long_team_projects",
+    "short_hackathons",
+];
+
+fn levels_for(domain: &str) -> &'static [&'static str] {
+    if domain == "code" { CODE_LEVELS } else { LEVELS }
+}
+
+fn weekly_hours_for(domain: &str) -> &'static [&'static str] {
+    if domain == "code" {
+        CODE_WEEKLY_HOURS
+    } else {
+        WEEKLY_HOURS
+    }
+}
+
+fn goals_for(domain: &str) -> &'static [&'static str] {
+    if domain == "code" { CODE_GOALS } else { GOALS }
+}
+
+fn challenge_preferences_for(domain: &str) -> &'static [&'static str] {
+    if domain == "code" {
+        CODE_CHALLENGE_PREFERENCES
+    } else {
+        CHALLENGE_PREFERENCES
+    }
+}
+
 /// AI only. What somebody can actually run decides which challenges are
 /// worth showing them — recommending a seventy-billion-parameter fine-tune to
 /// someone on free Colab wastes their week.
@@ -87,9 +150,10 @@ const COMPUTE: &[&str] = &[
 ];
 const FRAMEWORKS: &[&str] = &["pytorch", "jax", "tensorflow", "candle", "mlx", "other"];
 
-/// Design only. Whether somebody wants to be given a brief alone or to enter
-/// against other people decides which half of the catalogue is worth showing
-/// them: a contest and an individual challenge are different weeks.
+/// Design's answers. Whether somebody wants to be given a brief alone or to
+/// enter against other people decides which half of the catalogue is worth
+/// showing them: a contest and an individual challenge are different weeks.
+/// Code asks the same question with its own five answers.
 const CHALLENGE_PREFERENCES: &[&str] = &["individual", "contest", "both", "undecided"];
 
 /// Design only, and the analogue of `main_framework`. It sorts what gets
@@ -126,15 +190,30 @@ pub struct DomainProfileBody {
     /// reviewed work.
     #[schema(max_length = 60)]
     pub huggingface_username: Option<String>,
-    /// Design only: up to three orientation slugs the person is drawn to.
-    /// Validated against the catalogue, because a slug that names no trade
-    /// recommends nothing.
+    /// Up to three of the families or trades the person is drawn to.
+    /// Validated against the catalogue for the domain in the path, because a
+    /// slug that names no trade recommends nothing.
     pub preferred_families: Option<Vec<String>>,
-    /// Design only: `individual`, `contest`, `both`, `undecided`.
+    /// Design: `individual`, `contest`, `both`, `undecided`. Code has its own
+    /// five. Both answer the same question.
     pub challenge_preference: Option<String>,
-    /// Design only: `figma`, `adobe`, `sketch`, `blender`, `after_effects`,
-    /// `other`.
+    /// Design only, and one value: `figma`, `adobe`, `sketch`, `blender`,
+    /// `after_effects`, `other`.
     pub main_tool: Option<String>,
+    /// What somebody works in — languages for code, and up to three. Stored
+    /// under the same key as `main_tool` for a reader that does not care
+    /// which word the wizard used.
+    pub main_tools: Option<Vec<String>>,
+    /// Optional, code only. A GitHub handle here means "import what I already
+    /// have", and waiting for the weekly sweep would make the wizard look
+    /// inert. Claimed, never verified: typing a name proves nothing.
+    #[schema(max_length = 60)]
+    pub github_username: Option<String>,
+    /// Optional, design only. A portfolio URL, recorded unconfirmed — the
+    /// backend does not fetch arbitrary user-supplied URLs, and a moderator
+    /// confirms it before it counts as evidence.
+    #[schema(max_length = 500)]
+    pub portfolio_url: Option<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -142,6 +221,12 @@ pub struct DomainProfileResponse {
     pub domain: String,
     #[schema(value_type = Object)]
     pub answers: serde_json::Value,
+    /// What to do first, given what was just said. Present on a save,
+    /// absent on a read: it is the answer to the wizard, not a property of
+    /// the profile, and recomputing it on every GET would let it drift from
+    /// the words the person actually saw.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recommendation: Option<crate::services::onboarding_recommendation::Recommendation>,
 }
 
 /// Refuse an answer outside the vocabulary, naming what was allowed.
@@ -189,6 +274,7 @@ fn belongs_to(field: &str, present: bool, owner: &str, domain: &str) -> Result<(
 /// distinguishes from an unanswered question and a recommender should too.
 async fn check_preferred_families(
     db: &sqlx::PgPool,
+    domain: &str,
     families: Option<&[String]>,
 ) -> Result<Option<Vec<String>>, AppError> {
     let Some(families) = families else {
@@ -210,11 +296,20 @@ async fn check_preferred_families(
     }
 
     if !deduped.is_empty() {
+        // Two shapes, both real: design names trades by slug, code names
+        // families by reviewer group. Both are seeded by migration and grow
+        // by migration, so both are checked against the catalogue rather than
+        // against a list in this file that would go stale silently.
         let known: Vec<String> = sqlx::query_scalar(
             "SELECT slug FROM orientations
-              WHERE slug = ANY($1) AND primary_domain = 'design' AND is_archived = FALSE",
+              WHERE slug = ANY($1) AND primary_domain = $2 AND is_archived = FALSE
+             UNION
+             SELECT DISTINCT reviewer_group FROM orientations
+              WHERE reviewer_group = ANY($1) AND primary_domain = $2
+                AND is_archived = FALSE",
         )
         .bind(&deduped)
+        .bind(domain)
         .fetch_all(db)
         .await?;
 
@@ -225,7 +320,7 @@ async fn check_preferred_families(
             .collect();
         if !unknown.is_empty() {
             return Err(AppError::Validation(format!(
-                "preferred_families names no live design trade: {}",
+                "preferred_families names no live {domain} trade or family: {}",
                 unknown.join(", ")
             )));
         }
@@ -273,6 +368,7 @@ pub async fn get_profile(
     Ok(Json(ApiResponse::new(DomainProfileResponse {
         domain,
         answers: answers.unwrap_or_else(|| json!({})),
+        recommendation: None,
     })))
 }
 
@@ -301,9 +397,13 @@ pub async fn put_profile(
 ) -> Result<Json<ApiResponse<DomainProfileResponse>>, AppError> {
     check_domain(&domain)?;
 
-    let level = checked("level", body.level.as_ref(), LEVELS)?;
-    let weekly_hours = checked("weekly_hours", body.weekly_hours.as_ref(), WEEKLY_HOURS)?;
-    let goal = checked("goal", body.goal.as_ref(), GOALS)?;
+    let level = checked("level", body.level.as_ref(), levels_for(&domain))?;
+    let weekly_hours = checked(
+        "weekly_hours",
+        body.weekly_hours.as_ref(),
+        weekly_hours_for(&domain),
+    )?;
+    let goal = checked("goal", body.goal.as_ref(), goals_for(&domain))?;
 
     // Domain-owned answers are refused where they mean nothing, before their
     // vocabulary is looked at: "compute belongs to ai" is the useful message,
@@ -316,19 +416,19 @@ pub async fn put_profile(
         "ai",
         &domain,
     )?;
-    belongs_to(
-        "preferred_families",
-        body.preferred_families.is_some(),
-        "design",
-        &domain,
-    )?;
-    belongs_to(
-        "challenge_preference",
-        body.challenge_preference.is_some(),
-        "design",
-        &domain,
-    )?;
     belongs_to("main_tool", body.main_tool.is_some(), "design", &domain)?;
+    belongs_to(
+        "github_username",
+        body.github_username.is_some(),
+        "code",
+        &domain,
+    )?;
+    belongs_to(
+        "portfolio_url",
+        body.portfolio_url.is_some(),
+        "design",
+        &domain,
+    )?;
 
     let compute = checked("compute", body.compute.as_ref(), COMPUTE)?;
     let framework = checked("main_framework", body.main_framework.as_ref(), FRAMEWORKS)?;
@@ -336,11 +436,29 @@ pub async fn put_profile(
     let challenge_preference = checked(
         "challenge_preference",
         body.challenge_preference.as_ref(),
-        CHALLENGE_PREFERENCES,
+        challenge_preferences_for(&domain),
     )?;
     let main_tool = checked("main_tool", body.main_tool.as_ref(), MAIN_TOOLS)?;
     let preferred_families =
-        check_preferred_families(&state.db, body.preferred_families.as_deref()).await?;
+        check_preferred_families(&state.db, &domain, body.preferred_families.as_deref()).await?;
+    crate::validators::check_max_len_opt(&body.github_username, "github_username", 60)?;
+    crate::validators::check_max_len_opt(&body.portfolio_url, "portfolio_url", 500)?;
+
+    // Free text, so capped in count and in length. Three, like the families:
+    // an answer that lists everything sorts nothing.
+    let main_tools = match body.main_tools.as_deref() {
+        Some(tools) if tools.len() > MAX_PREFERRED_FAMILIES => {
+            return Err(AppError::Validation(format!(
+                "main_tools accepts at most {MAX_PREFERRED_FAMILIES} entries"
+            )));
+        }
+        Some(tools) if tools.iter().any(|tool| tool.len() > 40) => {
+            return Err(AppError::Validation(
+                "each entry in main_tools is at most 40 characters".into(),
+            ));
+        }
+        other => other,
+    };
 
     // Only the answers actually given. A key present with a null value and an
     // absent key read the same to a recommender, and one of them is a lie
@@ -355,6 +473,8 @@ pub async fn put_profile(
         ("huggingface_username", body.huggingface_username.as_ref()),
         ("challenge_preference", challenge_preference),
         ("main_tool", main_tool),
+        ("github_username", body.github_username.as_ref()),
+        ("portfolio_url", body.portfolio_url.as_ref()),
     ] {
         if let Some(v) = value {
             answers.insert(key.to_string(), json!(v));
@@ -363,13 +483,23 @@ pub async fn put_profile(
     if let Some(families) = preferred_families {
         answers.insert("preferred_families".to_string(), json!(families));
     }
+    if let Some(tools) = main_tools {
+        answers.insert("main_tools".to_string(), json!(tools));
+    }
     let answers = serde_json::Value::Object(answers);
 
+    // `completed_at` is written here. The column has existed since the table
+    // did and nothing set it, so "has this person done the wizard" had no
+    // answer — which is also why the skip below had nowhere to record itself.
     sqlx::query(
         r#"
-        INSERT INTO user_domain_profiles (user_id, domain, answers)
-        VALUES ($1, $2, $3)
-        ON CONFLICT (user_id, domain) DO UPDATE SET answers = EXCLUDED.answers
+        INSERT INTO user_domain_profiles (user_id, domain, answers, completed_at)
+        VALUES ($1, $2, $3, NOW())
+        ON CONFLICT (user_id, domain) DO UPDATE
+            SET answers = EXCLUDED.answers,
+                completed_at = NOW(),
+                -- Answering after skipping is no longer skipping.
+                skipped_at = NULL
         "#,
     )
     .bind(auth.user_id)
@@ -378,10 +508,112 @@ pub async fn put_profile(
     .execute(&state.db)
     .await?;
 
+    // A handle given here means "import what I already have", and waiting for
+    // the next weekly sweep would make the wizard look inert. Both are
+    // best-effort and neither is verified — typing a name proves nothing, and
+    // connecting an account is a separate, deliberate act.
+    if let Some(username) = body.github_username.as_deref().map(str::trim)
+        && !username.is_empty()
+        && let Err(err) = crate::services::code_portfolio::claim(
+            &state.db,
+            auth.user_id,
+            &format!("https://github.com/{username}"),
+        )
+        .await
+    {
+        tracing::info!(%err, "github username from the wizard not recorded");
+    }
+    if let Some(url) = body.portfolio_url.as_deref().map(str::trim)
+        && !url.is_empty()
+    {
+        claim_portfolio_signal(&state.db, auth.user_id, url).await;
+    }
+
+    let recommendation =
+        crate::services::onboarding_recommendation::recommend(&domain, &answers);
+
     Ok(Json(ApiResponse::new(DomainProfileResponse {
         domain,
         answers,
+        recommendation: Some(recommendation),
     })))
+}
+
+/// Record a declared portfolio, unconfirmed.
+///
+/// `external_signals` is where portfolios on platforms Skilluv does not own
+/// live, and a row without `verified_at` is exactly what an unconfirmed one
+/// is: visible to a moderator, invisible to a recruiter search. The backend
+/// does not fetch the URL — fetching arbitrary user-supplied addresses is how
+/// a server becomes somebody's proxy.
+async fn claim_portfolio_signal(db: &sqlx::PgPool, user_id: uuid::Uuid, url: &str) {
+    // The provider is read off the host rather than asked for: somebody
+    // pasting a Behance link has already said which platform it is.
+    let provider = if url.contains("behance.net") {
+        "behance"
+    } else if url.contains("dribbble.com") {
+        "dribbble"
+    } else if url.contains("artstation.com") {
+        "artstation"
+    } else if url.contains("vimeo.com") {
+        "vimeo"
+    } else {
+        // A personal site is not one of the known platforms, and inventing a
+        // provider for it would put it in a filter it does not belong in.
+        return;
+    };
+
+    let result = sqlx::query(
+        "INSERT INTO external_signals (user_id, provider, url, title)
+         VALUES ($1, $2, $3, 'Portfolio')
+         ON CONFLICT (user_id, url) DO NOTHING",
+    )
+    .bind(user_id)
+    .bind(provider)
+    .bind(url)
+    .execute(db)
+    .await;
+
+    if let Err(err) = result {
+        tracing::info!(%err, "portfolio url from the wizard not recorded");
+    }
+}
+
+/// Skip the wizard.
+///
+/// Recorded rather than ignored. Somebody who declined is not somebody who
+/// has not got round to it, and asking them again every week is how a prompt
+/// becomes noise.
+#[utoipa::path(
+    post, path = "/api/users/me/domain-profile/{domain}/skip", tag = "profile",
+    params(("domain" = String, Path, description = "Domain slug")),
+    responses(
+        (status = 204, description = "Skipped"),
+        (status = 400, description = "Unknown domain", body = crate::api_response::ErrorResponse),
+        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn skip_profile(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(domain): Path<String>,
+) -> Result<axum::http::StatusCode, AppError> {
+    check_domain(&domain)?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO user_domain_profiles (user_id, domain, answers, skipped_at)
+        VALUES ($1, $2, '{}'::jsonb, NOW())
+        ON CONFLICT (user_id, domain) DO UPDATE SET skipped_at = NOW()
+        "#,
+    )
+    .bind(auth.user_id)
+    .bind(&domain)
+    .execute(&state.db)
+    .await?;
+
+    Ok(axum::http::StatusCode::NO_CONTENT)
 }
 
 #[cfg(test)]

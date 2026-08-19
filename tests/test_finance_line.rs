@@ -40,10 +40,14 @@ async fn a_talent(app: &TestApp, username: &str, rank: &str) -> Uuid {
 /// An issued invoice on a mission, which is the only thing an advance can
 /// point at.
 async fn an_issued_invoice(app: &TestApp, owner: Uuid, amount: &str) -> Uuid {
+    // One enterprise per owner: `idx_enterprises_owner` is unique, so a test
+    // that issues a second invoice for the same person cannot open a second
+    // company for them. Reuse rather than collide.
     let enterprise: Uuid = sqlx::query_scalar(
         "INSERT INTO enterprises (owner_id, company_name, slug, company_size)
          VALUES ($1, 'Facture SA',
                  'facture-sa-' || substr(gen_random_uuid()::text, 1, 8), '11-50')
+         ON CONFLICT (owner_id) DO UPDATE SET updated_at = NOW()
          RETURNING id",
     )
     .bind(owner)

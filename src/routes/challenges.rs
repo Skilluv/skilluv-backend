@@ -113,15 +113,11 @@ pub async fn list_challenges(
     tenant: crate::middleware::TenantContext,
     Query(query): Query<ListQuery>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    // Enforce les contraintes declarees (schemathesis
-    // negative_data_rejection catch schema-invalid accepte).
-    if let Some(d) = &query.domain
-        && !matches!(d.as_str(), "code" | "design" | "game" | "security")
-    {
-        return Err(AppError::Validation(
-            "domain must be one of: code, design, game, security".into(),
-        ));
-    }
+    // Against `validators::SKILL_DOMAINS`, not a fourth hand-written copy of
+    // the list. This one had gone stale at four domains while eight were live,
+    // so `?domain=ai` was refused on an endpoint that has AI challenges — and
+    // the refusal named the four, which reads as "AI does not exist here".
+    crate::validators::check_skill_domain_opt(&query.domain, "domain")?;
     crate::validators::check_range_opt(query.difficulty.map(i64::from), "difficulty", 1, 5)?;
     crate::validators::check_range_opt(query.page, "page", 1, 100_000)?;
     crate::validators::check_range_opt(query.per_page, "per_page", 1, 50)?;

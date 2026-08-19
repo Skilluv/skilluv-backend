@@ -619,7 +619,11 @@ async fn nothing_reaches_the_client_unreviewed() {
     let app = TestApp::spawn().await;
     let (engagement, milestone, _a, _b) = a_running_engagement(&app, "Unreviewedco", "unrev").await;
 
-    app.login("unrevco").await;
+    // The company's username is derived from its name, so it is
+    // `unreviewedco` — `unrevco` is the prefix and the suffix stuck together,
+    // and no such account exists. The login answered 401 and the assertion
+    // below then read as an authorisation bug in the milestone route.
+    app.login("unreviewedco").await;
     // The guarantee is the product. A milestone that skipped review is one
     // the margin was charged for and not delivered.
     let resp = app

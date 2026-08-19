@@ -210,12 +210,11 @@ pub async fn request_sponsorship(
     Json(body): Json<RequestBody>,
 ) -> Result<Json<ApiResponse<RequestCreatedResponse>>, AppError> {
     let enterprise_id = current_enterprise_for(&state.db, auth.user_id).await?;
-    if !matches!(
-        body.skill_domain.as_str(),
-        "code" | "design" | "game" | "security"
-    ) {
-        return Err(AppError::Validation("invalid skill_domain".into()));
-    }
+    // The same stale four as `routes/challenges.rs` had. A company could not
+    // sponsor an AI, ops or audio challenge, and the refusal said only
+    // "invalid skill_domain" — so the answer to "why can I not sponsor this"
+    // was nowhere in it.
+    crate::validators::check_skill_domain(&body.skill_domain, "skill_domain")?;
     if body.brief.trim().len() < 30 {
         return Err(AppError::Validation(
             "brief must be at least 30 characters".into(),

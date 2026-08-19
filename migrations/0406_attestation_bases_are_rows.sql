@@ -44,7 +44,12 @@
 
 CREATE TABLE attestation_bases (
     basis VARCHAR(40) PRIMARY KEY,
-    skill_domain VARCHAR(30) NOT NULL REFERENCES skill_domains(slug) ON UPDATE CASCADE,
+    -- NULL where the basis is not about a domain. The contest ones are the
+    -- case: being a finalist, or being hired off a shortlist, says the same
+    -- thing whether the contest was about code or about design. Forcing a
+    -- domain on them would mean picking one arbitrarily and then filtering it
+    -- back out everywhere.
+    skill_domain VARCHAR(30) REFERENCES skill_domains(slug) ON UPDATE CASCADE,
     -- The words the attestation is issued with, in the default locale.
     title VARCHAR(120) NOT NULL,
     description TEXT NOT NULL,
@@ -101,6 +106,16 @@ INSERT INTO attestation_bases
 ('featured_ai_researcher', 'ai', 'Mis en avant',
  'Un travail IA retenu par la rédaction pour son exemplarité.', FALSE, 170),
 
+-- Contests (migration 0358). These rest on a contest rather than on a
+-- deliverable — `a_contest_attestation_names_its_contest` is what holds them
+-- to something — so `requires_deliverable` is FALSE and the artefact
+-- constraint deliberately does not cover them.
+('contest_finalist', NULL, 'Finaliste',
+ 'Retenu parmi les finalistes d''un concours organisé par une entreprise. '
+ 'Vaut d''être gardé même quand la réponse a été non.', FALSE, 280),
+('contest_hired', NULL, 'Recruté à l''issue d''un concours',
+ 'Recruté après un concours et un entretien.', FALSE, 290),
+
 -- Design (migration 0233). The branch that added these was open when this
 -- table was written, and a CHECK-to-table conversion that forgets a value
 -- does not fail loudly — it fails later, on the foreign key, the first time
@@ -113,10 +128,13 @@ INSERT INTO attestation_bases
  'Une famille de caractères publiée avec ses fichiers de production.', TRUE, 330),
 ('design_system_adopted', 'design', 'Système adopté',
  'Un système de design repris par une équipe qui construit dessus.', TRUE, 340),
+-- Both require a deliverable, per the constraint 0233 wrote: an artefact
+-- basis with nothing to open is a label rather than a claim. A podium finish
+-- names the work that won, not just the placing.
 ('design_contest_won', 'design', 'Concours remporté',
- 'Une place sur le podium d''un concours de design.', FALSE, 350),
+ 'Une place sur le podium d''un concours de design, avec le travail qui l''a value.', TRUE, 350),
 ('design_mission_delivered', 'design', 'Mission livrée',
- 'Une mission payée, livrée et acceptée par le client.', FALSE, 360),
+ 'Une mission payée, livrée et acceptée par le client.', TRUE, 360),
 ('featured_designer', 'design', 'Mis en avant',
  'Un travail de design retenu par la rédaction pour son exemplarité.', FALSE, 370),
 

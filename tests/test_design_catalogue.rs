@@ -305,7 +305,10 @@ async fn the_design_badges_are_seeded_and_none_of_them_is_manual() {
     .fetch_one(&app.db)
     .await
     .unwrap();
-    assert_eq!(count, 14);
+    // A floor. Design keeps adding rules — the brief-proposal badge from 0251
+    // is the fifteenth — and a pinned count turns each new one into an edit
+    // here rather than into a badge somebody can earn.
+    assert!(count >= 14, "got {count}");
 
     let manual: Vec<String> = sqlx::query_scalar(
         "SELECT slug FROM badge_rules

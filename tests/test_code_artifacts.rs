@@ -62,11 +62,19 @@ async fn a_subtype_on_another_kind_of_slice_is_refused() {
     let app = TestApp::spawn().await;
     let project = a_project(&app).await;
 
-    // "library_published" on a Figma frame is a claim nothing reads.
+    // "library_published" on a design artefact is a claim nothing reads.
+    //
+    // The slice type is `design_artifact`, not the `figma_frame` 0231 replaced:
+    // with a slug that no longer exists the insert failed on the foreign key
+    // instead of on the rule under test, so the assertion passed for the wrong
+    // reason and would have kept passing if the rule were deleted.
     let refused = sqlx::query(
         "INSERT INTO project_slices
-            (project_id, title, description, primary_domain, slice_type, code_subtype, difficulty)
-         VALUES ($1, 'Maquette', 'x', 'design', 'figma_frame', 'library_published', 3)",
+            (project_id, title, description, primary_domain, slice_type, code_subtype,
+             difficulty, orientation_id)
+         VALUES ($1, 'Maquette', 'x', 'design', 'design_artifact', 'library_published', 3,
+                 (SELECT id FROM orientations
+                   WHERE slug = 'design-web' AND is_archived = FALSE))",
     )
     .bind(project)
     .execute(&app.db)

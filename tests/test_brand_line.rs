@@ -1077,8 +1077,29 @@ async fn the_only_thing_an_individual_can_buy_is_a_replay() {
 
     // Talents do not pay to be seen. Nothing here sells visibility, ranking
     // or access to work.
-    assert_eq!(plans.len(), 1);
-    assert_eq!(plans[0]["slug"], "event_replays_annual");
+    //
+    // An allowlist rather than a count. The count said one, 0365 added the
+    // paid newsletter — an individual paying monthly for something that is
+    // not visibility, which is allowed — and a count would have been edited
+    // to two without anybody restating why. Adding a plan should require
+    // saying here that it does not sell attention.
+    const AN_INDIVIDUAL_MAY_BUY: &[&str] = &[
+        // Watching a talk again.
+        "event_replays_annual",
+        // Reading. Sells no place in any listing.
+        "newsletter_premium",
+    ];
+    for plan in plans {
+        let slug = plan["slug"].as_str().unwrap();
+        assert!(
+            AN_INDIVIDUAL_MAY_BUY.contains(&slug),
+            "'{slug}' is sold to individuals and nobody has said what it sells:              if it is attention, ranking or access to work, it does not belong here"
+        );
+    }
+    assert!(
+        plans.iter().any(|p| p["slug"] == "event_replays_annual"),
+        "the replay plan is the one this endpoint exists for"
+    );
 }
 
 #[tokio::test]

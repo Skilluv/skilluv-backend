@@ -342,10 +342,17 @@ async fn a_sound_file_cannot_hang_off_a_design_artefact() {
     let app = TestApp::spawn().await;
     let project_id = seed_project(&app).await;
 
+    // `orientation_id` is required on a design slice — 0231 refuses one that
+    // does not name the trade it belongs to, because the reviewer family is
+    // derived from it and a slice nobody can be given rights over cannot be
+    // reviewed.
     let frame_id: Uuid = sqlx::query_scalar(
         "INSERT INTO project_slices
-            (project_id, title, description, slice_type, primary_domain, difficulty)
-         VALUES ($1, 'Écran', 'x', 'design_artifact', 'design', 2)
+            (project_id, title, description, slice_type, primary_domain,
+             difficulty, orientation_id)
+         VALUES ($1, 'Écran', 'x', 'design_artifact', 'design', 2,
+                 (SELECT id FROM orientations
+                   WHERE slug = 'design-web' AND is_archived = FALSE))
          RETURNING id",
     )
     .bind(project_id)

@@ -508,6 +508,19 @@ pub async fn set_status(
     // Closing is the client accepting delivery, and that is what makes the
     // money withdrawable. Doing it here rather than in the route means it
     // happens whichever way the mission is closed.
+    // A mission opening for applications is the one status change the room
+    // wants to hear about — the rest are between the client and one person.
+    if to == "published"
+        && let Ok(Some((domain, slug, title))) = sqlx::query_as::<_, (String, String, String)>(
+            "SELECT skill_domain, slug, title FROM missions WHERE id = $1",
+        )
+        .bind(mission_id)
+        .fetch_optional(db)
+        .await
+    {
+        crate::services::discord_announce::mission_posted(db, &domain, &slug, &title).await;
+    }
+
     if to == "closed" {
         crate::services::mission_billing::release_all(db, mission_id).await?;
 

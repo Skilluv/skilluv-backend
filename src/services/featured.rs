@@ -197,6 +197,17 @@ pub async fn feature(
         tracing::warn!(%user_id, error = %e, "featured notification not delivered");
     }
 
+    // And in the room, where the point of a featuring is that other people
+    // see it. Best-effort, like everything else after the row is written.
+    if let Ok(Some(username)) =
+        sqlx::query_scalar::<_, String>("SELECT username FROM users WHERE id = $1")
+            .bind(user_id)
+            .fetch_optional(db)
+            .await
+    {
+        crate::services::discord_announce::talent_featured(db, domain, &username, week).await;
+    }
+
     of_week(db, domain, week)
         .await?
         .ok_or_else(|| AppError::Internal("the featuring was written and cannot be read".into()))

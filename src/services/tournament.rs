@@ -360,6 +360,34 @@ pub async fn create_tournament(
     .bind(scoring_direction)
     .fetch_one(db)
     .await?;
+
+    // Announced at creation rather than on a later status change: a contest
+    // is created open, and a room that hears about it the day it closes has
+    // been told nothing useful. A cross-domain contest routes to the
+    // domain-blind room, which is what `skill_domain = NULL` resolves to.
+    crate::services::discord_announce::contest_opened(
+        db,
+        t.skill_domain.as_deref().unwrap_or_default(),
+        &t.slug,
+        &t.name,
+        t.ends_at,
+        // The cash prize lives on the row but not on this struct, so it is
+        // read back rather than guessed at. A contest funded after creation
+        // simply announces without a figure, which is honest: at the moment
+        // of the post there was none.
+        sqlx::query_scalar::<_, Option<String>>(
+            "SELECT prize_cash_amount::TEXT || ' ' || prize_cash_currency
+               FROM tournaments WHERE id = $1",
+        )
+        .bind(t.id)
+        .fetch_optional(db)
+        .await
+        .ok()
+        .flatten()
+        .flatten(),
+    )
+    .await;
+
     Ok(t)
 }
 
@@ -796,6 +824,30 @@ pub async fn conclude_tournament(
 /// than raised. The ranking is final at this point; a mail server being down
 /// must not make an organiser conclude the contest twice.
 async fn announce_result(db: &PgPool, t: &Tournament, participants: &[(String, Uuid, i32)]) {
+    // The room hears about the winner. One post, not one per participant: a
+    // ranking is news, a full leaderboard pasted into a chat channel is not.
+    if let Some((_, winner_id, _)) = participants
+        .iter()
+        .find(|(ptype, _, _)| ptype == "user")
+    {
+        let username: Option<String> =
+            sqlx::query_scalar("SELECT username FROM users WHERE id = $1")
+                .bind(winner_id)
+                .fetch_optional(db)
+                .await
+                .unwrap_or_default();
+        if let Some(username) = username {
+            crate::services::discord_announce::contest_won(
+                db,
+                t.skill_domain.as_deref().unwrap_or_default(),
+                &t.slug,
+                &t.name,
+                &username,
+            )
+            .await;
+        }
+    }
+
     for (index, (ptype, pid, _)) in participants.iter().enumerate() {
         if ptype != "user" {
             continue;

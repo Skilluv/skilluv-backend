@@ -78,6 +78,45 @@ impl EventHandler for Handler {
                         .required(true),
                     ),
                 )
+                .add_option(
+                    CreateCommandOption::new(
+                        CommandOptionType::SubCommand,
+                        "contests",
+                        "Open contests you can still enter",
+                    )
+                    .add_sub_option(CreateCommandOption::new(
+                        CommandOptionType::String,
+                        "domain",
+                        "code, design, ai, security, ops, game, soft_skills",
+                    )),
+                )
+                .add_option(
+                    CreateCommandOption::new(
+                        CommandOptionType::SubCommand,
+                        "featured",
+                        "Who is featured this week",
+                    )
+                    .add_sub_option(CreateCommandOption::new(
+                        CommandOptionType::String,
+                        "domain",
+                        "code, design, ai, security, ops, game, soft_skills",
+                    )),
+                )
+                .add_option(
+                    CreateCommandOption::new(
+                        CommandOptionType::SubCommand,
+                        "portfolio",
+                        "Somebody's public Skilluv profile",
+                    )
+                    .add_sub_option(
+                        CreateCommandOption::new(
+                            CommandOptionType::String,
+                            "username",
+                            "Their Skilluv username",
+                        )
+                        .required(true),
+                    ),
+                )
                 .add_option(CreateCommandOption::new(
                     CommandOptionType::SubCommand,
                     "help",
@@ -167,6 +206,18 @@ impl Handler {
                 let hash = extract_string(sub, "hash").context("missing hash arg")?;
                 self.handle_verify(&hash).await?
             }
+            "contests" => {
+                self.handle_contests(extract_string(sub, "domain").as_deref())
+                    .await?
+            }
+            "featured" => {
+                self.handle_featured(extract_string(sub, "domain").as_deref())
+                    .await?
+            }
+            "portfolio" => {
+                let username = extract_string(sub, "username").context("missing username arg")?;
+                self.handle_portfolio(&username).await?
+            }
             "help" => help_message(&self.frontend_url),
             other => format!("Unknown subcommand `{other}` — try `/skilluv help`"),
         };
@@ -193,10 +244,15 @@ impl Handler {
                 .await
                 .context("db query failed")?;
         Ok(match row {
-            Some((_, username)) => format!(
-                "You are linked to **{username}** — profile: {frontend}/@{username}",
-                frontend = self.frontend_url,
-            ),
+            Some((id, username)) => {
+                // The trades and the scores, because "you are linked" is not
+                // worth a round trip on its own.
+                let profile = self.profile_lines(id).await;
+                format!(
+                    "You are linked to **{username}** — {frontend}/@{username}{profile}",
+                    frontend = self.frontend_url,
+                )
+            }
             None => format!(
                 "Your Discord account is not linked to a Skilluv profile yet.\n\
                  Sign up or log in at {frontend}, then reply here with your \
@@ -214,13 +270,25 @@ impl Handler {
         if trimmed.is_empty() || trimmed.len() > 128 {
             return Ok("The hash must be 1..128 chars. Copy it from the /verify URL.".into());
         }
-        let row: Option<(String, String, Option<String>)> = sqlx::query_as(
+        // Two tables, because attestations live in two places. The slice
+        // hash is the older one; `attestations` is where every design, code
+        // and AI attestation has gone since, and it carries the ten-character
+        // verification code people actually paste. Reading only the first
+        // meant every one of those answered "no such attestation".
+        let row: Option<(String, String, bool, String)> = sqlx::query_as(
             r#"
-            SELECT ps.title, u.username, ps.attestation_hash
+            SELECT ps.title, u.username, FALSE AS revoked,
+                   ps.attestation_hash AS code
               FROM project_slices ps
               JOIN users u ON u.id = ps.claimed_by_user_id
              WHERE ps.attestation_hash = $1
-             LIMIT 1
+            UNION ALL
+            SELECT a.title, u2.username, a.revoked_at IS NOT NULL,
+                   a.verification_code
+              FROM attestations a
+              JOIN users u2 ON u2.id = a.user_id
+             WHERE a.verification_code = $1
+            LIMIT 1
             "#,
         )
         .bind(trimmed)
@@ -228,12 +296,156 @@ impl Handler {
         .await
         .context("db query failed")?;
         Ok(match row {
-            Some((title, username, _)) => format!(
-                "Attestation `{trimmed}` — **{username}** validated **{title}**\n\
-                 Public verify page: {frontend}/verify/{trimmed}",
+            // A revoked attestation is answered, not hidden. Somebody
+            // checking one has been shown a copy and needs to be told it no
+            // longer holds.
+            Some((title, username, true, code)) => format!(
+                "Attestation `{code}` — **{username}**, **{title}** — \
+                 **cette attestation a été révoquée**.\n\
+                 {frontend}/attestations/verify/{code}",
+                frontend = self.frontend_url,
+            ),
+            Some((title, username, false, code)) => format!(
+                "Attestation `{code}` — **{username}** a validé **{title}**\n\
+                 {frontend}/attestations/verify/{code}",
                 frontend = self.frontend_url,
             ),
             None => format!("No Skilluv attestation matches `{trimmed}`."),
+        })
+    }
+
+    /// The trades and scores under a name, as chat-sized lines.
+    ///
+    /// Empty when there is nothing to say. A profile that prints "0 points,
+    /// no trade" for a new member reads as a verdict rather than as a start.
+    async fn profile_lines(&self, user_id: Uuid) -> String {
+        let trades: Vec<String> = sqlx::query_scalar(
+            r#"
+            SELECT o.name
+              FROM user_orientations uo
+              JOIN orientations o ON o.id = uo.orientation_id
+             WHERE uo.user_id = $1 AND uo.ended_at IS NULL
+             ORDER BY uo.is_primary DESC, o.name
+             LIMIT 3
+            "#,
+        )
+        .bind(user_id)
+        .fetch_all(&self.db)
+        .await
+        .unwrap_or_default();
+
+        let scores: Vec<(String, i32)> = sqlx::query_as(
+            "SELECT skill_domain, score FROM craft_scores
+              WHERE user_id = $1 AND score > 0
+              ORDER BY score DESC LIMIT 3",
+        )
+        .bind(user_id)
+        .fetch_all(&self.db)
+        .await
+        .unwrap_or_default();
+
+        let mut out = String::new();
+        if !trades.is_empty() {
+            out.push_str(&format!("\nMétiers : {}", trades.join(", ")));
+        }
+        if !scores.is_empty() {
+            let rendered: Vec<String> = scores
+                .iter()
+                .map(|(domain, score)| format!("{domain} {score}"))
+                .collect();
+            out.push_str(&format!("\nCraft score : {}", rendered.join(" · ")));
+        }
+        out
+    }
+
+    /// `/skilluv contests [domain]` — what somebody can still enter.
+    ///
+    /// Cross-domain contests are always included, whichever domain was asked
+    /// for: those are the events that want the widest field, and filtering
+    /// them out would hide exactly the ones worth announcing.
+    async fn handle_contests(&self, domain: Option<&str>) -> Result<String> {
+        let rows: Vec<(String, String, Option<chrono::DateTime<chrono::Utc>>)> = sqlx::query_as(
+            r#"
+            SELECT name, slug, ends_at
+              FROM tournaments
+             WHERE status IN ('upcoming', 'registration', 'active')
+               AND ($1::TEXT IS NULL OR skill_domain = $1 OR skill_domain IS NULL)
+             ORDER BY ends_at ASC NULLS LAST
+             LIMIT 5
+            "#,
+        )
+        .bind(domain)
+        .fetch_all(&self.db)
+        .await
+        .context("db query failed")?;
+
+        if rows.is_empty() {
+            return Ok("Aucun concours ouvert en ce moment.".into());
+        }
+        let lines: Vec<String> = rows
+            .iter()
+            .map(|(name, slug, ends)| {
+                let until = ends
+                    .map(|d| format!(" — jusqu'au {}", d.format("%d/%m")))
+                    .unwrap_or_default();
+                format!("- **{name}**{until} — {}/contests/{slug}", self.frontend_url)
+            })
+            .collect();
+        Ok(format!("Concours ouverts :\n{}", lines.join("\n")))
+    }
+
+    /// `/skilluv featured [domain]` — the week's editorial pick.
+    async fn handle_featured(&self, domain: Option<&str>) -> Result<String> {
+        let row: Option<(String, String, String, chrono::NaiveDate)> = sqlx::query_as(
+            r#"
+            SELECT u.username, u.display_name, ft.reason_md, ft.week_of
+              FROM featured_talents ft
+              JOIN users u ON u.id = ft.user_id
+             WHERE ($1::TEXT IS NULL OR ft.skill_domain = $1)
+             ORDER BY ft.week_of DESC
+             LIMIT 1
+            "#,
+        )
+        .bind(domain)
+        .fetch_optional(&self.db)
+        .await
+        .context("db query failed")?;
+
+        Ok(match row {
+            Some((username, display_name, reason, week)) => format!(
+                "**{display_name}** ({}/@{username}) — semaine du {week}\n{reason}",
+                self.frontend_url
+            ),
+            None => "Personne n'a encore été mis en avant ici.".into(),
+        })
+    }
+
+    /// `/skilluv portfolio <username>` — somebody's public profile.
+    ///
+    /// Public rows only. A hidden or banned profile answers as unknown rather
+    /// than as hidden: confirming that an account exists is itself a leak on
+    /// a surface anybody can query.
+    async fn handle_portfolio(&self, username: &str) -> Result<String> {
+        let trimmed = username.trim().trim_start_matches('@');
+        let row: Option<(Uuid, String, String)> = sqlx::query_as(
+            "SELECT id, username, display_name FROM users
+              WHERE username = $1 AND profile_active = TRUE
+                AND is_banned = FALSE AND profile_hidden = FALSE",
+        )
+        .bind(trimmed)
+        .fetch_optional(&self.db)
+        .await
+        .context("db query failed")?;
+
+        Ok(match row {
+            Some((id, username, display_name)) => {
+                let profile = self.profile_lines(id).await;
+                format!(
+                    "**{display_name}** — {frontend}/@{username}{profile}",
+                    frontend = self.frontend_url,
+                )
+            }
+            None => format!("Aucun profil public au nom de `{trimmed}`."),
         })
     }
 }
@@ -241,8 +453,11 @@ impl Handler {
 fn help_message(frontend: &str) -> String {
     format!(
         "**Skilluv bot** — commands available :\n\
-         - `/skilluv me` — show your linked Skilluv profile\n\
+         - `/skilluv me` — your linked profile, trades and craft score\n\
          - `/skilluv verify <hash>` — check a Skilluv attestation\n\
+         - `/skilluv contests [domain]` — open contests\n\
+         - `/skilluv featured [domain]` — this week\'s featured member\n\
+         - `/skilluv portfolio <username>` — somebody\'s public profile\n\
          - `/skilluv help` — this message\n\n\
          Platform: {frontend}",
     )
@@ -290,6 +505,7 @@ struct QueueRow {
     id: Uuid,
     event_type: String,
     payload_json: sqlx::types::Json<Value>,
+    target_channel_id: Option<String>,
 }
 
 async fn tick(
@@ -301,7 +517,7 @@ async fn tick(
 ) -> Result<usize> {
     let rows: Vec<QueueRow> = sqlx::query_as(
         r#"
-        SELECT id, event_type, payload_json
+        SELECT id, event_type, payload_json, target_channel_id
           FROM discord_notifications_queue
          WHERE sent_at IS NULL AND failed_count < $1
          ORDER BY created_at ASC
@@ -314,12 +530,27 @@ async fn tick(
 
     let mut sent = 0usize;
     for row in rows {
-        let channel = match row.event_type.as_str() {
-            "rank_promotion" | "badge_earned" => promotions,
-            "attestation_new" | "slice_validated" => annonces,
-            _ => promotions, // fallback
+        // The row carries the room it was routed to at enqueue time. This
+        // column has existed since migration 0135 and was ignored, so every
+        // announcement went to one of two hardcoded channels regardless.
+        let channel = match row
+            .target_channel_id
+            .as_deref()
+            .and_then(|id| id.parse::<u64>().ok())
+        {
+            Some(id) => ChannelId::new(id),
+            // No room configured for that purpose. Posting in the default
+            // beats dropping the announcement.
+            None => match row.event_type.as_str() {
+                "rank_promotion" | "badge_earned" => promotions,
+                _ => annonces,
+            },
         };
-        let msg = render_message(&row.event_type, &row.payload_json.0, frontend);
+        let msg = skilluv_backend::services::discord_announce::render(
+            &row.event_type,
+            &row.payload_json.0,
+            frontend,
+        );
         match channel.say(http, msg).await {
             Ok(_) => {
                 sqlx::query("UPDATE discord_notifications_queue SET sent_at = NOW() WHERE id = $1")
@@ -341,33 +572,6 @@ async fn tick(
         }
     }
     Ok(sent)
-}
-
-fn render_message(event_type: &str, payload: &Value, frontend: &str) -> String {
-    match event_type {
-        "rank_promotion" => {
-            let username = payload["username"].as_str().unwrap_or("someone");
-            let rank = payload["new_rank"].as_str().unwrap_or("");
-            format!("**{username}** just reached rank **{rank}** on Skilluv.")
-        }
-        "badge_earned" => {
-            let username = payload["username"].as_str().unwrap_or("someone");
-            let badge = payload["badge_name"].as_str().unwrap_or("a new badge");
-            format!("**{username}** earned the **{badge}** badge.")
-        }
-        "attestation_new" => {
-            let username = payload["username"].as_str().unwrap_or("someone");
-            let title = payload["challenge_title"].as_str().unwrap_or("a challenge");
-            let hash = payload["attestation_hash"].as_str().unwrap_or("");
-            format!("**{username}** just validated **{title}** — verify: {frontend}/verify/{hash}")
-        }
-        "slice_validated" => {
-            let username = payload["username"].as_str().unwrap_or("someone");
-            let repo = payload["repo"].as_str().unwrap_or("a repo");
-            format!("**{username}** shipped a validated PR on **{repo}**.")
-        }
-        _ => format!("Skilluv event: {event_type}"),
-    }
 }
 
 // ═══════════════════════════════════════════════════════════════════

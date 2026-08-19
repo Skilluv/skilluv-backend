@@ -464,6 +464,57 @@ address KYC full, live AI wiring in prod, and RLS enforcement.
 
 ### Fixed
 
+- **fix(goals)** — A capability goal could not be created at all. The target
+  was validated by pattern-matching the *text* of
+  `user_capabilities_capability_check`, and migration 0404 made the
+  capabilities rows and dropped that constraint, so the lookup answered false
+  for every capability that exists — and said the capability was unknown.
+  Reads `capability_catalog` now.
+- **fix(feed)** — The public feed's keyset cursor was `<rfc3339>|<uuid>`, and
+  an RFC3339 offset carries a `+`, which a query string decodes as a space.
+  The only thing anybody does with `next_cursor` is put it in a URL, so the
+  second page answered 400 to a cursor the server had just issued. base64url
+  now, which also makes it opaque again.
+- **fix(credentials)** — `declare` read its own insert through a
+  data-modifying CTE. Every part of a statement sees one snapshot, so the
+  SELECT over `credentials_with_currency` found nothing and the endpoint 500'd
+  on a credential it had in fact written.
+- **fix(ops)** — An incident could be opened with a start date in the future.
+  Resolving stamps `NOW()`, which then lands before the start and trips
+  `an_incident_runs_forward`: a 500 at the end of an outage, on the step meant
+  to close it.
+- **fix(api)** — A NUL byte in any JSON string reached PostgreSQL, which
+  cannot hold one in a text column at all, and surfaced as a 500 blaming the
+  server for input no text column anywhere will ever accept. Refused at the
+  edge with a 400. A middleware rather than a check per field: every endpoint
+  taking free text has the same exposure.
+- **fix(missions)** — `GET /api/missions` declared maximum lengths on seven
+  filters and enforced none of them, answering 200 with an empty list to a
+  malformed query.
+- **fix(schema)** — Migration 0440 puts a foreign key on the seven domain
+  columns that were still free strings — `academy_cohorts`, `consultations`,
+  `external_resources`, `featured_talents`, `marketplace_items`,
+  `mentoring_programs`, `tournament_series`. A typo in one of them inserted
+  cleanly and was invisible to every listing that joins the catalogue.
+- **fix(migrations)** — Three CHECK-to-table conversions had dropped another
+  branch's values. 0408 listed the two slice types 0231 had already folded
+  into `design_artifact`; 0416 omitted the `duel` and `brief_contest` formats
+  from 0235; 0431 re-added a deliverable-format CHECK holding only the code
+  and ops values after 0413 had replaced it with a table, which would have
+  refused every AI, audio and design mission.
+- **fix(wizard)** — The design domain's own two questions,
+  `challenge_preference` and `main_tool`, were never carried into the shared
+  question registry, so `PUT /domain-profile/design` refused its own fields.
+  A field sent to the wrong wizard now names the domain that owns it, and an
+  empty `preferred_families` is stored rather than dropped — "no family in
+  particular" is an answer somebody gave, and never opening the wizard is not.
+- **fix(ci)** — Integration test shards ran the runner out of disk while
+  linking: 184 test binaries each statically linking the whole dependency
+  graph, with full DWARF. Three shards died with ENOSPC and the fourth with a
+  linker SIGBUS, which is the same full disk seen through an mmap.
+  `debug = "line-tables-only"` on the dev and test profiles, and the job now
+  reclaims the preinstalled SDKs it never uses.
+
 - **fix(openapi)** — Every operation and every schema now has a name of its
   own. utoipa derives `operationId` from the handler's function name and a
   component name from the Rust type alone, and neither was unique: 126
@@ -488,14 +539,6 @@ address KYC full, live AI wiring in prod, and RLS enforcement.
   one the API accepts.
 - **fix(routes)** — Removed the `my_mentions` handler in `routes/social.rs`,
   left behind when SKI-293 unregistered `/api/social/mentions/me`.
-- **fix(ci)** — Integration test shards ran the runner out of disk while
-  linking: 184 test binaries each statically linking the whole dependency
-  graph, with full DWARF. Three shards died with ENOSPC and the fourth with a
-  linker SIGBUS, which is the same disk with a different error message.
-  `debug = "line-tables-only"` on the dev and test profiles, and the job now
-  reclaims the ~25 GB of preinstalled SDKs it never uses.
-
-
 - **fix(routes)** — Route conflict on `/api/seasons` between `routes/tournament.rs`
   (Phase 2 Sprint 6) and `routes/seasons.rs` (P6). The tournament module now
   only registers the `/admin/seasons/*` endpoints.

@@ -145,10 +145,9 @@ async fn an_engagement_registers_as_an_enterprise_product() {
     .unwrap();
 
     assert_eq!(product.0, "outsourcing_project");
-    assert_eq!(
-        product.1.unwrap().to_string(),
-        "30000.00",
-        "the contract value should follow the pricing model"
+    common::assert_decimal(
+        &product.1.clone().unwrap(),
+        "30000.00", // the contract value follows the pricing model
     );
 }
 
@@ -687,16 +686,14 @@ async fn an_accepted_milestone_pays_the_team_by_their_shares() {
     let paid = body["data"]["paid"].as_array().unwrap();
     assert_eq!(paid.len(), 2);
 
-    let amount_for = |user: Uuid| -> String {
-        paid.iter()
+    let amount_for = |user: Uuid| -> &Value {
+        &paid
+            .iter()
             .find(|p| p["user_id"] == user.to_string())
             .unwrap()["amount"]
-            .as_str()
-            .unwrap()
-            .to_string()
     };
-    assert_eq!(amount_for(a), "15300.00");
-    assert_eq!(amount_for(b), "10200.00");
+    common::assert_amount(amount_for(a), "15300.00");
+    common::assert_amount(amount_for(b), "10200.00");
 
     // And the margin is booked as its own line, with the rate that produced it.
     let revenue: (sqlx::types::BigDecimal, i32) = sqlx::query_as(

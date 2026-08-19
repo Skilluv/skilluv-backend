@@ -305,11 +305,20 @@ async fn an_advance_needs_an_issued_invoice_to_point_at() {
     let person = a_talent(&app, "advanceperson", "artisan").await;
     let invoice = an_issued_invoice(&app, person, "1000.00").await;
 
-    sqlx::query("UPDATE mission_invoices SET status = 'paid' WHERE id = $1")
-        .bind(invoice)
-        .execute(&app.db)
-        .await
-        .unwrap();
+    // Cancelled rather than paid. What this test needs is an invoice that is
+    // no longer issued; `paid` additionally means money moved, and 0194
+    // refuses that without naming the payment it moved through — money that
+    // moved leaves a trace of where it moved from. Cancelling needs a reason
+    // for the same kind of reason.
+    sqlx::query(
+        "UPDATE mission_invoices
+            SET status = 'cancelled', cancellation_reason = 'mission annulée par le client'
+          WHERE id = $1",
+    )
+    .bind(invoice)
+    .execute(&app.db)
+    .await
+    .unwrap();
 
     app.login("advanceperson").await;
     // Against anything but an issued invoice it would be a loan, which is

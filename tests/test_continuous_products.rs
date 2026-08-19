@@ -393,7 +393,7 @@ async fn a_quiet_month_pays_the_people_who_showed_up_more() {
 
     // The point of a pool rather than a per-item rate.
     assert_eq!(body["data"]["contributions_paid"], 2);
-    assert_eq!(body["data"]["each"].as_str().unwrap(), "500.00");
+    common::assert_amount(&body["data"]["each"], "500.00");
 }
 
 #[tokio::test]
@@ -603,10 +603,7 @@ async fn a_signed_proposal_books_the_facilitation_share() {
 
     // The team found the problem and convinced the client; Skilluv held the
     // meeting. Ten per cent.
-    assert_eq!(
-        body["data"]["facilitation_fee"].as_str().unwrap(),
-        "4000.00"
-    );
+    common::assert_amount(&body["data"]["facilitation_fee"], "4000.00");
 
     let booked: Uuid = sqlx::query_scalar(
         "SELECT related_talent_id FROM platform_revenues

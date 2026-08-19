@@ -51,15 +51,19 @@ async fn an_issued_invoice(app: &TestApp, owner: Uuid, amount: &str) -> Uuid {
     .await
     .unwrap();
 
+    // `assigned_user_id` is not decoration: migration 0194 refuses an invoice
+    // on a mission nobody was selected for, because the money would land in
+    // the platform's account with no owner. The advance under test points at
+    // an invoice, so the mission needs somebody on it.
     let mission: Uuid = sqlx::query_scalar(
         "INSERT INTO missions
             (enterprise_id, mission_type_id, skill_domain, slug, title, description,
              acceptance_criteria, deliverable_format, payment_model, budget_eur,
-             created_by)
+             created_by, assigned_user_id)
          VALUES ($1, (SELECT id FROM mission_types LIMIT 1), 'code',
                  'mission-' || substr(gen_random_uuid()::text, 1, 8),
                  'Mission', 'Brief', 'Livré et relu.', 'github_pr',
-                 'fixed_price', 5000.00, $2)
+                 'fixed_price', 5000.00, $2, $2)
          RETURNING id",
     )
     .bind(enterprise)
@@ -288,7 +292,7 @@ async fn an_approved_loan_books_its_origination_commission() {
         .await;
     assert_eq!(resp.status(), 200, "{}", resp.text().await.unwrap());
     let body: Value = resp.json().await.unwrap();
-    assert_eq!(body["data"]["commission"].as_str().unwrap(), "240.00");
+    common::assert_amount(&body["data"]["commission"], "240.00");
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -336,8 +340,8 @@ async fn the_net_amount_is_stated_before_anybody_agrees() {
     let body: Value = resp.json().await.unwrap();
 
     // 500 advanced, 4% fee, 480 received. The number they care about.
-    assert_eq!(body["data"]["advance"]["advance_amount"], "500.00");
-    assert_eq!(body["data"]["you_would_receive"], "480.00");
+    common::assert_amount(&body["data"]["advance"]["advance_amount"], "500.00");
+    common::assert_amount(&body["data"]["you_would_receive"], "480.00");
 }
 
 #[tokio::test]
@@ -464,7 +468,7 @@ async fn disbursing_pays_the_net_and_books_the_fee() {
     assert_eq!(resp.status(), 200, "{}", resp.text().await.unwrap());
     let body: Value = resp.json().await.unwrap();
     // 600 advanced, 24 fee, 576 out.
-    assert_eq!(body["data"]["paid_out"].as_str().unwrap(), "576.00");
+    common::assert_amount(&body["data"]["paid_out"], "576.00");
 
     let booked: sqlx::types::BigDecimal = sqlx::query_scalar(
         "SELECT amount_credits FROM platform_revenues WHERE source = 'factoring_take'",
@@ -472,7 +476,7 @@ async fn disbursing_pays_the_net_and_books_the_fee() {
     .fetch_one(&app.db)
     .await
     .unwrap();
-    assert_eq!(booked.to_string(), "24.00");
+    common::assert_decimal(&booked, "24.00");
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -524,7 +528,7 @@ async fn a_claim_is_capped_per_mission_and_per_year() {
         .await;
     assert_eq!(resp.status(), 200, "{}", resp.text().await.unwrap());
     let body: Value = resp.json().await.unwrap();
-    assert_eq!(body["data"]["paid"].as_str().unwrap(), "500.00");
+    common::assert_amount(&body["data"]["paid"], "500.00");
 
     // Two more of the same exhaust the year.
     for _ in 0..2 {

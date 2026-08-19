@@ -276,7 +276,7 @@ async fn passing_the_audit_issues_a_dated_badge_and_books_the_fee() {
     let body: Value = resp.json().await.unwrap();
     assert_eq!(body["data"]["certification"]["status"], "issued");
     // (95*2 + 80) / 3 = 90
-    assert_eq!(body["data"]["certification"]["audit_score"], "90.00");
+    common::assert_amount(&body["data"]["certification"]["audit_score"], "90.00");
     assert!(body["data"]["certification"]["expires_at"].is_string());
 
     let booked: sqlx::types::BigDecimal = sqlx::query_scalar(
@@ -286,7 +286,7 @@ async fn passing_the_audit_issues_a_dated_badge_and_books_the_fee() {
     .fetch_one(&app.db)
     .await
     .unwrap();
-    assert_eq!(booked.to_string(), "5000.00");
+    common::assert_decimal(&booked, "5000.00");
 
     // The findings are kept, so the score can be argued with rather than
     // only believed.
@@ -427,11 +427,8 @@ async fn the_creator_sees_their_take_before_listing() {
     let body: Value = resp.json().await.unwrap();
 
     // 15% above twenty euros.
-    assert_eq!(
-        body["data"]["platform_commission"].as_str().unwrap(),
-        "4.50"
-    );
-    assert_eq!(body["data"]["creator_receives"].as_str().unwrap(), "25.50");
+    common::assert_amount(&body["data"]["platform_commission"], "4.50");
+    common::assert_amount(&body["data"]["creator_receives"], "25.50");
 }
 
 #[tokio::test]
@@ -444,11 +441,8 @@ async fn a_small_item_carries_the_higher_commission() {
     let body: Value = resp.json().await.unwrap();
     // 20% below twenty euros: the cost of handling a sale barely moves with
     // its size.
-    assert_eq!(
-        body["data"]["platform_commission"].as_str().unwrap(),
-        "0.60"
-    );
-    assert_eq!(body["data"]["creator_receives"].as_str().unwrap(), "2.40");
+    common::assert_amount(&body["data"]["platform_commission"], "0.60");
+    common::assert_amount(&body["data"]["creator_receives"], "2.40");
 }
 
 #[tokio::test]
@@ -504,7 +498,7 @@ async fn a_sale_splits_exactly_and_pays_the_creator() {
     .fetch_one(&app.db)
     .await
     .unwrap();
-    assert_eq!(booked.to_string(), "14.99");
+    common::assert_decimal(&booked, "14.99");
 }
 
 #[tokio::test]
@@ -578,7 +572,7 @@ async fn only_a_buyer_can_rate_and_the_average_follows() {
             .fetch_one(&app.db)
             .await
             .unwrap();
-    assert_eq!(item.0.unwrap().to_string(), "4.00");
+    common::assert_decimal(&item.0.unwrap(), "4.00");
     assert_eq!(item.1, 1);
 
     // Changing the rating moves the average rather than adding a second one.
@@ -594,7 +588,7 @@ async fn only_a_buyer_can_rate_and_the_average_follows() {
             .fetch_one(&app.db)
             .await
             .unwrap();
-    assert_eq!(item.0.unwrap().to_string(), "2.00");
+    common::assert_decimal(&item.0.unwrap(), "2.00");
     assert_eq!(item.1, 1);
 }
 

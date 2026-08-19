@@ -332,15 +332,20 @@ async fn a_creative_commons_source_states_its_credit_line() {
 }
 
 /// Files belong to audio deliveries and nothing else.
+///
+/// The slice used to be a `figma_frame`. Migration 0231 folded that and
+/// `design_token` into `design_artifact` and moved the existing rows across,
+/// so the old slug names nothing — which is a different failure from the one
+/// this test is about.
 #[tokio::test]
-async fn a_sound_file_cannot_hang_off_a_figma_frame() {
+async fn a_sound_file_cannot_hang_off_a_design_artefact() {
     let app = TestApp::spawn().await;
     let project_id = seed_project(&app).await;
 
     let frame_id: Uuid = sqlx::query_scalar(
         "INSERT INTO project_slices
             (project_id, title, description, slice_type, primary_domain, difficulty)
-         VALUES ($1, 'Écran', 'x', 'figma_frame', 'design', 2)
+         VALUES ($1, 'Écran', 'x', 'design_artifact', 'design', 2)
          RETURNING id",
     )
     .bind(project_id)

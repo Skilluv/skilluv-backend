@@ -98,7 +98,7 @@ async fn subscribing_pays_the_mentor_and_books_the_platform_share() {
     .fetch_one(&app.db)
     .await
     .unwrap();
-    assert_eq!(booked.to_string(), "20.00");
+    common::assert_decimal(&booked, "20.00");
 }
 
 #[tokio::test]
@@ -223,7 +223,7 @@ async fn volunteer_hours_accumulate_and_report_the_threshold() {
         )
         .await;
     let body: Value = resp.json().await.unwrap();
-    assert_eq!(body["data"]["hours_with_this_mentee"], "4.00");
+    common::assert_amount(&body["data"]["hours_with_this_mentee"], "4.00");
     assert_eq!(body["data"]["commission_threshold"], 5.0);
 }
 
@@ -547,7 +547,7 @@ async fn a_company_client_carries_the_higher_commission() {
     let body: Value = resp.json().await.unwrap();
 
     // Skilluv found the client; the mentor did not have to sell anything.
-    assert_eq!(body["data"]["program"]["commission_percent"], "25.00");
+    common::assert_amount(&body["data"]["program"]["commission_percent"], "25.00");
     assert_eq!(body["data"]["program"]["payer"], "enterprise");
 }
 
@@ -660,7 +660,7 @@ async fn enrolling_pays_the_mentor_their_share() {
     .fetch_one(&app.db)
     .await
     .unwrap();
-    assert_eq!(booked.to_string(), "120.00");
+    common::assert_decimal(&booked, "120.00");
 }
 
 #[tokio::test]

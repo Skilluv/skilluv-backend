@@ -36,7 +36,10 @@ async fn the_catalogue_says_how_each_product_earns() {
         .await
         .unwrap();
     let types = body["data"]["product_types"].as_array().unwrap();
-    assert_eq!(types.len(), 18);
+    // A floor, not a count. The catalogue is rows precisely so that the
+    // nineteenth product is an INSERT, and a test that pins the number turns
+    // every new one into an edit here.
+    assert!(types.len() >= 18, "got {}", types.len());
 
     for product in types {
         assert!(!product["description"].as_str().unwrap().is_empty());

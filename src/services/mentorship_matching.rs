@@ -343,25 +343,45 @@ pub async fn matches_for(
                u.username,
                m.headline,
                cs.score AS craft_score,
-               -- Proven, not declared. The families of the trades this person
-               -- has verified work in, rather than the ones they told the
-               -- wizard interest them. A mentor who said they were interested
-               -- in motion and never delivered any is not a motion mentor,
-               -- and an hour with them teaches that the expensive way.
+               -- Proven where there is proof, declared only where there is
+               -- none at all.
                --
-               -- The mentee side stays declared, and deliberately: somebody
-               -- looking for a mentor is looking towards where they want to
-               -- go, not where they have already been.
-               ARRAY(
-                   SELECT DISTINCT o.reviewer_group
-                     FROM deliverables d
-                     JOIN project_slices ps ON ps.id = d.slice_id
-                     JOIN orientations o ON o.id = ps.orientation_id
-                    WHERE d.user_id = u.id
-                      AND d.verification_status = 'verified'
-                      AND d.revoked_at IS NULL
-                      AND o.primary_domain = $3
-                      AND o.reviewer_group IS NOT NULL
+               -- A mentor who has delivered in this domain is matched on the
+               -- families they actually delivered in, and on nothing else: the
+               -- case worth refusing is somebody proven in web who also
+               -- declared motion, because an hour with them teaches that the
+               -- expensive way and the mentee paid for it.
+               --
+               -- Somebody with no verified deliverable in the domain yet falls
+               -- back to what they declared. Requiring proof from everybody
+               -- reads well and empties the list on a young platform, which
+               -- helps nobody — and it is a different claim from the one
+               -- above, so the fallback is all-or-nothing rather than a union.
+               COALESCE(
+                   NULLIF(ARRAY(
+                       SELECT DISTINCT o.reviewer_group
+                         FROM deliverables d
+                         JOIN project_slices ps ON ps.id = d.slice_id
+                         JOIN orientations o ON o.id = ps.orientation_id
+                        WHERE d.user_id = u.id
+                          AND d.verification_status = 'verified'
+                          AND d.revoked_at IS NULL
+                          AND o.primary_domain = $3
+                          AND o.reviewer_group IS NOT NULL
+                   ), '{}'),
+                   -- The declared answer, read through the orientations so it
+                   -- speaks the same words the proven side does. A wizard that
+                   -- stores trade slugs — design's — maps each to its reviewer
+                   -- family; one that already stores families finds no
+                   -- orientation by that slug and keeps what it had. No flag,
+                   -- because the lookup answers the question either way.
+                   ARRAY(
+                       SELECT DISTINCT COALESCE(o2.reviewer_group, f.value)
+                         FROM unnest(answer_texts(p.answers, $5)) AS f(value)
+                         LEFT JOIN orientations o2
+                                ON o2.slug = f.value
+                               AND o2.reviewer_group IS NOT NULL
+                   )
                ) AS families,
                -- What the mentor works in: their declared tools, and the
                -- expertise they wrote on their mentor profile. Both, because
@@ -398,6 +418,7 @@ pub async fn matches_for(
     .bind(mentee_score + MIN_SCORE_GAP)
     .bind(rules.domain)
     .bind(rules.tools_key)
+    .bind(rules.families_key)
     .fetch_all(db)
     .await?;
 

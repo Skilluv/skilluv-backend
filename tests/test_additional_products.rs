@@ -107,7 +107,7 @@ async fn a_placement_starts_and_bills_only_once_the_person_agrees() {
     .fetch_one(&app.db)
     .await
     .unwrap();
-    assert_eq!(booked.to_string(), "3000.00");
+    common::assert_decimal(&booked, "3000.00");
 }
 
 #[tokio::test]
@@ -497,10 +497,7 @@ async fn every_proposal_is_answered_before_the_call_is_awarded() {
         .await;
     assert_eq!(resp.status(), 200, "{}", resp.text().await.unwrap());
     let body: Value = resp.json().await.unwrap();
-    assert_eq!(
-        body["data"]["facilitation_fee"].as_str().unwrap(),
-        "2000.00"
-    );
+    common::assert_amount(&body["data"]["facilitation_fee"], "2000.00");
 }
 
 #[tokio::test]

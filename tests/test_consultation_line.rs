@@ -127,13 +127,13 @@ async fn a_review_keeps_more_than_an_advisory() {
 
     // An advisory is an introduction. A review is a panel assembled, a
     // deadline held across several people, and a synthesis written.
-    assert_eq!(
-        advisory["data"]["consultation"]["commission_percent"],
-        "25.00"
+    common::assert_amount(
+        &advisory["data"]["consultation"]["commission_percent"],
+        "25.00",
     );
-    assert_eq!(
-        review["data"]["consultation"]["commission_percent"],
-        "40.00"
+    common::assert_amount(
+        &review["data"]["consultation"]["commission_percent"],
+        "40.00",
     );
 }
 
@@ -268,7 +268,7 @@ async fn a_delivered_review_divides_the_fee_between_the_people_who_wrote() {
     let body: Value = resp.json().await.unwrap();
 
     // 9000 at 40%: 3600 kept, 5400 between the two who wrote.
-    assert_eq!(body["data"]["commission"].as_str().unwrap(), "3600.00");
+    common::assert_amount(&body["data"]["commission"], "3600.00");
     assert_eq!(body["data"]["experts_paid"], 2);
 
     let shares: Vec<sqlx::types::BigDecimal> = sqlx::query_scalar(
@@ -281,7 +281,7 @@ async fn a_delivered_review_divides_the_fee_between_the_people_who_wrote() {
     .unwrap();
     assert_eq!(shares.len(), 2);
     let total: sqlx::types::BigDecimal = shares.into_iter().sum();
-    assert_eq!(total.to_string(), "5400.00");
+    common::assert_decimal(&total, "5400.00");
 }
 
 #[tokio::test]
@@ -459,7 +459,7 @@ async fn an_audit_is_not_delivered_until_everybody_has_seen_their_own() {
     .fetch_one(&app.db)
     .await
     .unwrap();
-    assert_eq!(booked.to_string(), "12000.00");
+    common::assert_decimal(&booked, "12000.00");
 }
 
 #[tokio::test]

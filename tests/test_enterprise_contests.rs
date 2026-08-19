@@ -665,7 +665,7 @@ async fn a_hire_after_a_real_interview_books_the_success_fee() {
             .fetch_one(&app.db)
             .await
             .unwrap();
-    assert_eq!(fee.0.to_string(), "3000.00");
+    common::assert_decimal(&fee.0, "3000.00");
     assert_eq!(fee.1, Some(id));
 
     let hired: i64 = sqlx::query_scalar(
@@ -728,7 +728,7 @@ async fn concluding_books_what_skilluv_charged_to_run_it() {
     .fetch_one(&app.db)
     .await
     .unwrap();
-    assert_eq!(booked.to_string(), "500.00");
+    common::assert_decimal(&booked, "500.00");
 }
 
 #[tokio::test]

@@ -577,10 +577,7 @@ async fn a_cost_reduction_is_attested_only_if_the_service_still_works() {
 
     // 2500 a month is 30 000 a year — the figure the decision was made
     // against.
-    assert_eq!(
-        created["data"]["annual_saving"].as_str().unwrap(),
-        "30000.00"
-    );
+    common::assert_amount(&created["data"]["annual_saving"], "30000.00");
     assert!((created["data"]["reduction_percent"].as_f64().unwrap() - 62.5).abs() < 0.01);
 
     app.login("costadmin").await;

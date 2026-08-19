@@ -444,7 +444,7 @@ async fn a_report_over_the_floor_is_delivered_and_booked() {
     .fetch_one(&app.db)
     .await
     .unwrap();
-    assert_eq!(booked.to_string(), "15000.00");
+    common::assert_decimal(&booked, "15000.00");
 }
 
 #[tokio::test]

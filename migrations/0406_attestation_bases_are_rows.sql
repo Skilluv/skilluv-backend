@@ -101,6 +101,25 @@ INSERT INTO attestation_bases
 ('featured_ai_researcher', 'ai', 'Mis en avant',
  'Un travail IA retenu par la rédaction pour son exemplarité.', FALSE, 170),
 
+-- Design (migration 0233). The branch that added these was open when this
+-- table was written, and a CHECK-to-table conversion that forgets a value
+-- does not fail loudly — it fails later, on the foreign key, the first time
+-- somebody wins a design contest.
+('design_deliverable_validated', 'design', 'Livrable validé',
+ 'Un livrable de design validé après critique.', TRUE, 310),
+('design_brand_system_delivered', 'design', 'Identité livrée',
+ 'Une identité complète et ses règles d''usage.', TRUE, 320),
+('design_typeface_released', 'design', 'Caractère publié',
+ 'Une famille de caractères publiée avec ses fichiers de production.', TRUE, 330),
+('design_system_adopted', 'design', 'Système adopté',
+ 'Un système de design repris par une équipe qui construit dessus.', TRUE, 340),
+('design_contest_won', 'design', 'Concours remporté',
+ 'Une place sur le podium d''un concours de design.', FALSE, 350),
+('design_mission_delivered', 'design', 'Mission livrée',
+ 'Une mission payée, livrée et acceptée par le client.', FALSE, 360),
+('featured_designer', 'design', 'Mis en avant',
+ 'Un travail de design retenu par la rédaction pour son exemplarité.', FALSE, 370),
+
 -- Audio
 ('audio_composition_published', 'audio', 'Composition publiée',
  'Une composition originale livrée, écoutable, avec ses stems et ses licences en règle.', TRUE, 210),

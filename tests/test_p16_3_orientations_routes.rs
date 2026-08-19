@@ -32,9 +32,9 @@ async fn get_catalog_filters_by_domain() {
 async fn get_orientation_detail_includes_skills() {
     let app = TestApp::spawn().await;
 
-    // Attache 1 skill au track dev-frontend pour vérifier le join.
+    // Attache 1 skill au track web-frontend-developer pour vérifier le join.
     let track_id: uuid::Uuid =
-        sqlx::query_scalar("SELECT id FROM orientations WHERE slug = 'dev-frontend'")
+        sqlx::query_scalar("SELECT id FROM orientations WHERE slug = 'web-frontend-developer'")
             .fetch_one(&app.db)
             .await
             .unwrap();
@@ -54,7 +54,7 @@ async fn get_orientation_detail_includes_skills() {
     .await
     .unwrap();
 
-    let resp = app.get("/api/orientations/dev-frontend").await;
+    let resp = app.get("/api/orientations/web-frontend-developer").await;
     assert!(resp.status().is_success());
     let body: serde_json::Value = resp.json().await.unwrap();
     assert_eq!(
@@ -129,7 +129,9 @@ async fn delete_orientation_historises_but_keeps_row() {
         &json!({ "slug": "web-backend-developer" }),
     )
     .await;
-    let del = app.delete("/api/users/me/orientations/dev-backend").await;
+    let del = app
+        .delete("/api/users/me/orientations/web-backend-developer")
+        .await;
     assert_eq!(del.status().as_u16(), 200);
 
     // La ligne existe encore avec ended_at, invisible dans le "actives" mais
@@ -173,7 +175,7 @@ async fn patch_switches_primary_flag_atomically() {
 
     let patch = app
         .put(
-            "/api/users/me/orientations/web-designer",
+            "/api/users/me/orientations/design-web",
             &json!({ "is_primary": true }),
         )
         .await;
@@ -182,21 +184,18 @@ async fn patch_switches_primary_flag_atomically() {
     let _ = patch;
     let resp = app
         .client
-        .patch(format!(
-            "{}/api/users/me/orientations/web-designer",
-            app.addr
-        ))
+        .patch(format!("{}/api/users/me/orientations/design-web", app.addr))
         .json(&json!({ "is_primary": true }))
         .send()
         .await
         .unwrap();
     assert_eq!(resp.status().as_u16(), 200);
 
-    // La seule primary active est maintenant web-designer.
+    // La seule primary active est maintenant design-web.
     let (front_primary, design_primary): (bool, bool) = sqlx::query_as(
         "SELECT
-            COALESCE(BOOL_OR(o.slug='dev-frontend' AND uo.is_primary), FALSE),
-            COALESCE(BOOL_OR(o.slug='web-designer' AND uo.is_primary), FALSE)
+            COALESCE(BOOL_OR(o.slug='web-frontend-developer' AND uo.is_primary), FALSE),
+            COALESCE(BOOL_OR(o.slug='design-web' AND uo.is_primary), FALSE)
          FROM user_orientations uo JOIN orientations o ON o.id = uo.orientation_id
          WHERE uo.ended_at IS NULL",
     )

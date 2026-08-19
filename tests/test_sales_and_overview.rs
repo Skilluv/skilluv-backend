@@ -136,7 +136,7 @@ async fn spend_is_grouped_by_the_stream_that_produced_it() {
     let spend = body["data"]["spend_by_stream"].as_array().unwrap();
 
     let bounty = spend.iter().find(|s| s["stream"] == "bounty").unwrap();
-    assert_eq!(bounty["total"].as_str().unwrap(), "1000.00");
+    common::assert_amount(&bounty["total"], "1000.00");
     assert_eq!(bounty["entries"], 2);
 }
 
@@ -212,7 +212,7 @@ async fn the_weighted_total_is_smaller_than_the_face_value() {
     let body: Value = resp.json().await.unwrap();
 
     // 10% of ten thousand plus 75% of ten thousand.
-    assert_eq!(body["data"]["weighted_value"].as_str().unwrap(), "8500.00");
+    common::assert_amount(&body["data"]["weighted_value"], "8500.00");
     // And it says out loud that the weights are guesses.
     assert!(body["data"]["weighted_value_note"].is_string());
 }
@@ -333,7 +333,7 @@ async fn renewals_are_read_from_the_products_themselves() {
         .iter()
         .find(|r| r["product"] == "corporate_learning")
         .unwrap();
-    assert_eq!(learning["value"].as_str().unwrap(), "600.00");
+    common::assert_amount(&learning["value"], "600.00");
 
     // And moving the subscription moves the renewal, because there is only
     // one place the date lives.

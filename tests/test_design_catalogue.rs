@@ -326,16 +326,12 @@ async fn design_badge_rules_name_only_things_the_engine_can_read() {
 
     // A rule referencing a proof type nothing implements is a badge nobody
     // can ever earn, and no test would otherwise notice.
-    const KNOWN: &[&str] = &[
-        "deliverable_verified",
-        "attestation_received",
-        "onboarding_bonjour_completed",
-        "slice_merged_upstream",
-        "deliverable_featured",
-        "tournament_podium",
-        "tournament_judged",
-        "mentorship_mentees_led",
-    ];
+    //
+    // Read from the engine rather than copied. The copy went stale in the
+    // direction nobody expects — the engine grew `design_briefs_published`
+    // and this list did not, so a correct rule was reported as naming
+    // something unimplemented.
+    let known = skilluv_backend::services::badge_engine::PROOF_TYPES;
 
     let rules: Vec<(String, serde_json::Value)> =
         sqlx::query_as("SELECT slug, conditions FROM badge_rules WHERE slug LIKE 'design-%'")
@@ -351,7 +347,7 @@ async fn design_badge_rules_name_only_things_the_engine_can_read() {
         for t in types {
             let name = t.as_str().unwrap_or_default();
             assert!(
-                KNOWN.contains(&name),
+                known.contains(&name),
                 "{slug} asks for proof type '{name}', which the engine does not implement"
             );
         }

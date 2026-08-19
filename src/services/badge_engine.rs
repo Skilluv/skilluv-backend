@@ -59,6 +59,29 @@ use uuid::Uuid;
 
 use crate::errors::AppError;
 
+/// Every `proof_type` this engine knows how to count.
+///
+/// A rule naming anything else is satisfied by nothing and awards its badge to
+/// nobody, forever, without an error — the failure is a badge that quietly does
+/// not exist. `tests/test_design_catalogue.rs` checks the seeded rules against
+/// this list, and it lives here rather than in the test so that adding a proof
+/// type to the engine is one edit instead of two that drift.
+pub const PROOF_TYPES: &[&str] = &[
+    "attestation_received",
+    "contest_won",
+    "deliverable_featured",
+    "deliverable_verified",
+    "design_briefs_published",
+    "mentee_guided",
+    "mentorship_mentees_led",
+    "mission_completed",
+    "onboarding_bonjour_completed",
+    "orientation",
+    "slice_merged_upstream",
+    "tournament_judged",
+    "tournament_podium",
+];
+
 #[derive(Debug, Deserialize, Default, Clone)]
 struct RuleConditions {
     #[serde(default)]

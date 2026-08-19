@@ -382,7 +382,7 @@ async fn a_studio_carries_its_shares_onto_the_work() {
 
     assert_eq!(shares.len(), 2);
     assert_eq!(shares[0].0, a);
-    assert_eq!(shares[0].1.to_string(), "60.00");
+    common::assert_decimal(&shares[0].1, "60.00");
 }
 
 #[tokio::test]
@@ -706,7 +706,7 @@ async fn an_accepted_milestone_pays_the_team_by_their_shares() {
     .fetch_one(&app.db)
     .await
     .unwrap();
-    assert_eq!(revenue.0.to_string(), "4500.00");
+    common::assert_decimal(&revenue.0, "4500.00");
     assert_eq!(revenue.1, 1500);
 }
 
@@ -779,7 +779,7 @@ async fn the_quote_is_the_maximum_the_client_can_be_billed() {
     // Five testers at 25 plus a 500 fee. Quoted at the maximum, because a
     // client who budgets for the average and is billed for the maximum has
     // been misled by arithmetic.
-    assert_eq!(body["data"]["quoted_maximum"].as_str().unwrap(), "625.00");
+    common::assert_amount(&body["data"]["quoted_maximum"], "625.00");
 }
 
 #[tokio::test]
@@ -945,5 +945,5 @@ async fn the_program_fee_is_booked_at_closing_not_at_opening() {
     .fetch_one(&app.db)
     .await
     .unwrap();
-    assert_eq!(booked.to_string(), "500.00");
+    common::assert_decimal(&booked, "500.00");
 }

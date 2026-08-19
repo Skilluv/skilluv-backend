@@ -230,7 +230,7 @@ async fn a_sponsorship_takes_the_published_price_unless_told_otherwise() {
             .fetch_one(&app.db)
             .await
             .unwrap();
-    assert_eq!(fee.to_string(), "3800.00");
+    common::assert_decimal(&fee, "3800.00");
 }
 
 #[tokio::test]
@@ -337,7 +337,7 @@ async fn signing_grants_the_credits_the_tier_promised() {
     .fetch_one(&app.db)
     .await
     .unwrap();
-    assert_eq!(granted.to_string(), "20.00");
+    common::assert_decimal(&granted, "20.00");
 }
 
 #[tokio::test]
@@ -372,7 +372,7 @@ async fn revenue_is_booked_when_the_event_happened_not_when_it_was_signed() {
     .fetch_one(&app.db)
     .await
     .unwrap();
-    assert_eq!(booked.to_string(), "460.00");
+    common::assert_decimal(&booked, "460.00");
 }
 
 #[tokio::test]
@@ -735,7 +735,7 @@ async fn a_refusal_after_the_quality_gate_owes_the_author_a_reason() {
         .await;
     assert_eq!(resp.status(), 200, "{}", resp.text().await.unwrap());
     let body: Value = resp.json().await.unwrap();
-    assert_eq!(body["data"]["reward_paid"].as_str().unwrap(), "200.00");
+    common::assert_amount(&body["data"]["reward_paid"], "200.00");
 }
 
 #[tokio::test]
@@ -827,7 +827,7 @@ async fn sponsored_content_always_says_it_is_sponsored() {
     .fetch_one(&app.db)
     .await
     .unwrap();
-    assert_eq!(booked.to_string(), "1200.00");
+    common::assert_decimal(&booked, "1200.00");
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -967,7 +967,7 @@ async fn nobody_becomes_an_ambassador_without_saying_yes() {
     .fetch_one(&app.db)
     .await
     .unwrap();
-    assert_eq!(booked.to_string(), "5000.00");
+    common::assert_decimal(&booked, "5000.00");
 }
 
 #[tokio::test]
@@ -1016,7 +1016,7 @@ async fn a_short_month_is_pro_rated_and_paid_once() {
         .await;
     assert_eq!(resp.status(), 200, "{}", resp.text().await.unwrap());
     let body: Value = resp.json().await.unwrap();
-    assert_eq!(body["data"]["paid"].as_str().unwrap(), "200.00");
+    common::assert_amount(&body["data"]["paid"], "200.00");
 
     // A retry that paid twice would be found by an accountant months later,
     // if at all.

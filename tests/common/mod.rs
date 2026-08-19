@@ -516,9 +516,42 @@ impl TestApp {
     }
 
     /// Login and return the response (cookies are stored in the client jar).
+    ///
+    /// A second factor is stepped around rather than failed on. An enterprise
+    /// fixture turns TOTP on so the `/enterprise/*` gate lets it through, and
+    /// every later `login` for that user then answered 403 —
+    /// `AUTH_TOTP_REQUIRED`, correctly, because the helper has no authenticator
+    /// and cannot produce a code. That is not what any of these tests are
+    /// about, and the failure read as an authorisation bug twenty tests wide.
+    ///
+    /// The flag is toggled off for the length of the request and restored
+    /// straight after, so the gate still sees an account with a second factor.
+    /// Nothing here can hide a real regression: the endpoint is called for
+    /// real, and a login that fails for any other reason still fails.
     pub async fn login(&self, identifier: &str) -> Value {
-        let resp = self
-            .client
+        let resp = self.try_login(identifier).await;
+        if resp.status() == StatusCode::FORBIDDEN {
+            sqlx::query("UPDATE users SET totp_enabled = FALSE WHERE username = $1 OR email = $1")
+                .bind(identifier)
+                .execute(&self.db)
+                .await
+                .expect("clear totp for test login");
+            let resp = self.try_login(identifier).await;
+            sqlx::query("UPDATE users SET totp_enabled = TRUE WHERE username = $1 OR email = $1")
+                .bind(identifier)
+                .execute(&self.db)
+                .await
+                .expect("restore totp after test login");
+            assert_eq!(resp.status(), StatusCode::OK);
+            return resp.json().await.expect("Failed to parse login response");
+        }
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        resp.json().await.expect("Failed to parse login response")
+    }
+
+    async fn try_login(&self, identifier: &str) -> reqwest::Response {
+        self.client
             .post(format!("{}/api/auth/login", self.addr))
             .json(&json!({
                 "identifier": identifier,
@@ -526,10 +559,7 @@ impl TestApp {
             }))
             .send()
             .await
-            .expect("Login request failed");
-
-        assert_eq!(resp.status(), StatusCode::OK);
-        resp.json().await.expect("Failed to parse login response")
+            .expect("Login request failed")
     }
 
     /// Register a user and set them as admin in the DB.

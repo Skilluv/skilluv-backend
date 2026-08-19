@@ -8,6 +8,13 @@ use uuid::Uuid;
 
 async fn an_enterprise(app: &TestApp, company: &str) -> Uuid {
     app.register_enterprise(company).await;
+    // `register_enterprise` verifies the e-mail and stops there. Every
+    // `/enterprise/*` route also wants a session and a second factor, so
+    // without these two lines the gate answers 403 and every assertion in this
+    // file reads as an authorisation failure rather than the thing it tests.
+    let username = company.to_lowercase().replace(' ', "");
+    app.login(&username).await;
+    app.enable_totp_for(&username).await;
     sqlx::query_scalar(
         "SELECT e.id FROM enterprises e JOIN users u ON u.id = e.owner_id
           WHERE e.company_name = $1",

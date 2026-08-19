@@ -316,7 +316,7 @@ async fn the_maximum_cost_is_shown_before_anybody_starts() {
 
     // Four weeks at 80, thirty-five hours a week. Seen now rather than on the
     // first invoice.
-    assert_eq!(body["data"]["maximum_cost"], "11200.00");
+    common::assert_amount(&body["data"]["maximum_cost"], "11200.00");
 }
 
 #[tokio::test]
@@ -434,8 +434,8 @@ async fn only_approved_hours_are_settled() {
 
     // 8 h at 80 = 640 gross. 15% platform = 96, talent 544. The unapproved
     // six hours are not money owed.
-    assert_eq!(body["data"]["talent_owed"], "544.00");
-    assert_eq!(body["data"]["platform_share"], "96.00");
+    common::assert_amount(&body["data"]["talent_owed"], "544.00");
+    common::assert_amount(&body["data"]["platform_share"], "96.00");
 }
 
 #[tokio::test]

@@ -407,7 +407,7 @@ async fn leaving_early_refunds_the_whole_fee() {
         .await;
     assert_eq!(resp.status(), 200, "{}", resp.text().await.unwrap());
     let body: Value = resp.json().await.unwrap();
-    assert_eq!(body["data"]["refund_amount"], "4000.00");
+    common::assert_amount(&body["data"]["refund_amount"], "4000.00");
 }
 
 #[tokio::test]
@@ -428,7 +428,7 @@ async fn leaving_after_the_guarantee_refunds_nothing() {
         .await;
     assert_eq!(resp.status(), 200);
     let body: Value = resp.json().await.unwrap();
-    assert_eq!(body["data"]["refund_amount"], "0.00");
+    common::assert_amount(&body["data"]["refund_amount"], "0.00");
 }
 
 #[tokio::test]

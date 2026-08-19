@@ -221,11 +221,13 @@ address KYC full, live AI wiring in prod, and RLS enforcement.
   `routes/events.rs`): `events(slug, name, starts_at, ends_at,
   visual_theme JSONB, is_partner, is_active)` +
   `user_event_participation(user_id, event_id, joined_at,
-  contribution_ref)`. Routes namespaced as `/badge-events` to avoid
-  collision with the pre-existing `/events` from tournaments. `GET
-  /api/badge-events` (active only), `POST
-  /api/badge-events/{slug}/join` (idempotent), `GET
-  /api/users/me/badge-events`. Wires up Skilluv Fest / Hacktoberfest /
+  contribution_ref)`. `GET /api/events` (active only), `POST
+  /api/events/{slug}/join` (idempotent), `GET /api/users/me/events`.
+  (This entry originally said the routes were namespaced as
+  `/badge-events` to avoid a collision with the tournament `/events`.
+  They never were — the collision was real and was resolved instead by
+  moving the tournament route to `/api/tournaments/feed`, which is what
+  had been making the router panic at startup.) Wires up Skilluv Fest / Hacktoberfest /
   seasons to eventually mint `event_stamp` badges via the P17.3 rules
   engine.
 - **P17.5** — Badge API (`routes/badges.rs`): polymorphic `GET

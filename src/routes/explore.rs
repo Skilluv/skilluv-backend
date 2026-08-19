@@ -54,8 +54,11 @@ pub struct ExploreQuery {
     /// Filtre optionnel sur le kind (`slice` | `challenge`). Sinon les deux.
     #[param(pattern = r"^(slice|challenge)$")]
     pub kind: Option<String>,
-    /// Filtre domaine (`code`, `design`, `game`, `security`, `ops`, `ai`, `soft_skills`).
-    #[param(pattern = r"^(code|design|game|security|ops|ai|soft_skills)$")]
+    /// One of the eight active domains. The handler checks it against
+    /// `validators::SKILL_DOMAINS`; this pattern is the same list, and it had
+    /// gone stale — a contract that understates what it accepts sends a caller
+    /// looking for an endpoint that does not exist.
+    #[param(pattern = r"^(code|design|game|security|ops|ai|soft_skills|audio)$")]
     pub domain: Option<String>,
     /// Difficulté (1-5).
     #[param(minimum = 1, maximum = 5)]

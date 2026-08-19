@@ -107,3 +107,67 @@ async fn a_declared_minimum_is_enforced_and_not_only_documented() {
     let resp = app.get("/api/talents/search?min_craft_score=0").await;
     assert_eq!(resp.status().as_u16(), 200, "{:?}", resp.text().await);
 }
+
+#[tokio::test]
+async fn a_declared_pattern_is_enforced_and_not_only_documented() {
+    let app = TestApp::spawn().await;
+
+    // `?language_spoken=` was accepted, applied, and reported back in
+    // `filters_applied` — so the answer claimed to have narrowed the search on
+    // a language while matching nobody, which reads as "no such people"
+    // rather than "that is not a language code".
+    for bad in ["", "x", "fra", "1r"] {
+        let path = format!("/api/talents/search?language_spoken={bad}");
+        let resp = app.get(&path).await;
+        assert_eq!(
+            resp.status().as_u16(),
+            400,
+            "{path}: {:?}",
+            resp.text().await
+        );
+    }
+
+    for bad in ["", "fr", "FRA"] {
+        let path = format!("/api/talents/search?country_iso2={bad}");
+        let resp = app.get(&path).await;
+        assert_eq!(
+            resp.status().as_u16(),
+            400,
+            "{path}: {:?}",
+            resp.text().await
+        );
+    }
+
+    let resp = app
+        .get("/api/talents/search?language_spoken=fr&country_iso2=BJ")
+        .await;
+    assert_eq!(resp.status().as_u16(), 200, "{:?}", resp.text().await);
+}
+
+#[tokio::test]
+async fn the_domain_filters_accept_every_live_domain() {
+    let app = TestApp::spawn().await;
+
+    // Three endpoints declared a domain list in their contract and let it go
+    // stale — four domains in one, seven in two others, against eight live.
+    // A contract that understates what it accepts sends a caller looking for
+    // an endpoint that does not exist.
+    let live: Vec<String> =
+        sqlx::query_scalar("SELECT slug FROM skill_domains WHERE is_active ORDER BY slug")
+            .fetch_all(&app.db)
+            .await
+            .unwrap();
+
+    for domain in &live {
+        for base in ["/api/slices", "/api/explore", "/api/challenges"] {
+            let path = format!("{base}?domain={domain}");
+            let resp = app.get(&path).await;
+            assert_ne!(
+                resp.status().as_u16(),
+                400,
+                "{path} refuses a live domain: {:?}",
+                resp.text().await
+            );
+        }
+    }
+}

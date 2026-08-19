@@ -660,6 +660,25 @@ fn validate(q: &SearchQuery) -> Result<(), AppError> {
             "min_craft_score must be between 0 and 10000".into(),
         ));
     }
+    // The two-letter codes, declared with a pattern and enforced nowhere.
+    // `?language_spoken=` was accepted, applied, and reported back in
+    // `filters_applied` — so the answer said it had narrowed the search on a
+    // language while matching nobody, which reads as "no such people" rather
+    // than "that is not a language code".
+    if let Some(code) = &q.country_iso2
+        && !(code.len() == 2 && code.chars().all(|c| c.is_ascii_uppercase()))
+    {
+        return Err(AppError::Validation(
+            "country_iso2 must be two uppercase letters".into(),
+        ));
+    }
+    if let Some(code) = &q.language_spoken
+        && !(code.len() == 2 && code.chars().all(|c| c.is_ascii_alphabetic()))
+    {
+        return Err(AppError::Validation(
+            "language_spoken must be a two-letter code".into(),
+        ));
+    }
     if !matches!(
         q.sort.as_str(),
         "craft_score" | "contests_won" | "missions_delivered" | "recently_featured"

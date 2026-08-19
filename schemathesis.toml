@@ -9,6 +9,19 @@
 # follows for advisories: an exception that nobody can explain later becomes an
 # exception nobody dares remove.
 
+[generation]
+# Do not generate NUL inside strings.
+#
+# JSON Schema's `string` admits `\0`; a PostgreSQL `text` column does not, at
+# all. So the API refuses a request carrying one, with a 400 saying so — which
+# is the correct answer and which the generic "schema-compliant input must be
+# accepted" check reads as a bug.
+#
+# Turned off here rather than by disabling that check, because the check is
+# worth keeping: it is the one that would notice the API refusing input it
+# ought to take. What is wrong is the input, not the expectation.
+allow-x00 = false
+
 [[operations]]
 include-name = "GET /api/feed/public"
 

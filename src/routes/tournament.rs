@@ -37,8 +37,12 @@ pub fn tournament_routes() -> Router<AppState> {
             "/tournaments/{slug}/community-ranking",
             get(community_ranking),
         )
-        // Public events feed
-        .route("/events", get(events_feed))
+        // The season and what is coming up. Not `/events`: that path belongs
+        // to `events.rs`, which owns the `events` table and its sub-paths —
+        // and registering both made the router panic at startup, so the
+        // binary did not boot at all. Nothing caught it but the contract
+        // test, because `build_router` is only ever built by the binary.
+        .route("/tournaments/feed", get(events_feed))
 }
 
 /// Trello vx5q6jW4 — les admin routes de seasons/tournaments vivaient dans
@@ -603,11 +607,15 @@ pub async fn admin_conclude(
     }))))
 }
 
-// ─── Events feed (public landing) ────────────────────────────────
+// ─── The season, and what is coming up ───────────────────────────
 
-/// Public events feed (tournaments + season milestones).
+/// The current season and the tournaments still open, for the landing page.
+///
+/// Named after what it returns rather than after where it is shown. It was
+/// `/api/events`, which collides with the events catalogue and describes
+/// neither a season nor a tournament.
 #[utoipa::path(
-    get, path = "/api/events", tag = "feed",
+    get, path = "/api/tournaments/feed", tag = "feed",
     responses((status = 200, body = serde_json::Value)),
 )]
 pub async fn events_feed(State(state): State<AppState>) -> Result<Json<Value>, AppError> {

@@ -50,6 +50,12 @@ ignore = [
     #   fetches CRLs — Discord's cert doesn't advertise a CRL DP that
     #   rustls-webpki would follow.
     #
+    # These four report `advisory-not-detected` on a default-feature build,
+    # and that is expected rather than stale: serenity is behind the optional
+    # `discord-bot` feature, so the crates they cover are not in the graph CI
+    # resolves. Deleting them because the warning looks like dead config is
+    # how the exception disappears and the bot build starts failing.
+    #
     # Drop once serenity ships a release on the rustls 0.23 chain.
     "RUSTSEC-2026-0049",
     "RUSTSEC-2026-0098",

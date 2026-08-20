@@ -160,8 +160,16 @@ async fn measure(db: &PgPool, user_id: Uuid) -> Result<Measurements, AppError> {
                 AND g.domain = 'ops')
                 AS review_grid_average,
 
+            -- BIGINT, not INT. Every other figure here is a `count(*)`, which
+            -- PostgreSQL returns as bigint, and the struct reads them all as
+            -- `i64`. This one went through `date_part`, so the cast decided
+            -- the column's width — and `::INT` made it the one int4 in the
+            -- row. sqlx does not widen: it refused to decode the whole row,
+            -- so `GET /users/{username}/ops-profile` answered 500 to every
+            -- call it has ever received. One test reaches this endpoint,
+            -- which is why one test failed rather than the suite.
             (SELECT COALESCE(
-                        date_part('year', age(NOW(), min(a.issued_at)))::INT + 1,
+                        date_part('year', age(NOW(), min(a.issued_at)))::BIGINT + 1,
                         0)
                FROM attestations a
               WHERE a.user_id = $1 AND a.revoked_at IS NULL

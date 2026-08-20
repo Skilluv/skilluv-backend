@@ -647,3 +647,43 @@ async fn an_ops_artefact_says_what_it_is() {
     .await;
     assert!(good.is_ok(), "{good:?}");
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// Every ops GET answers something
+// ═══════════════════════════════════════════════════════════════════
+
+/// No ops read endpoint answers 500 to a plain request.
+///
+/// `GET /users/{username}/ops-profile` returned 500 to every call it had ever
+/// received — one figure in its query was cast to `INT` while the struct read
+/// every column as `i64`, and sqlx refused to decode the row. The suite
+/// reported a single failure, because exactly one test reached that endpoint,
+/// and only on its way to checking something else.
+///
+/// A 500 is never the right answer here: unauthenticated is 401, absent is
+/// 404, refused is 403. This asserts the shape of the answer rather than its
+/// content, so it stays true as the endpoints grow, and it fails the day a
+/// query stops decoding — which is the failure that hid.
+#[tokio::test]
+async fn no_ops_read_endpoint_answers_500() {
+    let app = TestApp::spawn().await;
+    a_talent(&app, "ops_smoke").await;
+
+    for path in [
+        "/api/ops/reference",
+        "/api/ops/toolkit",
+        "/api/ops/incidents",
+        "/api/ops/mentors/for-me",
+        "/api/ops/onboarding",
+        "/api/users/ops_smoke/ops-profile",
+        "/api/admin/ops/overdue-actions",
+    ] {
+        let resp = app.get(path).await;
+        let status = resp.status().as_u16();
+        assert!(
+            status < 500,
+            "GET {path} answered {status}: {:?}",
+            resp.text().await
+        );
+    }
+}

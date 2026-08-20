@@ -466,6 +466,65 @@ address KYC full, live AI wiring in prod, and RLS enforcement.
 
 ### Fixed
 
+- **fix(ops)** — `GET /users/{username}/ops-profile` answered 500 to every
+  request it had ever received. Twelve of its thirteen figures are `count(*)`,
+  which PostgreSQL returns as bigint, and the struct reads all thirteen as
+  `i64`; the thirteenth went through `date_part` and was cast `::INT`, making
+  it the one int4 in the row. sqlx does not widen an integer to fit, so it
+  refused to decode the row. The four sibling services — AI, audio, design,
+  code — all cast `::BIGINT`; ops was the only one written otherwise.
+- **fix(enterprise)** — `/api/enterprises/me/agency-clients` and
+  `/api/enterprises/me/type-config` ordered by `enterprise_members.created_at`,
+  a column that does not exist: the table records when somebody was invited
+  and when they accepted. Both endpoints 500'd on every call. The function is
+  a second copy of `enterprise::resolve_active_enterprise` that had drifted;
+  realigning it also restored the `status = 'active'` filter it had lost,
+  without which a pending invitation outranked a membership somebody holds.
+- **fix(accounting)** — `/api/admin/accounting/export` selected
+  `enterprises.country`, which does not exist either. The country lives on the
+  invoice, which is the correct source: VAT follows where the customer was
+  when they were billed, so a company that has since moved must not
+  retroactively change last year's return.
+- **fix(payments)** — An unconfigured Stripe was reported as an internal
+  error. That tells a caller the server failed when the honest answer is that
+  payments were never set up on this deployment. Four handlers now answer 503.
+- **fix(search)** — `capability` and `skills` are closed vocabularies and were
+  accepted as free text, so a filter that could match nothing answered 200
+  with an empty list — telling a recruiter that nobody holds the capability
+  rather than that what they typed is not one. Both are checked as shapes now,
+  deliberately not against the catalogue: a capability that exists and that
+  nobody holds must still return an empty list, because that is true.
+- **fix(migrations)** — `domain_curator:all` was inserted with a NULL scope
+  against a CHECK requiring `family || ':' || scope`. The insert was refused,
+  which failed the migration chain, which meant the backend never started —
+  one row costing an entire CI run.
+
+### Added
+
+- **`scripts/check-migrations.sh`** — applies every migration to a throwaway
+  database and asserts what the schema should hold. Fifteen seconds against a
+  local PostgreSQL; no Docker, no test suite. A migration is checked by
+  nothing else — not `cargo check`, not clippy, not a unit test — so a bad row
+  does not fail one test, it fails the chain and every shard with it.
+- **`tests/test_read_endpoints_answer.rs`** — calls the 118 GET routes that
+  take no path parameter and that no other test reaches, as a stranger, a
+  member and an admin. An audit found 404 of 922 registered routes called by
+  no test at all; this covers the cheapest place for a dead endpoint to hide,
+  and found three on its first run. It asserts the shape of the answer rather
+  than its content: 401, 403, 404 and 503 are all correct, and a 500 to a
+  well-formed request is what a query that has stopped decoding produces.
+
+### Changed
+
+- **ci** — Eight test shards instead of four, and a 45-minute budget instead
+  of 35. At four, three shards out of four were being killed by the timeout,
+  so a run reported a quarter of its failures and lost the rest. A shard is
+  ~12 min of compilation plus ~16 min of tests and only the second half
+  divides, so eight shards is ~20 min rather than half of 28 — the gain that
+  matters is that results survive to be read.
+
+### Fixed
+
 - **fix(goals)** — A capability goal could not be created at all. The target
   was validated by pattern-matching the *text* of
   `user_capabilities_capability_check`, and migration 0404 made the

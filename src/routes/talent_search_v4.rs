@@ -628,6 +628,43 @@ fn validate(q: &SearchQuery) -> Result<(), AppError> {
     crate::validators::check_max_len_opt(&q.orientation, "orientation", 100)?;
     crate::validators::check_max_len_opt(&q.skills, "skills", 500)?;
     crate::validators::check_max_len_opt(&q.capability, "capability", 60)?;
+
+    // Both are closed vocabularies, and both were accepted as free text. A
+    // capability is `family` or `family:scope`; a skill filter is a CSV of
+    // slugs. Anything else matches nothing, and answering 200 with an empty
+    // list tells a recruiter that nobody has the skill rather than that the
+    // filter was not a skill.
+    //
+    // Checked as a shape rather than against the catalogue on purpose: a
+    // capability that exists but nobody holds must still return an empty
+    // list, because that is a true answer about the platform.
+    fn is_slug(s: &str) -> bool {
+        !s.is_empty()
+            && s.chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_')
+    }
+
+    if let Some(capability) = &q.capability {
+        let shaped = match capability.split_once(':') {
+            Some((family, scope)) => is_slug(family) && is_slug(scope),
+            None => is_slug(capability),
+        };
+        if !shaped {
+            return Err(AppError::Validation(
+                "capability must be a slug, optionally scoped — `mentor`, \
+                 `code_reviewer:web`"
+                    .into(),
+            ));
+        }
+    }
+
+    if let Some(skills) = &q.skills
+        && !skills.split(',').all(|s| is_slug(s.trim()))
+    {
+        return Err(AppError::Validation(
+            "skills is a comma-separated list of skill slugs".into(),
+        ));
+    }
     crate::validators::check_max_len_opt(&q.min_tier, "min_tier", 40)?;
     crate::validators::check_max_len_opt(&q.platform, "platform", 30)?;
     crate::validators::check_max_len_opt(&q.badge, "badge", 100)?;

@@ -171,3 +171,49 @@ async fn the_domain_filters_accept_every_live_domain() {
         }
     }
 }
+
+#[tokio::test]
+async fn a_closed_vocabulary_filter_is_shaped_like_one() {
+    let app = TestApp::spawn().await;
+
+    // `capability` and `skills` are closed vocabularies and were accepted as
+    // free text. A filter that cannot match anything answered 200 with an
+    // empty list, which tells a recruiter that nobody has the skill rather
+    // than that what they typed is not a skill.
+    for bad in [
+        "J&x",
+        "Code_Reviewer",
+        "code reviewer",
+        "code_reviewer:",
+        ":web",
+    ] {
+        let path = format!("/api/talents/search?capability={bad}");
+        let resp = app.get(&path).await;
+        assert_eq!(
+            resp.status().as_u16(),
+            400,
+            "{path}: {:?}",
+            resp.text().await
+        );
+    }
+
+    let resp = app.get("/api/talents/search?skills=.exe").await;
+    assert_eq!(resp.status().as_u16(), 400, "{:?}", resp.text().await);
+
+    // And the shapes that are real still answer. A capability nobody holds
+    // returns an empty list, which is a true answer about the platform.
+    for good in [
+        "/api/talents/search?capability=mentor",
+        "/api/talents/search?capability=code_reviewer:web",
+        "/api/talents/search?capability=design_reviewer:3d-viz",
+        "/api/talents/search?skills=rust,react-hooks",
+    ] {
+        let resp = app.get(good).await;
+        assert_eq!(
+            resp.status().as_u16(),
+            200,
+            "{good}: {:?}",
+            resp.text().await
+        );
+    }
+}

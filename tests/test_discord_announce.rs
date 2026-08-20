@@ -18,15 +18,23 @@ fn monday_of_this_week() -> chrono::NaiveDate {
     today - chrono::Duration::days(today.weekday().num_days_from_monday() as i64)
 }
 
-/// A configured room.
+/// A configured room. An empty domain means the domain-blind room, which is
+/// NULL in the column since 0440 — the empty string was a sentinel kept only
+/// so the primary key would not have to reason about NULL equality, and a
+/// sentinel cannot point at the domain catalogue.
+///
+/// The conflict target is the expression index that replaced that primary
+/// key. Naming the columns instead looks for a constraint on
+/// `(purpose, skill_domain)`, which no longer exists.
 async fn a_channel(app: &TestApp, purpose: &str, domain: &str, id: &str) {
     sqlx::query(
         "INSERT INTO discord_channels (purpose, skill_domain, channel_id, label)
          VALUES ($1, $2, $3, 'test')
-         ON CONFLICT (purpose, skill_domain) DO UPDATE SET channel_id = EXCLUDED.channel_id",
+         ON CONFLICT (purpose, COALESCE(skill_domain, ''))
+             DO UPDATE SET channel_id = EXCLUDED.channel_id",
     )
     .bind(purpose)
-    .bind(domain)
+    .bind((!domain.is_empty()).then_some(domain))
     .bind(id)
     .execute(&app.db)
     .await

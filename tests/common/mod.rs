@@ -955,33 +955,43 @@ pub async fn delivered_in(app: &TestApp, user: Uuid, domain: &str, family: &str)
 
     // The surface the work lives on, per domain. A design slice additionally
     // has to say what came out of it and which trade it belongs to.
-    let slice_type = match domain {
-        "code" => "code_artifact",
-        "ai" => "ai_artifact",
-        "audio" => "audio_artifact",
-        "design" => "design_artifact",
-        "ops" => "ops_artifact",
+    // The surface the work lives on, and what came out of it. Each domain has
+    // its own subtype column, and the pairing is enforced both ways: an
+    // `ai_artifact` slice must name an `ai_subtype`, and a slice of any other
+    // type must leave it NULL. Setting only `design_subtype` therefore failed
+    // for every domain except design.
+    let (slice_type, subtype_column, subtype) = match domain {
+        "code" => ("code_artifact", "code_subtype", "library_published"),
+        "ai" => ("ai_artifact", "ai_subtype", "ml_model"),
+        "audio" => ("audio_artifact", "audio_subtype", "composition"),
+        "design" => ("design_artifact", "design_subtype", "interface"),
+        "ops" => ("ops_artifact", "ops_subtype", "iac_terraform"),
         other => panic!("no slice type known for the {other} domain"),
     };
-    let design_subtype = (domain == "design").then_some("interface");
 
-    let slice: Uuid = sqlx::query_scalar(
+    // `published_artifact_url` on every one of them. Two subtypes demand it —
+    // an `ml_model` and a `library_published` are claims about something a
+    // stranger can fetch, and the schema refuses one that says nowhere. Giving
+    // it to all five is simpler than tracking which, and it is never wrong:
+    // this helper exists to describe work that was delivered.
+    let slice: Uuid = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
         "INSERT INTO project_slices
             (project_id, slice_type, title, description, primary_domain, difficulty,
-             status, orientation_id, design_subtype)
+             status, orientation_id, published_artifact_url, {subtype_column})
          VALUES ($1, $2, 'Travail', 'Un brief.', $3, 3, 'validated',
                  (SELECT id FROM orientations
                    WHERE primary_domain = $3 AND reviewer_group = $4
                      AND is_archived = FALSE
                    ORDER BY slug LIMIT 1),
+                 'https://example.test/delivered',
                  $5)
-         RETURNING id",
-    )
+         RETURNING id"
+    )))
     .bind(project)
     .bind(slice_type)
     .bind(domain)
     .bind(family)
-    .bind(design_subtype)
+    .bind(subtype)
     .fetch_one(&app.db)
     .await
     .unwrap_or_else(|e| panic!("slice in {domain}/{family}: {e}"));

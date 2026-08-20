@@ -200,6 +200,15 @@ notification:
       title: "You are now {rank}"
       body: "Your work on the platform earned you the rank of {rank}."
       cta: "See my profile"
+  moderation:
+    plagiarism_case_opened:
+      title: "An entry you submitted is being contested"
+      body: "Somebody says it reuses existing work. You have 72 hours to answer before a decision is taken."
+      cta: "Read and answer"
+    plagiarism_case_decided:
+      title: "The case has been decided"
+      body: "The decision is written down, with its reasons."
+      cta: "Read the decision"
   design:
     brief_published:
       title: "Your brief is published"

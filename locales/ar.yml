@@ -195,6 +195,15 @@ notification:
       title: "أصبحت الآن {rank}"
       body: "عملك على المنصة رفعك إلى رتبة {rank}."
       cta: "عرض ملفي"
+  moderation:
+    plagiarism_case_opened:
+      title: "اعتراض على عمل قدمته"
+      body: "يقول أحدهم إنه يعيد استخدام عمل موجود. لديك 72 ساعة للرد قبل اتخاذ القرار."
+      cta: "اقرأ ورد"
+    plagiarism_case_decided:
+      title: "تم البت في الاعتراض"
+      body: "القرار مكتوب مع أسبابه."
+      cta: "اقرأ القرار"
   design:
     brief_published:
       title: "نُشر موجزك"

@@ -214,6 +214,8 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", admin_gate(routes::admin_dashboard_routes()))
         .nest("/api", admin_gate(routes::admin_domain_routes()))
         .nest("/api", admin_gate(routes::admin_mission_routes()))
+        .nest("/api", admin_gate(routes::admin_plagiarism_routes()))
+        .nest("/api", routes::plagiarism_routes())
         .nest("/api", admin_gate(routes::admin_fraud_routes()))
         .nest("/api", admin_gate(routes::admin_project_routes()))
         .nest("/api", admin_gate(routes::admin_slice_routes()))

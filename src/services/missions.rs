@@ -606,17 +606,50 @@ pub async fn delivered_missions_of(db: &PgPool, user_id: Uuid) -> Result<i64, Ap
     Ok(count)
 }
 
-/// The rate that applies to this person, today.
+/// A rate, and the rule that produced it.
+///
+/// The reason travels with the number because a rate with nothing to point at
+/// is a rate somebody will eventually argue about.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Commission {
+    pub percent: f64,
+    /// `standard`, `charity_brief` or `loyalty_discount`.
+    pub reason: &'static str,
+}
+
+/// The rate that applies to this mission, taken by this person, today.
 ///
 /// Called once, at selection, and written onto the mission. Reading it at
 /// payout time would mean somebody's tenth delivery retroactively re-rated
 /// the nine before it.
-pub async fn commission_for(db: &PgPool, user_id: Uuid) -> Result<f64, AppError> {
+///
+/// Charity wins over loyalty rather than stacking: zero is already the floor,
+/// and "zero, and then ten percent off" is a rule somebody implements wrongly
+/// one day.
+pub async fn commission_for(
+    db: &PgPool,
+    user_id: Uuid,
+    charity_brief: bool,
+) -> Result<Commission, AppError> {
+    if charity_brief {
+        // Skilluv does not take a cut of work given away.
+        return Ok(Commission {
+            percent: 0.0,
+            reason: "charity_brief",
+        });
+    }
+
     let delivered = delivered_missions_of(db, user_id).await?;
     Ok(if delivered >= FEATURED_THRESHOLD {
-        FEATURED_COMMISSION
+        Commission {
+            percent: FEATURED_COMMISSION,
+            reason: "loyalty_discount",
+        }
     } else {
-        STANDARD_COMMISSION
+        Commission {
+            percent: STANDARD_COMMISSION,
+            reason: "standard",
+        }
     })
 }
 
@@ -850,18 +883,24 @@ pub async fn decide(
     .await?;
 
     if status == "selected" {
-        let commission = commission_for(db, applicant).await?;
+        let charity: bool = sqlx::query_scalar("SELECT charity_brief FROM missions WHERE id = $1")
+            .bind(mission_id)
+            .fetch_one(&mut *tx)
+            .await?;
+        let commission = commission_for(db, applicant, charity).await?;
         sqlx::query(
             "UPDATE missions
                 SET assigned_user_id = $2,
                     assigned_at = NOW(),
                     status = 'in_progress',
-                    commission_percent = $3
+                    commission_percent = $3,
+                    commission_reason = $4
               WHERE id = $1",
         )
         .bind(mission_id)
         .bind(applicant)
-        .bind(bigdecimal::BigDecimal::try_from(commission).unwrap_or_default())
+        .bind(bigdecimal::BigDecimal::try_from(commission.percent).unwrap_or_default())
+        .bind(commission.reason)
         .execute(&mut *tx)
         .await?;
 
@@ -884,6 +923,16 @@ pub async fn decide(
         .await?;
     }
     tx.commit().await?;
+
+    // The whole schedule of instalments, after the commit and only for the
+    // model that has one. A designer starting work needs to see how much each
+    // round releases and how much is held to the end.
+    if status == "selected"
+        && let Err(err) =
+            crate::services::mission_milestones::schedule_on_assignment(db, mission_id).await
+    {
+        tracing::warn!(%err, mission = %mission_id, "milestone schedule not raised");
+    }
 
     let sql = format!("{APPLICATION_SELECT} WHERE a.id = $1");
     sqlx::query_as::<_, Application>(sqlx::AssertSqlSafe(sql))

@@ -203,6 +203,15 @@ pub async fn accept(db: &PgPool, mission_id: Uuid, client_id: Uuid) -> Result<De
         tracing::warn!(%err, mission = %mission_id, "mission attestation not issued");
     }
 
+    // And the instalment this round earned, where the mission is paid that
+    // way. Does nothing for the other four models: they release on closure,
+    // which is the same money at a different moment.
+    if let Err(err) =
+        crate::services::mission_milestones::release_for_round(db, mission_id, delivery.round).await
+    {
+        tracing::warn!(%err, mission = %mission_id, "milestone instalment not released");
+    }
+
     Ok(delivery)
 }
 

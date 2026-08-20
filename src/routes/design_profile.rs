@@ -87,8 +87,14 @@ pub async fn design_profile(
     State(state): State<AppState>,
     Path(username): Path<String>,
 ) -> Result<Json<Value>, AppError> {
+    // `profile_active` as well as `profile_hidden`: registration leaves an
+    // account inactive until somebody fills it in, and serving one reads as
+    // "this person has done nothing" rather than "this person has not
+    // started". The recruiter search has always filtered on it; this page
+    // did not.
     let header: Option<ProfileHeader> = sqlx::query_as(
-        "SELECT id, profile_hidden FROM users WHERE username = $1 AND is_banned = FALSE",
+        "SELECT id, profile_hidden FROM users
+          WHERE username = $1 AND is_banned = FALSE AND profile_active = TRUE",
     )
     .bind(&username)
     .fetch_optional(&state.db)
@@ -192,9 +198,123 @@ pub async fn design_profile(
     .fetch_all(&state.db)
     .await?;
 
+    // Paid work: how much, of what kind, and how it was rated. No client
+    // names and no figures — what a piece of work paid is the contractor's
+    // business, and the client is often under an agreement Skilluv is not
+    // party to.
+    let missions: Vec<(String, i64)> = sqlx::query_as(
+        r#"
+        SELECT mt.slug, count(*)::bigint
+          FROM missions m
+          JOIN mission_types mt ON mt.id = m.mission_type_id
+         WHERE m.assigned_user_id = $1
+           AND m.skill_domain = 'design'
+           AND m.status IN ('delivered', 'closed')
+         GROUP BY mt.slug
+         ORDER BY count(*) DESC
+        "#,
+    )
+    .bind(header.id)
+    .fetch_all(&state.db)
+    .await?;
+
+    // Revealed ratings only, and the average is null rather than zero for
+    // somebody with none: an unrated person is not a badly rated one.
+    let standing = crate::services::mission_delivery::standing_of(&state.db, header.id).await?;
+
+    // Portfolios on platforms Skilluv does not own. Confirmed rows only: a
+    // URL somebody typed is not evidence, and this is a page a recruiter
+    // reads.
+    let portfolios: Vec<(String, String, Option<String>)> = sqlx::query_as(
+        r#"
+        SELECT provider, url, title
+          FROM external_signals
+         WHERE user_id = $1 AND verified_at IS NOT NULL
+         ORDER BY verified_at DESC
+        "#,
+    )
+    .bind(header.id)
+    .fetch_all(&state.db)
+    .await?;
+
+    // Work that took three rounds or more, with the rounds. This is the one
+    // section that shows the process rather than the result, and it is here
+    // because a deliverable that survived four critiques says something a
+    // finished image cannot.
+    //
+    // Shown, never ranked. Needing more rounds is not an achievement and not
+    // a failure — it is how somebody learned, and a leaderboard of it would
+    // teach people to iterate for the leaderboard.
+    let stories: Vec<(uuid::Uuid, String, i16, Value)> = sqlx::query_as(
+        r#"
+        SELECT s.id,
+               s.title,
+               max(v.round) AS rounds,
+               jsonb_agg(
+                   jsonb_build_object(
+                       'round', v.round,
+                       'decision', v.decision,
+                       'blocking_reason', v.blocking_reason,
+                       'artifact_url', v.reviewed_artifact_url,
+                       'decided_at', v.decided_at
+                   ) ORDER BY v.round
+               ) AS rounds_detail
+          FROM countable_deliverables d
+          JOIN project_slices s ON s.id = d.slice_id
+          JOIN slice_validation_decisions v ON v.slice_id = s.id
+         WHERE d.user_id = $1
+           AND d.artifact_type = 'design_artifact'
+           AND d.public = TRUE
+           AND v.decided_at IS NOT NULL
+         GROUP BY s.id, s.title
+        HAVING max(v.round) >= 3
+         ORDER BY max(v.round) DESC
+         LIMIT 6
+        "#,
+    )
+    .bind(header.id)
+    .fetch_all(&state.db)
+    .await?;
+
+    // What they say they are open to. A declaration, never a credential —
+    // and separated from everything above it for that reason.
+    let availability: Option<(bool, Option<String>)> =
+        sqlx::query_as("SELECT available_for_hire, looking_for FROM users WHERE id = $1")
+            .bind(header.id)
+            .fetch_optional(&state.db)
+            .await?;
+
     Ok(Json(build_response(json!({
         "username": username,
         "craft_score": score,
+        "missions": {
+            "delivered": missions.iter().map(|(_, n)| n).sum::<i64>(),
+            "by_type": missions
+                .into_iter()
+                .map(|(slug, count)| json!({ "mission_type": slug, "delivered": count }))
+                .collect::<Vec<_>>(),
+            // Null, not zero, for somebody nobody has rated yet.
+            "rating_average": standing.average,
+            "rating_count": standing.received,
+        },
+        "portfolios": portfolios
+            .into_iter()
+            .map(|(provider, url, title)| json!({
+                "provider": provider, "url": url, "title": title,
+            }))
+            .collect::<Vec<_>>(),
+        "iteration_stories": stories
+            .into_iter()
+            .map(|(slice_id, title, rounds, detail)| json!({
+                "slice_id": slice_id, "title": title, "rounds": rounds,
+                "timeline": detail,
+            }))
+            .collect::<Vec<_>>(),
+        "availability": availability
+            .map(|(available, looking_for)| json!({
+                "available_for_missions": available,
+                "looking_for": looking_for,
+            })),
         "artefacts": artefacts,
         "contests": contests
             .into_iter()

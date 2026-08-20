@@ -485,9 +485,13 @@ address KYC full, live AI wiring in prod, and RLS enforcement.
   invoice, which is the correct source: VAT follows where the customer was
   when they were billed, so a company that has since moved must not
   retroactively change last year's return.
-- **fix(payments)** — An unconfigured Stripe was reported as an internal
-  error. That tells a caller the server failed when the honest answer is that
-  payments were never set up on this deployment. Four handlers now answer 503.
+- **fix(payments, sandbox)** — An unconfigured Stripe and an unreachable
+  Judge0 were reported as internal errors. That tells a caller the server
+  failed when the honest answer is that the integration was never set up on
+  this deployment, or is not running. Both answer 503 now. For Judge0 the
+  distinction is drawn on the `reqwest` error: a transport failure is
+  unavailability, a response we received and disliked stays a 500, because
+  then the request itself is the suspect.
 - **fix(search)** — `capability` and `skills` are closed vocabularies and were
   accepted as free text, so a filter that could match nothing answered 200
   with an empty list — telling a recruiter that nobody holds the capability
@@ -506,13 +510,15 @@ address KYC full, live AI wiring in prod, and RLS enforcement.
   local PostgreSQL; no Docker, no test suite. A migration is checked by
   nothing else — not `cargo check`, not clippy, not a unit test — so a bad row
   does not fail one test, it fails the chain and every shard with it.
-- **`tests/test_read_endpoints_answer.rs`** — calls the 118 GET routes that
-  take no path parameter and that no other test reaches, as a stranger, a
-  member and an admin. An audit found 404 of 922 registered routes called by
-  no test at all; this covers the cheapest place for a dead endpoint to hide,
-  and found three on its first run. It asserts the shape of the answer rather
-  than its content: 401, 403, 404 and 503 are all correct, and a 500 to a
-  well-formed request is what a query that has stopped decoding produces.
+- **`tests/test_read_endpoints_answer.rs`** — calls the 192 GET routes that no
+  other test reaches, as a stranger, a member and an admin. An audit found 404
+  of 922 registered routes called by no test at all; this covers every GET
+  among them, the parameterised ones with an id nothing owns — a handler
+  naming a column that does not exist fails when the query runs, not when a
+  row matches. It found three dead endpoints on its first run. It asserts the
+  shape of the answer rather than its content: 401, 403, 404 and 503 are all
+  correct, and a 500 to a well-formed request is what a query that has stopped
+  decoding produces.
 
 ### Changed
 

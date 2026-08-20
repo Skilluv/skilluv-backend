@@ -147,13 +147,98 @@ const READ_ENDPOINTS: &[&str] = &[
     "/api/users/me/wallet/transactions",
 ];
 
+/// The same, for routes that take a path parameter — filled with an id
+/// nothing owns.
+///
+/// A handler naming a column that does not exist fails when the query runs,
+/// not when a row matches, so a stranger's id still reaches the failure. 404
+/// is the right answer here and 500 is not: that is what
+/// `/api/enterprises/me/agency-clients` was doing, and it took an audit
+/// rather than a user to notice.
+const PARAMETERISED_ENDPOINTS: &[&str] = &[
+    "/api/activity/heatmap/00000000-0000-4000-8000-000000000000",
+    "/api/admin/domains/nothing-by-this-name/featured-queue",
+    "/api/admin/projects/nothing-by-this-name/stats",
+    "/api/admin/sales/enterprises/00000000-0000-4000-8000-000000000000",
+    "/api/admin/tenants/00000000-0000-4000-8000-000000000000",
+    "/api/admin/tenants/00000000-0000-4000-8000-000000000000/cohorts",
+    "/api/admin/tenants/00000000-0000-4000-8000-000000000000/members",
+    "/api/admin/tournaments/00000000-0000-4000-8000-000000000000/vote-bursts",
+    "/api/assistant/jobs/00000000-0000-4000-8000-000000000000",
+    "/api/audio/castings/00000000-0000-4000-8000-000000000000",
+    "/api/audio/files/00000000-0000-4000-8000-000000000000/listen",
+    "/api/audio/slices/00000000-0000-4000-8000-000000000000/files",
+    "/api/audio/slices/00000000-0000-4000-8000-000000000000/revisions",
+    "/api/audio/slices/00000000-0000-4000-8000-000000000000/sources",
+    "/api/badge/repo/nothing-by-this-name/nothing-by-this-name/validated.svg",
+    "/api/badge/user/nothing-by-this-name/validated.svg",
+    "/api/beginner/verifications/questions/00000000-0000-4000-8000-000000000000",
+    "/api/challenges/00000000-0000-4000-8000-000000000000/eligibility",
+    "/api/challenges/00000000-0000-4000-8000-000000000000/teams",
+    "/api/challenges/00000000-0000-4000-8000-000000000000/timer",
+    "/api/contact/conversations/00000000-0000-4000-8000-000000000000",
+    "/api/deliverables/00000000-0000-4000-8000-000000000000",
+    "/api/deliverables/00000000-0000-4000-8000-000000000000/reviews",
+    "/api/dev/verify-tokens/nothing-by-this-name",
+    "/api/developer/keys/00000000-0000-4000-8000-000000000000/usage",
+    "/api/dm/conversations/00000000-0000-4000-8000-000000000000/messages",
+    "/api/enterprise/ambassador-programs/00000000-0000-4000-8000-000000000000/ambassadors",
+    "/api/enterprise/consultations/00000000-0000-4000-8000-000000000000",
+    "/api/enterprise/contests/00000000-0000-4000-8000-000000000000/submissions",
+    "/api/enterprise/invoices/00000000-0000-4000-8000-000000000000",
+    "/api/enterprise/invoices/00000000-0000-4000-8000-000000000000/html",
+    "/api/enterprise/invoices/00000000-0000-4000-8000-000000000000/pdf",
+    "/api/enterprise/invoices/00000000-0000-4000-8000-000000000000/preview",
+    "/api/enterprise/lists/00000000-0000-4000-8000-000000000000",
+    "/api/enterprise/sponsored-challenges/00000000-0000-4000-8000-000000000000/submissions",
+    "/api/featured/nothing-by-this-name/recent",
+    "/api/guilds/00000000-0000-4000-8000-000000000000/members",
+    "/api/guilds/nothing-by-this-name/composition",
+    "/api/guilds/nothing-by-this-name/projects",
+    "/api/maintainer-digest/confirm/nothing-by-this-name",
+    "/api/maintainer-digest/unsubscribe/nothing-by-this-name",
+    "/api/marketplace/downloads/nothing-by-this-name",
+    "/api/payments/00000000-0000-4000-8000-000000000000/status",
+    "/api/projects/00000000-0000-4000-8000-000000000000/stewards",
+    "/api/projects/nothing-by-this-name/active-skilluvers",
+    "/api/projects/nothing-by-this-name/contributors",
+    "/api/public/v1/talent-attestations/nothing-by-this-name",
+    "/api/review-queue/00000000-0000-4000-8000-000000000000",
+    "/api/sandbox/result/nothing-by-this-name",
+    "/api/skills/nothing-by-this-name/talents",
+    "/api/skills/tree/00000000-0000-4000-8000-000000000000",
+    "/api/social/comments/nothing-by-this-name/00000000-0000-4000-8000-000000000000",
+    "/api/social/reactions/nothing-by-this-name/00000000-0000-4000-8000-000000000000/summary",
+    "/api/social/tag-map/nothing-by-this-name/00000000-0000-4000-8000-000000000000",
+    "/api/stewards/00000000-0000-4000-8000-000000000000/inbox",
+    "/api/studios/00000000-0000-4000-8000-000000000000",
+    "/api/teams/00000000-0000-4000-8000-000000000000/slices",
+    "/api/teams/00000000-0000-4000-8000-000000000000/slots",
+    "/api/tournaments/nothing-by-this-name/community-ranking",
+    "/api/tracks/nothing-by-this-name",
+    "/api/tracks/nothing-by-this-name/progress",
+    "/api/u/nothing-by-this-name/cv",
+    "/api/u/nothing-by-this-name/repos",
+    "/api/users/00000000-0000-4000-8000-000000000000/attestations",
+    "/api/users/00000000-0000-4000-8000-000000000000/deliverables",
+    "/api/users/00000000-0000-4000-8000-000000000000/skills",
+    "/api/users/me/orientations/nothing-by-this-name/playlist",
+    "/api/users/nothing-by-this-name/audio-profile",
+    "/api/users/nothing-by-this-name/badge.svg",
+    "/api/users/nothing-by-this-name/design-profile",
+    "/api/users/nothing-by-this-name/portfolio.json",
+    "/api/v1/users/nothing-by-this-name/badges",
+    "/api/v1/users/nothing-by-this-name/skills",
+    "/api/verify/nothing-by-this-name/pdf",
+];
+
 /// The three doors, because an endpoint can decode fine on the path that
 /// refuses you and fail on the one that reads rows. The unauthenticated pass
 /// alone would not have caught the ops profile.
 async fn every_endpoint_answers(app: &TestApp, who: &str) {
     let mut dead = Vec::new();
 
-    for path in READ_ENDPOINTS {
+    for path in READ_ENDPOINTS.iter().chain(PARAMETERISED_ENDPOINTS) {
         let resp = app.get(path).await;
         let status = resp.status().as_u16();
         // 503 is allowed and 500 is not, which is the whole distinction: an

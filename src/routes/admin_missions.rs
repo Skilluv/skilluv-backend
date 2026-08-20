@@ -1,0 +1,594 @@
+//! Paid missions, seen from outside the two parties.
+//!
+//! ## Why this is not `/admin/design-missions`
+//!
+//! Migration 0192 built missions, applications and billing for every domain,
+//! keyed by `mission_types.skill_domain`. Design needed rows, not a mechanism,
+//! and got twelve of them. A design mission is a mission with
+//! `skill_domain = 'design'`, so a design admin surface is this one with a
+//! filter — and the same surface serves security, code and the four others
+//! without a second implementation to keep in step.
+//!
+//! ## What an admin is for here
+//!
+//! Not running missions. A mission belongs to the enterprise that posted it
+//! and the person who took it, and both already have every action they need.
+//! What neither of them has is a way out of the case where they disagree and
+//! neither will move: the mission sits `in_progress` for ever and the money
+//! sits in escrow.
+//!
+//! That is the whole of the write surface: one decision, taken by somebody
+//! outside, recorded as having been decided rather than agreed.
+
+use axum::extract::{Path, Query, State};
+use axum::routing::{get, post};
+use axum::{Json, Router};
+use serde::{Deserialize, Serialize};
+use utoipa::{IntoParams, ToSchema};
+use uuid::Uuid;
+
+use crate::AppState;
+use crate::api_response::ApiResponse;
+use crate::errors::AppError;
+use crate::middleware::AuthUser;
+
+pub fn admin_mission_routes() -> Router<AppState> {
+    Router::new()
+        .route("/admin/missions", get(list))
+        .route("/admin/missions/{slug}", get(detail))
+        .route("/admin/missions/{slug}/arbitrate", post(arbitrate))
+}
+
+/// An admin, the curator of the mission's domain, or an arbiter.
+///
+/// A design curator reads design missions and not security ones, which is the
+/// point of the scope.
+///
+/// An arbiter reads any of them, because deciding a case means opening it
+/// first — and because the alternative is an arbiter who can end a mission
+/// and then cannot see what they did.
+async fn require_reader(state: &AppState, auth: &AuthUser, domain: &str) -> Result<(), AppError> {
+    crate::middleware::capabilities::require_any_capability(
+        &state.db,
+        auth.user_id,
+        &[
+            "admin",
+            &format!("domain_curator:{domain}"),
+            "domain_curator:all",
+            "mission_arbiter",
+        ],
+    )
+    .await
+}
+
+/// Somebody allowed to decide a mission neither side will end.
+///
+/// Not scoped by domain, deliberately: the question an arbiter answers is
+/// whether a contract was honoured, and that is the same question about a
+/// logotype and about a pull request. Scoping it would leave a stuck mission
+/// nobody may unstick because its domain has no arbiter yet.
+async fn require_arbiter(state: &AppState, auth: &AuthUser) -> Result<(), AppError> {
+    crate::middleware::capabilities::require_any_capability(
+        &state.db,
+        auth.user_id,
+        &["admin", "mission_arbiter"],
+    )
+    .await
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// The list
+// ═══════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
+pub struct ListQuery {
+    /// One of the seven skill domains. Required for a curator, who may only
+    /// read their own; optional for an admin.
+    #[param(max_length = 30)]
+    pub skill_domain: Option<String>,
+    /// A `mission_types` slug — `brand_identity_design`, `website_design`…
+    #[param(max_length = 60)]
+    pub mission_type: Option<String>,
+    #[param(max_length = 30)]
+    pub status: Option<String>,
+    /// Only missions where the two sides have stopped moving. The queue an
+    /// arbiter actually works.
+    #[serde(default)]
+    pub stuck_only: bool,
+    /// How long without a decision counts as stuck. Twenty-one days by
+    /// default: long enough that a fortnight's holiday is not a dispute.
+    #[serde(default = "default_stuck_days")]
+    #[param(minimum = 1, maximum = 365)]
+    pub stuck_after_days: i32,
+    #[serde(default = "default_page")]
+    #[param(minimum = 1)]
+    pub page: i64,
+    #[serde(default = "default_per_page")]
+    #[param(minimum = 1, maximum = 200)]
+    pub per_page: i64,
+}
+
+fn default_stuck_days() -> i32 {
+    21
+}
+fn default_page() -> i64 {
+    1
+}
+fn default_per_page() -> i64 {
+    50
+}
+
+#[derive(Debug, Serialize, sqlx::FromRow, ToSchema)]
+pub struct AdminMissionRow {
+    pub id: Uuid,
+    pub slug: String,
+    pub title: String,
+    pub skill_domain: String,
+    pub mission_type_slug: String,
+    pub status: String,
+    pub enterprise_name: String,
+    pub assigned_username: Option<String>,
+    pub published_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// The last hand-in, whether or not anybody answered it.
+    pub last_delivered_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// How many rounds have been handed in.
+    pub rounds: i64,
+    /// True when a round is waiting and has been waiting too long. This is
+    /// what "stuck" means: not a slow mission, an unanswered one.
+    pub awaiting_decision: bool,
+    /// Already decided by somebody outside. Shown so an arbiter does not open
+    /// a case that has one.
+    pub arbitrated: bool,
+}
+
+/// Every mission, narrowed.
+#[utoipa::path(
+    get,
+    path = "/api/admin/missions",
+    tag = "admin",
+    params(ListQuery),
+    responses(
+        (status = 200, body = ApiResponse<Vec<AdminMissionRow>>),
+        (status = 400, description = "Unknown domain or filter", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Not an admin or a curator", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Query(q): Query<ListQuery>,
+) -> Result<Json<ApiResponse<Vec<AdminMissionRow>>>, AppError> {
+    if let Some(domain) = &q.skill_domain {
+        crate::validators::validate_skill_domain(domain, "skill_domain")?;
+    }
+    if q.page < 1 {
+        return Err(AppError::Validation("page must be at least 1".into()));
+    }
+    if !(1..=200).contains(&q.per_page) {
+        return Err(AppError::Validation(
+            "per_page must be between 1 and 200".into(),
+        ));
+    }
+    if !(1..=365).contains(&q.stuck_after_days) {
+        return Err(AppError::Validation(
+            "stuck_after_days must be between 1 and 365".into(),
+        ));
+    }
+
+    // An admin may read every domain; a curator only their own, and they have
+    // to name it. Answering "all of them" to a curator who left the filter
+    // blank would hand them the domains they were not given.
+    //
+    // An arbiter reads the stuck queue across every domain and nothing else:
+    // that queue *is* their job, and the rest of the mission board is not.
+    if q.stuck_only {
+        crate::middleware::capabilities::require_any_capability(
+            &state.db,
+            auth.user_id,
+            &["admin", "mission_arbiter", "domain_curator:all"],
+        )
+        .await?;
+    } else {
+        match &q.skill_domain {
+            Some(domain) => require_reader(&state, &auth, domain).await?,
+            None => {
+                crate::routes::admin::require_admin(&state, &auth).await?;
+            }
+        }
+    }
+
+    let rows = sqlx::query_as::<_, AdminMissionRow>(
+        r#"
+        SELECT m.id,
+               m.slug,
+               m.title,
+               m.skill_domain,
+               mt.slug AS mission_type_slug,
+               m.status,
+               e.company_name AS enterprise_name,
+               u.username AS assigned_username,
+               m.published_at,
+               d.last_delivered_at,
+               COALESCE(d.rounds, 0) AS rounds,
+               COALESCE(d.waiting_since < NOW() - ($4::INTEGER * INTERVAL '1 day'), FALSE)
+                   AS awaiting_decision,
+               a.id IS NOT NULL AS arbitrated
+
+          FROM missions m
+          JOIN mission_types mt ON mt.id = m.mission_type_id
+          JOIN enterprises e ON e.id = m.enterprise_id
+          LEFT JOIN users u ON u.id = m.assigned_user_id
+          LEFT JOIN mission_arbitrations a ON a.mission_id = m.id
+
+          LEFT JOIN LATERAL (
+              SELECT count(*) AS rounds,
+                     max(md.delivered_at) AS last_delivered_at,
+                     -- The oldest hand-in nobody has answered. One unanswered
+                     -- round is what a dispute looks like from outside.
+                     min(md.delivered_at) FILTER (WHERE md.decision IS NULL)
+                         AS waiting_since
+                FROM mission_deliveries md
+               WHERE md.mission_id = m.id
+          ) AS d ON TRUE
+
+         WHERE ($1::TEXT IS NULL OR m.skill_domain = $1)
+           AND ($2::TEXT IS NULL OR mt.slug = $2)
+           AND ($3::TEXT IS NULL OR m.status = $3)
+           AND (NOT $5::BOOLEAN
+                OR (d.waiting_since IS NOT NULL
+                    AND d.waiting_since < NOW() - ($4::INTEGER * INTERVAL '1 day')
+                    AND a.id IS NULL))
+
+         ORDER BY d.waiting_since ASC NULLS LAST, m.created_at DESC
+         LIMIT $6 OFFSET $7
+        "#,
+    )
+    .bind(q.skill_domain.as_deref())
+    .bind(q.mission_type.as_deref())
+    .bind(q.status.as_deref())
+    .bind(q.stuck_after_days)
+    .bind(q.stuck_only)
+    .bind(q.per_page)
+    .bind((q.page - 1) * q.per_page)
+    .fetch_all(&state.db)
+    .await?;
+
+    Ok(Json(ApiResponse::new(rows)))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// One mission, with its trail
+// ═══════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AdminMissionDetail {
+    pub mission: AdminMissionRow,
+    /// What the mission says about who owns the work. Shown because it is
+    /// what an arbitration turns on, and because nobody reads a contract they
+    /// have to go and find.
+    pub ip_terms: String,
+    pub nda_required: bool,
+    /// Every round, in order, with what was decided and why.
+    #[schema(value_type = Vec<Object>)]
+    pub rounds: Vec<serde_json::Value>,
+    /// The invoices raised against it, so the money is visible next to the
+    /// work rather than on another page.
+    #[schema(value_type = Vec<Object>)]
+    pub invoices: Vec<serde_json::Value>,
+    /// The arbitration, where there has been one.
+    #[schema(value_type = Option<Object>)]
+    pub arbitration: Option<serde_json::Value>,
+}
+
+/// One mission, and everything that happened to it.
+#[utoipa::path(
+    get,
+    path = "/api/admin/missions/{slug}",
+    tag = "admin",
+    params(("slug" = String, Path, description = "Mission slug")),
+    responses(
+        (status = 200, body = ApiResponse<AdminMissionDetail>),
+        (status = 403, description = "Not an admin or a curator of this domain", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "No such mission", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn detail(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(slug): Path<String>,
+) -> Result<Json<ApiResponse<AdminMissionDetail>>, AppError> {
+    // The domain is read before the permission is checked, because the
+    // permission depends on it. A mission nobody may read still answers 404
+    // rather than 403: which missions exist is not a curator's business.
+    let head: Option<(Uuid, String, String, bool)> = sqlx::query_as(
+        "SELECT id, skill_domain, ip_terms, nda_required FROM missions WHERE slug = $1",
+    )
+    .bind(&slug)
+    .fetch_optional(&state.db)
+    .await?;
+
+    let Some((mission_id, domain, ip_terms, nda_required)) = head else {
+        return Err(AppError::NotFound("no such mission".into()));
+    };
+    require_reader(&state, &auth, &domain).await?;
+
+    load_detail(&state, mission_id, ip_terms, nda_required).await
+}
+
+/// Everything about one mission, with the permission already settled.
+///
+/// Split out so an arbiter can be handed the result of their own decision.
+/// Calling the handler again would re-check a permission that has just been
+/// established, and refuse the arbiter their own outcome — which is exactly
+/// what it did.
+async fn load_detail(
+    state: &AppState,
+    mission_id: Uuid,
+    ip_terms: String,
+    nda_required: bool,
+) -> Result<Json<ApiResponse<AdminMissionDetail>>, AppError> {
+    let mission = sqlx::query_as::<_, AdminMissionRow>(
+        r#"
+        SELECT m.id, m.slug, m.title, m.skill_domain, mt.slug AS mission_type_slug,
+               m.status, e.company_name AS enterprise_name, u.username AS assigned_username,
+               m.published_at,
+               (SELECT max(delivered_at) FROM mission_deliveries WHERE mission_id = m.id)
+                   AS last_delivered_at,
+               (SELECT count(*) FROM mission_deliveries WHERE mission_id = m.id) AS rounds,
+               EXISTS (SELECT 1 FROM mission_deliveries
+                        WHERE mission_id = m.id AND decision IS NULL) AS awaiting_decision,
+               EXISTS (SELECT 1 FROM mission_arbitrations WHERE mission_id = m.id) AS arbitrated
+          FROM missions m
+          JOIN mission_types mt ON mt.id = m.mission_type_id
+          JOIN enterprises e ON e.id = m.enterprise_id
+          LEFT JOIN users u ON u.id = m.assigned_user_id
+         WHERE m.id = $1
+        "#,
+    )
+    .bind(mission_id)
+    .fetch_one(&state.db)
+    .await?;
+
+    let rounds: Vec<serde_json::Value> = sqlx::query_scalar(
+        r#"
+        SELECT jsonb_build_object(
+                   'round', md.round,
+                   'delivered_by', u.username,
+                   'artifact_url', md.artifact_url,
+                   'notes_md', md.notes_md,
+                   'delivered_at', md.delivered_at,
+                   'decision', md.decision,
+                   'decision_reason', md.decision_reason,
+                   'decided_at', md.decided_at,
+                   'beyond_agreed_rounds', md.beyond_agreed_rounds
+               )
+          FROM mission_deliveries md
+          LEFT JOIN users u ON u.id = md.delivered_by
+         WHERE md.mission_id = $1
+         ORDER BY md.round ASC
+        "#,
+    )
+    .bind(mission_id)
+    .fetch_all(&state.db)
+    .await?;
+
+    let invoices: Vec<serde_json::Value> = sqlx::query_scalar(
+        r#"
+        SELECT jsonb_build_object(
+                   'id', mi.id,
+                   'label', mi.label,
+                   'amount', mi.amount,
+                   'currency', mi.currency,
+                   'status', mi.status,
+                   'captured_at', mi.captured_at,
+                   'released_at', mi.released_at,
+                   'issued_at', mi.issued_at
+               )
+          FROM mission_invoices mi
+         WHERE mi.mission_id = $1
+         ORDER BY mi.sequence ASC
+        "#,
+    )
+    .bind(mission_id)
+    .fetch_all(&state.db)
+    .await?;
+
+    let arbitration: Option<serde_json::Value> = sqlx::query_scalar(
+        r#"
+        SELECT jsonb_build_object(
+                   'outcome', a.outcome,
+                   'reason_md', a.reason_md,
+                   'arbiter', u.username,
+                   'decided_at', a.decided_at
+               )
+          FROM mission_arbitrations a
+          LEFT JOIN users u ON u.id = a.arbiter_id
+         WHERE a.mission_id = $1
+        "#,
+    )
+    .bind(mission_id)
+    .fetch_optional(&state.db)
+    .await?;
+
+    Ok(Json(ApiResponse::new(AdminMissionDetail {
+        mission,
+        ip_terms,
+        nda_required,
+        rounds,
+        invoices,
+        arbitration,
+    })))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// The decision
+// ═══════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ArbitrateBody {
+    /// `accepted` — the delivery stands and the money is released.
+    /// `cancelled` — the mission ends and the escrow goes back.
+    #[schema(max_length = 20)]
+    pub outcome: String,
+    /// Read by both sides, one of whom has just lost. Eighty characters
+    /// minimum, because "refusé" teaches nobody anything and cannot be
+    /// argued with.
+    #[schema(min_length = 80, max_length = 8000)]
+    pub reason_md: String,
+}
+
+/// Decide a mission neither side will end.
+///
+/// Both outcomes already exist in the mission's own vocabulary — this endpoint
+/// does not invent a third. What it adds is the record that the outcome was
+/// decided rather than agreed, and by whom: a mission accepted by arbitration
+/// and one accepted by a happy client look identical in `missions`, and they
+/// must not read the same to anybody who later asks what happened.
+///
+/// Once. A second arbitration would re-open a decision that has already moved
+/// money, and re-opening it is a new mission rather than a new row.
+#[utoipa::path(
+    post,
+    path = "/api/admin/missions/{slug}/arbitrate",
+    tag = "admin",
+    params(("slug" = String, Path, description = "Mission slug")),
+    request_body = ArbitrateBody,
+    responses(
+        (status = 200, description = "Decided", body = ApiResponse<AdminMissionDetail>),
+        (status = 400, description = "Unknown outcome or a reason too short", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Not an arbiter", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "No such mission", body = crate::api_response::ErrorResponse),
+        (status = 409, description = "Already arbitrated, or not in a state to be", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn arbitrate(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(slug): Path<String>,
+    Json(body): Json<ArbitrateBody>,
+) -> Result<Json<ApiResponse<AdminMissionDetail>>, AppError> {
+    require_arbiter(&state, &auth).await?;
+
+    if !matches!(body.outcome.as_str(), "accepted" | "cancelled") {
+        return Err(AppError::Validation(
+            "outcome must be accepted or cancelled".into(),
+        ));
+    }
+    let reason = body.reason_md.trim();
+    if reason.chars().count() < 80 {
+        return Err(AppError::Validation(
+            "say why in at least eighty characters — both sides read this, and one of them \
+             has just lost"
+                .into(),
+        ));
+    }
+    if reason.chars().count() > 8000 {
+        return Err(AppError::Validation("that reason is too long".into()));
+    }
+
+    let mission: Option<(Uuid, String, String, bool)> = sqlx::query_as(
+        "SELECT id, status, ip_terms, nda_required FROM missions WHERE slug = $1",
+    )
+    .bind(&slug)
+    .fetch_optional(&state.db)
+    .await?;
+    let Some((mission_id, status, ip_terms, nda_required)) = mission else {
+        return Err(AppError::NotFound("no such mission".into()));
+    };
+
+    // A mission that has already ended has nothing to arbitrate. Saying so is
+    // better than writing a decision that changes nothing.
+    if matches!(status.as_str(), "closed" | "cancelled") {
+        return Err(AppError::Conflict(
+            "this mission has already ended".into(),
+        ));
+    }
+
+    let mut tx = state.db.begin().await?;
+
+    // The round in dispute, where there is one. A designer who vanished
+    // leaves none, and the mission is arbitrated without it.
+    let delivery_id: Option<Uuid> = sqlx::query_scalar(
+        "SELECT id FROM mission_deliveries
+          WHERE mission_id = $1 AND decision IS NULL
+          ORDER BY round DESC LIMIT 1",
+    )
+    .bind(mission_id)
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    // The unique index refuses a second arbitration; the conflict is turned
+    // into a 409 rather than a 500 because it is a thing a caller did, not a
+    // thing that went wrong.
+    let written = sqlx::query(
+        "INSERT INTO mission_arbitrations
+             (mission_id, delivery_id, arbiter_id, outcome, reason_md)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (mission_id) DO NOTHING",
+    )
+    .bind(mission_id)
+    .bind(delivery_id)
+    .bind(auth.user_id)
+    .bind(&body.outcome)
+    .bind(reason)
+    .execute(&mut *tx)
+    .await?;
+
+    if written.rows_affected() == 0 {
+        return Err(AppError::Conflict(
+            "this mission has already been arbitrated".into(),
+        ));
+    }
+
+    // The waiting round is answered, so the loop cannot be resumed behind the
+    // decision. The reason is the arbiter's, in full: the round's own trail
+    // has to say what happened without a second lookup.
+    if let Some(delivery_id) = delivery_id {
+        sqlx::query(
+            "UPDATE mission_deliveries
+                SET decision = $2, decision_reason = $3, decided_by = $4, decided_at = NOW()
+              WHERE id = $1 AND decision IS NULL",
+        )
+        .bind(delivery_id)
+        .bind(if body.outcome == "accepted" {
+            "accepted"
+        } else {
+            "changes_requested"
+        })
+        .bind(format!("Arbitrage : {reason}"))
+        .bind(auth.user_id)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    sqlx::query(
+        "UPDATE missions
+            SET status = $2,
+                cancellation_reason = CASE WHEN $2 = 'cancelled' THEN $3
+                                           ELSE cancellation_reason END,
+                delivered_at = CASE WHEN $2 = 'delivered' AND delivered_at IS NULL
+                                    THEN NOW() ELSE delivered_at END,
+                closed_at = CASE WHEN $2 = 'cancelled' THEN NOW() ELSE closed_at END,
+                updated_at = NOW()
+          WHERE id = $1",
+    )
+    .bind(mission_id)
+    .bind(if body.outcome == "accepted" {
+        "delivered"
+    } else {
+        "cancelled"
+    })
+    .bind(reason)
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+
+    load_detail(&state, mission_id, ip_terms, nda_required).await
+}

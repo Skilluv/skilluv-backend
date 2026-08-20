@@ -132,8 +132,9 @@ pub async fn subscribe_to_pipeline(
             "plan_slug does not reference a subscription pack".into(),
         ));
     }
-    let cfg = crate::services::stripe::StripeConfig::from_env()
-        .ok_or(AppError::Internal("Stripe not configured".into()))?;
+    let cfg = crate::services::stripe::StripeConfig::from_env().ok_or(
+        AppError::ServiceUnavailable("payments are not configured on this deployment".into()),
+    )?;
     let email = sqlx::query_scalar::<_, String>("SELECT email FROM users WHERE id = $1")
         .bind(auth.user_id)
         .fetch_one(&state.db)

@@ -83,7 +83,13 @@ pub async fn admin_accounting_export(
     let month = q.month.unwrap_or_else(|| chrono::Utc::now().month() as i32);
     let rows: Vec<sqlx::postgres::PgRow> = sqlx::query(
         r#"
-        SELECT i.invoice_number, i.issued_at, e.company_name, e.country,
+        -- `i.billing_country`, not `e.country`: `enterprises` has no country
+        -- column, so this export answered 500 to every request an accountant
+        -- has ever made of it. The invoice is the right source anyway — VAT
+        -- follows where the customer was when they were billed, and a company
+        -- that has since moved must not retroactively change last year's
+        -- return.
+        SELECT i.invoice_number, i.issued_at, e.company_name, i.billing_country,
                i.amount_ht_cents, i.amount_tva_cents, i.amount_ttc_cents,
                i.tva_rate, i.currency, i.stripe_payment_intent_id
         FROM invoices i
@@ -108,7 +114,8 @@ pub async fn admin_accounting_export(
             r.get::<chrono::DateTime<chrono::Utc>, _>("issued_at")
                 .format("%Y-%m-%d"),
             r.get::<String, _>("company_name").replace(';', ","),
-            r.get::<Option<String>, _>("country").unwrap_or_default(),
+            r.get::<Option<String>, _>("billing_country")
+                .unwrap_or_default(),
             r.get::<i64, _>("amount_ht_cents") as f64 / 100.0,
             r.get::<i64, _>("amount_tva_cents") as f64 / 100.0,
             r.get::<i64, _>("amount_ttc_cents") as f64 / 100.0,

@@ -641,8 +641,9 @@ pub async fn start_connect_onboarding(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
-    let cfg = crate::services::stripe::StripeConfig::from_env()
-        .ok_or(AppError::Internal("Stripe not configured".into()))?;
+    let cfg = crate::services::stripe::StripeConfig::from_env().ok_or(
+        AppError::ServiceUnavailable("payments are not configured on this deployment".into()),
+    )?;
     let profile =
         sqlx::query("SELECT stripe_connect_account_id FROM mentor_profiles WHERE user_id = $1")
             .bind(auth.user_id)
@@ -701,8 +702,9 @@ pub async fn connect_status(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
-    let cfg = crate::services::stripe::StripeConfig::from_env()
-        .ok_or(AppError::Internal("Stripe not configured".into()))?;
+    let cfg = crate::services::stripe::StripeConfig::from_env().ok_or(
+        AppError::ServiceUnavailable("payments are not configured on this deployment".into()),
+    )?;
     let profile =
         sqlx::query("SELECT stripe_connect_account_id FROM mentor_profiles WHERE user_id = $1")
             .bind(auth.user_id)

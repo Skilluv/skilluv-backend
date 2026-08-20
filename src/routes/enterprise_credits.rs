@@ -246,8 +246,9 @@ pub async fn billing_portal(
     // invoice, and — crucially — cancel the subscription. Recruiters must not
     // be able to nuke the enterprise's billing state.
     let enterprise = crate::routes::enterprise::require_enterprise_owner_pub(&state, &auth).await?;
-    let cfg = stripe::StripeConfig::from_env()
-        .ok_or(AppError::Internal("Stripe not configured".into()))?;
+    let cfg = stripe::StripeConfig::from_env().ok_or(AppError::ServiceUnavailable(
+        "payments are not configured on this deployment".into(),
+    ))?;
     // Look up the most recent Stripe customer for the enterprise (cached in metadata)
     let enterprise_id = enterprise.id;
     let row: Option<(Option<String>,)> = sqlx::query_as(

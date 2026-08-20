@@ -114,7 +114,11 @@ INSERT INTO capability_catalog (capability, family, scope, description) VALUES
      'Anime le domaine savoir-être : ses défis, ses concours, ses mises en avant.'),
     ('domain_curator:audio', 'domain_curator', 'audio',
      'Anime le domaine audio : ses défis, ses concours, ses mises en avant.'),
-    ('domain_curator:all', 'domain_curator', NULL,
+    -- `all` is the scope, not the absence of one:
+    -- `capability_catalog_name_matches_its_parts` requires the name to be
+    -- `family` plus `:scope`, and a NULL scope would mean the capability is
+    -- called `domain_curator`. The other `:all` rows follow the same rule.
+    ('domain_curator:all', 'domain_curator', 'all',
      'Anime tous les domaines.');
 
 -- ═══════════════════════════════════════════════════════════════════

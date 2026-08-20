@@ -194,7 +194,80 @@ pub async fn accept(db: &PgPool, mission_id: Uuid, client_id: Uuid) -> Result<De
     .await?;
 
     tx.commit().await?;
+
+    // After the commit, and logged rather than raised: the acceptance is a
+    // fact once written, and failing it because an attestation could not be
+    // issued would leave the mission delivered and the client staring at an
+    // error. The attestation is re-issuable; a half-accepted delivery is not.
+    if let Err(err) = attest_acceptance(db, mission_id, &delivery).await {
+        tracing::warn!(%err, mission = %mission_id, "mission attestation not issued");
+    }
+
     Ok(delivery)
+}
+
+/// Issue the attestation an accepted mission earns.
+///
+/// The rounds are counted from the deliveries, because that is what a reader
+/// of the attestation is being told: three rounds is not a worse mission than
+/// one, it is a mission where somebody was told what was wrong and came back.
+async fn attest_acceptance(
+    db: &PgPool,
+    mission_id: Uuid,
+    delivery: &Delivery,
+) -> Result<(), AppError> {
+    let mission: Option<(String, String)> = sqlx::query_as(
+        "SELECT skill_domain, title FROM missions WHERE id = $1",
+    )
+    .bind(mission_id)
+    .fetch_optional(db)
+    .await?;
+
+    let Some((domain, title)) = mission else {
+        return Ok(());
+    };
+
+    // The artefact first. Migration 0233 rules that an artefact basis must
+    // link a deliverable, and it is right to: an attestation whose evidence
+    // is a sentence is an attestation nobody can check.
+    let deliverable_id: Uuid = sqlx::query_scalar(
+        r#"
+        INSERT INTO deliverables
+            (mission_delivery_id, user_id, artifact_type, artifact_url,
+             verifiable_by, verification_status, verified_at, public)
+        VALUES ($1, $2, 'design_artifact', $3,
+                -- The client looked at it and said yes. That is a human
+                -- review, and it is the only verification a paid mission has.
+                'human_review', 'verified', NOW(),
+                -- Public: that the work happened is public, what it paid is
+                -- not, and the amount is nowhere on this row.
+                TRUE)
+        ON CONFLICT (mission_delivery_id) WHERE mission_delivery_id IS NOT NULL
+            DO UPDATE SET artifact_url = EXCLUDED.artifact_url
+        RETURNING id
+        "#,
+    )
+    .bind(delivery.id)
+    .bind(delivery.delivered_by)
+    .bind(&delivery.artifact_url)
+    .fetch_one(db)
+    .await?;
+
+    crate::services::design_attestations::mission_delivered(
+        db,
+        delivery.delivered_by,
+        &domain,
+        &title,
+        // The artefact, not the mission page. Evidence is the thing somebody
+        // opens to check the claim, and a mission page says only that a
+        // mission existed.
+        &delivery.artifact_url,
+        delivery.round,
+        deliverable_id,
+    )
+    .await?;
+
+    Ok(())
 }
 
 /// Ask for another round, saying what is wrong.

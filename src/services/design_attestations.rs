@@ -99,6 +99,29 @@ pub async fn issue(
 /// first round" and "validated at the fifth" are different stories, and the
 /// second is often the better one: it says somebody was told their direction
 /// was wrong and came back four times rather than abandoning it.
+/// Which claim a validated deliverable supports, given what it is.
+///
+/// A brand kit and a typeface are not "a design deliverable": they are the
+/// two shapes the schema names in their own right, because a reader who sees
+/// "identité de marque livrée" learns something that "livrable validé" hides.
+///
+/// Everything else is the general basis. Naming a basis per subtype would
+/// mean twelve of them, eleven of which say the same thing in different
+/// words.
+///
+/// `design_system_adopted` is deliberately absent. Delivering a design system
+/// is not the same as another team building on it, and the platform records
+/// no adoption — issuing it on validation would make the attestation claim
+/// something nobody has observed. It stays issuable only by hand, which is
+/// what "adopted" is: somebody's observation.
+fn basis_for_subtype(subtype: Option<&str>) -> &'static str {
+    match subtype {
+        Some("brand_kit") => "design_brand_system_delivered",
+        Some("type_family") => "design_typeface_released",
+        _ => "design_deliverable_validated",
+    }
+}
+
 pub async fn deliverable_validated(
     db: &PgPool,
     user_id: Uuid,
@@ -106,6 +129,7 @@ pub async fn deliverable_validated(
     slice_title: &str,
     artifact_url: &str,
     rounds: i16,
+    subtype: Option<&str>,
 ) -> Result<Issued, AppError> {
     let rounds_sentence = match rounds {
         0 | 1 => "Validé au premier tour de critique.".to_string(),
@@ -114,10 +138,18 @@ pub async fn deliverable_validated(
     issue(
         db,
         user_id,
-        "design_deliverable_validated",
+        basis_for_subtype(subtype),
         &Evidence {
             url: artifact_url.to_string(),
-            title: format!("Livrable design validé : {slice_title}"),
+            title: match basis_for_subtype(subtype) {
+                "design_brand_system_delivered" => {
+                    format!("Identité de marque livrée : {slice_title}")
+                }
+                "design_typeface_released" => {
+                    format!("Famille de caractères publiée : {slice_title}")
+                }
+                _ => format!("Livrable design validé : {slice_title}"),
+            },
             description: format!(
                 "Livré sur Skilluv et validé par un relecteur du métier. {rounds_sentence}"
             ),
@@ -321,6 +353,68 @@ pub async fn award_contest_podium(
 /// it is: somebody chose to put this person forward, and put their name to it.
 ///
 /// It is the one design basis that rests on no deliverable, which is why it is
+/// A paid mission handed in and accepted.
+///
+/// Fired on acceptance, never on delivery: a mission handed in is a mission
+/// somebody has not yet agreed was done, and an attestation issued at that
+/// moment would be the platform vouching for work its client had not seen.
+///
+/// ## What it does not say
+///
+/// No client name and no figure. The client is often under an agreement the
+/// platform is not party to, and what a piece of work paid is the
+/// contractor's business — the same rule the public feed already follows.
+/// What is public is that the work happened and that somebody accepted it.
+///
+/// Only design missions for now: `design_mission_delivered` is the only
+/// mission basis the schema names. Adding one for another domain is a
+/// migration, and this function will pick it up without a code change.
+pub async fn mission_delivered(
+    db: &PgPool,
+    user_id: Uuid,
+    domain: &str,
+    mission_title: &str,
+    mission_url: &str,
+    rounds: i16,
+    deliverable_id: Uuid,
+) -> Result<Option<Issued>, AppError> {
+    let Some(basis) = mission_basis(domain) else {
+        return Ok(None);
+    };
+
+    let rounds_sentence = match rounds {
+        0 | 1 => "Accepté au premier rendu.".to_string(),
+        n => format!("Accepté au bout de {n} rendus."),
+    };
+
+    issue(
+        db,
+        user_id,
+        basis,
+        &Evidence {
+            url: mission_url.to_string(),
+            title: format!("Mission livrée : {mission_title}"),
+            description: format!(
+                "Mission rémunérée passée par une entreprise sur Skilluv, rendue et acceptée \
+                 par le client. {rounds_sentence}"
+            ),
+            deliverable_id: Some(deliverable_id),
+            project_id: None,
+            skill_node_ids: Vec::new(),
+        },
+    )
+    .await
+    .map(Some)
+}
+
+/// The mission basis for a domain, where the schema names one.
+fn mission_basis(domain: &str) -> Option<&'static str> {
+    match domain {
+        "design" => Some("design_mission_delivered"),
+        _ => None,
+    }
+}
+
 /// absent from `ARTIFACT_BASES`.
 pub async fn featured_designer(
     db: &PgPool,

@@ -453,6 +453,7 @@ pub async fn review(
                 &state.title,
                 url,
                 rounds,
+                state.design_subtype.as_deref(),
             )
             .await?;
         }

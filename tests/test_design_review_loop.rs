@@ -245,7 +245,10 @@ async fn three_rounds_then_validated_leaves_a_full_proof() {
     .fetch_one(&app.db)
     .await
     .expect("attestation");
-    assert_eq!(basis, "design_deliverable_validated");
+    // The slice is a `brand_kit`, and the schema names that claim in its own
+    // right. "Identité de marque livrée" tells a reader something that
+    // "livrable validé" hides.
+    assert_eq!(basis, "design_brand_system_delivered");
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -888,4 +891,81 @@ async fn a_domain_nobody_practises_is_refused_rather_than_answered_emptily() {
         .get("/api/users/me/next-challenges?domain=charcuterie")
         .await;
     assert_eq!(resp.status().as_u16(), 400);
+}
+
+#[tokio::test]
+async fn the_basis_follows_what_was_actually_delivered() {
+    let app = TestApp::spawn().await;
+    app.register_user("basis_designer").await;
+    app.register_user("basis_reviewer").await;
+    let designer = user_id(&app, "basis_designer").await;
+    let reviewer = user_id(&app, "basis_reviewer").await;
+    grant(&app, reviewer, "design_reviewer:all").await;
+
+    // An interface, not a brand kit and not a typeface. Naming a basis per
+    // subtype would mean twelve of them, eleven saying the same thing in
+    // different words — so everything but those two gets the general claim.
+    let slice = a_claimed_challenge(&app, designer, "design-web", "interface", 60).await;
+
+    app.login("basis_designer").await;
+    app.post(
+        &format!("/api/design/slices/{slice}/versions"),
+        &a_version(1),
+    )
+    .await;
+    app.login("basis_reviewer").await;
+    app.post(
+        &format!("/api/design/slices/{slice}/reviews"),
+        &a_critique("approve", None),
+    )
+    .await;
+
+    assert_eq!(slice_status(&app, slice).await, "validated");
+
+    let basis: String = sqlx::query_scalar(
+        "SELECT basis FROM attestations WHERE user_id = $1 AND basis IS NOT NULL",
+    )
+    .bind(designer)
+    .fetch_one(&app.db)
+    .await
+    .expect("attestation");
+    assert_eq!(basis, "design_deliverable_validated");
+}
+
+#[tokio::test]
+async fn a_typeface_says_it_is_a_typeface() {
+    let app = TestApp::spawn().await;
+    app.register_user("type_designer").await;
+    app.register_user("type_reviewer").await;
+    let designer = user_id(&app, "type_designer").await;
+    let reviewer = user_id(&app, "type_reviewer").await;
+    grant(&app, reviewer, "design_reviewer:all").await;
+
+    let slice = a_claimed_challenge(&app, designer, "design-typography", "type_family", 200).await;
+
+    app.login("type_designer").await;
+    app.post(
+        &format!("/api/design/slices/{slice}/versions"),
+        &a_version(1),
+    )
+    .await;
+    app.login("type_reviewer").await;
+    app.post(
+        &format!("/api/design/slices/{slice}/reviews"),
+        &a_critique("approve", None),
+    )
+    .await;
+
+    let (basis, title): (String, String) = sqlx::query_as(
+        "SELECT basis, title FROM attestations WHERE user_id = $1 AND basis IS NOT NULL",
+    )
+    .bind(designer)
+    .fetch_one(&app.db)
+    .await
+    .expect("attestation");
+
+    assert_eq!(basis, "design_typeface_released");
+    // The words follow the claim. A reader who sees "livrable validé" on a
+    // published typeface learns less than the schema already knows.
+    assert!(title.contains("Famille de caractères"), "{title}");
 }

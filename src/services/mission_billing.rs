@@ -340,44 +340,63 @@ pub async fn capture(db: &PgPool, invoice_id: Uuid, payment_id: Uuid) -> Result<
 /// accepting delivery is one event, and releasing the March instalment while
 /// holding April's would mean nothing to either party.
 pub async fn release_all(db: &PgPool, mission_id: Uuid) -> Result<u64, AppError> {
-    let invoices: Vec<(Uuid, BigDecimal, String, BigDecimal)> = sqlx::query_as(
-        "SELECT id, amount, currency, commission_percent
-           FROM mission_invoices
-          WHERE mission_id = $1 AND status = 'paid'",
+    let invoices: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT id FROM mission_invoices WHERE mission_id = $1 AND status = 'paid'",
     )
     .bind(mission_id)
     .fetch_all(db)
     .await?;
 
-    let recipient: Option<Uuid> =
-        sqlx::query_scalar("SELECT assigned_user_id FROM missions WHERE id = $1")
-            .bind(mission_id)
-            .fetch_optional(db)
-            .await?
-            .flatten();
-    let Some(recipient) = recipient else {
-        return Ok(0);
-    };
-
     let mut released = 0u64;
-    for (id, amount, currency, commission) in invoices {
-        let currency: ledger::Currency = currency.parse()?;
-        // The recipient's share, not the gross: the platform's half was
-        // never in their pending balance to release.
-        let theirs = amount.clone() - platform_share(&amount, &commission);
-
-        ledger::release(db, recipient, theirs, currency, "mission_invoice", id).await?;
-
-        sqlx::query(
-            "UPDATE mission_invoices SET status = 'released', released_at = NOW()
-              WHERE id = $1 AND status = 'paid'",
-        )
-        .bind(id)
-        .execute(db)
-        .await?;
-        released += 1;
+    for id in invoices {
+        if release_one(db, id).await? {
+            released += 1;
+        }
     }
     Ok(released)
+}
+
+/// One captured invoice becomes withdrawable.
+///
+/// Split out of `release_all` because `milestone_iteration` releases as it
+/// goes: an accepted round pays its own instalment, and the rest stays in
+/// escrow until its round is accepted too. Two code paths releasing money
+/// would be two chances to release it twice, so there is one.
+///
+/// Returns false for an invoice that was not captured. That is not an error:
+/// money nobody has put up cannot be released, and paying the designer out of
+/// the platform's pocket would be the alternative.
+pub async fn release_one(db: &PgPool, invoice_id: Uuid) -> Result<bool, AppError> {
+    let row: Option<(Uuid, BigDecimal, String, BigDecimal)> = sqlx::query_as(
+        "SELECT m.assigned_user_id, i.amount, i.currency, i.commission_percent
+           FROM mission_invoices i
+           JOIN missions m ON m.id = i.mission_id
+          WHERE i.id = $1 AND i.status = 'paid' AND m.assigned_user_id IS NOT NULL",
+    )
+    .bind(invoice_id)
+    .fetch_optional(db)
+    .await?;
+
+    let Some((recipient, amount, currency, commission)) = row else {
+        return Ok(false);
+    };
+
+    let currency: ledger::Currency = currency.parse()?;
+    // The recipient's share, not the gross: the platform's half was never in
+    // their pending balance to release.
+    let theirs = amount.clone() - platform_share(&amount, &commission);
+
+    ledger::release(db, recipient, theirs, currency, "mission_invoice", invoice_id).await?;
+
+    let done = sqlx::query(
+        "UPDATE mission_invoices SET status = 'released', released_at = NOW()
+          WHERE id = $1 AND status = 'paid'",
+    )
+    .bind(invoice_id)
+    .execute(db)
+    .await?;
+
+    Ok(done.rows_affected() > 0)
 }
 
 /// The provider names the ledger knows.

@@ -78,7 +78,7 @@ pub struct DomainRules {
 /// leave most people unmatched.
 pub const CODE: DomainRules = DomainRules {
     domain: "code",
-    tools_key: "main_languages",
+    tools_key: "main_tools",
     families_key: "preferred_families",
     max_active_mentees: 5,
     tools_label: "langages",

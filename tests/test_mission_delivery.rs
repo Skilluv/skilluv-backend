@@ -415,3 +415,109 @@ async fn work_still_being_argued_about_is_not_rated() {
         .await;
     assert_eq!(resp.status().as_u16(), 409);
 }
+
+#[tokio::test]
+async fn an_accepted_mission_leaves_an_attestation_a_stranger_can_check() {
+    let app = TestApp::spawn().await;
+    app.register_user("attest_client").await;
+    app.register_user("attest_talent").await;
+    let client = user_id(&app, "attest_client").await;
+    let talent = user_id(&app, "attest_talent").await;
+    a_mission_in_progress(&app, client, talent, "m-attest", Some(2)).await;
+
+    app.login("attest_talent").await;
+    app.post("/api/missions/m-attest/deliveries", &a_delivery(1)).await;
+
+    app.login("attest_client").await;
+    let accepted = app
+        .post("/api/missions/m-attest/deliveries/accept", &json!({}))
+        .await;
+    assert_eq!(accepted.status().as_u16(), 200);
+
+    let row: Option<(String, String, Option<String>)> = sqlx::query_as(
+        "SELECT basis, title, description FROM attestations
+          WHERE user_id = $1 AND basis = 'design_mission_delivered'",
+    )
+    .bind(talent)
+    .fetch_optional(&app.db)
+    .await
+    .unwrap();
+
+    let (basis, title, description) = row.expect("an accepted mission earns an attestation");
+    assert_eq!(basis, "design_mission_delivered");
+    assert!(title.contains("Identité coopérative"), "{title}");
+
+    // No client name and no figure. What a piece of work paid is the
+    // contractor's business, and the client is often under an agreement the
+    // platform is not party to.
+    let description = description.unwrap_or_default();
+    assert!(!description.contains("2000"), "{description}");
+    assert!(!description.contains('€'), "{description}");
+}
+
+#[tokio::test]
+async fn a_delivery_that_was_only_handed_in_earns_nothing() {
+    let app = TestApp::spawn().await;
+    app.register_user("attest_early_client").await;
+    app.register_user("attest_early_talent").await;
+    let client = user_id(&app, "attest_early_client").await;
+    let talent = user_id(&app, "attest_early_talent").await;
+    a_mission_in_progress(&app, client, talent, "m-attest-early", Some(2)).await;
+
+    app.login("attest_early_talent").await;
+    app.post("/api/missions/m-attest-early/deliveries", &a_delivery(1))
+        .await;
+
+    // Handed in is not accepted. An attestation issued here would be the
+    // platform vouching for work the client has not looked at.
+    let count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM attestations WHERE user_id = $1",
+    )
+    .bind(talent)
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert_eq!(count, 0);
+}
+
+#[tokio::test]
+async fn the_attestation_says_how_many_rounds_it_took() {
+    let app = TestApp::spawn().await;
+    app.register_user("attest_rounds_client").await;
+    app.register_user("attest_rounds_talent").await;
+    let client = user_id(&app, "attest_rounds_client").await;
+    let talent = user_id(&app, "attest_rounds_talent").await;
+    a_mission_in_progress(&app, client, talent, "m-attest-rounds", Some(3)).await;
+
+    app.login("attest_rounds_talent").await;
+    app.post("/api/missions/m-attest-rounds/deliveries", &a_delivery(1))
+        .await;
+    app.login("attest_rounds_client").await;
+    app.post(
+        "/api/missions/m-attest-rounds/deliveries/request-changes",
+        &json!({"reason": "La marque ne survit pas en une seule couleur."}),
+    )
+    .await;
+
+    app.login("attest_rounds_talent").await;
+    app.post("/api/missions/m-attest-rounds/deliveries", &a_delivery(2))
+        .await;
+    app.login("attest_rounds_client").await;
+    app.post("/api/missions/m-attest-rounds/deliveries/accept", &json!({}))
+        .await;
+
+    let description: Option<String> = sqlx::query_scalar(
+        "SELECT description FROM attestations
+          WHERE user_id = $1 AND basis = 'design_mission_delivered'",
+    )
+    .bind(talent)
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+
+    // Two rounds is not a worse mission than one. It is a mission where
+    // somebody was told what was wrong and came back, and the attestation
+    // says so rather than hiding it.
+    let description = description.unwrap_or_default();
+    assert!(description.contains("2 rendus"), "{description}");
+}

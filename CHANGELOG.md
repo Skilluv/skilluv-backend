@@ -15,6 +15,34 @@ address KYC full, live AI wiring in prod, and RLS enforcement.
 
 ### Added
 
+- **The migrations get their own CI job.** `scripts/check-migrations.sh`
+  applies every migration to an empty database in order, then asserts the
+  invariants the schema is supposed to hold; the workflow runs it as
+  `Migrations Apply And The Schema Holds`, and the eight test shards now wait
+  on it. A chain that does not apply used to make all eight shards red with
+  the same unrelated error forty-five minutes later. This names the migration
+  and the line in about two, and spends one runner doing it.
+- **A check that every capability a route guards itself with can be granted.**
+  `scripts/capabilities-named-in-code.py` reads the names out of the
+  `require_capability` call sites — by balanced parentheses, so a literal that
+  merely sits nearby is not mistaken for one passed in — and the job refuses
+  any the catalogue has no row for. This is not a misconfiguration that
+  degrades: the grant is refused, so the guard refuses everybody, silently and
+  forever. It found `mission_arbiter`.
+- **Answering a wizard comes back with advice.** `PUT
+  /api/users/me/domain-profile/{domain}` carries a `recommendation`: a
+  headline, the reasoning behind it so it can be argued with, guides to open
+  and a ready-made query against the domain's feed. Absent from the reads,
+  deliberately -- it answers having just answered, and a profile that carried
+  it would invite a front end to show month-one advice to somebody in their
+  sixth month.
+- **The wizards' declared handles become portfolio rows in every domain.**
+  Previously audio only. A GitHub username given to the code wizard and a
+  HuggingFace one given to the AI wizard were both stored and read by nothing.
+  Migration 0441 adds the `huggingface` platform, without which the insert
+  would have been logged and dropped. Claimed, never proved — only the OAuth
+  callback sets `verified_at`.
+
 - **Audio — a domain of its own.** Five trades (`audio-composer`,
   `audio-music-implementer`, `audio-sound-designer`, `audio-voice-actor`,
   `audio-programmer`) in four review families, 61 skill nodes, 24 seeded
@@ -45,6 +73,24 @@ address KYC full, live AI wiring in prod, and RLS enforcement.
   creator's portfolio away, and it says so.
 
 ### Changed
+
+- **One onboarding wizard, and the code wizard folded into it.** Migration
+  0258 moves the eight `users.code_*` columns into `user_domain_profiles` and
+  drops them; `POST /api/code/onboarding` and `/code/onboarding/skip` are gone,
+  answered by `PUT /api/users/me/domain-profile/code` like every other domain.
+  Two questions are renamed on the way: `objective` is `goal` and
+  `main_languages` is `main_tools`, because the generic wizard already called
+  them that and two names for one question is how a reader ends up checking
+  the wrong key. `main_tools` is the one tools question with no vocabulary —
+  the set of things a developer works in is not a list this platform owns.
+- **`POST /api/users/me/domain-profile/{domain}/skip` answers 204.** It used
+  to answer 200 with a body it made up: the write touches `skipped_at` alone,
+  so the body reported no answers and no completion whatever the row held, and
+  told somebody who had answered and then skipped that they never answered.
+- **Migration 0306 is empty.** It did what 0258 does, written on another branch
+  at the same time and numbered after it, so it failed the chain on the first
+  database that saw both. The file stays with the reason in it rather than
+  being deleted, because a gap explained reads better than a number missing.
 
 - **The lists that could only be rewritten became rows.** Migrations 0228 and
   0305 documented the failure mode — a CHECK cannot be extended, only

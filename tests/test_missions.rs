@@ -519,10 +519,14 @@ async fn the_commission_is_frozen_at_selection() {
     let now = skilluv_backend::services::missions::commission_for(
         &app.db,
         user_id(&app, "commission_dev").await,
+        // Not a charity brief. The rate now carries the rule that produced
+        // it, and charity wins over loyalty rather than stacking with it.
+        false,
     )
     .await
     .unwrap();
-    assert_eq!(now, 10.0, "twelve deliveries earn the reduced rate");
+    assert_eq!(now.percent, 10.0, "twelve deliveries earn the reduced rate");
+    assert_eq!(now.reason, "loyalty_discount");
 
     let frozen: f64 = sqlx::query_scalar(
         "SELECT i.commission_percent::FLOAT8 FROM mission_invoices i

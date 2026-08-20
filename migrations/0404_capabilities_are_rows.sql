@@ -119,7 +119,12 @@ INSERT INTO capability_catalog (capability, family, scope, description) VALUES
     -- `family` plus `:scope`, and a NULL scope would mean the capability is
     -- called `domain_curator`. The other `:all` rows follow the same rule.
     ('domain_curator:all', 'domain_curator', 'all',
-     'Anime tous les domaines.');
+     'Anime tous les domaines.'),
+    -- Flat: family with no scope, so the name is the family alone. Added by
+    -- migration 0260, which this file's list was written before seeing --
+    -- the seventh capability a restated CHECK dropped on the way through.
+    ('mission_arbiter', 'mission_arbiter', NULL,
+     'Tranche une mission payee que ni le client ni le prestataire ne veut clore.');
 
 -- ═══════════════════════════════════════════════════════════════════
 -- The derived rows, and the trigger that keeps them

@@ -56,6 +56,21 @@ check() {
     fi
 }
 
+# Reads capability names on stdin, prints the ones the catalogue has no row
+# for. One query rather than one per name, so the output names every missing
+# capability at once instead of stopping at the first.
+psql_missing_capabilities() {
+    local list
+    list=$(sed "s/.*/('&')/" | paste -sd, -)
+    [ -z "${list}" ] && return 0
+    psql "${BASE}/${DB}" -tAc "
+        SELECT n.capability
+          FROM (VALUES ${list}) AS n(capability)
+         WHERE NOT EXISTS (SELECT 1 FROM capability_catalog c
+                            WHERE c.capability = n.capability)
+         ORDER BY n.capability" | paste -sd' ' -
+}
+
 # Every domain column points at the catalogue. This is the check that found
 # the two Discord routing tables; a domain column with no key does not fail on
 # a typo, it routes to nothing and nobody finds out.
@@ -99,6 +114,21 @@ check "every live domain has skills" "
     SELECT count(*) FROM skill_domains d
      WHERE d.is_active
        AND NOT EXISTS (SELECT 1 FROM skill_nodes n WHERE n.domain = d.slug)" "0"
+
+# Every capability a route guards itself with has to be one the catalogue can
+# grant. A route naming a capability no row holds is not merely misconfigured:
+# the grant is refused, so the guard refuses everybody, forever, silently. This
+# is the check that found `mission_arbiter`, which migration 0260 added and the
+# three later migrations that restate the list were all written before seeing.
+python_bin=$(command -v python3 || command -v python)
+missing=$("${python_bin}" scripts/capabilities-named-in-code.py           | psql_missing_capabilities)
+if [ -n "${missing}" ]; then
+    echo "  FAIL capabilities named in code exist in the catalogue"
+    echo "       the catalogue has no row for: ${missing}"
+    fail=1
+else
+    echo "  ok   capabilities named in code exist in the catalogue"
+fi
 
 echo
 if [ "${fail}" -ne 0 ]; then

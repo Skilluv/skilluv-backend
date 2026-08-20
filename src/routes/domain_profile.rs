@@ -157,6 +157,20 @@ const fn closed_multi(key: &'static str, allowed: &'static [&'static str]) -> Qu
     }
 }
 
+/// Several answers, checked for length rather than against a vocabulary.
+///
+/// For the questions whose vocabulary the platform does not own. `check_answer`
+/// already reads an empty `allowed` as "any value within `max_len`"; this only
+/// names the combination so a reader does not have to infer it.
+const fn open_multi(key: &'static str, max_len: usize) -> Question {
+    Question {
+        key,
+        multi: true,
+        allowed: &[],
+        max_len,
+    }
+}
+
 const fn free_text(key: &'static str, max_len: usize) -> Question {
     Question {
         key,
@@ -166,12 +180,56 @@ const fn free_text(key: &'static str, max_len: usize) -> Question {
     }
 }
 
-/// Asked in every domain.
+/// The code wizard's own ladder, kept rather than folded into the five above.
+///
+/// `staff` is a rank the design ladder has no word for, and inventing one so
+/// that a single list would serve both loses the distinction the question
+/// exists to draw. The same is true of the hours and the goals: "contribute
+/// upstream" and "publish a library" are things a developer answers and a
+/// designer does not.
+///
+/// So the three questions every domain asks are asked in each domain's own
+/// words. Which is not the same as each domain asking different questions —
+/// that is `questions_for`, below.
+const CODE_LEVELS: &[&str] = &["beginner", "junior", "mid", "senior", "staff"];
+const CODE_WEEKLY_HOURS: &[&str] = &["under_5", "5_to_15", "15_to_40", "fulltime"];
+const CODE_GOALS: &[&str] = &[
+    "learn",
+    "build_portfolio",
+    "find_paid_work",
+    "contribute_upstream",
+    "publish_library",
+    "become_mentor",
+    "ship_own_product",
+];
+const CODE_CHALLENGE_PREFERENCES: &[&str] = &[
+    "upstream_contributions",
+    "solo_shipped_apps",
+    "published_libraries",
+    "long_team_projects",
+    "short_hackathons",
+];
+
+/// Asked in every domain, in the words that domain uses.
 const COMMON_QUESTIONS: &[Question] = &[
     closed("level", LEVELS),
     closed("weekly_hours", WEEKLY_HOURS),
     closed("goal", GOALS),
 ];
+
+const CODE_COMMON_QUESTIONS: &[Question] = &[
+    closed("level", CODE_LEVELS),
+    closed("weekly_hours", CODE_WEEKLY_HOURS),
+    closed("goal", CODE_GOALS),
+];
+
+/// The three shared questions, in this domain's vocabulary.
+fn common_questions_for(domain: &str) -> &'static [Question] {
+    match domain {
+        "code" => CODE_COMMON_QUESTIONS,
+        _ => COMMON_QUESTIONS,
+    }
+}
 
 const AI_QUESTIONS: &[Question] = &[
     closed("compute", COMPUTE),
@@ -199,6 +257,32 @@ const DESIGN_TOOLS: &[&str] = &[
 const DESIGN_QUESTIONS: &[Question] = &[
     closed("challenge_preference", CHALLENGE_PREFERENCES),
     closed("main_tool", DESIGN_TOOLS),
+    // Recorded as an unconfirmed signal, never fetched. See
+    // `claim_portfolio_signal`.
+    free_text("portfolio_url", 500),
+];
+
+/// What a developer wants to spend their time on. Its own vocabulary for the
+/// same reason the code ladder is: "upstream contributions" and "published
+/// libraries" are answers a developer gives and a designer has no equivalent
+/// for.
+const CODE_QUESTIONS: &[Question] = &[
+    closed("challenge_preference", CODE_CHALLENGE_PREFERENCES),
+    // Open, where every other domain's tools question is closed, and on
+    // purpose. A framework list and a DAW list are vocabularies the platform
+    // owns; the set of things a developer works in is not one — it includes
+    // Terraform and Elixir and whatever shipped last year. The sandbox keeps a
+    // language catalogue, but it lists what a challenge can be *executed* in,
+    // which is narrower than what somebody works in, and using it would refuse
+    // a real answer.
+    //
+    // Safe to leave open because of what reads it: the matching treats tools
+    // as a bonus and never a filter, and the first-issues query passes the
+    // first one through as `?language=`. An unknown value costs an empty feed,
+    // not a wrong recommendation. `MAX_SELECTIONS` still applies.
+    open_multi("main_tools", 40),
+    // Claimed here, proved only by the OAuth callback. See `claim_github`.
+    free_text("github_username", 39),
 ];
 
 const AUDIO_QUESTIONS: &[Question] = &[
@@ -228,6 +312,7 @@ pub fn questions_for(domain: &str) -> &'static [Question] {
     match domain {
         "ai" => AI_QUESTIONS,
         "audio" => AUDIO_QUESTIONS,
+        "code" => CODE_QUESTIONS,
         "design" => DESIGN_QUESTIONS,
         _ => &[],
     }
@@ -239,16 +324,16 @@ pub fn questions_for(domain: &str) -> &'static [Question] {
 /// Read by the mentor matching, which is why an unknown one is refused rather
 /// than stored: it would match nobody, silently, and look like an empty
 /// platform.
-async fn check_families(
-    db: &sqlx::PgPool,
-    domain: &str,
-    families: &[String],
-) -> Result<(), AppError> {
-    if families.len() > MAX_SELECTIONS {
-        return Err(AppError::Validation(format!(
-            "at most {MAX_SELECTIONS} families — picking everything says nothing"
-        )));
-    }
+/// The values `preferred_families` accepts in this domain, in order.
+///
+/// One function because there are two callers: the wizard that validates the
+/// answer and the endpoint that publishes the choices. They used to hold a
+/// query each, and the queries disagreed — the endpoint offered design's
+/// reviewer groups while the validator wanted design's trades, so a form built
+/// from what the API published was refused by the API that published it. Both
+/// were defensible alone, which is why nothing caught it until a test sent one
+/// through the other.
+pub async fn families_for(db: &sqlx::PgPool, domain: &str) -> Result<Vec<String>, AppError> {
     // Which vocabulary this domain's wizard speaks. Design asks which trades
     // interest you — `design-brand-identity` — where the others ask for the
     // reviewer family directly. The matcher reads the answer through the same
@@ -278,6 +363,30 @@ async fn check_families(
     .bind(domain)
     .fetch_all(db)
     .await?;
+
+    Ok(known)
+}
+
+/// The families a mentee wants to be matched in, per domain: reviewer groups,
+/// the same ones the guides and the review capabilities use — or trades, where
+/// the domain asks in trades. See [`families_for`].
+///
+/// Read by the mentor matching, which is why an unknown one is refused rather
+/// than stored: it would match nobody, silently, and look like an empty
+/// platform.
+async fn check_families(
+    db: &sqlx::PgPool,
+    domain: &str,
+    families: &[String],
+) -> Result<(), AppError> {
+    if families.len() > MAX_SELECTIONS {
+        return Err(AppError::Validation(format!(
+            "at most {MAX_SELECTIONS} families — picking everything says nothing"
+        )));
+    }
+    let by_trade = crate::services::mentorship_matching::rules_for(domain)
+        .is_some_and(|r| r.families_are_trade_slugs);
+    let known = families_for(db, domain).await?;
 
     for family in families {
         if !known.contains(family) {
@@ -327,6 +436,14 @@ pub struct DomainProfileResponse {
     /// When somebody said stop asking. Different from having answered
     /// nothing: the first means "stop", the second means "ask again".
     pub skipped_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// What to do first, given what was just said.
+    ///
+    /// Present on the answer to the wizard and absent everywhere else. It is
+    /// the reply to having answered, not a property of the profile: a read
+    /// carrying one would invite a front end to show month-one advice to
+    /// somebody in their sixth month.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recommendation: Option<crate::services::onboarding_recommendation::Recommendation>,
 }
 
 /// Refuse an answer this question does not accept, naming what it does.
@@ -414,6 +531,7 @@ pub async fn get_profile(
         answers,
         completed_at,
         skipped_at,
+        recommendation: None,
     })))
 }
 
@@ -444,6 +562,16 @@ async fn link_declared_handles(
             "https://soundcloud.com/",
         ),
         ("bandcamp_username", "bandcamp", "https://bandcamp.com/"),
+        // Same treatment for the other wizards' handles. Each was stored and
+        // read by nothing, which is the shape the paragraph above describes.
+        // A username typed into a form is a claim; only the OAuth callback
+        // makes it a proved account, so these rows stay unverified.
+        ("github_username", "github", "https://github.com/"),
+        (
+            "huggingface_username",
+            "huggingface",
+            "https://huggingface.co/",
+        ),
     ] {
         let Some(handle) = answers.get(key).and_then(|v| v.as_str()) else {
             continue;
@@ -474,6 +602,55 @@ async fn link_declared_handles(
         if let Err(e) = outcome {
             tracing::warn!(user = %user_id, platform, error = %e, "handle not linked");
         }
+    }
+}
+
+/// Record a declared portfolio, unconfirmed.
+///
+/// `external_signals` is where portfolios on platforms Skilluv does not own
+/// live, and a row without `verified_at` is exactly what an unconfirmed one
+/// is: visible to a moderator, invisible to a recruiter search. The backend
+/// does not fetch the URL — fetching arbitrary user-supplied addresses is how
+/// a server becomes somebody's proxy.
+async fn claim_portfolio_signal(
+    db: &sqlx::PgPool,
+    user_id: uuid::Uuid,
+    answers: &serde_json::Map<String, serde_json::Value>,
+) {
+    let Some(url) = answers.get("portfolio_url").and_then(|v| v.as_str()) else {
+        return;
+    };
+    let url = url.trim();
+
+    // The provider is read off the host rather than asked for: somebody
+    // pasting a Behance link has already said which platform it is.
+    let provider = if url.contains("behance.net") {
+        "behance"
+    } else if url.contains("dribbble.com") {
+        "dribbble"
+    } else if url.contains("artstation.com") {
+        "artstation"
+    } else if url.contains("vimeo.com") {
+        "vimeo"
+    } else {
+        // A personal site is not one of the known platforms, and inventing a
+        // provider for it would put it in a filter it does not belong in.
+        return;
+    };
+
+    let result = sqlx::query(
+        "INSERT INTO external_signals (user_id, provider, url, title)
+         VALUES ($1, $2, $3, 'Portfolio')
+         ON CONFLICT (user_id, url) DO NOTHING",
+    )
+    .bind(user_id)
+    .bind(provider)
+    .bind(url)
+    .execute(db)
+    .await;
+
+    if let Err(err) = result {
+        tracing::info!(%err, "portfolio url from the wizard not recorded");
     }
 }
 
@@ -528,7 +705,7 @@ pub async fn put_profile(
             continue;
         }
 
-        let question = COMMON_QUESTIONS
+        let question = common_questions_for(&domain)
             .iter()
             .chain(asked.iter())
             .find(|q| q.key == key)
@@ -543,7 +720,7 @@ pub async fn put_profile(
                         "'{key}' belongs to the {owner} wizard, not the {domain} one"
                     ));
                 }
-                let known: Vec<&str> = COMMON_QUESTIONS
+                let known: Vec<&str> = common_questions_for(&domain)
                     .iter()
                     .chain(asked.iter())
                     .map(|q| q.key)
@@ -559,7 +736,7 @@ pub async fn put_profile(
             let values = as_string_list(key, value)?;
             if values.len() > MAX_SELECTIONS {
                 return Err(AppError::Validation(format!(
-                    "at most {MAX_SELECTIONS} answers to '{key}' — picking                      everything says nothing"
+                    "at most {MAX_SELECTIONS} answers to '{key}' — picking everything says nothing"
                 )));
             }
             for v in &values {
@@ -579,10 +756,14 @@ pub async fn put_profile(
 
     let answers = serde_json::Value::Object(answers);
 
-    if domain == "audio"
-        && let serde_json::Value::Object(map) = &answers
-    {
+    // No per-domain gate: the loop looks each handle up by key, and a key only
+    // one wizard asks is absent from every other wizard's answers. Naming the
+    // domain here as well would be a second list to keep in step with the
+    // question registry, which is how the code wizard's GitHub handle went
+    // missing in the first place.
+    if let serde_json::Value::Object(map) = &answers {
         link_declared_handles(&state.db, auth.user_id, map).await;
+        claim_portfolio_signal(&state.db, auth.user_id, map).await;
     }
 
     sqlx::query(
@@ -603,11 +784,15 @@ pub async fn put_profile(
     .execute(&state.db)
     .await?;
 
+    let recommendation =
+        crate::services::onboarding_recommendation::recommend(&domain, &answers);
+
     Ok(Json(ApiResponse::new(DomainProfileResponse {
         domain,
         answers,
         completed_at: Some(chrono::Utc::now()),
         skipped_at: None,
+        recommendation: Some(recommendation),
     })))
 }
 
@@ -621,7 +806,12 @@ pub async fn put_profile(
     post, path = "/api/users/me/domain-profile/{domain}/skip", tag = "profile",
     params(("domain" = String, Path, description = "Domain slug")),
     responses(
-        (status = 200, description = "Recorded", body = ApiResponse<DomainProfileResponse>),
+        // No content, because there is no true content to send. The write
+        // touches `skipped_at` and nothing else, so a body describing the
+        // profile would have to either re-read the row or guess at it, and
+        // guessing told somebody who had answered and then skipped that they
+        // had never answered.
+        (status = 204, description = "Recorded"),
         (status = 400, description = "Unknown domain", body = crate::api_response::ErrorResponse),
         (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
     ),
@@ -631,7 +821,7 @@ pub async fn skip_profile(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(domain): Path<String>,
-) -> Result<Json<ApiResponse<DomainProfileResponse>>, AppError> {
+) -> Result<axum::http::StatusCode, AppError> {
     check_domain(&domain)?;
 
     sqlx::query(
@@ -646,24 +836,27 @@ pub async fn skip_profile(
     .execute(&state.db)
     .await?;
 
-    Ok(Json(ApiResponse::new(DomainProfileResponse {
-        domain,
-        answers: json!({}),
-        completed_at: None,
-        skipped_at: Some(chrono::Utc::now()),
-    })))
+    Ok(axum::http::StatusCode::NO_CONTENT)
 }
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct QuestionSpec {
     pub key: String,
-    /// `single`, `multi` or `text`.
+    /// `single`, `multi` or `text` — whether the answer is one value, several,
+    /// or typed.
+    ///
+    /// Read it together with `allowed`: `multi` with an empty `allowed` and a
+    /// `max_len` is several answers of any value, which is what `main_tools`
+    /// is. It is `multi` and not `text` because the wire shape is a list, and
+    /// a form that reads only this field has to send the shape the wizard
+    /// accepts.
     pub answer: String,
-    /// The accepted values, empty for free text.
+    /// The accepted values. Empty where the question has no vocabulary, which
+    /// is free text for a `single` question and any value for a `multi` one.
     pub allowed: Vec<String>,
     /// How many answers at most, for a multi-answer question.
     pub max_selections: Option<usize>,
-    /// Longest accepted answer, for free text.
+    /// Longest accepted answer, where there is no vocabulary to check against.
     pub max_len: Option<usize>,
 }
 
@@ -692,15 +885,23 @@ pub async fn list_questions(
 ) -> Result<Json<ApiResponse<Vec<QuestionSpec>>>, AppError> {
     check_domain(&domain)?;
 
-    let mut specs: Vec<QuestionSpec> = COMMON_QUESTIONS
+    let mut specs: Vec<QuestionSpec> = common_questions_for(&domain)
         .iter()
         .chain(questions_for(&domain).iter())
         .map(|q| QuestionSpec {
             key: q.key.to_string(),
-            answer: if q.allowed.is_empty() {
-                "text".into()
-            } else if q.multi {
+            // `multi` first. A question can be several-of-anything —
+            // `main_tools` is — and testing the vocabulary first called it
+            // `text`, which renders as one input, sends a string, and is
+            // refused by the validator that wanted a list.
+            //
+            // The three values still describe every case, because `allowed`
+            // and `max_len` are sent alongside: `multi` with an empty
+            // `allowed` and a `max_len` is "several, any value, this long".
+            answer: if q.multi {
                 "multi".into()
+            } else if q.allowed.is_empty() {
+                "text".into()
             } else {
                 "single".into()
             },
@@ -710,14 +911,9 @@ pub async fn list_questions(
         })
         .collect();
 
-    let families: Vec<String> = sqlx::query_scalar(
-        "SELECT DISTINCT reviewer_group FROM orientations
-          WHERE reviewer_group IS NOT NULL AND primary_domain = $1
-          ORDER BY reviewer_group",
-    )
-    .bind(&domain)
-    .fetch_all(&state.db)
-    .await?;
+    // The same function the validator uses, not a second query that says
+    // nearly the same thing. See `families_for`.
+    let families = families_for(&state.db, &domain).await?;
 
     // Offered only where the domain has families to offer. A question with an
     // empty vocabulary is one nobody can answer, and showing it makes the
@@ -740,7 +936,7 @@ mod tests {
     use super::*;
 
     fn question(domain: &str, key: &str) -> &'static Question {
-        COMMON_QUESTIONS
+        common_questions_for(domain)
             .iter()
             .chain(questions_for(domain).iter())
             .find(|q| q.key == key)
@@ -772,7 +968,13 @@ mod tests {
         assert!(questions_for("ai").iter().any(|q| q.key == "compute"));
         assert!(!questions_for("audio").iter().any(|q| q.key == "compute"));
         assert!(questions_for("audio").iter().any(|q| q.key == "main_daws"));
-        assert!(questions_for("code").is_empty());
+
+        // Code asked nothing here until its own wizard was folded in. Now it
+        // asks, and what matters is the same property: its questions are its
+        // own and nobody else's.
+        assert!(questions_for("code").iter().any(|q| q.key == "main_tools"));
+        assert!(!questions_for("design").iter().any(|q| q.key == "main_tools"));
+        assert!(!questions_for("code").iter().any(|q| q.key == "main_tool"));
     }
 
     #[test]

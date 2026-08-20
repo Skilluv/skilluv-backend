@@ -161,10 +161,15 @@ async fn skipping_is_not_the_same_as_answering_nothing() {
     let resp = app
         .post("/api/users/me/domain-profile/ai/skip", &json!({}))
         .await;
-    assert_eq!(resp.status().as_u16(), 200, "{:?}", resp.text().await);
+    // 204: the write touches `skipped_at` alone, so there is nothing true to
+    // put in a body. It used to answer 200 with one it made up, reporting no
+    // answers and no completion whatever the row held — which told somebody
+    // who had answered and then skipped that they had never answered.
+    assert_eq!(resp.status().as_u16(), 204, "{:?}", resp.text().await);
 
-    // Without this distinction the wizard reappears forever for exactly the
-    // people who least wanted it.
+    // The state it recorded is read back from the profile, which is the only
+    // place it was ever true. Without this distinction the wizard reappears
+    // forever for exactly the people who least wanted it.
     let after: serde_json::Value = app
         .get("/api/users/me/domain-profile/ai")
         .await

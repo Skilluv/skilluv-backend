@@ -65,12 +65,20 @@ pub async fn resolve_channel(
     purpose: Purpose,
     domain: Option<&str>,
 ) -> Option<String> {
+    // The domain-blind room is NULL, not the empty string. It was a sentinel
+    // so the primary key would not have to reason about NULL equality;
+    // migration 0440 moved that uniqueness to an index over COALESCE so the
+    // column could point at `skill_domains`, because a routing table with an
+    // unchecked domain does not fail on a typo — it routes the announcement
+    // nowhere and nobody finds out.
+    //
+    // The ordering still prefers the domain's own room over the general one.
     sqlx::query_scalar(
         r#"
         SELECT channel_id FROM discord_channels
          WHERE purpose = $1
-           AND skill_domain IN (COALESCE($2, ''), '')
-         ORDER BY (skill_domain <> '') DESC
+           AND (skill_domain = $2 OR skill_domain IS NULL)
+         ORDER BY (skill_domain IS NOT NULL) DESC
          LIMIT 1
         "#,
     )

@@ -538,6 +538,10 @@ async fn a_mentor_is_suggested_with_the_reasoning_attached() {
         .execute(&app.db)
         .await
         .unwrap();
+        // A mentor's families come from what they delivered, not from what
+        // they declared: a profile and a score describe somebody who has said
+        // what interests them and shown nothing.
+        common::delivered_in(&app, mentor, "code", family).await;
     }
 
     app.login("match_mentee").await;

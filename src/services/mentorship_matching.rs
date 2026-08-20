@@ -309,7 +309,7 @@ pub async fn matches_for(
 
     if mentee_families.is_empty() {
         return Err(AppError::Validation(format!(
-            "answer the {} onboarding first — without a family there is nothing to match on",
+            "réponds d'abord au questionnaire {} : sans famille, il n'y a rien sur quoi faire correspondre",
             rules.domain
         )));
     }
@@ -328,7 +328,7 @@ pub async fn matches_for(
         .await?;
         if resolved.is_empty() {
             return Err(AppError::Validation(format!(
-                "answer the {} onboarding first — without a family there is nothing to match on",
+                "réponds d'abord au questionnaire {} : sans famille, il n'y a rien sur quoi faire correspondre",
                 rules.domain
             )));
         }

@@ -236,10 +236,11 @@ async fn list_open_respects_domain_filter() {
     sqlx::query(
         "INSERT INTO project_slices
             (project_id, slice_type, title, description, primary_domain, difficulty,
-             status, orientation_id)
+             status, orientation_id, design_subtype)
          VALUES ($1, 'design_artifact', 'Design', 'X', 'design', 2, 'open',
                  (SELECT id FROM orientations
-                   WHERE slug = 'design-web' AND is_archived = FALSE))",
+                   WHERE slug = 'design-web' AND is_archived = FALSE),
+                 'interface')",
     )
     .bind(project_id)
     .execute(&db)

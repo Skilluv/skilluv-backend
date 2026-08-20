@@ -70,3 +70,50 @@ ALTER TABLE mentoring_programs
 ALTER TABLE tournament_series
     ADD CONSTRAINT tournament_series_skill_domain_fkey
     FOREIGN KEY (skill_domain) REFERENCES skill_domains(slug) ON UPDATE CASCADE;
+
+
+-- ═══════════════════════════════════════════════════════════════════
+-- The two Discord routing tables
+-- ═══════════════════════════════════════════════════════════════════
+--
+-- 0257 wrote these with a bare VARCHAR and said why: `skill_domains` existed
+-- on some developer machines and not in the canonical chain, so referencing
+-- it migrated locally and failed on a fresh database. That was true on the
+-- branch it was written on. It is not true here — 0400 puts the table in the
+-- chain, three hundred migrations before this one — and the cost of no key is
+-- concrete for a routing table: a typo'd domain does not fail, it routes the
+-- announcement nowhere and nobody finds out.
+--
+-- `discord_channels.skill_domain` used the empty string for the domain-blind
+-- room, so that the primary key would not have to reason about NULL equality.
+-- A sentinel cannot point at a catalogue, so it becomes NULL and the
+-- uniqueness moves to an index over COALESCE — same guarantee, one less value
+-- that means something only by convention.
+
+UPDATE discord_channels SET skill_domain = NULL WHERE skill_domain = '';
+
+UPDATE discord_channels SET skill_domain = NULL
+ WHERE skill_domain IS NOT NULL
+   AND skill_domain NOT IN (SELECT slug FROM skill_domains);
+
+UPDATE discord_notifications_queue SET skill_domain = NULL
+ WHERE skill_domain IS NOT NULL
+   AND skill_domain NOT IN (SELECT slug FROM skill_domains);
+
+ALTER TABLE discord_channels
+    DROP CONSTRAINT IF EXISTS discord_channels_pkey;
+
+ALTER TABLE discord_channels
+    ALTER COLUMN skill_domain DROP DEFAULT,
+    ALTER COLUMN skill_domain DROP NOT NULL;
+
+CREATE UNIQUE INDEX idx_discord_channels_purpose_domain
+    ON discord_channels (purpose, COALESCE(skill_domain, ''));
+
+ALTER TABLE discord_channels
+    ADD CONSTRAINT discord_channels_skill_domain_fkey
+    FOREIGN KEY (skill_domain) REFERENCES skill_domains(slug) ON UPDATE CASCADE;
+
+ALTER TABLE discord_notifications_queue
+    ADD CONSTRAINT discord_notifications_queue_skill_domain_fkey
+    FOREIGN KEY (skill_domain) REFERENCES skill_domains(slug) ON UPDATE CASCADE;

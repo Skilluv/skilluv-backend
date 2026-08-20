@@ -349,10 +349,11 @@ async fn a_sound_file_cannot_hang_off_a_design_artefact() {
     let frame_id: Uuid = sqlx::query_scalar(
         "INSERT INTO project_slices
             (project_id, title, description, slice_type, primary_domain,
-             difficulty, orientation_id)
+             difficulty, orientation_id, design_subtype)
          VALUES ($1, 'Écran', 'x', 'design_artifact', 'design', 2,
                  (SELECT id FROM orientations
-                   WHERE slug = 'design-web' AND is_archived = FALSE))
+                   WHERE slug = 'design-web' AND is_archived = FALSE),
+                 'interface')
          RETURNING id",
     )
     .bind(project_id)

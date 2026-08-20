@@ -93,7 +93,29 @@ INSERT INTO capability_catalog (capability, family, scope, description) VALUES
     ('verified_apprentice', 'verified_apprentice', NULL,
      'Apprenti dont l''identité et la démarche ont été vérifiées.'),
     ('apprentice_verifier', 'apprentice_verifier', NULL,
-     'Peut vérifier un apprenti.');
+     'Peut vérifier un apprenti.'),
+    -- Running a domain (migration 0256). Its challenges, its contests, its
+    -- featurings — not its people and not its money. Written out rather than
+    -- derived from `skill_domains` because `:all` has no domain behind it and
+    -- a curator is appointed per domain rather than following the catalogue.
+    ('domain_curator:code', 'domain_curator', 'code',
+     'Anime le domaine code : ses défis, ses concours, ses mises en avant.'),
+    ('domain_curator:design', 'domain_curator', 'design',
+     'Anime le domaine design : ses défis, ses concours, ses mises en avant.'),
+    ('domain_curator:game', 'domain_curator', 'game',
+     'Anime le domaine jeu : ses défis, ses concours, ses mises en avant.'),
+    ('domain_curator:security', 'domain_curator', 'security',
+     'Anime le domaine cybersécurité : ses défis, ses concours, ses mises en avant.'),
+    ('domain_curator:ops', 'domain_curator', 'ops',
+     'Anime le domaine infrastructure : ses défis, ses concours, ses mises en avant.'),
+    ('domain_curator:ai', 'domain_curator', 'ai',
+     'Anime le domaine IA : ses défis, ses concours, ses mises en avant.'),
+    ('domain_curator:soft_skills', 'domain_curator', 'soft_skills',
+     'Anime le domaine savoir-être : ses défis, ses concours, ses mises en avant.'),
+    ('domain_curator:audio', 'domain_curator', 'audio',
+     'Anime le domaine audio : ses défis, ses concours, ses mises en avant.'),
+    ('domain_curator:all', 'domain_curator', NULL,
+     'Anime tous les domaines.');
 
 -- ═══════════════════════════════════════════════════════════════════
 -- The derived rows, and the trigger that keeps them

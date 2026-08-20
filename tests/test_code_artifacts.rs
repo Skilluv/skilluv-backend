@@ -71,10 +71,11 @@ async fn a_subtype_on_another_kind_of_slice_is_refused() {
     let refused = sqlx::query(
         "INSERT INTO project_slices
             (project_id, title, description, primary_domain, slice_type, code_subtype,
-             difficulty, orientation_id)
+             difficulty, orientation_id, design_subtype)
          VALUES ($1, 'Maquette', 'x', 'design', 'design_artifact', 'library_published', 3,
                  (SELECT id FROM orientations
-                   WHERE slug = 'design-web' AND is_archived = FALSE))",
+                   WHERE slug = 'design-web' AND is_archived = FALSE),
+                 'interface')",
     )
     .bind(project)
     .execute(&app.db)

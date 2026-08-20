@@ -391,6 +391,11 @@ async fn an_ai_mentor_is_suggested_with_the_reasoning_attached() {
         let mentor = a_user(&app, name).await;
         profile_for(&app, mentor, "ai", family, "pytorch", "+02:00").await;
         score_for(&app, mentor, "ai", score).await;
+        // A mentor's families come from what they delivered, not from what
+        // they declared. Setting a profile and a score describes somebody who
+        // has said what interests them and shown nothing, which is exactly
+        // who the matcher is supposed to leave out.
+        common::delivered_in(&app, mentor, "ai", family).await;
         sqlx::query(
             "INSERT INTO mentor_profiles
                 (user_id, headline, bio, hourly_rate_eur_cents, active)

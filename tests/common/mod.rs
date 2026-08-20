@@ -932,3 +932,70 @@ pub fn assert_decimal(actual: &sqlx::types::BigDecimal, expected: &str) {
         .unwrap_or_else(|e| panic!("{expected} is not a decimal: {e}"));
     assert_eq!(actual, &want, "expected {expected}, got {actual}");
 }
+
+/// Give somebody a verified deliverable in a reviewer family.
+///
+/// The mentor matcher reads a mentor's families from what they have actually
+/// delivered, not from what they told the wizard interests them — a mentor who
+/// declared motion and never delivered any is not a motion mentor. So a test
+/// that wants a mentor to be suggested has to give them work, and one that
+/// only sets a craft score and a profile is describing the person the rule
+/// exists to exclude.
+#[allow(dead_code)]
+pub async fn delivered_in(app: &TestApp, user: Uuid, domain: &str, family: &str) {
+    let project: Uuid = sqlx::query_scalar(
+        "INSERT INTO projects (slug, name, description, owner_type, owner_id)
+         VALUES ($1, 'Projet mentor', 'x', 'user', $2) RETURNING id",
+    )
+    .bind(format!("mentor-p-{}", Uuid::new_v4()))
+    .bind(user)
+    .fetch_one(&app.db)
+    .await
+    .expect("project for a delivered work");
+
+    // The surface the work lives on, per domain. A design slice additionally
+    // has to say what came out of it and which trade it belongs to.
+    let slice_type = match domain {
+        "code" => "code_artifact",
+        "ai" => "ai_artifact",
+        "audio" => "audio_artifact",
+        "design" => "design_artifact",
+        "ops" => "ops_artifact",
+        other => panic!("no slice type known for the {other} domain"),
+    };
+    let design_subtype = (domain == "design").then_some("interface");
+
+    let slice: Uuid = sqlx::query_scalar(
+        "INSERT INTO project_slices
+            (project_id, slice_type, title, description, primary_domain, difficulty,
+             status, orientation_id, design_subtype)
+         VALUES ($1, $2, 'Travail', 'Un brief.', $3, 3, 'validated',
+                 (SELECT id FROM orientations
+                   WHERE primary_domain = $3 AND reviewer_group = $4
+                     AND is_archived = FALSE
+                   ORDER BY slug LIMIT 1),
+                 $5)
+         RETURNING id",
+    )
+    .bind(project)
+    .bind(slice_type)
+    .bind(domain)
+    .bind(family)
+    .bind(design_subtype)
+    .fetch_one(&app.db)
+    .await
+    .unwrap_or_else(|e| panic!("slice in {domain}/{family}: {e}"));
+
+    sqlx::query(
+        "INSERT INTO deliverables
+            (slice_id, user_id, artifact_type, artifact_url, verifiable_by,
+             verification_status, verified_at, public)
+         VALUES ($1, $2, 'other', 'https://example.test/x', 'human_review',
+                 'verified', NOW(), TRUE)",
+    )
+    .bind(slice)
+    .bind(user)
+    .execute(&app.db)
+    .await
+    .expect("verified deliverable");
+}

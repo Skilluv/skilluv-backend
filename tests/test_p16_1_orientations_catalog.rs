@@ -81,14 +81,23 @@ async fn seed_produces_at_least_thirty_curated_orientations() {
 #[tokio::test]
 async fn all_seed_orientations_have_valid_primary_domain() {
     let (db, name) = setup_test_db().await;
-    let bad: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM orientations WHERE primary_domain NOT IN
-         ('code','design','game','security','soft_skills','ai','ops')",
+    // Against the catalogue, not against a list written here. This one had
+    // gone stale without `audio`, so the five audio trades were reported as
+    // seeded with an invalid domain — the test's own copy was the thing that
+    // was wrong, which is the failure mode a copy always has.
+    let bad: Vec<String> = sqlx::query_scalar(
+        "SELECT slug FROM orientations o
+          WHERE NOT EXISTS (
+              SELECT 1 FROM skill_domains d WHERE d.slug = o.primary_domain)
+          ORDER BY slug",
     )
-    .fetch_one(&db)
+    .fetch_all(&db)
     .await
     .expect("bad");
-    assert_eq!(bad, 0, "seed contains a track with invalid domain");
+    assert!(
+        bad.is_empty(),
+        "seed contains a track whose domain is not in the catalogue: {bad:?}"
+    );
     db.close().await;
     cleanup_test_db(&name).await;
 }
@@ -185,10 +194,18 @@ async fn archived_orientations_stay_visible_via_flag() {
             .await
             .expect("arch before");
 
-    sqlx::query("UPDATE orientations SET is_archived = TRUE WHERE slug = 'smart-contract-dev'")
-        .execute(&db)
-        .await
-        .expect("archive");
+    // Whichever one is still live, not a slug written here: 0173 archived
+    // `smart-contract-dev` under a rename, so archiving it again changed
+    // nothing and the count never moved.
+    sqlx::query(
+        "UPDATE orientations SET is_archived = TRUE
+          WHERE slug = (SELECT slug FROM orientations
+                         WHERE is_archived = FALSE AND is_curated = TRUE
+                         ORDER BY slug LIMIT 1)",
+    )
+    .execute(&db)
+    .await
+    .expect("archive");
 
     let active: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM orientations WHERE is_curated = TRUE AND is_archived = FALSE",

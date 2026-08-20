@@ -433,7 +433,18 @@ pub async fn browse_postings(
     auth: AuthUser,
     Query(q): Query<BrowseQuery>,
 ) -> Result<Json<Value>, AppError> {
-    crate::routes::enterprise::require_enterprise(&state, &auth).await?;
+    // A person with no company gets 403, not the 404 `require_enterprise`
+    // returns when it cannot resolve one. Both hide the list, and only one of
+    // them is true: this surface exists and is not theirs. 404 here would say
+    // the endpoint does not exist, which is the wrong thing to tell somebody
+    // whose employer might be reading over their shoulder — the reason the
+    // list is private in the first place.
+    crate::routes::enterprise::require_enterprise(&state, &auth)
+        .await
+        .map_err(|e| match e {
+            AppError::NotFound(_) => AppError::Forbidden,
+            other => other,
+        })?;
     crate::validators::check_max_len_opt(&q.domain, "domain", 30)?;
     crate::validators::check_max_len_opt(&q.orientation, "orientation", 100)?;
 

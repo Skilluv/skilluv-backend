@@ -386,7 +386,15 @@ pub async fn release_one(db: &PgPool, invoice_id: Uuid) -> Result<bool, AppError
     // their pending balance to release.
     let theirs = amount.clone() - platform_share(&amount, &commission);
 
-    ledger::release(db, recipient, theirs, currency, "mission_invoice", invoice_id).await?;
+    ledger::release(
+        db,
+        recipient,
+        theirs,
+        currency,
+        "mission_invoice",
+        invoice_id,
+    )
+    .await?;
 
     let done = sqlx::query(
         "UPDATE mission_invoices SET status = 'released', released_at = NOW()

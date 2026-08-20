@@ -499,9 +499,9 @@ async fn a_mentor_is_suggested_with_the_reasoning_attached() {
     .unwrap();
     sqlx::query("UPDATE users SET timezone = '+01:00' WHERE id = $1")
         .bind(mentee)
-    .execute(&app.db)
-    .await
-    .unwrap();
+        .execute(&app.db)
+        .await
+        .unwrap();
     sqlx::query(
         "INSERT INTO craft_scores (user_id, skill_domain, score, tier_slug)
          VALUES ($1, 'code', 100, 'contributor')",
@@ -536,9 +536,9 @@ async fn a_mentor_is_suggested_with_the_reasoning_attached() {
         .unwrap();
         sqlx::query("UPDATE users SET timezone = '+02:00' WHERE id = $1")
             .bind(mentor)
-        .execute(&app.db)
-        .await
-        .unwrap();
+            .execute(&app.db)
+            .await
+            .unwrap();
         sqlx::query(
             "INSERT INTO craft_scores (user_id, skill_domain, score, tier_slug)
              VALUES ($1, 'code', $2, 'senior')",

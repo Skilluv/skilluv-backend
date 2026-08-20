@@ -784,8 +784,7 @@ pub async fn put_profile(
     .execute(&state.db)
     .await?;
 
-    let recommendation =
-        crate::services::onboarding_recommendation::recommend(&domain, &answers);
+    let recommendation = crate::services::onboarding_recommendation::recommend(&domain, &answers);
 
     Ok(Json(ApiResponse::new(DomainProfileResponse {
         domain,
@@ -973,7 +972,11 @@ mod tests {
         // asks, and what matters is the same property: its questions are its
         // own and nobody else's.
         assert!(questions_for("code").iter().any(|q| q.key == "main_tools"));
-        assert!(!questions_for("design").iter().any(|q| q.key == "main_tools"));
+        assert!(
+            !questions_for("design")
+                .iter()
+                .any(|q| q.key == "main_tools")
+        );
         assert!(!questions_for("code").iter().any(|q| q.key == "main_tool"));
     }
 

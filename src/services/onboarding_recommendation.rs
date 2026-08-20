@@ -217,7 +217,8 @@ fn design(answers: &Value) -> Recommendation {
                 "Déclare tes portfolios existants : un lien confirmé compte dans la recherche \
                  des recruteurs, un lien affirmé ne compte pas."
                     .to_string(),
-                "Prends un livrable en parallèle : c'est lui qui produit l'attestation.".to_string(),
+                "Prends un livrable en parallèle : c'est lui qui produit l'attestation."
+                    .to_string(),
             ],
         ),
         (true, _) => (
@@ -363,10 +364,25 @@ mod tests {
     fn scarce_time_earns_an_extra_sentence_in_both_vocabularies() {
         // Code says `under_5`, design says `lt3`. The same answer to the same
         // question, and both have to be heard.
-        let code = recommend("code", &json!({"level": "junior", "weekly_hours": "under_5"}));
-        let design = recommend("design", &json!({"level": "apprentissage", "weekly_hours": "lt3"}));
-        assert!(code.next_steps.iter().any(|s| s.contains("une seule chose")));
-        assert!(design.next_steps.iter().any(|s| s.contains("une seule chose")));
+        let code = recommend(
+            "code",
+            &json!({"level": "junior", "weekly_hours": "under_5"}),
+        );
+        let design = recommend(
+            "design",
+            &json!({"level": "apprentissage", "weekly_hours": "lt3"}),
+        );
+        assert!(
+            code.next_steps
+                .iter()
+                .any(|s| s.contains("une seule chose"))
+        );
+        assert!(
+            design
+                .next_steps
+                .iter()
+                .any(|s| s.contains("une seule chose"))
+        );
     }
 
     #[test]
@@ -375,7 +391,11 @@ mod tests {
             "design",
             &json!({"level": "debutant", "preferred_families": ["design-brand-identity"]}),
         );
-        assert!(out.feed_query.contains("design-brand-identity"), "{}", out.feed_query);
+        assert!(
+            out.feed_query.contains("design-brand-identity"),
+            "{}",
+            out.feed_query
+        );
         assert_eq!(out.guides[0], "onboarding-design-brand-identity");
     }
 

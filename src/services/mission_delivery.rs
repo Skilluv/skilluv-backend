@@ -225,12 +225,11 @@ async fn attest_acceptance(
     mission_id: Uuid,
     delivery: &Delivery,
 ) -> Result<(), AppError> {
-    let mission: Option<(String, String)> = sqlx::query_as(
-        "SELECT skill_domain, title FROM missions WHERE id = $1",
-    )
-    .bind(mission_id)
-    .fetch_optional(db)
-    .await?;
+    let mission: Option<(String, String)> =
+        sqlx::query_as("SELECT skill_domain, title FROM missions WHERE id = $1")
+            .bind(mission_id)
+            .fetch_optional(db)
+            .await?;
 
     let Some((domain, title)) = mission else {
         return Ok(());

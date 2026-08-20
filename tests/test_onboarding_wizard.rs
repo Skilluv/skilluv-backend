@@ -339,7 +339,10 @@ async fn every_wizard_accepts_the_form_it_publishes() {
             .await;
         assert_eq!(resp.status(), 200, "{domain} publishes no questions");
         let body: Value = resp.json().await.unwrap();
-        let specs = body["data"].as_array().expect("a list of questions").clone();
+        let specs = body["data"]
+            .as_array()
+            .expect("a list of questions")
+            .clone();
         assert!(!specs.is_empty(), "the {domain} wizard asks nothing");
 
         let mut form = serde_json::Map::new();

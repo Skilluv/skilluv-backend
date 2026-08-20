@@ -492,12 +492,11 @@ pub async fn arbitrate(
         return Err(AppError::Validation("that reason is too long".into()));
     }
 
-    let mission: Option<(Uuid, String, String, bool)> = sqlx::query_as(
-        "SELECT id, status, ip_terms, nda_required FROM missions WHERE slug = $1",
-    )
-    .bind(&slug)
-    .fetch_optional(&state.db)
-    .await?;
+    let mission: Option<(Uuid, String, String, bool)> =
+        sqlx::query_as("SELECT id, status, ip_terms, nda_required FROM missions WHERE slug = $1")
+            .bind(&slug)
+            .fetch_optional(&state.db)
+            .await?;
     let Some((mission_id, status, ip_terms, nda_required)) = mission else {
         return Err(AppError::NotFound("no such mission".into()));
     };
@@ -505,9 +504,7 @@ pub async fn arbitrate(
     // A mission that has already ended has nothing to arbitrate. Saying so is
     // better than writing a decision that changes nothing.
     if matches!(status.as_str(), "closed" | "cancelled") {
-        return Err(AppError::Conflict(
-            "this mission has already ended".into(),
-        ));
+        return Err(AppError::Conflict("this mission has already ended".into()));
     }
 
     let mut tx = state.db.begin().await?;

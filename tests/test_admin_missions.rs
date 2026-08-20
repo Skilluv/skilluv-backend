@@ -231,10 +231,7 @@ async fn a_mission_nobody_may_read_answers_not_found() {
     // 403, because the mission exists and this person may not read it. The
     // 404 is reserved for a mission that is not there — which is what
     // `am-nope` below is.
-    assert_eq!(
-        app.get("/api/admin/missions/am-hidden").await.status(),
-        403
-    );
+    assert_eq!(app.get("/api/admin/missions/am-hidden").await.status(), 403);
     assert_eq!(app.get("/api/admin/missions/am-nope").await.status(), 404);
 }
 
@@ -285,10 +282,7 @@ async fn only_an_arbiter_decides_and_a_curator_does_not() {
 
     // Reading a domain and deciding a contract in it are different
     // permissions, and the curator has only the first.
-    assert_eq!(
-        app.get("/api/admin/missions/am-reader").await.status(),
-        200
-    );
+    assert_eq!(app.get("/api/admin/missions/am-reader").await.status(), 200);
     let refused = app
         .post(
             "/api/admin/missions/am-reader/arbitrate",
@@ -334,13 +328,12 @@ async fn an_arbitration_ends_the_round_and_says_it_was_decided() {
 
     // The waiting round is answered, so the loop cannot be resumed behind the
     // decision.
-    let (decision, decided_by): (Option<String>, Option<Uuid>) = sqlx::query_as(
-        "SELECT decision, decided_by FROM mission_deliveries WHERE mission_id = $1",
-    )
-    .bind(mission)
-    .fetch_one(&app.db)
-    .await
-    .unwrap();
+    let (decision, decided_by): (Option<String>, Option<Uuid>) =
+        sqlx::query_as("SELECT decision, decided_by FROM mission_deliveries WHERE mission_id = $1")
+            .bind(mission)
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
     assert_eq!(decision.as_deref(), Some("accepted"));
     assert_eq!(decided_by, Some(arbiter));
 

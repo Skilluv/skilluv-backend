@@ -91,15 +91,9 @@ async fn a_milestone_mission(
 
 /// Select the applicant, which is what raises the schedule.
 async fn select_applicant(app: &TestApp, application: Uuid, decider: Uuid) {
-    skilluv_backend::services::missions::decide(
-        &app.db,
-        application,
-        decider,
-        "selected",
-        None,
-    )
-    .await
-    .expect("selection");
+    skilluv_backend::services::missions::decide(&app.db, application, decider, "selected", None)
+        .await
+        .expect("selection");
 }
 
 async fn a_cast(app: &TestApp, prefix: &str) -> (Uuid, Uuid) {
@@ -149,11 +143,10 @@ async fn assigning_twice_does_not_double_the_schedule() {
 
     // Selection can be retried. A second schedule would double the money the
     // enterprise is asked for.
-    let again = skilluv_backend::services::mission_milestones::schedule_on_assignment(
-        &app.db, mission,
-    )
-    .await
-    .unwrap();
+    let again =
+        skilluv_backend::services::mission_milestones::schedule_on_assignment(&app.db, mission)
+            .await
+            .unwrap();
     assert_eq!(again, 0);
 
     let count: i64 =
@@ -268,7 +261,10 @@ async fn an_accepted_round_releases_only_what_the_client_has_paid() {
 
     app.login("ms_release_client").await;
     let accepted = app
-        .post("/api/missions/ms-release/deliveries/accept", &serde_json::json!({}))
+        .post(
+            "/api/missions/ms-release/deliveries/accept",
+            &serde_json::json!({}),
+        )
         .await;
     assert_eq!(accepted.status().as_u16(), 200);
 
@@ -404,5 +400,8 @@ async fn a_milestone_mission_without_a_split_is_refused() {
     .bind(mission_type)
     .execute(&app.db)
     .await;
-    assert!(bad.is_err(), "a milestone mission with no split was accepted");
+    assert!(
+        bad.is_err(),
+        "a milestone mission with no split was accepted"
+    );
 }

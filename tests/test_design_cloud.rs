@@ -44,7 +44,11 @@ async fn a_figma_link_is_read_without_anybody_logging_in() {
     let app = TestApp::spawn().await;
     // Public and unauthenticated on purpose: it parses a string and touches
     // nothing, and the front needs it on a form nobody has submitted yet.
-    let body = inspect(&app, "https://www.figma.com/file/ABC123/identite?node-id=1%3A2").await;
+    let body = inspect(
+        &app,
+        "https://www.figma.com/file/ABC123/identite?node-id=1%3A2",
+    )
+    .await;
     let source = &body["data"]["source"];
 
     assert_eq!(source["provider"], "figma");

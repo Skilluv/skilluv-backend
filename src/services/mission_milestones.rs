@@ -115,12 +115,11 @@ pub async fn schedule_on_assignment(db: &PgPool, mission_id: Uuid) -> Result<usi
 
     // Already scheduled. The schema cannot express "one schedule per
     // mission" — invoices are legitimately many — so the check is here.
-    let existing: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM mission_invoices WHERE mission_id = $1",
-    )
-    .bind(mission_id)
-    .fetch_one(db)
-    .await?;
+    let existing: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM mission_invoices WHERE mission_id = $1")
+            .bind(mission_id)
+            .fetch_one(db)
+            .await?;
     if existing > 0 {
         return Ok(0);
     }

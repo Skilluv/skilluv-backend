@@ -23,8 +23,8 @@
 //! of that needs a token.
 
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
 use sqlx::PgPool;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::errors::AppError;
@@ -437,7 +437,11 @@ mod tests {
             "https://www.figma.com/file/XYZ789/identite",
             "https://www.figma.com/proto/XYZ789/identite",
         ] {
-            assert_eq!(read_url(url).unwrap().key.as_deref(), Some("XYZ789"), "{url}");
+            assert_eq!(
+                read_url(url).unwrap().key.as_deref(),
+                Some("XYZ789"),
+                "{url}"
+            );
         }
     }
 
@@ -445,7 +449,11 @@ mod tests {
     fn a_tool_link_says_whether_a_reviewer_can_open_it() {
         // The whole point of recording the provider. A queue full of links
         // nobody can open is a queue nobody works.
-        assert!(!read_url("https://www.figma.com/file/A/b").unwrap().opens_without_account);
+        assert!(
+            !read_url("https://www.figma.com/file/A/b")
+                .unwrap()
+                .opens_without_account
+        );
         assert!(
             read_url("https://exemple.webflow.io/page")
                 .unwrap()

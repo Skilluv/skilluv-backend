@@ -21,10 +21,7 @@ pub fn design_cloud_routes() -> Router<AppState> {
     Router::new()
         .route("/design/cloud/connections", get(list_connections))
         .route("/design/cloud/{provider}/start", get(start))
-        .route(
-            "/design/cloud/{provider}/disconnect",
-            post(disconnect),
-        )
+        .route("/design/cloud/{provider}/disconnect", post(disconnect))
         .route("/design/cloud/inspect", get(inspect))
 }
 

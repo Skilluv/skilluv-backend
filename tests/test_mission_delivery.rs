@@ -426,7 +426,8 @@ async fn an_accepted_mission_leaves_an_attestation_a_stranger_can_check() {
     a_mission_in_progress(&app, client, talent, "m-attest", Some(2)).await;
 
     app.login("attest_talent").await;
-    app.post("/api/missions/m-attest/deliveries", &a_delivery(1)).await;
+    app.post("/api/missions/m-attest/deliveries", &a_delivery(1))
+        .await;
 
     app.login("attest_client").await;
     let accepted = app
@@ -470,13 +471,11 @@ async fn a_delivery_that_was_only_handed_in_earns_nothing() {
 
     // Handed in is not accepted. An attestation issued here would be the
     // platform vouching for work the client has not looked at.
-    let count: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM attestations WHERE user_id = $1",
-    )
-    .bind(talent)
-    .fetch_one(&app.db)
-    .await
-    .unwrap();
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM attestations WHERE user_id = $1")
+        .bind(talent)
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
     assert_eq!(count, 0);
 }
 
@@ -503,8 +502,11 @@ async fn the_attestation_says_how_many_rounds_it_took() {
     app.post("/api/missions/m-attest-rounds/deliveries", &a_delivery(2))
         .await;
     app.login("attest_rounds_client").await;
-    app.post("/api/missions/m-attest-rounds/deliveries/accept", &json!({}))
-        .await;
+    app.post(
+        "/api/missions/m-attest-rounds/deliveries/accept",
+        &json!({}),
+    )
+    .await;
 
     let description: Option<String> = sqlx::query_scalar(
         "SELECT description FROM attestations

@@ -26,7 +26,9 @@ async fn a_public_user(app: &TestApp, username: &str) -> Uuid {
 }
 
 async fn profile(app: &TestApp, username: &str) -> Value {
-    let resp = app.get(&format!("/api/users/{username}/design-profile")).await;
+    let resp = app
+        .get(&format!("/api/users/{username}/design-profile"))
+        .await;
     assert_eq!(resp.status(), 200, "{}", resp.text().await.unwrap());
     resp.json().await.unwrap()
 }
@@ -131,7 +133,9 @@ async fn availability_is_a_declaration_and_sits_apart_from_the_proofs() {
 async fn a_profile_that_does_not_exist_is_a_404() {
     let app = TestApp::spawn().await;
     assert_eq!(
-        app.get("/api/users/dp_nobody/design-profile").await.status(),
+        app.get("/api/users/dp_nobody/design-profile")
+            .await
+            .status(),
         404
     );
 }

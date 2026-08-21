@@ -59,7 +59,10 @@ pub async fn generate_export(
         write_json(
             &mut zip,
             "preferences.json",
-            &fetch_table(&db, "user_email_preferences", user_id, "user_id").await?,
+            // `user_email_preferences` does not exist and never did: this
+            // line failed every time an export ran. The table is
+            // `notification_preferences`.
+            &fetch_table(&db, "notification_preferences", user_id, "user_id").await?,
             options,
         )?;
         write_json(
@@ -121,6 +124,84 @@ pub async fn generate_export(
             &mut zip,
             "email_log.json",
             &fetch_table(&db, "email_log", user_id, "user_id").await?,
+            options,
+        )?;
+
+        // ── What somebody did on the design side ──────────────────────
+        //
+        // Added because an export that stopped at challenges was an export
+        // that told somebody less than the platform knows about them, which
+        // is the one thing an export may not do.
+        write_json(
+            &mut zip,
+            "wizard_answers.json",
+            &fetch_table(&db, "user_domain_profiles", user_id, "user_id").await?,
+            options,
+        )?;
+        write_json(
+            &mut zip,
+            "declared_portfolios.json",
+            &fetch_table(&db, "external_signals", user_id, "user_id").await?,
+            options,
+        )?;
+        write_json(
+            &mut zip,
+            "deliverables.json",
+            &fetch_table(&db, "deliverables", user_id, "user_id").await?,
+            options,
+        )?;
+        write_json(
+            &mut zip,
+            "attestations.json",
+            &fetch_table(&db, "attestations", user_id, "user_id").await?,
+            options,
+        )?;
+        write_json(
+            &mut zip,
+            "contest_entries.json",
+            &fetch_table(&db, "tournament_submissions", user_id, "submitted_by").await?,
+            options,
+        )?;
+        write_json(
+            &mut zip,
+            "contest_placings.json",
+            &fetch_table(&db, "tournament_participants", user_id, "participant_id").await?,
+            options,
+        )?;
+        write_json(
+            &mut zip,
+            "missions_taken.json",
+            &fetch_table(&db, "missions", user_id, "assigned_user_id").await?,
+            options,
+        )?;
+        write_json(
+            &mut zip,
+            "mission_deliveries.json",
+            &fetch_table(&db, "mission_deliveries", user_id, "delivered_by").await?,
+            options,
+        )?;
+        // Ratings *about* this person. Somebody else's opinion of their work
+        // is still their personal data, and it is the half people actually
+        // want to see.
+        write_json(
+            &mut zip,
+            "ratings_received.json",
+            &fetch_table(&db, "mission_ratings", user_id, "rated_id").await?,
+            options,
+        )?;
+        write_json(
+            &mut zip,
+            "plagiarism_cases.json",
+            &fetch_table(&db, "plagiarism_cases", user_id, "accused_id").await?,
+            options,
+        )?;
+        // Connections to design tools — the metadata only. Exporting the
+        // encrypted tokens would put a live credential in a zip file that
+        // travels by e-mail, which is worse than not exporting it.
+        write_json(
+            &mut zip,
+            "connected_tools.json",
+            &fetch_connections(&db, user_id).await?,
             options,
         )?;
 
@@ -258,6 +339,52 @@ async fn fetch_table(
         .await?;
     let arr: Vec<Value> = rows.iter().map(|r| pg_row_to_json(r, &[])).collect();
     Ok(Value::Array(arr))
+}
+
+/// Connections to design tools, without their tokens.
+///
+/// `fetch_table` is `SELECT *`, which here would put a live credential —
+/// encrypted, but a credential — into a zip file that travels by e-mail. The
+/// person is entitled to know the connection exists, not to be handed the key
+/// in a format anybody who intercepts the mail can keep.
+/// One connection, without its token.
+type ConnectionRow = (
+    String,                                // provider
+    Vec<String>,                           // scopes
+    Option<String>,                        // remote handle
+    Option<chrono::DateTime<chrono::Utc>>, // expires_at
+    chrono::DateTime<chrono::Utc>,         // connected_at
+    Option<chrono::DateTime<chrono::Utc>>, // revoked_at
+);
+
+async fn fetch_connections(
+    db: &sqlx::PgPool,
+    user_id: uuid::Uuid,
+) -> Result<serde_json::Value, crate::errors::AppError> {
+    let rows: Vec<ConnectionRow> = sqlx::query_as(
+        "SELECT provider, scopes, remote_handle, expires_at, connected_at, revoked_at
+               FROM design_cloud_connections WHERE user_id = $1",
+    )
+    .bind(user_id)
+    .fetch_all(db)
+    .await?;
+
+    Ok(serde_json::Value::Array(
+        rows.into_iter()
+            .map(
+                |(provider, scopes, handle, expires_at, connected_at, revoked_at)| {
+                    serde_json::json!({
+                        "provider": provider,
+                        "scopes": scopes,
+                        "remote_handle": handle,
+                        "expires_at": expires_at,
+                        "connected_at": connected_at,
+                        "revoked_at": revoked_at,
+                    })
+                },
+            )
+            .collect(),
+    ))
 }
 
 async fn fetch_conversations(db: &PgPool, user_id: Uuid) -> Result<Value, AppError> {

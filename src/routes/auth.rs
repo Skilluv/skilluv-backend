@@ -2158,21 +2158,23 @@ pub async fn delete_account(
         }
     }
 
-    // Delete all user data (cascade order matters)
-    // 1. User skills (P8.7 : skill_fragments legacy retiré)
-    sqlx::query("DELETE FROM user_skills WHERE user_id = $1")
-        .bind(auth.user_id)
-        .execute(&state.db)
-        .await?;
+    // Erased, not deleted.
+    //
+    // `DELETE FROM users` took the contest entries, the podium places, the
+    // validated deliverables and the attestations with it — destroying more
+    // than the person asked for, and destroying other people's records in the
+    // process: a contest where the second place vanished leaves first and
+    // third unexplained, and the winner's own attestation cites a ranking
+    // that no longer adds up.
+    //
+    // What has to go is the personal data. `erasure::erase` deletes every row
+    // that is wholly about this person and turns the `users` row into a
+    // tombstone with nothing personal left in it.
+    crate::services::erasure::erase(&state.db, auth.user_id).await?;
 
-    // 2. Challenge submissions
+    // Purely this person's, and not in the erasure list because it belongs to
+    // the challenge module rather than to any profile surface.
     sqlx::query("DELETE FROM challenge_submissions WHERE user_id = $1")
-        .bind(auth.user_id)
-        .execute(&state.db)
-        .await?;
-
-    // 3. User record
-    sqlx::query("DELETE FROM users WHERE id = $1")
         .bind(auth.user_id)
         .execute(&state.db)
         .await?;

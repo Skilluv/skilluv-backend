@@ -227,6 +227,15 @@ notification:
       title: "Une entreprise s'interesse a ton profil"
       body: "Tu as ete propose pour un poste de {role}. Reponds pour savoir de qui il s'agit."
       cta: "Voir la proposition"
+  moderation:
+    plagiarism_case_opened:
+      title: "Une proposition que tu as rendue est contestee"
+      body: "Quelqu'un affirme qu'elle reprend un travail existant. Tu as 72 heures pour repondre avant qu'une decision soit prise."
+      cta: "Lire et repondre"
+    plagiarism_case_decided:
+      title: "La contestation a ete tranchee"
+      body: "La decision est ecrite, avec ses raisons."
+      cta: "Lire la decision"
   design:
     brief_published:
       title: "Ton brief est publie"

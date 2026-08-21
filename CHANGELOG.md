@@ -15,6 +15,20 @@ address KYC full, live AI wiring in prod, and RLS enforcement.
 
 ### Added
 
+- **An accusation the accused can answer.** `plagiarism_cases`, deliberately
+  not a `reports` row: a report has nowhere for the accused to reply, and the
+  reply is the substance of a procedure whose outcome is a disqualification, a
+  confiscated prize and a public record. Eighty characters minimum both ways --
+  on the accusation and on the decision -- and an evidence link is required,
+  because an accusation with nothing to compare against cannot be checked by
+  anybody, the reviewer included.
+- **Erasure leaves a tombstone.** `DELETE FROM users` took the contest entries,
+  the podium places and the attestations with it, destroying more than the
+  person asked for and other people's records besides: a contest whose second
+  place vanished leaves first and third unexplained. `erasure::erase` deletes
+  every row wholly about the person and empties the `users` row instead. The
+  table list is checked against the schema before anything is deleted, and
+  every statement after that is fatal -- half an erasure is worse than none.
 - **The migrations get their own CI job.** `scripts/check-migrations.sh`
   applies every migration to an empty database in order, then asserts the
   invariants the schema is supposed to hold; the workflow runs it as
@@ -74,6 +88,13 @@ address KYC full, live AI wiring in prod, and RLS enforcement.
 
 ### Changed
 
+- **Six dependency bumps, folded in rather than merged separately.** rand_core
+  0.6 to 0.10, jsonwebtoken 10 to 11, zip 3 to 8, and three GitHub Actions.
+  Only rand_core needed code: 0.10 removed `OsRng` from the crate root, and the
+  three call sites now use `getrandom::fill` -- the same OS entropy `OsRng`
+  wrapped, and what the rest of this codebase already reached for a few lines
+  away. One of the three was dead code kept only to silence a warning about a
+  dependency that has since become direct.
 - **One onboarding wizard, and the code wizard folded into it.** Migration
   0258 moves the eight `users.code_*` columns into `user_domain_profiles` and
   drops them; `POST /api/code/onboarding` and `/code/onboarding/skip` are gone,

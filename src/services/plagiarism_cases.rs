@@ -281,6 +281,8 @@ pub async fn decide(
     .execute(&mut *tx)
     .await?;
 
+    let mut confiscate_from: Option<(Uuid, Uuid)> = None;
+
     if upheld {
         // `refusal_carries_a_reason` requires the note, and the decision is
         // the note: the entry's own trail has to say what happened without a
@@ -296,9 +298,55 @@ pub async fn decide(
         .bind(format!("Plagiat retenu : {decision}"))
         .execute(&mut *tx)
         .await?;
+
+        // Whose prize, if the disqualified entry won one. A guild entry has
+        // none: `contest_prizes::award` pays user participants only, because a
+        // prize paid to a guild has no account to land in.
+        confiscate_from = sqlx::query_as(
+            "SELECT tournament_id, participant_id
+               FROM tournament_submissions
+              WHERE id = $1 AND participant_type = 'user'",
+        )
+        .bind(submission)
+        .fetch_optional(&mut *tx)
+        .await?;
     }
 
     tx.commit().await?;
+
+    // The confiscation the module header promised.
+    //
+    // `award` puts a prize in `pending` rather than `available` and says why:
+    // "the release window is what makes a contested result recoverable". This
+    // is the only thing that ever contests one, and until now it disqualified
+    // the entry and left the money — so a contest could hold a winner who was
+    // disqualified and paid at the same time, in the same person.
+    //
+    // After the commit, and deliberately. The decision is the thing that must
+    // not be lost: it has been written, the accused can read it, and the
+    // ledger posting carries an idempotency key so a repeat is safe. A prize
+    // that cannot be taken back — already released, already withdrawn — is a
+    // debt to recover through people, and it must not turn a decided case
+    // back into an open one.
+    if let Some((tournament_id, participant_id)) = confiscate_from {
+        match crate::services::contest_prizes::confiscate(db, tournament_id, participant_id).await {
+            Ok(Some(amount)) => {
+                tracing::info!(
+                    case = %case_id, tournament = %tournament_id, %amount,
+                    "prize confiscated and returned to the contest escrow"
+                );
+            }
+            Ok(None) => {}
+            Err(err) => {
+                tracing::error!(
+                    case = %case_id, tournament = %tournament_id, %err,
+                    "plagiarism upheld but the prize could not be taken back — recover this by hand"
+                );
+                metrics::counter!("skilluv_prize_manual_confiscation_needed_total").increment(1);
+            }
+        }
+    }
+
     by_id(db, case_id).await
 }
 

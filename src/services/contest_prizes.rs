@@ -360,6 +360,107 @@ pub async fn refund(db: &PgPool, tournament_id: Uuid, reason: &str) -> Result<()
     Ok(())
 }
 
+/// Take an awarded prize back, because the entry that won it was upheld as
+/// plagiarised.
+///
+/// This is the case `award` was written for. Its own comment says the prize
+/// lands in `pending` rather than `available` because "the release window is
+/// what makes a contested result recoverable" — and until now nothing
+/// recovered one. `plagiarism_cases::decide` disqualified the submission and
+/// left the money exactly where it was, so a contest could have a
+/// disqualified winner and a paid one at the same time, in the same person.
+///
+/// **Back to the escrow, not to the sponsor and not to the next place.**
+/// Returning it to the sponsor would decide, in a function nobody is reading,
+/// that a contest with a cheating winner pays its second place nothing.
+/// Promoting the runner-up automatically would pay somebody weeks after the
+/// contest closed, on a decision they were never told about, and re-running
+/// `award` against a changed podium is not something its idempotency keys
+/// allow. So the money goes back to the pot it came from, where it is visible,
+/// balanced, and somebody's to decide about.
+///
+/// Returns what was taken back. `None` when the winner had no prize — a free
+/// contest, or a place that paid nothing.
+pub async fn confiscate(
+    db: &PgPool,
+    tournament_id: Uuid,
+    user_id: Uuid,
+) -> Result<Option<BigDecimal>, AppError> {
+    let currency: Option<String> =
+        sqlx::query_scalar("SELECT prize_cash_currency FROM tournaments WHERE id = $1")
+            .bind(tournament_id)
+            .fetch_optional(db)
+            .await?
+            .flatten();
+    let Some(currency) = currency else {
+        return Ok(None);
+    };
+    let currency: Currency = currency.parse()?;
+
+    // What this person was actually awarded, read from the book rather than
+    // recomputed from the split: a recomputation would have to agree about
+    // rounding and about how many places finished, and the entry that says
+    // what was paid is right here.
+    //
+    // Negated, because a claim is stored negative and the award credited it —
+    // the same flip `ledger_user_balance` does.
+    let awarded: Option<BigDecimal> = sqlx::query_scalar(
+        "SELECT -SUM(e.amount)
+           FROM ledger_entries e
+           JOIN ledger_transactions t ON t.id = e.transaction_id
+           JOIN ledger_accounts a ON a.id = e.account_id
+          WHERE t.reason = 'contest_prize_award'
+            AND t.subject_type = $1 AND t.subject_id = $2
+            AND a.code = $3",
+    )
+    .bind(SUBJECT)
+    .bind(tournament_id)
+    .bind(owed(user_id, State::Pending, currency).code())
+    .fetch_one(db)
+    .await?;
+
+    let Some(amount) = awarded.filter(|a| a.is_positive()) else {
+        return Ok(None);
+    };
+
+    // Only what is still held. Once released the prize is theirs to withdraw
+    // and may already be gone; taking it out of `pending` anyway would drive
+    // the account negative and make the platform's books claim money that is
+    // not there. A prize that has left is a debt to recover, not a ledger
+    // entry — and it is the reason the release window exists at all.
+    let still_pending = ledger::user_balance(db, user_id, State::Pending, currency).await?;
+    if still_pending < amount {
+        return Err(AppError::Conflict(format!(
+            "the prize has already been released — {still_pending} of {amount} is still held, \
+             and the rest is a debt to recover rather than an entry to reverse"
+        )));
+    }
+
+    let mut tx = db.begin().await?;
+
+    ledger::post_in_tx(
+        &mut tx,
+        Posting::new(
+            "contest_prize_confiscated",
+            vec![
+                Leg::debit(owed(user_id, State::Pending, currency), amount.clone()),
+                Leg::credit(escrow_account(tournament_id, currency), amount.clone()),
+            ],
+        )
+        .about(SUBJECT, tournament_id)
+        .note("plagiarism upheld")
+        // Per person, so a contest with two disqualified entrants takes both
+        // back rather than the first one twice.
+        .idempotent(format!(
+            "prize_confiscated:{SUBJECT}:{tournament_id}:{user_id}"
+        )),
+    )
+    .await?;
+
+    tx.commit().await?;
+    Ok(Some(amount))
+}
+
 /// Money leaving the escrow back across the boundary.
 ///
 /// `World` rather than a platform bucket: it is not ours, and crediting it to

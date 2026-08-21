@@ -10,8 +10,10 @@
 //! - An erased account leaves a **tombstone** for the same reason.
 
 mod common;
+use bigdecimal::BigDecimal;
 use common::TestApp;
 use serde_json::{Value, json};
+use skilluv_backend::services::ledger::{Currency, State};
 use uuid::Uuid;
 
 /// What a tombstone looks like once the personal data is gone.
@@ -612,4 +614,178 @@ async fn the_export_carries_the_design_half() {
     );
 
     let _ = user;
+}
+
+/// Fund a contest and pay its single finisher the whole pool.
+///
+/// The state a contest is in when somebody looks at the winning entry and
+/// recognises it: money in, ranks written, prize in the winner's pending
+/// balance and not yet withdrawable.
+async fn a_paid_contest(app: &TestApp, tournament: Uuid, winner: Uuid) {
+    let enterprise: Uuid = sqlx::query_scalar(
+        "INSERT INTO enterprises (owner_id, company_name, slug, company_size)
+         VALUES ($1, 'Mécène test', 'ent-' || substr($2::text, 1, 8), '11-50')
+         RETURNING id",
+    )
+    .bind(winner)
+    .bind(tournament)
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+
+    // `fund` writes `prize_cash_amount` and `prize_cash_currency` itself; the
+    // contest only has to be concluded, because a prize is awarded from a
+    // ranking and `award` refuses one that has none.
+    skilluv_backend::services::contest_prizes::fund(
+        &app.db,
+        tournament,
+        enterprise,
+        BigDecimal::from(900),
+        Currency::Eur,
+        "stripe",
+        format!("pi_test_{tournament}"),
+    )
+    .await
+    .expect("fund");
+
+    sqlx::query("UPDATE tournament_participants SET rank = 1 WHERE tournament_id = $1")
+        .bind(tournament)
+        .execute(&app.db)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE tournaments SET status = 'concluded' WHERE id = $1")
+        .bind(tournament)
+        .execute(&app.db)
+        .await
+        .unwrap();
+
+    skilluv_backend::services::contest_prizes::award(&app.db, tournament)
+        .await
+        .expect("award");
+}
+
+async fn pending(app: &TestApp, user: Uuid) -> BigDecimal {
+    skilluv_backend::services::ledger::user_balance(&app.db, user, State::Pending, Currency::Eur)
+        .await
+        .unwrap()
+}
+
+async fn tournament_of(app: &TestApp, submission: Uuid) -> Uuid {
+    sqlx::query_scalar("SELECT tournament_id FROM tournament_submissions WHERE id = $1")
+        .bind(submission)
+        .fetch_one(&app.db)
+        .await
+        .unwrap()
+}
+
+/// Upholding a case takes the prize back.
+///
+/// `contest_prizes::award` puts a prize into `pending` rather than `available`
+/// and says why in as many words: "the release window is what makes a
+/// contested result recoverable". Upholding a plagiarism case is the only
+/// thing that ever contests one, and it disqualified the entry and left the
+/// money — so a contest could hold, in one person, a winner who was
+/// disqualified and a winner who was paid.
+#[tokio::test]
+async fn upholding_a_case_takes_the_prize_back() {
+    let app = TestApp::spawn().await;
+    app.register_user("pl_prize_author").await;
+    app.register_user("pl_prize_accuser").await;
+    let author = user_id(&app, "pl_prize_author").await;
+    let entry = an_entry(&app, "pl-prize", author).await;
+    let tournament = tournament_of(&app, entry).await;
+
+    a_paid_contest(&app, tournament, author).await;
+    // Half the pool, not all of it: the split is 50/30/20 and one finisher
+    // takes first place only. The other 450 went back to the sponsor when the
+    // prize was awarded, because inventing a redistribution would pay somebody
+    // more than the contest promised.
+    assert_eq!(pending(&app, author).await, BigDecimal::from(450));
+
+    app.login("pl_prize_accuser").await;
+    let opened: Value = app
+        .post(
+            &format!("/api/contests/submissions/{entry}/flag"),
+            &json!({
+                "reason_md": A_REAL_ACCUSATION,
+                "evidence_url": "https://exemple.test/original",
+            }),
+        )
+        .await
+        .json()
+        .await
+        .unwrap();
+    let case = opened["data"]["id"].as_str().unwrap().to_string();
+
+    app.register_admin("pl_prize_admin").await;
+    app.login("pl_prize_admin").await;
+    let decided = app
+        .post(
+            &format!("/api/admin/plagiarism/{case}/decide"),
+            &json!({"upheld": true, "decision_md": A_REAL_DECISION}),
+        )
+        .await;
+    assert_eq!(decided.status(), 200, "{}", decided.text().await.unwrap());
+
+    // Nothing owed to the author any more.
+    assert_eq!(pending(&app, author).await, BigDecimal::from(0));
+
+    // And the money is back in the pot rather than vanished. The books balance
+    // either way; "balanced" and "somewhere somebody can decide about it" are
+    // not the same thing. Back to the escrow rather than to the sponsor or the
+    // runner-up, because both of those are decisions and neither belongs in a
+    // function nobody is reading.
+    // `ledger_balance` is the raw signed figure and an escrow is a liability,
+    // so money held reads negative — the same convention `ledger_user_balance`
+    // hides for user accounts. Negated here rather than asserted at -450,
+    // because a reader should not have to know that to read the test.
+    let escrow: BigDecimal = sqlx::query_scalar("SELECT -ledger_balance($1)")
+        .bind(format!("escrow:tournament:{tournament}:EUR"))
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
+    assert_eq!(escrow, BigDecimal::from(450));
+}
+
+/// Dismissing one leaves the prize alone.
+///
+/// The complement, and the one that would break first if the confiscation
+/// were wired to the decision rather than to its outcome.
+#[tokio::test]
+async fn dismissing_a_case_leaves_the_prize_alone() {
+    let app = TestApp::spawn().await;
+    app.register_user("pl_keep_author").await;
+    app.register_user("pl_keep_accuser").await;
+    let author = user_id(&app, "pl_keep_author").await;
+    let entry = an_entry(&app, "pl-keep", author).await;
+    let tournament = tournament_of(&app, entry).await;
+
+    a_paid_contest(&app, tournament, author).await;
+
+    app.login("pl_keep_accuser").await;
+    let opened: Value = app
+        .post(
+            &format!("/api/contests/submissions/{entry}/flag"),
+            &json!({
+                "reason_md": A_REAL_ACCUSATION,
+                "evidence_url": "https://exemple.test/original",
+            }),
+        )
+        .await
+        .json()
+        .await
+        .unwrap();
+    let case = opened["data"]["id"].as_str().unwrap().to_string();
+
+    app.register_admin("pl_keep_admin").await;
+    app.login("pl_keep_admin").await;
+    let decided = app
+        .post(
+            &format!("/api/admin/plagiarism/{case}/decide"),
+            &json!({"upheld": false, "decision_md": A_REAL_DECISION}),
+        )
+        .await;
+    assert_eq!(decided.status(), 200, "{}", decided.text().await.unwrap());
+
+    assert_eq!(pending(&app, author).await, BigDecimal::from(450));
 }

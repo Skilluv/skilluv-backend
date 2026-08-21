@@ -331,6 +331,7 @@ async fn build_client(
     get, path = "/api/enterprise/sso/{slug}/start", tag = "enterprise",
     params(("slug" = String, Path)),
     responses((status = 302, description = "Redirect to IdP")),
+    operation_id = "enterpriseSsoStart",
 )]
 pub async fn start(
     State(state): State<AppState>,
@@ -394,6 +395,7 @@ struct CallbackQuery {
     get, path = "/api/enterprise/sso/{slug}/callback", tag = "enterprise",
     params(("slug" = String, Path), CallbackQuery),
     responses((status = 302, description = "Redirect to app after session established")),
+    operation_id = "enterpriseSsoCallback",
 )]
 pub async fn callback(
     State(state): State<AppState>,

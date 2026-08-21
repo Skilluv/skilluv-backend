@@ -113,6 +113,7 @@ pub struct ReviewsListResponse {
         (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "reviewQueueListOpen",
 )]
 pub async fn list_open(
     State(state): State<AppState>,
@@ -196,6 +197,7 @@ pub async fn claim_task(
         (status = 400, description = "Invalid verdict or empty body", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "reviewQueueSubmitReview",
 )]
 pub async fn submit_review(
     State(state): State<AppState>,

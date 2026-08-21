@@ -547,6 +547,7 @@ pub async fn update_tenant(
         (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "tenantsListMembers",
 )]
 pub async fn list_members(
     State(state): State<AppState>,
@@ -598,6 +599,7 @@ pub async fn list_members(
         (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "tenantsAddMember",
 )]
 pub async fn add_member(
     State(state): State<AppState>,

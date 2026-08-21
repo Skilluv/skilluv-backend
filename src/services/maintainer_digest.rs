@@ -12,7 +12,6 @@
 //! precise enough — a maintainer subscribed on Wednesday can get their
 //! first digest by Wednesday of the following week at the same hour.
 
-use rand_core::{OsRng, RngCore};
 use sqlx::PgPool;
 use std::sync::Arc;
 use std::time::Duration;
@@ -48,7 +47,9 @@ pub struct Subscription {
 pub fn new_token() -> String {
     use base64::Engine;
     let mut bytes = [0u8; 32];
-    OsRng.fill_bytes(&mut bytes);
+    // `rand_core::OsRng` is gone in 0.10; `getrandom::fill` is the same OS
+    // entropy it wrapped, and what the rest of this codebase uses for tokens.
+    getrandom::fill(&mut bytes).expect("OS RNG");
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes)
 }
 

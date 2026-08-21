@@ -33,15 +33,7 @@ pub fn admin_skill_routes() -> Router<AppState> {
         .route("/admin/skills/{id}", put(update_skill))
 }
 
-const ALLOWED_DOMAINS: &[&str] = &[
-    "code",
-    "design",
-    "game",
-    "security",
-    "soft_skills",
-    "ai",
-    "ops",
-];
+use crate::validators::SKILL_DOMAINS as ALLOWED_DOMAINS;
 
 fn wrap(data: Value) -> Value {
     json!({
@@ -135,6 +127,7 @@ pub struct CreateSkillData {
         (status = 403, body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "adminSkillsListSkills",
 )]
 pub async fn list_skills(
     _gate: crate::middleware::admin_gate::AdminGate,

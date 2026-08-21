@@ -9,6 +9,7 @@ use uuid::Uuid;
 use crate::AppState;
 use crate::errors::AppError;
 use crate::middleware::{AuthUser, extract_ip};
+use crate::routes::admin::require_admin;
 use crate::services::{AuthService, LeaderboardService, SessionService};
 
 pub fn admin_moderation_routes() -> Router<AppState> {
@@ -31,11 +32,6 @@ fn build_response(data: serde_json::Value) -> serde_json::Value {
             "timestamp": chrono::Utc::now().to_rfc3339(),
         }
     })
-}
-
-// P21.1 : délègue à user_capabilities (source de vérité canonique).
-async fn require_admin(state: &AppState, auth: &AuthUser) -> Result<(), AppError> {
-    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await
 }
 
 async fn write_audit_log(
@@ -283,6 +279,7 @@ pub struct ModerationDashboard {
         (status = 403, body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "adminModerationListUsers",
 )]
 pub async fn list_users(
     _gate: crate::middleware::admin_gate::AdminGate,
@@ -310,7 +307,11 @@ pub async fn list_users(
     if query.q.is_some() {
         param_idx += 1;
         where_clauses.push(format!(
-            "search_vector @@ to_tsquery('simple', ${param_idx})"
+            // `websearch_to_tsquery`, not `to_tsquery`: the latter parses its
+            // input as a query expression and raises on anything that is not
+            // one, so a moderator searching for `R&D` or `o'brien` got a 500
+            // instead of a result list. See the same fix in `forum::search`.
+            "search_vector @@ websearch_to_tsquery('simple', ${param_idx})"
         ));
     }
 
@@ -337,9 +338,10 @@ pub async fn list_users(
         cnt_query = cnt_query.bind(banned);
     }
     if let Some(ref q) = query.q {
-        let tsq = q.split_whitespace().collect::<Vec<_>>().join(" & ");
-        db_query = db_query.bind(tsq.clone());
-        cnt_query = cnt_query.bind(tsq);
+        // As typed. The ` & ` join this used to build was not an escape —
+        // every operator character survived it untouched.
+        db_query = db_query.bind(q.clone());
+        cnt_query = cnt_query.bind(q.clone());
     }
 
     let users: Vec<UserSummary> = db_query.fetch_all(&state.db).await?;
@@ -407,6 +409,7 @@ pub struct AdminUserDetailData {
         (status = 404, body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "adminModerationGetUser",
 )]
 pub async fn get_user(
     _gate: crate::middleware::admin_gate::AdminGate,
@@ -645,6 +648,7 @@ pub async fn unban_user(
     get, path = "/api/admin/reports", tag = "admin",
     responses((status = 200, body = ReportListResponse), (status = 403, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
+    operation_id = "adminModerationListReports",
 )]
 pub async fn list_reports(
     _gate: crate::middleware::admin_gate::AdminGate,

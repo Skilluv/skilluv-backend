@@ -603,15 +603,6 @@ pub fn validate_name(name: &str, field: &str) -> Result<(), AppError> {
     crate::validators::validate_bounded_line(name, field, 1, 50)
 }
 
-fn validate_skill_domain(domain: &str) -> Result<(), AppError> {
-    match domain {
-        "code" | "design" | "game" | "security" => Ok(()),
-        _ => Err(AppError::Validation(
-            "skill_domain must be one of: code, design, game, security".to_string(),
-        )),
-    }
-}
-
 fn build_cookie(name: &str, value: &str, max_age_secs: i64, path: &str) -> String {
     format!(
         "{name}={value}; HttpOnly; Secure; SameSite=Strict; Path={path}; Max-Age={max_age_secs}"
@@ -758,6 +749,7 @@ fn login_pending_2fa_key(user_id: Uuid) -> String {
         (status = 400, description = "Validation error (email, username, password policy, terms not accepted, duplicate)", body = crate::api_response::ErrorResponse),
         (status = 429, description = "Rate limit hit (5/h per IP)", body = crate::api_response::ErrorResponse),
     ),
+    operation_id = "authRegister",
 )]
 pub async fn register(
     State(state): State<AppState>,
@@ -782,7 +774,7 @@ pub async fn register(
     validate_password(&body.password)?;
     validate_name(&body.first_name, "first_name")?;
     validate_name(&body.last_name, "last_name")?;
-    validate_skill_domain(&body.skill_domain)?;
+    crate::validators::validate_skill_domain(&body.skill_domain, "skill_domain")?;
 
     let email_lower = body.email.trim().to_lowercase();
     let username_lower = body.username.trim().to_lowercase();
@@ -833,7 +825,18 @@ pub async fn register(
         .set_ex(&key, user.id.to_string(), 24 * 60 * 60) // 24h
         .await?;
 
-    state
+    // A failed send does not fail the registration.
+    //
+    // The account row is already committed and the token is already in Redis,
+    // so returning 500 here left a real account behind while telling the
+    // person their signup failed — they retry, and are told the email is
+    // taken. An unreachable SMTP host is an operational problem, and the
+    // recovery path for it already exists: `POST /auth/resend-verification`.
+    //
+    // Nothing is loosened by this. `AuthUserComplete` still refuses every
+    // write endpoint until the address is verified, so an account whose mail
+    // never left can read and can do nothing else.
+    if let Err(err) = state
         .email
         .send_email_verification(
             &user.email,
@@ -841,7 +844,17 @@ pub async fn register(
             &verify_token,
             &state.config.frontend_url,
         )
-        .await?;
+        .await
+    {
+        tracing::error!(
+            user_id = %user.id,
+            error = %err,
+            "verification email could not be sent at registration; the account is usable once the address is confirmed via /auth/resend-verification"
+        );
+        // Reported as well as logged: a mail path that starts failing
+        // silently is one nobody notices until signups stop.
+        sentry::capture_error(&err);
+    }
 
     // Generate tokens
     let access_token =
@@ -2145,21 +2158,23 @@ pub async fn delete_account(
         }
     }
 
-    // Delete all user data (cascade order matters)
-    // 1. User skills (P8.7 : skill_fragments legacy retiré)
-    sqlx::query("DELETE FROM user_skills WHERE user_id = $1")
-        .bind(auth.user_id)
-        .execute(&state.db)
-        .await?;
+    // Erased, not deleted.
+    //
+    // `DELETE FROM users` took the contest entries, the podium places, the
+    // validated deliverables and the attestations with it — destroying more
+    // than the person asked for, and destroying other people's records in the
+    // process: a contest where the second place vanished leaves first and
+    // third unexplained, and the winner's own attestation cites a ranking
+    // that no longer adds up.
+    //
+    // What has to go is the personal data. `erasure::erase` deletes every row
+    // that is wholly about this person and turns the `users` row into a
+    // tombstone with nothing personal left in it.
+    crate::services::erasure::erase(&state.db, auth.user_id).await?;
 
-    // 2. Challenge submissions
+    // Purely this person's, and not in the erasure list because it belongs to
+    // the challenge module rather than to any profile surface.
     sqlx::query("DELETE FROM challenge_submissions WHERE user_id = $1")
-        .bind(auth.user_id)
-        .execute(&state.db)
-        .await?;
-
-    // 3. User record
-    sqlx::query("DELETE FROM users WHERE id = $1")
         .bind(auth.user_id)
         .execute(&state.db)
         .await?;
@@ -2238,7 +2253,7 @@ pub async fn complete_profile(
     auth: AuthUser,
     Json(body): Json<CompleteProfileRequest>,
 ) -> Result<Json<ApiResponse<CompleteProfileResponse>>, AppError> {
-    validate_skill_domain(&body.skill_domain)?;
+    crate::validators::validate_skill_domain(&body.skill_domain, "skill_domain")?;
     if !body.terms_accepted {
         return Err(AppError::Validation(
             "You must accept the Terms of Service and Privacy Policy".into(),

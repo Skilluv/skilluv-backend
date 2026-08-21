@@ -99,6 +99,7 @@ pub struct PrivacySettings {
     request_body = UpdateProfileRequest,
     responses((status = 200, body = serde_json::Value), (status = 401, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
+    operation_id = "userProfileUpdateProfile",
 )]
 pub async fn update_profile(
     State(state): State<AppState>,
@@ -429,14 +430,7 @@ pub async fn update_skill_domain(
     auth: AuthUser,
     Json(body): Json<UpdateSkillDomainRequest>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    match body.skill_domain.as_str() {
-        "code" | "design" | "game" | "security" => {}
-        _ => {
-            return Err(AppError::Validation(
-                "skill_domain must be one of: code, design, game, security".to_string(),
-            ));
-        }
-    }
+    crate::validators::validate_skill_domain(&body.skill_domain, "skill_domain")?;
 
     sqlx::query("UPDATE users SET skill_domain = $1, updated_at = NOW() WHERE id = $2")
         .bind(&body.skill_domain)

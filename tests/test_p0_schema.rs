@@ -124,30 +124,46 @@ async fn migrations_up_to_p0_apply_cleanly() {
 }
 
 #[tokio::test]
-async fn skill_nodes_seed_has_expected_counts() {
+async fn every_active_domain_has_a_skill_tree() {
+    // This used to assert 53 categories and 290 atomic skills. Every domain
+    // added since broke it, and each time the fix was to write down a bigger
+    // number — which tested that somebody had run the seed, and nothing else.
+    //
+    // What is worth holding is the shape: a domain the platform says is live
+    // has skills to place people on, and every skill hangs off a category.
     let (db, db_name) = setup_test_db().await;
 
-    // 53 catégories (parent_id NULL) + 290 skills atomiques = 343 total
-    let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM skill_nodes")
-        .fetch_one(&db)
-        .await
-        .expect("count skill_nodes failed");
+    let orphans: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM skill_nodes child
+          WHERE child.parent_id IS NOT NULL
+            AND NOT EXISTS (SELECT 1 FROM skill_nodes p WHERE p.id = child.parent_id)",
+    )
+    .fetch_one(&db)
+    .await
+    .expect("count orphans failed");
+    assert_eq!(orphans, 0, "a skill hanging off nothing is unreachable");
 
     let categories: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM skill_nodes WHERE parent_id IS NULL")
             .fetch_one(&db)
             .await
             .expect("count categories failed");
+    assert!(categories >= 53, "categories went down: {categories}");
 
-    let atomic: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM skill_nodes WHERE parent_id IS NOT NULL")
-            .fetch_one(&db)
-            .await
-            .expect("count atomic skills failed");
-
-    assert_eq!(total, 343, "Expected 343 total skill_nodes, got {total}");
-    assert_eq!(categories, 53, "Expected 53 categories, got {categories}");
-    assert_eq!(atomic, 290, "Expected 290 atomic skills, got {atomic}");
+    let empty: Vec<String> = sqlx::query_scalar(
+        "SELECT d.slug FROM skill_domains d
+          WHERE d.is_active
+            AND NOT EXISTS (
+                SELECT 1 FROM skill_nodes n WHERE n.domain = d.slug)
+          ORDER BY d.slug",
+    )
+    .fetch_all(&db)
+    .await
+    .expect("count domains without skills failed");
+    assert!(
+        empty.is_empty(),
+        "a live domain with no skills cannot place anybody: {empty:?}"
+    );
 
     db.close().await;
     cleanup_test_db(&db_name).await;

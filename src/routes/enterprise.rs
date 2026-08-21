@@ -133,7 +133,13 @@ fn build_response(data: serde_json::Value) -> serde_json::Value {
     })
 }
 
-async fn require_enterprise(state: &AppState, auth: &AuthUser) -> Result<Enterprise, AppError> {
+/// The enterprise the caller is acting for, after the gates every enterprise
+/// surface shares: a verified email and a strong second factor.
+///
+/// Public because the mission board is an enterprise surface living in
+/// another module, and reimplementing these gates there would mean two places
+/// to get 2FA wrong.
+pub async fn require_enterprise(state: &AppState, auth: &AuthUser) -> Result<Enterprise, AppError> {
     // Load the security flags we gate on in one round-trip.
     let row: Option<(bool, bool)> =
         sqlx::query_as("SELECT totp_enabled, email_verified FROM users WHERE id = $1")
@@ -595,6 +601,7 @@ pub async fn register_enterprise(
     get, path = "/api/enterprise/profile", tag = "enterprise",
     responses((status = 200, body = serde_json::Value)),
     security(("cookie_auth" = [])),
+    operation_id = "enterpriseGetProfile",
 )]
 pub async fn get_profile(
     State(state): State<AppState>,
@@ -622,6 +629,7 @@ pub async fn get_profile(
     request_body = UpdateProfileRequest,
     responses((status = 200, body = serde_json::Value)),
     security(("cookie_auth" = [])),
+    operation_id = "enterpriseUpdateProfile",
 )]
 pub async fn update_profile(
     State(state): State<AppState>,
@@ -861,6 +869,7 @@ pub async fn invite_recruiter(
     request_body = AcceptInviteRequest,
     responses((status = 200, body = serde_json::Value)),
     security(("cookie_auth" = [])),
+    operation_id = "enterpriseAcceptInvite",
 )]
 pub async fn accept_invite(
     State(state): State<AppState>,
@@ -1143,6 +1152,7 @@ pub async fn invite_register_and_accept(
     get, path = "/api/enterprise/members", tag = "enterprise",
     responses((status = 200, body = serde_json::Value)),
     security(("cookie_auth" = [])),
+    operation_id = "enterpriseListMembers",
 )]
 pub async fn list_members(
     State(state): State<AppState>,

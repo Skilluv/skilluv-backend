@@ -233,7 +233,70 @@ pub async fn release_now(
     )
     .increment(1);
 
+    // A bounty actually paid, on the public feed — off by default, because
+    // publishing what somebody earns because they took a bounty is not the
+    // same as repeating a merged pull request that was already public.
+    //
+    // Best-effort: a feed line must never fail a release that went through.
+    if subject_type == "slice"
+        && let Err(err) = announce_bounty(db, &hold, subject_id).await
+    {
+        tracing::warn!(%err, subject = %subject_id, "bounty not announced on the public feed");
+    }
+
     Ok(true)
+}
+
+/// Put a paid bounty on the public feed.
+///
+/// The one kind that carries a figure, and the one that is hidden unless
+/// somebody asks for it.
+async fn announce_bounty(
+    db: &PgPool,
+    hold: &PendingRelease,
+    slice_id: Uuid,
+) -> Result<(), AppError> {
+    let row: Option<(String, String, Option<String>)> = sqlx::query_as(
+        "SELECT u.username, s.title,
+                CASE WHEN p.github_repo_owner IS NOT NULL
+                     THEN p.github_repo_owner || '/' || p.github_repo_name END
+           FROM project_slices s
+           JOIN projects p ON p.id = s.project_id
+           JOIN users u ON u.id = $2
+          WHERE s.id = $1",
+    )
+    .bind(slice_id)
+    .bind(hold.beneficiary_id)
+    .fetch_optional(db)
+    .await?;
+    let Some((username, title, repository)) = row else {
+        return Ok(());
+    };
+
+    crate::services::public_feed::emit(
+        db,
+        crate::services::public_feed::Emission {
+            kind: "bounty_paid",
+            subject_type: "user",
+            subject_id: hold.beneficiary_id,
+            subject_label: &username,
+            headline: format!("prime versée — {title}"),
+            artifact_url: format!(
+                "{}/slices/{slice_id}",
+                std::env::var("SKILLUV_FRONTEND_URL")
+                    .unwrap_or_else(|_| "https://skill-uv.com".into())
+                    .trim_end_matches('/')
+            ),
+            repository,
+            amount: Some(hold.amount.clone()),
+            currency: Some(hold.currency.as_str()),
+            source_type: "bounty",
+            source_id: slice_id,
+        },
+    )
+    .await?;
+
+    Ok(())
 }
 
 /// Freeze a hold while a complaint is examined.

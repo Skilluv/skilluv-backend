@@ -54,8 +54,11 @@ pub struct ExploreQuery {
     /// Filtre optionnel sur le kind (`slice` | `challenge`). Sinon les deux.
     #[param(pattern = r"^(slice|challenge)$")]
     pub kind: Option<String>,
-    /// Filtre domaine (`code`, `design`, `game`, `security`, `ops`, `ai`, `soft_skills`).
-    #[param(pattern = r"^(code|design|game|security|ops|ai|soft_skills)$")]
+    /// One of the eight active domains. The handler checks it against
+    /// `validators::SKILL_DOMAINS`; this pattern is the same list, and it had
+    /// gone stale — a contract that understates what it accepts sends a caller
+    /// looking for an endpoint that does not exist.
+    #[param(pattern = r"^(code|design|game|security|ops|ai|soft_skills|audio)$")]
     pub domain: Option<String>,
     /// Difficulté (1-5).
     #[param(minimum = 1, maximum = 5)]
@@ -126,16 +129,7 @@ pub async fn explore(
             "kind must be one of: slice, challenge".into(),
         ));
     }
-    if let Some(d) = &q.domain
-        && !matches!(
-            d.as_str(),
-            "code" | "design" | "game" | "security" | "ops" | "ai" | "soft_skills"
-        )
-    {
-        return Err(AppError::Validation(
-            "domain must be one of: code, design, game, security, ops, ai, soft_skills".into(),
-        ));
-    }
+    crate::validators::check_skill_domain_opt(&q.domain, "domain")?;
     crate::validators::check_max_len_opt(&q.language, "language", 50)?;
     crate::validators::check_max_len_opt(&q.q, "q", 200)?;
     crate::validators::check_range_opt(q.difficulty.map(i64::from), "difficulty", 1, 5)?;

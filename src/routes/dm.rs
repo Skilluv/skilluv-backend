@@ -153,6 +153,7 @@ pub async fn open_conversation(
         (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "dmListConversations",
 )]
 pub async fn list_conversations(
     State(state): State<AppState>,
@@ -207,6 +208,7 @@ pub async fn list_messages(
         (status = 403, description = "Blocked or not a participant", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "dmSendMessage",
 )]
 pub async fn send_message(
     State(state): State<AppState>,
@@ -280,6 +282,7 @@ pub async fn send_message(
         (status = 200, description = "Marked count", body = ApiResponse<MarkReadResponse>),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "dmMarkRead",
 )]
 pub async fn mark_read(
     State(state): State<AppState>,

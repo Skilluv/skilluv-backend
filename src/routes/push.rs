@@ -49,6 +49,7 @@ pub struct VapidPublicKeyResponse {
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = PushSubscribeBody)]
 pub struct SubscribeBody {
     /// Endpoint URL returned by `PushManager.subscribe`.
     #[schema(max_length = 10000)]
@@ -62,6 +63,7 @@ pub struct SubscribeBody {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+#[schema(as = PushSubscribeResponse)]
 pub struct SubscribeResponse {
     pub subscription_id: Uuid,
 }
@@ -106,6 +108,7 @@ pub async fn vapid_public_key() -> Result<Json<ApiResponse<VapidPublicKeyRespons
         (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "pushSubscribe",
 )]
 pub async fn subscribe(
     State(state): State<AppState>,
@@ -159,6 +162,7 @@ pub async fn subscribe(
         (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "pushUnsubscribe",
 )]
 pub async fn unsubscribe(
     State(state): State<AppState>,

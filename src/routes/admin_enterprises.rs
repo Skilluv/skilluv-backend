@@ -445,6 +445,7 @@ pub async fn patch_type(
     params(("id" = Uuid, Path)),
     responses((status = 200, body = crate::api_response::ApiResponse<EnterpriseTypeConfigData>), (status = 403, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
+    operation_id = "adminEnterprisesGetTypeConfig",
 )]
 pub async fn get_type_config(
     _gate: crate::middleware::admin_gate::AdminGate,

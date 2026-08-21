@@ -49,7 +49,11 @@ pub fn slice_routes() -> Router<AppState> {
 #[into_params(parameter_in = Query)]
 #[serde(deny_unknown_fields)]
 pub struct ListQuery {
-    #[param(pattern = r"^(code|design|game|security|ops|ai|soft_skills)$")]
+    /// One of the eight active domains. The handler checks it against
+    /// `validators::SKILL_DOMAINS`; this pattern is the same list, and it had
+    /// gone stale — a contract that understates what it accepts sends a caller
+    /// looking for an endpoint that does not exist.
+    #[param(pattern = r"^(code|design|game|security|ops|ai|soft_skills|audio)$")]
     domain: Option<String>,
     #[param(minimum = 1, maximum = 5)]
     difficulty: Option<i16>,
@@ -98,21 +102,13 @@ fn build_response(data: serde_json::Value) -> serde_json::Value {
     tag = "projects",
     params(ListQuery),
     responses((status = 200, body = serde_json::Value)),
+    operation_id = "slicesListOpen",
 )]
 pub async fn list_open(
     State(state): State<AppState>,
     Query(query): Query<ListQuery>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    if let Some(d) = &query.domain
-        && !matches!(
-            d.as_str(),
-            "code" | "design" | "game" | "security" | "ops" | "ai" | "soft_skills"
-        )
-    {
-        return Err(AppError::Validation(
-            "domain must be one of: code, design, game, security, ops, ai, soft_skills".into(),
-        ));
-    }
+    crate::validators::check_skill_domain_opt(&query.domain, "domain")?;
     crate::validators::check_range_opt(query.difficulty.map(i64::from), "difficulty", 1, 5)?;
     crate::validators::check_range_opt(query.page, "page", 1, 100_000)?;
     crate::validators::check_range_opt(query.per_page, "per_page", 1, 100)?;
@@ -192,6 +188,7 @@ pub struct SubmitPrBody {
         (status = 400, description = "Malformed PR URL or slice not in a submittable state"),
         (status = 401, description = "Unauthenticated"),
     ),
+    operation_id = "slicesSubmitPr",
 )]
 pub async fn submit_pr(
     State(state): State<AppState>,

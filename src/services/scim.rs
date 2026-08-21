@@ -13,7 +13,6 @@
 
 use base64::Engine;
 use chrono::{DateTime, Utc};
-use rand_core::RngCore;
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -102,13 +101,6 @@ pub fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
         diff |= a[i] ^ b[i];
     }
     diff == 0
-}
-
-// Silence rand_core dep warning without pulling in an extra `rand`.
-fn _rng_unused() {
-    let mut _rng = rand_core::OsRng;
-    let mut buf = [0u8; 4];
-    _rng.fill_bytes(&mut buf);
 }
 
 // ─── Token DB ops ────────────────────────────────────────────────

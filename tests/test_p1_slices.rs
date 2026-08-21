@@ -231,11 +231,16 @@ async fn list_open_respects_domain_filter() {
     let (db, db_name) = setup_test_db().await;
     let (_user, project_id, _slice) = setup_project_with_open_slice(&db).await;
 
-    // Add a design slice
+    // Add a design slice. `figma_frame` was folded into `design_artifact` by
+    // 0231, which also requires the slice to name the trade it belongs to.
     sqlx::query(
         "INSERT INTO project_slices
-            (project_id, slice_type, title, description, primary_domain, difficulty, status)
-         VALUES ($1, 'figma_frame', 'Design', 'X', 'design', 2, 'open')",
+            (project_id, slice_type, title, description, primary_domain, difficulty,
+             status, orientation_id, design_subtype)
+         VALUES ($1, 'design_artifact', 'Design', 'X', 'design', 2, 'open',
+                 (SELECT id FROM orientations
+                   WHERE slug = 'design-web' AND is_archived = FALSE),
+                 'interface')",
     )
     .bind(project_id)
     .execute(&db)

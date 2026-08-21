@@ -17,15 +17,7 @@ use uuid::Uuid;
 
 use crate::errors::AppError;
 
-pub const VALID_DOMAINS: &[&str] = &[
-    "code",
-    "design",
-    "game",
-    "security",
-    "ops",
-    "ai",
-    "soft_skills",
-];
+pub use crate::validators::SKILL_DOMAINS as VALID_DOMAINS;
 
 /// Minimum thresholds a self-nominated candidate must meet on a domain.
 pub const MIN_RANK: &str = "artisan";
@@ -62,12 +54,7 @@ pub struct InviteInput {
 }
 
 fn validate_domain(domain: &str) -> Result<(), AppError> {
-    if !VALID_DOMAINS.contains(&domain) {
-        return Err(AppError::Validation(format!(
-            "unknown validator domain: {domain}"
-        )));
-    }
-    Ok(())
+    crate::validators::validate_skill_domain(domain, "validator domain")
 }
 
 /// SKI-81 — self-nomination. Checks stats before inserting a `pending`

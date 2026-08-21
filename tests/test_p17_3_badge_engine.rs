@@ -294,22 +294,43 @@ async fn recompute_is_idempotent() {
     .await;
     insert_verified_deliverable(&db, u, None).await;
 
+    // Named rather than counted: the seeded catalogue also has rules that a
+    // first verified deliverable satisfies, and it grows with every domain.
+    // What this test is about is the second run, not the size of the first.
     let r1 = badge_engine::recompute_badges_for_user(&db, u)
         .await
         .unwrap();
-    assert_eq!(r1.awarded.len(), 1);
+    assert!(
+        r1.awarded.contains(&"test-idem".to_string()),
+        "got {:?}",
+        r1.awarded
+    );
     let r2 = badge_engine::recompute_badges_for_user(&db, u)
         .await
         .unwrap();
-    assert_eq!(r2.awarded.len(), 0, "no re-award on idempotent recompute");
+    assert_eq!(
+        r2.awarded.len(),
+        0,
+        "no re-award on idempotent recompute, got {:?}",
+        r2.awarded
+    );
     assert!(r2.unchanged >= 1);
 
-    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM user_badges WHERE user_id = $1")
-        .bind(u)
-        .fetch_one(&db)
-        .await
-        .unwrap();
-    assert_eq!(count, 1, "single user_badge row");
+    // One row for *this* rule, not one row in total. The seeded catalogue has
+    // other rules a first verified deliverable satisfies, and counting every
+    // badge the user holds measures the size of the catalogue rather than
+    // whether recompute awarded twice — which is what this test is about.
+    let count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM user_badges ub
+           JOIN badge_rules br ON br.id = ub.rule_id
+          WHERE ub.user_id = $1 AND br.slug = 'test-idem'
+            AND ub.revoked_at IS NULL",
+    )
+    .bind(u)
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(count, 1, "single user_badge row for the rule under test");
 
     db.close().await;
     cleanup_test_db(&name).await;

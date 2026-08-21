@@ -329,7 +329,7 @@ async fn verify_pdf(
     .await?;
 
     let Some((
-        _slice_id,
+        slice_id,
         Some(validated_at),
         pr_url,
         domain,
@@ -351,6 +351,8 @@ async fn verify_pdf(
         hash
     );
 
+    let evidence = measured_evidence(&state, slice_id).await?;
+
     let html = render_attestation_html(AttestationView {
         challenger_username: c_username.as_deref().unwrap_or("(unknown)"),
         challenger_display: c_display.as_deref().unwrap_or("(unknown)"),
@@ -363,6 +365,7 @@ async fn verify_pdf(
         validated_at: &validated_at.to_rfc3339(),
         verify_url: &verify_url,
         hash: &hash,
+        evidence,
     });
 
     let client = reqwest::Client::builder()
@@ -418,6 +421,133 @@ struct AttestationView<'a> {
     validated_at: &'a str,
     verify_url: &'a str,
     hash: &'a str,
+    /// The measured claims this slice carries, already reproduced by somebody
+    /// else. Empty for a slice with none, which is most of them.
+    evidence: Vec<EvidenceLine>,
+}
+
+/// One line of measured evidence, pre-formatted.
+///
+/// Deliberately a rendered string rather than a set of numbers the template
+/// assembles: what a benchmark line says depends on its unit and on which
+/// direction counts as better, and a template deciding that would be a second
+/// place to get it wrong.
+#[derive(Debug, Clone)]
+struct EvidenceLine {
+    label: String,
+    value: String,
+}
+
+/// What this slice has that a second person confirmed.
+///
+/// Only reproduced benchmarks and hub figures we fetched ourselves. An
+/// unreproduced measurement is the author's word, and an attestation exists
+/// precisely so a reader does not have to take it — printing one would undo
+/// the point of the document.
+async fn measured_evidence(
+    state: &AppState,
+    slice_id: uuid::Uuid,
+) -> Result<Vec<EvidenceLine>, AppError> {
+    let mut lines = Vec::new();
+
+    type Bench = (String, String, String, f64, bool, Option<String>);
+    let benchmarks: Vec<Bench> = sqlx::query_as(
+        "SELECT benchmark_name, metric_name, metric_unit, metric_value,
+                lower_is_better, dataset_split
+           FROM benchmark_results
+          WHERE slice_id = $1 AND reproduced_at IS NOT NULL
+          ORDER BY benchmark_name
+          LIMIT 5",
+    )
+    .bind(slice_id)
+    .fetch_all(&state.db)
+    .await?;
+
+    for (name, metric, unit, value, lower_is_better, split) in benchmarks {
+        let direction = if lower_is_better {
+            "plus bas vaut mieux"
+        } else {
+            "plus haut vaut mieux"
+        };
+        let on = split.map(|s| format!(", sur {s}")).unwrap_or_default();
+        lines.push(EvidenceLine {
+            label: name,
+            value: format!("{metric} {value} {unit} ({direction}{on}) — rejoué par un relecteur"),
+        });
+    }
+
+    // Hub figures, summed across whatever this slice publishes. Dated,
+    // because a download count with no date is a number nobody can situate.
+    type Reach = (
+        Option<i64>,
+        Option<i32>,
+        Option<chrono::DateTime<chrono::Utc>>,
+    );
+    let reach: Option<Reach> = sqlx::query_as(
+        "SELECT sum(downloads_recent)::BIGINT, sum(likes_count)::INT, max(fetched_at)
+           FROM published_artifact_stats
+          WHERE slice_id = $1
+            AND registry IN ('huggingface_models', 'huggingface_datasets',
+                             'kaggle_datasets')",
+    )
+    .bind(slice_id)
+    .fetch_optional(&state.db)
+    .await?;
+
+    if let Some((Some(downloads), likes, Some(fetched))) = reach
+        && downloads > 0
+    {
+        let likes = likes.unwrap_or(0);
+        lines.push(EvidenceLine {
+            label: "Diffusion".into(),
+            value: format!(
+                "{downloads} téléchargements sur 30 jours, {likes} mentions — relevé le {}",
+                fetched.format("%d/%m/%Y")
+            ),
+        });
+    }
+
+    Ok(lines)
+}
+
+/// The measured-evidence block, or nothing at all.
+///
+/// ## Why there are no images here
+///
+/// The AI backlog asked for model-card thumbnails and benchmark charts. Both
+/// mean the PDF renderer fetching a URL somebody else controls, at render
+/// time, from inside our network — which is a request-forgery primitive and a
+/// way to put arbitrary bytes into a document carrying our name. The existing
+/// QR code is inline SVG for the same reason, and that decision is worth
+/// keeping rather than making an exception to.
+///
+/// The substance survives without them. What makes a benchmark worth printing
+/// is the figure, the baseline it beat, and the fact that a second person
+/// re-ran it — all three are text we already hold. A chart would be a picture
+/// of one row.
+fn render_evidence(lines: &[EvidenceLine]) -> String {
+    if lines.is_empty() {
+        return String::new();
+    }
+    let rows = lines
+        .iter()
+        .map(|l| {
+            format!(
+                r#"<div style="margin-top: 8px; font-size: 14px;"><strong>{}</strong> — {}</div>"#,
+                html_escape(&l.label),
+                html_escape(&l.value)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n      ");
+
+    format!(
+        r#"
+  <section style="margin-top: 24px; border-left: 3px solid #2E7D32; padding-left: 16px;">
+    <div style="font-size: 13px; text-transform: uppercase; color:#666;">Mesuré et reproduit</div>
+      {rows}
+  </section>"#
+    )
 }
 
 /// Pure HTML template. Uses inline styles because the pdf_renderer
@@ -426,6 +556,7 @@ struct AttestationView<'a> {
 /// crate — no external image fetch during PDF rendering.
 fn render_attestation_html(v: AttestationView<'_>) -> String {
     let qr_svg = render_qr_svg(v.verify_url);
+    let evidence_html = render_evidence(&v.evidence);
     let avatar_html = v
         .challenger_avatar
         .map(|a| format!(
@@ -463,6 +594,8 @@ fn render_attestation_html(v: AttestationView<'_>) -> String {
     </div>
   </section>
 
+  {evidence_html}
+
   <section style="margin-top: 24px;">
     <div style="font-size: 13px; text-transform: uppercase; color:#666;">Validated by</div>
     <div style="margin-top: 4px;">{validator_display} · @{validator_username}</div>
@@ -479,6 +612,7 @@ fn render_attestation_html(v: AttestationView<'_>) -> String {
   </footer>
 </body></html>"#,
         avatar_html = avatar_html,
+        evidence_html = evidence_html,
         challenger_display = html_escape(v.challenger_display),
         challenger_username = html_escape(v.challenger_username),
         pr_url = html_escape(v.pr_url),

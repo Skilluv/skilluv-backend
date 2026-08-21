@@ -1,10 +1,15 @@
 //! Endpoints publics pour enfiler / interroger les jobs IA — Phase 5.
 //!
-//! POST /api/ai/code-review          {submission_id, ...}       → job_id
-//! POST /api/ai/recommendations      {user_snapshot, candidates} → job_id
-//! POST /api/admin/ai/hidden-gems    {talents}                   → job_id (admin)
-//! POST /api/admin/ai/churn          {talents, horizon_days}     → job_id (admin)
-//! GET  /api/ai/jobs/{job_id}                                     → result | pending
+//! POST /api/assistant/code-review       {submission_id, ...}       → job_id
+//! POST /api/assistant/recommendations   {user_snapshot, candidates} → job_id
+//! POST /api/admin/assistant/hidden-gems {talents}                   → job_id (admin)
+//! POST /api/admin/assistant/churn       {talents, horizon_days}     → job_id (admin)
+//! GET  /api/assistant/jobs/{job_id}                                 → result | pending
+//!
+//! Sous `/assistant` et non `/ai` : `ai` est le nom d'un domaine de métier —
+//! dix orientations, des grilles de revue, des artefacts. L'assistant qui
+//! relit une soumission n'en fait pas partie, et les servir sous le même
+//! préfixe rendait l'API illisible pour qui la découvre.
 
 use axum::extract::{Path, State};
 use axum::routing::{get, post};
@@ -21,11 +26,11 @@ use crate::middleware::AuthUser;
 
 pub fn ai_job_routes() -> Router<AppState> {
     Router::new()
-        .route("/ai/code-review", post(request_code_review))
-        .route("/ai/recommendations", post(request_recommendations))
-        .route("/ai/jobs/{job_id}", get(get_job_result))
-        .route("/admin/ai/hidden-gems", post(admin_hidden_gems))
-        .route("/admin/ai/churn", post(admin_churn))
+        .route("/assistant/code-review", post(request_code_review))
+        .route("/assistant/recommendations", post(request_recommendations))
+        .route("/assistant/jobs/{job_id}", get(get_job_result))
+        .route("/admin/assistant/hidden-gems", post(admin_hidden_gems))
+        .route("/admin/assistant/churn", post(admin_churn))
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -42,7 +47,7 @@ pub struct CodeReviewBody {
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct AiJobEnqueuedResponse {
-    /// Opaque job id — poll `/api/ai/jobs/{job_id}` until `status ==
+    /// Opaque job id — poll `/api/assistant/jobs/{job_id}` until `status ==
     /// "ready"` to fetch the result.
     pub job_id: String,
 }
@@ -60,10 +65,10 @@ pub struct AiJobResultResponse {
 
 /// Enqueue a code-review job for one of the caller's submissions.
 /// The heavy lifting happens in a background worker (skilluv-ia); poll
-/// `/api/ai/jobs/{job_id}` for the result.
+/// `/api/assistant/jobs/{job_id}` for the result.
 #[utoipa::path(
     post,
-    path = "/api/ai/code-review",
+    path = "/api/assistant/code-review",
     tag = "challenges",
     request_body = CodeReviewBody,
     responses(
@@ -133,7 +138,7 @@ pub async fn request_code_review(
 /// Kept as free-form JSON since the payload evolves quickly.
 #[utoipa::path(
     post,
-    path = "/api/ai/recommendations",
+    path = "/api/assistant/recommendations",
     tag = "feed",
     request_body(content = serde_json::Value, description = "Free-form snapshot + candidates payload"),
     responses(
@@ -166,7 +171,7 @@ pub async fn request_recommendations(
 /// worker has finished, otherwise `status: "pending"` + job_id.
 #[utoipa::path(
     get,
-    path = "/api/ai/jobs/{job_id}",
+    path = "/api/assistant/jobs/{job_id}",
     tag = "challenges",
     params(("job_id" = String, Path, description = "Opaque job id from an enqueue call")),
     responses(
@@ -200,7 +205,7 @@ pub async fn get_job_result(
 /// is defined by skilluv-ia (talent pool + filters).
 #[utoipa::path(
     post,
-    path = "/api/admin/ai/hidden-gems",
+    path = "/api/admin/assistant/hidden-gems",
     tag = "admin",
     request_body(content = serde_json::Value, description = "Talents pool + filter parameters"),
     responses(
@@ -226,7 +231,7 @@ pub async fn admin_hidden_gems(
 /// Admin only: enqueue a churn-analysis job.
 #[utoipa::path(
     post,
-    path = "/api/admin/ai/churn",
+    path = "/api/admin/assistant/churn",
     tag = "admin",
     request_body(content = serde_json::Value, description = "Talents + horizon_days"),
     responses(

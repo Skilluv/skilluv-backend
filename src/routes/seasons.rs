@@ -25,6 +25,7 @@ use crate::AppState;
 use crate::api_response::{ApiResponse, SimpleMessage};
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
+use crate::routes::admin::require_admin;
 use crate::services::seasons::Season;
 use crate::services::stewards::ProjectSteward;
 use crate::services::{CreateSeasonParams, SeasonsService, StewardsService};
@@ -44,11 +45,6 @@ pub fn season_routes() -> Router<AppState> {
             delete(remove_steward),
         )
         .route("/users/me/stewardships", get(my_stewardships))
-}
-
-// P21.1 : délègue à user_capabilities (source de vérité canonique).
-async fn require_admin(state: &AppState, auth: &AuthUser) -> Result<(), AppError> {
-    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await
 }
 
 // ═══════════════════════════════════════════════════════════════════

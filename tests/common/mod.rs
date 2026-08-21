@@ -45,6 +45,188 @@ pub fn test_db_url(db_name: &str) -> String {
     format!("{}/{db_name}", base.trim_end_matches('/'))
 }
 
+/// Migrations, applied once and then copied.
+///
+/// ## Why
+///
+/// Every test used to create an empty database and replay every migration
+/// into it. That is roughly thirteen seconds each, on a schema that is over
+/// two hundred and forty migrations long — a suite of eighteen tests spent
+/// four minutes doing the same work eighteen times, and the whole integration
+/// suite spent most of an hour on it.
+///
+/// PostgreSQL can copy a database at the file level. So the migrations run
+/// once into a template, and each test gets a copy of that template, which
+/// takes about as long as creating an empty database did.
+///
+/// ## Why the template name carries a fingerprint
+///
+/// It is built from every migration's version and checksum, which is exactly
+/// what would have been applied. Change any migration and the name changes,
+/// so the next run builds a fresh template instead of copying a stale schema
+/// — the failure mode this optimisation would otherwise introduce, and the
+/// one that would waste an afternoon.
+///
+/// ## Why an advisory lock
+///
+/// Several test binaries start at once, and all of them would find the
+/// template missing and try to build it. The lock makes one of them build it
+/// while the others wait; they then find it present. It is taken on the
+/// maintenance database, not on the template, because nothing may hold a
+/// connection to a database being used as a template.
+mod template {
+    use super::*;
+
+    /// Namespace for the advisory lock. Arbitrary, but fixed: two runs have
+    /// to pick the same number to exclude each other.
+    const LOCK_NAMESPACE: i32 = 0x5C11;
+
+    /// A fingerprint of the migration set, short enough to read in a database
+    /// name and specific enough that two different sets never collide in
+    /// practice.
+    fn fingerprint() -> String {
+        // FNV-1a over each migration's version and checksum. Hand-rolled to
+        // keep this file dependency-free, and sufficient: this distinguishes
+        // schema versions, it does not defend against an adversary.
+        let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+        let mut eat = |byte: u8| {
+            hash ^= byte as u64;
+            hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+        };
+        for migration in sqlx::migrate!("./migrations").iter() {
+            for byte in migration.version.to_le_bytes() {
+                eat(byte);
+            }
+            for byte in migration.checksum.iter() {
+                eat(*byte);
+            }
+        }
+        format!("{hash:016x}")
+    }
+
+    pub fn name() -> String {
+        format!("skilluv_tmpl_{}", fingerprint())
+    }
+
+    /// Build the template if it is not there, and drop any left by an older
+    /// migration set.
+    ///
+    /// Returns the template name, ready to be copied from.
+    pub async fn ensure(admin: &PgPool) -> String {
+        let tmpl = name();
+
+        let exists: bool =
+            sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = $1)")
+                .bind(&tmpl)
+                .fetch_one(admin)
+                .await
+                .expect("failed to look for the template database");
+        if exists {
+            return tmpl;
+        }
+
+        // One builder, the rest wait. `pg_advisory_lock` is held for the
+        // session, and this pool is closed by the caller right after.
+        sqlx::query("SELECT pg_advisory_lock($1, $2)")
+            .bind(LOCK_NAMESPACE)
+            .bind(lock_key(&tmpl))
+            .execute(admin)
+            .await
+            .expect("failed to take the template lock");
+
+        // Somebody may have built it while we waited.
+        let exists: bool =
+            sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = $1)")
+                .bind(&tmpl)
+                .fetch_one(admin)
+                .await
+                .expect("failed to look for the template database");
+
+        if !exists {
+            build(admin, &tmpl).await;
+            sweep_stale_templates(admin, &tmpl).await;
+        }
+
+        sqlx::query("SELECT pg_advisory_unlock($1, $2)")
+            .bind(LOCK_NAMESPACE)
+            .bind(lock_key(&tmpl))
+            .execute(admin)
+            .await
+            .expect("failed to release the template lock");
+
+        tmpl
+    }
+
+    async fn build(admin: &PgPool, tmpl: &str) {
+        sqlx::query(sqlx::AssertSqlSafe(format!("CREATE DATABASE \"{tmpl}\"")))
+            .execute(admin)
+            .await
+            .expect("failed to create the template database");
+
+        // A pool of its own, closed before anybody copies from it: PostgreSQL
+        // refuses to use a database as a template while a session is attached.
+        let pool = PgPoolOptions::new()
+            .max_connections(1)
+            .connect(&test_db_url(tmpl))
+            .await
+            .expect("failed to connect to the template database");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("failed to migrate the template database");
+        pool.close().await;
+
+        // Nothing should ever connect to it again. Refusing connections is
+        // what keeps a stray psql session from blocking every test at once.
+        let _ = sqlx::query(sqlx::AssertSqlSafe(format!(
+            "ALTER DATABASE \"{tmpl}\" WITH ALLOW_CONNECTIONS false IS_TEMPLATE true"
+        )))
+        .execute(admin)
+        .await;
+    }
+
+    /// Templates from an older migration set are dead weight on somebody's
+    /// development machine, and this runs on the machine that made them.
+    async fn sweep_stale_templates(admin: &PgPool, keep: &str) {
+        let stale: Vec<String> = sqlx::query_scalar(
+            "SELECT datname FROM pg_database
+              WHERE datname LIKE 'skilluv\\_tmpl\\_%' AND datname <> $1",
+        )
+        .bind(keep)
+        .fetch_all(admin)
+        .await
+        .unwrap_or_default();
+
+        for old in stale {
+            // `IS_TEMPLATE` has to be cleared before a template can be
+            // dropped, and both statements are allowed to fail: another run
+            // may be copying from it at this instant, and a template left
+            // behind is a wasted gigabyte rather than a broken test.
+            let _ = sqlx::query(sqlx::AssertSqlSafe(format!(
+                "ALTER DATABASE \"{old}\" WITH IS_TEMPLATE false"
+            )))
+            .execute(admin)
+            .await;
+            let _ = sqlx::query(sqlx::AssertSqlSafe(format!(
+                "DROP DATABASE IF EXISTS \"{old}\" WITH (FORCE)"
+            )))
+            .execute(admin)
+            .await;
+        }
+    }
+
+    /// Second half of the advisory lock key, derived from the template name so
+    /// two different migration sets do not block each other.
+    fn lock_key(tmpl: &str) -> i32 {
+        let mut hash: u32 = 2_166_136_261;
+        for byte in tmpl.as_bytes() {
+            hash ^= *byte as u32;
+            hash = hash.wrapping_mul(16_777_619);
+        }
+        (hash & 0x7fff_ffff) as i32
+    }
+}
+
 /// A test application instance with isolated database.
 pub struct TestApp {
     pub addr: String,
@@ -93,12 +275,17 @@ impl TestApp {
             .await
             .expect("Failed to connect to admin DB");
 
+        // The migrations ran once, into a template. This is a file-level copy
+        // of it, which is what makes a test cost a second rather than the
+        // thirteen it takes to replay two hundred and forty migrations.
+        let tmpl = template::ensure(&admin_pool).await;
+
         sqlx::query(sqlx::AssertSqlSafe(format!(
-            "CREATE DATABASE \"{db_name}\""
+            "CREATE DATABASE \"{db_name}\" TEMPLATE \"{tmpl}\""
         )))
         .execute(&admin_pool)
         .await
-        .expect("Failed to create test DB");
+        .expect("Failed to create test DB from the migration template");
 
         admin_pool.close().await;
 
@@ -109,12 +296,6 @@ impl TestApp {
             .connect(&db_url)
             .await
             .expect("Failed to connect to test DB");
-
-        // Run migrations
-        sqlx::migrate!("./migrations")
-            .run(&db)
-            .await
-            .expect("Failed to run migrations on test DB");
 
         // Redis : chaque binaire de test s'attribue une DB distincte via PID % 16
         // (Redis fournit 16 DBs par défaut). Cela évite les races inter-binaires
@@ -308,11 +489,19 @@ impl TestApp {
             .await
             .expect("Register request failed");
 
-        assert_eq!(resp.status(), StatusCode::CREATED);
+        // The body, not just the status: a failed registration is the first
+        // thing a hundred suites hit, and `201 != 500` on its own has cost
+        // whole afternoons.
+        let status = resp.status();
         let body: Value = resp
             .json()
             .await
             .expect("Failed to parse register response");
+        assert_eq!(
+            status,
+            StatusCode::CREATED,
+            "register {username} said: {body}"
+        );
 
         // Short-circuit the email-verification hop for tests — real users have
         // to click the link in the verification email before AuthUserComplete
@@ -327,9 +516,63 @@ impl TestApp {
     }
 
     /// Login and return the response (cookies are stored in the client jar).
+    ///
+    /// A second factor is stepped around rather than failed on. An enterprise
+    /// fixture turns TOTP on so the `/enterprise/*` gate lets it through, and
+    /// every later `login` for that user then answered 403 —
+    /// `AUTH_TOTP_REQUIRED`, correctly, because the helper has no authenticator
+    /// and cannot produce a code. That is not what any of these tests are
+    /// about, and the failure read as an authorisation bug twenty tests wide.
+    ///
+    /// The flag is toggled off for the length of the request and restored
+    /// straight after, so the gate still sees an account with a second factor.
+    /// Nothing here can hide a real regression: the endpoint is called for
+    /// real, and a login that fails for any other reason still fails.
     pub async fn login(&self, identifier: &str) -> Value {
-        let resp = self
-            .client
+        let resp = self.try_login(identifier).await;
+        if resp.status() != StatusCode::FORBIDDEN {
+            assert_eq!(resp.status(), StatusCode::OK);
+            return resp.json().await.expect("Failed to parse login response");
+        }
+
+        // A 403 is only stepped around when the account actually has TOTP on.
+        // Checking first matters: a 403 for any other reason — a banned
+        // account, say — would otherwise be retried and then left with
+        // `totp_enabled = TRUE` on a user who never had a second factor,
+        // which is a lie the next assertion in that test would inherit.
+        let has_totp: bool = sqlx::query_scalar(
+            "SELECT COALESCE(BOOL_OR(totp_enabled), FALSE) FROM users
+              WHERE username = $1 OR email = $1",
+        )
+        .bind(identifier)
+        .fetch_one(&self.db)
+        .await
+        .expect("read totp state for test login");
+
+        if !has_totp {
+            let body = resp.text().await.unwrap_or_default();
+            panic!(
+                "login as {identifier} was refused with 403, and not for a second factor: {body}"
+            );
+        }
+
+        sqlx::query("UPDATE users SET totp_enabled = FALSE WHERE username = $1 OR email = $1")
+            .bind(identifier)
+            .execute(&self.db)
+            .await
+            .expect("clear totp for test login");
+        let resp = self.try_login(identifier).await;
+        sqlx::query("UPDATE users SET totp_enabled = TRUE WHERE username = $1 OR email = $1")
+            .bind(identifier)
+            .execute(&self.db)
+            .await
+            .expect("restore totp after test login");
+        assert_eq!(resp.status(), StatusCode::OK);
+        resp.json().await.expect("Failed to parse login response")
+    }
+
+    async fn try_login(&self, identifier: &str) -> reqwest::Response {
+        self.client
             .post(format!("{}/api/auth/login", self.addr))
             .json(&json!({
                 "identifier": identifier,
@@ -337,10 +580,7 @@ impl TestApp {
             }))
             .send()
             .await
-            .expect("Login request failed");
-
-        assert_eq!(resp.status(), StatusCode::OK);
-        resp.json().await.expect("Failed to parse login response")
+            .expect("Login request failed")
     }
 
     /// Register a user and set them as admin in the DB.
@@ -461,6 +701,24 @@ impl TestApp {
             .expect("GET request failed")
     }
 
+    /// GET helper carrying one extra header.
+    ///
+    /// The metered public API authenticates on `x-api-key` rather than on the
+    /// session cookie, so its tests need a way to present one.
+    pub async fn get_with_header(
+        &self,
+        path: &str,
+        name: &'static str,
+        value: &str,
+    ) -> reqwest::Response {
+        self.client
+            .get(format!("{}{}", self.addr, path))
+            .header(name, value)
+            .send()
+            .await
+            .expect("GET request failed")
+    }
+
     /// POST helper with JSON body.
     pub async fn post(&self, path: &str, body: &Value) -> reqwest::Response {
         self.client
@@ -479,6 +737,16 @@ impl TestApp {
             .send()
             .await
             .expect("PUT request failed")
+    }
+
+    /// PATCH helper with JSON body.
+    pub async fn patch(&self, path: &str, body: &Value) -> reqwest::Response {
+        self.client
+            .patch(format!("{}{}", self.addr, path))
+            .json(body)
+            .send()
+            .await
+            .expect("PATCH request failed")
     }
 
     /// DELETE helper.
@@ -629,4 +897,115 @@ impl Drop for TestApp {
             });
         });
     }
+}
+
+/// Assert a money field by value rather than by the scale its column happened
+/// to print.
+///
+/// `199`, `199.00` and `199.0000` are the same amount. A test that fails on
+/// the difference is asserting a NUMERIC's scale, which is a storage decision
+/// nobody promised a caller — and it breaks on the day somebody widens the
+/// column for a currency with three decimal places.
+#[track_caller]
+#[allow(dead_code)]
+pub fn assert_amount(actual: &Value, expected: &str) {
+    let raw = match actual {
+        Value::String(s) => s.clone(),
+        Value::Number(n) => n.to_string(),
+        other => panic!("not a decimal: {other}"),
+    };
+    let got: sqlx::types::BigDecimal = raw
+        .parse()
+        .unwrap_or_else(|e| panic!("{raw} is not a decimal: {e}"));
+    let want: sqlx::types::BigDecimal = expected
+        .parse()
+        .unwrap_or_else(|e| panic!("{expected} is not a decimal: {e}"));
+    assert_eq!(got, want, "expected {expected}, got {raw}");
+}
+
+/// The same comparison for a decimal read straight out of the database.
+#[track_caller]
+#[allow(dead_code)]
+pub fn assert_decimal(actual: &sqlx::types::BigDecimal, expected: &str) {
+    let want: sqlx::types::BigDecimal = expected
+        .parse()
+        .unwrap_or_else(|e| panic!("{expected} is not a decimal: {e}"));
+    assert_eq!(actual, &want, "expected {expected}, got {actual}");
+}
+
+/// Give somebody a verified deliverable in a reviewer family.
+///
+/// The mentor matcher reads a mentor's families from what they have actually
+/// delivered, not from what they told the wizard interests them — a mentor who
+/// declared motion and never delivered any is not a motion mentor. So a test
+/// that wants a mentor to be suggested has to give them work, and one that
+/// only sets a craft score and a profile is describing the person the rule
+/// exists to exclude.
+#[allow(dead_code)]
+pub async fn delivered_in(app: &TestApp, user: Uuid, domain: &str, family: &str) {
+    let project: Uuid = sqlx::query_scalar(
+        "INSERT INTO projects (slug, name, description, owner_type, owner_id)
+         VALUES ($1, 'Projet mentor', 'x', 'user', $2) RETURNING id",
+    )
+    .bind(format!("mentor-p-{}", Uuid::new_v4()))
+    .bind(user)
+    .fetch_one(&app.db)
+    .await
+    .expect("project for a delivered work");
+
+    // The surface the work lives on, per domain. A design slice additionally
+    // has to say what came out of it and which trade it belongs to.
+    // The surface the work lives on, and what came out of it. Each domain has
+    // its own subtype column, and the pairing is enforced both ways: an
+    // `ai_artifact` slice must name an `ai_subtype`, and a slice of any other
+    // type must leave it NULL. Setting only `design_subtype` therefore failed
+    // for every domain except design.
+    let (slice_type, subtype_column, subtype) = match domain {
+        "code" => ("code_artifact", "code_subtype", "library_published"),
+        "ai" => ("ai_artifact", "ai_subtype", "ml_model"),
+        "audio" => ("audio_artifact", "audio_subtype", "composition"),
+        "design" => ("design_artifact", "design_subtype", "interface"),
+        "ops" => ("ops_artifact", "ops_subtype", "iac_terraform"),
+        other => panic!("no slice type known for the {other} domain"),
+    };
+
+    // `published_artifact_url` on every one of them. Two subtypes demand it —
+    // an `ml_model` and a `library_published` are claims about something a
+    // stranger can fetch, and the schema refuses one that says nowhere. Giving
+    // it to all five is simpler than tracking which, and it is never wrong:
+    // this helper exists to describe work that was delivered.
+    let slice: Uuid = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+        "INSERT INTO project_slices
+            (project_id, slice_type, title, description, primary_domain, difficulty,
+             status, orientation_id, published_artifact_url, {subtype_column})
+         VALUES ($1, $2, 'Travail', 'Un brief.', $3, 3, 'validated',
+                 (SELECT id FROM orientations
+                   WHERE primary_domain = $3 AND reviewer_group = $4
+                     AND is_archived = FALSE
+                   ORDER BY slug LIMIT 1),
+                 'https://example.test/delivered',
+                 $5)
+         RETURNING id"
+    )))
+    .bind(project)
+    .bind(slice_type)
+    .bind(domain)
+    .bind(family)
+    .bind(subtype)
+    .fetch_one(&app.db)
+    .await
+    .unwrap_or_else(|e| panic!("slice in {domain}/{family}: {e}"));
+
+    sqlx::query(
+        "INSERT INTO deliverables
+            (slice_id, user_id, artifact_type, artifact_url, verifiable_by,
+             verification_status, verified_at, public)
+         VALUES ($1, $2, 'other', 'https://example.test/x', 'human_review',
+                 'verified', NOW(), TRUE)",
+    )
+    .bind(slice)
+    .bind(user)
+    .execute(&app.db)
+    .await
+    .expect("verified deliverable");
 }

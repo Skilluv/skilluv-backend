@@ -145,6 +145,7 @@ pub async fn list_notifications(
         (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "notificationsMarkRead",
 )]
 pub async fn mark_read(
     State(state): State<AppState>,

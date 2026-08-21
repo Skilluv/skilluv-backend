@@ -15,6 +15,134 @@ address KYC full, live AI wiring in prod, and RLS enforcement.
 
 ### Added
 
+- **An accusation the accused can answer.** `plagiarism_cases`, deliberately
+  not a `reports` row: a report has nowhere for the accused to reply, and the
+  reply is the substance of a procedure whose outcome is a disqualification, a
+  confiscated prize and a public record. Eighty characters minimum both ways --
+  on the accusation and on the decision -- and an evidence link is required,
+  because an accusation with nothing to compare against cannot be checked by
+  anybody, the reviewer included.
+- **Erasure leaves a tombstone.** `DELETE FROM users` took the contest entries,
+  the podium places and the attestations with it, destroying more than the
+  person asked for and other people's records besides: a contest whose second
+  place vanished leaves first and third unexplained. `erasure::erase` deletes
+  every row wholly about the person and empties the `users` row instead. The
+  table list is checked against the schema before anything is deleted, and
+  every statement after that is fatal -- half an erasure is worse than none.
+- **The migrations get their own CI job.** `scripts/check-migrations.sh`
+  applies every migration to an empty database in order, then asserts the
+  invariants the schema is supposed to hold; the workflow runs it as
+  `Migrations Apply And The Schema Holds`, and the eight test shards now wait
+  on it. A chain that does not apply used to make all eight shards red with
+  the same unrelated error forty-five minutes later. This names the migration
+  and the line in about two, and spends one runner doing it.
+- **A check that every capability a route guards itself with can be granted.**
+  `scripts/capabilities-named-in-code.py` reads the names out of the
+  `require_capability` call sites — by balanced parentheses, so a literal that
+  merely sits nearby is not mistaken for one passed in — and the job refuses
+  any the catalogue has no row for. This is not a misconfiguration that
+  degrades: the grant is refused, so the guard refuses everybody, silently and
+  forever. It found `mission_arbiter`.
+- **Answering a wizard comes back with advice.** `PUT
+  /api/users/me/domain-profile/{domain}` carries a `recommendation`: a
+  headline, the reasoning behind it so it can be argued with, guides to open
+  and a ready-made query against the domain's feed. Absent from the reads,
+  deliberately -- it answers having just answered, and a profile that carried
+  it would invite a front end to show month-one advice to somebody in their
+  sixth month.
+- **The wizards' declared handles become portfolio rows in every domain.**
+  Previously audio only. A GitHub username given to the code wizard and a
+  HuggingFace one given to the AI wizard were both stored and read by nothing.
+  Migration 0441 adds the `huggingface` platform, without which the insert
+  would have been logged and dropped. Claimed, never proved — only the OAuth
+  callback sets `verified_at`.
+
+- **Audio — a domain of its own.** Five trades (`audio-composer`,
+  `audio-music-implementer`, `audio-sound-designer`, `audio-voice-actor`,
+  `audio-programmer`) in four review families, 61 skill nodes, 24 seeded
+  challenges, 13 badges, 5 review grids, 7 mission types, 7 attestation
+  bases and a craft score. Migrations 0400-0421. The one legacy trade,
+  `game-sound-engineer`, is archived with a `replaced_by` lineage.
+- **Audio deliveries are files, and the files are measured.**
+  `audio_artifact_files` holds a master, its stems, a generated preview and
+  the project archive, with duration, sample rate, bit depth, channels,
+  integrated loudness, true peak and loudness range read out of the file by
+  `ffprobe`/`ffmpeg` — never taken from the uploader. Both tools are
+  optional: where they are absent, files are accepted and served and the
+  measurements stay NULL with `analysis_status = 'skipped'`.
+- **Source declarations gate the attestations that need them.**
+  `audio_source_licences` plus `project_slices.audio_sources_declared_at`.
+  A composition or a sound pack is not attested until the author states the
+  source list is complete — an empty list with a declaration means "all
+  original", an empty list without one means nobody filled the form in.
+- **Voice castings, blind by default.** `voice_castings` and
+  `voice_audition_submissions`: one brief, the same lines for everybody, one
+  choice at the end, and names withheld until it is made.
+- **Revision rounds, for every domain rather than for audio.**
+  `slice_revision_rounds` with a per-domain limit enforced in the database,
+  because the count is the one both sides quote. Audio: five.
+- **`mission_licensing_scopes`** — what the client may do with the work,
+  orthogonal to `ip_terms` which says who owns it. Required on audio
+  missions, optional elsewhere. Exactly one scope (`buyout`) takes the
+  creator's portfolio away, and it says so.
+
+### Changed
+
+- **Six dependency bumps, folded in rather than merged separately.** rand_core
+  0.6 to 0.10, jsonwebtoken 10 to 11, zip 3 to 8, and three GitHub Actions.
+  Only rand_core needed code: 0.10 removed `OsRng` from the crate root, and the
+  three call sites now use `getrandom::fill` -- the same OS entropy `OsRng`
+  wrapped, and what the rest of this codebase already reached for a few lines
+  away. One of the three was dead code kept only to silence a warning about a
+  dependency that has since become direct.
+- **One onboarding wizard, and the code wizard folded into it.** Migration
+  0258 moves the eight `users.code_*` columns into `user_domain_profiles` and
+  drops them; `POST /api/code/onboarding` and `/code/onboarding/skip` are gone,
+  answered by `PUT /api/users/me/domain-profile/code` like every other domain.
+  Two questions are renamed on the way: `objective` is `goal` and
+  `main_languages` is `main_tools`, because the generic wizard already called
+  them that and two names for one question is how a reader ends up checking
+  the wrong key. `main_tools` is the one tools question with no vocabulary —
+  the set of things a developer works in is not a list this platform owns.
+- **`POST /api/users/me/domain-profile/{domain}/skip` answers 204.** It used
+  to answer 200 with a body it made up: the write touches `skipped_at` alone,
+  so the body reported no answers and no completion whatever the row held, and
+  told somebody who had answered and then skipped that they never answered.
+- **Migration 0306 is empty.** It did what 0258 does, written on another branch
+  at the same time and numbered after it, so it failed the chain on the first
+  database that saw both. The file stays with the reason in it rather than
+  being deleted, because a gap explained reads better than a number missing.
+
+- **The lists that could only be rewritten became rows.** Migrations 0228 and
+  0305 documented the failure mode — a CHECK cannot be extended, only
+  replaced, so every addition is a chance to silently delete somebody else's
+  value, and 0223 had already deleted two of 0189's. Five of those lists are
+  now tables with foreign keys: `skill_domains` (0400, replacing ten CHECK
+  constraints and closing ten columns that had none), `capability_catalog`
+  (0404, with the reviewer capabilities derived from `orientations` by
+  trigger), `attestation_bases` (0406, carrying `requires_deliverable` and the
+  wording each basis is issued with), `slice_types` (0408),
+  `mission_deliverable_formats` (0413) and `tournament_kinds` (0416, carrying
+  what three separate Rust constants held).
+- **`user_code_portfolios` is now `user_external_portfolios`**, with a
+  `portfolio_platforms` catalogue keyed by domain and a `figures_are_declared`
+  flag. A SoundCloud account is the same row, the same verification problem
+  and the same staleness problem as a GitHub one. Declared audience figures
+  are accepted, marked, and counted at half weight.
+- **The domain wizard asks questions from a registry** rather than from a
+  struct field per question, and publishes them at
+  `GET /api/users/me/domain-profile/{domain}/questions` so a front end renders
+  the form instead of shipping its own copy of the list. The wire format is
+  unchanged.
+- **`validators::SKILL_DOMAINS` is the only domain list in Rust.** There were
+  eight, three of them stale — `ai` was accepted by the skill tree and refused
+  by the explore filter for a year, and the leaderboard had offered four
+  domains since 2024. A test asserts the constant against the table.
+- **`craft_score::assemble`** extracted when audio became the third domain to
+  score: everything after the measuring is identical, and three copies is
+  three places for the cap or the skip-on-zero to drift.
+
+
 - **P25.3** — `middleware::capabilities::require_any_capability(db,
   user_id, &[caps])` — passes if any listed capability is active (not
   revoked, not expired). Empty list rejects (defense in depth). New
@@ -160,11 +288,13 @@ address KYC full, live AI wiring in prod, and RLS enforcement.
   `routes/events.rs`): `events(slug, name, starts_at, ends_at,
   visual_theme JSONB, is_partner, is_active)` +
   `user_event_participation(user_id, event_id, joined_at,
-  contribution_ref)`. Routes namespaced as `/badge-events` to avoid
-  collision with the pre-existing `/events` from tournaments. `GET
-  /api/badge-events` (active only), `POST
-  /api/badge-events/{slug}/join` (idempotent), `GET
-  /api/users/me/badge-events`. Wires up Skilluv Fest / Hacktoberfest /
+  contribution_ref)`. `GET /api/events` (active only), `POST
+  /api/events/{slug}/join` (idempotent), `GET /api/users/me/events`.
+  (This entry originally said the routes were namespaced as
+  `/badge-events` to avoid a collision with the tournament `/events`.
+  They never were — the collision was real and was resolved instead by
+  moving the tournament route to `/api/tournaments/feed`, which is what
+  had been making the router panic at startup.) Wires up Skilluv Fest / Hacktoberfest /
   seasons to eventually mint `event_stamp` badges via the P17.3 rules
   engine.
 - **P17.5** — Badge API (`routes/badges.rs`): polymorphic `GET
@@ -403,6 +533,178 @@ address KYC full, live AI wiring in prod, and RLS enforcement.
 
 ### Fixed
 
+- **Searching for `C++` was a server error.** `forum::search_posts` and
+  `admin_moderation::list_users` handed user input to `to_tsquery`, which
+  parses its argument as a query expression — so `&`, `|`, `!`, `(`, `)` and
+  `:` reached the parser as syntax and raised `syntax error in tsquery`.
+  `R&D`, `(brouillon)` and `design:system` were all 500s. Both now use
+  `websearch_to_tsquery`, which never raises on its input and reads quoted
+  phrases and a leading `-` the way somebody typing into a search box expects.
+- **A cancelled mission never gave the escrow back.** `missions::set_status`
+  released the escrow on `closed` and did nothing on `cancelled`, so a mission
+  cancelled from `in_progress` with a paid invoice left the talent's share in
+  `pending` for ever — no path could release it, no path could return it, and
+  nothing counted it. `mission_billing::refund_all` mirrors `release_all`:
+  provider first then the books, the commission back with the rest, and only
+  what is still pending. Money already released stays released; that is what
+  the dispute machinery is for.
+- **Arbitration documented money it never moved.** `POST
+  /api/admin/missions/{slug}/arbitrate` said "the delivery stands and the money
+  is released" and "the escrow goes back" while writing the status with a raw
+  UPDATE that bypassed the one function where both live. It also stopped at
+  `delivered`, which waits on the client accepting delivery — the act
+  arbitration exists because the client refused. It now goes through
+  `set_status` to `closed`, and `delivered -> cancelled` is a legal transition.
+  No arbitration test had ever put an invoice on a mission, which is why an
+  endpoint that moved nothing passed.
+- **An upheld plagiarism case never took the prize back.** `contest_prizes`
+  awards into `pending` rather than `available` and says why: "the release
+  window is what makes a contested result recoverable". Nothing ever recovered
+  one, so a contest could hold a winner who was both disqualified and paid.
+  `confiscate` returns the awarded amount to the contest escrow — not to the
+  sponsor and not to the runner-up, because both are decisions that do not
+  belong in a function nobody is reading.
+
+- **fix(ops)** — `GET /users/{username}/ops-profile` answered 500 to every
+  request it had ever received. Twelve of its thirteen figures are `count(*)`,
+  which PostgreSQL returns as bigint, and the struct reads all thirteen as
+  `i64`; the thirteenth went through `date_part` and was cast `::INT`, making
+  it the one int4 in the row. sqlx does not widen an integer to fit, so it
+  refused to decode the row. The four sibling services — AI, audio, design,
+  code — all cast `::BIGINT`; ops was the only one written otherwise.
+- **fix(enterprise)** — `/api/enterprises/me/agency-clients` and
+  `/api/enterprises/me/type-config` ordered by `enterprise_members.created_at`,
+  a column that does not exist: the table records when somebody was invited
+  and when they accepted. Both endpoints 500'd on every call. The function is
+  a second copy of `enterprise::resolve_active_enterprise` that had drifted;
+  realigning it also restored the `status = 'active'` filter it had lost,
+  without which a pending invitation outranked a membership somebody holds.
+- **fix(accounting)** — `/api/admin/accounting/export` selected
+  `enterprises.country`, which does not exist either. The country lives on the
+  invoice, which is the correct source: VAT follows where the customer was
+  when they were billed, so a company that has since moved must not
+  retroactively change last year's return.
+- **fix(payments, sandbox)** — An unconfigured Stripe and an unreachable
+  Judge0 were reported as internal errors. That tells a caller the server
+  failed when the honest answer is that the integration was never set up on
+  this deployment, or is not running. Both answer 503 now. For Judge0 the
+  distinction is drawn on the `reqwest` error: a transport failure is
+  unavailability, a response we received and disliked stays a 500, because
+  then the request itself is the suspect.
+- **fix(search)** — `capability` and `skills` are closed vocabularies and were
+  accepted as free text, so a filter that could match nothing answered 200
+  with an empty list — telling a recruiter that nobody holds the capability
+  rather than that what they typed is not one. Both are checked as shapes now,
+  deliberately not against the catalogue: a capability that exists and that
+  nobody holds must still return an empty list, because that is true.
+- **fix(migrations)** — `domain_curator:all` was inserted with a NULL scope
+  against a CHECK requiring `family || ':' || scope`. The insert was refused,
+  which failed the migration chain, which meant the backend never started —
+  one row costing an entire CI run.
+
+### Added
+
+- **`scripts/check-migrations.sh`** — applies every migration to a throwaway
+  database and asserts what the schema should hold. Fifteen seconds against a
+  local PostgreSQL; no Docker, no test suite. A migration is checked by
+  nothing else — not `cargo check`, not clippy, not a unit test — so a bad row
+  does not fail one test, it fails the chain and every shard with it.
+- **`tests/test_read_endpoints_answer.rs`** — calls the 192 GET routes that no
+  other test reaches, as a stranger, a member and an admin. An audit found 404
+  of 922 registered routes called by no test at all; this covers every GET
+  among them, the parameterised ones with an id nothing owns — a handler
+  naming a column that does not exist fails when the query runs, not when a
+  row matches. It found three dead endpoints on its first run. It asserts the
+  shape of the answer rather than its content: 401, 403, 404 and 503 are all
+  correct, and a 500 to a well-formed request is what a query that has stopped
+  decoding produces.
+
+### Changed
+
+- **ci** — Eight test shards instead of four, and a 45-minute budget instead
+  of 35. At four, three shards out of four were being killed by the timeout,
+  so a run reported a quarter of its failures and lost the rest. A shard is
+  ~12 min of compilation plus ~16 min of tests and only the second half
+  divides, so eight shards is ~20 min rather than half of 28 — the gain that
+  matters is that results survive to be read.
+
+### Fixed
+
+- **fix(goals)** — A capability goal could not be created at all. The target
+  was validated by pattern-matching the *text* of
+  `user_capabilities_capability_check`, and migration 0404 made the
+  capabilities rows and dropped that constraint, so the lookup answered false
+  for every capability that exists — and said the capability was unknown.
+  Reads `capability_catalog` now.
+- **fix(feed)** — The public feed's keyset cursor was `<rfc3339>|<uuid>`, and
+  an RFC3339 offset carries a `+`, which a query string decodes as a space.
+  The only thing anybody does with `next_cursor` is put it in a URL, so the
+  second page answered 400 to a cursor the server had just issued. base64url
+  now, which also makes it opaque again.
+- **fix(credentials)** — `declare` read its own insert through a
+  data-modifying CTE. Every part of a statement sees one snapshot, so the
+  SELECT over `credentials_with_currency` found nothing and the endpoint 500'd
+  on a credential it had in fact written.
+- **fix(ops)** — An incident could be opened with a start date in the future.
+  Resolving stamps `NOW()`, which then lands before the start and trips
+  `an_incident_runs_forward`: a 500 at the end of an outage, on the step meant
+  to close it.
+- **fix(api)** — A NUL byte in any JSON string reached PostgreSQL, which
+  cannot hold one in a text column at all, and surfaced as a 500 blaming the
+  server for input no text column anywhere will ever accept. Refused at the
+  edge with a 400. A middleware rather than a check per field: every endpoint
+  taking free text has the same exposure.
+- **fix(missions)** — `GET /api/missions` declared maximum lengths on seven
+  filters and enforced none of them, answering 200 with an empty list to a
+  malformed query.
+- **fix(schema)** — Migration 0440 puts a foreign key on the seven domain
+  columns that were still free strings — `academy_cohorts`, `consultations`,
+  `external_resources`, `featured_talents`, `marketplace_items`,
+  `mentoring_programs`, `tournament_series`. A typo in one of them inserted
+  cleanly and was invisible to every listing that joins the catalogue.
+- **fix(migrations)** — Three CHECK-to-table conversions had dropped another
+  branch's values. 0408 listed the two slice types 0231 had already folded
+  into `design_artifact`; 0416 omitted the `duel` and `brief_contest` formats
+  from 0235; 0431 re-added a deliverable-format CHECK holding only the code
+  and ops values after 0413 had replaced it with a table, which would have
+  refused every AI, audio and design mission.
+- **fix(wizard)** — The design domain's own two questions,
+  `challenge_preference` and `main_tool`, were never carried into the shared
+  question registry, so `PUT /domain-profile/design` refused its own fields.
+  A field sent to the wrong wizard now names the domain that owns it, and an
+  empty `preferred_families` is stored rather than dropped — "no family in
+  particular" is an answer somebody gave, and never opening the wizard is not.
+- **fix(ci)** — Integration test shards ran the runner out of disk while
+  linking: 184 test binaries each statically linking the whole dependency
+  graph, with full DWARF. Three shards died with ENOSPC and the fourth with a
+  linker SIGBUS, which is the same full disk seen through an mmap.
+  `debug = "line-tables-only"` on the dev and test profiles, and the job now
+  reclaims the preinstalled SDKs it never uses.
+
+- **fix(openapi)** — Every operation and every schema now has a name of its
+  own. utoipa derives `operationId` from the handler's function name and a
+  component name from the Rust type alone, and neither was unique: 126
+  handlers collapsed onto 56 operation ids and 51 structs onto 18 component
+  names, each collision quietly overwriting the last. `POST
+  /api/legal/consent` documented the data-line consent body — a fuzzer sent
+  the documented `{"agree": true}` and the endpoint refused it. Two unit
+  tests in `src/openapi.rs` now fail on the next collision.
+- **fix(openapi)** — `/api/admin/ai/churn` and `/api/admin/ai/hidden-gems`
+  were documented at paths the router never served; the handlers are at
+  `/api/admin/assistant/…`. A documented path nothing routes answers 404, and
+  404 is an allowed answer to nearly every contract check, so the gap was
+  invisible from the outside.
+- **fix(openapi)** — `EcosystemRow.community_links` and `notable_events` are
+  JSONB arrays declared as `object`, so a generated client could not iterate
+  what it was handed. Both now have real item schemas.
+- **fix(openapi)** — Query parameters that the handler validated against a
+  closed vocabulary said `string` in the contract: `looking_for` on the
+  talent search and `urgency` on the mission board are enums, and the
+  keyset cursors on `/api/feed/public` and `/api/talents/search` carry the
+  pattern they are actually parsed with. A schema-compliant request is now
+  one the API accepts.
+- **fix(routes)** — Removed the `my_mentions` handler in `routes/social.rs`,
+  left behind when SKI-293 unregistered `/api/social/mentions/me`.
 - **fix(routes)** — Route conflict on `/api/seasons` between `routes/tournament.rs`
   (Phase 2 Sprint 6) and `routes/seasons.rs` (P6). The tournament module now
   only registers the `/admin/seasons/*` endpoints.

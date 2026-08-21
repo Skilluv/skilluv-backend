@@ -33,6 +33,7 @@ pub fn enterprise_subscription_routes() -> Router<AppState> {
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = EnterpriseSubscriptionsSubscribeBody)]
 pub struct SubscribeBody {
     /// Slug of the subscription pack (see `packs` table where
     /// `kind = 'subscription'`).
@@ -45,6 +46,7 @@ pub struct SubscribeBody {
 /// populated; otherwise `checkout_url` + `session_id` for the Stripe
 /// flow.
 #[derive(Debug, Serialize, ToSchema)]
+#[schema(as = EnterpriseSubscriptionsSubscribeResponse)]
 pub struct SubscribeResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
@@ -130,8 +132,9 @@ pub async fn subscribe_to_pipeline(
             "plan_slug does not reference a subscription pack".into(),
         ));
     }
-    let cfg = crate::services::stripe::StripeConfig::from_env()
-        .ok_or(AppError::Internal("Stripe not configured".into()))?;
+    let cfg = crate::services::stripe::StripeConfig::from_env().ok_or(
+        AppError::ServiceUnavailable("payments are not configured on this deployment".into()),
+    )?;
     let email = sqlx::query_scalar::<_, String>("SELECT email FROM users WHERE id = $1")
         .bind(auth.user_id)
         .fetch_one(&state.db)
@@ -219,6 +222,7 @@ pub async fn current_subscription(
         (status = 404, description = "No active subscription", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "enterpriseSubscriptionsCancelSubscription",
 )]
 pub async fn cancel_subscription(
     State(state): State<AppState>,

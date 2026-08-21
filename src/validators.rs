@@ -11,6 +11,54 @@ pub const MAX_CODE_BYTES: usize = 100 * 1024;
 /// 2 MB max for avatar uploads (cf. `user_profile.rs::MAX_AVATAR_SIZE`).
 pub const MAX_AVATAR_BYTES: usize = 2 * 1024 * 1024;
 
+/// Every domain somebody can currently choose, work in or be filtered on.
+///
+/// The authority is the `skill_domains` table (migration 0500), and this is a
+/// mirror of the rows where `is_active`. It exists because eight modules
+/// validated a domain against a list of their own — three of which had gone
+/// stale, so `ai` was accepted by the skill tree and refused by the explore
+/// filter for a year.
+///
+/// Kept as a constant rather than read from the database because these are
+/// request-path guards that run before any query and must not add a
+/// round-trip to reject a typo. The test
+/// `the_rust_domain_list_matches_the_table` fails when the two drift, which is
+/// the only thing a mirror needs.
+pub const SKILL_DOMAINS: &[&str] = &[
+    "code",
+    "design",
+    "game",
+    "security",
+    "ops",
+    "ai",
+    "soft_skills",
+    "audio",
+];
+
+/// Refuse a domain nothing knows, naming what was allowed.
+///
+/// An unknown domain is never passed through: downstream it becomes a filter
+/// that matches nothing or a capability string nobody can hold, and both read
+/// as an empty platform rather than as a bad request.
+pub fn check_skill_domain(value: &str, field: &str) -> Result<(), AppError> {
+    if !SKILL_DOMAINS.contains(&value) {
+        return Err(AppError::Validation(format!(
+            "{field} must be one of: {}",
+            SKILL_DOMAINS.join(", ")
+        )));
+    }
+    Ok(())
+}
+
+/// The same check on an optional filter. `None` is not an error: a listing
+/// with no domain filter is every domain.
+pub fn check_skill_domain_opt(value: &Option<String>, field: &str) -> Result<(), AppError> {
+    match value {
+        Some(v) => check_skill_domain(v, field),
+        None => Ok(()),
+    }
+}
+
 /// Reject strings containing ASCII control characters (other than common whitespace).
 /// Useful for display names, titles, slugs.
 pub fn no_control_chars(value: &str, field: &str) -> Result<(), AppError> {
@@ -98,6 +146,18 @@ pub fn validate_bio(bio: &str) -> Result<(), AppError> {
 /// post-deserialisation, donc chaque handler qui declare une contrainte
 /// de longueur dans son DTO DOIT appeler ce helper pour la garantir cote
 /// serveur (schema OpenAPI = contrat opposable, pas fiction).
+/// Same rule for a value that is always present. Counts characters, not
+/// bytes: a limit expressed in bytes rejects a shorter message in French than
+/// in English, for no reason the person writing it could guess.
+pub fn check_max_len(value: &str, field: &str, max: usize) -> Result<(), AppError> {
+    if value.chars().count() > max {
+        return Err(AppError::Validation(format!(
+            "{field} must be at most {max} characters"
+        )));
+    }
+    Ok(())
+}
+
 pub fn check_max_len_opt(value: &Option<String>, field: &str, max: usize) -> Result<(), AppError> {
     if let Some(s) = value
         && s.chars().count() > max
@@ -190,9 +250,55 @@ pub fn validate_display_name(name: &str) -> Result<(), AppError> {
     Ok(())
 }
 
+/// Reject anything that is not one of [`SKILL_DOMAINS`].
+///
+/// `field` names the caller's parameter, because the same list is checked at
+/// signup (`skill_domain`), on a validator application (`domain`) and on a
+/// project (`skill_domains[]`), and a message naming the wrong one wastes an
+/// afternoon.
+pub fn validate_skill_domain(domain: &str, field: &str) -> Result<(), AppError> {
+    if !SKILL_DOMAINS.contains(&domain) {
+        return Err(AppError::Validation(format!(
+            "{field} must be one of: {}",
+            SKILL_DOMAINS.join(", ")
+        )));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // The mirror between `SKILL_DOMAINS` and the catalogue moved to
+    // `tests/test_domain_profile.rs`, where a database exists.
+    //
+    // It used to read a CHECK constraint out of migration 0243 at compile
+    // time. Migration 0400 made the domains rows, and a domain becomes active
+    // in whichever later migration gives it a catalogue — 0401 for audio — so
+    // no single file holds the answer any more. A compile-time test reading
+    // one of them is worse than none: it fails for the wrong reason and gets
+    // silenced.
+
+    #[test]
+    fn an_unknown_domain_is_named_in_the_error() {
+        let err = validate_skill_domain("crypto", "skill_domain").unwrap_err();
+        let message = format!("{err:?}");
+        assert!(message.contains("skill_domain"), "{message}");
+        assert!(message.contains("soft_skills"), "{message}");
+    }
+
+    #[test]
+    fn the_three_domains_that_used_to_be_refused_are_accepted() {
+        // The whole point of migration 0517: these were seeded, validated and
+        // ranked long before anybody could declare them.
+        for domain in ["ai", "ops", "soft_skills"] {
+            assert!(
+                validate_skill_domain(domain, "skill_domain").is_ok(),
+                "{domain} should be a declarable domain"
+            );
+        }
+    }
 
     #[test]
     fn no_control_chars_accepts_whitespace() {

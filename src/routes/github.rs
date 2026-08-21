@@ -78,6 +78,7 @@ fn github_oauth_env() -> Result<(String, String, String), AppError> {
         (status = 401, body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "githubStart",
 )]
 pub async fn start(State(state): State<AppState>, auth: AuthUser) -> Result<Redirect, AppError> {
     let (client_id, _, redirect_uri) = github_oauth_env()?;
@@ -107,6 +108,7 @@ pub struct CallbackQuery {
         (status = 302, description = "Redirect back to skill-uv.com"),
         (status = 400, body = crate::api_response::ErrorResponse),
     ),
+    operation_id = "githubCallback",
 )]
 pub async fn callback(
     State(state): State<AppState>,
@@ -137,6 +139,21 @@ pub async fn callback(
     )
     .await?;
 
+    // The one place a portfolio account becomes verified: OAuth just proved
+    // this person controls it. Everything else somebody types is a claim.
+    if let Err(err) = crate::services::code_portfolio::record_verified(
+        &state.db,
+        user_id,
+        "github",
+        &gh_user.login,
+        &format!("https://github.com/{}", gh_user.login),
+        "oauth",
+    )
+    .await
+    {
+        tracing::warn!(%user_id, error = %err, "github portfolio row not recorded");
+    }
+
     // Mirror GitHub username onto the user's profile.github field if empty
     let _ = sqlx::query("UPDATE users SET github = COALESCE(NULLIF(github, ''), $1) WHERE id = $2")
         .bind(&gh_user.login)
@@ -150,6 +167,25 @@ pub async fn callback(
     tokio::spawn(async move {
         if let Err(err) = github::sync_repos_for(&db, &jwt, user_id).await {
             tracing::warn!(%user_id, error = %err, "initial github sync failed");
+        }
+
+        // And the contribution graph, which is the one figure that reads as
+        // effort rather than outcome. Fetched now rather than at the next
+        // weekly sweep: somebody who has just connected expects to see it.
+        match reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(20))
+            .build()
+        {
+            Ok(client) => {
+                if let Err(err) = crate::services::code_portfolio::sync_contribution_graph(
+                    &db, &client, &jwt, user_id,
+                )
+                .await
+                {
+                    tracing::warn!(%user_id, error = %err, "contribution graph not imported");
+                }
+            }
+            Err(err) => tracing::warn!(error = %err, "no HTTP client for the contribution graph"),
         }
     });
 

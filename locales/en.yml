@@ -53,6 +53,15 @@ email:
 
 # ─── Notifications ───────────────────────────────────────────────
 notification:
+  credential:
+    refused:
+      title: "A certification could not be confirmed"
+      body: "{reason}"
+      cta: "See my certifications"
+    expiring:
+      title: "{name} expires on {date}"
+      body: "It stops counting on your profile that day. Renewing means booking an exam slot, which is why this arrives a month early."
+      cta: "See my certifications"
   payout:
     sent:
       title: "Your payout is on its way"
@@ -200,6 +209,114 @@ notification:
       title: "You are now {rank}"
       body: "Your work on the platform earned you the rank of {rank}."
       cta: "See my profile"
+  trial:
+    started:
+      title: "Your trial period starts"
+      body: "{weeks} paid weeks. Log your hours as you go."
+      cta: "Open the trial"
+  reverse_recruitment:
+    pitch_received:
+      title: "{company} is making its case"
+      body: "A company took the time to write. Your call."
+      cta: "Read the pitch"
+    pitch_answered:
+      title: "An answer to your pitch"
+      body: "The person you approached has replied."
+      cta: "See the answer"
+  recruitment:
+    shortlisted:
+      title: "A company is interested in your profile"
+      body: "You have been put forward for a {role} role. Answer to find out who."
+      cta: "See the proposal"
+  moderation:
+    plagiarism_case_opened:
+      title: "An entry you submitted is being contested"
+      body: "Somebody says it reuses existing work. You have 72 hours to answer before a decision is taken."
+      cta: "Read and answer"
+    plagiarism_case_decided:
+      title: "The case has been decided"
+      body: "The decision is written down, with its reasons."
+      cta: "Read the decision"
+  design:
+    brief_published:
+      title: "Your brief is published"
+      body: "{brief} is open: somebody can claim it."
+      cta: "See the challenge"
+    brief_rejected:
+      title: "Brief not accepted"
+      body: "{brief} was not accepted. The reason is written down."
+      cta: "Read the reason"
+    iteration_requested:
+      title: "Another round is asked for"
+      body: "{reviewer} read your version and asks for one more round on {slice}."
+      cta: "Read the critique"
+    version_submitted:
+      title: "A version is waiting for a critique"
+      body: "A version has just been handed in on {slice}."
+      cta: "Open the queue"
+    validated:
+      title: "Your work is validated"
+      body: "{slice} is validated after {rounds} rounds of critique."
+      cta: "See the deliverable"
+    rejected:
+      title: "Work not accepted"
+      body: "{slice} was not accepted. The critique says why."
+      cta: "Read the critique"
+  talent:
+    featured:
+      title: "You are featured"
+      body: "Your work is featured by the platform this week."
+      cta: "See my profile"
+  contest:
+    published:
+      title: "A new contest"
+      body: "{contest} is open, in a trade you have declared."
+      cta: "Read the brief"
+    deadline_soon:
+      title: "The deadline is close"
+      body: "{contest} closes in {hours} hours."
+      cta: "Hand in my entry"
+    closed:
+      title: "The contest is closed"
+      body: "{contest} takes no more entries. Judging begins."
+      cta: "See the entries"
+    jury_invited:
+      title: "You are invited to the panel"
+      body: "You are asked to judge {contest}."
+      cta: "Accept or decline"
+    jury_deadline_soon:
+      title: "Little time left to judge"
+      body: "Judging {contest} ends in {hours} hours."
+      cta: "Judge"
+    concluded:
+      title: "The contest is over"
+      body: "The ranking for {contest} is published."
+      cta: "See the ranking"
+    participation_recorded:
+      title: "Your entry is recorded"
+      body: "Your entry to {contest} is on your profile."
+      cta: "See my profile"
+  mission:
+    matching_published:
+      title: "A mission for you"
+      body: "A new mission matches the trades you have declared."
+      cta: "See the mission"
+    application_received:
+      title: "New application"
+      body: "Somebody applied to the {mission} mission."
+      cta: "Read the applications"
+    application_selected:
+      title: "You have been selected"
+      body: "Your application was chosen. The mission is yours."
+      cta: "Open the mission"
+    application_rejected:
+      title: "Application not selected"
+      body: "Your application was not selected this time."
+      cta: "See my applications"
+    application_shortlisted:
+      title: "You are shortlisted"
+      body: "Your application made the shortlist."
+      cta: "See my applications"
   tournament:
     podium:
       title: "You made the podium"

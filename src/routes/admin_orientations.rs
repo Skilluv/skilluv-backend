@@ -30,15 +30,7 @@ pub fn admin_orientation_routes() -> Router<AppState> {
         )
 }
 
-const ALLOWED_DOMAINS: &[&str] = &[
-    "code",
-    "design",
-    "game",
-    "security",
-    "soft_skills",
-    "ai",
-    "ops",
-];
+use crate::validators::SKILL_DOMAINS as ALLOWED_DOMAINS;
 
 fn build_response(data: Value) -> Value {
     json!({

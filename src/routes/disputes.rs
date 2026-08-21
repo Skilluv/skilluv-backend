@@ -157,6 +157,7 @@ pub async fn contest(
         (status = 403, description = "Not the person who raised it", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "disputesWithdraw",
 )]
 pub async fn withdraw(
     State(state): State<AppState>,
@@ -205,6 +206,7 @@ pub struct DecideRequest {
         (status = 403, description = "Not an operator", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "disputesDecide",
 )]
 pub async fn decide(
     State(state): State<AppState>,

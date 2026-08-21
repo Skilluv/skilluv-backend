@@ -350,6 +350,7 @@ pub async fn fraud_flagged_list(
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
+#[schema(as = ModerationReasonBody)]
 pub struct ReasonBody {
     #[serde(default)]
     #[schema(max_length = 10000)]

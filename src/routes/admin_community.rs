@@ -11,17 +11,13 @@ use crate::api_response::ApiResponse;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
 use crate::models::ChallengeTemplate;
+use crate::routes::admin::require_admin;
 
 pub fn admin_community_routes() -> Router<AppState> {
     Router::new()
         .route("/admin/community/review", get(pending_review))
         .route("/admin/community/{id}/approve", post(approve_challenge))
         .route("/admin/community/{id}/reject", post(reject_challenge))
-}
-
-// P21.1 : délègue à user_capabilities (source de vérité canonique).
-async fn require_admin(state: &AppState, auth: &AuthUser) -> Result<(), AppError> {
-    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await
 }
 
 #[derive(Debug, Deserialize, ToSchema)]

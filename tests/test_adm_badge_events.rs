@@ -1,4 +1,12 @@
-//! Tests ADM — POST /admin/badge-events (MVP.md Annexe A #8).
+//! Tests ADM — POST /admin/events (MVP.md Annexe A #8).
+//!
+//! The backlog line called it `/admin/badge-events` and these tests followed
+//! it, so every call answered 404 and the assertions read as validation
+//! failures. The route is `/admin/events`, and it stays there: the item
+//! operations on the same row — appoint an organiser, set a status, add a
+//! livestream — live under `/admin/events/{id}` in `routes/events.rs`, and a
+//! collection at one prefix with its members at another is worse than a name
+//! that does not match a planning document.
 
 mod common;
 use common::TestApp;
@@ -50,7 +58,7 @@ async fn create_event_persists_row() {
 
     let resp = admin_post(
         &app,
-        "/api/admin/badge-events",
+        "/api/admin/events",
         json!({
             "slug": "hacktoberfest-2026",
             "name": "Hacktoberfest 2026",
@@ -79,7 +87,7 @@ async fn create_event_rejects_bad_slug() {
     setup_admin(&app, "adm_ev_b").await;
     let resp = admin_post(
         &app,
-        "/api/admin/badge-events",
+        "/api/admin/events",
         json!({
             "slug": "Bad Slug With Spaces",
             "name": "X",
@@ -96,7 +104,7 @@ async fn create_event_rejects_ends_before_starts() {
     setup_admin(&app, "adm_ev_c").await;
     let resp = admin_post(
         &app,
-        "/api/admin/badge-events",
+        "/api/admin/events",
         json!({
             "slug": "bad-window",
             "name": "Bad window",

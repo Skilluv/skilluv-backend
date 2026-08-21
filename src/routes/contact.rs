@@ -532,6 +532,7 @@ pub async fn decline_interest(
     get, path = "/api/contact/conversations", tag = "social",
     responses((status = 200, body = serde_json::Value), (status = 401, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
+    operation_id = "contactListConversations",
 )]
 pub async fn list_conversations(
     State(state): State<AppState>,
@@ -703,6 +704,7 @@ struct SendMessageBody {
     request_body(content = serde_json::Value),
     responses((status = 201, body = serde_json::Value), (status = 404, body = crate::api_response::ErrorResponse)),
     security(("cookie_auth" = [])),
+    operation_id = "contactSendMessage",
 )]
 pub async fn send_message(
     State(state): State<AppState>,

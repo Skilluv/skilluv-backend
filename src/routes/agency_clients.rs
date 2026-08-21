@@ -56,11 +56,20 @@ fn allowed_keys_for(ent_type: &str) -> &'static [&'static str] {
 async fn resolve_enterprise(state: &AppState, auth: &AuthUser) -> Result<(Uuid, String), AppError> {
     let ent: Option<(Uuid, String)> = sqlx::query_as(
         r#"
+        -- `enterprise_members` has no `created_at`: it records when somebody
+        -- was invited and when they accepted, which are the two moments that
+        -- exist. Ordering by a column that is not there made both endpoints
+        -- using this answer 500 to every request either has ever received.
+        --
+        -- The ordering and the `status` filter now match
+        -- `enterprise::resolve_active_enterprise`, which this function is a
+        -- second copy of. Without the filter a pending invitation outranked a
+        -- membership somebody actually holds.
         SELECT e.id, e.enterprise_type
         FROM enterprise_members em
         JOIN enterprises e ON e.id = em.enterprise_id
-        WHERE em.user_id = $1
-        ORDER BY em.created_at DESC
+        WHERE em.user_id = $1 AND em.status = 'active'
+        ORDER BY em.accepted_at DESC NULLS LAST, em.invited_at DESC
         LIMIT 1
         "#,
     )
@@ -98,6 +107,7 @@ pub struct TypeConfigUpdatedResponse {
         (status = 403, description = "Caller has no enterprise", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "agencyClientsGetTypeConfig",
 )]
 pub async fn get_type_config(
     State(state): State<AppState>,
@@ -178,11 +188,20 @@ pub async fn patch_type_config(
 async fn resolve_staffing_agency(state: &AppState, auth: &AuthUser) -> Result<Uuid, AppError> {
     let ent: Option<(Uuid, String)> = sqlx::query_as(
         r#"
+        -- `enterprise_members` has no `created_at`: it records when somebody
+        -- was invited and when they accepted, which are the two moments that
+        -- exist. Ordering by a column that is not there made both endpoints
+        -- using this answer 500 to every request either has ever received.
+        --
+        -- The ordering and the `status` filter now match
+        -- `enterprise::resolve_active_enterprise`, which this function is a
+        -- second copy of. Without the filter a pending invitation outranked a
+        -- membership somebody actually holds.
         SELECT e.id, e.enterprise_type
         FROM enterprise_members em
         JOIN enterprises e ON e.id = em.enterprise_id
-        WHERE em.user_id = $1
-        ORDER BY em.created_at DESC
+        WHERE em.user_id = $1 AND em.status = 'active'
+        ORDER BY em.accepted_at DESC NULLS LAST, em.invited_at DESC
         LIMIT 1
         "#,
     )
@@ -244,6 +263,7 @@ pub struct AgencyClientDeactivatedResponse {
         (status = 403, description = "Caller has no enterprise", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "agencyClientsList",
 )]
 pub async fn list(
     State(state): State<AppState>,
@@ -289,6 +309,7 @@ pub struct CreateBody {
         (status = 403, description = "Caller has no enterprise", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "agencyClientsCreate",
 )]
 pub async fn create(
     State(state): State<AppState>,
@@ -316,6 +337,7 @@ pub async fn create(
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = AgencyClientsUpdateBody)]
 pub struct UpdateBody {
     #[serde(default)]
     #[schema(max_length = 10000)]

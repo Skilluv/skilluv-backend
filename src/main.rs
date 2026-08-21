@@ -221,7 +221,15 @@ async fn async_main(config: AppConfig) {
     //   SKILLUV_PROFILE_README_SYNC_ENABLED=1
     // Sans le flag, la tache spawn quand meme mais log un no-op.
     spawn_hello_wall_mirror_worker(state.clone());
+    spawn_artifact_stats_worker(state.clone());
+    spawn_craft_score_worker(state.clone());
+    spawn_contest_reminder_worker(state.clone());
+    spawn_audio_analysis_worker(state.clone());
+    spawn_design_upload_sweeper(state.clone());
+    spawn_code_portfolio_worker(state.clone());
     spawn_release_sweep_worker(state.clone());
+    spawn_credential_expiry_worker(state.clone());
+    spawn_ats_erasure_worker(state.clone());
     spawn_payout_reconciliation_worker(state.clone());
     spawn_profile_readme_sync_worker(state.clone());
 
@@ -252,6 +260,57 @@ async fn async_main(config: AppConfig) {
 /// notices their money arriving at 14:07 instead of 14:00 — and a short
 /// interval keeps the backlog small enough that one failing hold cannot bury
 /// the rest.
+/// Erases applicant records past their retention date.
+///
+/// Not behind a feature flag, and not optional. The retention date is a
+/// promise made to people who never signed up to this platform, and a date
+/// nobody acts on is a comment. Daily is enough: the promise is "not kept
+/// beyond N days", not "deleted at midnight exactly".
+fn spawn_ats_erasure_worker(state: skilluv_backend::AppState) {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(24 * 60 * 60));
+        loop {
+            interval.tick().await;
+            match skilluv_backend::services::ats::erase_expired(&state.db).await {
+                Ok(erased) if erased > 0 => {
+                    tracing::info!(erased, "applicant records past their retention erased");
+                }
+                Ok(_) => {}
+                Err(e) => tracing::error!(
+                    error = %e,
+                    "applicant erasure failed - records are being kept past what was promised"
+                ),
+            }
+        }
+    });
+}
+
+/// Tells people their certifications are about to lapse, a month ahead.
+///
+/// Daily, because the query selects exactly one day of the notice window: a
+/// shorter interval would send the same notice several times, and a longer
+/// one would skip days entirely.
+fn spawn_credential_expiry_worker(state: skilluv_backend::AppState) {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(24 * 60 * 60));
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+            match skilluv_backend::services::credentials::notify_expiring(&state).await {
+                Ok(sent) if sent > 0 => {
+                    tracing::info!(sent, "credential expiry notices sent");
+                }
+                Ok(_) => {}
+                Err(e) => tracing::error!(
+                    error = %e,
+                    "credential expiry sweep failed - somebody's certification \
+                     will lapse without warning"
+                ),
+            }
+        }
+    });
+}
+
 fn spawn_release_sweep_worker(state: skilluv_backend::AppState) {
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(10 * 60));
@@ -325,6 +384,254 @@ fn spawn_payout_reconciliation_worker(state: skilluv_backend::AppState) {
                 Err(e) => tracing::error!(
                     error = %e,
                     "payout reconciliation failed entirely - unconfirmed payouts stayed unconfirmed"
+                ),
+            }
+        }
+    });
+}
+
+/// Refresh download figures for published libraries, once a day.
+///
+/// The sweep itself only touches rows older than a week, so a daily tick
+/// spreads the work rather than doing it all on one day — and a deployment
+/// that was down on sync day is not a week behind.
+///
+/// Off unless asked for: it calls three third-party services, and a
+/// development machine has no business doing that on every boot.
+/// Refresh the accounts people have on other platforms.
+///
+/// Weekly: none of these figures move fast enough to be worth asking more
+/// often, and every one of these APIs rate-limits anonymous callers.
+fn spawn_code_portfolio_worker(state: skilluv_backend::AppState) {
+    tokio::spawn(async move {
+        if std::env::var("SKILLUV_CODE_PORTFOLIO_SYNC_ENABLED").as_deref() != Ok("1") {
+            tracing::info!("code_portfolio worker : disabled (env flag absent)");
+            return;
+        }
+
+        let client = match reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(20))
+            .build()
+        {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::error!(error = %e, "code_portfolio worker : no HTTP client, giving up");
+                return;
+            }
+        };
+
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(24 * 60 * 60));
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+            let secret = state.config.jwt_secret.clone();
+            match skilluv_backend::services::code_portfolio::sync_stale(
+                &state.db,
+                &client,
+                Some(&secret),
+            )
+            .await
+            {
+                Ok(0) => tracing::debug!("code_portfolio worker : nothing stale"),
+                Ok(n) => {
+                    tracing::info!(refreshed = n, "code_portfolio worker : profiles refreshed")
+                }
+                Err(e) => tracing::error!(
+                    error = %e,
+                    "code_portfolio worker : sweep failed, figures stay as they were"
+                ),
+            }
+        }
+    });
+}
+
+/// Measure the audio files that arrived, and give every master a preview.
+///
+/// Every two minutes rather than hourly: an uploader is waiting for the
+/// waveform and the loudness figures their own review grid asks about, and an
+/// hour of "pending" reads as broken.
+///
+/// Not gated behind an env flag, unlike the craft-score sweep. That flag
+/// exists because recomputing every score is expensive whether or not anything
+/// changed; this pass does nothing at all when nothing is pending, and where
+/// ffmpeg is absent it marks the queue `skipped` once and then finds it empty.
+fn spawn_audio_analysis_worker(state: skilluv_backend::AppState) {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(120));
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+            match skilluv_backend::services::audio_files::analyse_pending(
+                &state.db,
+                &state.storage,
+                25,
+            )
+            .await
+            {
+                Ok(0) => {}
+                Ok(n) => tracing::info!(analysed = n, "audio worker : files measured"),
+                Err(e) => tracing::error!(
+                    error = %e,
+                    "audio worker : pass failed, the files stay pending"
+                ),
+            }
+        }
+    });
+}
+
+/// Keep the stored craft scores fresh.
+///
+/// The score is computed live on the profile page, so this exists only for
+/// the column the sorted lists read. Hourly, bounded per pass: a sweep that
+/// tries to do the whole table at once is one that times out and never
+/// reaches the end of the alphabet.
+/// Give up on the large uploads nobody finished.
+///
+/// An abandoned multipart upload keeps the parts already sent, and the object
+/// store bills for them whether or not anybody ever completes it. Nightly,
+/// because the sessions live a week and nothing is urgent — but it is the only
+/// thing standing between a slow month and a storage invoice nobody can
+/// explain.
+fn spawn_design_upload_sweeper(state: skilluv_backend::AppState) {
+    tokio::spawn(async move {
+        if std::env::var("SKILLUV_DESIGN_UPLOAD_SWEEP_ENABLED").as_deref() != Ok("1") {
+            tracing::info!("design_upload_sweeper : disabled (env flag absent)");
+            return;
+        }
+
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(24 * 60 * 60));
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+            match skilluv_backend::services::design_uploads::sweep_expired(
+                &state.db,
+                &state.storage,
+            )
+            .await
+            {
+                Ok(0) => tracing::debug!("design_upload_sweeper : nothing abandoned"),
+                Ok(n) => tracing::info!(swept = n, "design_upload_sweeper : uploads abandoned"),
+                Err(e) => tracing::error!(
+                    error = %e,
+                    "design_upload_sweeper : sweep failed, the next pass retries"
+                ),
+            }
+        }
+    });
+}
+
+/// Warn people before a contest deadline passes, and tell them when it has.
+///
+/// Hourly, which is the coarsest cadence that still lands a forty-eight hour
+/// warning inside its window. Enabled by env like the other sweeps: a second
+/// process running this would double every reminder, and the flag is what
+/// makes "which box sends the mail" an explicit answer.
+fn spawn_contest_reminder_worker(state: skilluv_backend::AppState) {
+    tokio::spawn(async move {
+        if std::env::var("SKILLUV_CONTEST_REMINDERS_ENABLED").as_deref() != Ok("1") {
+            tracing::info!("contest_reminders worker : disabled (env flag absent)");
+            return;
+        }
+
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(60 * 60));
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+            match skilluv_backend::services::contest_reminders::sweep(&state.db).await {
+                Ok(report) if report.total() == 0 => {
+                    tracing::debug!("contest_reminders worker : no deadline in the window")
+                }
+                Ok(report) => tracing::info!(
+                    deadlines = report.deadline_warnings,
+                    juries = report.jury_warnings,
+                    closures = report.closures_announced,
+                    "contest_reminders worker : reminders sent"
+                ),
+                Err(e) => tracing::error!(
+                    error = %e,
+                    "contest_reminders worker : sweep failed, the next pass retries"
+                ),
+            }
+        }
+    });
+}
+
+fn spawn_craft_score_worker(state: skilluv_backend::AppState) {
+    tokio::spawn(async move {
+        if std::env::var("SKILLUV_CRAFT_SCORE_ENABLED").as_deref() != Ok("1") {
+            tracing::info!("craft_score worker : disabled (env flag absent)");
+            return;
+        }
+
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(60 * 60));
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+            // One worker, one sweep per domain. A second worker per domain
+            // would mean a second env flag somebody forgets to set, and the
+            // symptom is a domain whose listings quietly never sort.
+            for (domain, outcome) in [
+                (
+                    "code",
+                    skilluv_backend::services::craft_score::sweep(&state.db, 500).await,
+                ),
+                (
+                    "ai",
+                    skilluv_backend::services::ai_profile::sweep(&state.db, 500).await,
+                ),
+                (
+                    "audio",
+                    skilluv_backend::services::audio_profile::sweep(&state.db, 500).await,
+                ),
+            ] {
+                match outcome {
+                    Ok(0) => tracing::debug!(domain, "craft_score worker : nothing stale"),
+                    Ok(n) => {
+                        tracing::info!(
+                            domain,
+                            recomputed = n,
+                            "craft_score worker : scores refreshed"
+                        )
+                    }
+                    Err(e) => tracing::error!(
+                        domain, error = %e,
+                        "craft_score worker : sweep failed, scores stay as they were"
+                    ),
+                }
+            }
+        }
+    });
+}
+
+fn spawn_artifact_stats_worker(state: skilluv_backend::AppState) {
+    tokio::spawn(async move {
+        if std::env::var("SKILLUV_ARTIFACT_STATS_ENABLED").as_deref() != Ok("1") {
+            tracing::info!("artifact_stats worker : disabled (env flag absent)");
+            return;
+        }
+
+        let client = match reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(20))
+            .build()
+        {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::error!(error = %e, "artifact_stats worker : no HTTP client, giving up");
+                return;
+            }
+        };
+
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(24 * 60 * 60));
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+            match skilluv_backend::services::artifact_registry::sync_stale(&state.db, &client).await
+            {
+                Ok(0) => tracing::debug!("artifact_stats worker : nothing stale"),
+                Ok(n) => tracing::info!(refreshed = n, "artifact_stats worker : figures refreshed"),
+                Err(e) => tracing::error!(
+                    error = %e,
+                    "artifact_stats worker : sweep failed, figures stay as they were"
                 ),
             }
         }

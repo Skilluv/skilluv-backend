@@ -227,6 +227,7 @@ pub async fn get_result(
         (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "sandboxListLanguages",
 )]
 pub async fn list_languages(_auth: AuthUser) -> Json<ApiResponse<LanguagesResponse>> {
     let languages = sandbox::supported_languages();

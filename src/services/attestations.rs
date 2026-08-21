@@ -10,9 +10,7 @@
 //! Anti-double-issue via UNIQUE indexes SQL sur linked_skill_node_ids.
 //! Révocation propagée quand un deliverable sous-jacent est révoqué.
 
-use base32::Alphabet;
 use chrono::{DateTime, Utc};
-use rand_core::RngCore;
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
@@ -24,6 +22,34 @@ use crate::errors::AppError;
 pub const SENIOR_REVIEWER_REPUTATION_THRESHOLD: f64 = 0.7;
 
 pub struct AttestationsService;
+
+/// The words an attestation on this basis is issued with.
+///
+/// Read from `attestation_bases` (migration 0506) rather than from a constant
+/// per domain: an attestation copies these onto its own row at issue and keeps
+/// them, so the table is the source and never the display. What the table adds
+/// is that a typo in a title somebody reads on a public profile is fixed by an
+/// operator instead of by a deployment.
+///
+/// Falls back to a generic pair rather than failing. An attestation that was
+/// earned must not be lost because the wording of its basis was deleted, and a
+/// foreign key already guarantees the basis itself exists.
+pub async fn basis_wording(db: &PgPool, basis: &str) -> (String, String) {
+    let row: Option<(String, String)> =
+        sqlx::query_as("SELECT title, description FROM attestation_bases WHERE basis = $1")
+            .bind(basis)
+            .fetch_optional(db)
+            .await
+            .unwrap_or(None);
+
+    row.unwrap_or_else(|| {
+        tracing::warn!(basis, "no wording for this attestation basis");
+        (
+            "Contribution vérifiée".to_string(),
+            "Un travail vérifié sur la plateforme.".to_string(),
+        )
+    })
+}
 
 /// Ligne attestations (calquée sur le schéma SQL).
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, utoipa::ToSchema)]
@@ -67,11 +93,14 @@ impl AttestationsService {
 
     /// Génère un code base32 de 10 caractères pour l'URL publique de vérification.
     /// 50 bits d'entropie (~10^15 combinaisons, quasi zéro collision).
-    fn generate_verification_code() -> String {
-        let mut bytes = [0u8; 8];
-        rand_core::OsRng.fill_bytes(&mut bytes);
-        let encoded = base32::encode(Alphabet::Rfc4648 { padding: false }, &bytes);
-        encoded.chars().take(10).collect()
+    /// One generator, in `artefact_attestations`.
+    ///
+    /// There were three copies of these five lines. They agreed, which is the
+    /// only reason nothing broke — and the day one of them had grown to
+    /// twelve characters, half the attestations would have been unverifiable
+    /// against a page expecting ten.
+    pub(crate) fn generate_verification_code() -> String {
+        crate::services::artefact_attestations::verification_code()
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -454,7 +483,7 @@ impl AttestationsService {
     /// Appelée :
     /// - Manuellement par admin
     /// - Automatiquement quand un deliverable sous-jacent est révoqué
-    ///   (voir `revoke_attestations_depending_on_deliverable`)
+    ///   (trigger `trg_attestation_loses_its_evidence`, migration 0225)
     pub async fn revoke(
         db: &PgPool,
         attestation_id: Uuid,
@@ -476,23 +505,14 @@ impl AttestationsService {
         Ok(())
     }
 
-    /// Cascade révocation : quand un deliverable est révoqué, on révoque toutes
-    /// les attestations qui listaient ce deliverable dans leurs preuves.
-    pub async fn revoke_attestations_depending_on_deliverable(
-        tx: &mut Transaction<'_, Postgres>,
-        deliverable_id: Uuid,
-    ) -> Result<u64, AppError> {
-        let result = sqlx::query(
-            r#"
-            UPDATE attestations
-            SET revoked_at = NOW(),
-                revoke_reason = 'underlying_deliverable_revoked'
-            WHERE $1 = ANY(linked_deliverable_ids) AND revoked_at IS NULL
-            "#,
-        )
-        .bind(deliverable_id)
-        .execute(&mut **tx)
-        .await?;
-        Ok(result.rows_affected())
-    }
+    // The cascade that used to live here is a trigger since migration 0225.
+    // It was `pub`, written for exactly this, and called from nowhere — so a
+    // deliverable revoked for plagiarism kept its attestation issued and the
+    // record kept pointing at something withdrawn. A function nobody calls
+    // does not become a rule by existing.
+    //
+    // The trigger also fires on the moderation path, which sets the status
+    // and never touches `revoked_at`, and it waits for the *last* live
+    // deliverable to go: a compagnonnage attestation on five deliverables
+    // still stands on four.
 }

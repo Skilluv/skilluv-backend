@@ -352,6 +352,7 @@ fn parse_eq_filter<'a>(filter: &'a str, attr: &str) -> Option<&'a str> {
     get, path = "/api/scim/v2/Users", tag = "scim",
     responses((status = 200, body = serde_json::Value)),
     security(("bearer_auth" = [])),
+    operation_id = "scimListUsers",
 )]
 pub async fn list_users(
     State(state): State<AppState>,
@@ -490,6 +491,7 @@ pub async fn create_user(
     params(("id" = Uuid, Path)),
     responses((status = 200, body = serde_json::Value), (status = 404, body = crate::api_response::ErrorResponse)),
     security(("bearer_auth" = [])),
+    operation_id = "scimGetUser",
 )]
 pub async fn get_user(
     State(state): State<AppState>,

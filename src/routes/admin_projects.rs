@@ -206,6 +206,7 @@ pub struct IngestRunReport {
         (status = 403, body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
+    operation_id = "adminProjectsCreateProject",
 )]
 pub async fn create_project(
     _gate: crate::middleware::admin_gate::AdminGate,
@@ -885,10 +886,10 @@ fn validate_skill_domains(domains: Option<&[String]>) -> Result<(), AppError> {
         return Ok(());
     };
     for d in list {
-        if !crate::services::validator_applications::VALID_DOMAINS.contains(&d.as_str()) {
+        if !crate::validators::SKILL_DOMAINS.contains(&d.as_str()) {
             return Err(AppError::Validation(format!(
                 "unknown skill_domain: {d}; allowed: {:?}",
-                crate::services::validator_applications::VALID_DOMAINS
+                crate::validators::SKILL_DOMAINS
             )));
         }
     }

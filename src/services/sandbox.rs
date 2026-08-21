@@ -2,6 +2,23 @@ use serde::{Deserialize, Serialize};
 
 use crate::errors::AppError;
 
+/// A sandbox we cannot reach is unavailable, not broken.
+///
+/// `reqwest` distinguishes a transport failure — nothing listening, DNS, a
+/// timeout — from a response we did receive and disliked. The first is 503:
+/// Judge0 is not running on this deployment, or not running yet, and telling
+/// the caller our server failed sends them to the wrong place. Anything else
+/// stays a 500, because then the request itself is the suspect.
+fn judge0_unreachable(e: reqwest::Error) -> AppError {
+    if e.is_connect() || e.is_timeout() || e.is_request() {
+        AppError::ServiceUnavailable(
+            "the code sandbox is not reachable from this deployment".into(),
+        )
+    } else {
+        AppError::Internal(format!("Judge0 request failed: {e}"))
+    }
+}
+
 /// Language mapping: name → Judge0 language_id
 /// Judge0 CE 1.13.1 language IDs
 pub fn language_id(lang: &str) -> Option<u32> {
@@ -214,7 +231,7 @@ impl SandboxService {
             .json(&body)
             .send()
             .await
-            .map_err(|e| AppError::Internal(format!("Judge0 request failed: {e}")))?;
+            .map_err(judge0_unreachable)?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -276,7 +293,7 @@ impl SandboxService {
             .json(&body)
             .send()
             .await
-            .map_err(|e| AppError::Internal(format!("Judge0 request failed: {e}")))?;
+            .map_err(judge0_unreachable)?;
 
         let result: Judge0TokenResponse = response
             .json()
@@ -298,7 +315,7 @@ impl SandboxService {
             .get(&url)
             .send()
             .await
-            .map_err(|e| AppError::Internal(format!("Judge0 request failed: {e}")))?;
+            .map_err(judge0_unreachable)?;
 
         let result: Judge0SubmissionResponse = response
             .json()

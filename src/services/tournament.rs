@@ -7,15 +7,21 @@ use uuid::Uuid;
 
 use crate::errors::AppError;
 
-pub const VALID_KINDS: &[&str] = &[
-    "individual",
-    "guild_war",
-    "hackathon",
-    "marathon",       // Format 1 Grande Epreuve : saisons impaires, cooperatif
-    "defi_solitaire", // Format 3 : background permanent, defi ultime solo
-];
 pub const VALID_FORMATS: &[&str] = &["swiss", "bracket", "ladder"];
 pub const VALID_PARTICIPANT_TYPES: &[&str] = &["user", "guild"];
+
+/// The end of the scale a format is won at.
+///
+/// Read from the format's row rather than from a list here. Getting it wrong
+/// crowns the worst entry — a code golf sorted descending rewards the longest
+/// program — which is why it is never a caller's choice.
+pub fn scoring_direction_for(spec: &crate::services::contest::KindSpec) -> &'static str {
+    if spec.lower_is_better {
+        "lower_is_better"
+    } else {
+        "higher_is_better"
+    }
+}
 
 // ─── Seasons ──────────────────────────────────────────────────────
 
@@ -221,6 +227,15 @@ pub struct Tournament {
     pub created_by: Option<Uuid>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    /// NULL means the contest is open to every domain.
+    pub skill_domain: Option<String>,
+    /// What the contest asks for. Shape depends on `kind` — see
+    /// `contest::validate_rules`.
+    pub rules: serde_json::Value,
+    pub scoring_direction: String,
+    /// While the contest is open, entrants read only their own entry. See
+    /// migration 0518 for why this narrows *when* rather than *whether*.
+    pub blind_until_close: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -239,6 +254,10 @@ pub struct CreateTournamentInput {
     pub registration_opens_at: Option<DateTime<Utc>>,
     pub starts_at: DateTime<Utc>,
     pub ends_at: DateTime<Utc>,
+    #[serde(default)]
+    pub skill_domain: Option<String>,
+    #[serde(default)]
+    pub rules: Option<serde_json::Value>,
 }
 
 pub async fn create_tournament(
@@ -246,12 +265,7 @@ pub async fn create_tournament(
     creator_id: Uuid,
     input: CreateTournamentInput,
 ) -> Result<Tournament, AppError> {
-    if !VALID_KINDS.contains(&input.kind.as_str()) {
-        return Err(AppError::Validation(format!(
-            "kind must be one of: {}",
-            VALID_KINDS.join(", ")
-        )));
-    }
+    let kind_spec = crate::services::contest::load_kind(db, &input.kind).await?;
     let format = input.format.unwrap_or_else(|| "ladder".into());
     if !VALID_FORMATS.contains(&format.as_str()) {
         return Err(AppError::Validation(format!(
@@ -278,14 +292,22 @@ pub async fn create_tournament(
             "Only hackathon tournaments may have a sponsor".into(),
         ));
     }
+    let rules = input.rules.unwrap_or_else(|| serde_json::json!({}));
+    crate::services::contest::validate_rules(&kind_spec, &rules)?;
+    // Not a caller's choice: code golf is won at the bottom of the scale
+    // whatever anybody types, and letting an admin invert it once would
+    // silently crown the longest solution.
+    let scoring_direction = scoring_direction_for(&kind_spec);
+
     let t: Tournament = sqlx::query_as(
         r#"
         INSERT INTO tournaments
             (season_id, slug, name, description, kind, format,
              prize_pool_fragments, prize_pool_gp,
              sponsor_enterprise_id, sponsor_logo_url, sponsor_blurb,
-             registration_opens_at, starts_at, ends_at, created_by)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+             registration_opens_at, starts_at, ends_at, created_by,
+             skill_domain, rules, scoring_direction)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
         RETURNING *
         "#,
     )
@@ -304,53 +326,96 @@ pub async fn create_tournament(
     .bind(input.starts_at)
     .bind(input.ends_at)
     .bind(creator_id)
+    .bind(input.skill_domain.as_deref())
+    .bind(&rules)
+    .bind(scoring_direction)
     .fetch_one(db)
     .await?;
+
+    // Announced at creation rather than on a later status change: a contest
+    // is created open, and a room that hears about it the day it closes has
+    // been told nothing useful. A cross-domain contest routes to the
+    // domain-blind room, which is what `skill_domain = NULL` resolves to.
+    crate::services::discord_announce::contest_opened(
+        db,
+        t.skill_domain.as_deref().unwrap_or_default(),
+        &t.slug,
+        &t.name,
+        t.ends_at,
+        // The cash prize lives on the row but not on this struct, so it is
+        // read back rather than guessed at. A contest funded after creation
+        // simply announces without a figure, which is honest: at the moment
+        // of the post there was none.
+        sqlx::query_scalar::<_, Option<String>>(
+            "SELECT prize_cash_amount::TEXT || ' ' || prize_cash_currency
+               FROM tournaments WHERE id = $1",
+        )
+        .bind(t.id)
+        .fetch_optional(db)
+        .await
+        .ok()
+        .flatten()
+        .flatten(),
+    )
+    .await;
+
     Ok(t)
 }
 
+/// What a caller may narrow the list by.
+///
+/// A struct rather than four positional arguments because every one of them
+/// is optional and three of them are strings: `list_tournaments(db, None,
+/// Some("design"), None, ...)` is a bug waiting for the day two of the
+/// filters are transposed.
+#[derive(Debug, Default, Clone)]
+pub struct TournamentFilter<'a> {
+    pub status: Option<&'a str>,
+    /// `code_golf`, `brief_contest`, `duel`… — see `contest::VALID_KINDS`.
+    pub kind: Option<&'a str>,
+    /// A domain-scoped contest, plus the ones open to every domain: asking
+    /// for design contests and being shown none of the cross-domain ones
+    /// would hide exactly the events that want the widest field.
+    pub skill_domain: Option<&'a str>,
+    /// Only what somebody can still enter or watch.
+    pub upcoming_or_active_only: bool,
+    pub limit: i64,
+}
+
+/// List tournaments, narrowed in SQL.
+///
+/// The filters used to be three hand-written query strings and a `match` that
+/// bound their parameters in the right order. Adding a fourth would have meant
+/// eight strings, so the predicates are now expressed once and disabled by a
+/// NULL bind. PostgreSQL still uses the indexes: `$n IS NULL OR col = $n`
+/// short-circuits per row and every column here is either indexed or tiny.
+///
+/// Without `kind` and `skill_domain` the design contest page asked for two
+/// hundred rows and filtered them in the browser, which stops working at the
+/// two hundred and first tournament — silently, by dropping the oldest.
 pub async fn list_tournaments(
     db: &PgPool,
-    status_filter: Option<&str>,
-    upcoming_or_active_only: bool,
-    limit: i64,
+    filter: TournamentFilter<'_>,
 ) -> Result<Vec<Tournament>, AppError> {
-    let sql = if upcoming_or_active_only {
+    let rows = sqlx::query_as(
         r#"
         SELECT * FROM tournaments
-        WHERE status IN ('upcoming', 'registration', 'active')
-        ORDER BY starts_at ASC
-        LIMIT $1
-        "#
-    } else if status_filter.is_some() {
-        r#"
-        SELECT * FROM tournaments WHERE status = $1 ORDER BY starts_at DESC LIMIT $2
-        "#
-    } else {
-        "SELECT * FROM tournaments ORDER BY starts_at DESC LIMIT $1"
-    };
-
-    let rows = match (upcoming_or_active_only, status_filter) {
-        (true, _) => {
-            sqlx::query_as(sql)
-                .bind(limit.clamp(1, 100))
-                .fetch_all(db)
-                .await?
-        }
-        (false, Some(s)) => {
-            sqlx::query_as(sql)
-                .bind(s)
-                .bind(limit.clamp(1, 100))
-                .fetch_all(db)
-                .await?
-        }
-        (false, None) => {
-            sqlx::query_as(sql)
-                .bind(limit.clamp(1, 100))
-                .fetch_all(db)
-                .await?
-        }
-    };
+         WHERE ($1::text IS NULL OR status = $1)
+           AND ($2::text IS NULL OR kind = $2)
+           AND ($3::text IS NULL OR skill_domain = $3 OR skill_domain IS NULL)
+           AND (NOT $4 OR status IN ('upcoming', 'registration', 'active'))
+         ORDER BY CASE WHEN $4 THEN starts_at END ASC,
+                  starts_at DESC
+         LIMIT $5
+        "#,
+    )
+    .bind(filter.status)
+    .bind(filter.kind)
+    .bind(filter.skill_domain)
+    .bind(filter.upcoming_or_active_only)
+    .bind(filter.limit.clamp(1, 100))
+    .fetch_all(db)
+    .await?;
     Ok(rows)
 }
 
@@ -397,6 +462,35 @@ pub struct TournamentParticipant {
     pub registered_at: DateTime<Utc>,
 }
 
+/// A leaderboard line, with whoever is on it.
+///
+/// Separate from [`TournamentParticipant`] because the identity is joined at
+/// read time and is not part of the row: a participant is a foreign key, and
+/// putting a display name on the stored shape would invite writing one.
+///
+/// Both name fields are optional, and that is the deleted-account case rather
+/// than an oversight. A user row can go; the participation stays, because
+/// removing it would rewrite a podium that other people were ranked against.
+/// Such a line comes back nameless, and a reader shows it as withdrawn.
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+pub struct LeaderboardEntry {
+    pub tournament_id: Uuid,
+    pub participant_type: String,
+    pub participant_id: Uuid,
+    pub score: i32,
+    pub rank: Option<i32>,
+    pub prize_fragments_awarded: i32,
+    pub prize_gp_awarded: i32,
+    pub registered_at: DateTime<Utc>,
+    /// The handle a reader can build a link from: the account's username, or
+    /// the guild's slug. NULL when the account is gone.
+    pub username: Option<String>,
+    /// What to print: the person's display name, or the guild's name.
+    pub display_name: Option<String>,
+    /// The avatar, or the guild's logo.
+    pub avatar_url: Option<String>,
+}
+
 pub async fn register_individual(
     db: &PgPool,
     tournament_id: Uuid,
@@ -407,9 +501,18 @@ pub async fn register_individual(
         .fetch_optional(db)
         .await?
         .ok_or(AppError::NotFound("tournament not found".into()))?;
-    if t.kind != "individual" && t.kind != "hackathon" {
+    // Stated the other way round on purpose. It used to allow `individual`
+    // and `hackathon` and refuse everything else, so `marathon` and
+    // `defi_solitaire` — added in migration 0114 — could be created and never
+    // joined: the endpoint answered "not open to individual registration"
+    // about tournaments that take nothing but individuals.
+    //
+    // Guild wars take guilds. Everything else takes people, including the two
+    // AI kinds added here, and a new kind is now open by default rather than
+    // silently closed.
+    if t.kind == "guild_war" {
         return Err(AppError::Validation(
-            "this tournament is not open to individual registration".into(),
+            "this tournament takes guilds, not individual registrations".into(),
         ));
     }
     if !matches!(t.status.as_str(), "registration" | "upcoming") {
@@ -482,15 +585,49 @@ pub async fn register_guild(
     Ok(row)
 }
 
+/// The ranking, with names on it.
+///
+/// A podium that can only print UUIDs is not a podium, so the identity is
+/// joined here rather than left to N follow-up requests by the caller. Both
+/// joins are LEFT, and a participant whose account is gone comes back with
+/// null names instead of vanishing from the ranking — removing the line would
+/// change the standing of everybody below it.
 pub async fn leaderboard_of(
     db: &PgPool,
     tournament_id: Uuid,
-) -> Result<Vec<TournamentParticipant>, AppError> {
+) -> Result<Vec<LeaderboardEntry>, AppError> {
+    // A participant who has not scored yet sorts last in both directions.
+    // Without this, `lower_is_better` would put every unscored entry on top,
+    // and zero would win a code golf.
     let rows = sqlx::query_as(
         r#"
-        SELECT * FROM tournament_participants
-        WHERE tournament_id = $1
-        ORDER BY rank NULLS LAST, score DESC, registered_at ASC
+        SELECT p.tournament_id,
+               p.participant_type,
+               p.participant_id,
+               p.score,
+               p.rank,
+               p.prize_fragments_awarded,
+               p.prize_gp_awarded,
+               p.registered_at,
+               COALESCE(u.username, g.slug) AS username,
+               COALESCE(u.display_name, g.name) AS display_name,
+               COALESCE(u.avatar_url, g.logo_url) AS avatar_url
+          FROM tournament_participants p
+          JOIN tournaments t ON t.id = p.tournament_id
+          LEFT JOIN users u
+                 ON p.participant_type = 'user' AND u.id = p.participant_id
+          LEFT JOIN guilds g
+                 ON p.participant_type = 'guild' AND g.id = p.participant_id
+         WHERE p.tournament_id = $1
+        ORDER BY p.rank NULLS LAST,
+                 (p.score = 0) ASC,
+                 CASE WHEN t.scoring_direction = 'lower_is_better'
+                      THEN p.score
+                 END ASC NULLS LAST,
+                 CASE WHEN t.scoring_direction = 'higher_is_better'
+                      THEN p.score
+                 END DESC NULLS LAST,
+                 p.registered_at ASC
         "#,
     )
     .bind(tournament_id)
@@ -550,11 +687,22 @@ pub async fn conclude_tournament(
 
     let mut tx = db.begin().await?;
 
-    // 1. Assign ranks
+    // 1. Assign ranks, at the end of the scale this kind is won at. An
+    //    unscored participant sorts last either way — zero characters is not
+    //    a winning code golf entry, it is an absent one.
     let participants: Vec<(String, Uuid, i32)> = sqlx::query_as(
-        "SELECT participant_type, participant_id, score FROM tournament_participants WHERE tournament_id = $1 ORDER BY score DESC, registered_at ASC",
+        r#"
+        SELECT participant_type, participant_id, score
+          FROM tournament_participants
+         WHERE tournament_id = $1
+         ORDER BY (score = 0) ASC,
+                  CASE WHEN $2 = 'lower_is_better' THEN score END ASC NULLS LAST,
+                  CASE WHEN $2 = 'higher_is_better' THEN score END DESC NULLS LAST,
+                  registered_at ASC
+        "#,
     )
     .bind(tournament_id)
+    .bind(&t.scoring_direction)
     .fetch_all(&mut *tx)
     .await?;
 
@@ -622,6 +770,8 @@ pub async fn conclude_tournament(
 
     tx.commit().await?;
 
+    announce_result(db, &t, &participants).await;
+
     Ok(ConclusionReport {
         tournament_id,
         participants_ranked: total,
@@ -630,18 +780,74 @@ pub async fn conclude_tournament(
     })
 }
 
+/// Tell everybody who took part that the ranking is out.
+///
+/// Two notifications, not one, and not one per outcome: the ranking is the
+/// same event for everybody, and the podium is a second, rarer event that
+/// only three people get. `tournament.podium` already existed and already
+/// carries the place, so no `contest_winner` kind is invented for the same
+/// moment — that would mean two celebrations for one result.
+///
+/// Guild entries are skipped: `Recipient` addresses people, and notifying a
+/// guild means notifying its members, which is `guild.*`'s business.
+///
+/// Everything here is after the commit and every failure is logged rather
+/// than raised. The ranking is final at this point; a mail server being down
+/// must not make an organiser conclude the contest twice.
+async fn announce_result(db: &PgPool, t: &Tournament, participants: &[(String, Uuid, i32)]) {
+    // The room hears about the winner. One post, not one per participant: a
+    // ranking is news, a full leaderboard pasted into a chat channel is not.
+    if let Some((_, winner_id, _)) = participants.iter().find(|(ptype, _, _)| ptype == "user") {
+        let username: Option<String> =
+            sqlx::query_scalar("SELECT username FROM users WHERE id = $1")
+                .bind(winner_id)
+                .fetch_optional(db)
+                .await
+                .unwrap_or_default();
+        if let Some(username) = username {
+            crate::services::discord_announce::contest_won(
+                db,
+                t.skill_domain.as_deref().unwrap_or_default(),
+                &t.slug,
+                &t.name,
+                &username,
+            )
+            .await;
+        }
+    }
+
+    for (index, (ptype, pid, _)) in participants.iter().enumerate() {
+        if ptype != "user" {
+            continue;
+        }
+        if let Err(e) = crate::services::notify::send(
+            crate::services::notify::Ctx::db_only(db),
+            crate::services::notify::Recipient::User(*pid),
+            "contest.concluded",
+        )
+        .arg("contest", t.name.clone())
+        .payload(serde_json::json!({
+            "tournament_id": t.id,
+            "tournament_slug": t.slug,
+            "rank": index + 1,
+        }))
+        .execute()
+        .await
+        {
+            tracing::warn!(tournament_id = %t.id, error = %e, "result notification not delivered");
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn valid_enums() {
-        assert!(VALID_KINDS.contains(&"individual"));
-        assert!(VALID_KINDS.contains(&"guild_war"));
-        assert!(VALID_KINDS.contains(&"hackathon"));
-        // Grande Epreuve Formats 1 + 3 (migration 0114).
-        assert!(VALID_KINDS.contains(&"marathon"));
-        assert!(VALID_KINDS.contains(&"defi_solitaire"));
+        // The kinds moved to `tournament_kinds` (migration 0516) and are
+        // asserted in `tests/test_contest_kinds.rs`, where a database exists
+        // to read them from.
         assert!(VALID_FORMATS.contains(&"swiss"));
         assert!(VALID_FORMATS.contains(&"bracket"));
         assert!(VALID_FORMATS.contains(&"ladder"));

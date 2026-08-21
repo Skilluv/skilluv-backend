@@ -269,6 +269,7 @@ pub async fn regenerate_key(
     params(("id" = Uuid, Path)),
     responses((status = 200, body = serde_json::Value)),
     security(("cookie_auth" = [])),
+    operation_id = "developerKeyUsage",
 )]
 pub async fn key_usage(
     State(state): State<AppState>,

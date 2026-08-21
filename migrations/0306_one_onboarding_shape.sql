@@ -1,0 +1,29 @@
+-- Superseded by 0258, which does the same move and does it first.
+--
+-- ## What this migration was
+--
+-- The code wizard kept its answers on eight columns of `users` while every
+-- other domain kept theirs in `user_domain_profiles`. This moved the code
+-- answers across and dropped the columns.
+--
+-- ## Why it is empty
+--
+-- Migration 0258 does exactly that, and runs before this one. Two branches
+-- wrote the same migration at the same time — the AI/audio branch numbered it
+-- 0306, the design branch 0258 — and neither could see the other. By the time
+-- this file runs the columns it reads are gone and the columns it adds are
+-- already there, so it failed the chain on the first fresh database that saw
+-- both. That is not a conflict a test can find: a migration is checked by
+-- running it, and until this branch nothing ran them before CI did.
+--
+-- 0258 is kept rather than this one for two reasons beyond ordering. It names
+-- the question `goal`, which is what the generic wizard already calls it,
+-- where this file wrote `objective` — two names for one question is how a
+-- reader ends up checking the wrong key. And it names the tools `main_tools`,
+-- which is what the design wizard already calls them.
+--
+-- The file stays, empty, rather than being deleted: the version sequence is
+-- easier to read with the gap explained than with the number missing, and
+-- anybody who finds `0306` referenced somewhere should land on this note.
+
+-- Intentionally no statements.

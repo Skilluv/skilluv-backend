@@ -183,6 +183,26 @@ impl IntoResponse for AppError {
             }
         });
 
-        (self.status_code(), axum::Json(body)).into_response()
+        let status = self.status_code();
+
+        // A 5xx is our fault and has to leave a trace on our side. Until now
+        // nothing here logged, so a failing endpoint produced one line from
+        // tower_http saying a request had failed with a 500 — and the only
+        // description of *what* failed went to the caller, in the response
+        // body. That is exactly backwards, and it is why a database error in
+        // CI could be seen but not diagnosed.
+        //
+        // The request id is in both places, so a report from a caller can be
+        // matched to the line here.
+        if status.is_server_error() {
+            tracing::error!(
+                request_id = %request_id,
+                code = self.error_code(),
+                error = %self,
+                "request failed"
+            );
+        }
+
+        (status, axum::Json(body)).into_response()
     }
 }

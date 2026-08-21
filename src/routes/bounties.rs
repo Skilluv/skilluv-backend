@@ -514,6 +514,7 @@ pub struct SubmitPrBody {
     request_body = SubmitPrBody,
     responses((status = 200, body = serde_json::Value)),
     security(("cookie_auth" = [])),
+    operation_id = "bountiesSubmitPr",
 )]
 pub async fn submit_pr(
     State(state): State<AppState>,
@@ -803,17 +804,27 @@ pub async fn handle_issues_event(state: &AppState, payload: &Value) -> Result<()
         },
     });
 
+    // The label that triggered this is the freshest statement anybody made
+    // about the issue, so it decides the trade when it is mapped.
+    let orientation_id = crate::services::slice_ingestion::orientation_for_labels(
+        &state.db,
+        project_id,
+        &existing_labels,
+        Some(added_label),
+    )
+    .await?;
+
     let inserted: Option<Uuid> = sqlx::query_scalar(
         r#"
         INSERT INTO project_slices
             (project_id, slice_type, external_ref, external_metadata,
              title, description, acceptance_criteria,
              primary_domain, difficulty, fragments_reward,
-             status, ingested_from)
+             status, ingested_from, orientation_id)
         VALUES ($1, 'github_issue', $2, $3,
                 $4, $5, $6,
                 $7, $8, $9,
-                $10, 'github_webhook')
+                $10, 'github_webhook', $11)
         ON CONFLICT (project_id, external_ref)
             WHERE slice_type = 'github_issue' AND external_ref IS NOT NULL
             DO NOTHING
@@ -830,6 +841,7 @@ pub async fn handle_issues_event(state: &AppState, payload: &Value) -> Result<()
     .bind(enriched.difficulty)
     .bind(fragments_reward)
     .bind(default_status)
+    .bind(orientation_id)
     .fetch_optional(&state.db)
     .await?;
 

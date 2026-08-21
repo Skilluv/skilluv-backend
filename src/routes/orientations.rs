@@ -11,7 +11,7 @@
 //! garder la flexibilité admin d'over-ride via SQL direct).
 
 use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use axum::routing::{get, patch};
 use axum::{Json, Router};
@@ -44,6 +44,25 @@ pub fn orientation_routes() -> Router<AppState> {
         )
         // FE-M1 — projection publique des orientations d'un user (profil public).
         .route("/users/{id}/orientations", get(public_user_orientations))
+}
+
+/// The locale to read the catalogue in.
+///
+/// The default locale lives on the `orientations` row itself and every other
+/// one in `orientation_translations`, so asking for French finds no
+/// translation row and falls back to the base — which is the same answer,
+/// reached without a special case.
+///
+/// `resolve_from_accept_language` answers `en` when the header is absent or
+/// names nothing we support. That is deliberate for an API whose readers are
+/// mostly machines and mostly English-speaking; a French reader sends the
+/// header.
+fn locale_of(headers: &axum::http::HeaderMap) -> String {
+    crate::routes::resolve_from_accept_language(
+        headers
+            .get(axum::http::header::ACCEPT_LANGUAGE)
+            .and_then(|value| value.to_str().ok()),
+    )
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -133,6 +152,7 @@ pub struct MyOrientationsResponse {
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = OrientationsRegisterBody)]
 pub struct RegisterBody {
     #[schema(max_length = 10000)]
     pub slug: String,
@@ -164,6 +184,7 @@ pub struct RegisterOrientationResponse {
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = OrientationsUpdateBody)]
 pub struct UpdateBody {
     #[schema(max_length = 10000)]
     pub mode: Option<String>,
@@ -219,8 +240,10 @@ pub struct PublicUserOrientationsResponse {
 )]
 pub async fn list_orientations(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Query(q): Query<CatalogQuery>,
 ) -> Result<Json<ApiResponse<OrientationsCatalogResponse>>, AppError> {
+    let locale = locale_of(&headers);
     crate::validators::check_max_len_opt(&q.domain, "domain", 100)?;
     crate::validators::check_max_len_opt(&q.tag, "tag", 100)?;
     if !(1..=200).contains(&q.limit) {
@@ -236,14 +259,19 @@ pub async fn list_orientations(
     let limit = q.limit.clamp(1, 200);
     let rows = sqlx::query_as::<_, OrientationRow>(
         r#"
-        SELECT id, slug, name, description, primary_domain,
-               secondary_domains, tags, is_curated, is_archived
-        FROM orientations
-        WHERE is_curated = TRUE
-          AND ($1::BOOLEAN OR is_archived = FALSE)
-          AND ($2::VARCHAR IS NULL OR primary_domain = $2)
-          AND ($3::VARCHAR IS NULL OR $3 = ANY(tags))
-        ORDER BY primary_domain, name
+        SELECT o.id, o.slug,
+               COALESCE(t.name, o.name) AS name,
+               COALESCE(NULLIF(t.description, ''), o.description) AS description,
+               o.primary_domain, o.secondary_domains, o.tags,
+               o.is_curated, o.is_archived
+        FROM orientations o
+        LEFT JOIN orientation_translations t
+               ON t.orientation_id = o.id AND t.locale = $6
+        WHERE o.is_curated = TRUE
+          AND ($1::BOOLEAN OR o.is_archived = FALSE)
+          AND ($2::VARCHAR IS NULL OR o.primary_domain = $2)
+          AND ($3::VARCHAR IS NULL OR $3 = ANY(o.tags))
+        ORDER BY o.primary_domain, COALESCE(t.name, o.name)
         LIMIT $4 OFFSET $5
         "#,
     )
@@ -252,6 +280,7 @@ pub async fn list_orientations(
     .bind(q.tag.as_deref())
     .bind(limit)
     .bind(q.offset.max(0))
+    .bind(&locale)
     .fetch_all(&state.db)
     .await?;
 
@@ -282,14 +311,23 @@ pub async fn list_orientations(
 )]
 pub async fn get_orientation(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path(slug): Path<String>,
 ) -> Result<Json<ApiResponse<OrientationDetailResponse>>, AppError> {
+    let locale = locale_of(&headers);
     let orientation = sqlx::query_as::<_, OrientationRow>(
-        "SELECT id, slug, name, description, primary_domain, secondary_domains,
-                tags, is_curated, is_archived
-         FROM orientations WHERE slug = $1",
+        "SELECT o.id, o.slug,
+                COALESCE(t.name, o.name) AS name,
+                COALESCE(NULLIF(t.description, ''), o.description) AS description,
+                o.primary_domain, o.secondary_domains, o.tags,
+                o.is_curated, o.is_archived
+           FROM orientations o
+           LEFT JOIN orientation_translations t
+                  ON t.orientation_id = o.id AND t.locale = $2
+          WHERE o.slug = $1",
     )
     .bind(&slug)
+    .bind(&locale)
     .fetch_optional(&state.db)
     .await?
     .ok_or_else(|| AppError::NotFound(format!("orientation '{slug}' not found")))?;

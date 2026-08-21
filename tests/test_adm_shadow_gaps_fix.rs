@@ -1,6 +1,6 @@
 //! Tests des 2 endpoints ajoutés pour combler les zones d'ombre admin front :
 //! - GET /admin/enterprises/{id}
-//! - GET /admin/badge-events
+//! - GET /admin/events
 
 mod common;
 use common::TestApp;
@@ -111,7 +111,7 @@ async fn get_admin_badge_events_returns_paginated_list() {
     // Seed 2 events (1 active partner + 1 inactive).
     admin_post(
         &app,
-        "/api/admin/badge-events",
+        "/api/admin/events",
         json!({
             "slug": "hackfest-2027",
             "name": "Hackfest 2027",
@@ -122,7 +122,7 @@ async fn get_admin_badge_events_returns_paginated_list() {
     .await;
     admin_post(
         &app,
-        "/api/admin/badge-events",
+        "/api/admin/events",
         json!({
             "slug": "skilluv-fest-2027",
             "name": "Skilluv Fest 2027",
@@ -133,7 +133,7 @@ async fn get_admin_badge_events_returns_paginated_list() {
     )
     .await;
 
-    let resp = admin_get(&app, "/api/admin/badge-events?per_page=10").await;
+    let resp = admin_get(&app, "/api/admin/events?per_page=10").await;
     assert_eq!(resp.status().as_u16(), 200);
     let body: serde_json::Value = resp.json().await.unwrap();
     let items = body["data"].as_array().unwrap();
@@ -141,7 +141,7 @@ async fn get_admin_badge_events_returns_paginated_list() {
     assert_eq!(body["pagination"]["per_page"], 10);
 
     // Filtre is_partner=true.
-    let resp2 = admin_get(&app, "/api/admin/badge-events?is_partner=true").await;
+    let resp2 = admin_get(&app, "/api/admin/events?is_partner=true").await;
     assert_eq!(resp2.status().as_u16(), 200);
     let body2: serde_json::Value = resp2.json().await.unwrap();
     let partner_items = body2["data"].as_array().unwrap();

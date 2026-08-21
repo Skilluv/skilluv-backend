@@ -102,10 +102,46 @@ pub fn build_router(state: AppState) -> Router {
             admin_gate(routes::admin_validator_application_routes()),
         )
         .nest("/api", routes::deliverable_routes())
+        .nest("/api", routes::design_routes())
+        .nest("/api", routes::design_upload_routes())
+        .nest("/api", routes::design_brief_routes())
+        .nest("/api", routes::featured_routes())
+        .nest("/api", routes::series_routes())
+        .nest("/api", routes::design_profile_routes())
+        .nest("/api", routes::design_cloud_routes())
         .nest("/api", routes::review_queue_routes())
         .nest("/api", routes::track_routes())
         .nest("/api", routes::skill_routes())
         .nest("/api", routes::orientation_routes())
+        .nest("/api", routes::ai_routes())
+        .nest("/api", routes::audio_routes())
+        .nest("/api", routes::ai_safety_routes())
+        .nest("/api", routes::benchmark_routes())
+        .nest("/api", routes::domain_profile_routes())
+        .nest("/api", routes::guide_routes())
+        .nest("/api", routes::award_routes())
+        .nest("/api", routes::code_routes())
+        .nest("/api", routes::mission_routes())
+        .nest("/api", routes::code_profile_routes())
+        .nest("/api", routes::public_feed_routes())
+        .nest("/api", routes::enterprise_product_routes())
+        .nest("/api", routes::recruitment_routes())
+        .nest("/api", routes::engagement_routes())
+        .nest("/api", routes::brand_routes())
+        .nest("/api", routes::contest_routes())
+        .nest("/api", routes::data_routes())
+        .nest("/api", routes::finance_routes())
+        .nest("/api", routes::ecosystem_routes())
+        .nest("/api", routes::mentoring_product_routes())
+        .nest("/api", routes::consultation_routes())
+        .nest("/api", routes::continuous_routes())
+        .nest("/api", routes::additional_product_routes())
+        .nest("/api", routes::enterprise_overview_routes())
+        .nest("/api", routes::ops_routes())
+        .nest("/api", routes::credential_routes())
+        .nest("/api", routes::ats_routes())
+        .nest("/api", routes::talent_line_routes())
+        .nest("/api", routes::code_stats_routes())
         .nest("/api", routes::onboarding_routes())
         .nest("/api", routes::attestation_routes())
         // P26 — sas compagnonnage débutant (verified_apprentice unlock).
@@ -137,7 +173,7 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::enterprise_routes())
         .nest("/api", routes::enterprise_sso_routes())
         .nest("/api", routes::scim_routes())
-        .nest("/api", routes::talent_search_routes())
+        .nest("/api", routes::talent_search_v4_routes())
         .nest("/api", routes::talent_list_routes())
         .nest("/api", routes::contact_routes())
         .nest("/api", routes::notification_routes())
@@ -190,12 +226,14 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::enterprise_credits_routes())
         .nest("/api", routes::enterprise_pipeline_routes())
         .nest("/api", routes::enterprise_kyc_routes())
-        .nest("/api", routes::talent_search_v2_routes())
-        .nest("/api", routes::talent_search_v3_routes())
         .nest("/api", routes::magic_link_routes())
         .nest("/api", routes::webauthn_routes())
         .nest("/api", routes::push_routes())
         .nest("/api", admin_gate(routes::admin_dashboard_routes()))
+        .nest("/api", admin_gate(routes::admin_domain_routes()))
+        .nest("/api", admin_gate(routes::admin_mission_routes()))
+        .nest("/api", admin_gate(routes::admin_plagiarism_routes()))
+        .nest("/api", routes::plagiarism_routes())
         .nest("/api", admin_gate(routes::admin_fraud_routes()))
         .nest("/api", admin_gate(routes::admin_project_routes()))
         .nest("/api", admin_gate(routes::admin_slice_routes()))
@@ -261,6 +299,11 @@ pub fn build_router(state: AppState) -> Router {
         //      repondre 405. Retourner 405 uniformement respecte l'attente
         //      schemathesis unsupported_methods sans desactiver l'admin_gate.
         .layer(axum::middleware::from_fn(reject_deprecated_methods))
+        // A NUL in a JSON string is a 400, not the 500 PostgreSQL would
+        // otherwise turn it into. Above the routes so no handler has to
+        // remember, below the method allowlist so an exotic verb is still
+        // refused before the body is read at all.
+        .layer(axum::middleware::from_fn(reject_nul_in_request))
         // Convertit les reponses 4xx/5xx text/plain en JSON conforme au
         // schema d'erreur documente. Cible principale : rejections axum
         // built-in (Query, Json, Path, etc.) qui renvoient text/plain par
@@ -312,6 +355,87 @@ async fn reject_deprecated_methods(
             .expect("static response builds");
     }
     next.run(req).await
+}
+
+/// Refuse a request carrying a NUL byte, with a 400 rather than a 500.
+///
+/// PostgreSQL cannot store `\0` in a `text` column at all — it is not an
+/// encoding we can widen, it is outside what the type accepts. So a NUL in any
+/// string reaches the driver, fails there, and surfaces as
+/// `DATABASE_ERROR ... invalid byte sequence for encoding "UTF8": 0x00`: a 500
+/// that tells the caller our server broke, when in fact they sent something no
+/// text column anywhere will ever hold.
+///
+/// Both halves of the request, because a NUL arrives by two routes and the
+/// first version of this only closed one of them:
+///
+///   * the URI, where it is written `%00` and is still a literal NUL by the
+///     time a query or path parameter has been deserialised — which is how it
+///     kept reaching the database after the body was being checked;
+///   * a JSON body, checked as raw bytes before it is parsed.
+///
+/// Checked here rather than field by field because every endpoint taking free
+/// text has the same exposure, and one of them will always be the one nobody
+/// remembered. Multipart is left alone: an upload is bytes by definition and a
+/// NUL in one is ordinary.
+async fn reject_nul_in_request(
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    use axum::http::{StatusCode, header::CONTENT_TYPE};
+    use axum::response::IntoResponse;
+
+    let uri = req.uri();
+    let has_encoded_nul = |s: &str| {
+        s.contains('\0')
+            || s.as_bytes()
+                .windows(3)
+                .any(|w| w[0] == b'%' && w[1] == b'0' && w[2] == b'0')
+    };
+    if has_encoded_nul(uri.path()) || uri.query().is_some_and(has_encoded_nul) {
+        return errors::AppError::Validation(
+            "the URL contains a NUL byte, which no text column can hold".into(),
+        )
+        .into_response();
+    }
+
+    let is_json = req
+        .headers()
+        .get(CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v.starts_with("application/json"));
+
+    if !is_json {
+        return next.run(req).await;
+    }
+
+    let (parts, body) = req.into_parts();
+    // 2 MiB is axum's own `DefaultBodyLimit`, which every `Json` extractor
+    // downstream already applies. Matching it means this middleware is not a
+    // new ceiling: a body too large to read here was already too large to
+    // deserialise.
+    let bytes = match axum::body::to_bytes(body, 2 * 1024 * 1024).await {
+        Ok(bytes) => bytes,
+        Err(_) => {
+            return axum::response::Response::builder()
+                .status(StatusCode::PAYLOAD_TOO_LARGE)
+                .body(axum::body::Body::empty())
+                .expect("static response builds");
+        }
+    };
+
+    if bytes.contains(&0u8) {
+        return errors::AppError::Validation(
+            "a text field contains a NUL byte, which no text column can hold".into(),
+        )
+        .into_response();
+    }
+
+    next.run(axum::extract::Request::from_parts(
+        parts,
+        axum::body::Body::from(bytes),
+    ))
+    .await
 }
 
 /// Convertit toute réponse d'erreur (4xx/5xx) dont le Content-Type n'est

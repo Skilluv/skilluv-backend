@@ -48,6 +48,15 @@ email:
 
 # ─── الإشعارات ───────────────────────────────────────────────────
 notification:
+  credential:
+    refused:
+      title: "تعذر تأكيد إحدى الشهادات"
+      body: "{reason}"
+      cta: "عرض شهاداتي"
+    expiring:
+      title: "{name} تنتهي في {date}"
+      body: "لن تُحتسب في ملفك بعد ذلك التاريخ. إعادة الامتحان تتطلب حجز موعد، ولهذا يصلك هذا التنبيه قبل شهر."
+      cta: "عرض شهاداتي"
   payout:
     sent:
       title: "تم إرسال دفعتك"
@@ -195,6 +204,114 @@ notification:
       title: "أصبحت الآن {rank}"
       body: "عملك على المنصة رفعك إلى رتبة {rank}."
       cta: "عرض ملفي"
+  trial:
+    started:
+      title: "تبدأ فترة التجربة"
+      body: "{weeks} أسابيع مدفوعة. سجّل ساعاتك أولًا بأول."
+      cta: "عرض فترة التجربة"
+  reverse_recruitment:
+    pitch_received:
+      title: "{company} تعرض حجّتها"
+      body: "شركة أخذت الوقت للكتابة. القرار لك."
+      cta: "قراءة العرض"
+    pitch_answered:
+      title: "ردّ على عرضك"
+      body: "الشخص الذي تواصلت معه قد ردّ."
+      cta: "عرض الرد"
+  recruitment:
+    shortlisted:
+      title: "شركة مهتمة بملفك"
+      body: "تم ترشيحك لوظيفة {role}. أجب لتعرف عن أي شركة يتعلق الأمر."
+      cta: "عرض العرض"
+  moderation:
+    plagiarism_case_opened:
+      title: "اعتراض على عمل قدمته"
+      body: "يقول أحدهم إنه يعيد استخدام عمل موجود. لديك 72 ساعة للرد قبل اتخاذ القرار."
+      cta: "اقرأ ورد"
+    plagiarism_case_decided:
+      title: "تم البت في الاعتراض"
+      body: "القرار مكتوب مع أسبابه."
+      cta: "اقرأ القرار"
+  design:
+    brief_published:
+      title: "نُشر موجزك"
+      body: "{brief} مفتوح: يمكن لأحدهم أخذه."
+      cta: "اعرض التحدي"
+    brief_rejected:
+      title: "لم يُقبل الموجز"
+      body: "لم يُقبل {brief}. السبب مكتوب."
+      cta: "اقرأ السبب"
+    iteration_requested:
+      title: "مطلوب جولة أخرى"
+      body: "قرأ {reviewer} نسختك ويطلب جولة إضافية على {slice}."
+      cta: "اقرأ الملاحظات"
+    version_submitted:
+      title: "نسخة تنتظر المراجعة"
+      body: "تم تسليم نسخة على {slice}."
+      cta: "افتح القائمة"
+    validated:
+      title: "تم اعتماد عملك"
+      body: "تم اعتماد {slice} بعد {rounds} جولات مراجعة."
+      cta: "اعرض التسليم"
+    rejected:
+      title: "لم يُقبل العمل"
+      body: "لم يُقبل {slice}. الملاحظات تشرح السبب."
+      cta: "اقرأ الملاحظات"
+  talent:
+    featured:
+      title: "تم إبرازك"
+      body: "عملك مُبرز على المنصة هذا الأسبوع."
+      cta: "اعرض ملفي"
+  contest:
+    published:
+      title: "مسابقة جديدة"
+      body: "{contest} مفتوحة، في مهنة أعلنت عنها."
+      cta: "اقرأ الموجز"
+    deadline_soon:
+      title: "الموعد النهائي يقترب"
+      body: "تغلق {contest} خلال {hours} ساعة."
+      cta: "سلّم مشاركتي"
+    closed:
+      title: "أُغلقت المسابقة"
+      body: "لم تعد {contest} تستقبل مشاركات. بدأ التحكيم."
+      cta: "اعرض المشاركات"
+    jury_invited:
+      title: "دعوة إلى لجنة التحكيم"
+      body: "طُلب منك تحكيم {contest}."
+      cta: "اقبل أو اعتذر"
+    jury_deadline_soon:
+      title: "بقي وقت قليل للتحكيم"
+      body: "ينتهي تحكيم {contest} خلال {hours} ساعة."
+      cta: "حكّم"
+    concluded:
+      title: "انتهت المسابقة"
+      body: "نُشر ترتيب {contest}."
+      cta: "اعرض الترتيب"
+    participation_recorded:
+      title: "سُجّلت مشاركتك"
+      body: "مشاركتك في {contest} مسجّلة على ملفك."
+      cta: "اعرض ملفي"
+  mission:
+    matching_published:
+      title: "مهمة تناسبك"
+      body: "مهمة جديدة تطابق المهن التي أعلنت عنها."
+      cta: "اعرض المهمة"
+    application_received:
+      title: "طلب جديد"
+      body: "تقدّم أحدهم لمهمة {mission}."
+      cta: "عرض الطلبات"
+    application_selected:
+      title: "تم اختيارك"
+      body: "تم قبول طلبك. المهمة لك."
+      cta: "عرض المهمة"
+    application_rejected:
+      title: "لم يتم قبول الطلب"
+      body: "لم يتم اختيار طلبك هذه المرة."
+      cta: "عرض طلباتي"
+    application_shortlisted:
+      title: "أنت في القائمة المختصرة"
+      body: "تأهل طلبك للمرحلة التالية."
+      cta: "عرض طلباتي"
   tournament:
     podium:
       title: "وصلت إلى منصة التتويج"

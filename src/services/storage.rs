@@ -217,12 +217,162 @@ impl StorageService {
             .map_err(|e| AppError::Internal(format!("presign failed: {e}")))
     }
 
+    /// Read an object back out of the private bucket.
+    ///
+    /// Used by the workers that have to look inside a file rather than hand it
+    /// to somebody — measuring an audio master, for one. A presigned URL plus
+    /// an HTTP client would work and would mean the service talking to itself
+    /// through a signature it just made.
+    pub async fn get_private(&self, key: &str) -> Result<Vec<u8>, AppError> {
+        let response = self
+            .private_bucket
+            .get_object(key)
+            .await
+            .map_err(|e| AppError::Internal(format!("read {key} failed: {e}")))?;
+        Ok(response.bytes().to_vec())
+    }
+
     pub async fn delete_private(&self, key: &str) -> Result<(), AppError> {
         self.private_bucket
             .delete_object(key)
             .await
             .map_err(|e| AppError::Internal(format!("delete {key} failed: {e}")))?;
         Ok(())
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Large files, uploaded by the client rather than through us
+    // ═══════════════════════════════════════════════════════════════
+    //
+    // A design deliverable can be a five-gigabyte scene file. Sending that
+    // through an axum handler would hold a connection and a buffer for as long
+    // as somebody's connection takes, and it would do so for every concurrent
+    // upload. So the object store receives it: we hand out presigned PUT URLs
+    // for each part, the client uploads straight there, and we only see the
+    // part list at the end.
+    //
+    // All of it lands in the private bucket. A design deliverable can be under
+    // NDA, so "readable only through a presigned URL" is the correct default
+    // and it is what this bucket already is.
+
+    /// Open a multipart upload and return the store's handle on it.
+    pub async fn begin_multipart(&self, key: &str, content_type: &str) -> Result<String, AppError> {
+        let started = self
+            .private_bucket
+            .initiate_multipart_upload(key, content_type)
+            .await
+            .map_err(|e| AppError::Internal(format!("multipart init for {key} failed: {e}")))?;
+        Ok(started.upload_id)
+    }
+
+    /// A presigned PUT for one part of an open multipart upload.
+    ///
+    /// The `uploadId` and `partNumber` travel as query parameters because that
+    /// is where S3 expects them, and they are part of what the signature
+    /// covers — a client cannot move a part to another upload or another
+    /// position without invalidating it.
+    pub async fn presign_part_put(
+        &self,
+        key: &str,
+        upload_id: &str,
+        part_number: u32,
+        expires_seconds: u32,
+    ) -> Result<String, AppError> {
+        let mut queries = std::collections::HashMap::new();
+        queries.insert("uploadId".to_string(), upload_id.to_string());
+        queries.insert("partNumber".to_string(), part_number.to_string());
+
+        self.private_bucket
+            .presign_put(
+                key,
+                expires_seconds.min(PRESIGN_MAX_TTL_SECONDS),
+                None,
+                Some(queries),
+            )
+            .await
+            .map_err(|e| AppError::Internal(format!("presign part {part_number} failed: {e}")))
+    }
+
+    /// A presigned PUT for a whole object. Used for the preview that
+    /// accompanies an unopenable source file — small enough to arrive in one
+    /// request, and separate so it can be replaced without re-sending the
+    /// source.
+    pub async fn presign_put_url(
+        &self,
+        key: &str,
+        expires_seconds: u32,
+    ) -> Result<String, AppError> {
+        self.private_bucket
+            .presign_put(
+                key,
+                expires_seconds.min(PRESIGN_MAX_TTL_SECONDS),
+                None,
+                None,
+            )
+            .await
+            .map_err(|e| AppError::Internal(format!("presign put for {key} failed: {e}")))
+    }
+
+    /// Ask the store to assemble the parts.
+    pub async fn finish_multipart(
+        &self,
+        key: &str,
+        upload_id: &str,
+        parts: &[crate::services::design_uploads::CompletedPart],
+    ) -> Result<(), AppError> {
+        let parts: Vec<s3::serde_types::Part> = parts
+            .iter()
+            .map(|p| s3::serde_types::Part {
+                part_number: p.part_number as u32,
+                etag: p.etag.clone(),
+            })
+            .collect();
+
+        let response = self
+            .private_bucket
+            .complete_multipart_upload(key, upload_id, parts)
+            .await
+            .map_err(|e| AppError::Internal(format!("multipart completion failed: {e}")))?;
+
+        // The store answers 200 with an error document on some failures, so
+        // the status is checked rather than assumed.
+        if response.status_code() >= 300 {
+            return Err(AppError::Validation(format!(
+                "the object store refused the assembly ({}) — usually a part                  that was never uploaded, or one under the five-megabyte floor",
+                response.status_code()
+            )));
+        }
+        Ok(())
+    }
+
+    /// Give up on an unfinished upload, so the store stops billing for the
+    /// parts already sent.
+    pub async fn abort_multipart(&self, key: &str, upload_id: &str) -> Result<(), AppError> {
+        self.private_bucket
+            .abort_upload(key, upload_id)
+            .await
+            .map_err(|e| AppError::Internal(format!("multipart abort failed: {e}")))?;
+        Ok(())
+    }
+
+    /// How many bytes the store actually holds.
+    ///
+    /// Read back rather than trusted: the ceiling checked before the upload
+    /// was checked against a number the client chose.
+    pub async fn object_size(&self, key: &str) -> Result<i64, AppError> {
+        let (head, status) = self
+            .private_bucket
+            .head_object(key)
+            .await
+            .map_err(|e| AppError::Internal(format!("head {key} failed: {e}")))?;
+        if status >= 300 {
+            return Err(AppError::NotFound(format!(
+                "the object store has nothing at {key}"
+            )));
+        }
+        head.content_length.ok_or_else(|| {
+            AppError::Internal(format!("the object store did not say how large {key} is"))
+        })
     }
 }
 

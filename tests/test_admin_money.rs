@@ -86,7 +86,7 @@ async fn money_taken_and_nothing_given_is_one_query_away() {
     assert_eq!(found.len(), 1);
     // Text, not a float: money on a screen must be the number in the
     // database rather than a rounding of it.
-    assert_eq!(found[0]["amount"], "5000.0000");
+    common::assert_amount(&found[0]["amount"], "5000.0000");
     assert!(found[0]["fulfilled_at"].is_null());
 }
 

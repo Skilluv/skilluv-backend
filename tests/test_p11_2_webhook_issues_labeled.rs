@@ -266,3 +266,149 @@ async fn pull_requests_are_skipped() {
     assert_eq!(count, 0, "PRs sont skip par le handler");
     drop(app);
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// The label also says which trade the work belongs to
+// ═══════════════════════════════════════════════════════════════════
+
+/// Record what `label` means, for `project`, using the live catalogue.
+async fn map_label(app: &TestApp, project: Uuid, label: &str, orientation_slug: &str) {
+    sqlx::query(
+        "INSERT INTO project_label_orientations (project_id, label, orientation_id)
+         SELECT $1, $2, resolve_orientation($3)",
+    )
+    .bind(project)
+    .bind(label)
+    .bind(orientation_slug)
+    .execute(&app.db)
+    .await
+    .expect("label mapping");
+}
+
+async fn trade_of_slice(app: &TestApp) -> Option<String> {
+    sqlx::query_scalar(
+        "SELECT o.slug FROM project_slices s
+           JOIN orientations o ON o.id = s.orientation_id",
+    )
+    .fetch_optional(&app.db)
+    .await
+    .expect("trade")
+}
+
+#[tokio::test]
+async fn a_mapped_label_types_the_ingested_slice() {
+    let app = TestApp::spawn().await;
+    let project =
+        create_user_and_project(&app, "acme", "typed", "auto", &["good-first-issue"]).await;
+    map_label(&app, project, "good-first-issue", "web-frontend-developer").await;
+
+    let payload = make_issue_labeled_payload(
+        "acme",
+        "typed",
+        7,
+        "Align the toolbar",
+        "good-first-issue",
+        false,
+    );
+    assert_eq!(post_webhook(&app, "issues", &payload).await.status(), 200);
+
+    assert_eq!(
+        trade_of_slice(&app).await.as_deref(),
+        Some("web-frontend-developer"),
+        "the label the maintainer added is what says which trade this is"
+    );
+    drop(app);
+}
+
+#[tokio::test]
+async fn an_unmapped_label_leaves_the_slice_untyped() {
+    let app = TestApp::spawn().await;
+    let _p = create_user_and_project(&app, "acme", "untyped", "auto", &["good-first-issue"]).await;
+
+    let payload =
+        make_issue_labeled_payload("acme", "untyped", 8, "Something", "good-first-issue", false);
+    assert_eq!(post_webhook(&app, "issues", &payload).await.status(), 200);
+
+    // Ingesting it untyped is right: nothing said which trade it is, and
+    // inventing one would credit a speciality nobody worked in.
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM project_slices")
+        .fetch_one(&app.db)
+        .await
+        .expect("c");
+    assert_eq!(count, 1, "an unmapped label still ingests");
+    assert!(trade_of_slice(&app).await.is_none());
+    drop(app);
+}
+
+#[tokio::test]
+async fn the_label_that_triggered_the_webhook_decides() {
+    let app = TestApp::spawn().await;
+    let project = create_user_and_project(
+        &app,
+        "acme",
+        "twolabels",
+        "auto",
+        &["good-first-issue", "area/kernel"],
+    )
+    .await;
+    map_label(&app, project, "good-first-issue", "web-frontend-developer").await;
+    map_label(&app, project, "area/kernel", "kernel-driver-developer").await;
+
+    // The issue carries both. The one just added is the most recent thing
+    // anybody said about it.
+    let mut payload = make_issue_labeled_payload(
+        "acme",
+        "twolabels",
+        9,
+        "Rework the driver",
+        "area/kernel",
+        false,
+    );
+    payload["issue"]["labels"] =
+        serde_json::json!([{ "name": "good-first-issue" }, { "name": "area/kernel" }]);
+
+    assert_eq!(post_webhook(&app, "issues", &payload).await.status(), 200);
+    assert_eq!(
+        trade_of_slice(&app).await.as_deref(),
+        Some("kernel-driver-developer")
+    );
+    drop(app);
+}
+
+#[tokio::test]
+async fn labels_that_disagree_type_nothing() {
+    let app = TestApp::spawn().await;
+    let project = create_user_and_project(
+        &app,
+        "acme",
+        "disagree",
+        "auto",
+        &["good-first-issue", "area/kernel", "help wanted"],
+    )
+    .await;
+    map_label(&app, project, "good-first-issue", "web-frontend-developer").await;
+    map_label(&app, project, "area/kernel", "kernel-driver-developer").await;
+
+    // The trigger label is curated but unmapped, so the rest has to answer —
+    // and it contradicts itself. Silence beats a coin toss.
+    let mut payload =
+        make_issue_labeled_payload("acme", "disagree", 10, "Unclear", "help wanted", false);
+    payload["issue"]["labels"] = serde_json::json!([
+        { "name": "good-first-issue" },
+        { "name": "area/kernel" },
+        { "name": "help wanted" }
+    ]);
+
+    assert_eq!(post_webhook(&app, "issues", &payload).await.status(), 200);
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM project_slices")
+        .fetch_one(&app.db)
+        .await
+        .expect("c");
+    assert_eq!(count, 1);
+    assert!(
+        trade_of_slice(&app).await.is_none(),
+        "two labels naming two trades is a contradiction, not a choice"
+    );
+    drop(app);
+}

@@ -104,22 +104,65 @@ pub async fn require_challenge_validator_for(
 ) -> Result<(), AppError> {
     // Guard against unknown domains rather than delegating a malformed
     // capability string that would never match.
-    const VALID_DOMAINS: &[&str] = &[
-        "code",
-        "design",
-        "game",
-        "security",
-        "ops",
-        "ai",
-        "soft_skills",
-    ];
-    if !VALID_DOMAINS.contains(&domain) {
+    if !crate::validators::SKILL_DOMAINS.contains(&domain) {
         return Err(AppError::Validation(format!(
             "unknown challenge validator domain: {domain}"
         )));
     }
     let capability = format!("challenge_validator:{domain}");
     require_capability(db, user_id, &capability).await
+}
+
+/// Whether this user may review work in a given trade.
+///
+/// Review rights are granted by family, not by trade: thirty-three code
+/// orientations would mean thirty-three capabilities and an operator granting
+/// them one at a time, and nobody reviews at that granularity anyway — someone
+/// who can judge a React component can judge a Svelte one, and cannot judge a
+/// CUDA kernel.
+///
+/// The family lives on the orientation row rather than in a match here,
+/// because orientations are created at runtime through the admin panel and a
+/// mapping compiled into the binary would leave every new one unreviewable
+/// until somebody deploys.
+///
+/// `{domain}_reviewer:all` is the wildcard: it covers every family in that
+/// domain. Checked second, so the specific grant is the common path.
+pub async fn require_reviewer_for_orientation(
+    db: &PgPool,
+    user_id: Uuid,
+    orientation_slug: &str,
+) -> Result<(), AppError> {
+    let row: Option<(String, Option<String>)> =
+        sqlx::query_as("SELECT primary_domain, reviewer_group FROM orientations WHERE slug = $1")
+            .bind(orientation_slug)
+            .fetch_optional(db)
+            .await?;
+
+    let Some((domain, group)) = row else {
+        return Err(AppError::Validation(format!(
+            "unknown orientation: {orientation_slug}"
+        )));
+    };
+
+    // No group means nobody has been made responsible for reviewing this
+    // trade yet. Refusing is the safe answer, and saying so names the fix.
+    let Some(group) = group else {
+        return Err(AppError::Validation(format!(
+            "orientation '{orientation_slug}' has no reviewer group, so review \
+             rights cannot be granted for it"
+        )));
+    };
+
+    require_any_capability(
+        db,
+        user_id,
+        &[
+            &format!("{domain}_reviewer:{group}"),
+            &format!("{domain}_reviewer:all"),
+        ],
+    )
+    .await
 }
 
 /// Retourne toutes les capabilities actives d'un user (utile pour /me/capabilities).

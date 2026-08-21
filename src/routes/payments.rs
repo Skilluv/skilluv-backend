@@ -70,6 +70,7 @@ pub struct PaymentMethod {
     responses(
         (status = 200, description = "Available methods, in display order. Empty when no country is given and none can be resolved from the caller's account", body = ApiResponse<Vec<PaymentMethod>>),
     ),
+    operation_id = "paymentsMethods",
 )]
 pub async fn methods(
     State(state): State<AppState>,

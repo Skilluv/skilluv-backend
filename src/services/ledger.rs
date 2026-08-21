@@ -46,6 +46,20 @@ use uuid::Uuid;
 
 use crate::errors::AppError;
 
+/// A rate as `platform_revenues.fee_rate_bps` wants it.
+///
+/// That column is NOT NULL and has no default, so every stream that books a
+/// margin has to say what rate produced it. Basis points rather than percent
+/// because 8.25% is a rate somebody will eventually charge, and rounding it
+/// to 8 in the audit trail makes the reported total disagree with the money.
+pub fn percent_to_bps(percent: &BigDecimal) -> i32 {
+    use bigdecimal::num_traits::ToPrimitive;
+    (percent * BigDecimal::from(100))
+        .with_scale_round(0, bigdecimal::RoundingMode::HalfUp)
+        .to_i32()
+        .unwrap_or(0)
+}
+
 /// Currency of an amount. Mirrors the CHECK constraint in migration 0153.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum Currency {
@@ -121,6 +135,17 @@ pub enum Account {
     /// The counterparty outside the system, for movements crossing the
     /// boundary with no claim behind them.
     World { currency: Currency },
+    /// Money owed to whoever an outcome designates, held until it does.
+    ///
+    /// A contest prize is escrowed before anybody knows who wins, so it
+    /// cannot sit on a `User` account — those are claims on a named person.
+    /// It sits here, keyed to the thing that will decide, and moves to the
+    /// winners' `pending` accounts at finalisation.
+    Escrow {
+        subject_type: &'static str,
+        subject_id: Uuid,
+        currency: Currency,
+    },
 }
 
 impl Account {
@@ -141,6 +166,11 @@ impl Account {
                 format!("psp:{provider}:settlement:{}", currency.as_str())
             }
             Account::World { currency } => format!("external:world:{}", currency.as_str()),
+            Account::Escrow {
+                subject_type,
+                subject_id,
+                currency,
+            } => format!("escrow:{subject_type}:{subject_id}:{}", currency.as_str()),
         }
     }
 
@@ -149,7 +179,8 @@ impl Account {
             Account::User { currency, .. }
             | Account::Platform { currency, .. }
             | Account::Psp { currency, .. }
-            | Account::World { currency } => *currency,
+            | Account::World { currency }
+            | Account::Escrow { currency, .. } => *currency,
         }
     }
 
@@ -159,6 +190,7 @@ impl Account {
             Account::Platform { .. } => "platform",
             Account::Psp { .. } => "psp",
             Account::World { .. } => "external",
+            Account::Escrow { .. } => "escrow",
         }
     }
 
@@ -622,6 +654,54 @@ pub async fn resolve_dispute_for_recipient(
         )
         .about(subject_type, subject_id)
         .idempotent(format!("dispute_resolved:{subject_type}:{subject_id}")),
+    )
+    .await
+}
+
+/// Money captured but never released goes back to the payer.
+///
+/// The same movement as `refund_from_dispute` and deliberately a separate
+/// function, because it starts from a different state: `pending` rather than
+/// `disputed`. Routing a cancellation through the dispute pair would write a
+/// dispute that nobody raised, and `hold_dispute` is not free of meaning —
+/// it is what an operator's queue counts.
+///
+/// Only what is still `pending` can go back this way. An amount already
+/// released is the recipient's to withdraw, and clawing it back is the much
+/// harder problem the release window exists to avoid; a caller holding
+/// released money has a dispute, not a cancellation.
+///
+/// Our commission goes back with it, for the reason below.
+#[allow(clippy::too_many_arguments)]
+pub async fn refund_from_pending(
+    tx: &mut Transaction<'_, Postgres>,
+    provider: &'static str,
+    user_id: Uuid,
+    recipient_share: BigDecimal,
+    platform_share: BigDecimal,
+    currency: Currency,
+    subject_type: &str,
+    subject_id: Uuid,
+) -> Result<Posted, AppError> {
+    let total = recipient_share.clone() + platform_share.clone();
+    post_in_tx(
+        tx,
+        Posting::new(
+            "capture_refunded",
+            vec![
+                Leg::debit(owed(user_id, State::Pending, currency), recipient_share),
+                Leg::debit(
+                    Account::Platform {
+                        bucket: "revenue",
+                        currency,
+                    },
+                    platform_share,
+                ),
+                Leg::credit(Account::Psp { provider, currency }, total),
+            ],
+        )
+        .about(subject_type, subject_id)
+        .idempotent(format!("refund_pending:{subject_type}:{subject_id}")),
     )
     .await
 }

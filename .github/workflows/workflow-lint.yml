@@ -48,6 +48,14 @@ jobs:
       - name: Run actionlint
         run: actionlint -color
 
+      # actionlint checks each workflow on its own. This checks a property
+      # that lives between two of them: `ci.yml` ignores a set of paths and
+      # `ci-docs-only.yml` claims exactly that set, because branch protection
+      # waits for two checks by name and a pull request triggering neither
+      # workflow waits for ever. Drift is silent in a diff review.
+      - name: The two CI path filters are complements
+        run: python3 scripts/check-ci-path-filters.py
+
   zizmor:
     name: zizmor (security)
     runs-on: ubuntu-latest

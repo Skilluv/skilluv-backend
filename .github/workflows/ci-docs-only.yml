@@ -1,0 +1,81 @@
+name: CI
+
+# The other half of `ci.yml`.
+#
+# ## The deadlock this exists to break
+#
+# `ci.yml` carries `paths-ignore: "**.md"` so a typo in a README does not spend
+# thirty minutes of runner time compiling Rust. Branch protection on `master`
+# requires two checks by name: `Build & Lint` and `Integration Tests`.
+#
+# Those two facts contradict each other. A pull request that touches only
+# Markdown does not trigger `ci.yml`, so neither required check is ever
+# reported, so GitHub waits for a status that is never coming and the pull
+# request cannot be merged. Not "fails" — waits, permanently.
+#
+# It surfaced on the release: release-please opens a pull request whose only
+# change is `CHANGELOG.md`, and version 0.1.0 does not bump `Cargo.toml`
+# because the manifest already said 0.1.0. So the first release of this
+# project was unmergeable by construction, and the only ways out were an
+# admin override or removing the optimisation.
+#
+# ## How this fixes it
+#
+# GitHub matches required checks by **job name**, not by workflow. This file
+# declares jobs with exactly the two required names, triggered on precisely
+# the paths `ci.yml` ignores. When a pull request is Markdown-only, these run
+# instead, report success in a couple of seconds, and the requirement is met.
+# When it touches anything else, `ci.yml` runs and this one does not — the two
+# path filters are complements, so exactly one workflow answers.
+#
+# The `name:` at the top is `CI` on purpose. The required contexts are
+# `Build & Lint` and `Integration Tests` without a workflow prefix, but
+# matching the workflow name too keeps the checks list readable: a reviewer
+# sees `CI / Build & Lint` either way rather than wondering why the name
+# changed on documentation pull requests.
+#
+# ## What this does not do
+#
+# It does not assert the code is good — it asserts that no code changed. That
+# is the whole claim, and it is a true one: the path filter is what proves it.
+# If a change reaches these jobs and is not documentation, the filters have
+# drifted apart, and that is a bug in the filters rather than something to
+# paper over here. Keep the two lists identical.
+
+on:
+  pull_request:
+    branches: [master]
+    types: [opened, synchronize, reopened, ready_for_review]
+    # The exact complement of `ci.yml`'s `paths-ignore`. Edit both together.
+    paths:
+      - "**.md"
+      - "docs/**"
+      - "LICENSE"
+      - ".gitignore"
+      - ".editorconfig"
+      - ".github/ISSUE_TEMPLATE/**"
+      - ".github/FUNDING.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Build & Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Nothing to build
+        run: |
+          echo "Documentation-only change: no Rust source, no manifest, no migration."
+          echo "The path filter is the proof — see .github/workflows/ci-docs-only.yml."
+
+  test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Nothing to test
+        run: |
+          echo "Documentation-only change: the suite would compile and run the"
+          echo "same code that is already green on master."

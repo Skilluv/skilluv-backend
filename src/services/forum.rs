@@ -532,19 +532,27 @@ pub async fn search_posts(
         return Ok(Vec::new());
     }
     // Build a tsquery from whitespace-separated terms, OR'd then AND'd
-    let tsquery_str = trimmed
-        .split_whitespace()
-        .filter(|w| !w.is_empty())
-        .map(|w| w.replace('\'', " "))
-        .collect::<Vec<_>>()
-        .join(" & ");
-    if tsquery_str.is_empty() {
+    // Handed to `websearch_to_tsquery` as typed.
+    //
+    // This used to join the words with ` & ` and escape apostrophes, which is
+    // not enough: `&`, `|`, `!`, `(`, `)` and `:` are tsquery operators, so
+    // `to_tsquery` raised a syntax error and the endpoint answered 500.
+    // Searching for `C++`, `R&D` or `(brouillon)` was a server error, and the
+    // contract fuzzer found it by typing bytes nobody would.
+    //
+    // `websearch_to_tsquery` is the one built for a search box: it never
+    // raises on its input, whatever it is. It also reads quoted phrases and a
+    // leading `-` as exclusion, which is what somebody typing into a search
+    // box already expects, and it still ANDs bare words — so what used to work
+    // works the same.
+    if trimmed.is_empty() {
         return Ok(Vec::new());
     }
+    let tsquery_str = trimmed;
 
     let rows: Vec<ForumRow505> = sqlx::query_as(
         r#"
-        WITH q AS (SELECT to_tsquery('simple', $1) AS tq)
+        WITH q AS (SELECT websearch_to_tsquery('simple', $1) AS tq)
         SELECT
             p.id,
             p.kind,
@@ -561,7 +569,7 @@ pub async fn search_posts(
         LIMIT $2
         "#,
     )
-    .bind(&tsquery_str)
+    .bind(tsquery_str)
     .bind(limit.clamp(1, 50))
     .fetch_all(db)
     .await?;

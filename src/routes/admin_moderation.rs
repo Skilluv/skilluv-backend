@@ -307,7 +307,11 @@ pub async fn list_users(
     if query.q.is_some() {
         param_idx += 1;
         where_clauses.push(format!(
-            "search_vector @@ to_tsquery('simple', ${param_idx})"
+            // `websearch_to_tsquery`, not `to_tsquery`: the latter parses its
+            // input as a query expression and raises on anything that is not
+            // one, so a moderator searching for `R&D` or `o'brien` got a 500
+            // instead of a result list. See the same fix in `forum::search`.
+            "search_vector @@ websearch_to_tsquery('simple', ${param_idx})"
         ));
     }
 
@@ -334,9 +338,10 @@ pub async fn list_users(
         cnt_query = cnt_query.bind(banned);
     }
     if let Some(ref q) = query.q {
-        let tsq = q.split_whitespace().collect::<Vec<_>>().join(" & ");
-        db_query = db_query.bind(tsq.clone());
-        cnt_query = cnt_query.bind(tsq);
+        // As typed. The ` & ` join this used to build was not an escape —
+        // every operator character survived it untouched.
+        db_query = db_query.bind(q.clone());
+        cnt_query = cnt_query.bind(q.clone());
     }
 
     let users: Vec<UserSummary> = db_query.fetch_all(&state.db).await?;

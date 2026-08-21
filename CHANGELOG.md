@@ -5,6 +5,10 @@ All notable changes to the Skilluv backend are documented here.
 The format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project will follow semantic versioning once 1.0 is reached.
 
+## [Unreleased]
+
+_Nothing yet._
+
 ## 0.1.0 (2026-08-21)
 
 
@@ -135,7 +139,14 @@ and the project will follow semantic versioning once 1.0 is reached.
 * **tests:** elimine les flakies en parallele ([a71be79](https://github.com/Skilluv/skilluv-backend/commit/a71be799b787789748f5564ee51dcb816a03437c))
 * **tests:** P13.2 + P13.5 env mutation guarded by Mutex ([5ee97ca](https://github.com/Skilluv/skilluv-backend/commit/5ee97ca8cf8a24d7b717811f336f81271c5d7881))
 
-## [Unreleased]
+### In detail
+
+The list above is generated from the commit messages and is the index.
+This is the account: what changed, and why it was done that way. It was
+written as the work happened, under `[Unreleased]`, and everything in it
+shipped in 0.1.0 — so it belongs here rather than above a release it is
+no longer waiting for.
+
 
 Target model + P10-P15 (teams multi-role, GitHub ingestion, discovery,
 real-money payouts, multi-tenancy + anti-fraud, mobile push +
@@ -143,7 +154,7 @@ AI-native verifier + team marketplace) all in place. The P10-P15
 roadmap in `docs/roadmap-p10-p15.md` is closed; next iteration will
 address KYC full, live AI wiring in prod, and RLS enforcement.
 
-### Added
+#### Added
 
 - **An accusation the accused can answer.** `plagiarism_cases`, deliberately
   not a `reports` row: a report has nowhere for the accused to reply, and the
@@ -216,7 +227,7 @@ address KYC full, live AI wiring in prod, and RLS enforcement.
   missions, optional elsewhere. Exactly one scope (`buyout`) takes the
   creator's portfolio away, and it says so.
 
-### Changed
+#### Changed
 
 - **Six dependency bumps, folded in rather than merged separately.** rand_core
   0.6 to 0.10, jsonwebtoken 10 to 11, zip 3 to 8, and three GitHub Actions.
@@ -635,7 +646,7 @@ address KYC full, live AI wiring in prod, and RLS enforcement.
 - **P8.5b** — Headers `Deprecation: true`, `Sunset: Fri, 31 Dec 2027 23:59:59 GMT`,
   `Link: </deliverables>; rel="successor-version"` on `POST /api/challenges/{id}/submit`.
 
-### Changed
+#### Changed
 
 - **P9.3** — Table `challenges` was renamed to `challenge_templates` (migration 0075).
   The HTTP paths `/api/challenges/*` are **unchanged**; the rename is an
@@ -648,7 +659,7 @@ address KYC full, live AI wiring in prod, and RLS enforcement.
   (gamification, profile, public_api) now read from `user_skills + skill_nodes`
   (single source of truth).
 
-### Removed
+#### Removed
 
 - **P9.3** — Old `challenges` table name (renamed, see above).
 - **P9.2** — Tables `oss_bounties` + `oss_bounty_claims` (migration 0074).
@@ -661,7 +672,7 @@ address KYC full, live AI wiring in prod, and RLS enforcement.
 - **P8.3** — Columns `challenges.ai_allowed` + `challenges.prerequisite_fragments`
   (migration 0070). Replaced by typed `ai_policy` + the `challenge_prerequisites` DAG.
 
-### Fixed
+#### Fixed
 
 - **Searching for `C++` was a server error.** `forum::search_posts` and
   `admin_moderation::list_users` handed user input to `to_tsquery`, which
@@ -732,7 +743,7 @@ address KYC full, live AI wiring in prod, and RLS enforcement.
   which failed the migration chain, which meant the backend never started —
   one row costing an entire CI run.
 
-### Added
+#### Added
 
 - **`scripts/check-migrations.sh`** — applies every migration to a throwaway
   database and asserts what the schema should hold. Fifteen seconds against a
@@ -749,7 +760,7 @@ address KYC full, live AI wiring in prod, and RLS enforcement.
   correct, and a 500 to a well-formed request is what a query that has stopped
   decoding produces.
 
-### Changed
+#### Changed
 
 - **ci** — Eight test shards instead of four, and a 45-minute budget instead
   of 35. At four, three shards out of four were being killed by the timeout,
@@ -758,7 +769,7 @@ address KYC full, live AI wiring in prod, and RLS enforcement.
   divides, so eight shards is ~20 min rather than half of 28 — the gain that
   matters is that results survive to be read.
 
-### Fixed
+#### Fixed
 
 - **fix(goals)** — A capability goal could not be created at all. The target
   was validated by pattern-matching the *text* of

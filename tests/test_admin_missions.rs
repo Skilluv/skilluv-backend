@@ -6,9 +6,71 @@
 //! hand in again, with the money sitting in escrow between them.
 
 mod common;
+use bigdecimal::BigDecimal;
 use common::TestApp;
 use serde_json::{Value, json};
+use skilluv_backend::services::ledger::{self, Currency, State};
+use std::str::FromStr;
 use uuid::Uuid;
+
+fn eur(value: &str) -> BigDecimal {
+    BigDecimal::from_str(value).unwrap()
+}
+
+async fn balance(app: &TestApp, user: Uuid, state: State) -> BigDecimal {
+    ledger::user_balance(&app.db, user, state, Currency::Eur)
+        .await
+        .unwrap()
+}
+
+/// Money in escrow: an invoice for the whole budget, paid, captured onto the
+/// ledger exactly as `mission_billing::capture` would have.
+///
+/// The fixture the arbitration tests were missing. Without an invoice there is
+/// nothing to release and nothing to return, which is why an endpoint whose
+/// own documentation says "the money is released" could move none and pass.
+async fn escrowed(app: &TestApp, mission: Uuid, talent: Uuid) -> Uuid {
+    let invoice: Uuid = sqlx::query_scalar(
+        "INSERT INTO mission_invoices
+            (mission_id, sequence, label, amount, currency, commission_percent, status)
+         VALUES ($1, 1, 'Solde de la mission', 2000, 'EUR', 15, 'issued')
+         RETURNING id",
+    )
+    .bind(mission)
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+
+    // The payment names the invoice, not the mission: that is the subject the
+    // refund looks the charge up by, and getting it wrong is the difference
+    // between reversing the card and logging "refund this by hand".
+    let payment: Uuid = sqlx::query_scalar(
+        "INSERT INTO payments (subject_type, subject_id, provider, method, amount,
+                               currency, status, succeeded_at)
+         VALUES ('mission_invoice', $1, 'stripe', 'card', 2000, 'EUR', 'succeeded', NOW())
+         RETURNING id",
+    )
+    .bind(invoice)
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+
+    sqlx::query("UPDATE mission_invoices SET payment_id = $2 WHERE id = $1")
+        .bind(invoice)
+        .bind(payment)
+        .execute(&app.db)
+        .await
+        .unwrap();
+
+    skilluv_backend::services::mission_billing::capture(&app.db, invoice, payment)
+        .await
+        .expect("capture");
+
+    // 2000 less the fifteen percent commission.
+    assert_eq!(balance(app, talent, State::Pending).await, eur("1700.00"));
+
+    invoice
+}
 
 async fn user_id(app: &TestApp, username: &str) -> Uuid {
     sqlx::query_scalar("SELECT id FROM users WHERE username = $1")
@@ -324,7 +386,11 @@ async fn an_arbitration_ends_the_round_and_says_it_was_decided() {
         .fetch_one(&app.db)
         .await
         .unwrap();
-    assert_eq!(status, "delivered");
+    // `closed`, not `delivered`. Closing is the client accepting delivery, and
+    // arbitration exists because the client will not: stopping at `delivered`
+    // would leave the mission waiting on the one act that was refused, with
+    // the escrow waiting behind it.
+    assert_eq!(status, "closed");
 
     // The waiting round is answered, so the loop cannot be resumed behind the
     // decision.
@@ -412,4 +478,185 @@ async fn a_mission_that_already_ended_has_nothing_to_arbitrate() {
         )
         .await;
     assert_eq!(resp.status(), 409);
+}
+
+/// Deciding for the delivery releases the escrow.
+///
+/// The endpoint's own documentation said "the delivery stands and the money is
+/// released", and it released nothing: the status was written with a raw
+/// UPDATE, and both the release and the refund live in `missions::set_status`.
+/// So the arbitration read as settled and the funds sat exactly where they
+/// were, which is the failure mode the whole payment layer was built to end.
+///
+/// Nothing caught it because no arbitration test had an invoice at all.
+#[tokio::test]
+async fn deciding_for_the_delivery_releases_the_escrow() {
+    let app = TestApp::spawn().await;
+    let (client, talent) = a_cast(&app, "am_pay_ok").await;
+    let mission = a_stuck_mission(&app, "am-pay-ok", client, talent).await;
+    let invoice = escrowed(&app, mission, talent).await;
+
+    app.register_user("am_pay_ok_arb").await;
+    let arbiter = user_id(&app, "am_pay_ok_arb").await;
+    grant(&app, arbiter, "mission_arbiter").await;
+    app.login("am_pay_ok_arb").await;
+
+    let reason = "Le livrable répond au critère écrit dans la mission : le logotype tient en une \
+                  couleur et reste lisible en favicon. Le client n'a formulé aucun grief en trente \
+                  jours.";
+    let resp = app
+        .post(
+            "/api/admin/missions/am-pay-ok/arbitrate",
+            &json!({"outcome": "accepted", "reason_md": reason}),
+        )
+        .await;
+    assert_eq!(resp.status(), 200, "{}", resp.text().await.unwrap());
+
+    // Pending became available: the talent can withdraw it. The commission
+    // never was in their pending balance, so the figure does not change here.
+    assert_eq!(balance(&app, talent, State::Pending).await, eur("0"));
+    assert_eq!(
+        balance(&app, talent, State::Available).await,
+        eur("1700.00")
+    );
+
+    let status: String = sqlx::query_scalar("SELECT status FROM mission_invoices WHERE id = $1")
+        .bind(invoice)
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
+    assert_eq!(status, "released");
+}
+
+/// Deciding against it returns the escrow.
+///
+/// The other half of the same silence: `cancelled` set the word and left the
+/// captured money in the talent's pending balance forever, with no path that
+/// could ever move it.
+#[tokio::test]
+async fn deciding_against_the_delivery_returns_the_escrow() {
+    let app = TestApp::spawn().await;
+    let (client, talent) = a_cast(&app, "am_pay_no").await;
+    let mission = a_stuck_mission(&app, "am-pay-no", client, talent).await;
+    let invoice = escrowed(&app, mission, talent).await;
+
+    app.register_user("am_pay_no_arb").await;
+    let arbiter = user_id(&app, "am_pay_no_arb").await;
+    grant(&app, arbiter, "mission_arbiter").await;
+    app.login("am_pay_no_arb").await;
+
+    let reason = "Le livrable ne répond pas au critère écrit : le logotype devient illisible en \
+                  favicon et aucune version monochrome n'a été fournie malgré deux demandes \
+                  écrites du client.";
+    let resp = app
+        .post(
+            "/api/admin/missions/am-pay-no/arbitrate",
+            &json!({"outcome": "cancelled", "reason_md": reason}),
+        )
+        .await;
+    assert_eq!(resp.status(), 200, "{}", resp.text().await.unwrap());
+
+    // Nothing is owed to anybody: the claim on the talent's side is cancelled
+    // and the money is back at the provider.
+    assert_eq!(balance(&app, talent, State::Pending).await, eur("0"));
+    assert_eq!(balance(&app, talent, State::Available).await, eur("0"));
+
+    let (status, reason_written): (String, Option<String>) =
+        sqlx::query_as("SELECT status, cancellation_reason FROM mission_invoices WHERE id = $1")
+            .bind(invoice)
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
+    // `refunded`, not `cancelled`: a cancelled invoice is one nobody ever
+    // paid, and an accountant has to be able to tell those apart.
+    assert_eq!(status, "refunded");
+    assert!(reason_written.is_some_and(|r| !r.trim().is_empty()));
+
+    // The commission came off with it. Keeping a fee on a service the arbiter
+    // has just ruled undelivered would be indefensible, and it would also
+    // leave marketplace revenue counting money we gave back.
+    let revenue: Option<BigDecimal> = sqlx::query_scalar(
+        "SELECT SUM(amount_credits) FROM platform_revenues
+          WHERE source = 'mission_marketplace' AND related_talent_id = $1",
+    )
+    .bind(talent)
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert_eq!(revenue.unwrap_or_else(|| eur("0")), eur("0"));
+}
+
+/// Cancelling a mission returns the escrow, arbitrated or not.
+///
+/// The bug was never only arbitration's. `release_all` was called from
+/// `set_status` on `closed` and nothing was called on `cancelled`, so any
+/// mission cancelled from `in_progress` with a paid invoice stranded the money
+/// -- no arbiter required. Fixing it at the status transition rather than at
+/// the endpoint is what makes this test possible to write.
+#[tokio::test]
+async fn cancelling_a_mission_returns_the_escrow_without_an_arbiter() {
+    let app = TestApp::spawn().await;
+    let (client, talent) = a_cast(&app, "am_plain_cancel").await;
+    let mission = a_stuck_mission(&app, "am-plain-cancel", client, talent).await;
+    let invoice = escrowed(&app, mission, talent).await;
+
+    skilluv_backend::services::missions::set_status(
+        &app.db,
+        mission,
+        "cancelled",
+        Some("Le client a mis fin à la mission avant la livraison finale."),
+    )
+    .await
+    .expect("cancel");
+
+    assert_eq!(balance(&app, talent, State::Pending).await, eur("0"));
+
+    let status: String = sqlx::query_scalar("SELECT status FROM mission_invoices WHERE id = $1")
+        .bind(invoice)
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
+    assert_eq!(status, "refunded");
+}
+
+/// Money already released stays released.
+///
+/// On a milestone mission the accepted rounds have already paid out, and
+/// cancelling the rest must not reach back for them: once released the amount
+/// is the talent's to withdraw and may already be gone. That is what the
+/// dispute machinery is for, with its own burden of proof.
+#[tokio::test]
+async fn a_cancellation_does_not_claw_back_what_was_already_released() {
+    let app = TestApp::spawn().await;
+    let (client, talent) = a_cast(&app, "am_released").await;
+    let mission = a_stuck_mission(&app, "am-released", client, talent).await;
+    let invoice = escrowed(&app, mission, talent).await;
+
+    skilluv_backend::services::mission_billing::release_one(&app.db, invoice)
+        .await
+        .expect("release");
+    assert_eq!(
+        balance(&app, talent, State::Available).await,
+        eur("1700.00")
+    );
+
+    skilluv_backend::services::missions::set_status(
+        &app.db,
+        mission,
+        "cancelled",
+        Some("Annulée après le versement du premier jalon, pour les rounds restants."),
+    )
+    .await
+    .expect("cancel");
+
+    assert_eq!(
+        balance(&app, talent, State::Available).await,
+        eur("1700.00")
+    );
+    let status: String = sqlx::query_scalar("SELECT status FROM mission_invoices WHERE id = $1")
+        .bind(invoice)
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
+    assert_eq!(status, "released");
 }

@@ -407,6 +407,147 @@ pub async fn release_one(db: &PgPool, invoice_id: Uuid) -> Result<bool, AppError
     Ok(done.rows_affected() > 0)
 }
 
+/// The mission ended without the delivery being accepted. What was captured
+/// and never released goes back to the payer.
+///
+/// The mirror of `release_all`, and driven by the same event for the same
+/// reason: cancelling is one decision about the whole mission, and returning
+/// March's instalment while keeping April's would mean nothing to either
+/// party.
+///
+/// **Only `paid` invoices.** An invoice already `released` is the talent's to
+/// withdraw and possibly already withdrawn; taking it back is the much harder
+/// problem the release window exists to avoid, and a client who wants that has
+/// a dispute — which has its own machinery, its own queue and its own burden
+/// of proof. On a `milestone_iteration` mission this is exactly the right
+/// line: rounds that were accepted stay paid, and the escrow for rounds that
+/// were not goes home.
+///
+/// **The provider first, then the books.** Same order as `disputes::settle`,
+/// and for the same reason: entries saying the money left the provider's float
+/// while the card was never credited is the one accounting error a customer
+/// notices before we do. A provider that cannot refund stops this, and the
+/// remaining invoices are left alone rather than half-returned.
+pub async fn refund_all(db: &PgPool, mission_id: Uuid, reason: &str) -> Result<u64, AppError> {
+    let invoices: Vec<(Uuid, BigDecimal, String, BigDecimal, Uuid)> = sqlx::query_as(
+        "SELECT i.id, i.amount, i.currency, i.commission_percent, m.assigned_user_id
+           FROM mission_invoices i
+           JOIN missions m ON m.id = i.mission_id
+          WHERE i.mission_id = $1 AND i.status = 'paid'
+            AND m.assigned_user_id IS NOT NULL
+          ORDER BY i.sequence",
+    )
+    .bind(mission_id)
+    .fetch_all(db)
+    .await?;
+
+    let registry = crate::services::collect_adapters::registry_from_env();
+    let mut refunded = 0u64;
+
+    for (invoice_id, amount, currency, commission, recipient) in invoices {
+        let currency: ledger::Currency = currency.parse()?;
+        let share = platform_share(&amount, &commission);
+        let theirs = amount.clone() - share.clone();
+
+        let at_provider =
+            crate::services::collect::refund(db, &registry, "mission_invoice", invoice_id, reason)
+                .await?;
+
+        if at_provider.is_none() {
+            // The books still have to move — the money is certainly not the
+            // talent's — but somebody has to give it back by hand. Loud, and
+            // counted, because nothing else will notice.
+            tracing::error!(
+                mission = %mission_id,
+                invoice = %invoice_id,
+                "refunded in the books with no provider charge to reverse — refund this by hand"
+            );
+            metrics::counter!("skilluv_mission_manual_refund_needed_total").increment(1);
+        }
+
+        // One transaction per invoice: the ledger posting and the row that
+        // says it happened cannot disagree, and an invoice that fails does not
+        // undo the ones already returned.
+        let mut tx = db.begin().await?;
+
+        ledger::refund_from_pending(
+            &mut tx,
+            ledger_provider_for_invoice(db, invoice_id).await?,
+            recipient,
+            theirs,
+            share.clone(),
+            currency,
+            "mission_invoice",
+            invoice_id,
+        )
+        .await?;
+
+        let done = sqlx::query(
+            "UPDATE mission_invoices
+                SET status = 'refunded', refunded_at = NOW(),
+                    cancellation_reason = $2, updated_at = NOW()
+              WHERE id = $1 AND status = 'paid'",
+        )
+        .bind(invoice_id)
+        .bind(reason)
+        .execute(&mut *tx)
+        .await?;
+
+        // The commission came off the books with the rest, so the revenue line
+        // `capture` wrote has to come off too. Left standing, marketplace
+        // revenue would count a fee on a service nobody received, and it would
+        // only surface when somebody reconciled the year.
+        if share.is_positive() {
+            sqlx::query(
+                "INSERT INTO platform_revenues
+                    (source, related_talent_id, amount_credits, fee_rate_bps, notes)
+                 VALUES ('mission_marketplace', $1, $2, $3, $4)",
+            )
+            .bind(recipient)
+            .bind(-share.clone())
+            .bind(ledger::percent_to_bps(&commission))
+            .bind(format!(
+                "remboursement de la facture {invoice_id} : {reason}"
+            ))
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        tx.commit().await?;
+
+        if done.rows_affected() > 0 {
+            refunded += 1;
+        }
+    }
+
+    Ok(refunded)
+}
+
+/// Which provider account the ledger should credit back.
+///
+/// Read from the payment rather than assumed, because a refund has to return
+/// to the float it came out of: a mission collected through FedaPay and
+/// credited back to the Stripe account would balance and still be wrong, and
+/// the reconciliation against the provider's own statement is what would
+/// eventually say so.
+async fn ledger_provider_for_invoice(
+    db: &PgPool,
+    invoice_id: Uuid,
+) -> Result<&'static str, AppError> {
+    let provider: Option<String> = sqlx::query_scalar(
+        "SELECT p.provider FROM payments p
+           JOIN mission_invoices i ON i.payment_id = p.id
+          WHERE i.id = $1",
+    )
+    .bind(invoice_id)
+    .fetch_optional(db)
+    .await?;
+
+    ledger_provider(&provider.ok_or_else(|| {
+        AppError::Internal(format!("invoice {invoice_id} is paid but names no payment"))
+    })?)
+}
+
 /// The provider names the ledger knows.
 fn ledger_provider(name: &str) -> Result<&'static str, AppError> {
     match name {

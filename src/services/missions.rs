@@ -88,8 +88,13 @@ fn allowed_transitions(from: &str) -> &'static [&'static str] {
         "applications_closed" => &["in_progress", "published", "cancelled"],
         "in_progress" => &["delivered", "cancelled"],
         // Closing is the client accepting delivery. Reopening a delivered
-        // mission would mean disputing it, which is a different flow.
-        "delivered" => &["closed"],
+        // mission would mean disputing it, which is a different flow — and
+        // that flow now exists: `POST /api/admin/missions/{slug}/arbitrate`
+        // decides a delivery neither side will settle, and deciding against
+        // it has to be able to end the mission. Cancelling is what returns
+        // the escrow, so without this transition the arbiter could refuse a
+        // delivery and still leave the money captured.
+        "delivered" => &["closed", "cancelled"],
         _ => &[],
     }
 }
@@ -592,6 +597,17 @@ pub async fn set_status(
         .await
     {
         crate::services::discord_announce::mission_posted(db, &domain, &slug, &title).await;
+    }
+
+    // Cancelling gives back what was captured and never released. Here rather
+    // than in the route for the same reason the release is: it has to happen
+    // whichever way the mission is cancelled, and it did not — a mission
+    // cancelled from `in_progress` with paid invoices left the escrow with
+    // nothing to release it and nobody to notice, which is the shape this
+    // codebase keeps finding and removing.
+    if to == "cancelled" {
+        let why = reason.unwrap_or("mission annulée");
+        crate::services::mission_billing::refund_all(db, mission_id, why).await?;
     }
 
     if to == "closed" {

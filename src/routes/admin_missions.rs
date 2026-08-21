@@ -501,10 +501,18 @@ pub async fn arbitrate(
         return Err(AppError::NotFound("no such mission".into()));
     };
 
-    // A mission that has already ended has nothing to arbitrate. Saying so is
-    // better than writing a decision that changes nothing.
-    if matches!(status.as_str(), "closed" | "cancelled") {
-        return Err(AppError::Conflict("this mission has already ended".into()));
+    // Only a mission with work in it can be arbitrated, and the check is up
+    // front because the decision now moves money: discovering three statements
+    // later that a published mission has no delivery to decide would leave an
+    // arbitration written against a mission that never had one.
+    //
+    // `delivered` counts. A client who will not close is the commonest reason
+    // this endpoint is called at all.
+    if !matches!(status.as_str(), "in_progress" | "delivered") {
+        return Err(AppError::Conflict(format!(
+            "a {status} mission has no delivery to arbitrate — this decides a round \
+             neither side will settle, and there is none"
+        )));
     }
 
     let mut tx = state.db.begin().await?;
@@ -538,9 +546,31 @@ pub async fn arbitrate(
     .await?;
 
     if written.rows_affected() == 0 {
-        return Err(AppError::Conflict(
-            "this mission has already been arbitrated".into(),
-        ));
+        // Already arbitrated — but the mission is still open, which the state
+        // check above just established. So the decision was written and the
+        // settlement behind it did not finish: the provider refund failed, the
+        // process died between the two, something.
+        //
+        // Answering 409 here would be the worst of both. The caller is told
+        // the work is done, the money is still where it was, and there is no
+        // second call that can finish it because every one of them 409s. So a
+        // repeat finishes the settlement instead, provided it asks for the
+        // same outcome — the ledger's idempotency keys make the money part
+        // safe to repeat, and `set_status` returns early when the status is
+        // already right.
+        let decided: Option<String> =
+            sqlx::query_scalar("SELECT outcome FROM mission_arbitrations WHERE mission_id = $1")
+                .bind(mission_id)
+                .fetch_one(&mut *tx)
+                .await?;
+
+        if decided.as_deref() != Some(body.outcome.as_str()) {
+            return Err(AppError::Conflict(format!(
+                "this mission was already arbitrated as {}, and a decision is not re-taken \
+                 — reopening it is a new mission",
+                decided.unwrap_or_else(|| "unknown".into())
+            )));
+        }
     }
 
     // The waiting round is answered, so the loop cannot be resumed behind the
@@ -564,28 +594,34 @@ pub async fn arbitrate(
         .await?;
     }
 
-    sqlx::query(
-        "UPDATE missions
-            SET status = $2,
-                cancellation_reason = CASE WHEN $2 = 'cancelled' THEN $3
-                                           ELSE cancellation_reason END,
-                delivered_at = CASE WHEN $2 = 'delivered' AND delivered_at IS NULL
-                                    THEN NOW() ELSE delivered_at END,
-                closed_at = CASE WHEN $2 = 'cancelled' THEN NOW() ELSE closed_at END,
-                updated_at = NOW()
-          WHERE id = $1",
-    )
-    .bind(mission_id)
-    .bind(if body.outcome == "accepted" {
-        "delivered"
-    } else {
-        "cancelled"
-    })
-    .bind(reason)
-    .execute(&mut *tx)
-    .await?;
-
     tx.commit().await?;
+
+    // The status moves through `set_status`, not through an UPDATE here.
+    //
+    // This endpoint used to write the status itself, and the money never
+    // moved: releasing the escrow and returning it both live in `set_status`,
+    // so a raw UPDATE set the word and skipped the transfer. The doc-comment
+    // above says "the money is released" and "the escrow goes back", and
+    // neither happened — an arbitration that reads as settled with the funds
+    // still sitting where they were.
+    //
+    // `accepted` goes all the way to `closed` rather than stopping at
+    // `delivered`. Closing is the client accepting delivery, and arbitration
+    // exists precisely because the client will not: leaving the mission at
+    // `delivered` leaves it waiting on the one act that was refused, with the
+    // money waiting behind it. The arbiter has decided the delivery stands, so
+    // it stands.
+    let statuses: &[&str] = if body.outcome == "accepted" {
+        // Through `delivered`, because that is the transition the workflow
+        // allows and it is what stamps `delivered_at`.
+        &["delivered", "closed"]
+    } else {
+        &["cancelled"]
+    };
+
+    for status in statuses {
+        crate::services::missions::set_status(&state.db, mission_id, status, Some(reason)).await?;
+    }
 
     load_detail(&state, mission_id, ip_terms, nda_required).await
 }

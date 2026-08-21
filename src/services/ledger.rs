@@ -658,6 +658,54 @@ pub async fn resolve_dispute_for_recipient(
     .await
 }
 
+/// Money captured but never released goes back to the payer.
+///
+/// The same movement as `refund_from_dispute` and deliberately a separate
+/// function, because it starts from a different state: `pending` rather than
+/// `disputed`. Routing a cancellation through the dispute pair would write a
+/// dispute that nobody raised, and `hold_dispute` is not free of meaning —
+/// it is what an operator's queue counts.
+///
+/// Only what is still `pending` can go back this way. An amount already
+/// released is the recipient's to withdraw, and clawing it back is the much
+/// harder problem the release window exists to avoid; a caller holding
+/// released money has a dispute, not a cancellation.
+///
+/// Our commission goes back with it, for the reason below.
+#[allow(clippy::too_many_arguments)]
+pub async fn refund_from_pending(
+    tx: &mut Transaction<'_, Postgres>,
+    provider: &'static str,
+    user_id: Uuid,
+    recipient_share: BigDecimal,
+    platform_share: BigDecimal,
+    currency: Currency,
+    subject_type: &str,
+    subject_id: Uuid,
+) -> Result<Posted, AppError> {
+    let total = recipient_share.clone() + platform_share.clone();
+    post_in_tx(
+        tx,
+        Posting::new(
+            "capture_refunded",
+            vec![
+                Leg::debit(owed(user_id, State::Pending, currency), recipient_share),
+                Leg::debit(
+                    Account::Platform {
+                        bucket: "revenue",
+                        currency,
+                    },
+                    platform_share,
+                ),
+                Leg::credit(Account::Psp { provider, currency }, total),
+            ],
+        )
+        .about(subject_type, subject_id)
+        .idempotent(format!("refund_pending:{subject_type}:{subject_id}")),
+    )
+    .await
+}
+
 /// Dispute resolved for the payer: the money goes back out.
 ///
 /// Our commission goes back with it. Keeping a fee on a refunded service

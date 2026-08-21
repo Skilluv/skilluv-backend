@@ -533,6 +533,13 @@ address KYC full, live AI wiring in prod, and RLS enforcement.
 
 ### Fixed
 
+- **Searching for `C++` was a server error.** `forum::search_posts` and
+  `admin_moderation::list_users` handed user input to `to_tsquery`, which
+  parses its argument as a query expression — so `&`, `|`, `!`, `(`, `)` and
+  `:` reached the parser as syntax and raised `syntax error in tsquery`.
+  `R&D`, `(brouillon)` and `design:system` were all 500s. Both now use
+  `websearch_to_tsquery`, which never raises on its input and reads quoted
+  phrases and a leading `-` the way somebody typing into a search box expects.
 - **A cancelled mission never gave the escrow back.** `missions::set_status`
   released the escrow on `closed` and did nothing on `cancelled`, so a mission
   cancelled from `in_progress` with a paid invoice left the talent's share in

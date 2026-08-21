@@ -189,9 +189,11 @@ pub async fn issue(
 /// route.
 pub fn verification_code() -> String {
     use base32::Alphabet;
-    use rand_core::RngCore;
     let mut bytes = [0u8; 8];
-    rand_core::OsRng.fill_bytes(&mut bytes);
+    // `rand_core::OsRng` is gone in 0.10. `getrandom::fill` is what the rest of
+    // this codebase already reaches for when it wants OS entropy for a token,
+    // and it is the same source the old `OsRng` wrapped.
+    getrandom::fill(&mut bytes).expect("OS RNG");
     base32::encode(Alphabet::Rfc4648 { padding: false }, &bytes)
         .chars()
         .take(10)

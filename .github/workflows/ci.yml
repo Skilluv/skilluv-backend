@@ -237,13 +237,30 @@ jobs:
     needs: [check, audit, secrets, migrations]
     # Skip drafts to save quota — devs can mark PR ready when they want CI.
     if: github.event.pull_request.draft == false
-    # 45 min budget. At 8 shards a run is ~20 min, so this is not a ceiling
-    # anybody should reach — and that is the point. The previous 35 was three
-    # minutes above what the slowest shard actually took, which is not a
-    # margin: compile time drifts up as the codebase grows, and when it
-    # crossed the line the shard was killed and its failures never reported.
-    # A timeout should catch a hang, not a slow week.
-    timeout-minutes: 45
+    # A timeout should catch a hang, not a slow week — which means it has to
+    # be sized for what the job actually does, and shard 1 does more than the
+    # rest. It runs the doctests, and it is the single writer for the shared
+    # build cache, so on a cache miss it pays an upload the other seven skip.
+    #
+    # Measured on the master run right after the eight-branch merge, where the
+    # Cargo.lock change guaranteed a miss:
+    #
+    #   setup, services, toolchain    ~4 min
+    #   tests (cold, full compile)    ~33 min
+    #   doctests                      ~20 s
+    #   save cargo + target cache     ~16 min      <- shard 1 only
+    #                                 -------
+    #                                 ~53 min
+    #
+    # Every step succeeded and the cache was written; the job was killed at 45
+    # anyway, and the aggregate reported the run as failed. That is the exact
+    # failure this comment was written to prevent, one layer down: a budget set
+    # from the average job rather than from the job it applies to.
+    #
+    # So shard 1 gets the room its extra work needs and the rest keep 45. A
+    # single number for jobs doing different work is how one of them silently
+    # runs out of it.
+    timeout-minutes: ${{ matrix.shard == 1 && 75 || 45 }}
     permissions:
       contents: read
       # sccache-action needs the GHA cache API (mozilla-actions/sccache-action).

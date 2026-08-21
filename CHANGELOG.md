@@ -533,6 +533,31 @@ address KYC full, live AI wiring in prod, and RLS enforcement.
 
 ### Fixed
 
+- **A cancelled mission never gave the escrow back.** `missions::set_status`
+  released the escrow on `closed` and did nothing on `cancelled`, so a mission
+  cancelled from `in_progress` with a paid invoice left the talent's share in
+  `pending` for ever — no path could release it, no path could return it, and
+  nothing counted it. `mission_billing::refund_all` mirrors `release_all`:
+  provider first then the books, the commission back with the rest, and only
+  what is still pending. Money already released stays released; that is what
+  the dispute machinery is for.
+- **Arbitration documented money it never moved.** `POST
+  /api/admin/missions/{slug}/arbitrate` said "the delivery stands and the money
+  is released" and "the escrow goes back" while writing the status with a raw
+  UPDATE that bypassed the one function where both live. It also stopped at
+  `delivered`, which waits on the client accepting delivery — the act
+  arbitration exists because the client refused. It now goes through
+  `set_status` to `closed`, and `delivered -> cancelled` is a legal transition.
+  No arbitration test had ever put an invoice on a mission, which is why an
+  endpoint that moved nothing passed.
+- **An upheld plagiarism case never took the prize back.** `contest_prizes`
+  awards into `pending` rather than `available` and says why: "the release
+  window is what makes a contested result recoverable". Nothing ever recovered
+  one, so a contest could hold a winner who was both disqualified and paid.
+  `confiscate` returns the awarded amount to the contest escrow — not to the
+  sponsor and not to the runner-up, because both are decisions that do not
+  belong in a function nobody is reading.
+
 - **fix(ops)** — `GET /users/{username}/ops-profile` answered 500 to every
   request it had ever received. Twelve of its thirteen figures are `count(*)`,
   which PostgreSQL returns as bigint, and the struct reads all thirteen as

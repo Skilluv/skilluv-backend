@@ -660,3 +660,64 @@ async fn a_cancellation_does_not_claw_back_what_was_already_released() {
         .unwrap();
     assert_eq!(status, "released");
 }
+
+/// A party cannot cancel work that was delivered. An arbiter can.
+///
+/// The transition existed for the arbiter and, for one commit, for everybody:
+/// `allowed_transitions("delivered")` gained `"cancelled"`, and
+/// `POST /api/missions/{slug}/status` lets the owning enterprise make any
+/// transition that table allows. So the edge opened for the one party it must
+/// never be open to. Cancelling is what returns the escrow, and it returns it
+/// to the client — accept the work, cancel the mission, take the payment back,
+/// with the refund added in the same commit doing the taking.
+///
+/// Asserted against `set_status` rather than through the route, because that
+/// is where the rule lives and what the route calls: the enterprise handler
+/// resolves a workspace and then delegates here with `Decider::Party`.
+#[tokio::test]
+async fn only_an_arbiter_can_end_a_delivered_mission() {
+    use skilluv_backend::services::missions::{Decider, set_status, set_status_as};
+
+    let app = TestApp::spawn().await;
+    let (client, talent) = a_cast(&app, "am_no_clawback").await;
+    let mission = a_stuck_mission(&app, "am-no-clawback", client, talent).await;
+    let invoice = escrowed(&app, mission, talent).await;
+
+    set_status(&app.db, mission, "delivered", None)
+        .await
+        .expect("deliver");
+
+    let refused = set_status(
+        &app.db,
+        mission,
+        "cancelled",
+        Some("Finalement je ne veux plus de ce travail."),
+    )
+    .await;
+    assert!(
+        refused.is_err(),
+        "a party cancelled delivered work, which returns the escrow to them"
+    );
+
+    // And nothing moved: the refusal has to happen before the money does.
+    assert_eq!(balance(&app, talent, State::Pending).await, eur("1700.00"));
+    let status: String = sqlx::query_scalar("SELECT status FROM mission_invoices WHERE id = $1")
+        .bind(invoice)
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
+    assert_eq!(status, "paid");
+
+    // The arbiter reaches the same transition, and the escrow goes home.
+    set_status_as(
+        &app.db,
+        mission,
+        "cancelled",
+        Some("Le livrable ne répond pas au critère écrit dans la mission."),
+        Decider::Arbiter,
+    )
+    .await
+    .expect("an arbiter must be able to end it");
+
+    assert_eq!(balance(&app, talent, State::Pending).await, eur("0"));
+}

@@ -88,13 +88,8 @@ fn allowed_transitions(from: &str) -> &'static [&'static str] {
         "applications_closed" => &["in_progress", "published", "cancelled"],
         "in_progress" => &["delivered", "cancelled"],
         // Closing is the client accepting delivery. Reopening a delivered
-        // mission would mean disputing it, which is a different flow — and
-        // that flow now exists: `POST /api/admin/missions/{slug}/arbitrate`
-        // decides a delivery neither side will settle, and deciding against
-        // it has to be able to end the mission. Cancelling is what returns
-        // the escrow, so without this transition the arbiter could refuse a
-        // delivery and still leave the money captured.
-        "delivered" => &["closed", "cancelled"],
+        // mission would mean disputing it, which is a different flow.
+        "delivered" => &["closed"],
         _ => &[],
     }
 }
@@ -527,6 +522,25 @@ pub async fn list_open(
     Ok(rows)
 }
 
+/// Who is asking for the status change.
+///
+/// The transition table cannot answer this on its own, and for one transition
+/// it has to. An arbiter deciding against a delivery must be able to end the
+/// mission, which means `delivered -> cancelled`; the client must not, because
+/// cancelling is what returns the escrow and the client is who it returns to.
+/// Opening that edge for everybody would let somebody accept the work, cancel
+/// the mission and take the money back — with the refund this codebase has
+/// just gained doing the taking.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Decider {
+    /// The enterprise or the assignee, moving their own mission along.
+    Party,
+    /// Somebody outside, deciding a case the two sides would not end. Reaches
+    /// this through `POST /api/admin/missions/{slug}/arbitrate`, which checks
+    /// the capability before calling.
+    Arbiter,
+}
+
 /// Move a mission along its workflow.
 ///
 /// Publishing is where the commission is frozen, so it is the one transition
@@ -536,6 +550,17 @@ pub async fn set_status(
     mission_id: Uuid,
     to: &str,
     reason: Option<&str>,
+) -> Result<Mission, AppError> {
+    set_status_as(db, mission_id, to, reason, Decider::Party).await
+}
+
+/// As [`set_status`], for a caller whose authority has already been checked.
+pub async fn set_status_as(
+    db: &PgPool,
+    mission_id: Uuid,
+    to: &str,
+    reason: Option<&str>,
+    who: Decider,
 ) -> Result<Mission, AppError> {
     let current: Option<(String, Option<Uuid>)> =
         sqlx::query_as("SELECT status, assigned_user_id FROM missions WHERE id = $1")
@@ -547,7 +572,9 @@ pub async fn set_status(
     if from == to {
         return by_id(db, mission_id).await;
     }
-    if !allowed_transitions(&from).contains(&to) {
+    // The one edge the table does not carry, because it depends on who asks.
+    let arbitrated_end = who == Decider::Arbiter && from == "delivered" && to == "cancelled";
+    if !arbitrated_end && !allowed_transitions(&from).contains(&to) {
         return Err(AppError::Validation(format!(
             "a {from} mission cannot become {to}"
         )));
@@ -1097,6 +1124,12 @@ mod tests {
         }
         // Except once delivered: disputing delivered work is a different flow
         // from cancelling a mission nobody started.
+        //
+        // This is a money rule before it is a workflow rule. Cancelling is
+        // what returns the escrow, and it returns it to the client — so a
+        // client who could cancel after delivery would accept the work, cancel
+        // the mission and take the payment back. An arbiter can, through
+        // `Decider::Arbiter`; nobody reaching this table can.
         assert!(!allowed_transitions("delivered").contains(&"cancelled"));
     }
 

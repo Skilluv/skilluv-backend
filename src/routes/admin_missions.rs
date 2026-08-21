@@ -620,7 +620,14 @@ pub async fn arbitrate(
     };
 
     for status in statuses {
-        crate::services::missions::set_status(&state.db, mission_id, status, Some(reason)).await?;
+        crate::services::missions::set_status_as(
+            &state.db,
+            mission_id,
+            status,
+            Some(reason),
+            crate::services::missions::Decider::Arbiter,
+        )
+        .await?;
     }
 
     load_detail(&state, mission_id, ip_terms, nda_required).await

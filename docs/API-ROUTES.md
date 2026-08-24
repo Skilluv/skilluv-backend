@@ -1,8 +1,8 @@
 # Skilluv Backend — API Routes Reference
 
 > **Base URL:** `http://localhost:3001/api`
-> **Auth:** JWT dans cookie HttpOnly `access_token` (sauf routes publiques)
-> **Format réponse:** `{ "data": {...}, "meta": { "request_id", "timestamp" }, "pagination"?: {...} }`
+> **Auth:** JWT in the `access_token` HttpOnly cookie (public routes excepted)
+> **Response shape:** `{ "data": {...}, "meta": { "request_id", "timestamp" }, "pagination"?: {...} }`
 
 ---
 
@@ -13,11 +13,11 @@
 | Method | Path | Body | Response |
 |--------|------|------|----------|
 | POST | `/auth/register` | `{ email, username, password, first_name, last_name, skill_domain, country? }` | `{ user: UserPrivate, refresh_token, message }` — 201, set cookie |
-| POST | `/auth/login` | `{ identifier, password, totp_code?, email_2fa_code? }` | `{ user: UserPrivate, refresh_token }` ou `{ requires_email_2fa, user_id }` — 200, set cookie |
+| POST | `/auth/login` | `{ identifier, password, totp_code?, email_2fa_code? }` | `{ user: UserPrivate, refresh_token }` or `{ requires_email_2fa, user_id }` — 200, set cookie |
 | POST | `/auth/email-2fa/verify` | `{ code, user_id? }` | `{ user, refresh_token }` — set cookie |
 | POST | `/auth/refresh` | `{ refresh_token, user_id }` | `{ refresh_token }` — set cookie |
 | GET | `/auth/verify-email?token=xxx` | — | `{ message }` |
-| POST | `/auth/forgot-password` | `{ email }` | `{ message }` (toujours succès) |
+| POST | `/auth/forgot-password` | `{ email }` | `{ message }` (always succeeds) |
 | POST | `/auth/reset-password` | `{ token, new_password }` | `{ message }` |
 
 ### Authenticated
@@ -33,17 +33,17 @@
 | POST | `/auth/totp/disable` | `{ code }` | `{ message }` |
 | POST | `/auth/email-2fa/enable` | — | `{ message }` |
 | POST | `/auth/email-2fa/disable` | `{ current_password, new_password }` | `{ message }` |
-| DELETE | `/auth/account` | `{ password, totp_code? }` | `{ message }` — RGPD suppression totale |
+| DELETE | `/auth/account` | `{ password, totp_code? }` | `{ message }` — full GDPR erasure |
 
 ---
 
-## Profil utilisateur (8 routes)
+## User profile (8 routes)
 
 ### Public (SSR-ready)
 
 | Method | Path | Response |
 |--------|------|----------|
-| GET | `/profile/{username}` | `{ user: { username, display_name, title, golden_stars, skill_domain, country, bio, avatar_url, github, linkedin, website, twitter, member_since }, stats, skill_tree?, heatmap_summary?, badges? }` — respecte privacy settings. 404 si le compte est banni ou `profile_hidden = true`. Visible dès l'inscription : `profile_active` ne gate que les surfaces de listing (talent search, leaderboard, digest). |
+| GET | `/profile/{username}` | `{ user: { username, display_name, title, golden_stars, skill_domain, country, bio, avatar_url, github, linkedin, website, twitter, member_since }, stats, skill_tree?, heatmap_summary?, badges? }` — honours the privacy settings. 404 when the account is banned or `profile_hidden = true`. Visible from sign-up onwards: `profile_active` gates only the listing surfaces (talent search, leaderboard, digest). |
 
 ### Authenticated
 
@@ -63,12 +63,12 @@
 
 | Method | Path | Auth | Body/Query | Response |
 |--------|------|------|------------|----------|
-| GET | `/challenges/onboarding?domain=code` | Oui | query: `domain` | `{ challenge }` |
-| GET | `/challenges?domain=&difficulty=&page=&per_page=` | Oui | query params | `{ data: [{ challenge, locked }], pagination }` |
-| GET | `/challenges/{id}` | Oui | — | `{ challenge }` |
-| POST | `/challenges/{id}/start` | Oui | — | `{ submission, challenge }` — 201 ou 200 (resume) |
-| POST | `/challenges/{id}/submit` | Oui | `{ code, language? }` | `{ submission, fragments_earned, perseverance_bonus, user: { total_fragments, title, golden_stars, streak_current, profile_active }, profile_activated?, message? }` |
-| GET | `/challenges/{id}/submissions` | Oui | — | `{ submissions: [] }` |
+| GET | `/challenges/onboarding?domain=code` | Yes | query: `domain` | `{ challenge }` |
+| GET | `/challenges?domain=&difficulty=&page=&per_page=` | Yes | query params | `{ data: [{ challenge, locked }], pagination }` |
+| GET | `/challenges/{id}` | Yes | — | `{ challenge }` |
+| POST | `/challenges/{id}/start` | Yes | — | `{ submission, challenge }` — 201, or 200 on resume |
+| POST | `/challenges/{id}/submit` | Yes | `{ code, language? }` | `{ submission, fragments_earned, perseverance_bonus, user: { total_fragments, title, golden_stars, streak_current, profile_active }, profile_activated?, message? }` |
+| GET | `/challenges/{id}/submissions` | Yes | — | `{ submissions: [] }` |
 
 ---
 
@@ -86,11 +86,11 @@
 
 | Method | Path | Auth | Body | Response |
 |--------|------|------|------|----------|
-| POST | `/challenges/{id}/team/create` | Oui | `{ name, max_members? }` | `{ team }` — 201 |
-| POST | `/challenges/{id}/team/{team_id}/join` | Oui | — | `{ message }` |
-| GET | `/challenges/{id}/teams` | Oui | — | `{ teams: [{ team, members, member_count }] }` |
-| POST | `/challenges/{id}/team/{team_id}/submit` | Oui | `{ code, language? }` | `{ submission, fragments_per_member, team_members, message }` |
-| GET | `/challenges/{id}/timer` | Oui | — | `{ submission_id, started_at, expires_at?, remaining_seconds?, expired, has_timer }` |
+| POST | `/challenges/{id}/team/create` | Yes | `{ name, max_members? }` | `{ team }` — 201 |
+| POST | `/challenges/{id}/team/{team_id}/join` | Yes | — | `{ message }` |
+| GET | `/challenges/{id}/teams` | Yes | — | `{ teams: [{ team, members, member_count }] }` |
+| POST | `/challenges/{id}/team/{team_id}/submit` | Yes | `{ code, language? }` | `{ submission, fragments_per_member, team_members, message }` |
+| GET | `/challenges/{id}/timer` | Yes | — | `{ submission_id, started_at, expires_at?, remaining_seconds?, expired, has_timer }` |
 | POST | `/challenges/{id}/timer/extend` | Admin | `{ minutes }` | `{ message, submissions_affected }` |
 
 ---
@@ -99,12 +99,12 @@
 
 | Method | Path | Auth | Body | Response |
 |--------|------|------|------|----------|
-| POST | `/community/challenges` | Oui | `{ title, description, instructions, skill_domain, difficulty, language?, expected_output?, test_cases?, reward_fragments?, duration_minutes?, tags?, submit_for_review? }` | `{ challenge, message }` — 201 |
-| GET | `/community/challenges/mine` | Oui | — | `{ challenges: [] }` |
-| PUT | `/community/challenges/{id}` | Oui (créateur) | `{ title?, description?, instructions?, difficulty?, language?, expected_output?, test_cases?, submit_for_review? }` | `{ challenge }` |
-| POST | `/community/challenges/{id}/vote` | Oui | — | `{ message }` — 201 |
-| DELETE | `/community/challenges/{id}/vote` | Oui | — | `{ message }` |
-| GET | `/community/challenges/popular?page=&per_page=` | Non (SSR) | — | `{ data: [Challenge], pagination }` |
+| POST | `/community/challenges` | Yes | `{ title, description, instructions, skill_domain, difficulty, language?, expected_output?, test_cases?, reward_fragments?, duration_minutes?, tags?, submit_for_review? }` | `{ challenge, message }` — 201 |
+| GET | `/community/challenges/mine` | Yes | — | `{ challenges: [] }` |
+| PUT | `/community/challenges/{id}` | Yes (author) | `{ title?, description?, instructions?, difficulty?, language?, expected_output?, test_cases?, submit_for_review? }` | `{ challenge }` |
+| POST | `/community/challenges/{id}/vote` | Yes | — | `{ message }` — 201 |
+| DELETE | `/community/challenges/{id}/vote` | Yes | — | `{ message }` |
+| GET | `/community/challenges/popular?page=&per_page=` | No (SSR) | — | `{ data: [Challenge], pagination }` |
 
 ---
 
@@ -112,10 +112,10 @@
 
 | Method | Path | Auth | Response |
 |--------|------|------|----------|
-| GET | `/skills/tree` | Oui | `{ user: { id, display_name, title, golden_stars, total_fragments }, tree: [{ domain, total_fragments, skills }] }` |
-| GET | `/skills/tree/{user_id}` | Oui | idem (profil doit être actif) |
-| GET | `/activity/heatmap` | Oui | `{ heatmap: [{ activity_date, challenges_completed, fragments_earned }], summary: { days_active, total_challenges, period_start, period_end } }` |
-| GET | `/activity/heatmap/{user_id}` | Oui | idem |
+| GET | `/skills/tree` | Yes | `{ user: { id, display_name, title, golden_stars, total_fragments }, tree: [{ domain, total_fragments, skills }] }` |
+| GET | `/skills/tree/{user_id}` | Yes | same (the profile has to be active) |
+| GET | `/activity/heatmap` | Yes | `{ heatmap: [{ activity_date, challenges_completed, fragments_earned }], summary: { days_active, total_challenges, period_start, period_end } }` |
+| GET | `/activity/heatmap/{user_id}` | Yes | same |
 
 ---
 
@@ -123,9 +123,9 @@
 
 | Method | Path | Auth | Query | Response |
 |--------|------|------|-------|----------|
-| GET | `/leaderboards` | Non (SSR) | — | `{ leaderboards: [{ domain, periods }] }` |
-| GET | `/leaderboards/{domain}` | Non (SSR) | `period?`, `page?`, `per_page?` | `{ data: { domain, period, entries: [{ rank, user_id, username, display_name, title, golden_stars, country, score }] }, pagination }` |
-| GET | `/leaderboards/{domain}/me` | Oui | `period?` | `{ domain, period, rank, score, total_participants }` |
+| GET | `/leaderboards` | No (SSR) | — | `{ leaderboards: [{ domain, periods }] }` |
+| GET | `/leaderboards/{domain}` | No (SSR) | `period?`, `page?`, `per_page?` | `{ data: { domain, period, entries: [{ rank, user_id, username, display_name, title, golden_stars, country, score }] }, pagination }` |
+| GET | `/leaderboards/{domain}/me` | Yes | `period?` | `{ domain, period, rank, score, total_participants }` |
 
 **Domains:** `global`, `code`, `design`, `game`, `security`
 **Periods:** `alltime`, `weekly`, `monthly`
@@ -136,10 +136,10 @@
 
 | Method | Path | Auth | Body | Response |
 |--------|------|------|------|----------|
-| POST | `/sandbox/execute` | Oui (rate: 20/min) | `{ source_code, language, stdin?, expected_output? }` | `{ execution, verdict, success }` |
-| POST | `/sandbox/execute-async` | Oui | idem | `{ token, message }` |
-| GET | `/sandbox/result/{token}` | Oui | — | `{ execution, verdict, success, processing }` |
-| GET | `/sandbox/languages` | Oui | — | `{ tier1, tier2, total }` |
+| POST | `/sandbox/execute` | Yes (rate: 20/min) | `{ source_code, language, stdin?, expected_output? }` | `{ execution, verdict, success }` |
+| POST | `/sandbox/execute-async` | Yes | same | `{ token, message }` |
+| GET | `/sandbox/result/{token}` | Yes | — | `{ execution, verdict, success, processing }` |
+| GET | `/sandbox/languages` | Yes | — | `{ tier1, tier2, total }` |
 
 ---
 
@@ -147,13 +147,13 @@
 
 | Method | Path | Auth | Body | Response |
 |--------|------|------|------|----------|
-| POST | `/enterprise/register` | Non | `{ email, username, password, first_name, last_name, company_name, website?, industry?, company_size, country? }` | `{ user, enterprise, refresh_token, message }` — 201, set cookie |
-| GET | `/enterprise/profile` | Enterprise | — | `{ enterprise, member_count }` |
-| PUT | `/enterprise/profile` | Enterprise (owner) | `{ company_name?, description?, website?, logo_url?, industry?, company_size? }` | `{ enterprise }` |
-| POST | `/enterprise/invite` | Enterprise (owner) | `{ email }` | `{ message, invite_token }` |
-| POST | `/enterprise/invite/accept` | Non (token) | `{ token }` | `{ message }` |
-| GET | `/enterprise/members` | Enterprise | — | `{ members: [{ id, user_id, username, display_name, email, role, status, invited_at, accepted_at? }] }` |
-| DELETE | `/enterprise/members/{user_id}` | Enterprise (owner) | — | `{ message }` |
+| POST | `/enterprise/register` | No | `{ email, username, password, first_name, last_name, company_name, website?, industry?, company_size, country? }` | `{ user, enterprise, refresh_token, message }` — 201, set cookie |
+| GET | `/enterprise/profile` | Company | — | `{ enterprise, member_count }` |
+| PUT | `/enterprise/profile` | Company (owner) | `{ company_name?, description?, website?, logo_url?, industry?, company_size? }` | `{ enterprise }` |
+| POST | `/enterprise/invite` | Company (owner) | `{ email }` | `{ message, invite_token }` |
+| POST | `/enterprise/invite/accept` | No (token) | `{ token }` | `{ message }` |
+| GET | `/enterprise/members` | Company | — | `{ members: [{ id, user_id, username, display_name, email, role, status, invited_at, accepted_at? }] }` |
+| DELETE | `/enterprise/members/{user_id}` | Company (owner) | — | `{ message }` |
 
 **company_size:** `1-10`, `11-50`, `51-200`, `201-500`, `501-1000`, `1000+`
 
@@ -163,14 +163,14 @@
 
 | Method | Path | Auth | Query | Response |
 |--------|------|------|-------|----------|
-| GET | `/talents/search` | Optionnel | `q?`, `skill_domain?`, `title?`, `country?`, `min_fragments?`, `sort_by?`, `page?`, `per_page?` | `{ data: [{ id, username, display_name, skill_domain, title, golden_stars, total_fragments, streak_current, country, member_since, is_bookmarked? }], pagination }` |
-| GET | `/talents/{username}/card` | Non | — | `{ username, display_name, skill_domain, title, golden_stars, total_fragments, streak_current, country, member_since, top_skills, badge_count }` |
+| GET | `/talents/search` | Optional | `q?`, `skill_domain?`, `title?`, `country?`, `min_fragments?`, `sort_by?`, `page?`, `per_page?` | `{ data: [{ id, username, display_name, skill_domain, title, golden_stars, total_fragments, streak_current, country, member_since, is_bookmarked? }], pagination }` |
+| GET | `/talents/{username}/card` | No | — | `{ username, display_name, skill_domain, title, golden_stars, total_fragments, streak_current, country, member_since, top_skills, badge_count }` |
 
-**sort_by:** `fragments` (défaut), `recent`, `relevance` (si `q` fourni)
+**sort_by:** `fragments` (default), `recent`, `relevance` (when `q` is given)
 
 ---
 
-## Bookmarks & Listes (10 routes — Enterprise auth)
+## Bookmarks and lists (10 routes — company auth)
 
 ### Bookmarks
 
@@ -180,7 +180,7 @@
 | DELETE | `/enterprise/bookmarks/{talent_id}` | — | `{ message }` |
 | GET | `/enterprise/bookmarks?page=&per_page=` | — | `{ data: [{ id, username, display_name, skill_domain, title, golden_stars, total_fragments, country, bookmarked_at }], pagination }` |
 
-### Listes nommées
+### Named lists
 
 | Method | Path | Body | Response |
 |--------|------|------|----------|
@@ -194,32 +194,32 @@
 
 ---
 
-## Contact & Messagerie (10 routes)
+## Contact and messaging (10 routes)
 
 ### Interest Requests
 
 | Method | Path | Auth | Body | Response |
 |--------|------|------|------|----------|
-| POST | `/contact/interest` | Enterprise (rate: 5/h) | `{ talent_id, message }` | `{ interest_request, message }` — 201 |
-| GET | `/contact/interest/sent?page=&per_page=` | Enterprise | — | `{ data: [{ id, talent_id, talent_username, talent_display_name, status, initial_message, created_at }], pagination }` |
-| GET | `/contact/interest/received?page=&per_page=` | Oui (talent) | — | `{ data: [{ id, enterprise_id, enterprise_name, enterprise_logo, status, initial_message, created_at }], pagination }` |
-| POST | `/contact/interest/{id}/accept` | Oui (talent) | — | `{ conversation, message }` — crée conversation + copie message initial |
-| POST | `/contact/interest/{id}/decline` | Oui (talent) | — | `{ message }` — cooldown 30 jours |
+| POST | `/contact/interest` | Company (rate: 5/h) | `{ talent_id, message }` | `{ interest_request, message }` — 201 |
+| GET | `/contact/interest/sent?page=&per_page=` | Company | — | `{ data: [{ id, talent_id, talent_username, talent_display_name, status, initial_message, created_at }], pagination }` |
+| GET | `/contact/interest/received?page=&per_page=` | Yes (talent) | — | `{ data: [{ id, enterprise_id, enterprise_name, enterprise_logo, status, initial_message, created_at }], pagination }` |
+| POST | `/contact/interest/{id}/accept` | Yes (talent) | — | `{ conversation, message }` — opens the conversation and copies the first message into it |
+| POST | `/contact/interest/{id}/decline` | Yes (talent) | — | `{ message }` — 30-day cooling-off period |
 
 ### Conversations
 
 | Method | Path | Auth | Body | Response |
 |--------|------|------|------|----------|
-| GET | `/contact/conversations` | Oui | — | `{ conversations: [{ id, closed, other_party: { type, name/username }, last_message?, unread_count, created_at }] }` |
-| GET | `/contact/conversations/{id}?page=&per_page=` | Oui | — | `{ data: { conversation, messages }, pagination }` — marque messages comme lus |
-| POST | `/contact/conversations/{id}/messages` | Oui | `{ content }` (1-5000 chars) | `{ message: Message }` — 201, notifie destinataire |
+| GET | `/contact/conversations` | Yes | — | `{ conversations: [{ id, closed, other_party: { type, name/username }, last_message?, unread_count, created_at }] }` |
+| GET | `/contact/conversations/{id}?page=&per_page=` | Yes | — | `{ data: { conversation, messages }, pagination }` — marks the messages read |
+| POST | `/contact/conversations/{id}/messages` | Yes | `{ content }` (1-5000 chars) | `{ message: Message }` — 201, notifies the recipient |
 
-### Blocage
+### Blocking
 
 | Method | Path | Auth | Response |
 |--------|------|------|----------|
-| POST | `/contact/block/{enterprise_id}` | Oui (talent) | `{ message }` — ferme les conversations ouvertes |
-| DELETE | `/contact/block/{enterprise_id}` | Oui (talent) | `{ message }` |
+| POST | `/contact/block/{enterprise_id}` | Yes (talent) | `{ message }` — closes any conversation still open |
+| DELETE | `/contact/block/{enterprise_id}` | Yes (talent) | `{ message }` |
 
 ---
 
@@ -227,10 +227,10 @@
 
 | Method | Path | Auth | Query | Response |
 |--------|------|------|-------|----------|
-| GET | `/notifications?read=false&page=&per_page=` | Oui | `read?`, `page?`, `per_page?` | `{ data: [Notification], pagination }` |
-| POST | `/notifications/{id}/read` | Oui | — | `{ message }` |
-| POST | `/notifications/read-all` | Oui | — | `{ message }` |
-| GET | `/notifications/unread-count` | Oui | — | `{ unread_count }` |
+| GET | `/notifications?read=false&page=&per_page=` | Yes | `read?`, `page?`, `per_page?` | `{ data: [Notification], pagination }` |
+| POST | `/notifications/{id}/read` | Yes | — | `{ message }` |
+| POST | `/notifications/read-all` | Yes | — | `{ message }` |
+| GET | `/notifications/unread-count` | Yes | — | `{ unread_count }` |
 
 **Notification types:** `interest_request_received`, `interest_accepted`, `interest_declined`, `new_message`, `challenge_approved`, `challenge_rejected`, `account_banned`, `account_unbanned`
 
@@ -240,9 +240,9 @@
 
 | Method | Path | Auth | Body | Response |
 |--------|------|------|------|----------|
-| POST | `/reports` | Oui | `{ target_type, target_id, reason, details? }` | `{ report, message }` — 201 |
-| GET | `/reports/mine` | Oui | — | `{ reports: [] }` |
-| DELETE | `/reports/{id}` | Oui | — | `{ message }` (seulement si status=pending) |
+| POST | `/reports` | Yes | `{ target_type, target_id, reason, details? }` | `{ report, message }` — 201 |
+| GET | `/reports/mine` | Yes | — | `{ reports: [] }` |
+| DELETE | `/reports/{id}` | Yes | — | `{ message }` (only while status=pending) |
 
 **target_type:** `user`, `challenge`, `message`, `enterprise`
 **reason:** `spam`, `harassment`, `inappropriate`, `cheating`, `fake_profile`, `other`
@@ -253,11 +253,11 @@
 
 | Method | Path | Auth | Body | Response |
 |--------|------|------|------|----------|
-| POST | `/developer/keys` | Oui | `{ name, permissions? }` | `{ key: ApiKeyInfo, secret: "sk_live_xxx", message }` — 201 |
-| GET | `/developer/keys` | Oui | — | `{ keys: [ApiKeyInfo] }` |
-| DELETE | `/developer/keys/{id}` | Oui | — | `{ message }` |
-| POST | `/developer/keys/{id}/regenerate` | Oui | — | `{ secret, message }` |
-| GET | `/developer/keys/{id}/usage` | Oui | — | `{ key_id, name, request_count, last_used_at?, active }` |
+| POST | `/developer/keys` | Yes | `{ name, permissions? }` | `{ key: ApiKeyInfo, secret: "sk_live_xxx", message }` — 201 |
+| GET | `/developer/keys` | Yes | — | `{ keys: [ApiKeyInfo] }` |
+| DELETE | `/developer/keys/{id}` | Yes | — | `{ message }` |
+| POST | `/developer/keys/{id}/regenerate` | Yes | — | `{ secret, message }` |
+| GET | `/developer/keys/{id}/usage` | Yes | — | `{ key_id, name, request_count, last_used_at?, active }` |
 
 **Permissions:** `read:profile`, `read:skills`, `read:badges`, `read:leaderboard`, `*`
 
@@ -267,20 +267,20 @@
 
 | Method | Path | Auth | Body | Response |
 |--------|------|------|------|----------|
-| POST | `/developer/webhooks` | Oui | `{ url, events: [] }` | `{ webhook, secret: "whsec_xxx", message }` — 201 |
-| GET | `/developer/webhooks` | Oui | — | `{ webhooks: [WebhookInfo] }` |
-| PUT | `/developer/webhooks/{id}` | Oui | `{ url?, events?, active? }` | `{ webhook }` |
-| DELETE | `/developer/webhooks/{id}` | Oui | — | `{ message }` |
-| POST | `/developer/webhooks/{id}/test` | Oui | — | `{ message }` |
+| POST | `/developer/webhooks` | Yes | `{ url, events: [] }` | `{ webhook, secret: "whsec_xxx", message }` — 201 |
+| GET | `/developer/webhooks` | Yes | — | `{ webhooks: [WebhookInfo] }` |
+| PUT | `/developer/webhooks/{id}` | Yes | `{ url?, events?, active? }` | `{ webhook }` |
+| DELETE | `/developer/webhooks/{id}` | Yes | — | `{ message }` |
+| POST | `/developer/webhooks/{id}/test` | Yes | — | `{ message }` |
 
 **Events:** `challenge.completed`, `badge.earned`, `title.changed`, `leaderboard.updated`
-**Signature:** Header `X-Skilluv-Signature: sha256={hmac}` — HMAC-SHA256 du body avec le secret
+**Signature:** Header `X-Skilluv-Signature: sha256={hmac}` — HMAC-SHA256 of the body, keyed with the secret
 
 ---
 
-## API Publique v1 (3 routes — API Key auth)
+## Public API v1 (3 routes — API key auth)
 
-Auth via header `Authorization: Bearer sk_live_xxx` ou query `?api_key=sk_live_xxx`
+Authenticated with the `Authorization: Bearer sk_live_xxx` header, or with the `?api_key=sk_live_xxx` query parameter
 
 | Method | Path | Permission | Response |
 |--------|------|------------|----------|
@@ -290,16 +290,16 @@ Auth via header `Authorization: Bearer sk_live_xxx` ou query `?api_key=sk_live_x
 
 ---
 
-## Admin — Modération (8 routes)
+## Admin — moderation (8 routes)
 
 | Method | Path | Body/Query | Response |
 |--------|------|------------|----------|
 | GET | `/admin/users?role=&banned=&q=&page=&per_page=` | query params | `{ data: [UserSummary], pagination }` |
 | GET | `/admin/users/{id}` | — | `{ user, reports_against, total_submissions }` |
-| POST | `/admin/users/{id}/ban` | `{ reason }` | `{ message, reason }` — ban complet + notifications |
+| POST | `/admin/users/{id}/ban` | `{ reason }` | `{ message, reason }` — a full ban, with the notifications that follow |
 | POST | `/admin/users/{id}/unban` | — | `{ message }` |
 | GET | `/admin/reports?status=&target_type=&page=&per_page=` | query params | `{ data: [{ report + reporter info }], pagination }` |
-| PUT | `/admin/reports/{id}` | `{ status, admin_note? }` | `{ report, message }` — status: `resolved` ou `dismissed` |
+| PUT | `/admin/reports/{id}` | `{ status, admin_note? }` | `{ report, message }` — status: `resolved` or `dismissed` |
 | GET | `/admin/audit-log?action=&page=&per_page=` | query params | `{ data: [AuditEntry], pagination }` |
 | GET | `/admin/dashboard/moderation` | — | `{ banned_users, reports: { pending, resolved, dismissed, total }, recent_bans_30d, admin_actions_today }` |
 
@@ -311,7 +311,7 @@ Auth via header `Authorization: Bearer sk_live_xxx` ou query `?api_key=sk_live_x
 |--------|------|------|----------|
 | POST | `/admin/challenges` | `{ title, description, instructions, skill_domain, difficulty, mode?, duration_minutes?, ai_allowed?, tone?, language?, prerequisite_fragments?, reward_fragments?, is_onboarding?, expected_output?, test_cases? }` | `{ challenge }` — 201 |
 | GET | `/admin/challenges` | — | `{ challenges, total }` |
-| PUT | `/admin/challenges/{id}` | champs optionnels | `{ challenge }` |
+| PUT | `/admin/challenges/{id}` | any subset of the fields above | `{ challenge }` |
 | POST | `/admin/challenges/{id}/publish` | — | `{ challenge }` |
 | POST | `/admin/challenges/{id}/archive` | — | `{ challenge }` |
 | GET | `/admin/stats` | — | `{ users, challenges, submissions, websocket }` |
@@ -321,28 +321,28 @@ Auth via header `Authorization: Bearer sk_live_xxx` ou query `?api_key=sk_live_x
 
 ## Community moderation (3 routes)
 
-Servies par `community_curator` OU `admin` (voir `docs/MODERATION-vs-ADMIN.md`).
-Le préfixe est `/api/community/...` — pas `/api/admin/community/...` (fix BE-P0-05).
+Served to `community_curator` or `admin` (see `docs/MODERATION-vs-ADMIN.md`).
+The prefix is `/api/community/...`, not `/api/admin/community/...` (fix BE-P0-05).
 
 | Method | Path | Body | Response |
 |--------|------|------|----------|
 | GET | `/community/challenges/review` | — | `{ challenges: [{ challenge, creator }], total }` |
-| POST | `/community/challenges/{id}/approve` | — | `{ challenge, message }` — publie + notifie créateur |
-| POST | `/community/challenges/{id}/reject` | `{ reason }` (min 8 chars ; `feedback` accepté en alias legacy) | `{ id, title, rejected: true }` — notifie créateur |
+| POST | `/community/challenges/{id}/approve` | — | `{ challenge, message }` — publishes it, and tells the author |
+| POST | `/community/challenges/{id}/reject` | `{ reason }` (at least 8 characters; `feedback` is accepted as a legacy alias) | `{ id, title, rejected: true }` — tells the author |
 
 ---
 
 ## Talent wallet — payouts (5 routes)
 
-Payouts vers Stripe Connect (EUR) ou Mobile Money africain (XOF).
+Payouts through Stripe Connect (EUR) or African mobile money (XOF).
 
 | Method | Path | Body | Response |
 |--------|------|------|----------|
 | POST | `/users/me/wallet/onboard/stripe` | `{ refresh_url, return_url }` | `{ onboarding_url }` |
-| POST | `/users/me/wallet/withdraw/stripe` | `{ amount: "12.50", currency?: "EUR" }` (fix BE-P0-11 — amount en devise, converti en cents server-side) | `{ transaction_id, stripe_transfer_id, amount_cents }` |
-| POST | `/users/me/wallet/momo/phone` | `{ phone: "+22507...", verified?: bool, provider?: "orange"\|"mtn"\|"wave" }` (fix BE-P0-12 — `verified` default true en P13.3, deviendra OTP-gated en P15) | `{ registered: true }` |
+| POST | `/users/me/wallet/withdraw/stripe` | `{ amount: "12.50", currency?: "EUR" }` (fix BE-P0-11 — the amount is in the currency, and converted to cents server-side) | `{ transaction_id, stripe_transfer_id, amount_cents }` |
+| POST | `/users/me/wallet/momo/phone` | `{ phone: "+22507...", verified?: bool, provider?: "orange"\|"mtn"\|"wave" }` (fix BE-P0-12 — `verified` defaults to true since P13.3, and becomes OTP-gated in P15) | `{ registered: true }` |
 | POST | `/users/me/wallet/withdraw/momo` | `{ provider, amount, currency?: "XOF" }` | `{ transaction_id, momo_ref }` |
-| GET | `/users/me/wallet/statement.csv` | — | CSV compliance |
+| GET | `/users/me/wallet/statement.csv` | — | A compliance CSV |
 
 ## DM messaging (3 routes)
 
@@ -350,18 +350,18 @@ Payouts vers Stripe Connect (EUR) ou Mobile Money africain (XOF).
 |--------|------|------|----------|
 | GET | `/dm/conversations` | — | `{ conversations }` |
 | GET | `/dm/conversations/{id}/messages` | — | `{ messages }` |
-| POST | `/dm/conversations/{id}/messages` | `{ body }` (alias `text` accepté — fix BE-P0-09) | `{ message }` |
+| POST | `/dm/conversations/{id}/messages` | `{ body }` (`text` is accepted as an alias — fix BE-P0-09) | `{ message }` |
 
 ## Fraud / plagiarism review (3 routes)
 
-Servies par `plagiarism_reviewer` OU `admin`. Cible = un **deliverable** individuel
-(pas un user entier — fix BE-P0-06).
+Served to `plagiarism_reviewer` or `admin`. The target is one **deliverable**,
+never a whole account (fix BE-P0-06).
 
 | Method | Path | Body | Response |
 |--------|------|------|----------|
 | GET | `/fraud/deliverables/flagged` | — | `{ data: [{ id, user_id, ... }], pagination }` |
-| POST | `/fraud/deliverables/{id}/mark-valid` | `{ reason? }` | `{ marked_valid: true, id }` — faux positif |
-| POST | `/fraud/deliverables/{id}/revoke` | `{ reason }` (min 8 chars) | `{ revoked: true, id }` — plagiat confirmé |
+| POST | `/fraud/deliverables/{id}/mark-valid` | `{ reason? }` | `{ marked_valid: true, id }` — a false positive |
+| POST | `/fraud/deliverables/{id}/revoke` | `{ reason }` (min 8 chars) | `{ revoked: true, id }` — plagiarism confirmed |
 
 ## Forum posts (5 core routes)
 
@@ -371,11 +371,11 @@ Servies par `plagiarism_reviewer` OU `admin`. Cible = un **deliverable** individ
 | POST | `/forum/posts` | `{ category_slug, kind, title, body, bounty_fragments? }` (fix BE-P0-07) | `{ post }` |
 | GET | `/forum/posts/{id}` | — | `{ post }` |
 | PUT | `/forum/posts/{id}` | `{ title, body }` | `{ post }` |
-| POST | `/forum/posts/{id}/accept-answer` | `{ answer_id }` (aliases `comment_id`, `answer_comment_id` acceptés — fix BE-P0-08) | `{ accepted, bounty_transferred }` |
+| POST | `/forum/posts/{id}/accept-answer` | `{ answer_id }` (`comment_id` and `answer_comment_id` are accepted as aliases — fix BE-P0-08) | `{ accepted, bounty_transferred }` |
 
 ## Forum moderation (2 routes)
 
-Servies par `forum_moderator` OU `admin`.
+Served to `forum_moderator` or `admin`.
 
 | Method | Path | Body | Response |
 |--------|------|------|----------|
@@ -388,70 +388,70 @@ Servies par `forum_moderator` OU `admin`.
 
 | Method | Path | Auth | Response |
 |--------|------|------|----------|
-| GET | `/enterprise/dashboard/platform-stats` | Enterprise | `{ total_talents, by_domain, by_title, avg_fragments, active_last_30d }` |
-| GET | `/enterprise/dashboard/my-stats` | Enterprise | `{ bookmarks, talent_lists, interest_requests: { total, pending, accepted, declined }, active_conversations, team_size }` |
+| GET | `/enterprise/dashboard/platform-stats` | Company | `{ total_talents, by_domain, by_title, avg_fragments, active_last_30d }` |
+| GET | `/enterprise/dashboard/my-stats` | Company | `{ bookmarks, talent_lists, interest_requests: { total, pending, accepted, declined }, active_conversations, team_size }` |
 
 ---
 
 ## Quality (12 routes)
 
-> Le domaine `quality` : rapports d'anomalie, exécutions de tests importées,
-> routage inter-domaines. Migrations 0450-0459.
+> The `quality` domain: defect reports, imported test runs, cross-domain
+> routing. Migrations 0450-0459.
 
 ### Public
 
 | Method | Path | Body | Response |
 |--------|------|------|----------|
 | GET | `/quality/reference` | — | `{ orientations, reviewer_groups, report_subtypes, severities, reproducibilities, test_run_sources }` |
-| GET | `/quality/reports?target_domain=&limit=` | — | `{ reports: [...] }` — artefacts vérifiés seulement ; `target_domain` inconnu → 400 |
-| GET | `/users/{username}/quality-profile` | — | `{ profile }` — score, anomalies confirmées, répartition par domaine cible |
+| GET | `/quality/reports?target_domain=&limit=` | — | `{ reports: [...] }` — verified artefacts only; an undeclared `target_domain` is 400 |
+| GET | `/users/{username}/quality-profile` | — | `{ profile }` — score, confirmed defects, breakdown by target domain |
 | GET | `/quality/slices/{slice_id}/test-runs` | — | `{ runs: [...] }` |
 
-### Authentifié
+### Authenticated
 
 | Method | Path | Body | Response |
 |--------|------|------|----------|
-| POST | `/quality/bugs` | `BugReportInput` | `{ report }` — reproduction < 40 car. → 400 |
+| POST | `/quality/bugs` | `BugReportInput` | `{ report }` — a reproduction under 40 characters is 400 |
 | GET | `/quality/bugs` | — | `{ reports: [...] }` |
 | POST | `/quality/bugs/{id}/fix` | `{ fix_url }` | `{ report }` |
-| POST | `/quality/bugs/{id}/confirm` | — | `{ report }` — auteur du signalement uniquement |
-| POST | `/quality/bugs/{id}/review` | `ReviewDecision` | `{ report }` — `quality_reviewer:{famille}` |
-| GET | `/quality/bugs/review-queue` | — | `{ reports: [...] }` — toute capability `quality_reviewer:*` |
-| POST | `/quality/test-runs` | `TestRunInput` | `{ run }` — ré-import = mise à jour, la vérification retombe |
-| POST | `/quality/test-runs/{id}/verify` | — | `{ run }` — jamais son propre import |
+| POST | `/quality/bugs/{id}/confirm` | — | `{ report }` — the reporter, and nobody else |
+| POST | `/quality/bugs/{id}/review` | `ReviewDecision` | `{ report }` — needs `quality_reviewer:{family}` for the trade behind the slice |
+| GET | `/quality/bugs/review-queue` | — | `{ reports: [...] }` — any `quality_reviewer:*` capability |
+| POST | `/quality/test-runs` | `TestRunInput` | `{ run }` — re-importing updates the row and drops its verification |
+| POST | `/quality/test-runs/{id}/verify` | — | `{ run }` — never your own import |
 
 ---
 
 ## Leadership (18 routes)
 
-> Le domaine `leadership` : caviardage, rétrospectives, coordination,
-> cohortes. Migrations 0460-0470.
+> The `leadership` domain: redaction, retrospectives, coordination,
+> cohorts. Migrations 0460-0470.
 
 ### Public
 
 | Method | Path | Body | Response |
 |--------|------|------|----------|
 | GET | `/leadership/reference` | — | `{ orientations, reviewer_groups, artifact_subtypes, redaction_states, retrospective_formats, link_kinds, cohort_leave_reasons }` |
-| GET | `/users/{username}/leadership-profile` | — | `{ profile }` — les artefacts confidentiels comptent dans le score et n'apparaissent qu'en abstrait |
+| GET | `/users/{username}/leadership-profile` | — | `{ profile }` — confidential artefacts count towards the score and appear only in the abstract |
 | GET | `/leadership/slices/{id}/links` | — | `{ reach }` |
 | GET | `/leadership/retrospectives/{id}/actions` | — | `{ actions, followthrough }` |
-| GET | `/leadership/cohorts/{id}/outcomes` | — | `{ outcomes }` — le dénominateur voyage avec le taux |
+| GET | `/leadership/cohorts/{id}/outcomes` | — | `{ outcomes }` — the denominator travels with the rate |
 
-### Authentifié
+### Authenticated
 
 | Method | Path | Body | Response |
 |--------|------|------|----------|
-| POST | `/leadership/slices/{id}/redaction/declare` | — | `{ declared }` — auteur uniquement |
-| POST | `/leadership/slices/{id}/redaction/confirm` | — | `{ confirmed }` — jamais l'auteur ; toute capability `leadership_reviewer:*` |
-| POST | `/leadership/slices/{id}/adoption` | `{ evidence_url? }` | `{ adopted }` — RFC/ADR seulement |
-| POST | `/leadership/slices/{id}/links` | `LinkInput` | `{ link }` — `commits`/`depends_on` exigent une note |
-| POST | `/leadership/links/{id}/acknowledge` | — | `{ link }` — le responsable du projet visé, jamais l'auteur |
-| POST | `/leadership/retrospectives` | `RetrospectiveInput` | `{ retrospective }` — notes < 200 car. → 400 |
+| POST | `/leadership/slices/{id}/redaction/declare` | — | `{ declared }` — the author, and nobody else |
+| POST | `/leadership/slices/{id}/redaction/confirm` | — | `{ confirmed }` — never the author; any `leadership_reviewer:*` capability |
+| POST | `/leadership/slices/{id}/adoption` | `{ evidence_url? }` | `{ adopted }` — written decisions only |
+| POST | `/leadership/slices/{id}/links` | `LinkInput` | `{ link }` — `commits` and `depends_on` require a note |
+| POST | `/leadership/links/{id}/acknowledge` | — | `{ link }` — the linked project's steward, never the author |
+| POST | `/leadership/retrospectives` | `RetrospectiveInput` | `{ retrospective }` — notes under 200 characters are 400 |
 | GET | `/leadership/retrospectives` | — | `{ retrospectives: [...] }` |
-| POST | `/leadership/retrospectives/{id}/actions` | `ActionInput` | `{ action }` — un porteur obligatoire |
+| POST | `/leadership/retrospectives/{id}/actions` | `ActionInput` | `{ action }` — an owner is required |
 | POST | `/leadership/actions/{id}/resolve` | `{ abandoned_reason? }` | `{ action }` |
 | POST | `/leadership/cohorts/{id}/lead` | `{ curriculum_slice_id?, target_domain? }` | `{ leading }` |
-| POST | `/leadership/cohorts/{id}/graduate` | `{ member_id }` | `{ graduated }` — le responsable, jamais le membre |
+| POST | `/leadership/cohorts/{id}/graduate` | `{ member_id }` | `{ graduated }` — the lead, never the member |
 | POST | `/leadership/cohorts/{id}/departure` | `{ member_id, reason, note? }` | `{ recorded }` |
 | POST | `/leadership/cohorts/{id}/conclude` | `{ note? }` | `{ outcomes }` |
 
@@ -461,8 +461,8 @@ Servies par `forum_moderator` OU `admin`.
 
 | Method | Path | Auth | Response |
 |--------|------|------|----------|
-| GET | `/health` | Non | `{ services: { postgresql, redis, judge0 }, status, version, websocket }` |
-| GET | `/docs/openapi.json` | Non | Spec OpenAPI 3.1.0 complète |
+| GET | `/health` | No | `{ services: { postgresql, redis, judge0 }, status, version, websocket }` |
+| GET | `/docs/openapi.json` | No | The full OpenAPI 3.1.0 document |
 
 ---
 
@@ -470,28 +470,28 @@ Servies par `forum_moderator` OU `admin`.
 
 | Path | Auth | Description |
 |------|------|-------------|
-| `/ws` | Cookie JWT | Connexion WebSocket temps réel |
+| `/ws` | JWT cookie | A live WebSocket connection |
 
-**Client → Serveur:**
-- `{ action: "join", room: "leaderboard:code" }` — rejoindre une room
-- `{ action: "leave", room: "..." }` — quitter une room
+**Client to server:**
+- `{ action: "join", room: "leaderboard:code" }` — join a room
+- `{ action: "leave", room: "..." }` — leave a room
 - `{ action: "ping" }` — keepalive
 
-**Serveur → Client (events):**
-- `connected` — connexion établie
-- `fragment.earned` — fragments gagnés
-- `badge.earned` — nouveau badge
-- `leaderboard.updated` — classement mis à jour
-- `challenge.submission` — soumission dans une room challenge
-- `notification` — notification temps réel (intérêt, message, etc.)
+**Server to client (events):**
+- `connected` — the connection is open
+- `fragment.earned` — fragments earned
+- `badge.earned` — a new badge
+- `leaderboard.updated` — the leaderboard moved
+- `challenge.submission` — a submission in a challenge room
+- `notification` — a live notification: an interest request, a message, and the rest
 
 **Rooms:** `user:{id}`, `leaderboard:{domain}`, `challenge:{id}`
 
 ---
 
-## Modèles de données
+## Data models
 
-### UserPrivate (retourné par /auth/me, /auth/login, etc.)
+### UserPrivate (returned by /auth/me, /auth/login and others)
 ```json
 {
   "id": "uuid",
@@ -580,26 +580,26 @@ Servies par `forum_moderator` OU `admin`.
 
 ---
 
-## Codes d'erreur
+## Error codes
 
 | Code | HTTP | Description |
 |------|------|-------------|
-| `RESOURCE_NOT_FOUND` | 404 | Ressource introuvable |
-| `AUTH_INVALID_CREDENTIALS` | 401 | Identifiants incorrects |
-| `AUTH_UNAUTHORIZED` | 401 | Non authentifié |
-| `AUTH_FORBIDDEN` | 403 | Accès interdit |
-| `VALIDATION_ERROR` | 400 | Erreur de validation |
-| `AUTH_TOTP_REQUIRED` | 403 | Code TOTP requis |
-| `AUTH_TOTP_INVALID` | 401 | Code TOTP invalide |
-| `AUTH_EMAIL_2FA_INVALID` | 401 | Code email 2FA invalide |
-| `CHALLENGE_PREREQUISITE_NOT_MET` | 403 | Prérequis non atteints |
-| `RATE_LIMITED` | 429 | Trop de requêtes |
-| `CONTACT_COOLDOWN_ACTIVE` | 429 | Cooldown après refus (30j) |
-| `CONTACT_ALREADY_REQUESTED` | 409 | Demande déjà en cours |
-| `CONTACT_BLOCKED` | 403 | Bloqué par l'utilisateur |
-| `CONVERSATION_CLOSED` | 403 | Conversation fermée |
+| `RESOURCE_NOT_FOUND` | 404 | No such resource |
+| `AUTH_INVALID_CREDENTIALS` | 401 | Wrong credentials |
+| `AUTH_UNAUTHORIZED` | 401 | Not authenticated |
+| `AUTH_FORBIDDEN` | 403 | Not allowed |
+| `VALIDATION_ERROR` | 400 | The request did not validate |
+| `AUTH_TOTP_REQUIRED` | 403 | A TOTP code is required |
+| `AUTH_TOTP_INVALID` | 401 | Wrong TOTP code |
+| `AUTH_EMAIL_2FA_INVALID` | 401 | Wrong e-mail second-factor code |
+| `CHALLENGE_PREREQUISITE_NOT_MET` | 403 | The prerequisites are not met |
+| `RATE_LIMITED` | 429 | Too many requests |
+| `CONTACT_COOLDOWN_ACTIVE` | 429 | Cooling off after a refusal (30 days) |
+| `CONTACT_ALREADY_REQUESTED` | 409 | A request is already open |
+| `CONTACT_BLOCKED` | 403 | Blocked by the person |
+| `CONVERSATION_CLOSED` | 403 | The conversation is closed |
 
-Format erreur :
+Error shape:
 ```json
 {
   "error": { "code": "ERROR_CODE", "message": "Description" },
@@ -611,17 +611,17 @@ Format erreur :
 
 ## Rate Limiting
 
-| Endpoint | Limite | Fenêtre |
+| Endpoint | Limit | Window |
 |----------|--------|---------|
-| `/auth/register`, `/auth/login` | 10 req | par minute, par IP |
-| `/sandbox/execute` | 20 req | par minute, par user |
-| `/contact/interest` | 5 req | par heure, par enterprise |
+| `/auth/register`, `/auth/login` | 10 req | per minute, per IP |
+| `/sandbox/execute` | 20 req | per minute, per account |
+| `/contact/interest` | 5 req | per hour, per company |
 
 ---
 
 ## Security Headers
 
-Toutes les réponses incluent :
+Every response carries:
 - `X-Content-Type-Options: nosniff`
 - `X-Frame-Options: DENY`
 - `X-XSS-Protection: 1; mode=block`

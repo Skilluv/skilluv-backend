@@ -5,7 +5,7 @@
 # ═══════════════════════════════════════════════════════════════════
 # Pin to a specific Rust minor + Debian trixie so builds are reproducible
 # (rust:latest = anti-pattern for prod images).
-FROM rust:1.97-slim-trixie AS builder
+FROM rust:1.98-slim-trixie AS builder
 
 # curl is required by utoipa-swagger-ui's build.rs to fetch the Swagger UI
 # zip from GitHub at compile time. Without it, the build panics with

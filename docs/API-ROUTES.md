@@ -393,6 +393,70 @@ Servies par `forum_moderator` OU `admin`.
 
 ---
 
+## Quality (12 routes)
+
+> Le domaine `quality` : rapports d'anomalie, exécutions de tests importées,
+> routage inter-domaines. Migrations 0450-0459.
+
+### Public
+
+| Method | Path | Body | Response |
+|--------|------|------|----------|
+| GET | `/quality/reference` | — | `{ orientations, reviewer_groups, report_subtypes, severities, reproducibilities, test_run_sources }` |
+| GET | `/quality/reports?target_domain=&limit=` | — | `{ reports: [...] }` — artefacts vérifiés seulement ; `target_domain` inconnu → 400 |
+| GET | `/users/{username}/quality-profile` | — | `{ profile }` — score, anomalies confirmées, répartition par domaine cible |
+| GET | `/quality/slices/{slice_id}/test-runs` | — | `{ runs: [...] }` |
+
+### Authentifié
+
+| Method | Path | Body | Response |
+|--------|------|------|----------|
+| POST | `/quality/bugs` | `BugReportInput` | `{ report }` — reproduction < 40 car. → 400 |
+| GET | `/quality/bugs` | — | `{ reports: [...] }` |
+| POST | `/quality/bugs/{id}/fix` | `{ fix_url }` | `{ report }` |
+| POST | `/quality/bugs/{id}/confirm` | — | `{ report }` — auteur du signalement uniquement |
+| POST | `/quality/bugs/{id}/review` | `ReviewDecision` | `{ report }` — `quality_reviewer:{famille}` |
+| GET | `/quality/bugs/review-queue` | — | `{ reports: [...] }` — toute capability `quality_reviewer:*` |
+| POST | `/quality/test-runs` | `TestRunInput` | `{ run }` — ré-import = mise à jour, la vérification retombe |
+| POST | `/quality/test-runs/{id}/verify` | — | `{ run }` — jamais son propre import |
+
+---
+
+## Leadership (18 routes)
+
+> Le domaine `leadership` : caviardage, rétrospectives, coordination,
+> cohortes. Migrations 0460-0470.
+
+### Public
+
+| Method | Path | Body | Response |
+|--------|------|------|----------|
+| GET | `/leadership/reference` | — | `{ orientations, reviewer_groups, artifact_subtypes, redaction_states, retrospective_formats, link_kinds, cohort_leave_reasons }` |
+| GET | `/users/{username}/leadership-profile` | — | `{ profile }` — les artefacts confidentiels comptent dans le score et n'apparaissent qu'en abstrait |
+| GET | `/leadership/slices/{id}/links` | — | `{ reach }` |
+| GET | `/leadership/retrospectives/{id}/actions` | — | `{ actions, followthrough }` |
+| GET | `/leadership/cohorts/{id}/outcomes` | — | `{ outcomes }` — le dénominateur voyage avec le taux |
+
+### Authentifié
+
+| Method | Path | Body | Response |
+|--------|------|------|----------|
+| POST | `/leadership/slices/{id}/redaction/declare` | — | `{ declared }` — auteur uniquement |
+| POST | `/leadership/slices/{id}/redaction/confirm` | — | `{ confirmed }` — jamais l'auteur ; toute capability `leadership_reviewer:*` |
+| POST | `/leadership/slices/{id}/adoption` | `{ evidence_url? }` | `{ adopted }` — RFC/ADR seulement |
+| POST | `/leadership/slices/{id}/links` | `LinkInput` | `{ link }` — `commits`/`depends_on` exigent une note |
+| POST | `/leadership/links/{id}/acknowledge` | — | `{ link }` — le responsable du projet visé, jamais l'auteur |
+| POST | `/leadership/retrospectives` | `RetrospectiveInput` | `{ retrospective }` — notes < 200 car. → 400 |
+| GET | `/leadership/retrospectives` | — | `{ retrospectives: [...] }` |
+| POST | `/leadership/retrospectives/{id}/actions` | `ActionInput` | `{ action }` — un porteur obligatoire |
+| POST | `/leadership/actions/{id}/resolve` | `{ abandoned_reason? }` | `{ action }` |
+| POST | `/leadership/cohorts/{id}/lead` | `{ curriculum_slice_id?, target_domain? }` | `{ leading }` |
+| POST | `/leadership/cohorts/{id}/graduate` | `{ member_id }` | `{ graduated }` — le responsable, jamais le membre |
+| POST | `/leadership/cohorts/{id}/departure` | `{ member_id, reason, note? }` | `{ recorded }` |
+| POST | `/leadership/cohorts/{id}/conclude` | `{ note? }` | `{ outcomes }` |
+
+---
+
 ## Health & Docs (2 routes)
 
 | Method | Path | Auth | Response |

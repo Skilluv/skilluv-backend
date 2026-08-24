@@ -7,7 +7,58 @@ and the project will follow semantic versioning once 1.0 is reached.
 
 ## [Unreleased]
 
-_Nothing yet._
+### Added
+
+* **communication:** the domain opens, with five trades — technical writer,
+  developer advocate, technical content creator, technical translator,
+  research writer — four review families, and every table a domain needs:
+  skill nodes and their map, review grids, six attestation bases, twelve
+  badges, a slice type with six subtypes, craft-score weights, seven mission
+  types, ten portfolio platforms, two contest formats, five award categories,
+  thirty seeded challenges and the full set of guides, briefs and writeup
+  templates.
+* **communication:** translation review. A translation is the one artefact on
+  the platform never attested automatically: somebody declares in writing the
+  languages they read, and signs a review in one of them. Ticket W-04 asked
+  for one capability per language; there are seven thousand languages, and the
+  declaration is `user_review_languages` instead.
+* **education:** the domain opens, with three trades — technical trainer,
+  coding teacher, curriculum designer — two review families, and the same full
+  set of tables, plus taught cohorts, per-learner outcome records and
+  curriculum adoption.
+* **education:** the learner-data gate. Every delivery that reports on
+  learners waits, unattested, until its author states in writing that no
+  identifiable learner remains; a testimonial cannot be stored without
+  consent, and the schema enforces it rather than trusting anybody to
+  remember.
+* **opportunities:** `/api/opportunities` — curated calls for papers, speaker
+  slots and teaching positions, public to read and curated to write. One table
+  where the communication and education backlogs each asked for their own.
+* **portfolios:** `/api/portfolios` and `/api/portfolio-platforms` now serve
+  every domain, and `/api/slices/{id}/revisions` likewise. Both were audio
+  endpoints reading tables that already carried a domain.
+* **registries:** DEV, Hashnode, Medium, YouTube, Speaker Deck, arXiv and
+  Zenodo are recognised as places a published artefact lives, with fetchers
+  for the four that answer.
+
+### Fixed
+
+* **missions:** `licensing_scope` was not settable through the API, so from
+  migration 0413 onwards an audio mission could not be created at all — the
+  insert was refused by a constraint naming a column the request had no way to
+  reach.
+* **craft-score:** the code score summed downloads across *every* published
+  artefact a person had, so a HuggingFace model or a container image paid into
+  a term called `library_downloads`. `/code-profile` listed them too.
+  `publication_registries` carries the domain, and both queries now say what
+  they mean.
+* **badges:** a `skill_domain` condition read the challenge behind a
+  deliverable and nothing else, so every domain badge counted only training
+  challenges and ignored work delivered against a project slice — which is the
+  work the platform exists to produce.
+* **guides:** a guide with no row in the requested locale was hidden rather
+  than served in the next best one. The fallback is now requested → English →
+  French, and English is the default when the caller expresses no preference.
 
 ## 0.1.0 (2026-08-21)
 

@@ -124,6 +124,36 @@ async fn recompute_inner(
         }
     }
 
+    // 1quater. Communication attestations, for the same reason and in the
+    // same place. The published address of an article or a talk recording
+    // usually lands after the work is verified, so the generator is run from
+    // here rather than from the verification.
+    match crate::services::communication_attestations::issue_for_user(db, user_id).await {
+        Ok(issued) if !issued.is_empty() => {
+            tracing::info!(user_id = %user_id, ?issued, "communication attestations issued");
+        }
+        Ok(_) => {}
+        Err(e) => {
+            tracing::warn!(user_id = %user_id, error = %e, "P19: communication attestations failed");
+            errors.push(format!("communication_attestations: {e}"));
+        }
+    }
+
+    // 1quinquies. Education attestations. Last of the four, and the one with
+    // the most reasons to arrive late: the learner-data declaration, the
+    // cohort's conclusion and the first adoption all happen after the work is
+    // verified.
+    match crate::services::education_attestations::issue_for_user(db, user_id).await {
+        Ok(issued) if !issued.is_empty() => {
+            tracing::info!(user_id = %user_id, ?issued, "education attestations issued");
+        }
+        Ok(_) => {}
+        Err(e) => {
+            tracing::warn!(user_id = %user_id, error = %e, "P19: education attestations failed");
+            errors.push(format!("education_attestations: {e}"));
+        }
+    }
+
     // 2. Badges
     let badges = match badge_engine::recompute_badges_for_user(db, user_id).await {
         Ok(r) => r,

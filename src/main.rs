@@ -583,6 +583,15 @@ fn spawn_craft_score_worker(state: skilluv_backend::AppState) {
                     "audio",
                     skilluv_backend::services::audio_profile::sweep(&state.db, 500).await,
                 ),
+                (
+                    "communication",
+                    skilluv_backend::services::communication_profile::sweep(&state.db, 500)
+                        .await,
+                ),
+                (
+                    "education",
+                    skilluv_backend::services::education_profile::sweep(&state.db, 500).await,
+                ),
             ] {
                 match outcome {
                     Ok(0) => tracing::debug!(domain, "craft_score worker : nothing stale"),

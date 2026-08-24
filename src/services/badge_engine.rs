@@ -16,7 +16,8 @@
 //!                                   // (via user_skills touchées)
 //!     "display_category": "craft" // filtre par catégorie UX (P17.2)
 //!     "skill_domain": "code"      // filtre : domaine du challenge derrière la preuve
-//!     "distinct_over": "challenge_language" // compte des valeurs distinctes,
+//!     "distinct_over": "challenge_language" | "orientation" | "target_language"
+//!                                   // compte des valeurs distinctes,
 //!                                   // pas des preuves : "trois langages" et non
 //!                                   // "trois livrables"
 //!     "attestation_basis": "ai_model_shipped" // filtre : ce sur quoi
@@ -225,12 +226,20 @@ async fn count_matching_proofs(
             LEFT JOIN slice_skills ss ON ss.slice_id = d.slice_id
             LEFT JOIN skill_nodes sn  ON sn.id = ss.skill_id
             LEFT JOIN challenge_templates ct ON ct.id = d.challenge_id
+            LEFT JOIN project_slices dps ON dps.id = d.slice_id
             WHERE d.user_id = $1
               AND d.verification_status = 'verified'
               AND d.revoked_at IS NULL
               AND ($2::VARCHAR IS NULL OR sn.slug = $2)
               AND ($3::VARCHAR IS NULL OR sn.display_category = $3)
-              AND ($4::VARCHAR IS NULL OR ct.skill_domain = $4)
+              -- The domain of a deliverable is whichever of the two things
+              -- behind it carries one. Reading `ct.skill_domain` alone was a
+              -- silent undercount: work delivered against a project slice has
+              -- no challenge, so every `skill_domain` badge counted only the
+              -- training catalogue and ignored the real artefacts — which are
+              -- the ones the platform exists to produce.
+              AND ($4::VARCHAR IS NULL
+                   OR ct.skill_domain = $4 OR dps.primary_domain = $4)
               AND ($5::BOOLEAN IS FALSE OR d.featured)
               AND ($6::SMALLINT IS NULL OR EXISTS (
                       SELECT 1 FROM slice_validation_decisions v
@@ -254,12 +263,20 @@ async fn count_matching_proofs(
             LEFT JOIN slice_skills ss ON ss.slice_id = d.slice_id
             LEFT JOIN skill_nodes sn  ON sn.id = ss.skill_id
             LEFT JOIN challenge_templates ct ON ct.id = d.challenge_id
+            LEFT JOIN project_slices dps ON dps.id = d.slice_id
             WHERE d.user_id = $1
               AND d.verification_status = 'verified'
               AND d.revoked_at IS NULL
               AND ($2::VARCHAR IS NULL OR sn.slug = $2)
               AND ($3::VARCHAR IS NULL OR sn.display_category = $3)
-              AND ($4::VARCHAR IS NULL OR ct.skill_domain = $4)
+              -- The domain of a deliverable is whichever of the two things
+              -- behind it carries one. Reading `ct.skill_domain` alone was a
+              -- silent undercount: work delivered against a project slice has
+              -- no challenge, so every `skill_domain` badge counted only the
+              -- training catalogue and ignored the real artefacts — which are
+              -- the ones the platform exists to produce.
+              AND ($4::VARCHAR IS NULL
+                   OR ct.skill_domain = $4 OR dps.primary_domain = $4)
               AND ($5::BOOLEAN IS FALSE OR d.featured)
               AND ($6::SMALLINT IS NULL OR EXISTS (
                       SELECT 1 FROM slice_validation_decisions v
@@ -642,6 +659,9 @@ async fn count_distinct_dimension(
     if dimension == "orientation" {
         return count_distinct_orientations(db, user_id, conds).await;
     }
+    if dimension == "target_language" {
+        return count_distinct_target_languages(db, user_id, conds).await;
+    }
     if dimension != "challenge_language" {
         return Err(AppError::Internal(format!(
             "badge rule asks to count distinct '{dimension}', which nothing implements"
@@ -676,6 +696,67 @@ async fn count_distinct_dimension(
           AND ct.language IS NOT NULL
           AND ($2::VARCHAR IS NULL OR ct.skill_domain = $2)
         ORDER BY ct.language, d.id
+        LIMIT 25
+        "#,
+    )
+    .bind(user_id)
+    .bind(conds.skill_domain.as_deref())
+    .fetch_all(db)
+    .await?;
+
+    Ok((matched, sources))
+}
+
+/// How many distinct target languages this person's validated translations
+/// cover.
+///
+/// Only translations that were actually reviewed count. The target languages
+/// of an unreviewed translation are tags somebody typed, and a badge that read
+/// them would be awarded for typing five of them.
+///
+/// The sample is one slice per language, which is what makes the badge
+/// auditable: a reader can open five artefacts and see five languages.
+async fn count_distinct_target_languages(
+    db: &PgPool,
+    user_id: Uuid,
+    conds: &RuleConditions,
+) -> Result<(i64, Vec<Uuid>), AppError> {
+    let matched: i64 = sqlx::query_scalar(
+        r#"
+        SELECT count(DISTINCT lang)
+        FROM deliverables d
+        JOIN project_slices ps ON ps.id = d.slice_id
+        JOIN attestations a
+          ON d.id = ANY (a.linked_deliverable_ids)
+         AND a.basis = 'communication_translation_validated'
+         AND a.revoked_at IS NULL
+        CROSS JOIN LATERAL unnest(ps.communication_target_languages) AS lang
+        WHERE d.user_id = $1
+          AND d.verification_status = 'verified'
+          AND d.revoked_at IS NULL
+          AND ($2::VARCHAR IS NULL OR ps.primary_domain = $2)
+        "#,
+    )
+    .bind(user_id)
+    .bind(conds.skill_domain.as_deref())
+    .fetch_one(db)
+    .await?;
+
+    let sources: Vec<Uuid> = sqlx::query_scalar(
+        r#"
+        SELECT DISTINCT ON (lang) d.id
+        FROM deliverables d
+        JOIN project_slices ps ON ps.id = d.slice_id
+        JOIN attestations a
+          ON d.id = ANY (a.linked_deliverable_ids)
+         AND a.basis = 'communication_translation_validated'
+         AND a.revoked_at IS NULL
+        CROSS JOIN LATERAL unnest(ps.communication_target_languages) AS lang
+        WHERE d.user_id = $1
+          AND d.verification_status = 'verified'
+          AND d.revoked_at IS NULL
+          AND ($2::VARCHAR IS NULL OR ps.primary_domain = $2)
+        ORDER BY lang, d.id
         LIMIT 25
         "#,
     )

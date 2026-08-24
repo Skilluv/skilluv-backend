@@ -258,11 +258,16 @@ pub async fn submit(
 
     let measured = spec.is_measured;
     match (measured, input.measured_value) {
-        // Without the number there is nothing to rank a golf entry by.
+        // Without the number there is nothing to rank the entry by.
+        //
+        // The message names the kind rather than the metric: code golf was the
+        // only measured format when this was written, so it said "character
+        // count" to everybody — including, once the documentation jam arrived,
+        // to somebody counting merged contributions.
         (true, None) => {
-            return Err(AppError::Validation(
-                "a code golf entry must state its measured_value (character count)".into(),
-            ));
+            return Err(AppError::Validation(format!(
+                "a {kind} entry is ranked on a number and must state its measured_value"
+            )));
         }
         (true, Some(n)) if n <= 0 => {
             return Err(AppError::Validation(

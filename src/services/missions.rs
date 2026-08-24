@@ -133,6 +133,18 @@ pub struct Mission {
     pub oncall_has_backup: bool,
     pub production_access_required: bool,
     pub compliance_frameworks: Vec<String>,
+
+    /// What the client may do with the delivered work. Orthogonal to
+    /// `ip_terms`, which says who owns it (migration 0413). Compulsory for
+    /// audio and communication, where the licence is where the disputes are.
+    pub licensing_scope: Option<String>,
+    /// Education: who is being taught. Not a level of the person doing the
+    /// work, which is what every other level field here means.
+    pub target_audience: Option<String>,
+    pub target_learners: Option<i32>,
+    /// Education: hours in front of people. Distinct from `estimated_days`,
+    /// which says how long the work takes.
+    pub delivery_hours: Option<i32>,
 }
 
 const MISSION_SELECT: &str = r#"
@@ -150,7 +162,9 @@ const MISSION_SELECT: &str = r#"
                AS application_count,
            m.target_platforms, m.includes_oncall, m.oncall_window,
            m.oncall_response_minutes, m.oncall_has_backup,
-           m.production_access_required, m.compliance_frameworks
+           m.production_access_required, m.compliance_frameworks,
+           m.licensing_scope,
+           m.target_audience, m.target_learners, m.delivery_hours
       FROM missions m
       JOIN mission_types mt ON mt.id = m.mission_type_id
       LEFT JOIN orientations o ON o.id = m.orientation_id
@@ -219,6 +233,30 @@ pub struct CreateMissionInput {
     /// background check before applying rather than after being refused.
     #[serde(default)]
     pub compliance_frameworks: Vec<String>,
+
+    /// One of `mission_licensing_scopes` (migration 0413): what the client may
+    /// do with the work, as distinct from who owns it.
+    ///
+    /// This field was missing until communication opened, and its absence was
+    /// a live bug rather than a gap: migration 0413 made the column compulsory
+    /// for audio missions, so from that migration until this one an audio
+    /// mission could not be created through the API at all — the insert was
+    /// refused by a constraint naming a column the request had no way to set.
+    #[serde(default)]
+    pub licensing_scope: Option<String>,
+
+    /// Education: `beginner`, `junior`, `mid`, `senior` or `mixed`.
+    /// Compulsory for an education mission — without it an applicant cannot
+    /// tell whether they are the right trainer.
+    #[serde(default)]
+    pub target_audience: Option<String>,
+    /// Education: how many people. Twelve and two hundred are different work.
+    #[serde(default)]
+    pub target_learners: Option<i32>,
+    /// Education: hours in front of people, which is not the same question as
+    /// how long the preparation takes.
+    #[serde(default)]
+    pub delivery_hours: Option<i32>,
 }
 
 fn yes() -> bool {
@@ -343,9 +381,10 @@ pub async fn create(
              upstream_license_spdx,
              target_platforms, includes_oncall, oncall_window,
              oncall_response_minutes, oncall_has_backup,
-             production_access_required, compliance_frameworks)
+             production_access_required, compliance_frameworks,
+             licensing_scope, target_audience, target_learners, delivery_hours)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,
-                $23,$24,$25,$26,$27,$28,$29,$30)
+                $23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34)
         RETURNING id
         "#,
     )
@@ -379,6 +418,10 @@ pub async fn create(
     .bind(input.oncall_has_backup)
     .bind(input.production_access_required)
     .bind(&input.compliance_frameworks)
+    .bind(input.licensing_scope.as_deref())
+    .bind(input.target_audience.as_deref())
+    .bind(input.target_learners)
+    .bind(input.delivery_hours)
     .fetch_one(db)
     .await
     .map_err(|e| {
@@ -458,6 +501,9 @@ pub struct MissionFilter {
     pub min_budget_eur: Option<bigdecimal::BigDecimal>,
     pub remote_only: Option<bool>,
     pub urgency: Option<String>,
+    /// Education: who the mission teaches. A trainer filtering for beginners
+    /// and one filtering for senior engineers are looking for different work.
+    pub target_audience: Option<String>,
 }
 
 /// Missions anybody can apply to.
@@ -485,9 +531,10 @@ pub async fn list_open(
                 OR COALESCE(m.budget_eur, m.hourly_rate_eur) >= $8)
            AND ($9::BOOLEAN IS NULL OR m.remote_only = $9)
            AND ($10::TEXT IS NULL OR m.urgency = $10)
+           AND ($11::TEXT IS NULL OR m.target_audience = $11)
          ORDER BY CASE m.urgency WHEN 'urgent' THEN 0 WHEN 'soon' THEN 1 ELSE 2 END,
                   m.published_at DESC NULLS LAST
-         LIMIT $11 OFFSET $12"
+         LIMIT $12 OFFSET $13"
     );
 
     let orientation_id: Option<Uuid> = match &filter.orientation {
@@ -515,6 +562,7 @@ pub async fn list_open(
         .bind(filter.min_budget_eur.as_ref())
         .bind(filter.remote_only)
         .bind(filter.urgency.as_deref())
+        .bind(filter.target_audience.as_deref())
         .bind(limit)
         .bind(offset)
         .fetch_all(db)

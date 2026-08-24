@@ -86,12 +86,23 @@ impl Presentation {
     /// Which family a basis belongs to.
     ///
     /// Unknown bases present as [`Presentation::Artefact`], which is the
-    /// conservative default: every basis in the schema except the three
-    /// editorial ones requires a deliverable, so a new one almost certainly
-    /// does too. Getting it wrong that way understates nothing.
+    /// conservative default: almost every basis in the schema requires a
+    /// deliverable, so a new one almost certainly does too. Getting it wrong
+    /// that way understates nothing.
+    ///
+    /// The editorial ones are matched by prefix rather than listed. They were
+    /// listed, and the list went stale twice without anybody noticing:
+    /// `featured_audio_creator` arrived with migration 0406 and
+    /// `featured_communicator` with 0504, and both rendered as
+    /// `Artefact` — an editorial choice printed on a sheet that says a
+    /// reviewer verified a deliverable, which is the one direction this enum
+    /// must never get wrong.
+    ///
+    /// Every domain names its editorial basis `featured_*`, and that
+    /// convention is now what the code reads.
     pub fn for_basis(basis: &str) -> Self {
         match basis {
-            "featured_coder" | "featured_designer" | "featured_ai_researcher" => Self::Editorial,
+            b if b.starts_with("featured_") => Self::Editorial,
             b if b.ends_with("_contest_won") => Self::Contest,
             _ => Self::Artefact,
         }
@@ -136,6 +147,21 @@ impl Presentation {
             }
         }
     }
+}
+
+/// The sentence an education attestation carries, and no other one does.
+///
+/// Not a `Presentation` variant: the claim is still an artefact claim, and
+/// demoting it would understate work that was genuinely verified. What has to
+/// change is one added sentence, because in several of the jurisdictions this
+/// platform serves "formateur certifié" and its equivalents are protected
+/// terms — a sheet that reads like a teaching qualification is a liability for
+/// the platform and a false hope for the person holding it.
+fn education_disclaimer(basis: &str) -> Option<&'static str> {
+    basis.starts_with("education_").then_some(
+        "Elle ne constitue ni un diplôme, ni une qualification d'enseignement, \
+         ni une accréditation.",
+    )
 }
 
 /// Everything the card and the sheet show. Built by the route from one query.
@@ -350,14 +376,24 @@ pub fn build_certificate_svg(data: &CertificateData) -> String {
         .collect::<Vec<_>>()
         .join("\n    ");
 
-    let footing_lines = wrap(presentation.footing(), 68, 3);
+    // The footing, plus the sentence education attestations have to carry.
+    // "Certified trainer" is a protected term in several of the jurisdictions
+    // the platform serves, and a sheet that reads like a teaching
+    // qualification is a liability for the platform and a false hope for the
+    // holder. `docs/education/LEARNER-DATA.md` §8 is where the wording comes
+    // from.
+    let footing_text = match education_disclaimer(&data.basis) {
+        Some(extra) => format!("{} {extra}", presentation.footing()),
+        None => presentation.footing().to_string(),
+    };
+    let footing_lines = wrap(&footing_text, 68, 4);
     let footing_svg: String = footing_lines
         .iter()
         .enumerate()
         .map(|(i, line)| {
             format!(
                 r#"<text x="80" y="{y}" font-size="16" fill="{INK_MUTED}">{line}</text>"#,
-                y = 690 + i * 24,
+                y = 678 + i * 24,
                 line = escape(line)
             )
         })
@@ -488,6 +524,39 @@ mod tests {
             Presentation::Artefact.accent()
         );
         assert!(Presentation::Editorial.footing().contains("éditorial"));
+    }
+
+    #[test]
+    fn every_domains_editorial_basis_reads_as_editorial() {
+        // Matched by prefix rather than listed, because the list went stale
+        // twice: an editorial choice printed on a sheet claiming a reviewer
+        // verified a deliverable is the one direction this must never fail.
+        for basis in [
+            "featured_coder",
+            "featured_designer",
+            "featured_ai_researcher",
+            "featured_audio_creator",
+            "featured_communicator",
+            "featured_educator",
+        ] {
+            assert_eq!(
+                Presentation::for_basis(basis),
+                Presentation::Editorial,
+                "{basis} presented as something stronger than a choice"
+            );
+        }
+    }
+
+    #[test]
+    fn only_education_carries_the_qualification_disclaimer() {
+        assert!(education_disclaimer("education_cohort_delivered").is_some());
+        assert!(education_disclaimer("education_curriculum_authored").is_some());
+
+        assert!(education_disclaimer("code_pr_merged_upstream").is_none());
+        assert!(education_disclaimer("communication_talk_delivered").is_none());
+        // The editorial one is not an education attestation about work, and
+        // it says so already.
+        assert!(education_disclaimer("featured_educator").is_none());
     }
 
     #[test]

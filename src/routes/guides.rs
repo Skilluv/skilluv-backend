@@ -13,11 +13,17 @@
 //!
 //! ## Locale
 //!
-//! French is the base locale for this content, unlike the orientation
-//! catalogue: these are written here first and translated after. A guide with
-//! no translation in the requested locale is served in French rather than
-//! 404ing, because a half-translated catalogue should show the untranslated
-//! page instead of claiming the guide does not exist.
+//! These are written here first and translated after, unlike the orientation
+//! catalogue. A guide with no row in the requested locale is served in the
+//! next best one rather than disappearing, because a half-translated
+//! catalogue should show the untranslated page instead of claiming the guide
+//! does not exist.
+//!
+//! The chain is: the locale asked for, then English, then French. English is
+//! in the middle rather than last because it is now the locale this content
+//! is authored in — the guides seeded from migration 0514 onwards have no
+//! French row until somebody writes one, and the older ones have no English
+//! row. Either way a reader gets the page.
 
 use axum::extract::{Path, Query, State};
 use axum::routing::get;
@@ -98,16 +104,25 @@ pub async fn list_guides(
     crate::validators::check_max_len_opt(&q.reviewer_group, "reviewer_group", 30)?;
     let locale = guide_locale(&headers);
 
+    // One row per guide, in the best locale available for it: the one asked
+    // for, then English, then French.
+    //
+    // This used to be `locale = $1`, which silently hid every guide that had
+    // no row in the requested locale. It was invisible while the whole table
+    // was French and every reader defaulted to French; the first English-only
+    // domain — communication, migration 0514 — would have been missing from
+    // a French reader's list entirely, and the list would have looked
+    // complete.
     let guides = sqlx::query_as::<_, GuideSummary>(
         r#"
-        SELECT slug, kind, skill_domain, reviewer_group, locale, title, summary
+        SELECT DISTINCT ON (slug)
+               slug, kind, skill_domain, reviewer_group, locale, title, summary
           FROM content_guides
          WHERE is_published = TRUE
-           AND locale = $1
            AND ($2::TEXT IS NULL OR skill_domain = $2)
            AND ($3::TEXT IS NULL OR kind = $3)
            AND ($4::TEXT IS NULL OR reviewer_group = $4)
-         ORDER BY skill_domain, sort_order, slug
+         ORDER BY slug, (locale = $1) DESC, (locale = 'en') DESC, (locale = 'fr') DESC
         "#,
     )
     .bind(&locale)
@@ -116,6 +131,16 @@ pub async fn list_guides(
     .bind(q.reviewer_group.as_deref())
     .fetch_all(&state.db)
     .await?;
+
+    // `DISTINCT ON` dictates the SQL ordering, so the display ordering is
+    // restored here. Sorting in Rust rather than wrapping the query in a
+    // subselect: the whole table is a few hundred rows and always will be.
+    let mut guides = guides;
+    guides.sort_by(|a, b| {
+        a.skill_domain
+            .cmp(&b.skill_domain)
+            .then_with(|| a.slug.cmp(&b.slug))
+    });
 
     Ok(Json(ApiResponse::new(guides)))
 }
@@ -144,7 +169,7 @@ pub async fn get_guide(
                body_md
           FROM content_guides
          WHERE slug = $1 AND is_published = TRUE
-         ORDER BY (locale = $2) DESC, (locale = 'fr') DESC
+         ORDER BY (locale = $2) DESC, (locale = 'en') DESC, (locale = 'fr') DESC
          LIMIT 1
         "#,
     )
@@ -166,6 +191,10 @@ fn guide_locale(headers: &axum::http::HeaderMap) -> String {
     if headers.contains_key(axum::http::header::ACCEPT_LANGUAGE) {
         resolved
     } else {
-        "fr".into()
+        // English when the caller says nothing. It was French, from when the
+        // whole table was; the repository's default is English now, and a
+        // reader who expressed no preference should get the locale the
+        // content is authored in rather than the one it is translated into.
+        "en".into()
     }
 }

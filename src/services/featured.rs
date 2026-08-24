@@ -215,10 +215,10 @@ pub async fn feature(
 
 /// Issue the editorial attestation, where the domain has one.
 ///
-/// Three domains do: `featured_coder`, `featured_designer` and
-/// `featured_ai_researcher`. The other four are featured without one rather
-/// than being given a basis the schema refuses — an insert that failed here
-/// would lose the featuring itself, which is the thing worth keeping.
+/// Seven domains do, and the list is `attestation_bases` filtered to
+/// `featured\_%` rather than anything written here — which is the point of the
+/// fallthrough below. Game, security and soft_skills declare none and are
+/// featured without one.
 ///
 /// Each domain's own service issues it, because each knows its own bases and
 /// its own rules about what evidence may look like.
@@ -272,16 +272,61 @@ async fn issue_attestation(
             )
             .await?;
         }
-        // Ops and audio declare a `featured_*` basis and have no generator
-        // behind it, so a featuring in those domains records the featuring and
-        // issues nothing. That predates this branch and is left as it is
-        // rather than being fixed on the way past: the fix is a generator per
-        // domain, and adding two while adding a third is how a match arm list
-        // becomes the thing nobody audits. It is written down here so the
-        // next person does not have to rediscover it from an empty profile.
-        _ => {}
+        "ops" => {
+            crate::services::ops_practice::featured_ops_engineer(
+                db,
+                user_id,
+                profile_url,
+                &citation,
+            )
+            .await?;
+        }
+        "audio" => {
+            crate::services::audio_attestations::featured_audio_creator(
+                db,
+                user_id,
+                profile_url,
+                &citation,
+            )
+            .await?;
+        }
+        // Game, security and soft_skills declare no `featured_*` basis, and
+        // silence is the right answer for them: somebody is put forward, the
+        // announcement goes out, and there is nothing to attest.
+        //
+        // A domain that *does* declare one and reaches this arm is a different
+        // thing entirely, and it is the bug that hid here for two domains —
+        // ops and audio each had a basis, a profile term counting it, and no
+        // arm. The featuring was recorded, nothing was issued, and the only
+        // symptom was a number stuck at zero on somebody else's profile.
+        //
+        // So the fallthrough asks the catalogue rather than assuming. It logs
+        // and does not fail: an insert that failed here would lose the
+        // featuring itself, which is the thing worth keeping.
+        other => warn_if_the_domain_expected_one(db, other).await,
     }
     Ok(())
+}
+
+/// Complain when a domain declares a featuring basis that nothing issues.
+///
+/// The guard the match arms cannot be: a missing arm is not a compile error,
+/// it is a person whose profile quietly says zero.
+async fn warn_if_the_domain_expected_one(db: &PgPool, domain: &str) {
+    let basis: Result<Option<String>, _> = sqlx::query_scalar(
+        r"SELECT basis FROM attestation_bases
+           WHERE skill_domain = $1 AND basis LIKE 'featured\_%'",
+    )
+    .bind(domain)
+    .fetch_optional(db)
+    .await;
+
+    if let Ok(Some(basis)) = basis {
+        tracing::error!(
+            domain, %basis,
+            "this domain declares a featuring basis and no generator issues it —              the featuring was recorded and the attestation was not, which shows              up only as a profile term stuck at zero"
+        );
+    }
 }
 
 /// What the attestation points at.
@@ -294,7 +339,11 @@ async fn issue_attestation(
 /// The profile remains the answer when nobody named a piece of work: somebody
 /// can be put forward for a body of work, and a link to the body of work is a
 /// profile.
-async fn evidence_url_of(
+/// Public because two paths reach a featuring: the weekly one below, and an
+/// administrator issuing one by hand through `/admin/ops/attestations/featured`.
+/// Both have to point at the same thing, and a second convention invented in a
+/// route handler is how they stop.
+pub async fn evidence_url_of(
     db: &PgPool,
     user_id: Uuid,
     deliverable_id: Option<Uuid>,

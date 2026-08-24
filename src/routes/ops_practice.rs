@@ -469,7 +469,20 @@ pub async fn attest_featured(
     Json(body): Json<FeaturedBody>,
 ) -> Result<Json<Value>, AppError> {
     crate::routes::admin::require_admin(&state, &auth).await?;
-    ops_practice::attest_featured(&state.db, body.user_id, &body.reason).await?;
+
+    // The same address the weekly featuring would have used. Building one
+    // here instead would be a second convention for "what does a featuring
+    // point at", and the two would drift.
+    let evidence_url = crate::services::featured::evidence_url_of(
+        &state.db,
+        body.user_id,
+        None,
+        &state.config.frontend_url,
+    )
+    .await;
+
+    ops_practice::featured_ops_engineer(&state.db, body.user_id, &evidence_url, &body.reason)
+        .await?;
     Ok(Json(build_response(json!({ "issued": true }))))
 }
 

@@ -828,22 +828,58 @@ pub async fn attest_artefact(
     Ok(())
 }
 
+/// What this domain may issue editorially.
+///
+/// One basis. Everything else ops issues rests on an objective held, an
+/// incident led or a bill reduced, and is written by the functions above.
+const EDITORIAL: crate::services::artefact_attestations::Domain =
+    crate::services::artefact_attestations::Domain {
+        name: "ops",
+        bases: &["featured_ops_engineer"],
+        artifact_bases: &[],
+        allows_stored_objects: false,
+    };
+
 /// The community one. It rests on nobody's artefact and everybody's opinion,
-/// which is why it is issued by hand and carries no deliverable.
-pub async fn attest_featured(db: &PgPool, user_id: Uuid, reason: &str) -> Result<(), AppError> {
-    if reason.trim().len() < 40 {
+/// which is why it carries no deliverable.
+///
+/// Reached two ways and issued once: an administrator through
+/// `POST /admin/ops/attestations/featured`, and the weekly featuring through
+/// [`crate::services::featured`]. Until this change only the first existed,
+/// so an ops engineer the community put forward got the announcement and no
+/// attestation — the row was written, the match arm did nothing, and the
+/// absence showed only as a profile term stuck at zero.
+///
+/// It goes through `artefact_attestations::issue` rather than the local
+/// `issue_ops_attestation` for one reason: the shared path puts the evidence
+/// URL into the description and refuses a link nobody can open. An
+/// attestation saying somebody was featured and pointing at nothing is the
+/// fabricated social proof this platform sells against.
+pub async fn featured_ops_engineer(
+    db: &PgPool,
+    user_id: Uuid,
+    profile_url: &str,
+    citation: &str,
+) -> Result<crate::services::artefact_attestations::Issued, AppError> {
+    if citation.trim().len() < 40 {
         return Err(AppError::Validation(
-            "say why in a sentence somebody outside the decision would \
-             understand — at least forty characters"
+            "say why in a sentence somebody outside the decision would              understand — at least forty characters"
                 .into(),
         ));
     }
-    issue_ops_attestation(
+    crate::services::artefact_attestations::issue(
         db,
         user_id,
         "featured_ops_engineer",
-        "Mise en avant par la communauté ops",
-        reason.trim(),
+        &crate::services::artefact_attestations::Evidence {
+            url: profile_url.to_string(),
+            title: "Mise en avant par la communauté ops".into(),
+            description: citation.trim().to_string(),
+            deliverable_id: None,
+            project_id: None,
+            skill_node_ids: vec![],
+        },
+        &EDITORIAL,
     )
     .await
 }

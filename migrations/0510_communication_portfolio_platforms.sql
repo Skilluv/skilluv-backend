@@ -26,6 +26,18 @@
 -- publishes readership, so `reach_label` is NULL: the item count is checked
 -- and the audience is simply absent, which is the honest pair.
 --
+-- Its `handle` is the address of the feed rather than a username, because a
+-- personal blog has no username — which is the whole reason it needs a row of
+-- its own instead of being filed under a hosted platform.
+--
+-- ## `has_public_api` is a queue, not a description
+--
+-- `services::portfolio_sync` selects on it, so a platform marked TRUE and not
+-- implemented is a row that fails every weekly pass forever. Four are TRUE
+-- and fetched: DEV, Hashnode, a feed, and YouTube. Weblate makes five.
+-- Everything else here is declared, marked, and counted at half by
+-- `communication_profile::reach`.
+--
 -- ## Why podcasts are two rows and not one
 --
 -- Spotify and Apple host the same episodes and answer differently: Spotify
@@ -44,8 +56,13 @@ INSERT INTO portfolio_platforms
      NULL, 'articles', NULL, TRUE, 340),
     ('youtube', 'communication', 'YouTube',
      'https://www.youtube.com/@{handle}', 'videos', 'views', TRUE, 350),
+    -- FALSE, unlike the other three with an API: Twitch answers only to an
+    -- application registration with a client secret, which this deployment
+    -- does not have. `has_public_api` is what puts a row in the refresh queue,
+    -- and a row queued for a platform nothing can call fails every pass
+    -- forever.
     ('twitch', 'communication', 'Twitch',
-     'https://www.twitch.tv/{handle}', 'streams', 'viewers', TRUE, 360),
+     'https://www.twitch.tv/{handle}', 'streams', 'viewers', FALSE, 360),
     ('spotify_podcast', 'communication', 'Spotify (podcast)',
      NULL, 'episodes', NULL, FALSE, 370),
     ('apple_podcast', 'communication', 'Apple Podcasts',

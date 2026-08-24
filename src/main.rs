@@ -227,6 +227,7 @@ async fn async_main(config: AppConfig) {
     spawn_audio_analysis_worker(state.clone());
     spawn_design_upload_sweeper(state.clone());
     spawn_code_portfolio_worker(state.clone());
+    spawn_portfolio_sync_worker(state.clone());
     spawn_release_sweep_worker(state.clone());
     spawn_credential_expiry_worker(state.clone());
     spawn_ats_erasure_worker(state.clone());
@@ -641,6 +642,47 @@ fn spawn_artifact_stats_worker(state: skilluv_backend::AppState) {
                 Err(e) => tracing::error!(
                     error = %e,
                     "artifact_stats worker : sweep failed, figures stay as they were"
+                ),
+            }
+        }
+    });
+}
+
+/// Refreshes the external accounts linked outside the code forges.
+///
+/// Weekly, because these figures move slowly and every one of these services
+/// is somebody else's, run for free. `spawn_code_portfolio_worker` covers the
+/// forges, where the figures and the verification are a different problem.
+fn spawn_portfolio_sync_worker(state: skilluv_backend::AppState) {
+    tokio::spawn(async move {
+        if std::env::var("SKILLUV_PORTFOLIO_SYNC_ENABLED").as_deref() != Ok("1") {
+            tracing::info!("portfolio_sync worker : disabled (env flag absent)");
+            return;
+        }
+
+        let client = match reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(20))
+            .build()
+        {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::error!(error = %e, "portfolio_sync worker : no HTTP client, giving up");
+                return;
+            }
+        };
+
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(24 * 60 * 60));
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+            match skilluv_backend::services::portfolio_sync::sync_stale(&state.db, &client).await {
+                Ok(0) => tracing::debug!("portfolio_sync worker : nothing stale"),
+                Ok(n) => {
+                    tracing::info!(refreshed = n, "portfolio_sync worker : accounts refreshed")
+                }
+                Err(e) => tracing::error!(
+                    error = %e,
+                    "portfolio_sync worker : sweep failed, figures stay as they were"
                 ),
             }
         }

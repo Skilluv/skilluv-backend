@@ -124,6 +124,7 @@ pub mod peer_matching;
 pub mod plagiarism;
 pub mod plagiarism_cases;
 pub mod portfolio;
+pub mod portfolio_sync;
 pub mod profile_readme_sync;
 pub mod projects;
 pub mod promotion_notify;

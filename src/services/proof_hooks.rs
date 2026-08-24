@@ -124,6 +124,23 @@ async fn recompute_inner(
         }
     }
 
+    // 1quater. Quality attestations.
+    //
+    // Here for the reason the two above are, and with one extra: this
+    // domain's signature basis waits on a fix confirmation that arrives long
+    // after the deliverable was verified. Hooking verification alone would
+    // have left every confirmed defect permanently unattested.
+    match crate::services::quality_attestations::issue_for_user(db, user_id).await {
+        Ok(issued) if !issued.is_empty() => {
+            tracing::info!(user_id = %user_id, ?issued, "quality attestations issued");
+        }
+        Ok(_) => {}
+        Err(e) => {
+            tracing::warn!(user_id = %user_id, error = %e, "P19: quality attestations failed");
+            errors.push(format!("quality_attestations: {e}"));
+        }
+    }
+
     // 2. Badges
     let badges = match badge_engine::recompute_badges_for_user(db, user_id).await {
         Ok(r) => r,

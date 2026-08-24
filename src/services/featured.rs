@@ -254,6 +254,22 @@ async fn issue_attestation(
             )
             .await?;
         }
+        "quality" => {
+            crate::services::quality_attestations::featured_quality_engineer(
+                db,
+                user_id,
+                profile_url,
+                &citation,
+            )
+            .await?;
+        }
+        // Ops and audio declare a `featured_*` basis and have no generator
+        // behind it, so a featuring in those domains records the featuring and
+        // issues nothing. That predates this branch and is left as it is
+        // rather than being fixed on the way past: the fix is a generator per
+        // domain, and adding two while adding a third is how a match arm list
+        // becomes the thing nobody audits. It is written down here so the
+        // next person does not have to rediscover it from an empty profile.
         _ => {}
     }
     Ok(())

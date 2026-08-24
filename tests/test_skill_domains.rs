@@ -110,17 +110,23 @@ async fn an_undeclared_domain_is_refused_by_the_database() {
 /// A declared domain that is not open yet still accepts rows.
 ///
 /// This is the distinction the `is_active` flag carries: `craft_score_tiers`
-/// has held rows for `audio`, `quality` and three others since migration 0204,
-/// and a foreign key that refused them would have had to delete them.
+/// has held rows for `audio`, `communication` and three others since migration
+/// 0204, and a foreign key that refused them would have had to delete them.
+///
+/// Written against `quality` until migrations 0450-0459 opened that domain,
+/// which is the assertion working as intended: it fails when a domain is
+/// opened, and whoever opens one moves it to a domain that is still closed.
+/// `communication` and `education` are the two remaining.
 #[tokio::test]
 async fn a_declared_but_inactive_domain_still_holds_its_rows() {
     let app = TestApp::spawn().await;
 
-    let tiers: i64 =
-        sqlx::query_scalar("SELECT count(*) FROM craft_score_tiers WHERE skill_domain = 'quality'")
-            .fetch_one(&app.db)
-            .await
-            .unwrap();
+    let tiers: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM craft_score_tiers WHERE skill_domain = 'communication'",
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
 
     assert_eq!(
         tiers, 6,
@@ -128,7 +134,7 @@ async fn a_declared_but_inactive_domain_still_holds_its_rows() {
     );
 
     let active: bool =
-        sqlx::query_scalar("SELECT is_active FROM skill_domains WHERE slug = 'quality'")
+        sqlx::query_scalar("SELECT is_active FROM skill_domains WHERE slug = 'communication'")
             .fetch_one(&app.db)
             .await
             .unwrap();

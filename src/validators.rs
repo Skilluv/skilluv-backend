@@ -33,6 +33,7 @@ pub const SKILL_DOMAINS: &[&str] = &[
     "ai",
     "soft_skills",
     "audio",
+    "quality",
 ];
 
 /// Refuse a domain nothing knows, naming what was allowed.

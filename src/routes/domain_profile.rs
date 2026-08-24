@@ -292,6 +292,45 @@ const AUDIO_QUESTIONS: &[Question] = &[
     free_text("bandcamp_username", 60),
 ];
 
+/// Quality only. Where somebody is arriving from.
+///
+/// Asked because this domain receives more career changers than any other on
+/// the platform, and the first month of a developer moving into testing and of
+/// somebody arriving from support have almost nothing in common. It steers
+/// which guide is shown first and nothing else — it is a statement about a
+/// path, never about a level.
+const QUALITY_BACKGROUNDS: &[&str] = &[
+    "developer_moving_across",
+    "professional_tester",
+    "support_or_operations",
+    "career_change",
+    "student",
+    "other",
+];
+
+/// Quality only. Which domains somebody wants to put to the test.
+///
+/// The one wizard answer in this domain that has no equivalent anywhere else,
+/// and the reason it exists: every other trade works *in* a domain, this one
+/// works *on* one. Somebody who wants to test games and is shown a queue of
+/// API test plans reads the platform as empty.
+///
+/// Closed against the same domain list every other guard reads, so a domain
+/// opened later becomes an answer here without anybody editing this file.
+/// Multi, capped by `MAX_SELECTIONS`: two is a specialisation, everything is
+/// an absence of one.
+const QUALITY_TARGET_DOMAINS: &[&str] = crate::validators::SKILL_DOMAINS;
+
+const QUALITY_QUESTIONS: &[Question] = &[
+    closed("quality_background", QUALITY_BACKGROUNDS),
+    closed_multi("quality_target_domains", QUALITY_TARGET_DOMAINS),
+    // Open, for the reason the code one is: the set of things a tester works
+    // in runs from Playwright to a screen reader to a spreadsheet, and a
+    // closed list would refuse real answers. Read as a bonus in the matching,
+    // never as a filter.
+    open_multi("quality_tools", 40),
+];
+
 /// Which wizard a field belongs to, for the message when it arrives on
 /// another one.
 ///
@@ -314,6 +353,7 @@ pub fn questions_for(domain: &str) -> &'static [Question] {
         "audio" => AUDIO_QUESTIONS,
         "code" => CODE_QUESTIONS,
         "design" => DESIGN_QUESTIONS,
+        "quality" => QUALITY_QUESTIONS,
         _ => &[],
     }
 }

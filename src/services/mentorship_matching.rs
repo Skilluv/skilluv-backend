@@ -136,6 +136,23 @@ pub const DESIGN: DomainRules = DomainRules {
     families_are_trade_slugs: true,
 };
 
+/// Four, which is the code number rather than the design one, and for the
+/// reason that separates them: a quality session is usually reading a report
+/// or a suite and saying what is missing, which is closer to reading a diff
+/// than to critiquing an artefact.
+///
+/// `quality_tools` is open text, so the overlap it produces is a bonus and
+/// never a filter — somebody who lists "axe" and somebody who lists "axe
+/// DevTools" are the same answer, and a filter would separate them.
+pub const QUALITY: DomainRules = DomainRules {
+    domain: "quality",
+    tools_key: "quality_tools",
+    families_key: "preferred_families",
+    max_active_mentees: 4,
+    tools_label: "outils",
+    families_are_trade_slugs: false,
+};
+
 /// The rules for a domain named at runtime.
 ///
 /// The wizard validates its answers against the same distinction the matcher
@@ -149,6 +166,7 @@ pub fn rules_for(domain: &str) -> Option<DomainRules> {
         "ops" => Some(OPS),
         "audio" => Some(AUDIO),
         "design" => Some(DESIGN),
+        "quality" => Some(QUALITY),
         _ => None,
     }
 }

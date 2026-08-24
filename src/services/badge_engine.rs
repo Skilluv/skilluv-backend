@@ -18,7 +18,11 @@
 //!     "skill_domain": "code"      // filtre : domaine du challenge derrière la preuve
 //!     "distinct_over": "challenge_language" // compte des valeurs distinctes,
 //!                                   // pas des preuves : "trois langages" et non
-//!                                   // "trois livrables"
+//!                                   // "trois livrables". Also accepts
+//!                                   // "orientation" (distinct trades) and
+//!                                   // "target_domain" (distinct domains the
+//!                                   // work was aimed at, for quality and
+//!                                   // leadership).
 //!     "attestation_basis": "ai_model_shipped" // filtre : ce sur quoi
 //!                                   // l'attestation se fonde. Rend comptable
 //!                                   // ce qui était une appréciation.
@@ -81,6 +85,16 @@ pub const PROOF_TYPES: &[&str] = &[
     "tournament_judged",
     "tournament_podium",
 ];
+
+/// Every `distinct_over` dimension this engine knows how to count.
+///
+/// A rule naming anything else fails loudly rather than silently — the engine
+/// returns an error — but it fails at recompute time, on somebody's account,
+/// long after the migration that seeded it was merged. The list is public and
+/// asserted against the seeded rules by
+/// `tests/test_quality_domain.rs::every_seeded_rule_counts_something_real`,
+/// so the failure moves to CI where it belongs.
+pub const DISTINCT_DIMENSIONS: &[&str] = &["challenge_language", "orientation", "target_domain"];
 
 #[derive(Debug, Deserialize, Default, Clone)]
 struct RuleConditions {
@@ -642,9 +656,13 @@ async fn count_distinct_dimension(
     if dimension == "orientation" {
         return count_distinct_orientations(db, user_id, conds).await;
     }
+    if dimension == "target_domain" {
+        return count_distinct_target_domains(db, user_id, conds).await;
+    }
     if dimension != "challenge_language" {
         return Err(AppError::Internal(format!(
-            "badge rule asks to count distinct '{dimension}', which nothing implements"
+            "badge rule asks to count distinct '{dimension}', which nothing              implements. Known dimensions: {}",
+            DISTINCT_DIMENSIONS.join(", ")
         )));
     }
 
@@ -728,6 +746,63 @@ async fn count_distinct_orientations(
            AND ps.orientation_id IS NOT NULL
            AND ($2::VARCHAR IS NULL OR o.primary_domain = $2)
          ORDER BY ps.orientation_id, d.id
+         LIMIT 25
+        "#,
+    )
+    .bind(user_id)
+    .bind(conds.skill_domain.as_deref())
+    .fetch_all(db)
+    .await?;
+
+    Ok((matched, sources))
+}
+
+/// How many distinct domains this user's verified work was *aimed at*.
+///
+/// Reads `project_slices.target_domain`, which migration 0450 added for the
+/// trades that work on somebody else's domain — quality and leadership. Work
+/// that carries no target is not counted: NULL means cross-domain there, and
+/// crediting a cross-domain artefact as one more domain would let a single
+/// piece of work satisfy a badge about breadth.
+///
+/// Distinct from `orientation`, and the difference is the point. Somebody
+/// holding three quality orientations who tests one product three ways covers
+/// three trades and one domain; somebody who tested a codebase, an interface
+/// and a game covers one trade and three domains. The badges that talk about
+/// breadth mean the second.
+async fn count_distinct_target_domains(
+    db: &PgPool,
+    user_id: Uuid,
+    conds: &RuleConditions,
+) -> Result<(i64, Vec<Uuid>), AppError> {
+    let matched: i64 = sqlx::query_scalar(
+        r#"
+        SELECT count(DISTINCT ps.target_domain)
+          FROM deliverables d
+          JOIN project_slices ps ON ps.id = d.slice_id
+         WHERE d.user_id = $1
+           AND d.verification_status = 'verified'
+           AND d.revoked_at IS NULL
+           AND ps.target_domain IS NOT NULL
+           AND ($2::VARCHAR IS NULL OR ps.primary_domain = $2)
+        "#,
+    )
+    .bind(user_id)
+    .bind(conds.skill_domain.as_deref())
+    .fetch_one(db)
+    .await?;
+
+    let sources: Vec<Uuid> = sqlx::query_scalar(
+        r#"
+        SELECT DISTINCT ON (ps.target_domain) d.id
+          FROM deliverables d
+          JOIN project_slices ps ON ps.id = d.slice_id
+         WHERE d.user_id = $1
+           AND d.verification_status = 'verified'
+           AND d.revoked_at IS NULL
+           AND ps.target_domain IS NOT NULL
+           AND ($2::VARCHAR IS NULL OR ps.primary_domain = $2)
+         ORDER BY ps.target_domain, d.id
          LIMIT 25
         "#,
     )

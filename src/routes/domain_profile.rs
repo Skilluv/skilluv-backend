@@ -331,6 +331,46 @@ const QUALITY_QUESTIONS: &[Question] = &[
     open_multi("quality_tools", 40),
 ];
 
+/// Leadership only. How long somebody has been leading, as distinct from how
+/// long they have been working.
+///
+/// Its own ladder rather than the shared one, because the shared vocabulary
+/// (`debutant` … `researcher`) is about depth in a craft and this question is
+/// about a different axis entirely: a principal engineer of fifteen years who
+/// has never written a roadmap answers `aspiring` here, honestly, and the
+/// shared list has no word that lets them.
+const LEADERSHIP_LEVELS: &[&str] = &[
+    "aspiring",    // no formal leading yet, and wants to
+    "emerging",    // leads something small, informally
+    "lead",        // a team or a track, formally
+    "senior_lead", // several teams, or a function
+    "executive",
+];
+
+/// Leadership only. What kind of leading somebody is here to do. Not the same
+/// question as the trade — somebody can want `lead-tech` artefacts while
+/// their situation only offers them community work.
+const LEADERSHIP_CONTEXTS: &[&str] = &[
+    "employed_team", // they lead people at work
+    "open_source",   // they lead in a project they do not own
+    "community",     // a group, a chapter, a server
+    "own_venture",
+    "none_yet", // practising before the situation exists
+];
+
+const LEADERSHIP_QUESTIONS: &[Question] = &[
+    closed("leadership_level", LEADERSHIP_LEVELS),
+    closed("leadership_context", LEADERSHIP_CONTEXTS),
+    // Which domains they want to hold a direction for. Same list and same
+    // reasoning as quality's: this trade works *on* a domain rather than in
+    // one.
+    closed_multi("leadership_target_domains", QUALITY_TARGET_DOMAINS),
+    // Open, like code's and quality's. What a leader works in runs from Linear
+    // to a shared document to a whiteboard, and a closed list would refuse
+    // real answers.
+    open_multi("leadership_tools", 40),
+];
+
 /// Which wizard a field belongs to, for the message when it arrives on
 /// another one.
 ///
@@ -354,6 +394,7 @@ pub fn questions_for(domain: &str) -> &'static [Question] {
         "code" => CODE_QUESTIONS,
         "design" => DESIGN_QUESTIONS,
         "quality" => QUALITY_QUESTIONS,
+        "leadership" => LEADERSHIP_QUESTIONS,
         _ => &[],
     }
 }

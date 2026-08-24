@@ -153,6 +153,19 @@ pub const QUALITY: DomainRules = DomainRules {
     families_are_trade_slugs: false,
 };
 
+/// Three, like design and for the same reason: a leadership session is
+/// reading somebody's document and saying what is missing from it, which is
+/// slower and more attentive than reading a diff. A mentor carrying five is
+/// carrying them badly.
+pub const LEADERSHIP: DomainRules = DomainRules {
+    domain: "leadership",
+    tools_key: "leadership_tools",
+    families_key: "preferred_families",
+    max_active_mentees: 3,
+    tools_label: "outils",
+    families_are_trade_slugs: false,
+};
+
 /// The rules for a domain named at runtime.
 ///
 /// The wizard validates its answers against the same distinction the matcher
@@ -167,6 +180,7 @@ pub fn rules_for(domain: &str) -> Option<DomainRules> {
         "audio" => Some(AUDIO),
         "design" => Some(DESIGN),
         "quality" => Some(QUALITY),
+        "leadership" => Some(LEADERSHIP),
         _ => None,
     }
 }

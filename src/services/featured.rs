@@ -263,6 +263,15 @@ async fn issue_attestation(
             )
             .await?;
         }
+        "leadership" => {
+            crate::services::leadership_attestations::featured_leader(
+                db,
+                user_id,
+                profile_url,
+                &citation,
+            )
+            .await?;
+        }
         // Ops and audio declare a `featured_*` basis and have no generator
         // behind it, so a featuring in those domains records the featuring and
         // issues nothing. That predates this branch and is left as it is

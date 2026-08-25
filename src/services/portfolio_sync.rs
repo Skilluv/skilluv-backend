@@ -431,6 +431,14 @@ async fn fetch_weblate(client: &reqwest::Client, handle: &str) -> Result<Account
 /// row should not have reached this function at all — `sync_enabled` is set
 /// from `has_public_api` — and a platform that arrives anyway is a seeding
 /// mistake worth a log line, not a failure that would blank the figures.
+/// The platforms this module can read.
+///
+/// The same set as the `match` below, named once so a test can compare it
+/// against `portfolio_platforms.sync_implemented`. The two lists disagreed
+/// before there was anything to notice: the catalogue said sixteen platforms
+/// were syncable and five of them were.
+pub const SYNCABLE: &[&str] = &["dev_to", "hashnode", "personal_blog", "weblate", "youtube"];
+
 pub async fn fetch(
     client: &reqwest::Client,
     platform: &str,
@@ -531,10 +539,13 @@ pub async fn sync_stale(db: &PgPool, client: &reqwest::Client) -> Result<usize, 
           FROM user_external_portfolios p
           JOIN portfolio_platforms pf ON pf.slug = p.platform
          WHERE p.sync_enabled
-           -- The catalogue decides, not this module's match arms: a platform
-           -- that publishes nothing must never enter the queue, or it fails
-           -- every pass forever.
-           AND pf.has_public_api
+           -- `sync_implemented`, not `has_public_api`. The second says an API
+           -- exists; the first says somebody wrote the fetcher. Selecting on
+           -- the second put sixteen platforms into this queue every pass so
+           -- that `fetch` could fall through to its catch-all arm and write
+           -- back nothing. `SYNCABLE` below is the same list, and a test
+           -- holds the two together.
+           AND pf.sync_implemented
            AND (p.last_synced_at IS NULL
                 OR p.last_synced_at < NOW() - make_interval(days => $1::INT))
          ORDER BY p.last_synced_at NULLS FIRST

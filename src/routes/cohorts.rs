@@ -187,7 +187,7 @@ struct MyCohortRow {
     role: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
 pub struct ListCohortsQuery {
     /// Filter by orientation slug (not id — this is the discovery surface,
     /// and slugs are what appear in URLs).
@@ -206,7 +206,12 @@ pub struct ListCohortsQuery {
 /// Discovery listing. Public, non-archived cohorts only — private cohorts
 /// never appear here, even for their own members (they reach them through
 /// `/users/me/cohorts`).
-async fn list(
+#[utoipa::path(
+    get, path = "/api/cohorts", tag = "education",
+    params(ListCohortsQuery),
+    responses((status = 200, body = serde_json::Value)),
+)]
+pub async fn list(
     State(state): State<AppState>,
     Query(q): Query<ListCohortsQuery>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -256,7 +261,16 @@ async fn list(
     }))))
 }
 
-async fn fetch(
+/// One cohort. Private cohorts answer only to their own members.
+#[utoipa::path(
+    get, path = "/api/cohorts/{id}", tag = "education",
+    params(("id" = uuid::Uuid, Path, description = "Cohort id")),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 404, description = "No such cohort, or a private one you are not in", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn fetch(
     State(state): State<AppState>,
     OptionalAuth(auth): OptionalAuth,
     Path(id): Path<Uuid>,
@@ -440,7 +454,16 @@ async fn remove_member(
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn list_members(
+/// Who is in a cohort. Follows the same visibility rule as the cohort.
+#[utoipa::path(
+    get, path = "/api/cohorts/{id}/members", tag = "education",
+    params(("id" = uuid::Uuid, Path, description = "Cohort id")),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 404, description = "No such cohort, or a private one you are not in", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn list_members(
     State(state): State<AppState>,
     OptionalAuth(auth): OptionalAuth,
     Path(id): Path<Uuid>,
@@ -627,7 +650,12 @@ async fn list_messages(
 
 /// The caller's cohorts, including private ones. This is how a member
 /// reaches a private cohort — it never appears in discovery.
-async fn list_mine(
+#[utoipa::path(
+    get, path = "/api/users/me/cohorts", tag = "education",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_mine(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<impl IntoResponse, AppError> {

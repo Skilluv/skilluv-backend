@@ -73,7 +73,13 @@ async fn submit(
 // Apprenti — voit sa progression
 // ═══════════════════════════════════════════════════════════════════
 
-async fn mine(State(state): State<AppState>, auth: AuthUser) -> Result<Json<Value>, AppError> {
+/// The verifications the caller asked for, whatever state they reached.
+#[utoipa::path(
+    get, path = "/api/beginner/verifications/mine", tag = "profile",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn mine(State(state): State<AppState>, auth: AuthUser) -> Result<Json<Value>, AppError> {
     let progress = apprentice_verification::get_progress(&state.db, auth.user_id).await?;
     Ok(Json(wrap(json!({ "progress": progress }))))
 }
@@ -82,7 +88,7 @@ async fn mine(State(state): State<AppState>, auth: AuthUser) -> Result<Json<Valu
 // Compagnon — file d'attente
 // ═══════════════════════════════════════════════════════════════════
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
 struct QueueParams {
     #[serde(default = "default_limit")]
     limit: i64,
@@ -94,7 +100,17 @@ fn default_limit() -> i64 {
     20
 }
 
-async fn queue(
+/// Verification requests waiting on a compagnon. Verifiers only.
+#[utoipa::path(
+    get, path = "/api/beginner/verifications/queue", tag = "moderation",
+    params(QueueParams),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 403, description = "Not an apprentice verifier", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn queue(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(params): Query<QueueParams>,

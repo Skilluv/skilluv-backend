@@ -168,7 +168,7 @@ async fn remove(
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
 pub struct ListNotesQuery {
     #[serde(default)]
     pub target_type: Option<String>,
@@ -178,7 +178,14 @@ pub struct ListNotesQuery {
     pub offset: Option<i64>,
 }
 
-async fn list_mine(
+/// The caller's private notes. Never readable by anybody else.
+#[utoipa::path(
+    get, path = "/api/users/me/notes", tag = "profile",
+    params(ListNotesQuery),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_mine(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<ListNotesQuery>,

@@ -98,7 +98,7 @@ async fn create(
     Ok((StatusCode::CREATED, Json(wrap(json!({ "offer": offer })))))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
 pub struct BrowseQuery {
     #[serde(default)]
     pub offer_type: Option<String>,
@@ -114,7 +114,13 @@ pub struct BrowseQuery {
     pub offset: Option<i64>,
 }
 
-async fn browse(
+/// Public listing of what people offer to teach, review or mentor.
+#[utoipa::path(
+    get, path = "/api/talent-offers", tag = "opportunities",
+    params(BrowseQuery),
+    responses((status = 200, body = serde_json::Value)),
+)]
+pub async fn browse(
     State(state): State<AppState>,
     Query(q): Query<BrowseQuery>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -140,7 +146,13 @@ async fn browse(
     }))))
 }
 
-async fn list_mine(
+/// The offers the caller published, including the closed ones.
+#[utoipa::path(
+    get, path = "/api/users/me/talent-offers", tag = "opportunities",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_mine(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<impl IntoResponse, AppError> {

@@ -92,6 +92,11 @@ pub async fn reject(
 }
 
 /// SKI-86 — GET /api/me/validation/queue
+#[utoipa::path(
+    get, path = "/api/me/validation/queue", tag = "slices",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
 pub async fn my_queue(
     State(state): State<AppState>,
     auth: AuthUser,

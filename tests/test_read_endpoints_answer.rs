@@ -179,51 +179,20 @@ const NOT_PART_OF_THE_API: &[&str] = &[
 
 /// GET routes that exist and are not in the OpenAPI document.
 ///
-/// Inherited, counted, allowed to shrink and never to grow. Each one is a
-/// public endpoint nothing sweeps, no generated client knows about, and no
-/// front-end developer can discover without reading `src/routes` — which is
-/// the condition that let `/users/me/performance` answer 500 to every
-/// signed-in caller for as long as it did.
+/// Empty, and the point is to keep it that way. It held sixty-two entries:
+/// thirty-two handlers whose `#[utoipa::path]` was never registered in
+/// `src/openapi.rs`, and thirty with no annotation at all. Every one of them
+/// was a public endpoint nothing swept, no generated client knew about, and
+/// no front-end developer could discover without reading `src/routes` —
+/// which is the condition that let `/users/me/performance` answer 500 to
+/// every signed-in caller for as long as it did.
 ///
 /// The assertion below is two-way on purpose. A new undocumented route fails
 /// it, and so does an entry here that has since been documented — so the list
-/// cannot quietly stop describing the truth, in either direction.
-///
-/// Closing one is mechanical: a `#[utoipa::path]` on the handler and a line in
-/// `src/openapi.rs`. They are not closed here because sixty-two of those in one
-/// commit is a diff nobody reads, and this list is what makes doing them in
-/// batches possible.
-const UNDOCUMENTED_YET: &[&str] = &[
-    "/beginner/verifications/mine",
-    "/beginner/verifications/queue",
-    "/cohorts",
-    "/cohorts/{id}",
-    "/cohorts/{id}/members",
-    "/enterprise/invoices/{id}/pdf",
-    "/maintainer-digest/confirm/{token}",
-    "/maintainer-digest/unsubscribe/{token}",
-    "/me/validation/queue",
-    "/me/validator-applications",
-    "/moderation/external-signals",
-    "/peer-matching/proposals",
-    "/projects/{slug}/active-skilluvers",
-    "/talent-offers",
-    "/users/me/assistant-interactions",
-    "/users/me/assistant-quota",
-    "/users/me/bookmarks",
-    "/users/me/bookmarks/folders",
-    "/users/me/cohorts",
-    "/users/me/external-signals",
-    "/users/me/goals",
-    "/users/me/notes",
-    "/users/me/peer-matches",
-    "/users/me/peer-matching/enrollments",
-    "/users/me/talent-offers",
-    "/users/me/vouchings",
-    "/users/{user_id}/external-signals",
-    "/users/{user_id}/vouchings",
-    "/verify/{hash}",
-    "/verify/{hash}/pdf",];
+/// cannot quietly stop describing the truth, in either direction. With the
+/// list empty, the first half is the one that bites: adding a GET route now
+/// means documenting it in the same commit.
+const UNDOCUMENTED_YET: &[&str] = &[];
 
 /// Every GET the router registers is in the published document.
 ///
@@ -394,4 +363,81 @@ async fn no_read_endpoint_answers_5xx_to_an_admin() {
     let app = TestApp::spawn().await;
     app.register_admin("reader_smoke_admin").await;
     every_endpoint_answers(&app, "an admin").await;
+}
+
+/// Every path `docs/API-ROUTES.md` names is a path the service actually serves.
+///
+/// The reference is hand-written and covers a fraction of the surface on
+/// purpose, so it is never checked for completeness. It is checked for
+/// truthfulness: a front-end developer reading it should not be sent to a
+/// route that was renamed or merged away. It named three wallet payout
+/// endpoints — `/withdraw/stripe`, `/withdraw/momo` and `/onboard/stripe` —
+/// for long after the rails were unified behind one `/withdraw`.
+#[test]
+fn every_route_the_reference_names_exists() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+
+    // Every routed literal, whatever the method. `src/websocket` holds `/ws`,
+    // which is a route like any other even though nothing sweeps an upgrade.
+    let mut served: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for sub in ["src/routes", "src/websocket"] {
+        for entry in std::fs::read_dir(root.join(sub)).expect("a readable module directory") {
+            let file = entry.expect("a directory entry").path();
+            if file.extension().and_then(|e| e.to_str()) != Some("rs") {
+                continue;
+            }
+            let source = std::fs::read_to_string(&file).expect("a readable module");
+            // Neither anchored to the start of a line nor to the same line:
+            // `Router::new().route(…)`, chained `.route(…).route(…)` and a
+            // call whose literal sits on the next line are all written here,
+            // and a scanner that assumes one shape silently misses the rest.
+            for piece in source.split(".route(").skip(1) {
+                let Some(rest) = piece.trim_start().strip_prefix('"') else {
+                    continue;
+                };
+                if let Some(route) = rest.split('"').next() {
+                    served.insert(route.to_string());
+                }
+            }
+        }
+    }
+
+    // Swagger UI is merged as a whole subtree rather than route by route, so
+    // its mount point never appears as a `.route(` literal. It is a served
+    // path all the same, and the reference sends readers to it.
+    let openapi = std::fs::read_to_string(root.join("src/openapi.rs")).expect("readable");
+    for piece in openapi.split("SwaggerUi::new(\"").skip(1) {
+        if let Some(mount) = piece.split('"').next() {
+            served.insert(mount.to_string());
+        }
+    }
+
+    let reference = std::fs::read_to_string(root.join("docs/API-ROUTES.md"))
+        .expect("the reference is readable");
+
+    let mut ghosts: Vec<String> = Vec::new();
+    for chunk in reference.split('`').skip(1).step_by(2) {
+        // Only the path-shaped ones. Prose in backticks, field names and
+        // JSON fragments are not paths and must not be read as claims.
+        if !chunk.starts_with('/') || chunk.contains(' ') || chunk.contains("...") {
+            continue;
+        }
+        let path = chunk.split('?').next().unwrap_or(chunk);
+        let bare = path.strip_prefix("/api").unwrap_or(path);
+        if served.contains(path) || served.contains(bare) {
+            continue;
+        }
+        ghosts.push(path.to_string());
+    }
+
+    ghosts.sort();
+    ghosts.dedup();
+
+    assert!(
+        ghosts.is_empty(),
+        "{} path(s) in docs/API-ROUTES.md are not served by anything. Either the \
+         reference is out of date or the route was lost:\n{}",
+        ghosts.len(),
+        ghosts.join("\n")
+    );
 }

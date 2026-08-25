@@ -89,7 +89,12 @@ async fn create(
 }
 
 /// Vouchings backing a user, with the voucher's identity resolved.
-async fn list_for_user(
+#[utoipa::path(
+    get, path = "/api/users/{user_id}/vouchings", tag = "profile",
+    params(("user_id" = uuid::Uuid, Path, description = "Whose profile")),
+    responses((status = 200, body = serde_json::Value)),
+)]
+pub async fn list_for_user(
     State(state): State<AppState>,
     OptionalAuth(auth): OptionalAuth,
     Path(user_id): Path<Uuid>,
@@ -159,7 +164,13 @@ async fn list_for_user(
     }))))
 }
 
-async fn list_mine(
+/// Vouchings the caller wrote for other people.
+#[utoipa::path(
+    get, path = "/api/users/me/vouchings", tag = "profile",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_mine(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<impl IntoResponse, AppError> {

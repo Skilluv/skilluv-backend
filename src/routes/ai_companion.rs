@@ -312,7 +312,7 @@ async fn ask(
     }))))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
 pub struct ListInteractionsQuery {
     #[serde(default)]
     pub limit: Option<i64>,
@@ -325,7 +325,13 @@ pub struct ListInteractionsQuery {
 ///
 /// Readable by the user themselves so the disclosure is something they can
 /// inspect, not something done to them.
-async fn list_interactions(
+#[utoipa::path(
+    get, path = "/api/users/me/assistant-interactions", tag = "ai",
+    params(ListInteractionsQuery),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_interactions(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<ListInteractionsQuery>,
@@ -349,7 +355,13 @@ async fn list_interactions(
     Ok(Json(wrap(json!({ "interactions": interactions }))))
 }
 
-async fn quota(
+/// What is left of the caller's assistant allowance for the current window.
+#[utoipa::path(
+    get, path = "/api/users/me/assistant-quota", tag = "ai",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn quota(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<impl IntoResponse, AppError> {

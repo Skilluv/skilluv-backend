@@ -122,7 +122,13 @@ async fn unenroll(
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn list_enrollments(
+/// The orientations the caller opened themselves to being matched on.
+#[utoipa::path(
+    get, path = "/api/users/me/peer-matching/enrollments", tag = "social",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_enrollments(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<impl IntoResponse, AppError> {
@@ -155,12 +161,20 @@ async fn list_enrollments(
     Ok(Json(wrap(json!({ "enrollments": enrollments }))))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
 pub struct ProposalsQuery {
     pub orientation_id: Uuid,
 }
 
-async fn proposals(
+/// Candidate peers for one orientation, ranked. Proposals only — pairing
+/// is a separate, deliberate act.
+#[utoipa::path(
+    get, path = "/api/peer-matching/proposals", tag = "social",
+    params(ProposalsQuery),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn proposals(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<ProposalsQuery>,
@@ -189,14 +203,21 @@ async fn create_match(
     Ok((StatusCode::CREATED, Json(wrap(json!({ "match": m })))))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
 pub struct ListMatchesQuery {
     /// Include matches that have ended. Off by default.
     #[serde(default)]
     pub include_ended: bool,
 }
 
-async fn list_matches(
+/// The caller's peer matches, with the other side resolved.
+#[utoipa::path(
+    get, path = "/api/users/me/peer-matches", tag = "social",
+    params(ListMatchesQuery),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_matches(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<ListMatchesQuery>,

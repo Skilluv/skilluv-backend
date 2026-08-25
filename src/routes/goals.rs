@@ -136,14 +136,21 @@ async fn create(
     Ok((StatusCode::CREATED, Json(wrap(json!({ "goal": progress })))))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
 pub struct ListGoalsQuery {
     /// Include archived goals (achieved or expired). Off by default.
     #[serde(default)]
     pub include_archived: bool,
 }
 
-async fn list_mine(
+/// The caller's goals with their progress recomputed on read.
+#[utoipa::path(
+    get, path = "/api/users/me/goals", tag = "profile",
+    params(ListGoalsQuery),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_mine(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<ListGoalsQuery>,

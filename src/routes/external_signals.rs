@@ -123,7 +123,13 @@ async fn create(
     ))
 }
 
-async fn list_mine(
+/// The caller's own signals, verified and declared alike.
+#[utoipa::path(
+    get, path = "/api/users/me/external-signals", tag = "profile",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_mine(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<impl IntoResponse, AppError> {
@@ -155,7 +161,12 @@ async fn remove(
 /// Unverified signals are visible here too — hiding them would make the
 /// "declared vs verified" distinction invisible precisely where it
 /// matters, on the profile a recruiter reads.
-async fn list_public(
+#[utoipa::path(
+    get, path = "/api/users/{user_id}/external-signals", tag = "profile",
+    params(("user_id" = uuid::Uuid, Path, description = "Whose profile")),
+    responses((status = 200, body = serde_json::Value)),
+)]
+pub async fn list_public(
     State(state): State<AppState>,
     OptionalAuth(auth): OptionalAuth,
     Path(user_id): Path<Uuid>,
@@ -180,13 +191,23 @@ async fn list_public(
     Ok(Json(wrap(split_buckets(signals))))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
 pub struct PendingQuery {
     #[serde(default)]
     pub limit: Option<i64>,
 }
 
-async fn list_pending(
+/// Signals still waiting on a human to verify them. Moderators only.
+#[utoipa::path(
+    get, path = "/api/moderation/external-signals", tag = "moderation",
+    params(PendingQuery),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 403, description = "Not a moderator", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_pending(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<PendingQuery>,

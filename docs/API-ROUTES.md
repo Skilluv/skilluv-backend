@@ -4,6 +4,12 @@
 > **Auth:** JWT in the `access_token` HttpOnly cookie (public routes excepted)
 > **Response shape:** `{ "data": {...}, "meta": { "request_id", "timestamp" }, "pagination"?: {...} }`
 
+> **Scope:** a hand-written tour of the surfaces a front end reaches first —
+> around 150 of the roughly 970 routes the service exposes. It is not the
+> complete list and does not try to be. The generated OpenAPI document at
+> `/api/docs` is: every route is registered there, and a test fails the build
+> when a GET route is added without it.
+
 ---
 
 ## Auth (17 routes)
@@ -332,17 +338,25 @@ The prefix is `/api/community/...`, not `/api/admin/community/...` (fix BE-P0-05
 
 ---
 
-## Talent wallet — payouts (5 routes)
+## Talent wallet — payouts (8 routes)
 
 Payouts through Stripe Connect (EUR) or African mobile money (XOF).
 
+One withdrawal endpoint serves every rail. There used to be one per rail,
+each naming its own — stripe and momo — in the URL, and this page still
+listed both long after they were merged away. Which rail reaches a recipient
+is decided server-side from the currency and what they have on file.
+
 | Method | Path | Body | Response |
 |--------|------|------|----------|
-| POST | `/users/me/wallet/onboard/stripe` | `{ refresh_url, return_url }` | `{ onboarding_url }` |
-| POST | `/users/me/wallet/withdraw/stripe` | `{ amount: "12.50", currency?: "EUR" }` (fix BE-P0-11 — the amount is in the currency, and converted to cents server-side) | `{ transaction_id, stripe_transfer_id, amount_cents }` |
+| GET | `/users/me/wallet` | — | `{ wallet }` — balances, held and available |
+| GET | `/users/me/wallet/transactions` | — | `{ transactions }` |
+| POST | `/users/me/wallet/residency` | `{ country }` | `{ wallet }` — decides which rails are open |
+| POST | `/users/me/wallet/stripe/onboard` | `{ refresh_url?, return_url? }` | `{ onboarding_url }` |
 | POST | `/users/me/wallet/momo/phone` | `{ phone: "+22507...", verified?: bool, provider?: "orange"\|"mtn"\|"wave" }` (fix BE-P0-12 — `verified` defaults to true since P13.3, and becomes OTP-gated in P15) | `{ registered: true }` |
-| POST | `/users/me/wallet/withdraw/momo` | `{ provider, amount, currency?: "XOF" }` | `{ transaction_id, momo_ref }` |
+| POST | `/users/me/wallet/withdraw` | `{ amount: "12.50", currency?: "EUR"\|"XOF", rail?: "stripe"\|"momo" }` — the amount is in currency units, never minor units (fix BE-P0-11) | `{ transaction }` |
 | GET | `/users/me/wallet/statement.csv` | — | A compliance CSV |
+| POST | `/webhooks/stripe-connect` | Stripe payload | Stripe Connect account and payout events |
 
 ## DM messaging (3 routes)
 

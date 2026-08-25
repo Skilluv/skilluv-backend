@@ -74,6 +74,12 @@ pub async fn apply(
     ))
 }
 
+/// The caller's applications to become a validator, and where each stands.
+#[utoipa::path(
+    get, path = "/api/me/validator-applications", tag = "profile",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
 pub async fn my_applications(
     State(state): State<AppState>,
     auth: AuthUser,

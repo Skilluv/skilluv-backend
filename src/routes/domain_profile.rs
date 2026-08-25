@@ -50,6 +50,7 @@ pub fn domain_profile_routes() -> Router<AppState> {
             "/users/me/domain-profile/{domain}/questions",
             get(list_questions),
         )
+        .route("/domains/{domain}/mentors/for-me", get(mentor_matches))
 }
 
 use crate::validators::SKILL_DOMAINS as DOMAINS;
@@ -1079,6 +1080,69 @@ pub async fn list_questions(
     }
 
     Ok(Json(ApiResponse::new(specs)))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// GET /domains/{domain}/mentors/for-me
+// ═══════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+pub struct MentorMatchQuery {
+    /// How many suggestions to return. Clamped to 50, because a list nobody
+    /// reads to the end is a list that suggests nobody.
+    #[serde(default)]
+    pub limit: Option<i64>,
+}
+
+/// Mentors worth suggesting in one domain, with the reasoning attached.
+///
+/// One endpoint rather than one per domain. There were seven, each a
+/// thirteen-line wrapper around the same `matches_for`, and they had already
+/// drifted: some accepted a `limit` and some hardcoded ten, some answered a
+/// bare array and some an envelope, and the two domains added last had no
+/// endpoint at all — which is the failure mode a copy carries. What differs
+/// between domains is the matching rules, and those live in one table of
+/// constants the matcher reads.
+///
+/// The reasoning ships with each suggestion on purpose. A recommendation
+/// nobody can argue with is one nobody can correct, and the first thing we
+/// will get wrong here is who should be suggested to whom.
+#[utoipa::path(
+    get, path = "/api/domains/{domain}/mentors/for-me", tag = "mentorship",
+    params(
+        ("domain" = String, Path, description = "Which domain to look for a mentor in"),
+        MentorMatchQuery,
+    ),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 400, description = "No such domain, or one with no mentorship rules", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn mentor_matches(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(domain): Path<String>,
+    axum::extract::Query(q): axum::extract::Query<MentorMatchQuery>,
+) -> Result<Json<ApiResponse<serde_json::Value>>, AppError> {
+    let rules = crate::services::mentorship_matching::rules_for(&domain).ok_or_else(|| {
+        AppError::Validation(format!(
+            "no mentorship rules for domain `{domain}` — how many mentees somebody              can carry and what their tools are called differ per domain, and              guessing them would match people badly rather than not at all"
+        ))
+    })?;
+
+    let limit = q.limit.unwrap_or(10).clamp(1, 50);
+    let mentors =
+        crate::services::mentorship_matching::matches_for(&state.db, rules, auth.user_id, limit)
+            .await?;
+    let suggested =
+        crate::services::mentorship_matching::could_use_a_mentor(&state.db, &domain, auth.user_id)
+            .await?;
+
+    Ok(Json(ApiResponse::new(json!({
+        "mentors": mentors,
+        "suggested": suggested,
+    }))))
 }
 
 #[cfg(test)]

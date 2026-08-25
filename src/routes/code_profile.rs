@@ -33,7 +33,6 @@ pub fn code_profile_routes() -> Router<AppState> {
             "/users/me/code-portfolios/{id}",
             axum::routing::delete(drop_portfolio),
         )
-        .route("/code/mentors/for-me", get(mentor_matches))
 }
 
 fn build_response(data: Value) -> Value {
@@ -280,32 +279,6 @@ pub async fn recompute_mine(
 ) -> Result<Json<Value>, AppError> {
     let score = craft_score::recompute(&state.db, auth.user_id).await?;
     Ok(Json(build_response(json!({ "craft_score": score }))))
-}
-
-// ─── Onboarding ──────────────────────────────────────────────────
-
-/// Mentors worth suggesting, with the reasoning attached.
-#[utoipa::path(
-    get, path = "/api/code/mentors/for-me", tag = "profile",
-    responses(
-        (status = 200, body = serde_json::Value),
-        (status = 400, description = "Onboarding not answered", body = crate::api_response::ErrorResponse),
-    ),
-    security(("cookie_auth" = [])),
-    operation_id = "codeProfileMentorMatches",
-)]
-pub async fn mentor_matches(
-    State(state): State<AppState>,
-    auth: AuthUser,
-) -> Result<Json<Value>, AppError> {
-    let matches = crate::services::mentorship_matching::matches_for(
-        &state.db,
-        crate::services::mentorship_matching::CODE,
-        auth.user_id,
-        10,
-    )
-    .await?;
-    Ok(Json(build_response(json!({ "mentors": matches }))))
 }
 
 // ─── Portfolios on other platforms ───────────────────────────────

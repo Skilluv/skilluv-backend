@@ -30,12 +30,12 @@
 //!   * what a public profile shows is aggregate, and no endpoint here returns
 //!     a learner list to anybody but the teacher.
 
-use axum::extract::{Path, Query, State};
+use axum::extract::{Path, State};
 use axum::routing::get;
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use utoipa::{IntoParams, ToSchema};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::AppState;
@@ -66,7 +66,6 @@ pub fn education_routes() -> Router<AppState> {
             "/education/curriculums/{slice_id}/adoptions",
             get(list_adoptions).post(adopt_curriculum),
         )
-        .route("/education/mentors/for-me", get(mentor_matches))
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -546,42 +545,6 @@ pub async fn adopt_curriculum(
 // ═══════════════════════════════════════════════════════════════════
 // Mentors
 // ═══════════════════════════════════════════════════════════════════
-
-#[derive(Debug, Deserialize, IntoParams)]
-#[into_params(parameter_in = Query)]
-#[serde(deny_unknown_fields)]
-pub struct EducationMentorQuery {
-    /// How many to return. Ten by default.
-    pub limit: Option<i64>,
-}
-
-/// Mentors worth suggesting to the caller, best first, with the reasoning.
-///
-/// The same module every other domain uses. Three mentees at most here: an
-/// education session is a conversation about somebody else's learners, and it
-/// does not compress.
-#[utoipa::path(
-    get, path = "/api/education/mentors/for-me", tag = "education",
-    params(EducationMentorQuery),
-    responses((status = 200, description = "Suggestions", body = ApiResponse<Vec<crate::services::mentorship_matching::Match>>)),
-    security(("cookie_auth" = [])),
-    operation_id = "educationMentorMatches",
-)]
-pub async fn mentor_matches(
-    State(state): State<AppState>,
-    auth: AuthUser,
-    Query(q): Query<EducationMentorQuery>,
-) -> Result<Json<ApiResponse<Vec<crate::services::mentorship_matching::Match>>>, AppError> {
-    let limit = q.limit.unwrap_or(10).clamp(1, 50);
-    let matches = crate::services::mentorship_matching::matches_for(
-        &state.db,
-        crate::services::mentorship_matching::EDUCATION,
-        auth.user_id,
-        limit,
-    )
-    .await?;
-    Ok(Json(ApiResponse::new(matches)))
-}
 
 /// Whether this person is the teacher of this cohort.
 async fn leads_cohort(db: &sqlx::PgPool, user_id: Uuid, cohort_id: Uuid) -> Result<bool, AppError> {

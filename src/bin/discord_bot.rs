@@ -55,6 +55,12 @@ impl EventHandler for Handler {
 
         // Register slash commands scoped to our single guild — instant
         // availability vs. up-to-one-hour propagation for global commands.
+        // Built from the list every validator reads, not copied beside it.
+        // The copy that used to sit here named seven domains long after four
+        // more had opened, so the bot was quietly telling people that
+        // quality, leadership, communication and education did not exist.
+        let domain_hint = skilluv_backend::validators::SKILL_DOMAINS.join(", ");
+
         let cmds = vec![
             CreateCommand::new("skilluv")
                 .description("Skilluv commands")
@@ -87,7 +93,7 @@ impl EventHandler for Handler {
                     .add_sub_option(CreateCommandOption::new(
                         CommandOptionType::String,
                         "domain",
-                        "code, design, ai, security, ops, game, soft_skills",
+                        domain_hint.as_str(),
                     )),
                 )
                 .add_option(
@@ -99,7 +105,7 @@ impl EventHandler for Handler {
                     .add_sub_option(CreateCommandOption::new(
                         CommandOptionType::String,
                         "domain",
-                        "code, design, ai, security, ops, game, soft_skills",
+                        domain_hint.as_str(),
                     )),
                 )
                 .add_option(

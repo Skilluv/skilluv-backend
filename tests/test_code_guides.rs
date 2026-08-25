@@ -548,7 +548,7 @@ async fn matching_needs_the_onboarding_answered_first() {
     a_user(&app, "match_unanswered").await;
     app.login("match_unanswered").await;
 
-    let resp = app.get("/api/code/mentors/for-me").await;
+    let resp = app.get("/api/domains/code/mentors/for-me").await;
     assert_eq!(
         resp.status(),
         400,
@@ -644,7 +644,7 @@ async fn a_mentor_is_suggested_with_the_reasoning_attached() {
 
     app.login("match_mentee").await;
     let body: Value = app
-        .get("/api/code/mentors/for-me")
+        .get("/api/domains/code/mentors/for-me")
         .await
         .json()
         .await

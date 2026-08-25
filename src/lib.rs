@@ -123,6 +123,7 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::ai_safety_routes())
         .nest("/api", routes::benchmark_routes())
         .nest("/api", routes::domain_profile_routes())
+        .nest("/api", routes::practice_routes())
         .nest("/api", routes::guide_routes())
         .nest("/api", routes::award_routes())
         .nest("/api", routes::code_routes())

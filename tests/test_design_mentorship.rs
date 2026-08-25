@@ -138,7 +138,7 @@ async fn a_mentor_is_suggested_for_what_they_delivered_not_what_they_declared() 
 
     app.login("mentee_brand").await;
     let body: Value = app
-        .get("/api/design/mentors/for-me")
+        .get("/api/domains/design/mentors/for-me")
         .await
         .json()
         .await
@@ -175,7 +175,7 @@ async fn a_suggestion_says_why_it_was_made() {
 
     app.login("mentee_reasons").await;
     let body: Value = app
-        .get("/api/design/mentors/for-me")
+        .get("/api/domains/design/mentors/for-me")
         .await
         .json()
         .await
@@ -219,7 +219,7 @@ async fn somebody_adjacent_is_a_peer_and_not_a_mentor() {
 
     app.login("mentee_close").await;
     let body: Value = app
-        .get("/api/design/mentors/for-me")
+        .get("/api/domains/design/mentors/for-me")
         .await
         .json()
         .await
@@ -238,7 +238,7 @@ async fn a_mentee_who_declared_nothing_is_told_what_to_do() {
 
     // Not an empty list: an empty list looks like "there is nobody", and the
     // person would wait rather than answer seven questions.
-    let resp = app.get("/api/design/mentors/for-me").await;
+    let resp = app.get("/api/domains/design/mentors/for-me").await;
     assert_eq!(resp.status().as_u16(), 400);
     let body = resp.text().await.unwrap();
     assert!(body.contains("questionnaire"), "{body}");
@@ -253,7 +253,7 @@ async fn being_stuck_is_answered_when_asked_rather_than_announced() {
 
     app.login("mentee_stuck").await;
     let before: Value = app
-        .get("/api/design/mentors/for-me")
+        .get("/api/domains/design/mentors/for-me")
         .await
         .json()
         .await
@@ -301,7 +301,7 @@ async fn being_stuck_is_answered_when_asked_rather_than_announced() {
     }
 
     let after: Value = app
-        .get("/api/design/mentors/for-me")
+        .get("/api/domains/design/mentors/for-me")
         .await
         .json()
         .await

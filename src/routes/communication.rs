@@ -24,12 +24,12 @@
 //! automatically: somebody declares the languages they read, and signs a
 //! review in one of them.
 
-use axum::extract::{Path, Query, State};
+use axum::extract::{Path, State};
 use axum::routing::get;
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use utoipa::{IntoParams, ToSchema};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::AppState;
@@ -61,7 +61,6 @@ pub fn communication_routes() -> Router<AppState> {
             "/communication/slices/{slice_id}/publications",
             get(list_publications),
         )
-        .route("/communication/mentors/for-me", get(mentor_matches))
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -400,45 +399,6 @@ pub async fn list_publications(
 // ═══════════════════════════════════════════════════════════════════
 // Mentors
 // ═══════════════════════════════════════════════════════════════════
-
-#[derive(Debug, Deserialize, IntoParams)]
-#[into_params(parameter_in = Query)]
-#[serde(deny_unknown_fields)]
-pub struct MentorQuery {
-    /// How many to return. Ten by default.
-    pub limit: Option<i64>,
-}
-
-/// Mentors worth suggesting to the caller, best first, with the reasoning.
-///
-/// The same module the code, AI, ops, audio and design domains use. What
-/// differs is three strings: which domain to score, which answer holds the
-/// tools, and how many mentees is too many.
-#[utoipa::path(
-    get, path = "/api/communication/mentors/for-me", tag = "communication",
-    params(MentorQuery),
-    responses((status = 200, description = "Suggestions", body = ApiResponse<Vec<crate::services::mentorship_matching::Match>>)),
-    security(("cookie_auth" = [])),
-    // Every domain has a handler of this name, so the generated id has to
-    // carry the domain: two operations sharing one is a client generator
-    // silently dropping one of them.
-    operation_id = "communicationMentorMatches",
-)]
-pub async fn mentor_matches(
-    State(state): State<AppState>,
-    auth: AuthUser,
-    Query(q): Query<MentorQuery>,
-) -> Result<Json<ApiResponse<Vec<crate::services::mentorship_matching::Match>>>, AppError> {
-    let limit = q.limit.unwrap_or(10).clamp(1, 50);
-    let matches = crate::services::mentorship_matching::matches_for(
-        &state.db,
-        crate::services::mentorship_matching::COMMUNICATION,
-        auth.user_id,
-        limit,
-    )
-    .await?;
-    Ok(Json(ApiResponse::new(matches)))
-}
 
 #[cfg(test)]
 mod tests {

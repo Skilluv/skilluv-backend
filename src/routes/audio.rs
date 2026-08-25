@@ -66,7 +66,6 @@ pub fn audio_routes() -> Router<AppState> {
         .route("/audio/castings/{casting_id}/auditions", post(audition))
         .route("/audio/castings/{casting_id}/select", post(select_voice))
         .route("/audio/deliverables/{deliverable_id}/credit", post(credit))
-        .route("/audio/mentors/for-me", get(mentor_matches))
         .route("/projects/{slug}/credits", get(project_credits))
 }
 
@@ -896,40 +895,6 @@ pub async fn credit(
         // conclusion, and re-running has to be free.
         "already_attested": id.is_none(),
     }))))
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// Mentors
-// ═══════════════════════════════════════════════════════════════════
-
-/// Mentors worth suggesting to the caller, best first, with the reasoning.
-///
-/// The same module the code and AI domains use. What differs is three strings:
-/// which domain to score, which answer holds the tools, and how many mentees is
-/// too many. Audio caps a mentor at three, like AI and for a related reason —
-/// listening to somebody's mix and saying something useful about it is not a
-/// fifteen-minute pass over a diff.
-#[utoipa::path(
-    get, path = "/api/audio/mentors/for-me", tag = "audio",
-    responses(
-        (status = 200, description = "Suggested mentors", body = ApiResponse<Vec<crate::services::mentorship_matching::Match>>),
-        (status = 400, description = "Audio onboarding not answered", body = crate::api_response::ErrorResponse),
-    ),
-    security(("cookie_auth" = [])),
-    operation_id = "audioMentorMatches",
-)]
-pub async fn mentor_matches(
-    State(state): State<AppState>,
-    auth: AuthUser,
-) -> Result<Json<ApiResponse<Vec<crate::services::mentorship_matching::Match>>>, AppError> {
-    let matches = crate::services::mentorship_matching::matches_for(
-        &state.db,
-        crate::services::mentorship_matching::AUDIO,
-        auth.user_id,
-        10,
-    )
-    .await?;
-    Ok(Json(ApiResponse::new(matches)))
 }
 
 // ═══════════════════════════════════════════════════════════════════

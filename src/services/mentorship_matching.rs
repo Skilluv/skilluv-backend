@@ -556,6 +556,46 @@ pub async fn matches_for(
     Ok(matches)
 }
 
+/// Whether somebody looks stuck enough that suggesting a mentor is worth it.
+///
+/// Three pieces of work handed in for review in this domain and none of them
+/// validated. Not a judgement about the person — it is the shape of somebody
+/// repeating a mistake nobody has named for them yet, which is the one thing
+/// a mentor fixes faster than another attempt does.
+///
+/// Returned rather than pushed. Telling somebody "you seem to be struggling"
+/// unprompted lands badly however it is worded; this way the suggestion sits
+/// beside their work because they opened the page.
+///
+/// The slice types are read from `slice_types` rather than named here, so a
+/// domain that gains a surface gains it in this signal too. Types with no
+/// domain — a repository issue, a piece of documentation — belong to every
+/// domain and are deliberately excluded: failing to get a doc fix merged says
+/// nothing about somebody's design.
+pub async fn could_use_a_mentor(
+    db: &PgPool,
+    domain: &str,
+    user_id: Uuid,
+) -> Result<bool, AppError> {
+    let (handed_in, validated): (i64, i64) = sqlx::query_as(
+        r#"
+        SELECT count(DISTINCT d.slice_id) FILTER (WHERE TRUE),
+               count(DISTINCT d.slice_id) FILTER (WHERE s.status = 'validated')
+          FROM slice_validation_decisions d
+          JOIN project_slices s ON s.id = d.slice_id
+          JOIN slice_types t ON t.slug = s.slice_type
+         WHERE s.claimed_by_user_id = $1
+           AND t.skill_domain = $2
+        "#,
+    )
+    .bind(user_id)
+    .bind(domain)
+    .fetch_one(db)
+    .await?;
+
+    Ok(handed_in >= 3 && validated == 0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -53,7 +53,6 @@ pub mod design_auto_checks;
 pub mod design_briefs;
 pub mod design_cloud;
 pub mod design_craft_score;
-pub mod design_mentorship;
 pub mod design_reviews;
 pub mod design_uploads;
 pub mod digest;

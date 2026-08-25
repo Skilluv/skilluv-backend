@@ -39,7 +39,7 @@ pub fn enterprise_credits_routes() -> Router<AppState> {
         .route("/enterprise/invoices/{id}/html", get(get_invoice_html))
         // Alias — front called it `/preview` (per BE-P0-13 audit) and there's
         // no reason to make the front migrate the name for a doc mismatch.
-        .route("/enterprise/invoices/{id}/preview", get(get_invoice_html))
+        .route("/enterprise/invoices/{id}/preview", get(get_invoice_preview))
         // BE-P0-36 — PDF endpoint. Delegates to the external
         // `skilluv-pdf-renderer` service (Python + weasyprint) via HTTP.
         // Returns 503 when `PDF_RENDERER_URL` isn't configured.
@@ -854,6 +854,25 @@ pub async fn get_invoice_html(
     Ok(axum::response::Html(
         crate::services::invoices::render_html(&inv, &row.0),
     ))
+}
+
+/// Render an invoice as HTML. Alias of `/html`, kept for the front.
+///
+/// A thin wrapper rather than a second route onto the same handler: a route
+/// the published document does not mention is a route nobody can find, and
+/// one function carries one `#[utoipa::path]`.
+#[utoipa::path(
+    get, path = "/api/enterprise/invoices/{id}/preview", tag = "enterprise",
+    params(("id" = uuid::Uuid, Path)),
+    responses((status = 200, description = "HTML content, same as /html")),
+    security(("cookie_auth" = [])),
+)]
+pub async fn get_invoice_preview(
+    state: State<AppState>,
+    auth: AuthUser,
+    id: axum::extract::Path<Uuid>,
+) -> Result<axum::response::Html<String>, AppError> {
+    get_invoice_html(state, auth, id).await
 }
 
 // BE-P0-36 / BE-P2-INVOICE-PDF — invoice PDF via external renderer.

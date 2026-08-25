@@ -489,30 +489,52 @@ async fn declaring_a_review_language_is_open_but_not_free_text() {
 
 /// The guides answer in the locale they exist in rather than disappearing.
 ///
-/// The communication guides are the first seeded in English. Before the
-/// fallback chain was widened they were absent from a French reader's list
-/// entirely, and the list looked complete.
+/// This asserted that a French reader got English rows, which was true while
+/// the French translations did not exist and was never the thing worth
+/// asserting. Migration 0535 wrote them, so the French reader now gets French
+/// — and the fallback is checked with a locale that genuinely has no rows,
+/// which is what the test was always about.
 #[tokio::test]
-async fn an_english_only_guide_still_reaches_a_french_reader() {
+async fn a_guide_reaches_a_reader_in_every_locale() {
     let app = TestApp::spawn().await;
 
-    let response = app
+    let french: serde_json::Value = app
         .get_with_header(
             "/api/guides?domain=communication&kind=onboarding",
             "accept-language",
             "fr-FR,fr;q=0.9",
         )
-        .await;
-    assert_eq!(response.status(), 200);
-
-    let body: serde_json::Value = response.json().await.unwrap();
-    let guides = body["data"].as_array().unwrap();
+        .await
+        .json()
+        .await
+        .unwrap();
+    let guides = french["data"].as_array().unwrap();
     assert_eq!(
         guides.len(),
         4,
         "one onboarding guide per review family, whatever locale the reader asked for"
     );
-    assert!(guides.iter().all(|g| g["locale"] == "en"));
+    assert!(
+        guides.iter().all(|g| g["locale"] == "fr"),
+        "French exists for every one of these since 0535: {guides:?}"
+    );
+
+    // Arabic has none. The list must still hold four rather than look empty,
+    // because a half-translated catalogue that answers nothing reads as a
+    // domain with no guides at all.
+    let arabic: serde_json::Value = app
+        .get_with_header(
+            "/api/guides?domain=communication&kind=onboarding",
+            "accept-language",
+            "ar",
+        )
+        .await
+        .json()
+        .await
+        .unwrap();
+    let fallback = arabic["data"].as_array().unwrap();
+    assert_eq!(fallback.len(), 4);
+    assert!(fallback.iter().all(|g| g["locale"] == "en"));
 }
 
 /// The opportunities board is public to read and curated to write.

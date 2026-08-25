@@ -14,7 +14,11 @@ fallu renuméroter à la fusion.
 | suite courante | `master`, et la branche qui fusionnera en premier |
 | `0300–0399` | `feat/ai-orientations` |
 | `0450–0499` | `feat/leadership-quality-domains` |
-| `0500–0549` | `feat/communication-education-domains` |
+| `0500–0549` | `feat/communication-education-domains`, fusionnée — bloc clos |
+
+Une branche fusionnée rend son bloc : ce qui suit sa fusion reprend la suite
+courante. `feat/communication-education-domains` s'est arrêtée à 0532, et la
+suite repart de 0533.
 
 `sqlx` applique les migrations dans l'ordre des versions et ne se soucie pas
 des trous. Un bloc réservé ne coûte donc rien, et supprime la collision au lieu

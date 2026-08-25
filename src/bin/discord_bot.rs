@@ -123,6 +123,48 @@ impl EventHandler for Handler {
                         .required(true),
                     ),
                 )
+                .add_option(
+                    CreateCommandOption::new(
+                        CommandOptionType::SubCommand,
+                        "craft",
+                        "Your craft score in one domain, and what it is made of",
+                    )
+                    .add_sub_option(
+                        CreateCommandOption::new(
+                            CommandOptionType::String,
+                            "domain",
+                            domain_hint.as_str(),
+                        )
+                        .required(true),
+                    ),
+                )
+                .add_option(
+                    CreateCommandOption::new(
+                        CommandOptionType::SubCommand,
+                        "queue",
+                        "How much work is waiting on a reviewer in one domain",
+                    )
+                    .add_sub_option(
+                        CreateCommandOption::new(
+                            CommandOptionType::String,
+                            "domain",
+                            domain_hint.as_str(),
+                        )
+                        .required(true),
+                    ),
+                )
+                .add_option(
+                    CreateCommandOption::new(
+                        CommandOptionType::SubCommand,
+                        "cohorts",
+                        "Cohorts recruiting now",
+                    )
+                    .add_sub_option(CreateCommandOption::new(
+                        CommandOptionType::String,
+                        "domain",
+                        domain_hint.as_str(),
+                    )),
+                )
                 .add_option(CreateCommandOption::new(
                     CommandOptionType::SubCommand,
                     "help",
@@ -224,6 +266,18 @@ impl Handler {
                 let username = extract_string(sub, "username").context("missing username arg")?;
                 self.handle_portfolio(&username).await?
             }
+            "craft" => {
+                let domain = extract_string(sub, "domain").context("missing domain arg")?;
+                self.handle_craft(cmd, &domain).await?
+            }
+            "queue" => {
+                let domain = extract_string(sub, "domain").context("missing domain arg")?;
+                self.handle_queue(&domain).await?
+            }
+            "cohorts" => {
+                self.handle_cohorts(extract_string(sub, "domain").as_deref())
+                    .await?
+            }
             "help" => help_message(&self.frontend_url),
             other => format!("Unknown subcommand `{other}` — try `/skilluv help`"),
         };
@@ -237,6 +291,201 @@ impl Handler {
         )
         .await?;
         Ok(())
+    }
+
+    /// `/skilluv craft <domain>` — the caller's craft score in one domain.
+    ///
+    /// One command with a domain argument rather than one per domain. The
+    /// Discord structure documents for leadership and quality each described
+    /// a `my-stats` of their own, and neither existed; writing them as two
+    /// would have made the next domain a third.
+    async fn handle_craft(&self, cmd: &CommandInteraction, domain: &str) -> Result<String> {
+        if !skilluv_backend::validators::SKILL_DOMAINS.contains(&domain) {
+            return Ok(format!(
+                "`{domain}` is not a domain. One of: {}",
+                skilluv_backend::validators::SKILL_DOMAINS.join(", ")
+            ));
+        }
+
+        let discord_id = cmd.user.id.to_string();
+        let user: Option<(Uuid, String)> =
+            sqlx::query_as("SELECT id, username FROM users WHERE discord_user_id = $1")
+                .bind(&discord_id)
+                .fetch_optional(&self.db)
+                .await
+                .context("db query failed")?;
+        let Some((user_id, username)) = user else {
+            return Ok(format!(
+                "This Discord account is not linked to a Skilluv profile yet — {}/settings",
+                self.frontend_url
+            ));
+        };
+
+        let score: Option<(i32, Option<String>)> = sqlx::query_as(
+            "SELECT score, tier_slug FROM craft_scores WHERE user_id = $1 AND skill_domain = $2",
+        )
+        .bind(user_id)
+        .bind(domain)
+        .fetch_optional(&self.db)
+        .await
+        .context("db query failed")?;
+
+        let Some((score, tier)) = score else {
+            return Ok(format!(
+                "**{username}** has no craft score in `{domain}` yet. It is computed from \
+                 validated work, so the first one arrives with the first validation."
+            ));
+        };
+
+        // What the score is made of, so a number nobody can question is not
+        // what gets posted in a channel.
+        let attested: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM attestations a
+               JOIN attestation_bases b ON b.basis = a.basis
+              WHERE a.user_id = $1 AND b.skill_domain = $2",
+        )
+        .bind(user_id)
+        .bind(domain)
+        .fetch_one(&self.db)
+        .await
+        .unwrap_or(0);
+
+        let tier = tier.unwrap_or_else(|| "—".into());
+        Ok(format!(
+            "**{username}** — `{domain}`\n\
+             Craft score: **{score}** ({tier})\n\
+             Attestations in this domain: {attested}\n\
+             {}/u/{username}",
+            self.frontend_url
+        ))
+    }
+
+    /// `/skilluv queue <domain>` — what is waiting on a reviewer.
+    ///
+    /// Public on purpose. A review queue nobody can see is a queue that grows
+    /// quietly, and the number being visible is what makes somebody
+    /// volunteer.
+    async fn handle_queue(&self, domain: &str) -> Result<String> {
+        if !skilluv_backend::validators::SKILL_DOMAINS.contains(&domain) {
+            return Ok(format!(
+                "`{domain}` is not a domain. One of: {}",
+                skilluv_backend::validators::SKILL_DOMAINS.join(", ")
+            ));
+        }
+
+        // Two numbers, and the second is the one that matters: work nobody has
+        // picked up is work nobody has promised to look at.
+        let (picked, unpicked): (i64, i64) = sqlx::query_as(
+            r#"
+            SELECT count(*) FILTER (WHERE s.picked_by_validator_id IS NOT NULL),
+                   count(*) FILTER (WHERE s.picked_by_validator_id IS NULL)
+              FROM project_slices s
+              JOIN slice_types t ON t.slug = s.slice_type
+             WHERE s.status = 'pending_validation'
+               AND t.skill_domain = $1
+            "#,
+        )
+        .bind(domain)
+        .fetch_one(&self.db)
+        .await
+        .context("db query failed")?;
+
+        if picked + unpicked == 0 {
+            return Ok(format!("Nothing waiting in `{domain}`."));
+        }
+
+        // How long the oldest unpicked one has been there. A queue of three
+        // that turns over in a day is healthy; a queue of three where one has
+        // sat for a fortnight is not, and the count alone hides that.
+        let oldest: Option<chrono::DateTime<chrono::Utc>> = sqlx::query_scalar(
+            r#"
+            SELECT min(s.submitted_at)
+              FROM project_slices s
+              JOIN slice_types t ON t.slug = s.slice_type
+             WHERE s.status = 'pending_validation'
+               AND s.picked_by_validator_id IS NULL
+               AND t.skill_domain = $1
+            "#,
+        )
+        .bind(domain)
+        .fetch_one(&self.db)
+        .await
+        .unwrap_or(None);
+
+        let waiting = oldest
+            .map(|d| {
+                let days = (chrono::Utc::now() - d).num_days();
+                format!("\nOldest unclaimed: {days} day(s).")
+            })
+            .unwrap_or_default();
+
+        Ok(format!(
+            "`{domain}` validation queue:\n\
+             - **{unpicked}** waiting for somebody to pick up\n\
+             - {picked} picked up and in review{waiting}\n\
+             {}/validation",
+            self.frontend_url
+        ))
+    }
+
+    /// `/skilluv cohorts [domain]` — cohorts somebody can still join.
+    ///
+    /// One command for every domain that runs cohorts, which is every domain
+    /// since migration 0532 gave them one model. Private cohorts never appear
+    /// here: they are reached by invitation, and listing them in a public
+    /// channel would defeat what makes them private.
+    async fn handle_cohorts(&self, domain: Option<&str>) -> Result<String> {
+        let rows: Vec<(
+            String,
+            String,
+            Option<chrono::DateTime<chrono::Utc>>,
+            i64,
+            Option<i32>,
+        )> = sqlx::query_as(
+            r#"
+            SELECT c.name, c.slug, c.starts_at,
+                   (SELECT count(*) FROM cohort_members m
+                     WHERE m.cohort_id = c.id AND m.left_at IS NULL),
+                   c.max_members
+              FROM cohorts c
+              LEFT JOIN orientations o ON o.id = c.orientation_id
+             WHERE c.is_public
+               AND c.archived_at IS NULL
+               AND c.concluded_at IS NULL
+               AND (c.starts_at IS NULL OR c.starts_at > NOW())
+               AND ($1::TEXT IS NULL
+                    OR c.target_domain = $1
+                    OR o.primary_domain = $1)
+             ORDER BY c.starts_at ASC NULLS LAST
+             LIMIT 5
+            "#,
+        )
+        .bind(domain)
+        .fetch_all(&self.db)
+        .await
+        .context("db query failed")?;
+
+        if rows.is_empty() {
+            return Ok("No cohort is recruiting right now.".into());
+        }
+
+        let lines: Vec<String> = rows
+            .iter()
+            .map(|(name, slug, starts, members, max)| {
+                let when = starts
+                    .map(|d| format!(" — starts {}", d.format("%d/%m")))
+                    .unwrap_or_default();
+                let places = match max {
+                    Some(m) => format!(" ({members}/{m})"),
+                    None => format!(" ({members} joined)"),
+                };
+                format!(
+                    "- **{name}**{when}{places} — {}/cohorts/{slug}",
+                    self.frontend_url
+                )
+            })
+            .collect();
+        Ok(format!("Cohorts recruiting:\n{}", lines.join("\n")))
     }
 
     /// `/skilluv me` — look up the caller by discord_user_id, echo the
@@ -467,6 +716,9 @@ fn help_message(frontend: &str) -> String {
          - `/skilluv contests [domain]` — open contests\n\
          - `/skilluv featured [domain]` — this week\'s featured member\n\
          - `/skilluv portfolio <username>` — somebody\'s public profile\n\
+         - `/skilluv craft <domain>` — your craft score there\n\
+         - `/skilluv queue <domain>` — what is waiting on a reviewer\n\
+         - `/skilluv cohorts [domain]` — cohorts recruiting now\n\
          - `/skilluv help` — this message\n\n\
          Platform: {frontend}",
     )

@@ -75,16 +75,34 @@ review-coloured standing after losing review rights.
 
 ## Bot commands
 
+The bot has one command with subcommands, and the domain is an argument
+rather than part of the name. There is no `/skilluv quality my-stats`: there
+were four of them written down across two of these documents, none of them
+existed, and writing them as four would have made the next domain a fifth.
+
 | Command | Answers |
 |---|---|
-| `/skilluv quality bug-bashes` | Defect hunts open now, with their scope and deadline |
-| `/skilluv quality queue` | How many reports are waiting per family |
-| `/skilluv quality my-stats` | Your quality craft score and its breakdown |
-| `/skilluv quality participants <n>` | Posts a recruitment call in `#quality-participants` with the study's protocol summary |
+| `/skilluv craft quality` | Your craft score in this domain, its tier, and how many attestations it rests on |
+| `/skilluv queue quality` | How much work is waiting on a reviewer here, split into picked up and not, with the age of the oldest unclaimed one |
+| `/skilluv cohorts quality` | Cohorts recruiting now, with places left |
+| `/skilluv contests quality` | Open contests in this domain — a bug bash is a contest, so this is where they appear |
+| `/skilluv featured quality` | Who is featured this week |
+| `/skilluv me` | Your linked profile, trades and craft score |
+| `/skilluv portfolio <username>` | Somebody's public profile |
+| `/skilluv verify <hash>` | Check an attestation from its hash |
 
-`/skilluv quality queue` is public on purpose. A review queue nobody can see
-is a queue that grows quietly, and the number being visible is what makes
-somebody volunteer.
+`/skilluv queue` is public on purpose, and it reports the unclaimed count
+first. A review queue nobody can see is a queue that grows quietly, and the
+number being visible is what makes somebody volunteer. The age of the oldest
+unclaimed item is there because a queue of three that turns over in a day is
+healthy and a queue of three where one has sat a fortnight is not, and the
+count alone hides the difference.
+
+The bot does not post participant recruitment calls. A study recruitment
+carries a consent protocol, a compensation statement and a description of what
+is recorded, and a slash command is the wrong door for all three. Recruitment
+goes through `#quality-participants` as a written post, which is also the
+record of what participants were told.
 
 ---
 

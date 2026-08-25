@@ -77,6 +77,38 @@ rather than two.
 Roles follow capabilities rather than the other way round. A role granted on
 Discord and not in the platform is a permission nobody can audit.
 
+## Bot commands
+
+The bot has one command with subcommands, and the domain is an argument
+rather than part of the name. There is no `/skilluv communication my-stats`: there
+were four of them written down across two of these documents, none of them
+existed, and writing them as four would have made the next domain a fifth.
+
+| Command | Answers |
+|---|---|
+| `/skilluv craft communication` | Your craft score in this domain, its tier, and how many attestations it rests on |
+| `/skilluv queue communication` | How much work is waiting on a reviewer here, split into picked up and not, with the age of the oldest unclaimed one |
+| `/skilluv cohorts communication` | Cohorts recruiting now, with places left |
+| `/skilluv contests communication` | Open contests in this domain — docs jams and content sprints appear here |
+| `/skilluv featured communication` | Who is featured this week |
+| `/skilluv me` | Your linked profile, trades and craft score |
+| `/skilluv portfolio <username>` | Somebody's public profile |
+| `/skilluv verify <hash>` | Check an attestation from its hash |
+
+`/skilluv queue` is public on purpose, and it reports the unclaimed count
+first. A review queue nobody can see is a queue that grows quietly, and the
+number being visible is what makes somebody volunteer. The age of the oldest
+unclaimed item is there because a queue of three that turns over in a day is
+healthy and a queue of three where one has sat a fortnight is not, and the
+count alone hides the difference.
+
+`/skilluv queue communication` counts what is waiting across all four review
+families rather than per family. Splitting it would tell somebody in the
+translation family that documentation has a backlog they cannot help with,
+which is a number that produces guilt rather than reviews.
+
+---
+
 ## What is posted automatically
 
 From `discord_notifications_queue`, filtered on `skill_domain = 'communication'`:

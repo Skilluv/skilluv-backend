@@ -81,17 +81,41 @@ titles.
 
 ## Bot commands
 
+The bot has one command with subcommands, and the domain is an argument
+rather than part of the name. There is no `/skilluv leadership my-stats`: there
+were four of them written down across two of these documents, none of them
+existed, and writing them as four would have made the next domain a fifth.
+
 | Command | Answers |
 |---|---|
-| `/skilluv leadership cohorts` | Cohorts recruiting now, with their entry conditions |
-| `/skilluv leadership redaction-queue` | Documents waiting for somebody to confirm a redaction |
-| `/skilluv leadership commitments` | Commitments made on your projects that you have not acknowledged |
-| `/skilluv leadership my-stats` | Your leadership craft score and its breakdown |
+| `/skilluv craft leadership` | Your craft score in this domain, its tier, and how many attestations it rests on |
+| `/skilluv queue leadership` | How much work is waiting on a reviewer here, split into picked up and not, with the age of the oldest unclaimed one |
+| `/skilluv cohorts leadership` | Cohorts recruiting now, with places left |
+| `/skilluv contests leadership` | Open contests in this domain |
+| `/skilluv featured leadership` | Who is featured this week |
+| `/skilluv me` | Your linked profile, trades and craft score |
+| `/skilluv portfolio <username>` | Somebody's public profile |
+| `/skilluv verify <hash>` | Check an attestation from its hash |
 
-`/skilluv leadership commitments` is the one that makes the coordination
-mechanism work. A commitment nobody has seen is a commitment nobody
-acknowledges, and the acknowledgement is the score term nobody can produce
-alone.
+`/skilluv queue` is public on purpose, and it reports the unclaimed count
+first. A review queue nobody can see is a queue that grows quietly, and the
+number being visible is what makes somebody volunteer. The age of the oldest
+unclaimed item is there because a queue of three that turns over in a day is
+healthy and a queue of three where one has sat a fortnight is not, and the
+count alone hides the difference.
+
+Two things this domain wanted from the bot are deliberately not commands.
+
+**Redaction confirmations** are not listed here. A redaction is confirmed by a
+second person reading the document, and a Discord notification that somebody
+is waiting turns a careful reading into a queue to clear. It stays on the
+platform, where the document is.
+
+**Unacknowledged commitments** are not listed either, for the same reason in
+reverse: acknowledging a commitment somebody made on your project is a
+judgement about whether they made it, and a one-click acknowledgement from a
+chat client is a rubber stamp. The score term exists because it cannot be
+produced alone, and a bot command would let it be.
 
 ---
 

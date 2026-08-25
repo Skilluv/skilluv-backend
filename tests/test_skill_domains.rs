@@ -110,36 +110,65 @@ async fn an_undeclared_domain_is_refused_by_the_database() {
 /// A declared domain that is not open yet still accepts rows.
 ///
 /// This is the distinction the `is_active` flag carries: `craft_score_tiers`
-/// has held rows for `audio`, `communication` and three others since migration
-/// 0204, and a foreign key that refused them would have had to delete them.
+/// has held rows for domains that were not open since migration 0204, and a
+/// foreign key that refused them would have had to delete them.
 ///
-/// Written against `quality` until migrations 0450-0459 opened that domain,
-/// which is the assertion working as intended: it fails when a domain is
-/// opened, and whoever opens one moves it to a domain that is still closed.
-/// `communication` and `education` are the two remaining.
+/// The test used to point at whichever domain happened to be closed — first
+/// `quality`, then `communication`. That made it a tripwire: it failed every
+/// time a domain opened, and each failure was a correct assertion about a
+/// stale fact, which is the worst kind to leave in a suite. Every declared
+/// domain is open now, so there is no closed one to point at and the property
+/// is asserted directly instead: declare one here, and check the keys accept
+/// its rows.
 #[tokio::test]
 async fn a_declared_but_inactive_domain_still_holds_its_rows() {
     let app = TestApp::spawn().await;
 
-    let tiers: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM craft_score_tiers WHERE skill_domain = 'communication'",
+    sqlx::query(
+        "INSERT INTO skill_domains (slug, name, description, display_category, is_active)
+         VALUES ('notopenyet', 'Not open yet',
+                 'Declared so its rows have somewhere to live, and closed so nobody \
+                  is offered a domain with no catalogue behind it.',
+                 'craft', FALSE)",
     )
-    .fetch_one(&app.db)
+    .execute(&app.db)
     .await
-    .unwrap();
+    .expect("a domain may be declared before it opens");
 
-    assert_eq!(
-        tiers, 6,
-        "the tiers seeded by 0204 did not survive the keys"
-    );
+    // The rows a closed domain is allowed to carry. This is the whole point:
+    // the tiers are seeded long before the trades exist, and a key that
+    // refused them would have forced the seed to wait for the domain.
+    let inserted = sqlx::query(
+        "INSERT INTO craft_score_tiers
+             (skill_domain, slug, name, min_score, max_score, description, sort_order)
+         VALUES ('notopenyet', 'apprentice', 'Apprentice', 0, 99, 'The first tier.', 1)",
+    )
+    .execute(&app.db)
+    .await
+    .expect("a closed domain still holds its tiers");
+    assert_eq!(inserted.rows_affected(), 1);
 
-    let active: bool =
-        sqlx::query_scalar("SELECT is_active FROM skill_domains WHERE slug = 'communication'")
+    // And it is not offered while it is closed.
+    let offered: bool =
+        sqlx::query_scalar("SELECT is_active FROM skill_domains WHERE slug = 'notopenyet'")
             .fetch_one(&app.db)
             .await
             .unwrap();
+    assert!(!offered, "a domain with no catalogue must not be offered");
 
-    assert!(!active, "a domain with no catalogue must not be offered");
+    // The other half of the same key: a domain that was never declared is
+    // refused, so `is_active` is the only thing separating the two cases.
+    let undeclared = sqlx::query(
+        "INSERT INTO craft_score_tiers
+             (skill_domain, slug, name, min_score, max_score, description, sort_order)
+         VALUES ('nosuchdomain', 'apprentice', 'Apprentice', 0, 99, 'x', 1)",
+    )
+    .execute(&app.db)
+    .await;
+    assert!(
+        undeclared.is_err(),
+        "tiers were filed under a domain that does not exist"
+    );
 }
 
 /// The reading category of a skill comes from its domain's row.

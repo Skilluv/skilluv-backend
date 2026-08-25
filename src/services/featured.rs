@@ -290,6 +290,24 @@ async fn issue_attestation(
             )
             .await?;
         }
+        "communication" => {
+            crate::services::communication_attestations::featured_communicator(
+                db,
+                user_id,
+                profile_url,
+                &citation,
+            )
+            .await?;
+        }
+        "education" => {
+            crate::services::education_attestations::featured_educator(
+                db,
+                user_id,
+                profile_url,
+                &citation,
+            )
+            .await?;
+        }
         // Game, security and soft_skills declare no `featured_*` basis, and
         // silence is the right answer for them: somebody is put forward, the
         // announcement goes out, and there is nothing to attest.

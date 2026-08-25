@@ -476,6 +476,53 @@ pub async fn issue_for_user(db: &PgPool, user_id: Uuid) -> Result<Vec<String>, A
     Ok(issued)
 }
 
+// ════════════════════════════════════════════════════════════════════
+// Featured
+// ════════════════════════════════════════════════════════════════════
+
+const EDITORIAL: crate::services::artefact_attestations::Domain =
+    crate::services::artefact_attestations::Domain {
+        name: "education",
+        bases: &["featured_educator"],
+        artifact_bases: &[],
+        allows_stored_objects: false,
+    };
+
+/// Featured.
+///
+/// Migration 0521 declared `featured_educator` and
+/// `education_profile` counts it, and until now nothing issued it: a featuring was
+/// recorded, the announcement went out, and the profile term stayed at zero.
+/// The same defect ops and audio carried, caught this time by the test that
+/// was written for them.
+pub async fn featured_educator(
+    db: &PgPool,
+    user_id: Uuid,
+    profile_url: &str,
+    citation: &str,
+) -> Result<crate::services::artefact_attestations::Issued, AppError> {
+    if citation.trim().is_empty() {
+        return Err(AppError::Validation(
+            "featuring somebody without saying why is a decision nobody can question".into(),
+        ));
+    }
+    crate::services::artefact_attestations::issue(
+        db,
+        user_id,
+        "featured_educator",
+        &crate::services::artefact_attestations::Evidence {
+            url: profile_url.to_string(),
+            title: "Featured educator".into(),
+            description: citation.trim().to_string(),
+            deliverable_id: None,
+            project_id: None,
+            skill_node_ids: vec![],
+        },
+        &EDITORIAL,
+    )
+    .await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

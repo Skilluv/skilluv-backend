@@ -190,3 +190,51 @@ async fn a_skill_takes_the_reading_category_of_its_domain() {
         "the trigger no longer reads the category from skill_domains"
     );
 }
+
+/// A slug column uses one separator, whichever it picked.
+///
+/// The repository has both, and settled them per table rather than globally:
+/// `orientations` and `badge_rules` are kebab, `tournament_kinds`,
+/// `mission_types`, `slice_types` and `portfolio_platforms` are snake. Either
+/// is fine and neither is worth a rename. What is not fine is one column
+/// holding both, because a slug goes in a URL and a consumer cannot guess:
+/// `award_categories` had thirty kebab rows and sixteen snake ones, seeded by
+/// three different domains, so the same page linked
+/// `/awards/best-docs-contribution` beside `/awards/quality_bug_of_the_year`.
+/// Migration 0538 settled it.
+///
+/// `badge_rules` carries the one exemption: its nine snake rows are all
+/// `legacy_*`, deprecated and named so deliberately, and renaming them would
+/// hide what the prefix is there to say.
+#[tokio::test]
+async fn a_slug_column_uses_one_separator() {
+    let app = TestApp::spawn().await;
+
+    for (table, exempt_prefix) in [
+        ("award_categories", None),
+        ("orientations", None),
+        ("tournament_kinds", None),
+        ("badge_rules", Some("legacy_")),
+        ("terrain_proposals", None),
+        ("portfolio_platforms", None),
+        ("mission_types", None),
+        ("slice_types", None),
+    ] {
+        // The table name is one of the eight literals above, never input.
+        let (snake, kebab): (i64, i64) = sqlx::query_as(sqlx::AssertSqlSafe(format!(
+            "SELECT count(*) FILTER (WHERE strpos(slug, '_') > 0),
+                    count(*) FILTER (WHERE strpos(slug, '-') > 0)
+               FROM {table}
+              WHERE $1::TEXT IS NULL OR strpos(slug, $1) <> 1"
+        )))
+        .bind(exempt_prefix)
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
+
+        assert!(
+            snake == 0 || kebab == 0,
+            "{table} holds {snake} snake_case slugs and {kebab} kebab-case ones,              and a reader of a URL cannot tell which one a given row will be"
+        );
+    }
+}

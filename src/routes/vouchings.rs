@@ -49,7 +49,7 @@ fn wrap(data: serde_json::Value) -> serde_json::Value {
     })
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CreateVouchingBody {
     pub vouched_id: Uuid,
@@ -65,7 +65,17 @@ pub struct CreateVouchingBody {
     pub statement: Option<String>,
 }
 
-async fn create(
+/// Vouch for somebody. A vouching carries the voucher's own standing,
+/// which is why it can be broken.
+#[utoipa::path(
+    post, path = "/api/vouchings", tag = "profile",
+    request_body = CreateVouchingBody,
+    responses(
+        (status = 201, description = "Vouched"),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<CreateVouchingBody>,
@@ -183,7 +193,18 @@ pub async fn list_mine(
     }))))
 }
 
-async fn withdraw(
+/// Withdraw a vouching the caller wrote. Their standing backed it, so it
+/// is theirs to take back.
+#[utoipa::path(
+    delete, path = "/api/vouchings/{id}", tag = "profile",
+    params(("id" = uuid::Uuid, Path)),
+    responses(
+        (status = 204, description = "Withdrawn"),
+        (status = 404, description = "No vouching of yours with that id", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn withdraw(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -192,14 +213,27 @@ async fn withdraw(
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
+#[schema(as = VouchingBreakBody)]
 pub struct BreakBody {
     /// At least 8 characters — this costs someone their rank.
     pub reason: String,
 }
 
-async fn break_vouching(
+/// Break a vouching. Moderators only, and the reason is recorded.
+#[utoipa::path(
+    post, path = "/api/moderation/vouchings/{id}/break", tag = "moderation",
+    params(("id" = uuid::Uuid, Path, description = "The vouching to break")),
+    request_body = BreakBody,
+    responses(
+        (status = 200, description = "Broken, with the reason recorded"),
+        (status = 403, description = "Not a moderator", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "No such vouching", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn break_vouching(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,

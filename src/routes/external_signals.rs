@@ -76,7 +76,7 @@ fn split_buckets(signals: Vec<external_signals::ExternalSignal>) -> serde_json::
     })
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CreateSignalBody {
     /// `github` | `medium` | `dev_to` | `conf_ref` | `behance` |
@@ -96,7 +96,17 @@ struct CreateSignalResponse {
     auto_verified: bool,
 }
 
-async fn create(
+/// Declare a signal from outside the platform. Declared is not verified,
+/// and the profile shows the difference.
+#[utoipa::path(
+    post, path = "/api/users/me/external-signals", tag = "profile",
+    request_body = CreateSignalBody,
+    responses(
+        (status = 201, description = "Declared. Unverified until a moderator confirms it"),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<CreateSignalBody>,
@@ -137,7 +147,17 @@ pub async fn list_mine(
     Ok(Json(wrap(split_buckets(signals))))
 }
 
-async fn remove(
+/// Withdraw one of the caller's own signals.
+#[utoipa::path(
+    delete, path = "/api/users/me/external-signals/{id}", tag = "profile",
+    params(("id" = uuid::Uuid, Path)),
+    responses(
+        (status = 204, description = "Removed"),
+        (status = 404, description = "No signal of yours with that id", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn remove(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -228,7 +248,18 @@ pub async fn list_pending(
     Ok(Json(wrap(json!({ "pending": signals }))))
 }
 
-async fn moderator_verify(
+/// Confirm a declared signal. Moderators only.
+#[utoipa::path(
+    post, path = "/api/moderation/external-signals/{id}/verify", tag = "moderation",
+    params(("id" = uuid::Uuid, Path, description = "The signal to verify")),
+    responses(
+        (status = 200, description = "Verified"),
+        (status = 403, description = "Not a moderator", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "No such signal", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn moderator_verify(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -254,7 +285,17 @@ async fn moderator_verify(
 }
 
 /// Remove a signal as a moderator (bogus or abusive claim).
-async fn moderator_delete(
+#[utoipa::path(
+    delete, path = "/api/moderation/external-signals/{id}", tag = "moderation",
+    params(("id" = uuid::Uuid, Path)),
+    responses(
+        (status = 204, description = "Removed"),
+        (status = 403, description = "Not a moderator", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "No such signal", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn moderator_delete(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,

@@ -219,7 +219,7 @@ pub async fn get_progress(
 
 // ─── Write-side ───────────────────────────────────────────────────
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct SubmitPayload {
     pub template_id: Uuid,
     pub submission_id: Option<Uuid>,
@@ -309,7 +309,7 @@ pub async fn submit_verification(
     Ok(row)
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct VerdictPayload {
     pub verdict: String,
     pub notes: Option<String>,

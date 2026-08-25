@@ -59,7 +59,7 @@ where
     Ok(Some(Option::<T>::deserialize(deserializer)?))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CreateOfferBody {
     pub offer_type: String,
@@ -76,7 +76,16 @@ pub struct CreateOfferBody {
     pub description: Option<String>,
 }
 
-async fn create(
+/// Publish an offer to teach, review or mentor.
+#[utoipa::path(
+    post, path = "/api/talent-offers", tag = "opportunities",
+    request_body = CreateOfferBody,
+    responses(
+        (status = 201, description = "Published"),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<CreateOfferBody>,
@@ -175,7 +184,7 @@ pub async fn list_mine(
     }))))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct UpdateOfferBody {
     #[serde(default)]
@@ -189,7 +198,18 @@ pub struct UpdateOfferBody {
     pub active: Option<bool>,
 }
 
-async fn update(
+/// Change one of the caller's offers.
+#[utoipa::path(
+    patch, path = "/api/talent-offers/{id}", tag = "opportunities",
+    params(("id" = uuid::Uuid, Path)),
+    request_body = UpdateOfferBody,
+    responses(
+        (status = 200, description = "Updated"),
+        (status = 404, description = "No offer of yours with that id", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn update(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -208,7 +228,17 @@ async fn update(
     Ok(Json(wrap(json!({ "offer": offer }))))
 }
 
-async fn remove(
+/// Withdraw one of the caller's offers.
+#[utoipa::path(
+    delete, path = "/api/talent-offers/{id}", tag = "opportunities",
+    params(("id" = uuid::Uuid, Path)),
+    responses(
+        (status = 204, description = "Withdrawn"),
+        (status = 404, description = "No offer of yours with that id", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn remove(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,

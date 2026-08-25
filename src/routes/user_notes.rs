@@ -58,7 +58,7 @@ fn wrap(data: serde_json::Value) -> serde_json::Value {
     })
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct UpsertNoteBody {
     /// 1..1000 chars after trimming. An all-whitespace body is a 400, not
@@ -76,7 +76,18 @@ struct NoteRow {
     updated_at: chrono::DateTime<chrono::Utc>,
 }
 
-async fn upsert(
+/// Write the caller's private note about something. One note per target,
+/// so this replaces rather than appends.
+#[utoipa::path(
+    put, path = "/api/users/me/notes/{target_type}/{target_id}", tag = "profile",
+    params(("target_type" = String, Path, description = "What the note is about"), ("target_id" = uuid::Uuid, Path, description = "Which one")),
+    request_body = UpsertNoteBody,
+    responses(
+        (status = 200, description = "Written"),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn upsert(
     State(state): State<AppState>,
     auth: AuthUser,
     Path((target_type, target_id)): Path<(String, Uuid)>,
@@ -122,7 +133,17 @@ async fn upsert(
     Ok(Json(wrap(json!({ "note": row }))))
 }
 
-async fn fetch(
+/// The caller's note about one thing, if they wrote one.
+#[utoipa::path(
+    get, path = "/api/users/me/notes/{target_type}/{target_id}", tag = "profile",
+    params(("target_type" = String, Path, description = "What the note is about"), ("target_id" = uuid::Uuid, Path, description = "Which one")),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 404, description = "No note of yours on that", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn fetch(
     State(state): State<AppState>,
     auth: AuthUser,
     Path((target_type, target_id)): Path<(String, Uuid)>,
@@ -144,7 +165,17 @@ async fn fetch(
     Ok(Json(wrap(json!({ "note": row }))))
 }
 
-async fn remove(
+/// Delete the caller's note about something.
+#[utoipa::path(
+    delete, path = "/api/users/me/notes/{target_type}/{target_id}", tag = "profile",
+    params(("target_type" = String, Path, description = "What the note is about"), ("target_id" = uuid::Uuid, Path, description = "Which one")),
+    responses(
+        (status = 204, description = "Deleted"),
+        (status = 404, description = "No note of yours on that", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn remove(
     State(state): State<AppState>,
     auth: AuthUser,
     Path((target_type, target_id)): Path<(String, Uuid)>,

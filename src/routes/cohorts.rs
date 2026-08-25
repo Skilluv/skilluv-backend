@@ -87,7 +87,7 @@ fn validate_slug(slug: &str) -> Result<(), AppError> {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CreateCohortBody {
     pub slug: String,
@@ -111,7 +111,16 @@ fn default_true() -> bool {
     true
 }
 
-async fn create(
+/// Open a cohort. The caller leads it.
+#[utoipa::path(
+    post, path = "/api/cohorts", tag = "education",
+    request_body = CreateCohortBody,
+    responses(
+        (status = 201, description = "The cohort was opened, with the caller leading it"),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<CreateCohortBody>,
@@ -306,7 +315,7 @@ pub async fn fetch(
     }))))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct UpdateCohortBody {
     #[serde(default)]
@@ -325,7 +334,19 @@ pub struct UpdateCohortBody {
     pub archive: Option<bool>,
 }
 
-async fn update(
+/// Change a cohort. Whoever leads it.
+#[utoipa::path(
+    patch, path = "/api/cohorts/{id}", tag = "education",
+    params(("id" = uuid::Uuid, Path)),
+    request_body = UpdateCohortBody,
+    responses(
+        (status = 200, description = "Updated"),
+        (status = 403, description = "Only the people leading a cohort change it", body = crate::api_response::ErrorResponse),
+        (status = 409, description = "The change conflicts with where the cohort already is", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn update(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -402,7 +423,18 @@ async fn update(
     Ok(Json(wrap(json!({ "cohort": updated }))))
 }
 
-async fn join(
+/// Join a public cohort.
+#[utoipa::path(
+    post, path = "/api/cohorts/{id}/join", tag = "education",
+    params(("id" = uuid::Uuid, Path)),
+    responses(
+        (status = 201, description = "Joined"),
+        (status = 403, description = "Private cohorts are joined by invitation", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "No such cohort", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn join(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -411,7 +443,18 @@ async fn join(
     Ok((StatusCode::CREATED, Json(wrap(json!({ "member": member })))))
 }
 
-async fn leave(
+/// Leave a cohort. Recorded as a departure, not as an absence — a cohort
+/// that counts only its survivors cannot tell you it is failing.
+#[utoipa::path(
+    delete, path = "/api/cohorts/{id}/leave", tag = "education",
+    params(("id" = uuid::Uuid, Path)),
+    responses(
+        (status = 204, description = "Left"),
+        (status = 404, description = "You are not in that cohort", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn leave(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -420,8 +463,9 @@ async fn leave(
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
+#[schema(as = CohortAddMemberBody)]
 pub struct AddMemberBody {
     pub user_id: Uuid,
     /// `member` (default) or `organizer`. Re-posting with a different role
@@ -430,7 +474,18 @@ pub struct AddMemberBody {
     pub role: Option<String>,
 }
 
-async fn add_member(
+/// Add somebody to a cohort.
+#[utoipa::path(
+    post, path = "/api/cohorts/{id}/members", tag = "education",
+    params(("id" = uuid::Uuid, Path)),
+    request_body = AddMemberBody,
+    responses(
+        (status = 201, description = "Added"),
+        (status = 403, description = "Only the people leading a cohort add members", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn add_member(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -442,7 +497,18 @@ async fn add_member(
     Ok((StatusCode::CREATED, Json(wrap(json!({ "member": member })))))
 }
 
-async fn remove_member(
+/// Remove somebody from a cohort.
+#[utoipa::path(
+    delete, path = "/api/cohorts/{id}/members/{user_id}", tag = "education",
+    params(("id" = uuid::Uuid, Path, description = "Cohort id"), ("user_id" = uuid::Uuid, Path, description = "Who to remove")),
+    responses(
+        (status = 204, description = "Removed"),
+        (status = 403, description = "Only the people leading a cohort remove members", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "No such cohort, or no such member", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn remove_member(
     State(state): State<AppState>,
     auth: AuthUser,
     Path((id, target)): Path<(Uuid, Uuid)>,
@@ -501,7 +567,7 @@ pub async fn list_members(
     Ok(Json(wrap(json!({ "members": members }))))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CreateMilestoneBody {
     pub title: String,
@@ -510,7 +576,18 @@ pub struct CreateMilestoneBody {
     pub target_date: chrono::NaiveDate,
 }
 
-async fn create_milestone(
+/// Add a milestone to a cohort's plan.
+#[utoipa::path(
+    post, path = "/api/cohorts/{id}/milestones", tag = "education",
+    params(("id" = uuid::Uuid, Path)),
+    request_body = CreateMilestoneBody,
+    responses(
+        (status = 201, description = "Added to the plan"),
+        (status = 403, description = "Only the people leading a cohort set milestones", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create_milestone(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -549,7 +626,16 @@ async fn create_milestone(
     ))
 }
 
-async fn list_milestones(
+/// A cohort's plan. Public where the cohort is.
+#[utoipa::path(
+    get, path = "/api/cohorts/{id}/milestones", tag = "education",
+    params(("id" = uuid::Uuid, Path)),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 404, description = "No such cohort", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn list_milestones(
     State(state): State<AppState>,
     OptionalAuth(auth): OptionalAuth,
     Path(id): Path<Uuid>,
@@ -566,7 +652,17 @@ async fn list_milestones(
     Ok(Json(wrap(json!({ "milestones": milestones }))))
 }
 
-async fn delete_milestone(
+/// Remove a milestone from a cohort's plan.
+#[utoipa::path(
+    delete, path = "/api/cohorts/{id}/milestones/{milestone_id}", tag = "education",
+    params(("id" = uuid::Uuid, Path, description = "Cohort id"), ("milestone_id" = uuid::Uuid, Path, description = "Which milestone")),
+    responses(
+        (status = 204, description = "Removed"),
+        (status = 404, description = "No such milestone in that cohort", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn delete_milestone(
     State(state): State<AppState>,
     auth: AuthUser,
     Path((id, milestone_id)): Path<(Uuid, Uuid)>,
@@ -587,13 +683,25 @@ async fn delete_milestone(
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PostMessageBody {
     pub body: String,
 }
 
-async fn post_message(
+/// Post to a cohort's thread. Members only.
+#[utoipa::path(
+    post, path = "/api/cohorts/{id}/messages", tag = "education",
+    params(("id" = uuid::Uuid, Path, description = "Cohort id")),
+    request_body = PostMessageBody,
+    responses(
+        (status = 201, description = "Posted"),
+        (status = 403, description = "Only members write to a cohort", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "No such cohort", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn post_message(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -628,7 +736,7 @@ async fn post_message(
     ))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
 pub struct ListMessagesQuery {
     #[serde(default)]
     pub limit: Option<i64>,
@@ -637,7 +745,18 @@ pub struct ListMessagesQuery {
     pub before: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-async fn list_messages(
+/// A cohort's thread. Members only.
+#[utoipa::path(
+    get, path = "/api/cohorts/{id}/messages", tag = "education",
+    params(("id" = uuid::Uuid, Path), ListMessagesQuery),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 403, description = "Members only", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "No such cohort", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_messages(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,

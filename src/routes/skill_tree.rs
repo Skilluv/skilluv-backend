@@ -42,7 +42,7 @@ fn wrap(data: serde_json::Value) -> serde_json::Value {
     })
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
 pub struct SkillTreeQuery {
     /// Narrow to one domain (`code`, `design`, `game`, `security`,
     /// `soft_skills`, `ai`, `ops`). Prerequisites are still evaluated
@@ -54,7 +54,16 @@ pub struct SkillTreeQuery {
 
 use crate::validators::SKILL_DOMAINS as ALLOWED_DOMAINS;
 
-async fn user_skill_tree(
+/// Somebody's skill tree. Follows the privacy they set on their profile.
+#[utoipa::path(
+    get, path = "/api/users/{user_id}/skill-tree", tag = "profile",
+    params(("user_id" = uuid::Uuid, Path, description = "Whose tree"), SkillTreeQuery),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 404, description = "No such user, or a tree they keep private", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn user_skill_tree(
     State(state): State<AppState>,
     OptionalAuth(auth): OptionalAuth,
     Path(user_id): Path<Uuid>,
@@ -108,7 +117,7 @@ async fn user_skill_tree(
     }))))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SetPrerequisitesBody {
     /// Full replacement list. An empty array clears the prerequisites.
@@ -124,7 +133,18 @@ pub struct SetPrerequisitesBody {
 /// `AdminGate` only enforces the admin origin and mandatory 2FA; it
 /// deliberately does not check the role (see its doc comment). The
 /// capability check below is what actually restricts this to admins.
-async fn set_prerequisites(
+#[utoipa::path(
+    put, path = "/api/admin/skills/{id}/prerequisites", tag = "admin",
+    params(("id" = uuid::Uuid, Path)),
+    request_body = SetPrerequisitesBody,
+    responses(
+        (status = 200, description = "The prerequisites are now exactly this list"),
+        (status = 400, description = "The list would make the graph cyclic", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Admins only", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn set_prerequisites(
     _gate: AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,

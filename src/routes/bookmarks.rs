@@ -62,7 +62,7 @@ fn normalize_opt(value: Option<String>) -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CreateBookmarkBody {
     pub target_type: String,
@@ -102,7 +102,16 @@ fn validate_folder(slug: &str) -> Result<(), AppError> {
     }
 }
 
-async fn create(
+/// Bookmark something, optionally into a folder.
+#[utoipa::path(
+    post, path = "/api/bookmarks", tag = "profile",
+    request_body = CreateBookmarkBody,
+    responses(
+        (status = 201, description = "Bookmarked"),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<CreateBookmarkBody>,
@@ -146,7 +155,17 @@ async fn create(
     Ok((StatusCode::CREATED, Json(wrap(json!({ "bookmark": row })))))
 }
 
-async fn remove(
+/// Remove one of the caller's bookmarks.
+#[utoipa::path(
+    delete, path = "/api/bookmarks/{id}", tag = "profile",
+    params(("id" = uuid::Uuid, Path)),
+    responses(
+        (status = 204, description = "Removed"),
+        (status = 404, description = "No bookmark of yours with that id", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn remove(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,

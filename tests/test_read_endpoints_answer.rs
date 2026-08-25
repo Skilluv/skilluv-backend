@@ -169,50 +169,63 @@ async fn every_path_parameter_is_described() {
 /// a liveness probe. Each is a contract with something other than a client of
 /// this API, and putting them in the OpenAPI document would say they are part
 /// of it.
+///
+/// The dev helper is here for a different reason. It reads a pending email
+/// verification token out of Redis so end-to-end tooling can follow the link
+/// without a mailbox, it answers only while `SKILLUV_DEV_MODE=true`, and the
+/// config layer refuses to boot with that set in production. Publishing it
+/// would advertise an email-ownership bypass as part of the product.
 const NOT_PART_OF_THE_API: &[&str] = &[
     "/.well-known/security.txt",
+    "/dev/verify-tokens/{email}",
     "/health/live",
     "/manifest.webmanifest",
     "/metrics",
     "/security.txt",
 ];
 
-/// GET routes that exist and are not in the OpenAPI document.
-///
-/// Empty, and the point is to keep it that way. It held sixty-two entries:
-/// thirty-two handlers whose `#[utoipa::path]` was never registered in
-/// `src/openapi.rs`, and thirty with no annotation at all. Every one of them
-/// was a public endpoint nothing swept, no generated client knew about, and
-/// no front-end developer could discover without reading `src/routes` —
-/// which is the condition that let `/users/me/performance` answer 500 to
-/// every signed-in caller for as long as it did.
-///
-/// The assertion below is two-way on purpose. A new undocumented route fails
-/// it, and so does an entry here that has since been documented — so the list
-/// cannot quietly stop describing the truth, in either direction. With the
-/// list empty, the first half is the one that bites: adding a GET route now
-/// means documenting it in the same commit.
-const UNDOCUMENTED_YET: &[&str] = &[];
-
-/// Every GET the router registers is in the published document.
+/// Every route the router registers is in the published document.
 ///
 /// The gap the derived sweep moved rather than closed. A route that exists and
 /// is undocumented is invisible to this file, to the OpenAPI consumers and to
 /// the front end — and adding one is a single line in a `Router`, with nothing
 /// asking for the `#[utoipa::path]` that should come with it.
 ///
+/// This held a list of eighty-five inherited exceptions: sixty-two reads and
+/// twenty-three writes, thirty-two of which had an annotation nobody had
+/// registered in `src/openapi.rs`. They are all closed, so the list is gone
+/// and there is nothing to add to. Being undocumented is the condition that
+/// let `/users/me/performance` answer 500 to every signed-in caller for as
+/// long as it did.
+///
+/// Every method, not only the reads. A `POST` nobody documented is worse than
+/// a `GET` nobody documented: it changes state, and whoever has to call it is
+/// guessing the body.
+///
 /// Read from the source rather than from the router, because `axum::Router`
 /// cannot be enumerated. That is a blunt instrument and it is the only one
-/// available; it stays narrow by only ever reading `.route("…", …get(…)…)`
+/// available; it stays narrow by only ever reading `.route("…", …method(…)…)`
 /// literals, which is how every route in this codebase is written.
 #[tokio::test]
 async fn an_undocumented_route_is_not_a_hidden_one() {
-    let documented: std::collections::HashSet<String> = ApiDoc::openapi()
+    let doc = ApiDoc::openapi();
+    let documented: std::collections::HashSet<(&str, String)> = doc
         .paths
         .paths
         .iter()
-        .filter(|(_, item)| item.get.is_some())
-        .map(|(path, _)| path.clone())
+        .flat_map(|(path, item)| {
+            [
+                ("get", item.get.is_some()),
+                ("post", item.post.is_some()),
+                ("put", item.put.is_some()),
+                ("patch", item.patch.is_some()),
+                ("delete", item.delete.is_some()),
+            ]
+            .into_iter()
+            .filter(|(_, present)| *present)
+            .map(|(method, _)| (method, path.clone()))
+            .collect::<Vec<_>>()
+        })
         .collect();
 
     let mut undocumented: Vec<(String, String)> = Vec::new();
@@ -225,32 +238,45 @@ async fn an_undocumented_route_is_not_a_hidden_one() {
         }
         let source = std::fs::read_to_string(&file).expect("a readable module");
 
-        for line in source.lines() {
-            let line = line.trim();
-            let Some(rest) = line.strip_prefix(".route(\"") else {
+        // Split on the call rather than reading line by line: the literal
+        // sometimes sits on the line below, and a scanner that assumes one
+        // shape quietly stops seeing a whole module's routes.
+        for piece in source.split(".route(").skip(1) {
+            let Some(rest) = piece.trim_start().strip_prefix('"') else {
                 continue;
             };
             let Some(route) = rest.split('"').next() else {
                 continue;
             };
-            // Only the GETs. A `.route(path, post(...))` line carries no
-            // `get(`, and a combined `get(x).post(y)` does.
-            if !line.contains("get(") {
-                continue;
-            }
-            // Three nesting styles coexist. Most routers are nested under
-            // `/api`, so their literal is a suffix. `well_known_routes` and
-            // `metrics_routes` are merged at the root and write the prefix
-            // out, so their literal is already absolute. Both are accepted,
-            // which is why this compares two candidates rather than one.
-            let nested = format!("/api{route}");
-            if !documented.contains(route) && !documented.contains(&nested) {
+            // The methods a route is served with are named just after its
+            // literal. Bounded, because the piece runs to the next `.route(`
+            // — for the last route in a module that is everything left in the
+            // file, and every `get(` in a handler body would read as a route.
+            // Counted in characters, not bytes: these modules are separated
+            // by box-drawing banners, and a byte offset lands inside one.
+            let tail: String = rest[route.len()..].chars().take(200).collect();
+
+            for method in ["get", "post", "put", "patch", "delete"] {
+                if !tail.contains(&format!("{method}(")) {
+                    continue;
+                }
+                // Three nesting styles coexist. Most routers are nested under
+                // `/api`, so their literal is a suffix. `well_known_routes`
+                // and `metrics_routes` are merged at the root and write the
+                // prefix out, so their literal is already absolute. Both are
+                // accepted, which is why this compares two candidates.
+                let nested = format!("/api{route}");
+                if documented.contains(&(method, route.to_string()))
+                    || documented.contains(&(method, nested))
+                {
+                    continue;
+                }
                 undocumented.push((
                     file.file_name()
                         .unwrap_or_default()
                         .to_string_lossy()
                         .to_string(),
-                    route.to_string(),
+                    format!("{} {route}", method.to_uppercase()),
                 ));
             }
         }
@@ -259,44 +285,25 @@ async fn an_undocumented_route_is_not_a_hidden_one() {
     undocumented.sort();
     undocumented.dedup();
 
-    let known: std::collections::HashSet<&str> = UNDOCUMENTED_YET
-        .iter()
-        .chain(NOT_PART_OF_THE_API)
-        .copied()
-        .collect();
+    let known: std::collections::HashSet<&str> = NOT_PART_OF_THE_API.iter().copied().collect();
 
     let fresh: Vec<String> = undocumented
         .iter()
-        .filter(|(_, route)| !known.contains(route.as_str()))
+        // The findings carry their method, the exemptions do not: nothing is
+        // exempt for one verb and expected for another.
+        .filter(|(_, route)| {
+            !known.contains(route.split_once(' ').map_or(route.as_str(), |(_, p)| p))
+        })
         .map(|(file, route)| format!("{file}: {route}"))
         .collect();
 
     assert!(
         fresh.is_empty(),
-        "{} GET route(s) were added without an OpenAPI entry, so nothing sweeps them \
+        "{} route(s) were added without an OpenAPI entry, so nothing sweeps them \
          and no client knows they exist — add the `#[utoipa::path]` and register the \
          handler in `src/openapi.rs`:\n{}",
         fresh.len(),
         fresh.join("\n")
-    );
-
-    // The other direction. An entry that has since been documented, or whose
-    // route no longer exists, has to leave the list — otherwise the list stops
-    // being a count of anything and starts being decoration.
-    let still_undocumented: std::collections::HashSet<&str> =
-        undocumented.iter().map(|(_, r)| r.as_str()).collect();
-    let stale: Vec<&str> = UNDOCUMENTED_YET
-        .iter()
-        .filter(|r| !still_undocumented.contains(*r))
-        .copied()
-        .collect();
-
-    assert!(
-        stale.is_empty(),
-        "{} route(s) in UNDOCUMENTED_YET are documented now, or gone. Remove them — \
-         a debt list that overstates itself stops being read:\n{}",
-        stale.len(),
-        stale.join("\n")
     );
 }
 
@@ -402,10 +409,20 @@ fn every_route_the_reference_names_exists() {
         }
     }
 
-    // Swagger UI is merged as a whole subtree rather than route by route, so
-    // its mount point never appears as a `.route(` literal. It is a served
-    // path all the same, and the reference sends readers to it.
+    // `src/openapi.rs` serves the document itself, and mounts Swagger UI as a
+    // whole subtree rather than route by route — so its mount point never
+    // appears as a `.route(` literal. Both are served paths, and the reference
+    // sends readers to both.
     let openapi = std::fs::read_to_string(root.join("src/openapi.rs")).expect("readable");
+    for piece in openapi.split(".route(").skip(1) {
+        if let Some(route) = piece
+            .trim_start()
+            .strip_prefix('"')
+            .and_then(|rest| rest.split('"').next())
+        {
+            served.insert(route.to_string());
+        }
+    }
     for piece in openapi.split("SwaggerUi::new(\"").skip(1) {
         if let Some(mount) = piece.split('"').next() {
             served.insert(mount.to_string());

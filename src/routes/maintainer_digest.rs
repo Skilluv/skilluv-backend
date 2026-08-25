@@ -20,8 +20,9 @@ pub fn maintainer_digest_routes() -> Router<AppState> {
         .route("/maintainer-digest/unsubscribe/{token}", get(unsubscribe))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
+#[schema(as = MaintainerDigestSubscribeBody)]
 pub struct SubscribeBody {
     pub github_login: String,
     pub email: String,
@@ -29,7 +30,16 @@ pub struct SubscribeBody {
     pub repos: Vec<String>,
 }
 
-async fn subscribe(
+/// Ask for the maintainer digest. Nothing is sent until the mailed link
+/// is followed — the address is not taken at its word.
+#[utoipa::path(
+    post, path = "/api/maintainer-digest/subscribe", tag = "public",
+    request_body = SubscribeBody,
+    responses(
+        (status = 202, description = "A confirmation mail was sent. Nothing is delivered until the link is followed"),
+    ),
+)]
+pub async fn subscribe(
     State(state): State<AppState>,
     Json(body): Json<SubscribeBody>,
 ) -> Result<impl IntoResponse, AppError> {

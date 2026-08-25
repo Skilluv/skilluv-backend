@@ -48,8 +48,9 @@ fn wrap(data: serde_json::Value) -> serde_json::Value {
     })
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
+#[schema(as = AssistantAskBody)]
 pub struct AskBody {
     /// `explain` | `generate_exercises` | `pre_review` | `debug_help`
     pub interaction_type: String,
@@ -67,7 +68,18 @@ pub struct AskBody {
     pub locale: Option<String>,
 }
 
-async fn ask(
+/// Ask the assistant. Every exchange lands in the caller's own
+/// disclosure ledger, which is the point of routing it through here.
+#[utoipa::path(
+    post, path = "/api/assistant/ask", tag = "ai",
+    request_body = AskBody,
+    responses(
+        (status = 200, description = "The assistant answered, and the exchange was recorded"),
+        (status = 503, description = "No assistant worker is reachable", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn ask(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<AskBody>,

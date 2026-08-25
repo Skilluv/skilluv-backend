@@ -37,7 +37,17 @@ fn required_env() -> Result<(String, String), AppError> {
     Ok((secret, token))
 }
 
-async fn receive(
+/// Linear webhook. HMAC-signed; an unsigned or mis-signed body is refused
+/// before anything is read from it.
+#[utoipa::path(
+    post, path = "/api/webhooks/linear", tag = "webhooks",
+    request_body(content = String, description = "The raw Linear payload the signature covers"),
+    responses(
+        (status = 202, description = "Accepted for processing"),
+        (status = 401, description = "The HMAC signature did not verify", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn receive(
     State(state): State<AppState>,
     headers: HeaderMap,
     body: axum::body::Bytes,

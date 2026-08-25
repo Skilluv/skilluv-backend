@@ -476,7 +476,10 @@ Served to `forum_moderator` or `admin`.
 | Method | Path | Auth | Response |
 |--------|------|------|----------|
 | GET | `/health` | No | `{ services: { postgresql, redis, judge0 }, status, version, websocket }` |
-| GET | `/docs/openapi.json` | No | The full OpenAPI 3.1.0 document |
+| GET | `/api/openapi.json` | No | The generated OpenAPI document, and the only one there is now — the older path served a hand-written copy that stopped being reachable, and kept being listed here anyway |
+
+Swagger UI reads it at `/api/docs`, except where `SKILLUV_HIDE_SWAGGER` is
+set, which leaves the raw document served on its own.
 
 ---
 

@@ -166,6 +166,30 @@ pub const LEADERSHIP: DomainRules = DomainRules {
     families_are_trade_slugs: false,
 };
 
+/// Four. A communication mentee usually arrives with a draft rather than an
+/// emergency, and reading a draft properly is an hour — slower than a diff,
+/// faster than listening to a mix twice.
+pub const COMMUNICATION: DomainRules = DomainRules {
+    domain: "communication",
+    tools_key: "main_formats",
+    families_key: "preferred_families",
+    max_active_mentees: 4,
+    tools_label: "formats",
+    families_are_trade_slugs: false,
+};
+
+/// Three. An education session is a conversation about somebody else's
+/// learners — what went wrong in a cohort, why a lesson lost the room — and it
+/// does not compress. Three is what a working trainer can carry.
+pub const EDUCATION: DomainRules = DomainRules {
+    domain: "education",
+    tools_key: "main_settings",
+    families_key: "preferred_families",
+    max_active_mentees: 3,
+    tools_label: "cadres",
+    families_are_trade_slugs: false,
+};
+
 /// The rules for a domain named at runtime.
 ///
 /// The wizard validates its answers against the same distinction the matcher
@@ -181,6 +205,8 @@ pub fn rules_for(domain: &str) -> Option<DomainRules> {
         "design" => Some(DESIGN),
         "quality" => Some(QUALITY),
         "leadership" => Some(LEADERSHIP),
+        "communication" => Some(COMMUNICATION),
+        "education" => Some(EDUCATION),
         _ => None,
     }
 }

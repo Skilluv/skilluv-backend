@@ -196,8 +196,94 @@ pub fn identify(url: &str) -> Option<PackageRef> {
             ["_", name, ..] => named("docker_hub", format!("library/{name}")),
             _ => None,
         },
+
+        // ── Where communication publishes (migration 0507) ─────────
+        //
+        // The identity is what the platform's own API keys on, which is not
+        // always what a reader would call the piece.
+
+        // https://dev.to/username/some-article-slug-4f2a
+        // The path is the identity: DEV's API looks an article up by
+        // username and slug, and the slug alone is not unique.
+        "dev.to" => match segments.as_slice() {
+            [author, slug, ..] => named("dev_to", format!("{author}/{slug}")),
+            _ => None,
+        },
+        // https://hashnode.com/post/some-post
+        // https://someone.hashnode.dev/some-post
+        // Hashnode's GraphQL API resolves a post by its full public URL, so
+        // that is what is stored. Splitting it into host and slug would mean
+        // reassembling it at fetch time from parts that can be ambiguous.
+        "hashnode.com" => match segments.as_slice() {
+            ["post", slug, ..] => named("hashnode", (*slug).to_string()),
+            _ => None,
+        },
+        host if host.ends_with(".hashnode.dev") => match segments.as_slice() {
+            [slug, ..] => named("hashnode", format!("{host}/{slug}")),
+            _ => None,
+        },
+        // https://medium.com/@author/title-hash
+        // https://publication.medium.com/title-hash
+        // Recognised so the URL is not left unclaimed, and never fetched:
+        // Medium stopped publishing anything machine-readable in 2019, which
+        // is what `has_public_api = FALSE` says on its row.
+        "medium.com" => match segments.as_slice() {
+            [author, slug, ..] if author.starts_with('@') => {
+                named("medium", format!("{author}/{slug}"))
+            }
+            [slug, ..] => named("medium", (*slug).to_string()),
+            _ => None,
+        },
+        // https://www.youtube.com/watch?v=ID  — the id is in the query, which
+        //   `segments` has already discarded, so it is read from the raw URL.
+        // https://youtu.be/ID
+        "youtube.com" => youtube_id(url).and_then(|id| named("youtube", id)),
+        "youtu.be" => match segments.as_slice() {
+            [id, ..] => named("youtube", (*id).to_string()),
+            _ => None,
+        },
+        // https://speakerdeck.com/author/deck-title
+        "speakerdeck.com" => match segments.as_slice() {
+            [author, deck, ..] => named("speakerdeck", format!("{author}/{deck}")),
+            _ => None,
+        },
+        // https://arxiv.org/abs/2401.12345  (and /pdf/, which people paste
+        // just as often). The version suffix is dropped: `2401.12345v3` and
+        // `2401.12345` are the same paper, and keeping both would list it
+        // twice on one profile.
+        "arxiv.org" => match segments.as_slice() {
+            ["abs", id, ..] | ["pdf", id, ..] => named(
+                "arxiv",
+                id.trim_end_matches(".pdf")
+                    .split('v')
+                    .next()
+                    .unwrap_or(id)
+                    .to_string(),
+            ),
+            _ => None,
+        },
+        // https://zenodo.org/records/1234567  (and the older /record/)
+        "zenodo.org" => match segments.as_slice() {
+            ["records", id, ..] | ["record", id, ..] => named("zenodo", (*id).to_string()),
+            _ => None,
+        },
+
         _ => None,
     }
+}
+
+/// The video id out of a YouTube watch URL.
+///
+/// Its own function because the id lives in the query string, and
+/// [`identify`] discards the query before splitting the path — for every other
+/// platform here the identity is in the path, and rewriting that split for one
+/// case would make eighteen matches read the query they do not use.
+fn youtube_id(url: &str) -> Option<String> {
+    let (_, query) = url.split_once('?')?;
+    query.split('&').find_map(|pair| {
+        let (key, value) = pair.split_once('=')?;
+        (key == "v" && !value.is_empty()).then(|| value.to_string())
+    })
 }
 
 /// What a registry told us about a published artefact.
@@ -209,6 +295,14 @@ pub struct PackageStats {
     pub dependents_count: Option<i32>,
     /// HuggingFace likes, Kaggle votes. Approval rather than use.
     pub likes_count: Option<i32>,
+    /// Readers or viewers. Never folded into a downloads column: that one
+    /// means somebody installed something, and the code craft score sums it.
+    pub views_count: Option<i64>,
+    /// Deliberate gestures — reactions, claps, comments. Platform-neutral on
+    /// purpose: nobody compares a clap to a reaction.
+    pub engagement_count: Option<i32>,
+    /// When the platform says it went out.
+    pub published_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// Ask one registry about one artefact.
@@ -231,7 +325,16 @@ pub async fn fetch(
         "ansible_galaxy" => fetch_ansible_galaxy(client, &package.name).await,
         "artifacthub" => fetch_artifacthub(client, &package.name).await,
         "docker_hub" => fetch_docker_hub(client, &package.name).await,
-        // Recognised, and honest about having nothing to report.
+        "dev_to" => fetch_dev_to(client, &package.name).await,
+        "youtube" => fetch_youtube(client, &package.name).await,
+        "arxiv" => fetch_arxiv(client, &package.name).await,
+        "zenodo" => fetch_zenodo(client, &package.name).await,
+        // Recognised, and honest about having nothing to report. `medium`,
+        // `speakerdeck` and `hashnode` are among these: the first two publish
+        // nothing machine-readable, and Hashnode answers only a GraphQL
+        // document this codebase has no client for. Their rows say so in
+        // `publication_registries.has_public_api`, so a missing figure reads
+        // as "this platform does not answer" rather than as zero.
         _ => Ok(PackageStats::default()),
     }
 }
@@ -270,6 +373,9 @@ async fn fetch_crates_io(client: &reqwest::Client, name: &str) -> Result<Package
         downloads_recent: body.krate.recent_downloads,
         dependents_count: None,
         likes_count: None,
+        views_count: None,
+        engagement_count: None,
+        published_at: None,
     })
 }
 
@@ -300,6 +406,9 @@ async fn fetch_npm(client: &reqwest::Client, name: &str) -> Result<PackageStats,
         downloads_recent: Some(recent.downloads),
         dependents_count: None,
         likes_count: None,
+        views_count: None,
+        engagement_count: None,
+        published_at: None,
     })
 }
 
@@ -333,6 +442,9 @@ async fn fetch_pypi(client: &reqwest::Client, name: &str) -> Result<PackageStats
         downloads_recent: None,
         dependents_count: None,
         likes_count: None,
+        views_count: None,
+        engagement_count: None,
+        published_at: None,
     })
 }
 
@@ -376,6 +488,9 @@ async fn fetch_huggingface(
         downloads_recent: body.downloads,
         dependents_count: None,
         likes_count: body.likes,
+        views_count: None,
+        engagement_count: None,
+        published_at: None,
     })
 }
 
@@ -414,6 +529,9 @@ async fn fetch_terraform(client: &reqwest::Client, name: &str) -> Result<Package
         downloads_recent: None,
         dependents_count: None,
         likes_count: None,
+        views_count: None,
+        engagement_count: None,
+        published_at: None,
     })
 }
 
@@ -462,6 +580,9 @@ async fn fetch_ansible_galaxy(
         downloads_recent: None,
         dependents_count: None,
         likes_count: None,
+        views_count: None,
+        engagement_count: None,
+        published_at: None,
     })
 }
 
@@ -496,6 +617,9 @@ async fn fetch_artifacthub(client: &reqwest::Client, name: &str) -> Result<Packa
         downloads_recent: None,
         dependents_count: None,
         likes_count: body.stars,
+        views_count: None,
+        engagement_count: None,
+        published_at: None,
     })
 }
 
@@ -532,11 +656,289 @@ async fn fetch_docker_hub(client: &reqwest::Client, name: &str) -> Result<Packag
         downloads_recent: None,
         dependents_count: None,
         likes_count: body.star_count,
+        views_count: None,
+        engagement_count: None,
+        published_at: None,
     })
 }
 
 /// Record what a registry said, keeping the previous figures on failure.
 ///
+/// Whether a string can go into a query string untouched.
+///
+/// Only the characters an identifier is actually made of. This is not a
+/// general escaper and is not meant to be one: everything it guards is a
+/// value parsed out of a URL by [`identify`] or read from configuration, and
+/// anything outside this set means the value is not what the caller thinks it
+/// is. Refusing it is more useful than encoding it.
+fn is_url_safe(s: &str) -> bool {
+    !s.is_empty()
+        && s.chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '~'))
+}
+
+#[derive(Deserialize)]
+struct DevToArticle {
+    public_reactions_count: Option<i32>,
+    comments_count: Option<i32>,
+    page_views_count: Option<i64>,
+    published_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+/// DEV, by author and slug.
+///
+/// `page_views_count` is returned only to the article's own author over an
+/// authenticated call; the public endpoint omits it. So views usually come
+/// back absent here and engagement does not, which is the honest split — a
+/// figure the platform will not tell us is not a figure of zero.
+async fn fetch_dev_to(client: &reqwest::Client, name: &str) -> Result<PackageStats, AppError> {
+    let (author, slug) = name
+        .split_once('/')
+        .ok_or_else(|| AppError::Internal(format!("bad dev.to reference: {name}")))?;
+
+    let body: DevToArticle = client
+        .get(format!("https://dev.to/api/articles/{author}/{slug}"))
+        .header("User-Agent", "skilluv (https://skill-uv.com)")
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("dev.to unreachable: {e}")))?
+        .error_for_status()
+        .map_err(|e| AppError::Internal(format!("dev.to refused: {e}")))?
+        .json()
+        .await
+        .map_err(|e| AppError::Internal(format!("dev.to sent something unexpected: {e}")))?;
+
+    // Reactions and comments are two counts of the same thing — somebody
+    // bothered — and the column is one. Summed rather than one of the two
+    // picked, because picking would make an article with fifty comments and
+    // no reactions read as ignored.
+    let engagement = match (body.public_reactions_count, body.comments_count) {
+        (None, None) => None,
+        (a, b) => Some(a.unwrap_or(0) + b.unwrap_or(0)),
+    };
+
+    Ok(PackageStats {
+        views_count: body.page_views_count,
+        engagement_count: engagement,
+        published_at: body.published_at,
+        ..PackageStats::default()
+    })
+}
+
+#[derive(Deserialize)]
+struct YouTubeList {
+    items: Vec<YouTubeVideo>,
+}
+
+#[derive(Deserialize)]
+struct YouTubeVideo {
+    statistics: Option<YouTubeStatistics>,
+    snippet: Option<YouTubeSnippet>,
+}
+
+#[derive(Deserialize, Default)]
+struct YouTubeStatistics {
+    // The Data API returns its counters as strings, and always has.
+    #[serde(rename = "viewCount")]
+    view_count: Option<String>,
+    #[serde(rename = "likeCount")]
+    like_count: Option<String>,
+    #[serde(rename = "commentCount")]
+    comment_count: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct YouTubeSnippet {
+    #[serde(rename = "publishedAt")]
+    published_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+/// YouTube, by video id.
+///
+/// Needs `YOUTUBE_API_KEY`. Without it the fetch is skipped rather than
+/// failed: a deployment that has not configured a key is not broken, and
+/// writing an error on every video every week would fill `last_error` with a
+/// message about our own configuration rather than about the platform.
+/// `publication_registries.api_needs_credential` is where that distinction is
+/// written down.
+async fn fetch_youtube(client: &reqwest::Client, id: &str) -> Result<PackageStats, AppError> {
+    let Ok(key) = std::env::var("YOUTUBE_API_KEY") else {
+        tracing::debug!(video = id, "YOUTUBE_API_KEY absent — figures not fetched");
+        return Ok(PackageStats::default());
+    };
+
+    // The query is built rather than passed as pairs: `reqwest` is compiled
+    // here without the feature that encodes them, and both values are checked
+    // above and below to contain nothing that would need encoding. An id that
+    // did is refused rather than sent half-escaped.
+    if !is_url_safe(id) {
+        return Err(AppError::Internal(format!("bad YouTube id: {id}")));
+    }
+    if !is_url_safe(&key) {
+        return Err(AppError::Internal(
+            "YOUTUBE_API_KEY contains characters that cannot go in a URL".into(),
+        ));
+    }
+
+    let body: YouTubeList = client
+        .get(format!(
+            "https://www.googleapis.com/youtube/v3/videos             ?part=statistics,snippet&id={id}&key={key}"
+        ))
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("YouTube unreachable: {e}")))?
+        .error_for_status()
+        .map_err(|e| AppError::Internal(format!("YouTube refused: {e}")))?
+        .json()
+        .await
+        .map_err(|e| AppError::Internal(format!("YouTube sent something unexpected: {e}")))?;
+
+    // An empty list means the video is private, deleted or never existed. Not
+    // an error: the row keeps whatever it had, with a visible date.
+    let Some(video) = body.items.into_iter().next() else {
+        return Ok(PackageStats::default());
+    };
+
+    let stats = video.statistics.unwrap_or_default();
+    let parse = |v: Option<String>| v.and_then(|s| s.parse::<i64>().ok());
+
+    let engagement = match (parse(stats.like_count), parse(stats.comment_count)) {
+        (None, None) => None,
+        (a, b) => Some((a.unwrap_or(0) + b.unwrap_or(0)) as i32),
+    };
+
+    Ok(PackageStats {
+        views_count: parse(stats.view_count),
+        engagement_count: engagement,
+        published_at: video.snippet.and_then(|s| s.published_at),
+        ..PackageStats::default()
+    })
+}
+
+/// arXiv, by identifier.
+///
+/// The Atom API gives the version and the date and no readership figure at
+/// all, and that is the truth about arXiv. Writing zero views for a paper
+/// everybody reads would be worse than writing nothing, which is why the
+/// column stays NULL — the rule migration 0181 set for Go modules and
+/// Homebrew.
+///
+/// The response is Atom rather than JSON, and it is read for two fields by
+/// string search rather than by adding an XML parser for this one caller.
+async fn fetch_arxiv(client: &reqwest::Client, id: &str) -> Result<PackageStats, AppError> {
+    if !is_url_safe(id) {
+        return Err(AppError::Internal(format!("bad arXiv id: {id}")));
+    }
+
+    let body = client
+        .get(format!(
+            "https://export.arxiv.org/api/query?id_list={id}&max_results=1"
+        ))
+        .header("User-Agent", "skilluv (https://skill-uv.com)")
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("arXiv unreachable: {e}")))?
+        .error_for_status()
+        .map_err(|e| AppError::Internal(format!("arXiv refused: {e}")))?
+        .text()
+        .await
+        .map_err(|e| AppError::Internal(format!("arXiv sent something unexpected: {e}")))?;
+
+    Ok(PackageStats {
+        latest_version: arxiv_version(&body),
+        published_at: between(&body, "<published>", "</published>")
+            .and_then(|t| chrono::DateTime::parse_from_rfc3339(&t).ok())
+            .map(|t| t.with_timezone(&chrono::Utc)),
+        ..PackageStats::default()
+    })
+}
+
+/// The version suffix arXiv put on the entry it returned, as `v3`.
+///
+/// [`identify`] strips the version from the identifier so one paper is one
+/// row; this reads back which version that row currently points at, which is
+/// what a reviewer needs in order to know they read the same one.
+fn arxiv_version(atom: &str) -> Option<String> {
+    let id = between(atom, "<id>", "</id>")?;
+    let tail = id.rsplit('/').next()?;
+    let (_, version) = tail.rsplit_once('v')?;
+    version
+        .chars()
+        .all(|c| c.is_ascii_digit())
+        .then(|| format!("v{version}"))
+}
+
+/// The text between two markers, once.
+///
+/// Enough for two fields of an Atom document, and deliberately not an XML
+/// parser: a dependency added for one caller is a dependency the whole
+/// project carries.
+fn between(haystack: &str, open: &str, close: &str) -> Option<String> {
+    let start = haystack.find(open)? + open.len();
+    let rest = &haystack[start..];
+    let end = rest.find(close)?;
+    Some(rest[..end].trim().to_string())
+}
+
+#[derive(Deserialize)]
+struct ZenodoRecord {
+    stats: Option<ZenodoStats>,
+    metadata: Option<ZenodoMetadata>,
+}
+
+#[derive(Deserialize, Default)]
+struct ZenodoStats {
+    unique_views: Option<f64>,
+    unique_downloads: Option<f64>,
+}
+
+#[derive(Deserialize, Default)]
+struct ZenodoMetadata {
+    version: Option<String>,
+    publication_date: Option<String>,
+}
+
+/// Zenodo, by record id.
+///
+/// The one research host that publishes both views and downloads, and it
+/// publishes the *unique* counts alongside the raw ones. The unique figures
+/// are the ones read: a raw view count on Zenodo includes every crawler that
+/// ever passed, and a paper is not more read for being indexed twice.
+///
+/// The counters come back as floats — Zenodo's aggregation produces them that
+/// way — and are rounded rather than truncated, because 41.999999 views is
+/// forty-two.
+async fn fetch_zenodo(client: &reqwest::Client, id: &str) -> Result<PackageStats, AppError> {
+    let body: ZenodoRecord = client
+        .get(format!("https://zenodo.org/api/records/{id}"))
+        .header("User-Agent", "skilluv (https://skill-uv.com)")
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("Zenodo unreachable: {e}")))?
+        .error_for_status()
+        .map_err(|e| AppError::Internal(format!("Zenodo refused: {e}")))?
+        .json()
+        .await
+        .map_err(|e| AppError::Internal(format!("Zenodo sent something unexpected: {e}")))?;
+
+    let stats = body.stats.unwrap_or_default();
+    let metadata = body.metadata.unwrap_or_default();
+
+    Ok(PackageStats {
+        latest_version: metadata.version,
+        downloads_total: stats.unique_downloads.map(|d| d.round() as i64),
+        views_count: stats.unique_views.map(|v| v.round() as i64),
+        // A date rather than an instant, anchored at midnight UTC rather than
+        // at whatever the local time happened to be.
+        published_at: metadata
+            .publication_date
+            .and_then(|d| chrono::NaiveDate::parse_from_str(&d, "%Y-%m-%d").ok())
+            .and_then(|d| d.and_hms_opt(0, 0, 0))
+            .map(|dt| dt.and_utc()),
+        ..PackageStats::default()
+    })
+}
+
 /// A failed fetch writes the error and leaves the numbers alone. An old
 /// figure with a visible date is worth more than no figure, and much more
 /// than a zero that reads as "nobody uses this".
@@ -553,14 +955,21 @@ pub async fn record(
                 INSERT INTO published_artifact_stats
                     (slice_id, registry, package_name, latest_version,
                      downloads_total, downloads_recent, dependents_count,
-                     likes_count, fetched_at, last_error)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NULL)
+                     likes_count, views_count, engagement_count, published_at,
+                     fetched_at, last_error)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NULL)
                 ON CONFLICT (slice_id, registry, package_name) DO UPDATE SET
                     latest_version   = EXCLUDED.latest_version,
                     downloads_total  = EXCLUDED.downloads_total,
                     downloads_recent = EXCLUDED.downloads_recent,
                     dependents_count = EXCLUDED.dependents_count,
                     likes_count      = EXCLUDED.likes_count,
+                    views_count      = EXCLUDED.views_count,
+                    engagement_count = EXCLUDED.engagement_count,
+                    -- Kept rather than overwritten with NULL: a platform that
+                    -- stops returning the date has not unpublished the piece.
+                    published_at     = COALESCE(EXCLUDED.published_at,
+                                                published_artifact_stats.published_at),
                     fetched_at       = NOW(),
                     last_error       = NULL
                 "#,
@@ -573,6 +982,9 @@ pub async fn record(
             .bind(stats.downloads_recent)
             .bind(stats.dependents_count)
             .bind(stats.likes_count)
+            .bind(stats.views_count)
+            .bind(stats.engagement_count)
+            .bind(stats.published_at)
             .execute(db)
             .await?;
         }
@@ -713,6 +1125,105 @@ mod tests {
 
     fn ident(url: &str) -> Option<(&'static str, String)> {
         identify(url).map(|p| (p.registry, p.name))
+    }
+
+    #[test]
+    fn the_publication_platforms_are_recognised() {
+        assert_eq!(
+            ident("https://dev.to/kps/writing-docs-that-run-4f2a"),
+            Some(("dev_to", "kps/writing-docs-that-run-4f2a".into()))
+        );
+        assert_eq!(
+            ident("https://hashnode.com/post/some-post"),
+            Some(("hashnode", "some-post".into()))
+        );
+        assert_eq!(
+            ident("https://kps.hashnode.dev/some-post"),
+            Some(("hashnode", "kps.hashnode.dev/some-post".into()))
+        );
+        assert_eq!(
+            ident("https://medium.com/@kps/a-title-abc123"),
+            Some(("medium", "@kps/a-title-abc123".into()))
+        );
+        assert_eq!(
+            ident("https://speakerdeck.com/kps/a-deck"),
+            Some(("speakerdeck", "kps/a-deck".into()))
+        );
+        assert_eq!(
+            ident("https://zenodo.org/records/1234567"),
+            Some(("zenodo", "1234567".into()))
+        );
+        // The older path form is still what half the citations use.
+        assert_eq!(
+            ident("https://zenodo.org/record/1234567"),
+            Some(("zenodo", "1234567".into()))
+        );
+    }
+
+    #[test]
+    fn a_youtube_id_is_read_out_of_the_query_string() {
+        // The only platform here whose identity is not in the path, which is
+        // why `identify` cannot get it from `segments`.
+        assert_eq!(
+            ident("https://www.youtube.com/watch?v=dQw4w9WgXcQ"),
+            Some(("youtube", "dQw4w9WgXcQ".into()))
+        );
+        assert_eq!(
+            ident("https://www.youtube.com/watch?list=PL1&v=dQw4w9WgXcQ&t=42"),
+            Some(("youtube", "dQw4w9WgXcQ".into()))
+        );
+        assert_eq!(
+            ident("https://youtu.be/dQw4w9WgXcQ"),
+            Some(("youtube", "dQw4w9WgXcQ".into()))
+        );
+        // A channel page is not a video, and filing it as one would fetch
+        // figures for a video id that does not exist.
+        assert_eq!(ident("https://www.youtube.com/@kps"), None);
+    }
+
+    #[test]
+    fn one_arxiv_paper_is_one_row_whatever_version_was_pasted() {
+        // Otherwise a profile lists the same paper three times because its
+        // author linked v1, then v2, then the PDF.
+        for url in [
+            "https://arxiv.org/abs/2401.12345",
+            "https://arxiv.org/abs/2401.12345v3",
+            "https://arxiv.org/pdf/2401.12345v3",
+        ] {
+            assert_eq!(
+                ident(url),
+                Some(("arxiv", "2401.12345".into())),
+                "{url} should identify one paper"
+            );
+        }
+    }
+
+    #[test]
+    fn the_arxiv_version_is_read_back_off_the_answer() {
+        // `identify` drops it so the row is stable; this is how a reviewer
+        // learns which version that row currently points at.
+        let atom = "<feed><entry><id>http://arxiv.org/abs/2401.12345v3</id></entry></feed>";
+        assert_eq!(arxiv_version(atom), Some("v3".into()));
+
+        // A response with no version, and one with no entry at all.
+        assert_eq!(
+            arxiv_version("<feed><entry><id>http://arxiv.org/abs/2401.12345</id></entry></feed>"),
+            None
+        );
+        assert_eq!(arxiv_version("<feed></feed>"), None);
+    }
+
+    #[test]
+    fn an_identifier_that_would_need_escaping_is_refused_rather_than_sent() {
+        // The guard on the two fetchers that build a query string by hand.
+        assert!(is_url_safe("dQw4w9WgXcQ"));
+        assert!(is_url_safe("2401.12345"));
+        assert!(is_url_safe("a-b_c.d~e"));
+
+        assert!(!is_url_safe(""));
+        assert!(!is_url_safe("id&key=stolen"));
+        assert!(!is_url_safe("id with spaces"));
+        assert!(!is_url_safe("id/../other"));
     }
 
     #[test]

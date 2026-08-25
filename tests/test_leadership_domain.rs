@@ -979,13 +979,12 @@ async fn a_cohort_abandoned_mid_run_is_not_a_cohort_that_finished() {
     // Everybody graduated and nobody concluded it. `ends_at` in the past means
     // the planned window closed, which is not the same as somebody bringing it
     // to an end.
-    let led: bool = sqlx::query_scalar(
-        "SELECT led_to_the_end FROM leadership_cohort_outcomes WHERE cohort_id = $1",
-    )
-    .bind(cohort)
-    .fetch_one(&app.db)
-    .await
-    .unwrap();
+    let led: bool =
+        sqlx::query_scalar("SELECT led_to_the_end FROM cohort_outcomes WHERE cohort_id = $1")
+            .bind(cohort)
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
     assert!(!led, "an unconcluded cohort counted as led to the end");
 }
 

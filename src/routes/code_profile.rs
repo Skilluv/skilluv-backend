@@ -170,6 +170,11 @@ pub async fn code_profile(
                ps.registry, ps.package_name, ps.latest_version,
                ps.downloads_recent, ps.downloads_total, ps.fetched_at
           FROM published_artifact_stats ps
+          -- Code registries only. This list is headed "published packages" on
+          -- a code profile, and without the join it also showed models,
+          -- container images and articles.
+          JOIN publication_registries reg ON reg.slug = ps.registry
+           AND reg.skill_domain = 'code'
           JOIN deliverables d ON d.slice_id = ps.slice_id
          WHERE d.user_id = $1
            AND d.verification_status = 'verified'

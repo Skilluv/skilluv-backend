@@ -127,6 +127,9 @@ pub struct MissionQuery {
     pub ip_terms: Option<String>,
     #[param(max_length = 30)]
     pub payment_model: Option<String>,
+    /// Education: `beginner`, `junior`, `mid`, `senior`, `mixed`.
+    #[param(max_length = 20)]
+    pub target_audience: Option<String>,
     pub min_budget_eur: Option<f64>,
     pub remote_only: Option<bool>,
     /// One of the three the column allows. A free string here silently
@@ -180,6 +183,7 @@ pub async fn list_missions(
         ("orientation", &q.orientation, 100),
         ("ip_terms", &q.ip_terms, 40),
         ("payment_model", &q.payment_model, 30),
+        ("target_audience", &q.target_audience, 20),
     ] {
         crate::validators::check_max_len_opt(value, name, max)?;
     }
@@ -197,6 +201,7 @@ pub async fn list_missions(
             .and_then(|v| bigdecimal::BigDecimal::try_from(v).ok()),
         remote_only: q.remote_only,
         urgency: q.urgency.map(|u| u.as_str().to_string()),
+        target_audience: q.target_audience,
     };
     let rows = missions::list_open(&state.db, &filter, q.limit, q.offset).await?;
     Ok(Json(build_response(json!({ "missions": rows }))))

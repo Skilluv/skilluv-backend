@@ -52,8 +52,7 @@ async fn figures_are_stored_with_the_date_they_were_read() {
             latest_version: Some("1.2.3".into()),
             downloads_total: Some(12_000),
             downloads_recent: Some(400),
-            dependents_count: None,
-            likes_count: None,
+            ..PackageStats::default()
         }),
     )
     .await
@@ -121,8 +120,7 @@ async fn a_failed_fetch_keeps_the_previous_figures() {
             latest_version: Some("1.0.0".into()),
             downloads_total: Some(999),
             downloads_recent: None,
-            dependents_count: None,
-            likes_count: None,
+            ..PackageStats::default()
         }),
     )
     .await
@@ -269,8 +267,8 @@ async fn a_model_and_a_crate_share_the_same_row_shape() {
             latest_version: Some("a1b2c3d4e5f6".into()),
             downloads_total: None,
             downloads_recent: Some(4_200),
-            dependents_count: None,
             likes_count: Some(37),
+            ..PackageStats::default()
         }),
     )
     .await

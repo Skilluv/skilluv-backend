@@ -757,6 +757,21 @@ impl TestApp {
             .await
             .expect("DELETE request failed")
     }
+
+    /// DELETE helper with a JSON body.
+    ///
+    /// A body on a DELETE is unusual and deliberate where it is used: taking
+    /// an opportunity off the board has to say why, and a reason in a query
+    /// string is a reason that ends up in an access log.
+    #[allow(dead_code)]
+    pub async fn delete_with_body(&self, path: &str, body: &Value) -> reqwest::Response {
+        self.client
+            .delete(format!("{}{}", self.addr, path))
+            .json(body)
+            .send()
+            .await
+            .expect("DELETE request failed")
+    }
 }
 
 // ─── Mailpit HTTP helpers ─────────────────────────────────────────
@@ -966,6 +981,16 @@ pub async fn delivered_in(app: &TestApp, user: Uuid, domain: &str, family: &str)
         "audio" => ("audio_artifact", "audio_subtype", "composition"),
         "design" => ("design_artifact", "design_subtype", "interface"),
         "ops" => ("ops_artifact", "ops_subtype", "iac_terraform"),
+        "communication" => (
+            "communication_artifact",
+            "communication_subtype",
+            "blog_post",
+        ),
+        "education" => (
+            "education_artifact",
+            "education_subtype",
+            "workshop_material",
+        ),
         other => panic!("no slice type known for the {other} domain"),
     };
 

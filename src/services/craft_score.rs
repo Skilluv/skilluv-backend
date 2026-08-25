@@ -205,6 +205,13 @@ async fn measure(db: &PgPool, user_id: Uuid) -> Result<Measurements, AppError> {
             -- an i64 fails at runtime rather than at compile time.
             (SELECT COALESCE(sum(COALESCE(ps.downloads_recent, ps.downloads_total)), 0)::BIGINT
                FROM published_artifact_stats ps
+               -- Code registries only. Without the join this summed every
+               -- published artefact a person had, so a HuggingFace model and
+               -- a Docker image paid into a term called `library_downloads`
+               -- in the *code* score. Invisible, because the number is
+               -- plausible and only ever compared to itself.
+               JOIN publication_registries reg ON reg.slug = ps.registry
+                AND reg.skill_domain = 'code'
                -- The disclosure view rather than the table: an artefact
                -- whose author never said whether an assistant helped stops
                -- counting when its window closes.

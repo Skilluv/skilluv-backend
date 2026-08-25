@@ -14,6 +14,7 @@ fallu renuméroter à la fusion.
 | suite courante | `master`, et la branche qui fusionnera en premier |
 | `0300–0399` | `feat/ai-orientations` |
 | `0450–0499` | `feat/leadership-quality-domains` |
+| `0500–0549` | `feat/communication-education-domains` |
 
 `sqlx` applique les migrations dans l'ordre des versions et ne se soucie pas
 des trous. Un bloc réservé ne coûte donc rien, et supprime la collision au lieu

@@ -143,10 +143,10 @@ async fn recompute_inner(
 
     // 1quinquies. Leadership attestations.
     //
-    // Last of the four, and the one with the most reasons to run here rather
-    // than at verification: a redaction confirmation, a retrospective's last
-    // action item and a cohort's conclusion all arrive well after the
-    // deliverable was verified.
+    // The one with the most reasons to run here rather than at verification:
+    // a redaction confirmation, a retrospective's last action item and a
+    // cohort's conclusion all arrive well after the deliverable was
+    // verified.
     match crate::services::leadership_attestations::issue_for_user(db, user_id).await {
         Ok(issued) if !issued.is_empty() => {
             tracing::info!(user_id = %user_id, ?issued, "leadership attestations issued");
@@ -155,6 +155,42 @@ async fn recompute_inner(
         Err(e) => {
             tracing::warn!(user_id = %user_id, error = %e, "P19: leadership attestations failed");
             errors.push(format!("leadership_attestations: {e}"));
+        }
+    }
+
+    // 1sexies. Communication attestations, for the same reason and in the
+    // same place. The published address of an article or a talk recording
+    // usually lands after the work is verified, so the generator is run from
+    // here rather than from the verification.
+    match crate::services::communication_attestations::issue_for_user(db, user_id).await {
+        Ok(issued) if !issued.is_empty() => {
+            tracing::info!(user_id = %user_id, ?issued, "communication attestations issued");
+        }
+        Ok(_) => {}
+        Err(e) => {
+            tracing::warn!(user_id = %user_id, error = %e, "P19: communication attestations failed");
+            errors.push(format!("communication_attestations: {e}"));
+        }
+    }
+
+    // 1septies. Education attestations. Last of the six, and the one with the
+    // most reasons to arrive late: the learner-data declaration, the cohort's
+    // conclusion and the first adoption all happen after the work is
+    // verified.
+    //
+    // Six blocks doing the same thing with a different function is where this
+    // stops scaling. The eighth domain should turn them into a list of
+    // generators rather than an eighth block and an eighth Latin ordinal —
+    // each one is `fn(&PgPool, Uuid) -> Result<Vec<String>>`, which is a
+    // shape a slice of function pointers can hold.
+    match crate::services::education_attestations::issue_for_user(db, user_id).await {
+        Ok(issued) if !issued.is_empty() => {
+            tracing::info!(user_id = %user_id, ?issued, "education attestations issued");
+        }
+        Ok(_) => {}
+        Err(e) => {
+            tracing::warn!(user_id = %user_id, error = %e, "P19: education attestations failed");
+            errors.push(format!("education_attestations: {e}"));
         }
     }
 

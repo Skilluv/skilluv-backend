@@ -35,7 +35,7 @@
 //!
 //! `leadership_cohort_completed` rests on a cohort having been run to its end
 //! with most of the people who joined finishing. That is rows in
-//! `leadership_cohort_outcomes`, not a document, and [`issue_cohort_outcomes`]
+//! `cohort_outcomes`, not a document, and [`issue_cohort_outcomes`]
 //! reads them.
 //!
 //! `leadership_community_initiative_impact` rests on a number having moved
@@ -390,7 +390,7 @@ pub async fn issue_for_user(db: &PgPool, user_id: Uuid) -> Result<Vec<String>, A
 ///
 /// Not derived from a slice, because a cohort is not a document. The rule —
 /// concluded, at least three people, seventy per cent of the ones not lost to
-/// a job finishing — lives in `leadership_cohort_outcomes`, so this reads a
+/// a job finishing — lives in `cohort_outcomes`, so this reads a
 /// boolean rather than reimplementing arithmetic a view already does.
 ///
 /// The attestation links the curriculum's deliverable when the cohort names
@@ -401,7 +401,7 @@ pub async fn issue_cohort_outcomes(db: &PgPool, user_id: Uuid) -> Result<Vec<Str
     let cohorts: Vec<(Uuid, Option<Uuid>)> = sqlx::query_as(
         r#"
         SELECT o.cohort_id, o.curriculum_slice_id
-          FROM leadership_cohort_outcomes o
+          FROM cohort_outcomes o
          WHERE o.led_by_user_id = $1
            AND o.led_to_the_end
          LIMIT 100

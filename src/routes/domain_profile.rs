@@ -285,6 +285,74 @@ const CODE_QUESTIONS: &[Question] = &[
     free_text("github_username", 39),
 ];
 
+/// Communication only. Which formats somebody actually works in.
+///
+/// Plural, like the AI frameworks and the audio stations: the person who
+/// writes the documentation and then films the tutorial is this domain's
+/// normal shape rather than its exception, and forcing a choice would lose
+/// half of what the matching needs.
+const COMMUNICATION_FORMATS: &[&str] = &[
+    "documentation",
+    "articles",
+    "talks",
+    "video",
+    "livestream",
+    "podcast",
+    "translation",
+    "research",
+];
+
+/// Communication and education both ask it: what the person communicates or
+/// teaches *about*.
+///
+/// A domain slug rather than free text, because it is used to pick which
+/// challenges to show — somebody who documents infrastructure should not be
+/// handed a game-audio brief. `cross` is a real answer and the most common
+/// one among people who have done this for a while.
+const SUBJECT_DOMAINS: &[&str] = &[
+    "code", "design", "game", "ai", "ops", "security", "audio", "cross",
+];
+
+/// Education only. Where the person teaches.
+///
+/// Asked because it is the single most useful thing to know when pairing two
+/// educators: a bootcamp instructor and somebody running community workshops
+/// share a craft and almost no constraints. Plural, because most people who
+/// teach for a living do it in two of these.
+const TEACHING_SETTINGS: &[&str] = &[
+    "bootcamp",
+    "school",
+    "university",
+    "in_company",
+    "community",
+    "self_paced",
+    "one_to_one",
+];
+
+/// Education only. Who they teach.
+///
+/// A different question from `level`, which asks how experienced the *teacher*
+/// is. Somebody twenty years into the trade may teach absolute beginners, and
+/// conflating the two would recommend them a curriculum-design brief for
+/// senior engineers.
+const LEARNER_LEVELS: &[&str] = &["beginner", "junior", "mid", "senior", "mixed"];
+
+const EDUCATION_QUESTIONS: &[Question] = &[
+    closed_multi("main_settings", TEACHING_SETTINGS),
+    closed("learner_level", LEARNER_LEVELS),
+    closed("subject_domain", SUBJECT_DOMAINS),
+];
+
+const COMMUNICATION_QUESTIONS: &[Question] = &[
+    closed_multi("main_formats", COMMUNICATION_FORMATS),
+    closed("subject_domain", SUBJECT_DOMAINS),
+    // Recorded as an unconfirmed signal, never fetched. A handle is a link a
+    // reader can follow; an article counts here when it arrives as work that
+    // was reviewed.
+    free_text("dev_to_username", 60),
+    free_text("blog_url", 500),
+];
+
 const AUDIO_QUESTIONS: &[Question] = &[
     closed("audio_destination", AUDIO_DESTINATIONS),
     closed_multi("main_daws", AUDIO_DAWS),
@@ -392,9 +460,11 @@ pub fn questions_for(domain: &str) -> &'static [Question] {
         "ai" => AI_QUESTIONS,
         "audio" => AUDIO_QUESTIONS,
         "code" => CODE_QUESTIONS,
+        "communication" => COMMUNICATION_QUESTIONS,
         "design" => DESIGN_QUESTIONS,
         "quality" => QUALITY_QUESTIONS,
         "leadership" => LEADERSHIP_QUESTIONS,
+        "education" => EDUCATION_QUESTIONS,
         _ => &[],
     }
 }

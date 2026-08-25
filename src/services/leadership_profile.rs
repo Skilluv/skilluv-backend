@@ -135,7 +135,7 @@ async fn measure(db: &PgPool, user_id: Uuid) -> Result<Measurements, AppError> {
             -- answered 500 to every call. `ops_profile` documents the same
             -- outage from the opposite direction, an `::INT` narrowing.
             (SELECT COALESCE(sum(o.graduated_total), 0)::BIGINT
-               FROM leadership_cohort_outcomes o
+               FROM cohort_outcomes o
               WHERE o.led_by_user_id = $1 AND o.led_to_the_end)
                 AS mentees_graduated,
 
@@ -332,7 +332,7 @@ pub async fn build(db: &PgPool, username: &str) -> Result<LeadershipProfile, App
                     'left_for_work', o.left_for_work,
                     'concluded_at', o.concluded_at,
                     'led_to_the_end', o.led_to_the_end)
-           FROM leadership_cohort_outcomes o
+           FROM cohort_outcomes o
           WHERE o.led_by_user_id = $1 AND o.concluded_at IS NOT NULL
           ORDER BY o.concluded_at DESC
           LIMIT 20",

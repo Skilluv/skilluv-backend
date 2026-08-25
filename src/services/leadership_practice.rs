@@ -882,7 +882,7 @@ pub async fn outcomes_for_cohort(
                     'left_for_work', left_for_work,
                     'concluded_at', concluded_at,
                     'led_to_the_end', led_to_the_end)
-           FROM leadership_cohort_outcomes
+           FROM cohort_outcomes
           WHERE cohort_id = $1",
     )
     .bind(cohort_id)
@@ -938,7 +938,7 @@ mod tests {
     fn leaving_because_it_worked_is_one_of_the_reasons() {
         // `found_work` is removed from the graduation denominator rather than
         // counted as a loss. Losing it from this list would make that branch
-        // in `leadership_cohort_outcomes` unreachable.
+        // in `cohort_outcomes` unreachable.
         assert!(LEAVE_REASONS.contains(&"found_work"));
     }
 }

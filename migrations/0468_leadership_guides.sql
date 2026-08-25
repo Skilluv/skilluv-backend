@@ -911,7 +911,7 @@ When a run ends, report with the denominator:
 > one stopped answering.
 
 A graduation rate over the survivors is not a graduation rate. The platform's
-own `leadership_cohort_outcomes` computes it over everybody who joined for
+own `cohort_outcomes` computes it over everybody who joined for
 exactly that reason — except people who left because they found work, who are
 removed rather than counted as losses.
 
@@ -993,7 +993,7 @@ Quand une session finit, rapporte avec le dénominateur :
 > pour un poste, un a cessé de répondre.
 
 Un taux de réussite calculé sur les survivants n'est pas un taux de réussite.
-La vue `leadership_cohort_outcomes` de la plateforme le calcule sur tous ceux
+La vue `cohort_outcomes` de la plateforme le calcule sur tous ceux
 qui ont rejoint, exactement pour cette raison — sauf ceux qui sont partis parce
 qu'ils ont trouvé du travail, qui sont retirés au lieu d'être comptés comme des
 pertes.

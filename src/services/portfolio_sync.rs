@@ -270,24 +270,13 @@ pub fn count_feed_entries(feed: &str) -> Option<i32> {
 /// No feed publishes readership, so `reach` is always absent. The item count
 /// is checked and the audience is simply not knowable, which is the honest
 /// pair for a self-hosted site.
-async fn fetch_feed(client: &reqwest::Client, feed_url: &str) -> Result<AccountStats, AppError> {
-    if !feed_url.starts_with("https://") {
-        return Err(AppError::Internal(
-            "a feed address has to be https".to_string(),
-        ));
-    }
-
-    let body = client
-        .get(feed_url)
-        .header("User-Agent", "skilluv (https://skill-uv.com)")
-        .send()
-        .await
-        .map_err(|e| AppError::Internal(format!("feed unreachable: {e}")))?
-        .error_for_status()
-        .map_err(|e| AppError::Internal(format!("feed refused: {e}")))?
-        .text()
-        .await
-        .map_err(|e| AppError::Internal(format!("feed sent something unexpected: {e}")))?;
+async fn fetch_feed(_client: &reqwest::Client, feed_url: &str) -> Result<AccountStats, AppError> {
+    // Through `services::outbound`, not the shared client. This address is
+    // typed by a member and this is the sweep that goes and reads it, so it
+    // was the one place in this codebase that would fetch whatever it was
+    // pointed at — including `https://` names resolving to a metadata
+    // endpoint. It checked the scheme and nothing else.
+    let body = crate::services::outbound::get_text(feed_url).await?;
 
     Ok(AccountStats {
         items: count_feed_entries(&body),
@@ -434,9 +423,8 @@ async fn fetch_weblate(client: &reqwest::Client, handle: &str) -> Result<Account
 /// The platforms this module can read.
 ///
 /// The same set as the `match` below, named once so a test can compare it
-/// against `portfolio_platforms.sync_implemented`. The two lists disagreed
-/// before there was anything to notice: the catalogue said sixteen platforms
-/// were syncable and five of them were.
+/// against the rows `portfolio_platforms` marks `synced_by =
+/// 'portfolio_sync'`. The two disagreed before there was anything to notice.
 pub const SYNCABLE: &[&str] = &["dev_to", "hashnode", "personal_blog", "weblate", "youtube"];
 
 pub async fn fetch(
@@ -539,13 +527,13 @@ pub async fn sync_stale(db: &PgPool, client: &reqwest::Client) -> Result<usize, 
           FROM user_external_portfolios p
           JOIN portfolio_platforms pf ON pf.slug = p.platform
          WHERE p.sync_enabled
-           -- `sync_implemented`, not `has_public_api`. The second says an API
-           -- exists; the first says somebody wrote the fetcher. Selecting on
-           -- the second put sixteen platforms into this queue every pass so
-           -- that `fetch` could fall through to its catch-all arm and write
-           -- back nothing. `SYNCABLE` below is the same list, and a test
-           -- holds the two together.
-           AND pf.sync_implemented
+           -- This module's own rows and nothing else. Selecting on
+           -- `has_public_api` put the forges in this queue so that `fetch`
+           -- could fall through to its catch-all arm, and `code_portfolio`
+           -- was meanwhile stamping `last_synced_at` on the rows that belong
+           -- here. `SYNCABLE` below is the same list, and a test holds the
+           -- two together.
+           AND pf.synced_by = 'portfolio_sync'
            AND (p.last_synced_at IS NULL
                 OR p.last_synced_at < NOW() - make_interval(days => $1::INT))
          ORDER BY p.last_synced_at NULLS FIRST

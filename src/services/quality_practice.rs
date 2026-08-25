@@ -502,12 +502,16 @@ pub struct TestRun {
     pub coverage_percent: Option<bigdecimal::BigDecimal>,
     pub verified_at: Option<chrono::DateTime<chrono::Utc>>,
     pub imported_at: chrono::DateTime<chrono::Utc>,
+    /// `parsed` when the report was fetched and read, `declared` when
+    /// somebody typed the numbers. A reviewer checks a different thing in
+    /// each case, so it travels with the row.
+    pub figures_source: String,
 }
 
 const RUN_SELECT: &str = r#"
     SELECT id, slice_id, source, report_url, commit_sha, repository_url,
            tests_total, tests_failed, tests_skipped, duration_seconds,
-           coverage_percent, verified_at, imported_at
+           coverage_percent, verified_at, imported_at, figures_source
       FROM quality_test_runs
 "#;
 
@@ -536,6 +540,16 @@ pub struct TestRunInput {
     #[serde(default)]
     #[schema(value_type = Option<Object>)]
     pub raw_summary: Option<serde_json::Value>,
+}
+
+/// Fetch a JUnit report and read its summary.
+///
+/// Through `services::outbound`, which refuses anything that resolves inside
+/// the network. A report address is typed by a member, and a server that
+/// fetches what it is told to fetch is a proxy into its own network.
+async fn read_junit(report_url: &str) -> Result<crate::services::junit::Summary, AppError> {
+    let body = crate::services::outbound::get_text(report_url).await?;
+    crate::services::junit::parse(&body)
 }
 
 /// Record a test run against a slice.
@@ -576,13 +590,73 @@ pub async fn import_test_run(
         ));
     }
 
+    // A JUnit report is a public XML document, so it is read rather than
+    // taken on trust. The other five sources stay declared: a GitHub Actions
+    // run needs a token to reach its artefacts, and Codecov publishes a
+    // coverage percentage rather than a test count.
+    //
+    // A failure to read is not a failure to import. A CI artefact expires, a
+    // link rots, a runner is behind a login — none of that makes the run
+    // untrue, and refusing would push people towards the sources that are
+    // never checked at all. What it does mean is that the row says
+    // `declared`, and a reviewer sees that.
+    let (figures, figures_source) = if input.source == "junit_xml" {
+        match read_junit(&input.report_url).await {
+            Ok(parsed) => (Some(parsed), "parsed"),
+            Err(why) => {
+                tracing::info!(url = %input.report_url, error = %why, "junit report not read");
+                (None, "declared")
+            }
+        }
+    } else {
+        (None, "declared")
+    };
+
+    // Where the report was read, what it says wins, and a claim that
+    // disagrees is refused rather than quietly overwritten. Somebody who
+    // typed a bigger number than their own artefact reports is told so.
+    let (tests_total, tests_failed, tests_skipped, duration_seconds) = match &figures {
+        Some(parsed) => {
+            let declared_something =
+                input.tests_total != 0 || input.tests_failed != 0 || input.tests_skipped != 0;
+            let disagrees = input.tests_total != parsed.tests_total
+                || input.tests_failed != parsed.tests_failed
+                || input.tests_skipped != parsed.tests_skipped;
+            if declared_something && disagrees {
+                return Err(AppError::Validation(format!(
+                    "the report says {} tests, {} failed and {} skipped; the import says \
+                     {}, {} and {}. The report is the one that counts — send its figures, \
+                     or send none and they will be read",
+                    parsed.tests_total,
+                    parsed.tests_failed,
+                    parsed.tests_skipped,
+                    input.tests_total,
+                    input.tests_failed,
+                    input.tests_skipped,
+                )));
+            }
+            (
+                parsed.tests_total,
+                parsed.tests_failed,
+                parsed.tests_skipped,
+                parsed.duration_seconds.or(input.duration_seconds),
+            )
+        }
+        None => (
+            input.tests_total,
+            input.tests_failed,
+            input.tests_skipped,
+            input.duration_seconds,
+        ),
+    };
+
     let run: TestRun = sqlx::query_as(
         r#"
         INSERT INTO quality_test_runs
             (slice_id, imported_by, source, report_url, commit_sha,
              repository_url, tests_total, tests_failed, tests_skipped,
-             duration_seconds, coverage_percent, raw_summary)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+             duration_seconds, coverage_percent, raw_summary, figures_source)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         ON CONFLICT (slice_id, source, report_url) DO UPDATE
             SET tests_total = EXCLUDED.tests_total,
                 tests_failed = EXCLUDED.tests_failed,
@@ -592,6 +666,7 @@ pub async fn import_test_run(
                 commit_sha = EXCLUDED.commit_sha,
                 repository_url = EXCLUDED.repository_url,
                 raw_summary = EXCLUDED.raw_summary,
+                figures_source = EXCLUDED.figures_source,
                 -- A re-import is new data, so whatever a reviewer checked no
                 -- longer describes what is in the row.
                 verified_by = NULL,
@@ -599,7 +674,7 @@ pub async fn import_test_run(
                 imported_at = NOW()
         RETURNING id, slice_id, source, report_url, commit_sha, repository_url,
                   tests_total, tests_failed, tests_skipped, duration_seconds,
-                  coverage_percent, verified_at, imported_at
+                  coverage_percent, verified_at, imported_at, figures_source
         "#,
     )
     .bind(input.slice_id)
@@ -608,12 +683,13 @@ pub async fn import_test_run(
     .bind(&input.report_url)
     .bind(input.commit_sha.as_deref())
     .bind(input.repository_url.as_deref())
-    .bind(input.tests_total)
-    .bind(input.tests_failed)
-    .bind(input.tests_skipped)
-    .bind(input.duration_seconds)
+    .bind(tests_total)
+    .bind(tests_failed)
+    .bind(tests_skipped)
+    .bind(duration_seconds)
     .bind(input.coverage_percent.as_ref())
     .bind(input.raw_summary.as_ref())
+    .bind(figures_source)
     .fetch_one(db)
     .await?;
 
@@ -637,7 +713,7 @@ pub async fn verify_test_run(
          WHERE id = $1 AND imported_by <> $2
         RETURNING id, slice_id, source, report_url, commit_sha, repository_url,
                   tests_total, tests_failed, tests_skipped, duration_seconds,
-                  coverage_percent, verified_at, imported_at
+                  coverage_percent, verified_at, imported_at, figures_source
         "#,
     )
     .bind(run_id)

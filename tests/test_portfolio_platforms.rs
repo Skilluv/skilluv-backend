@@ -10,32 +10,51 @@
 mod common;
 use common::TestApp;
 
+use skilluv_backend::services::code_portfolio::SYNCED_HERE;
 use skilluv_backend::services::portfolio_sync::SYNCABLE;
 
-/// The catalogue and the fetcher name the same platforms.
+/// Each sweep's list matches the rows the catalogue gives it.
 ///
-/// Two lists, one in SQL and one in a `match`, and nothing between them. This
-/// is the test that would have caught the original defect on the day a
-/// platform was seeded with `has_public_api = TRUE`.
+/// Two workers read `user_external_portfolios`, and the column says which one
+/// owns a platform. Before it existed they overlapped in both directions:
+/// `portfolio_sync` selected the forges and handed them to a `match` with no
+/// arm for them, and `code_portfolio` selected everything — stamping
+/// `last_synced_at` on a dev.to row it could not read, so the module that
+/// could never saw it come due.
 #[tokio::test]
-async fn the_catalogue_and_the_fetcher_agree() {
+async fn each_sweep_owns_exactly_the_platforms_it_can_read() {
     let app = TestApp::spawn().await;
 
-    let mut in_catalogue: Vec<String> =
-        sqlx::query_scalar("SELECT slug FROM portfolio_platforms WHERE sync_implemented")
-            .fetch_all(&app.db)
-            .await
-            .unwrap();
-    in_catalogue.sort();
+    for (worker, in_code) in [
+        ("portfolio_sync", SYNCABLE),
+        ("code_portfolio", SYNCED_HERE),
+    ] {
+        let mut in_catalogue: Vec<String> =
+            sqlx::query_scalar("SELECT slug FROM portfolio_platforms WHERE synced_by = $1")
+                .bind(worker)
+                .fetch_all(&app.db)
+                .await
+                .unwrap();
+        in_catalogue.sort();
 
-    let mut in_code: Vec<String> = SYNCABLE.iter().map(|s| s.to_string()).collect();
-    in_code.sort();
+        let mut expected: Vec<String> = in_code.iter().map(|s| s.to_string()).collect();
+        expected.sort();
 
-    assert_eq!(
-        in_catalogue, in_code,
-        "a platform the catalogue calls syncable has no fetcher, or a fetcher \
-         exists for a platform the sweep will never hand it"
-    );
+        assert_eq!(
+            in_catalogue, expected,
+            "{worker} and the catalogue disagree about which platforms it reads"
+        );
+    }
+
+    // And no platform belongs to both. The column makes that structurally
+    // impossible; it is asserted anyway, because it is the property that
+    // broke.
+    let overlap: Vec<String> = SYNCABLE
+        .iter()
+        .filter(|s| SYNCED_HERE.contains(s))
+        .map(|s| s.to_string())
+        .collect();
+    assert!(overlap.is_empty(), "two sweeps claim {overlap:?}");
 }
 
 /// A platform with an API nobody reads yet is not swept.
@@ -49,7 +68,7 @@ async fn an_api_that_exists_is_not_an_api_that_is_read() {
 
     let promised_but_unread: Vec<String> = sqlx::query_scalar(
         "SELECT slug FROM portfolio_platforms
-          WHERE has_public_api AND NOT sync_implemented
+          WHERE has_public_api AND synced_by IS NULL
           ORDER BY slug",
     )
     .fetch_all(&app.db)
@@ -62,10 +81,11 @@ async fn an_api_that_exists_is_not_an_api_that_is_read() {
          them should go"
     );
 
-    // The sweep's own predicate, run here: none of them may be selected.
+    // The other direction: a worker assigned a platform that publishes
+    // nothing would fail on it every pass, forever.
     let would_be_swept: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM portfolio_platforms
-          WHERE sync_implemented AND NOT has_public_api",
+          WHERE synced_by IS NOT NULL AND NOT has_public_api",
     )
     .fetch_one(&app.db)
     .await
@@ -132,7 +152,7 @@ async fn the_new_platforms_are_honest_about_being_declared() {
 
     let syncable_but_manual: Vec<String> = sqlx::query_scalar(
         "SELECT slug FROM portfolio_platforms
-          WHERE skill_domain IN ('leadership', 'quality') AND sync_implemented",
+          WHERE skill_domain IN ('leadership', 'quality') AND synced_by IS NOT NULL",
     )
     .fetch_all(&app.db)
     .await

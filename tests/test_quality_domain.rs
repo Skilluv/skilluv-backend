@@ -991,3 +991,121 @@ async fn the_wizard_asks_this_domain_its_own_questions() {
         assert!(text.contains(key), "the wizard does not ask {key}");
     }
 }
+
+/// A report that cannot be read is imported as declared, not refused.
+///
+/// The parser reads JUnit reports so a reviewer checks whether the run is the
+/// one it claims to be rather than whether somebody's arithmetic was honest.
+/// But a CI artefact expires, a link rots, a runner sits behind a login —
+/// none of which makes the run untrue. Refusing would push people towards the
+/// sources nothing reads at all, so the import succeeds and the row says
+/// where its figures came from.
+///
+/// The address here is one `services::outbound` refuses outright, which is
+/// also the assertion that it does: a server that fetched what it was told to
+/// fetch would reach the loopback interface of its own host.
+#[tokio::test]
+async fn an_unreadable_report_is_imported_as_declared() {
+    let app = TestApp::spawn().await;
+    let importer = a_talent(&app, "qa_unreadable").await;
+    app.login("qa_unreadable").await;
+
+    let project = a_project(&app, importer, "qa-unreadable-project").await;
+    let slice = a_qa_slice(
+        &app,
+        project,
+        importer,
+        "test_automation",
+        Some("code"),
+        "qa-code",
+    )
+    .await;
+
+    let resp = app
+        .post(
+            "/api/quality/test-runs",
+            &json!({
+                "slice_id": slice,
+                "source": "junit_xml",
+                "report_url": "https://localhost/junit.xml",
+                "tests_total": 40,
+                "tests_failed": 1,
+                "tests_skipped": 2
+            }),
+        )
+        .await;
+    assert_eq!(resp.status(), 200, "{}", resp.text().await.unwrap());
+
+    let source: String =
+        sqlx::query_scalar("SELECT figures_source FROM quality_test_runs WHERE slice_id = $1")
+            .bind(slice)
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
+    assert_eq!(
+        source, "declared",
+        "an unread report was recorded as though its figures had been parsed"
+    );
+
+    // And the figures are the ones that were sent, untouched.
+    let total: i32 =
+        sqlx::query_scalar("SELECT tests_total FROM quality_test_runs WHERE slice_id = $1")
+            .bind(slice)
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
+    assert_eq!(total, 40);
+}
+
+/// Every run says where its figures came from, including the old ones.
+///
+/// The column is what a reviewer reads to know what they are checking, so it
+/// travels with the row rather than being inferable from the source.
+#[tokio::test]
+async fn a_run_carries_the_provenance_of_its_figures() {
+    let app = TestApp::spawn().await;
+    let importer = a_talent(&app, "qa_provenance").await;
+    app.login("qa_provenance").await;
+
+    let project = a_project(&app, importer, "qa-provenance-project").await;
+    let slice = a_qa_slice(
+        &app,
+        project,
+        importer,
+        "test_automation",
+        Some("code"),
+        "qa-code",
+    )
+    .await;
+
+    // Codecov publishes a coverage percentage rather than a test count, so it
+    // is one of the five sources that stay declared.
+    let body: Value = app
+        .post(
+            "/api/quality/test-runs",
+            &json!({
+                "slice_id": slice,
+                "source": "codecov",
+                "report_url": "https://example.org/coverage/9",
+                "tests_total": 12,
+                "tests_failed": 0
+            }),
+        )
+        .await
+        .json()
+        .await
+        .unwrap();
+
+    assert_eq!(body["data"]["run"]["figures_source"], "declared");
+
+    let listed: Value = app
+        .get(&format!("/api/quality/slices/{slice}/test-runs"))
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(
+        listed["data"]["runs"][0]["figures_source"], "declared",
+        "the listing hides what the single-row response says"
+    );
+}

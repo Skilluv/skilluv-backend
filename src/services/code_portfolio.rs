@@ -50,6 +50,14 @@ pub const PLATFORMS: &[&str] = &[
 /// published.
 pub const FORGES: &[&str] = &["github", "gitlab", "codeberg", "sourcehut"];
 
+/// The forges this module actually reads.
+///
+/// Not the same list as `FORGES`: SourceHut needs a token to read even a
+/// public profile, so it is recognised, claimable and never measured. Named
+/// here so a test can compare it against the rows marked `synced_by =
+/// 'code_portfolio'`.
+pub const SYNCED_HERE: &[&str] = &["codeberg", "github", "gitlab"];
+
 /// Platforms whose ownership Skilluv can prove today.
 ///
 /// One, and that is the honest number. GitLab has OAuth and Skilluv has not
@@ -272,6 +280,100 @@ pub struct ForgeProfile {
     pub metadata: serde_json::Value,
 }
 
+/// What an account did to work that was not its own.
+///
+/// Tickets leadership/P-02 and quality/P-01 both ask for this, and they are
+/// asking for the same thing from two directions: a tech lead is visible in
+/// the reviews they gave and the proposals they wrote, and a QA engineer in
+/// the issues they opened. Neither shows up in a repository count, which is
+/// why an experienced person in either trade can look empty here.
+///
+/// Every field is a count from GitHub's search API and every one of them can
+/// be absent: search is the most aggressively rate-limited part of that API
+/// for anonymous callers — ten requests a minute — and a profile that was
+/// read successfully must not be thrown away because a follow-up was
+/// throttled. Absent means "not read", never "none".
+#[derive(Debug, Default, Serialize)]
+pub struct ReviewWork {
+    /// Pull requests this account reviewed. `reviewed-by` counts the person
+    /// who left a review, not the author.
+    pub reviews_given: Option<i64>,
+    /// Issues opened, anywhere public.
+    pub issues_opened: Option<i64>,
+    /// Issues labelled `rfc` or `roadmap` that this account authored — the
+    /// coordination trace leadership/P-02 names.
+    pub proposals_authored: Option<i64>,
+    /// When these were last read, so a reader can tell a stale zero from a
+    /// fresh one.
+    pub read_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+#[derive(Deserialize)]
+struct SearchCount {
+    total_count: i64,
+}
+
+/// Three counted searches, each allowed to fail on its own.
+async fn github_review_work(client: &reqwest::Client, handle: &str) -> ReviewWork {
+    // The handle reaches a query string. GitHub logins are alphanumeric and
+    // hyphens, and anything else is somebody trying to write their own query.
+    if handle.is_empty()
+        || handle.len() > 39
+        || !handle
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-')
+    {
+        return ReviewWork::default();
+    }
+
+    let reviews_given = github_search_count(client, &format!("type:pr+reviewed-by:{handle}")).await;
+    let issues_opened = github_search_count(client, &format!("type:issue+author:{handle}")).await;
+    let proposals_authored = github_search_count(
+        client,
+        &format!("type:issue+author:{handle}+label:rfc,roadmap"),
+    )
+    .await;
+
+    let read_anything =
+        reviews_given.is_some() || issues_opened.is_some() || proposals_authored.is_some();
+
+    ReviewWork {
+        reviews_given,
+        issues_opened,
+        proposals_authored,
+        read_at: read_anything.then(chrono::Utc::now),
+    }
+}
+
+/// One search, for its count alone.
+///
+/// `per_page=1` because the results are not wanted — only `total_count` is,
+/// and asking for thirty of them would move thirty issue bodies across the
+/// wire to be dropped.
+async fn github_search_count(client: &reqwest::Client, query: &str) -> Option<i64> {
+    let url = format!("https://api.github.com/search/issues?q={query}&per_page=1");
+    let response = client
+        .get(&url)
+        .header("User-Agent", "skilluv (https://skill-uv.com)")
+        .header("Accept", "application/vnd.github+json")
+        .send()
+        .await
+        .ok()?;
+
+    if !response.status().is_success() {
+        // 403 with a rate-limit header is the usual one, and it is not worth
+        // an error line every sweep: the figure is simply absent this week.
+        tracing::debug!(status = %response.status(), "github search declined");
+        return None;
+    }
+
+    response
+        .json::<SearchCount>()
+        .await
+        .ok()
+        .map(|c| c.total_count)
+}
+
 #[derive(Deserialize)]
 struct GithubUser {
     public_repos: Option<i32>,
@@ -341,6 +443,12 @@ pub async fn fetch(
             let user: GithubUser = response.json().await.map_err(|e| {
                 AppError::Internal(format!("github sent something unexpected: {e}"))
             })?;
+            // What the account did to other people's work, which is the
+            // half a repository count cannot see. Best effort: the search
+            // API rate-limits anonymous callers hard, and a refusal here
+            // must not lose the profile that was already read.
+            let review_work = github_review_work(client, handle).await;
+
             Ok(ForgeProfile {
                 repos_count: user.public_repos,
                 followers_count: user.followers,
@@ -354,6 +462,10 @@ pub async fn fetch(
                     "company": user.company,
                     "blog": user.blog,
                     "since": user.created_at,
+                    "reviews_given": review_work.reviews_given,
+                    "issues_opened": review_work.issues_opened,
+                    "proposals_authored": review_work.proposals_authored,
+                    "review_work_read_at": review_work.read_at,
                 }),
             })
         }
@@ -725,10 +837,18 @@ pub async fn sync_stale(
 
 async fn sync_stale_profiles(db: &PgPool, client: &reqwest::Client) -> Result<u64, AppError> {
     let stale: Vec<Uuid> = sqlx::query_scalar(
-        "SELECT id FROM user_external_portfolios
-          WHERE sync_enabled = TRUE
-            AND (last_synced_at IS NULL OR last_synced_at < NOW() - INTERVAL '7 days')
-          ORDER BY last_synced_at NULLS FIRST
+        "SELECT p.id FROM user_external_portfolios p
+           JOIN portfolio_platforms pf ON pf.slug = p.platform
+          WHERE p.sync_enabled = TRUE
+            -- This module's rows only. It used to take every stale row, and
+            -- `fetch` answered with an empty profile for anything that is not
+            -- a forge — which still wrote `last_synced_at = NOW()`. A dev.to
+            -- account was therefore marked freshly synced by the module that
+            -- cannot read dev.to, and `portfolio_sync` never saw it come due.
+            AND pf.synced_by = 'code_portfolio'
+            AND (p.last_synced_at IS NULL
+                 OR p.last_synced_at < NOW() - INTERVAL '7 days')
+          ORDER BY p.last_synced_at NULLS FIRST
           LIMIT 200",
     )
     .fetch_all(db)

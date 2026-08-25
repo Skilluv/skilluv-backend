@@ -1199,10 +1199,9 @@ pub async fn admin_generate_variant(
         ));
     }
 
-    let ai = state
-        .ai
-        .as_deref()
-        .ok_or_else(|| AppError::Internal("AI client not connected (grpc_ai_url absent)".into()))?;
+    let ai = state.ai.as_deref().ok_or_else(|| {
+        AppError::ServiceUnavailable("the AI worker is not connected on this deployment".into())
+    })?;
 
     // 1. Fetch le challenge original + convert en GeneratedChallenge proto.
     let orig: crate::models::ChallengeTemplate =

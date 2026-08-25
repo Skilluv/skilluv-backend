@@ -1,4 +1,4 @@
-//! Read endpoints that nothing else calls.
+//! Every documented read endpoint answers something, to everybody.
 //!
 //! `GET /users/{username}/ops-profile` returned 500 to every request it had
 //! ever received: one figure in its query was cast to `INT` while the struct
@@ -7,251 +7,391 @@
 //! something else — a wholly dead endpoint and one awkward test look identical
 //! from outside.
 //!
-//! An audit of the router found 404 of 922 registered routes that no test
-//! calls at all. Writing 404 tests is not the answer. This calls the ones that
-//! are cheapest to check and most likely to be hiding the same thing: GET, no
-//! path parameter, and reached by nothing.
+//! ## Why the list is no longer written down
 //!
-//! What is asserted is the *shape* of the answer, not its content — so these
-//! stay true as the endpoints grow, and they fail only for the reason worth
-//! failing on. Unauthenticated is 401, forbidden is 403, absent is 404, and a
-//! disabled integration is 503. A 500 to a well-formed request is none of
-//! those: it is what a query that has stopped decoding produces.
+//! This file used to carry a hand-maintained list of a hundred and
+//! ninety-eight paths: the GETs somebody had noticed nothing else calls. An
+//! audit had found 404 of 922 registered routes that no test touched, and a
+//! list was the affordable answer at the time.
 //!
-//! Excluded, deliberately: the OAuth start and callback routes, which redirect
-//! or need a provider configured, and `security.txt`, which is text rather
-//! than JSON. A 5xx from those says something about the environment.
+//! It had the failure mode it was written to catch. A route added and not
+//! added to the list is invisible again, and nothing says so.
+//!
+//! So the list is derived from `ApiDoc`, the OpenAPI document the platform
+//! publishes. Every documented GET is called, with its path parameters filled
+//! from the types the document itself declares. Four hundred and six paths
+//! rather than a hundred and ninety-eight, and the next one is covered the day
+//! it is documented rather than the day somebody remembers.
+//!
+//! That moves the drift somewhere better rather than removing it: a route in
+//! the router and absent from `openapi.rs` is still uncovered. It is a
+//! narrower and louder gap — an undocumented public endpoint is its own
+//! problem, whatever this file does — and
+//! `an_undocumented_route_is_not_a_hidden_one` is what reports it.
+//!
+//! ## What is asserted
+//!
+//! The *shape* of the answer, not its content — so these stay true as the
+//! endpoints grow, and fail only for the reason worth failing on.
+//! Unauthenticated is 401, forbidden is 403, absent is 404, and an integration
+//! this deployment does not have is 503. A 500 to a well-formed request is
+//! none of those: it is what a query that has stopped decoding produces.
+//!
+//! The three doors matter, because an endpoint can decode fine on the path
+//! that refuses you and fail on the one that reads rows. The unauthenticated
+//! pass alone would not have caught the ops profile, and it did not catch
+//! `/users/me/performance` either — that answered 500 to every signed-in
+//! caller because an absent AI worker was being reported as a server fault.
 
 mod common;
 use common::TestApp;
 
-/// Every GET that takes no path parameter and that no other test calls.
-const READ_ENDPOINTS: &[&str] = &[
-    "/api/api-plans",
-    "/api/activity/heatmap",
-    "/api/admin/accounting/export",
-    "/api/admin/audit-log/generic",
-    "/api/admin/dashboard/health",
-    "/api/admin/dashboard/moderation",
-    "/api/admin/dashboard/moderation-queue",
-    "/api/admin/dashboard/overview",
-    "/api/admin/disputes",
-    "/api/admin/feature-flags",
-    "/api/admin/reports",
-    "/api/admin/revenue/by-pillar",
-    "/api/admin/slices",
-    "/api/admin/tournaments/prizes/outstanding",
-    "/api/admin/validator-applications",
-    "/api/admin/validators/collusion-matrix",
-    "/api/ambassador-programs/open",
-    "/api/audio/castings",
-    "/api/audio/mentors/for-me",
-    "/api/audio/portfolios",
-    "/api/auth/me/oauth-providers",
-    "/api/leadership/retrospectives",
-    "/api/quality/bugs",
-    "/api/quality/bugs/review-queue",
-    "/api/auth/webauthn/credentials",
-    "/api/beginner/verifications/mine",
-    "/api/beginner/verifications/queue",
-    "/api/beta-programs/open",
-    "/api/challenges/categories",
-    "/api/challenges/featured",
-    "/api/challenges/onboarding",
-    "/api/challenges/tags",
-    "/api/code/languages/top",
-    "/api/community/challenges/mine",
-    "/api/community/challenges/popular",
-    "/api/contact/interest/sent",
-    "/api/design/tiers",
-    "/api/developer/webhooks",
-    "/api/diplomas/my",
-    "/api/disputes",
-    "/api/dm/conversations",
-    "/api/docs/openapi.json",
-    "/api/enterprise/credits",
-    "/api/enterprise/credits/transactions",
-    "/api/enterprise/dashboard/funnel",
-    "/api/enterprise/dashboard/overview",
-    "/api/enterprise/invite/preview",
-    "/api/enterprise/invoices",
-    "/api/enterprise/kyc",
-    "/api/enterprise/members",
-    "/api/enterprise/memberships",
-    "/api/enterprise/pipeline",
-    "/api/enterprise/pipeline/export.csv",
-    "/api/enterprise/sponsored-challenges",
-    "/api/enterprise/subscriptions/current",
-    "/api/enterprises/me/agency-clients",
-    "/api/enterprises/me/type-config",
-    "/api/feed/me",
-    "/api/forum/categories",
-    "/api/forum/search",
-    "/api/geo/cities",
-    "/api/health",
-    "/api/health/deep",
-    "/api/health/live",
-    "/api/i18n/locales",
-    "/api/launch-campaigns/open",
-    "/api/legal/consent-version",
-    "/api/manifest.webmanifest",
-    "/api/me/feed/challenges",
-    "/api/me/validation/queue",
-    "/api/me/validator-applications",
-    "/api/mentors/me/connect/status",
-    "/api/metrics",
-    "/api/metrics/summary",
-    "/api/missions/types",
-    "/api/notifications",
-    "/api/notifications/push/vapid-public-key",
-    "/api/notifications/unread-count",
-    "/api/onboarding/bonjour-skilluv/status",
-    "/api/payments/methods",
-    "/api/pricing",
-    "/api/profile/me/availability",
-    "/api/profile/me/educations",
-    "/api/profile/me/experiences",
-    "/api/profile/me/languages",
-    "/api/projects/curated",
-    "/api/projects/looking-for-contributors",
-    "/api/public/v1/usage",
-    "/api/reports/mine",
-    "/api/review-queue",
-    "/api/sandbox/languages",
-    "/api/scim/v2/ResourceTypes",
-    "/api/scim/v2/Schemas",
-    "/api/seasons",
-    "/api/seasons/current",
-    "/api/skills",
-    "/api/skills/tree",
-    "/api/sponsored-challenges/active",
-    "/api/tags",
-    "/api/team-slots/open",
-    "/api/teams/marketplace",
-    "/api/tournaments/feed",
-    "/api/tracks",
-    "/api/users/me/code-portfolios",
-    "/api/users/me/interviews",
-    "/api/users/me/mentor-subscriptions",
-    "/api/users/me/missions",
-    "/api/users/me/onboardings",
-    "/api/users/me/peer-matching/enrollments",
-    "/api/users/me/push-tokens",
-    "/api/users/me/recommendations/projects",
-    "/api/users/me/reverse-recruitment",
-    "/api/users/me/skill-recommendations",
-    "/api/users/me/slices",
-    "/api/users/me/stewardships",
-    "/api/users/me/teams",
-    "/api/users/me/tracks",
-    "/api/users/me/trials",
-    "/api/users/me/vouchings",
-    "/api/users/me/wallet/statement.csv",
-    "/api/users/me/wallet/transactions",
-];
+use skilluv_backend::openapi::ApiDoc;
+use utoipa::OpenApi;
+use utoipa::openapi::path::ParameterIn;
 
-/// The same, for routes that take a path parameter — filled with an id
-/// nothing owns.
+/// An id nothing owns, for the path parameters that are UUIDs.
 ///
 /// A handler naming a column that does not exist fails when the query runs,
 /// not when a row matches, so a stranger's id still reaches the failure. 404
 /// is the right answer here and 500 is not: that is what
-/// `/api/enterprises/me/agency-clients` was doing, and it took an audit
-/// rather than a user to notice.
-const PARAMETERISED_ENDPOINTS: &[&str] = &[
-    "/api/activity/heatmap/00000000-0000-4000-8000-000000000000",
-    "/api/admin/domains/nothing-by-this-name/featured-queue",
-    "/api/admin/projects/nothing-by-this-name/stats",
-    "/api/admin/sales/enterprises/00000000-0000-4000-8000-000000000000",
-    "/api/admin/tenants/00000000-0000-4000-8000-000000000000",
-    "/api/admin/tenants/00000000-0000-4000-8000-000000000000/cohorts",
-    "/api/admin/tenants/00000000-0000-4000-8000-000000000000/members",
-    "/api/admin/tournaments/00000000-0000-4000-8000-000000000000/vote-bursts",
-    "/api/assistant/jobs/00000000-0000-4000-8000-000000000000",
-    "/api/audio/castings/00000000-0000-4000-8000-000000000000",
-    "/api/audio/files/00000000-0000-4000-8000-000000000000/listen",
-    "/api/audio/slices/00000000-0000-4000-8000-000000000000/files",
-    "/api/audio/slices/00000000-0000-4000-8000-000000000000/revisions",
-    "/api/audio/slices/00000000-0000-4000-8000-000000000000/sources",
-    "/api/badge/repo/nothing-by-this-name/nothing-by-this-name/validated.svg",
-    "/api/leadership/cohorts/00000000-0000-4000-8000-000000000000/outcomes",
-    "/api/leadership/slices/00000000-0000-4000-8000-000000000000/links",
-    "/api/quality/slices/00000000-0000-4000-8000-000000000000/test-runs",
-    "/api/badge/user/nothing-by-this-name/validated.svg",
-    "/api/beginner/verifications/questions/00000000-0000-4000-8000-000000000000",
-    "/api/challenges/00000000-0000-4000-8000-000000000000/eligibility",
-    "/api/challenges/00000000-0000-4000-8000-000000000000/teams",
-    "/api/challenges/00000000-0000-4000-8000-000000000000/timer",
-    "/api/contact/conversations/00000000-0000-4000-8000-000000000000",
-    "/api/deliverables/00000000-0000-4000-8000-000000000000",
-    "/api/deliverables/00000000-0000-4000-8000-000000000000/reviews",
-    "/api/dev/verify-tokens/nothing-by-this-name",
-    "/api/developer/keys/00000000-0000-4000-8000-000000000000/usage",
-    "/api/dm/conversations/00000000-0000-4000-8000-000000000000/messages",
-    "/api/enterprise/ambassador-programs/00000000-0000-4000-8000-000000000000/ambassadors",
-    "/api/enterprise/consultations/00000000-0000-4000-8000-000000000000",
-    "/api/enterprise/contests/00000000-0000-4000-8000-000000000000/submissions",
-    "/api/enterprise/invoices/00000000-0000-4000-8000-000000000000",
-    "/api/enterprise/invoices/00000000-0000-4000-8000-000000000000/html",
-    "/api/enterprise/invoices/00000000-0000-4000-8000-000000000000/pdf",
-    "/api/enterprise/invoices/00000000-0000-4000-8000-000000000000/preview",
-    "/api/enterprise/lists/00000000-0000-4000-8000-000000000000",
-    "/api/enterprise/sponsored-challenges/00000000-0000-4000-8000-000000000000/submissions",
-    "/api/featured/nothing-by-this-name/recent",
-    "/api/guilds/00000000-0000-4000-8000-000000000000/members",
-    "/api/guilds/nothing-by-this-name/composition",
-    "/api/guilds/nothing-by-this-name/projects",
-    "/api/maintainer-digest/confirm/nothing-by-this-name",
-    "/api/maintainer-digest/unsubscribe/nothing-by-this-name",
-    "/api/marketplace/downloads/nothing-by-this-name",
-    "/api/payments/00000000-0000-4000-8000-000000000000/status",
-    "/api/projects/00000000-0000-4000-8000-000000000000/stewards",
-    "/api/projects/nothing-by-this-name/active-skilluvers",
-    "/api/projects/nothing-by-this-name/contributors",
-    "/api/public/v1/talent-attestations/nothing-by-this-name",
-    "/api/review-queue/00000000-0000-4000-8000-000000000000",
-    "/api/sandbox/result/nothing-by-this-name",
-    "/api/skills/nothing-by-this-name/talents",
-    "/api/skills/tree/00000000-0000-4000-8000-000000000000",
-    "/api/social/comments/nothing-by-this-name/00000000-0000-4000-8000-000000000000",
-    "/api/social/reactions/nothing-by-this-name/00000000-0000-4000-8000-000000000000/summary",
-    "/api/social/tag-map/nothing-by-this-name/00000000-0000-4000-8000-000000000000",
-    "/api/stewards/00000000-0000-4000-8000-000000000000/inbox",
-    "/api/studios/00000000-0000-4000-8000-000000000000",
-    "/api/teams/00000000-0000-4000-8000-000000000000/slices",
-    "/api/teams/00000000-0000-4000-8000-000000000000/slots",
-    "/api/tournaments/nothing-by-this-name/community-ranking",
-    "/api/tracks/nothing-by-this-name",
-    "/api/tracks/nothing-by-this-name/progress",
-    "/api/u/nothing-by-this-name/cv",
-    "/api/u/nothing-by-this-name/repos",
-    "/api/users/00000000-0000-4000-8000-000000000000/attestations",
-    "/api/users/00000000-0000-4000-8000-000000000000/deliverables",
-    "/api/users/00000000-0000-4000-8000-000000000000/skills",
-    "/api/users/me/orientations/nothing-by-this-name/playlist",
-    "/api/users/nothing-by-this-name/audio-profile",
-    "/api/users/nothing-by-this-name/badge.svg",
-    "/api/users/nothing-by-this-name/design-profile",
-    "/api/users/nothing-by-this-name/portfolio.json",
-    "/api/v1/users/nothing-by-this-name/badges",
-    "/api/v1/users/nothing-by-this-name/skills",
-    "/api/verify/nothing-by-this-name/pdf",
+/// `/api/enterprises/me/agency-clients` was doing, and it took an audit rather
+/// than a user to notice.
+const NO_SUCH_ID: &str = "00000000-0000-4000-8000-000000000000";
+
+/// The same, for the ones that are slugs, usernames or free strings.
+const NO_SUCH_SLUG: &str = "nothing-by-this-name";
+
+/// Every documented GET, with its path parameters filled in.
+///
+/// The placeholder comes from the parameter's own schema, so a route that
+/// declares a UUID gets a UUID and one that declares a slug gets a slug.
+/// Guessing from the parameter *name* would work until the first `{id}` that
+/// is a slug, and `/admin/missions/{slug}` and `/admin/users/{id}` show the
+/// two conventions already coexist.
+fn documented_read_endpoints() -> Vec<String> {
+    let doc = ApiDoc::openapi();
+    let mut paths = Vec::new();
+
+    for (path, item) in doc.paths.paths.iter() {
+        let Some(operation) = item.get.as_ref() else {
+            continue;
+        };
+
+        let mut concrete = path.clone();
+        if let Some(parameters) = operation.parameters.as_ref() {
+            for parameter in parameters {
+                if !matches!(parameter.parameter_in, ParameterIn::Path) {
+                    continue;
+                }
+                let schema = parameter
+                    .schema
+                    .as_ref()
+                    .map(|s| serde_json::to_string(s).unwrap_or_default())
+                    .unwrap_or_default();
+
+                let placeholder = if schema.contains("\"uuid\"") {
+                    NO_SUCH_ID
+                } else if schema.contains("\"integer\"") {
+                    "1"
+                } else {
+                    NO_SUCH_SLUG
+                };
+                concrete = concrete.replace(&format!("{{{}}}", parameter.name), placeholder);
+            }
+        }
+
+        // A segment the document declares nothing for. Left out of the sweep
+        // rather than called with a brace in the URL, and reported by
+        // `every_path_parameter_is_described` so it is fixed rather than
+        // silently skipped.
+        if !concrete.contains('{') {
+            paths.push(concrete);
+        }
+    }
+
+    paths.sort();
+    paths
+}
+
+/// Documented GETs whose path segments the document does not describe.
+fn paths_with_undescribed_segments() -> Vec<String> {
+    ApiDoc::openapi()
+        .paths
+        .paths
+        .iter()
+        .filter(|(path, item)| item.get.is_some() && path.contains('{'))
+        .filter(|(path, item)| {
+            let operation = item.get.as_ref().expect("filtered on being present");
+            let described: Vec<&str> = operation
+                .parameters
+                .as_ref()
+                .map(|params| {
+                    params
+                        .iter()
+                        .filter(|p| matches!(p.parameter_in, ParameterIn::Path))
+                        .map(|p| p.name.as_str())
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            // Every `{segment}` in the path has to have a parameter of that
+            // name. One missing is enough.
+            path.split('{')
+                .skip(1)
+                .filter_map(|rest| rest.split('}').next())
+                .any(|segment| !described.contains(&segment))
+        })
+        .map(|(path, _)| path.clone())
+        .collect()
+}
+
+/// A segment in the path and nothing describing it.
+///
+/// The sweep cannot fill those, so the path drops out of the coverage without
+/// anybody noticing — which is the failure this whole file exists to stop. It
+/// is also a real defect in the published document: a client generator reading
+/// it produces a method with no argument for the segment.
+#[tokio::test]
+async fn every_path_parameter_is_described() {
+    let undescribed = paths_with_undescribed_segments();
+    assert!(
+        undescribed.is_empty(),
+        "these paths take a segment the OpenAPI document does not declare, so the \
+         sweep cannot call them and no generated client can either: {undescribed:?}"
+    );
+}
+
+/// Registered outside the API surface on purpose, and documented nowhere
+/// because they are not part of it.
+///
+/// A Prometheus scrape endpoint, an RFC 9116 contact file, a PWA manifest and
+/// a liveness probe. Each is a contract with something other than a client of
+/// this API, and putting them in the OpenAPI document would say they are part
+/// of it.
+const NOT_PART_OF_THE_API: &[&str] = &[
+    "/.well-known/security.txt",
+    "/health/live",
+    "/manifest.webmanifest",
+    "/metrics",
+    "/security.txt",
 ];
 
+/// GET routes that exist and are not in the OpenAPI document.
+///
+/// Inherited, counted, allowed to shrink and never to grow. Each one is a
+/// public endpoint nothing sweeps, no generated client knows about, and no
+/// front-end developer can discover without reading `src/routes` — which is
+/// the condition that let `/users/me/performance` answer 500 to every
+/// signed-in caller for as long as it did.
+///
+/// The assertion below is two-way on purpose. A new undocumented route fails
+/// it, and so does an entry here that has since been documented — so the list
+/// cannot quietly stop describing the truth, in either direction.
+///
+/// Closing one is mechanical: a `#[utoipa::path]` on the handler and a line in
+/// `src/openapi.rs`. They are not closed here because sixty-two of those in one
+/// commit is a diff nobody reads, and this list is what makes doing them in
+/// batches possible.
+const UNDOCUMENTED_YET: &[&str] = &[
+    "/admin/design/briefs",
+    "/admin/domains/{domain}/overview",
+    "/admin/domains/{domain}/reviewers",
+    "/admin/feature-flags",
+    "/admin/featured/{domain}/{week}/card",
+    "/admin/plagiarism",
+    "/admin/slices",
+    "/admin/validators/collusion-matrix",
+    "/admin/validators/stats",
+    "/attestations/verify/{code}/card.png",
+    "/beginner/verifications/mine",
+    "/beginner/verifications/queue",
+    "/code/languages/top",
+    "/cohorts",
+    "/cohorts/{id}",
+    "/cohorts/{id}/members",
+    "/contests/plagiarism/{id}",
+    "/design/briefs/mine",
+    "/design/cloud/connections",
+    "/design/cloud/inspect",
+    "/design/cloud/{provider}/start",
+    "/design/mentors/for-me",
+    "/design/slices/{id}/auto-checks",
+    "/design/slices/{id}/compare",
+    "/design/slices/{id}/versions/{round}",
+    "/design/uploads/{id}/download-url",
+    "/design/uploads/{id}/parts",
+    "/enterprise/invoices/{id}/pdf",
+    "/enterprise/invoices/{id}/preview",
+    "/featured/{domain}",
+    "/featured/{domain}/recent",
+    "/maintainer-digest/confirm/{token}",
+    "/maintainer-digest/unsubscribe/{token}",
+    "/me/validation/queue",
+    "/me/validator-applications",
+    "/missions/{slug}/ratings",
+    "/moderation/external-signals",
+    "/peer-matching/proposals",
+    "/projects/{slug}/active-skilluvers",
+    "/series",
+    "/series/{slug}",
+    "/series/{slug}/standings",
+    "/talent-offers",
+    "/users/me/assistant-interactions",
+    "/users/me/assistant-quota",
+    "/users/me/bookmarks",
+    "/users/me/bookmarks/folders",
+    "/users/me/cohorts",
+    "/users/me/external-signals",
+    "/users/me/goals",
+    "/users/me/next-challenges",
+    "/users/me/notes",
+    "/users/me/peer-matches",
+    "/users/me/peer-matching/enrollments",
+    "/users/me/talent-offers",
+    "/users/me/vouchings",
+    "/users/{user_id}/external-signals",
+    "/users/{user_id}/vouchings",
+    "/users/{username}/code-languages",
+    "/users/{username}/mission-standing",
+    "/verify/{hash}",
+    "/verify/{hash}/pdf",
+];
+
+/// Every GET the router registers is in the published document.
+///
+/// The gap the derived sweep moved rather than closed. A route that exists and
+/// is undocumented is invisible to this file, to the OpenAPI consumers and to
+/// the front end — and adding one is a single line in a `Router`, with nothing
+/// asking for the `#[utoipa::path]` that should come with it.
+///
+/// Read from the source rather than from the router, because `axum::Router`
+/// cannot be enumerated. That is a blunt instrument and it is the only one
+/// available; it stays narrow by only ever reading `.route("…", …get(…)…)`
+/// literals, which is how every route in this codebase is written.
+#[tokio::test]
+async fn an_undocumented_route_is_not_a_hidden_one() {
+    let documented: std::collections::HashSet<String> = ApiDoc::openapi()
+        .paths
+        .paths
+        .iter()
+        .filter(|(_, item)| item.get.is_some())
+        .map(|(path, _)| path.clone())
+        .collect();
+
+    let mut undocumented: Vec<(String, String)> = Vec::new();
+
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/routes");
+    for entry in std::fs::read_dir(&dir).expect("src/routes is readable") {
+        let file = entry.expect("a directory entry").path();
+        if file.extension().and_then(|e| e.to_str()) != Some("rs") {
+            continue;
+        }
+        let source = std::fs::read_to_string(&file).expect("a readable module");
+
+        for line in source.lines() {
+            let line = line.trim();
+            let Some(rest) = line.strip_prefix(".route(\"") else {
+                continue;
+            };
+            let Some(route) = rest.split('"').next() else {
+                continue;
+            };
+            // Only the GETs. A `.route(path, post(...))` line carries no
+            // `get(`, and a combined `get(x).post(y)` does.
+            if !line.contains("get(") {
+                continue;
+            }
+            // Three nesting styles coexist. Most routers are nested under
+            // `/api`, so their literal is a suffix. `well_known_routes` and
+            // `metrics_routes` are merged at the root and write the prefix
+            // out, so their literal is already absolute. Both are accepted,
+            // which is why this compares two candidates rather than one.
+            let nested = format!("/api{route}");
+            if !documented.contains(route) && !documented.contains(&nested) {
+                undocumented.push((
+                    file.file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_string(),
+                    route.to_string(),
+                ));
+            }
+        }
+    }
+
+    undocumented.sort();
+    undocumented.dedup();
+
+    let known: std::collections::HashSet<&str> = UNDOCUMENTED_YET
+        .iter()
+        .chain(NOT_PART_OF_THE_API)
+        .copied()
+        .collect();
+
+    let fresh: Vec<String> = undocumented
+        .iter()
+        .filter(|(_, route)| !known.contains(route.as_str()))
+        .map(|(file, route)| format!("{file}: {route}"))
+        .collect();
+
+    assert!(
+        fresh.is_empty(),
+        "{} GET route(s) were added without an OpenAPI entry, so nothing sweeps them \
+         and no client knows they exist — add the `#[utoipa::path]` and register the \
+         handler in `src/openapi.rs`:\n{}",
+        fresh.len(),
+        fresh.join("\n")
+    );
+
+    // The other direction. An entry that has since been documented, or whose
+    // route no longer exists, has to leave the list — otherwise the list stops
+    // being a count of anything and starts being decoration.
+    let still_undocumented: std::collections::HashSet<&str> =
+        undocumented.iter().map(|(_, r)| r.as_str()).collect();
+    let stale: Vec<&str> = UNDOCUMENTED_YET
+        .iter()
+        .filter(|r| !still_undocumented.contains(*r))
+        .copied()
+        .collect();
+
+    assert!(
+        stale.is_empty(),
+        "{} route(s) in UNDOCUMENTED_YET are documented now, or gone. Remove them — \
+         a debt list that overstates itself stops being read:\n{}",
+        stale.len(),
+        stale.join("\n")
+    );
+}
+
 /// The three doors, because an endpoint can decode fine on the path that
-/// refuses you and fail on the one that reads rows. The unauthenticated pass
-/// alone would not have caught the ops profile.
+/// refuses you and fail on the one that reads rows.
 async fn every_endpoint_answers(app: &TestApp, who: &str) {
+    let paths = documented_read_endpoints();
+
+    // A floor rather than an exact count: the number grows with the platform,
+    // and an assertion on the exact figure would be edited without being read.
+    // A collapse to nothing is the failure worth catching — an empty sweep
+    // passes silently, which is the shape of bug this file is about.
+    assert!(
+        paths.len() > 300,
+        "the derived sweep collapsed to {} paths — something stopped the OpenAPI \
+         document being built",
+        paths.len()
+    );
+
     let mut dead = Vec::new();
 
-    for path in READ_ENDPOINTS.iter().chain(PARAMETERISED_ENDPOINTS) {
+    for path in &paths {
         let resp = app.get(path).await;
         let status = resp.status().as_u16();
         // 503 is allowed and 500 is not, which is the whole distinction: an
         // integration this deployment does not have is unavailable, not
         // broken. Stripe is absent here and in CI, and four handlers used to
         // call that an internal error — telling a caller the server failed
-        // when the honest answer is that payments were never configured.
+        // when the honest answer is that payments were never configured. The
+        // AI worker is absent for the same reason, and four more handlers
+        // were saying the same thing about it.
         if status >= 500 && status != 503 {
             dead.push(format!(
                 "{path} -> {status}: {}",

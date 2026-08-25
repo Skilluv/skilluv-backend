@@ -512,7 +512,7 @@ pub async fn deep_plagiarism_scan_endpoint(
     }
 
     let ai = state.ai.as_deref().ok_or_else(|| {
-        AppError::Internal("AI client not connected (grpc_ai_url absent en dev)".into())
+        AppError::ServiceUnavailable("the AI worker is not connected on this deployment".into())
     })?;
 
     // 2. Construit le comparison_pool (challenges similaires, cap 200).

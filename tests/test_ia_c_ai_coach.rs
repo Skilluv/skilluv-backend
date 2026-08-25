@@ -38,14 +38,25 @@ async fn performance_route_requires_auth() {
     assert_eq!(resp.status().as_u16(), 401);
 }
 
+/// An absent AI worker is 503, not 500.
+///
+/// This asserted 500 until the derived sweep in
+/// `tests/test_read_endpoints_answer.rs` reached the endpoint and found it
+/// answering 500 to every signed-in caller. The distinction was already the
+/// platform's position — four Stripe handlers were corrected for exactly this
+/// in August — and the AI ones were missed because the sweep's list was
+/// maintained by hand and did not include them.
+///
+/// It matters to a caller: 503 is retryable and says the deployment lacks an
+/// integration, 500 says the server is broken and is worth a bug report.
 #[tokio::test]
-async fn performance_route_returns_500_without_ai_client() {
+async fn performance_route_is_unavailable_without_an_ai_worker() {
     let app = TestApp::spawn().await;
     setup_user_with_passkey(&app, "perf_user").await;
     app.login("perf_user").await;
-    // GRPC_AI_URL absent en test → state.ai = None → 500.
+    // GRPC_AI_URL is unset in tests, so `state.ai` is None.
     let resp = app.get("/api/users/me/performance").await;
-    assert_eq!(resp.status().as_u16(), 500);
+    assert_eq!(resp.status().as_u16(), 503);
 }
 
 #[tokio::test]
@@ -58,14 +69,14 @@ async fn suggest_orientations_route_requires_auth() {
 }
 
 #[tokio::test]
-async fn suggest_orientations_returns_500_without_ai_client() {
+async fn suggest_orientations_is_unavailable_without_an_ai_worker() {
     let app = TestApp::spawn().await;
     setup_user_with_passkey(&app, "sug_user").await;
     app.login("sug_user").await;
     let resp = app
         .post("/api/users/me/orientations/suggest", &json!({}))
         .await;
-    assert_eq!(resp.status().as_u16(), 500);
+    assert_eq!(resp.status().as_u16(), 503);
 }
 
 #[tokio::test]
@@ -73,14 +84,16 @@ async fn suggest_orientations_refresh_rate_limited() {
     let app = TestApp::spawn().await;
     setup_user_with_passkey(&app, "rate_user").await;
     app.login("rate_user").await;
-    // Note : SKILLUV_DISABLE_RATELIMIT=1 en tests (voir common/mod.rs) désactive
-    // le rate-limit, donc pas testable ici. On vérifie juste que refresh=true
-    // est accepté et déclenche l'appel IA (500 car ai_client absent).
+    // SKILLUV_DISABLE_RATELIMIT=1 in tests (see common/mod.rs) turns the rate
+    // limit off, so the limit itself is not exercised here. What is checked is
+    // that `refresh: true` is accepted and reaches the AI call — which is 503
+    // because no worker is connected, and would have been 401 or 400 if the
+    // parameter were being refused earlier.
     let r1 = app
         .post(
             "/api/users/me/orientations/suggest",
             &json!({"refresh": true}),
         )
         .await;
-    assert_eq!(r1.status().as_u16(), 500);
+    assert_eq!(r1.status().as_u16(), 503);
 }

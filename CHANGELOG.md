@@ -84,9 +84,35 @@ and the project will follow semantic versioning once 1.0 is reached.
 * **registries:** DEV, Hashnode, Medium, YouTube, Speaker Deck, arXiv and
   Zenodo are recognised as places a published artefact lives, with fetchers
   for the four that answer.
+* **moderation:** `GET /moderation/vouchings?status=live|broken|expired`. The
+  break endpoint shipped with no way to find the id it takes, and a broken
+  vouching was readable nowhere at all.
+* **admin:** `GET /admin/cohorts` and `POST /admin/cohorts/{id}/archive`.
+  Archiving freezes the chat, because members went on reading it — which
+  answered the organizer and not the people who had worked there.
+* **admin:** `GET /admin/talent-offers` with `/deactivate` and `/reinstate`.
+  The moderation hold is its own column: `active` is the author's own pause
+  switch, and a hold placed there would be undone by their next PATCH. The row
+  survives, because a dispute is instructed against what was published.
+* **admin:** `GET /admin/assistant/stats` and
+  `GET /admin/users/{id}/assistant-interactions`. Two facts were
+  unrecoverable — a cache hit could not be told from a call, and a refusal
+  recorded nothing at all.
 
 ### Fixed
 
+* **profiles:** `GET /profile/{username}` returns `id`. Four public endpoints
+  are addressed by UUID and this was the only place a visitor could resolve a
+  username to one, so the front end could render those sections on your own
+  profile and on nobody else's.
+* **vouchings:** a vouching carries `voucher_username`, and `/users/me/vouchings`
+  resolves the other party on both sides. Profiles are addressed by username,
+  so a display name was the one thing a link could not be built from — on the
+  section whose whole point is going to check who vouched.
+* **moderation:** deleting an external signal requires a motive and writes what
+  it destroyed into the audit log. It was the most destructive endpoint of the
+  batch, it did not accept a reason, and the missing journal entry was only the
+  consequence of that.
 * **openapi:** ninety-four handlers shared a generated `operationId` with
   another handler, because utoipa derives it from the function name and
   `list`, `create` and `detail` are not unique across forty-five route files.

@@ -844,51 +844,10 @@ async fn assistant_stats_count_refusals_and_worker_failures() {
     assert_eq!(body["data"]["policy"]["daily_quota"].as_i64(), Some(10));
 }
 
-#[tokio::test]
-async fn the_burst_limit_is_recorded_as_a_refusal() {
-    let app = TestApp::spawn().await;
-    let me = app.register_user("gapaiburst").await;
-    let my_id = user_id_of(&me);
-    app.login("gapaiburst").await;
-
-    // The burst window allows three; the fourth is refused. Every call
-    // fails on the missing worker, which happens after the limiter.
-    for _ in 0..4 {
-        let _ = app
-            .post(
-                "/api/assistant/ask",
-                &json!({ "interaction_type": "explain", "prompt": "why does this move?" }),
-            )
-            .await;
-    }
-
-    let refused: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM ai_interactions
-          WHERE user_id = $1 AND status = 'rate_limited' AND refusal_kind = 'burst'",
-    )
-    .bind(my_id)
-    .fetch_one(&app.db)
-    .await
-    .unwrap();
-    assert!(
-        refused >= 1,
-        "a guard rail whose firing is unobservable cannot be tuned"
-    );
-
-    // A refusal is not an AI interaction: it must not eat the quota nor be
-    // disclosed on a deliverable.
-    let quota: Value = app
-        .get("/api/users/me/assistant-quota")
-        .await
-        .json()
-        .await
-        .unwrap();
-    assert_eq!(
-        quota["data"]["used"].as_i64(),
-        Some(0),
-        "nothing reached the worker, so nothing was used"
-    );
-}
+// `the_burst_limit_is_recorded_as_a_refusal` lives in
+// `tests/test_ai_burst_limit.rs`: it is the one assertion in this batch that
+// needs the rate limiter switched on, and this harness switches it off for
+// every test in a binary. See that file for why it has to be alone.
 
 #[tokio::test]
 async fn the_admin_can_read_one_users_disclosure_ledger() {

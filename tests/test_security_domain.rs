@@ -1362,13 +1362,13 @@ async fn somebody_elses_proof_is_not_yours_to_read() {
     app.login("nosy").await;
     let resp = app
         .get(&format!(
-            "/api/security/proofs/security-proofs/{mine}/x.png"
+            "/api/security/proofs?key=security-proofs/{mine}/x.png"
         ))
         .await;
     assert_eq!(resp.status(), 403);
 
     // And a key that is not a proof key is refused before anything is signed.
-    let resp = app.get("/api/security/proofs/kyc/secret.pdf").await;
+    let resp = app.get("/api/security/proofs?key=kyc/secret.pdf").await;
     assert_ne!(resp.status(), 200);
 }
 

@@ -115,7 +115,7 @@ pub async fn profile(
 pub struct ReportsQuery {
     /// Restrict to work aimed at one domain. Absent means every domain,
     /// including the cross-domain artefacts that target none.
-    #[param(nullable)]
+    #[param(nullable, value_type = Option<crate::validators::SkillDomain>)]
     pub target_domain: Option<String>,
     #[param(nullable)]
     pub limit: Option<i64>,

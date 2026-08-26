@@ -42,10 +42,12 @@ pub fn email_preview_routes() -> Router<AppState> {
 /// right-to-left-hostile amount, a title long enough to wrap. A preview
 /// filled with `Test` proves nothing about a layout.
 const SAMPLE_ARGS: &[(&str, &str)] = &[
+    ("after", "critique"),
     ("amount", "42 500 XOF"),
     ("applicant", "Kofi Mensah"),
     ("author", "Awa Kponou-Diallo"),
     ("badge", "Première contribution vérifiée"),
+    ("before", "élevée"),
     ("brief", "Une identité pour une coopérative de karité"),
     ("capability", "Steward de projet"),
     ("challenger", "Awa Kponou-Diallo"),
@@ -93,6 +95,7 @@ const SAMPLE_ARGS: &[(&str, &str)] = &[
     ("rounds", "3"),
     ("slice", "Écran de connexion, deuxième version"),
     ("stake", "1 500 fragments"),
+    ("severity", "élevée (CVSS 8.1)"),
     ("subject", "une soumission signalée automatiquement"),
     ("tag", "rust"),
     ("talent", "Awa Kponou-Diallo"),

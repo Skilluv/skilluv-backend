@@ -59,7 +59,7 @@ pub fn portfolio_account_routes() -> Router<AppState> {
 pub struct PortfolioQuery {
     /// `audio`, `communication`, `education`, … Absent means every account
     /// the caller has linked, whatever domain it belongs to.
-    #[param(max_length = 30)]
+    #[param(value_type = Option<crate::validators::SkillDomain>)]
     pub domain: Option<String>,
 }
 

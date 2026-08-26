@@ -70,7 +70,7 @@ pub fn opportunity_routes() -> Router<AppState> {
 #[serde(deny_unknown_fields)]
 pub struct OpportunityQuery {
     /// `communication`, `education`, … Absent means every domain.
-    #[param(max_length = 30)]
+    #[param(value_type = Option<crate::validators::SkillDomain>)]
     pub domain: Option<String>,
     /// One of the kinds. Absent means all of them.
     #[param(max_length = 30)]

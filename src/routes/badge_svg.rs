@@ -124,7 +124,9 @@ fn svg_response(body: String) -> impl IntoResponse {
 /// AND status ∈ {validated, merged} (both count as success — merged is
 /// the bonus tier of a validated slice).
 #[utoipa::path(
-    get, path = "/api/badge/user/{username}/validated.svg", tag = "public",
+    // Mounted at the root, not under `/api`, so a README can carry a short
+    // URL. The document claimed `/api/badge/...`, which 404s.
+    get, path = "/badge/user/{username}/validated.svg", tag = "public",
     params(("username" = String, Path, description = "Whose badge")),
     responses(
         (status = 200, description = "An SVG badge, cacheable, for a README"),
@@ -162,7 +164,7 @@ pub async fn user_validated_svg(
 /// SKI-117 — repo badge. Counts slices attached to the project matching
 /// (owner, name) with `status ∈ {validated, merged}`.
 #[utoipa::path(
-    get, path = "/api/badge/repo/{owner}/{name}/validated.svg", tag = "public",
+    get, path = "/badge/repo/{owner}/{name}/validated.svg", tag = "public",
     params(("owner" = String, Path, description = "Repository owner"), ("name" = String, Path, description = "Repository name")),
     responses(
         (status = 200, description = "An SVG badge, cacheable, for a README"),

@@ -49,13 +49,13 @@
 -- a liability, and a scraper that breaks silently is worse than a declared
 -- figure that says it is declared.
 
-UPDATE portfolio_platforms
-   SET skill_domain = 'security', sort_order = 610
- WHERE slug = 'hackerone';
-
-UPDATE portfolio_platforms
-   SET skill_domain = 'security', sort_order = 620
- WHERE slug = 'bugcrowd';
+-- HackerOne and Bugcrowd are NOT moved here. 0537 gives them to quality,
+-- which ships with exactly three platforms and would drop to one if these
+-- two left. This domain need not own the row: a bounty programme lives in
+-- external_bounty_programs below, a claim in external_bounty_claims (0561),
+-- and a researcher's HackerOne profile is a quality signal as much as a
+-- security one. Taking them would break another domain's rollout for no
+-- capability this one gains.
 
 INSERT INTO portfolio_platforms
     (slug, skill_domain, name, profile_url_pattern, items_label, reach_label,
@@ -64,12 +64,17 @@ VALUES
     ('hackthebox', 'security', 'Hack The Box',
      'https://app.hackthebox.com/profile/{handle}', 'machines pwned', 'global rank',
      FALSE, NULL, 630),
+    -- has_public_api is TRUE (both publish figures) but synced_by is NULL:
+    -- no worker fetches them yet. The two are different claims -- one about
+    -- the platform, one about this codebase. Stamping 'portfolio_sync' would
+    -- put them in a set the sweep reads, and it reads neither. Fetchers are
+    -- P-03/P-04; until they exist the honest value is NULL.
     ('tryhackme', 'security', 'TryHackMe',
      'https://tryhackme.com/p/{handle}', 'rooms completed', 'global rank',
-     TRUE, 'portfolio_sync', 640),
+     TRUE, NULL, 640),
     ('ctftime', 'security', 'CTFtime',
      'https://ctftime.org/user/{handle}', 'events played', 'rating',
-     TRUE, 'portfolio_sync', 650),
+     TRUE, NULL, 650),
     ('intigriti', 'security', 'Intigriti',
      'https://app.intigriti.com/researcher/{handle}', 'disclosed reports', 'points',
      FALSE, NULL, 660),

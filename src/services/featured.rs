@@ -308,7 +308,16 @@ async fn issue_attestation(
             )
             .await?;
         }
-        // Game, security and soft_skills declare no `featured_*` basis, and
+        "security" => {
+            crate::services::security_attestations::featured_security_researcher(
+                db,
+                user_id,
+                profile_url,
+                &citation,
+            )
+            .await?;
+        }
+        // Game and soft_skills declare no `featured_*` basis, and
         // silence is the right answer for them: somebody is put forward, the
         // announcement goes out, and there is nothing to attest.
         //

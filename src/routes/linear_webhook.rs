@@ -40,7 +40,9 @@ fn required_env() -> Result<(String, String), AppError> {
 /// Linear webhook. HMAC-signed; an unsigned or mis-signed body is refused
 /// before anything is read from it.
 #[utoipa::path(
-    post, path = "/api/webhooks/linear",
+    // Mounted at the root, not under `/api` — see the module note above. The
+    // document claimed `/api/webhooks/linear`, which 404s.
+    post, path = "/webhooks/linear",
     operation_id = "linearWebhookReceive",
     tag = "webhooks",
     request_body(content = String, description = "The raw Linear payload the signature covers"),

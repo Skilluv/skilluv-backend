@@ -501,6 +501,42 @@ pub async fn issue_for_user(db: &PgPool, user_id: Uuid) -> Result<Vec<String>, A
     Ok(issued)
 }
 
+/// Featured cyber researcher of the week (F-09).
+///
+/// Editorial, like every other domain's featuring: no formula, a person's
+/// judgement, and an attestation that says so. The basis is declared in the
+/// `SECURITY` domain and counted by the `featured_times` craft-score weight,
+/// so the featuring has to actually issue it — a declared basis with no arm is
+/// a profile term stuck at zero, which is the exact failure
+/// `every_domain_that_declares_a_featuring_basis_issues_it` guards against.
+pub async fn featured_security_researcher(
+    db: &PgPool,
+    user_id: Uuid,
+    profile_url: &str,
+    citation: &str,
+) -> Result<artefact_attestations::Issued, AppError> {
+    if citation.trim().is_empty() {
+        return Err(AppError::Validation(
+            "featuring somebody without saying why is a decision nobody can question".into(),
+        ));
+    }
+    artefact_attestations::issue(
+        db,
+        user_id,
+        "featured_security_researcher",
+        &Evidence {
+            url: profile_url.to_string(),
+            title: "Featured security researcher".into(),
+            description: citation.trim().to_string(),
+            deliverable_id: None,
+            project_id: None,
+            skill_node_ids: vec![],
+        },
+        &SECURITY,
+    )
+    .await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

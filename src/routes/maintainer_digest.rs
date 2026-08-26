@@ -33,10 +33,14 @@ pub struct SubscribeBody {
 /// Ask for the maintainer digest. Nothing is sent until the mailed link
 /// is followed — the address is not taken at its word.
 #[utoipa::path(
-    post, path = "/api/maintainer-digest/subscribe", tag = "public",
+    // Mounted at the root, not under `/api`: public and self-serve. The
+    // document claimed `/api/maintainer-digest/...` for all three of these,
+    // which 404s.
+    post, path = "/maintainer-digest/subscribe", tag = "public",
     request_body = SubscribeBody,
     responses(
         (status = 202, description = "A confirmation mail was sent. Nothing is delivered until the link is followed"),
+        (status = 400, description = "A missing field, or a repo that is not owner/name", body = crate::api_response::ErrorResponse),
     ),
 )]
 pub async fn subscribe(
@@ -83,7 +87,7 @@ pub async fn subscribe(
 /// A GET because it is reached by clicking a link in a mail client, and
 /// the token is single use.
 #[utoipa::path(
-    get, path = "/api/maintainer-digest/confirm/{token}", tag = "public",
+    get, path = "/maintainer-digest/confirm/{token}", tag = "public",
     params(("token" = String, Path, description = "The one-shot token mailed to the maintainer")),
     responses(
         (status = 200, body = serde_json::Value),
@@ -103,7 +107,7 @@ pub async fn confirm(
 
 /// Stop a maintainer's digest from the link every digest carries.
 #[utoipa::path(
-    get, path = "/api/maintainer-digest/unsubscribe/{token}", tag = "public",
+    get, path = "/maintainer-digest/unsubscribe/{token}", tag = "public",
     params(("token" = String, Path, description = "The unsubscribe token carried by every digest")),
     responses(
         (status = 200, body = serde_json::Value),

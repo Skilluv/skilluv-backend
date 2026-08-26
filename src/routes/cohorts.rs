@@ -198,7 +198,11 @@ struct MyCohortRow {
     role: String,
 }
 
+/// `deny_unknown_fields` like every other listing here: a caller who writes
+/// `?orientaton=rust` gets every cohort and believes the filter worked, which
+/// is worse than a 400 naming the parameter.
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[serde(deny_unknown_fields)]
 pub struct ListCohortsQuery {
     /// Filter by orientation slug (not id — this is the discovery surface,
     /// and slugs are what appear in URLs).
@@ -874,7 +878,13 @@ struct AdminCohortRow {
     organizer_user_id: Option<Uuid>,
 }
 
-async fn admin_list(
+#[utoipa::path(
+    get, path = "/api/admin/cohorts", tag = "admin",
+    operation_id = "adminCohortsList",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_list(
     _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
@@ -967,7 +977,7 @@ async fn admin_list(
     }))))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct AdminArchiveBody {
     /// At least 8 characters. A cohort frozen without a recorded motive is
@@ -981,7 +991,14 @@ pub struct AdminArchiveBody {
 /// resurrect a cycle everyone has been told is over. Archiving an already
 /// archived cohort answers 409 rather than succeeding silently — a
 /// moderator needs to know the gesture they just made was somebody else's.
-async fn admin_archive(
+#[utoipa::path(
+    post, path = "/api/admin/cohorts/{id}/archive", tag = "admin",
+    operation_id = "adminCohortArchive",
+    params(("id" = uuid::Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_archive(
     _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,

@@ -485,7 +485,13 @@ pub struct AdminStatsQuery {
     pub top: Option<i64>,
 }
 
-async fn admin_stats(
+#[utoipa::path(
+    get, path = "/api/admin/assistant/stats", tag = "admin",
+    operation_id = "adminAssistantStats",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_stats(
     _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
@@ -526,7 +532,14 @@ pub struct AdminLedgerQuery {
 /// Mirrors `GET /api/users/me/assistant-interactions` field for field, so
 /// the admin panel and the learner are looking at the same object and a
 /// dispute cannot turn on the two views disagreeing.
-async fn admin_user_interactions(
+#[utoipa::path(
+    get, path = "/api/admin/users/{user_id}/assistant-interactions", tag = "admin",
+    operation_id = "adminUserAssistantInteractions",
+    params(("user_id" = uuid::Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_user_interactions(
     _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,

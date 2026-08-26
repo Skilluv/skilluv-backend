@@ -57,7 +57,7 @@ pub fn security_routes() -> Router<AppState> {
         // Reporting.
         .route("/security/reports", get(my_reports).post(submit_report))
         .route("/security/reports/uploads", post(upload_proof))
-        .route("/security/proofs/{*key}", get(download_proof))
+        .route("/security/proofs", get(download_proof))
         .route("/security/reports/{id}/withdraw", post(withdraw))
         .route("/security/reports/{id}/answer-round", post(answer_round))
         // Practice.
@@ -398,8 +398,19 @@ pub async fn upload_proof(
 }
 
 /// A one-hour link to a proof, for whoever is allowed to see it.
+/// The object key of a proof file — a bucket path such as
+/// `security-proofs/{uploader}/{uuid}.png`. A query parameter rather than a
+/// path segment because it contains slashes: an axum path capture would need a
+/// `{*key}` wildcard, which OpenAPI cannot describe as a normal parameter, and
+/// a document that cannot name the segment is one no generated client can call.
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct ProofKeyQuery {
+    pub key: String,
+}
+
 #[utoipa::path(
-    get, path = "/api/security/proofs/{key}", tag = "security",
+    get, path = "/api/security/proofs", tag = "security",
+    params(ProofKeyQuery),
     params(("key" = String, Path, description = "Proof key from the upload")),
     responses(
         (status = 200, body = ApiResponse<serde_json::Value>),
@@ -410,8 +421,9 @@ pub async fn upload_proof(
 pub async fn download_proof(
     State(state): State<AppState>,
     auth: AuthUser,
-    Path(key): Path<String>,
+    Query(q): Query<ProofKeyQuery>,
 ) -> Result<Json<ApiResponse<Value>>, AppError> {
+    let key = q.key;
     if !key.starts_with("security-proofs/") || key.contains("..") {
         return Err(AppError::Validation("not a proof key".into()));
     }

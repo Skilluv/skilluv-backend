@@ -57,7 +57,10 @@ fn wrap(data: serde_json::Value) -> serde_json::Value {
 /// page.
 #[utoipa::path(
     get, path = "/api/featured/{domain}", tag = "profile",
-    params(("domain" = String, Path, description = "skill domain")),
+    params((
+        "domain" = crate::validators::SkillDomain, Path,
+        description = "skill domain"
+    )),
     responses(
         (status = 200, description = "this week's featured talent, or null"),
         (status = 400, description = "unknown domain", body = crate::api_response::ErrorResponse),
@@ -88,7 +91,13 @@ pub struct RecentQuery {
 /// The last weeks of a domain, newest first.
 #[utoipa::path(
     get, path = "/api/featured/{domain}/recent", tag = "profile",
-    params(("domain" = String, Path, description = "skill domain"), RecentQuery),
+    params(
+        (
+            "domain" = crate::validators::SkillDomain, Path,
+            description = "skill domain"
+        ),
+        RecentQuery
+    ),
     responses(
         (status = 200, description = "past featurings, newest first"),
         (status = 400, description = "unknown domain", body = crate::api_response::ErrorResponse),

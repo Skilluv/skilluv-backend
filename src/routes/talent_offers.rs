@@ -112,9 +112,25 @@ pub async fn create(
     Ok((StatusCode::CREATED, Json(wrap(json!({ "offer": offer })))))
 }
 
+/// The five kinds an offer can be, as a type, for the same reason
+/// `SkillDomain` exists: the document said `string`, the handler answered 400,
+/// and both were right. Mirrors `services::talent_offers::OFFER_TYPES`, which
+/// is what actually refuses a request; `the_offer_kinds_match_the_guard`
+/// fails when they drift.
+#[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum OfferKind {
+    PairProgramming,
+    CodeReview,
+    Whiteboard,
+    MockInterview,
+    CareerAdvice,
+}
+
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
 pub struct BrowseQuery {
     #[serde(default)]
+    #[param(value_type = Option<OfferKind>)]
     pub offer_type: Option<String>,
     /// Filter by skill slug (not id — this is a public browse surface).
     #[serde(default)]
@@ -316,7 +332,13 @@ pub struct AdminBrowseQuery {
     pub offset: Option<i64>,
 }
 
-async fn admin_browse(
+#[utoipa::path(
+    get, path = "/api/admin/talent-offers", tag = "admin",
+    operation_id = "adminTalentOffersList",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_browse(
     _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
@@ -357,7 +379,7 @@ async fn admin_browse(
     }))))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct AdminDeactivateBody {
     /// At least 8 characters. It is shown to nobody automatically, but it
@@ -370,7 +392,14 @@ pub struct AdminDeactivateBody {
 /// Not a delete: the offer stays readable so a dispute over it can be
 /// instructed against what was actually published, rather than against
 /// somebody's recollection of it.
-async fn admin_deactivate(
+#[utoipa::path(
+    post, path = "/api/admin/talent-offers/{id}/deactivate", tag = "admin",
+    operation_id = "adminTalentOfferDeactivate",
+    params(("id" = uuid::Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_deactivate(
     _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
@@ -412,7 +441,14 @@ async fn admin_deactivate(
 ///
 /// Deliberately a separate endpoint from the author's `PATCH`: the whole
 /// value of the hold is that the person it was placed on cannot undo it.
-async fn admin_reinstate(
+#[utoipa::path(
+    post, path = "/api/admin/talent-offers/{id}/reinstate", tag = "admin",
+    operation_id = "adminTalentOfferReinstate",
+    params(("id" = uuid::Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_reinstate(
     _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
@@ -443,4 +479,26 @@ async fn admin_reinstate(
     .await;
 
     Ok(Json(wrap(json!({ "offer": offer }))))
+}
+
+#[cfg(test)]
+mod offer_kind_tests {
+    use super::OfferKind;
+    use crate::services::talent_offers::OFFER_TYPES;
+
+    /// The document and the guard describe the same five kinds.
+    #[test]
+    fn the_offer_kinds_match_the_guard() {
+        let schema = serde_json::to_value(<OfferKind as utoipa::PartialSchema>::schema()).unwrap();
+        let documented: Vec<String> = schema["enum"]
+            .as_array()
+            .expect("a unit enum documents its values under `enum`")
+            .iter()
+            .map(|v| v.as_str().expect("each value is a string").to_string())
+            .collect();
+        assert_eq!(
+            documented, OFFER_TYPES,
+            "OfferKind and OFFER_TYPES have drifted"
+        );
+    }
 }

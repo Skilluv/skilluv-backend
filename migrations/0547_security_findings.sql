@@ -541,17 +541,23 @@ CREATE INDEX idx_attestations_security_finding
 INSERT INTO notification_kinds
     (kind, category, allows_in_app, allows_push, allows_email,
      default_in_app, default_push, default_email, transactional, cta_path)
+-- allows_* is a ceiling, not a preference: FALSE means nobody may ever turn
+-- the channel on. None of these earns that -- a reporter who wants every
+-- transition pushed is entitled to it. Out-of-box behaviour lives in
+-- default_* (most do not push by default; the three that matter do). An
+-- earlier version set allows_push FALSE and tripped, correctly,
+-- no_shipped_kind_locks_anyone_out_of_a_channel.
 VALUES
-('security.finding_received',   'learning', TRUE, FALSE, TRUE, TRUE, FALSE, TRUE, TRUE, '/security/reports'),
-('security.finding_triaged',    'learning', TRUE, FALSE, TRUE, TRUE, FALSE, TRUE, TRUE, '/security/reports'),
-('security.finding_confirmed',  'learning', TRUE, TRUE,  TRUE, TRUE, TRUE,  TRUE, TRUE, '/security/reports'),
-('security.finding_duplicate',  'learning', TRUE, FALSE, TRUE, TRUE, FALSE, TRUE, TRUE, '/security/reports'),
-('security.finding_rejected',   'learning', TRUE, FALSE, TRUE, TRUE, FALSE, TRUE, TRUE, '/security/reports'),
-('security.finding_round',      'learning', TRUE, TRUE,  TRUE, TRUE, TRUE,  TRUE, TRUE, '/security/reports'),
-('security.finding_fixed',      'learning', TRUE, FALSE, TRUE, TRUE, FALSE, TRUE, TRUE, '/security/reports'),
-('security.finding_published',  'learning', TRUE, TRUE,  TRUE, TRUE, TRUE,  TRUE, TRUE, '/security/hall-of-fame'),
-('security.severity_changed',   'learning', TRUE, FALSE, TRUE, TRUE, FALSE, TRUE, TRUE, '/security/reports'),
-('security.embargo_ending',     'learning', TRUE, FALSE, TRUE, TRUE, FALSE, TRUE, TRUE, '/security/reports'),
+('security.finding_received',   'learning', TRUE, TRUE, TRUE, TRUE, FALSE, TRUE, TRUE, '/security/reports'),
+('security.finding_triaged',    'learning', TRUE, TRUE, TRUE, TRUE, FALSE, TRUE, TRUE, '/security/reports'),
+('security.finding_confirmed',  'learning', TRUE, TRUE, TRUE, TRUE, TRUE,  TRUE, TRUE, '/security/reports'),
+('security.finding_duplicate',  'learning', TRUE, TRUE, TRUE, TRUE, FALSE, TRUE, TRUE, '/security/reports'),
+('security.finding_rejected',   'learning', TRUE, TRUE, TRUE, TRUE, FALSE, TRUE, TRUE, '/security/reports'),
+('security.finding_round',      'learning', TRUE, TRUE, TRUE, TRUE, TRUE,  TRUE, TRUE, '/security/reports'),
+('security.finding_fixed',      'learning', TRUE, TRUE, TRUE, TRUE, FALSE, TRUE, TRUE, '/security/reports'),
+('security.finding_published',  'learning', TRUE, TRUE, TRUE, TRUE, TRUE,  TRUE, TRUE, '/security/hall-of-fame'),
+('security.severity_changed',   'learning', TRUE, TRUE, TRUE, TRUE, FALSE, TRUE, TRUE, '/security/reports'),
+('security.embargo_ending',     'learning', TRUE, TRUE, TRUE, TRUE, FALSE, TRUE, TRUE, '/security/reports'),
 -- The two the triager sees rather than the reporter.
-('security.triage_queued',      'admin',    TRUE, FALSE, TRUE, TRUE, FALSE, TRUE, TRUE, '/admin/security/findings'),
-('security.dedup_suspected',    'admin',    TRUE, FALSE, FALSE, TRUE, FALSE, FALSE, TRUE, '/admin/security/findings');
+('security.triage_queued',      'admin',    TRUE, TRUE, TRUE, TRUE, FALSE, TRUE, TRUE, '/admin/security/findings'),
+('security.dedup_suspected',    'admin',    TRUE, TRUE, TRUE, TRUE, FALSE, FALSE, TRUE, '/admin/security/findings');

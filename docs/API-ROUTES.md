@@ -497,7 +497,7 @@ Served to `forum_moderator` or `admin`.
 | POST | `/security/reports` | `SubmitInput` | `{ finding }` — 5/h. Out-of-scope hosts are refused with the reason, and a CVSS vector is scored server-side rather than trusted |
 | GET | `/security/reports` | — | `{ findings: [...] }` — your own, with the rounds and the reviewer's reasoning |
 | POST | `/security/reports/uploads` | multipart `file` | `{ key, size }` — 20/h, 20 MB each, private bucket. Returns a key and never a URL |
-| GET | `/security/proofs/{key}` | — | `{ url }` — a one-hour signed link. The reporter, a triager, a security reviewer, an administrator; nobody else |
+| GET | `/security/proofs?key=` | — | `{ url }` — a one-hour signed link. The reporter, a triager, a security reviewer, an administrator; nobody else. `key` is the bucket path, a query parameter because it holds slashes |
 | POST | `/security/reports/{id}/withdraw` | `{ reason? }` | `{ finding }` — the reporter's own, before confirmation |
 | POST | `/security/reports/{id}/answer-round` | `{ round_no, answer }` | `{ round }` — answering a question the reviewer asked |
 | GET | `/security/external-bounties/claims` | — | `{ claims: [...] }` |

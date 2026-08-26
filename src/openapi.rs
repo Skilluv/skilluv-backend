@@ -250,6 +250,18 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         // the document never mentioned. Smaller, because the modules missing
         // them are the same ones whose reads were missing too.
         crate::routes::ai_companion::ask,
+        // Admin and moderation surfaces added by SKI-295..301. They shipped
+        // with handlers and no OpenAPI entry, so the generated document — and
+        // any client built from it — omitted them; the read-endpoint sweep
+        // caught it once the suite actually ran.
+        crate::routes::ai_companion::admin_stats,
+        crate::routes::ai_companion::admin_user_interactions,
+        crate::routes::cohorts::admin_list,
+        crate::routes::cohorts::admin_archive,
+        crate::routes::talent_offers::admin_browse,
+        crate::routes::talent_offers::admin_deactivate,
+        crate::routes::talent_offers::admin_reinstate,
+        crate::routes::vouchings::moderation_queue,
         crate::routes::apprentice_verifications::record_verdict,
         crate::routes::bookmarks::create,
         crate::routes::cohorts::create,
@@ -1346,6 +1358,9 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
     ),
     components(
         schemas(
+            // Two closed vocabularies the document used to spell `string`.
+            crate::validators::SkillDomain,
+            crate::routes::talent_offers::OfferKind,
             crate::routes::practice::AdoptBody,
             crate::routes::practice::DeclineBody,
             crate::routes::practice::ToolkitResponse,
@@ -1353,6 +1368,8 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
             crate::routes::ai_companion::AskBody,
             crate::routes::bookmarks::CreateBookmarkBody,
             crate::routes::cohorts::CreateCohortBody,
+            crate::routes::cohorts::AdminArchiveBody,
+            crate::routes::talent_offers::AdminDeactivateBody,
             crate::routes::cohorts::PostMessageBody,
             crate::routes::external_signals::CreateSignalBody,
             crate::routes::goals::CreateGoalBody,

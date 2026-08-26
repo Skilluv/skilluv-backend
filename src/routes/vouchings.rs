@@ -265,7 +265,13 @@ pub struct QueueQuery {
 /// Same gate as the break itself: a moderator who may end a vouching may
 /// read the list of them, and splitting the two would mean granting the
 /// destructive half without the half that tells you where to point it.
-async fn moderation_queue(
+#[utoipa::path(
+    get, path = "/api/moderation/vouchings", tag = "moderation",
+    operation_id = "moderationVouchingsQueue",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn moderation_queue(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<QueueQuery>,

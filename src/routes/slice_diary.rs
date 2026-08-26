@@ -88,7 +88,9 @@ fn wrap(data: serde_json::Value) -> serde_json::Value {
 /// Write a diary entry against a slice. The diary is what the work looked
 /// like while it was happening, not a summary written afterwards.
 #[utoipa::path(
-    post, path = "/api/slices/{id}/diary", tag = "slices",
+    post, path = "/api/slices/{id}/diary",
+    operation_id = "sliceDiaryCreate",
+    tag = "slices",
     params(("id" = uuid::Uuid, Path, description = "The slice")),
     request_body = CreateEntryBody,
     responses(
@@ -162,7 +164,9 @@ pub async fn create(
 
 /// A slice's diary, in the order it was written.
 #[utoipa::path(
-    get, path = "/api/slices/{id}/diary", tag = "slices",
+    get, path = "/api/slices/{id}/diary",
+    operation_id = "sliceDiaryList",
+    tag = "slices",
     params(("id" = uuid::Uuid, Path, description = "The slice")),
     responses(
         (status = 200, body = serde_json::Value),

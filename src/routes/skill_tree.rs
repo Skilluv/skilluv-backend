@@ -56,7 +56,9 @@ use crate::validators::SKILL_DOMAINS as ALLOWED_DOMAINS;
 
 /// Somebody's skill tree. Follows the privacy they set on their profile.
 #[utoipa::path(
-    get, path = "/api/users/{user_id}/skill-tree", tag = "profile",
+    get, path = "/api/users/{user_id}/skill-tree",
+    operation_id = "skillTreeUserSkillTree",
+    tag = "profile",
     params(("user_id" = uuid::Uuid, Path, description = "Whose tree"), SkillTreeQuery),
     responses(
         (status = 200, body = serde_json::Value),

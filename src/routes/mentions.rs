@@ -95,6 +95,7 @@ pub struct MentionsMarkedResponse {
 #[utoipa::path(
     get,
     path = "/api/users/me/mentions",
+    operation_id = "mentionsListMine",
     tag = "mentions",
     params(ListMentionsQuery),
     responses(

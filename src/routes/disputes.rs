@@ -172,7 +172,9 @@ pub async fn withdraw(
 
 /// Every dispute the caller is party to, from either side.
 #[utoipa::path(
-    get, path = "/api/disputes", tag = "payments",
+    get, path = "/api/disputes",
+    operation_id = "disputesMine",
+    tag = "payments",
     responses(
         (status = 200, description = "Disputes", body = ApiResponse<Vec<Dispute>>),
     ),
@@ -240,7 +242,9 @@ pub async fn decide(
 
 /// The operator queue: contested disputes, oldest first.
 #[utoipa::path(
-    get, path = "/api/admin/disputes", tag = "admin",
+    get, path = "/api/admin/disputes",
+    operation_id = "disputesQueue",
+    tag = "admin",
     responses(
         (status = 200, description = "Contested disputes", body = serde_json::Value),
         (status = 403, description = "Not an operator", body = crate::api_response::ErrorResponse),

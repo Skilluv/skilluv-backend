@@ -99,7 +99,9 @@ struct CreateSignalResponse {
 /// Declare a signal from outside the platform. Declared is not verified,
 /// and the profile shows the difference.
 #[utoipa::path(
-    post, path = "/api/users/me/external-signals", tag = "profile",
+    post, path = "/api/users/me/external-signals",
+    operation_id = "externalSignalsCreate",
+    tag = "profile",
     request_body = CreateSignalBody,
     responses(
         (status = 201, description = "Declared. Unverified until a moderator confirms it"),
@@ -135,7 +137,9 @@ pub async fn create(
 
 /// The caller's own signals, verified and declared alike.
 #[utoipa::path(
-    get, path = "/api/users/me/external-signals", tag = "profile",
+    get, path = "/api/users/me/external-signals",
+    operation_id = "externalSignalsListMine",
+    tag = "profile",
     responses((status = 200, body = serde_json::Value)),
     security(("cookie_auth" = [])),
 )]
@@ -149,7 +153,9 @@ pub async fn list_mine(
 
 /// Withdraw one of the caller's own signals.
 #[utoipa::path(
-    delete, path = "/api/users/me/external-signals/{id}", tag = "profile",
+    delete, path = "/api/users/me/external-signals/{id}",
+    operation_id = "externalSignalsRemove",
+    tag = "profile",
     params(("id" = uuid::Uuid, Path)),
     responses(
         (status = 204, description = "Removed"),

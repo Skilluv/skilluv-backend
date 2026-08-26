@@ -58,7 +58,9 @@ fn build_response(data: Value) -> Value {
 
 /// The vocabulary of the domain, so a client does not hard-code it.
 #[utoipa::path(
-    get, path = "/api/quality/reference", tag = "work",
+    get, path = "/api/quality/reference",
+    operation_id = "qualityReference",
+    tag = "work",
     responses((status = 200, body = serde_json::Value)),
 )]
 pub async fn reference(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
@@ -87,7 +89,9 @@ pub async fn reference(State(state): State<AppState>) -> Result<Json<Value>, App
 
 /// The public quality profile.
 #[utoipa::path(
-    get, path = "/api/users/{username}/quality-profile", tag = "profile",
+    get, path = "/api/users/{username}/quality-profile",
+    operation_id = "qualityProfile",
+    tag = "profile",
     params(("username" = String, Path, description = "Username")),
     responses(
         (status = 200, body = serde_json::Value),

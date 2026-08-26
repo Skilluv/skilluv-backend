@@ -69,6 +69,7 @@ pub async fn my_skill_tree(
 #[utoipa::path(
     get,
     path = "/api/skills/tree/{user_id}",
+    operation_id = "gamificationUserSkillTree",
     tag = "profile",
     params(("user_id" = Uuid, Path, description = "Target user UUID")),
     responses(

@@ -338,7 +338,9 @@ pub async fn schedule_session(
 
 /// The sessions on one match.
 #[utoipa::path(
-    get, path = "/api/peer-matches/{id}/sessions", tag = "social",
+    get, path = "/api/peer-matches/{id}/sessions",
+    operation_id = "peerMatchingListSessions",
+    tag = "social",
     params(("id" = uuid::Uuid, Path)),
     responses(
         (status = 200, body = serde_json::Value),
@@ -376,7 +378,9 @@ pub struct CheckInBody {
 
 /// Record that a session happened, and what came of it.
 #[utoipa::path(
-    patch, path = "/api/peer-sessions/{id}", tag = "social",
+    patch, path = "/api/peer-sessions/{id}",
+    operation_id = "peerMatchingCheckIn",
+    tag = "social",
     params(("id" = uuid::Uuid, Path)),
     request_body = CheckInBody,
     responses(
@@ -404,7 +408,9 @@ pub async fn check_in(
 
 /// Cancel a scheduled session.
 #[utoipa::path(
-    delete, path = "/api/peer-sessions/{id}", tag = "social",
+    delete, path = "/api/peer-sessions/{id}",
+    operation_id = "peerMatchingCancelSession",
+    tag = "social",
     params(("id" = uuid::Uuid, Path)),
     responses(
         (status = 200, description = "Cancelled"),

@@ -72,7 +72,9 @@ pub async fn pick_questions(
 
 /// Submit answers for a compagnon to look at.
 #[utoipa::path(
-    post, path = "/api/beginner/verifications", tag = "challenges",
+    post, path = "/api/beginner/verifications",
+    operation_id = "apprenticeVerificationsSubmit",
+    tag = "challenges",
     request_body = crate::services::apprentice_verification::SubmitPayload,
     responses(
         (status = 200, description = "Submitted for a compagnon to look at"),
@@ -95,7 +97,9 @@ pub async fn submit(
 
 /// The verifications the caller asked for, whatever state they reached.
 #[utoipa::path(
-    get, path = "/api/beginner/verifications/mine", tag = "profile",
+    get, path = "/api/beginner/verifications/mine",
+    operation_id = "apprenticeVerificationsMine",
+    tag = "profile",
     responses((status = 200, body = serde_json::Value)),
     security(("cookie_auth" = [])),
 )]
@@ -122,7 +126,9 @@ fn default_limit() -> i64 {
 
 /// Verification requests waiting on a compagnon. Verifiers only.
 #[utoipa::path(
-    get, path = "/api/beginner/verifications/queue", tag = "moderation",
+    get, path = "/api/beginner/verifications/queue",
+    operation_id = "apprenticeVerificationsQueue",
+    tag = "moderation",
     params(QueueParams),
     responses(
         (status = 200, body = serde_json::Value),

@@ -95,7 +95,9 @@ pub struct RejectBody {
 
 /// SKI-85 — POST /api/slices/{id}/validation/reject
 #[utoipa::path(
-    post, path = "/api/slices/{id}/validation/reject", tag = "slices",
+    post, path = "/api/slices/{id}/validation/reject",
+    operation_id = "sliceValidationReject",
+    tag = "slices",
     params(("id" = uuid::Uuid, Path)),
     request_body = RejectBody,
     responses(

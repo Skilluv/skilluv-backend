@@ -78,7 +78,9 @@ pub struct CreateOfferBody {
 
 /// Publish an offer to teach, review or mentor.
 #[utoipa::path(
-    post, path = "/api/talent-offers", tag = "opportunities",
+    post, path = "/api/talent-offers",
+    operation_id = "talentOffersCreate",
+    tag = "opportunities",
     request_body = CreateOfferBody,
     responses(
         (status = 201, description = "Published"),
@@ -157,7 +159,9 @@ pub async fn browse(
 
 /// The offers the caller published, including the closed ones.
 #[utoipa::path(
-    get, path = "/api/users/me/talent-offers", tag = "opportunities",
+    get, path = "/api/users/me/talent-offers",
+    operation_id = "talentOffersListMine",
+    tag = "opportunities",
     responses((status = 200, body = serde_json::Value)),
     security(("cookie_auth" = [])),
 )]
@@ -200,7 +204,9 @@ pub struct UpdateOfferBody {
 
 /// Change one of the caller's offers.
 #[utoipa::path(
-    patch, path = "/api/talent-offers/{id}", tag = "opportunities",
+    patch, path = "/api/talent-offers/{id}",
+    operation_id = "talentOffersUpdate",
+    tag = "opportunities",
     params(("id" = uuid::Uuid, Path)),
     request_body = UpdateOfferBody,
     responses(
@@ -230,7 +236,9 @@ pub async fn update(
 
 /// Withdraw one of the caller's offers.
 #[utoipa::path(
-    delete, path = "/api/talent-offers/{id}", tag = "opportunities",
+    delete, path = "/api/talent-offers/{id}",
+    operation_id = "talentOffersRemove",
+    tag = "opportunities",
     params(("id" = uuid::Uuid, Path)),
     responses(
         (status = 204, description = "Withdrawn"),

@@ -70,7 +70,9 @@ pub struct CreateGoalBody {
 
 /// Set a goal. Progress is recomputed on every read, never stored.
 #[utoipa::path(
-    post, path = "/api/users/me/goals", tag = "profile",
+    post, path = "/api/users/me/goals",
+    operation_id = "goalsCreate",
+    tag = "profile",
     request_body = CreateGoalBody,
     responses(
         (status = 201, description = "The goal was set"),
@@ -155,7 +157,9 @@ pub struct ListGoalsQuery {
 
 /// The caller's goals with their progress recomputed on read.
 #[utoipa::path(
-    get, path = "/api/users/me/goals", tag = "profile",
+    get, path = "/api/users/me/goals",
+    operation_id = "goalsListMine",
+    tag = "profile",
     params(ListGoalsQuery),
     responses((status = 200, body = serde_json::Value)),
     security(("cookie_auth" = [])),
@@ -171,7 +175,9 @@ pub async fn list_mine(
 
 /// One of the caller's goals, with its progress.
 #[utoipa::path(
-    get, path = "/api/users/me/goals/{id}", tag = "profile",
+    get, path = "/api/users/me/goals/{id}",
+    operation_id = "goalsFetch",
+    tag = "profile",
     params(("id" = uuid::Uuid, Path)),
     responses(
         (status = 200, body = serde_json::Value),
@@ -211,7 +217,9 @@ where
 
 /// Change a goal's target or its deadline.
 #[utoipa::path(
-    patch, path = "/api/users/me/goals/{id}", tag = "profile",
+    patch, path = "/api/users/me/goals/{id}",
+    operation_id = "goalsUpdate",
+    tag = "profile",
     params(("id" = uuid::Uuid, Path)),
     request_body = UpdateGoalBody,
     responses(
@@ -264,7 +272,9 @@ pub async fn update(
 
 /// Drop a goal.
 #[utoipa::path(
-    delete, path = "/api/users/me/goals/{id}", tag = "profile",
+    delete, path = "/api/users/me/goals/{id}",
+    operation_id = "goalsRemove",
+    tag = "profile",
     params(("id" = uuid::Uuid, Path)),
     responses(
         (status = 204, description = "Deleted"),

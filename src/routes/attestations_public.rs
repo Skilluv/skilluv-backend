@@ -102,7 +102,9 @@ type AttestationRow = (
 /// Check an attestation by its hash. Public: this is the surface a
 /// recruiter reaches from the certificate without holding an account.
 #[utoipa::path(
-    get, path = "/api/verify/{hash}", tag = "attestations",
+    get, path = "/api/verify/{hash}",
+    operation_id = "attestationsPublicVerify",
+    tag = "attestations",
     params(("hash" = String, Path, description = "The attestation hash printed on the certificate")),
     responses(
         (status = 200, body = serde_json::Value),

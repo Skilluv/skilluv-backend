@@ -524,7 +524,9 @@ pub async fn list_my_sessions(
 
 /// Cancel a mentorship session.
 #[utoipa::path(
-    post, path = "/api/mentorship/sessions/{id}/cancel", tag = "challenges",
+    post, path = "/api/mentorship/sessions/{id}/cancel",
+    operation_id = "mentorshipCancelSession",
+    tag = "challenges",
     params(("id" = uuid::Uuid, Path)),
     responses((status = 200, body = serde_json::Value)),
     security(("cookie_auth" = [])),

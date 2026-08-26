@@ -295,7 +295,9 @@ pub async fn record_outcome(
 /// to tell apart from one that ran to the end — so concluding is an act
 /// rather than a date passing.
 #[utoipa::path(
-    post, path = "/api/education/cohorts/{cohort_id}/conclude", tag = "education",
+    post, path = "/api/education/cohorts/{cohort_id}/conclude",
+    operation_id = "educationConcludeCohort",
+    tag = "education",
     params(("cohort_id" = Uuid, Path, description = "Cohort")),
     responses(
         (status = 200, description = "Concluded", body = ApiResponse<serde_json::Value>),

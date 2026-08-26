@@ -177,7 +177,9 @@ fn default_limit() -> i64 {
 
 /// The open cases, oldest first.
 #[utoipa::path(
-    get, path = "/api/admin/plagiarism", tag = "admin",
+    get, path = "/api/admin/plagiarism",
+    operation_id = "plagiarismQueue",
+    tag = "admin",
     params(QueueQuery),
     responses(
         (status = 200, body = ApiResponse<Vec<Case>>),

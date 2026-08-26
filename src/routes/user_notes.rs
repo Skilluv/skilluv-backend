@@ -79,7 +79,9 @@ struct NoteRow {
 /// Write the caller's private note about something. One note per target,
 /// so this replaces rather than appends.
 #[utoipa::path(
-    put, path = "/api/users/me/notes/{target_type}/{target_id}", tag = "profile",
+    put, path = "/api/users/me/notes/{target_type}/{target_id}",
+    operation_id = "userNotesUpsert",
+    tag = "profile",
     params(("target_type" = String, Path, description = "What the note is about"), ("target_id" = uuid::Uuid, Path, description = "Which one")),
     request_body = UpsertNoteBody,
     responses(
@@ -135,7 +137,9 @@ pub async fn upsert(
 
 /// The caller's note about one thing, if they wrote one.
 #[utoipa::path(
-    get, path = "/api/users/me/notes/{target_type}/{target_id}", tag = "profile",
+    get, path = "/api/users/me/notes/{target_type}/{target_id}",
+    operation_id = "userNotesFetch",
+    tag = "profile",
     params(("target_type" = String, Path, description = "What the note is about"), ("target_id" = uuid::Uuid, Path, description = "Which one")),
     responses(
         (status = 200, body = serde_json::Value),
@@ -167,7 +171,9 @@ pub async fn fetch(
 
 /// Delete the caller's note about something.
 #[utoipa::path(
-    delete, path = "/api/users/me/notes/{target_type}/{target_id}", tag = "profile",
+    delete, path = "/api/users/me/notes/{target_type}/{target_id}",
+    operation_id = "userNotesRemove",
+    tag = "profile",
     params(("target_type" = String, Path, description = "What the note is about"), ("target_id" = uuid::Uuid, Path, description = "Which one")),
     responses(
         (status = 204, description = "Deleted"),
@@ -211,7 +217,9 @@ pub struct ListNotesQuery {
 
 /// The caller's private notes. Never readable by anybody else.
 #[utoipa::path(
-    get, path = "/api/users/me/notes", tag = "profile",
+    get, path = "/api/users/me/notes",
+    operation_id = "userNotesListMine",
+    tag = "profile",
     params(ListNotesQuery),
     responses((status = 200, body = serde_json::Value)),
     security(("cookie_auth" = [])),

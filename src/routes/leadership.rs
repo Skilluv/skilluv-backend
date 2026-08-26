@@ -81,7 +81,9 @@ fn build_response(data: Value) -> Value {
 
 /// The vocabulary of the domain, so a client does not hard-code it.
 #[utoipa::path(
-    get, path = "/api/leadership/reference", tag = "work",
+    get, path = "/api/leadership/reference",
+    operation_id = "leadershipReference",
+    tag = "work",
     responses((status = 200, body = serde_json::Value)),
 )]
 pub async fn reference(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
@@ -111,7 +113,9 @@ pub async fn reference(State(state): State<AppState>) -> Result<Json<Value>, App
 
 /// The public leadership profile.
 #[utoipa::path(
-    get, path = "/api/users/{username}/leadership-profile", tag = "profile",
+    get, path = "/api/users/{username}/leadership-profile",
+    operation_id = "leadershipProfile",
+    tag = "profile",
     params(("username" = String, Path, description = "Username")),
     responses(
         (status = 200, body = serde_json::Value),
@@ -365,7 +369,9 @@ pub async fn my_retrospectives(
 }
 
 #[utoipa::path(
-    post, path = "/api/leadership/retrospectives/{id}/actions", tag = "work",
+    post, path = "/api/leadership/retrospectives/{id}/actions",
+    operation_id = "leadershipAddAction",
+    tag = "work",
     params(("id" = Uuid, Path, description = "Retrospective id")),
     request_body = leadership_practice::ActionInput,
     responses(
@@ -521,7 +527,9 @@ pub struct DepartureBody {
 }
 
 #[utoipa::path(
-    post, path = "/api/leadership/cohorts/{id}/departure", tag = "work",
+    post, path = "/api/leadership/cohorts/{id}/departure",
+    operation_id = "leadershipRecordDeparture",
+    tag = "work",
     params(("id" = Uuid, Path, description = "Cohort id")),
     request_body = DepartureBody,
     responses(
@@ -556,7 +564,9 @@ pub struct ConcludeBody {
 
 /// Bring a cohort to its end, and get the numbers back.
 #[utoipa::path(
-    post, path = "/api/leadership/cohorts/{id}/conclude", tag = "work",
+    post, path = "/api/leadership/cohorts/{id}/conclude",
+    operation_id = "leadershipConcludeCohort",
+    tag = "work",
     params(("id" = Uuid, Path, description = "Cohort id")),
     request_body = ConcludeBody,
     responses(

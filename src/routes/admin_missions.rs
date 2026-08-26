@@ -147,6 +147,7 @@ pub struct AdminMissionRow {
 #[utoipa::path(
     get,
     path = "/api/admin/missions",
+    operation_id = "adminMissionsList",
     tag = "admin",
     params(ListQuery),
     responses(
@@ -287,6 +288,7 @@ pub struct AdminMissionDetail {
 #[utoipa::path(
     get,
     path = "/api/admin/missions/{slug}",
+    operation_id = "adminMissionsDetail",
     tag = "admin",
     params(("slug" = String, Path, description = "Mission slug")),
     responses(

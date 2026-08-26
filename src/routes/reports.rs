@@ -162,6 +162,7 @@ pub async fn create_report(
 #[utoipa::path(
     get,
     path = "/api/reports/mine",
+    operation_id = "reportsMyReports",
     tag = "moderation",
     responses(
         (status = 200, description = "The caller's reports", body = ApiResponse<MyReportsResponse>),

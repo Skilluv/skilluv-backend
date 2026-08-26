@@ -173,6 +173,7 @@ pub async fn list_conversations(
 #[utoipa::path(
     get,
     path = "/api/dm/conversations/{id}/messages",
+    operation_id = "dmListMessages",
     tag = "dm",
     params(
         ("id" = Uuid, Path, description = "Conversation UUID"),

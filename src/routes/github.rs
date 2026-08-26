@@ -209,7 +209,9 @@ pub async fn callback(
 
 /// Disconnect the caller's GitHub account (revokes token, keeps history).
 #[utoipa::path(
-    post, path = "/api/auth/github/disconnect", tag = "auth",
+    post, path = "/api/auth/github/disconnect",
+    operation_id = "githubDisconnect",
+    tag = "auth",
     responses((status = 200, body = serde_json::Value)),
     security(("cookie_auth" = [])),
 )]

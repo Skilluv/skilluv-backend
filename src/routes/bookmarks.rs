@@ -104,7 +104,9 @@ fn validate_folder(slug: &str) -> Result<(), AppError> {
 
 /// Bookmark something, optionally into a folder.
 #[utoipa::path(
-    post, path = "/api/bookmarks", tag = "profile",
+    post, path = "/api/bookmarks",
+    operation_id = "bookmarksCreate",
+    tag = "profile",
     request_body = CreateBookmarkBody,
     responses(
         (status = 201, description = "Bookmarked"),
@@ -157,7 +159,9 @@ pub async fn create(
 
 /// Remove one of the caller's bookmarks.
 #[utoipa::path(
-    delete, path = "/api/bookmarks/{id}", tag = "profile",
+    delete, path = "/api/bookmarks/{id}",
+    operation_id = "bookmarksRemove",
+    tag = "profile",
     params(("id" = uuid::Uuid, Path)),
     responses(
         (status = 204, description = "Removed"),
@@ -206,7 +210,9 @@ const UNFILED: &str = "unfiled";
 
 /// The caller's bookmarks, newest first.
 #[utoipa::path(
-    get, path = "/api/users/me/bookmarks", tag = "profile",
+    get, path = "/api/users/me/bookmarks",
+    operation_id = "bookmarksListMine",
+    tag = "profile",
     params(ListQuery),
     responses((status = 200, body = serde_json::Value)),
     security(("cookie_auth" = [])),

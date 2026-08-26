@@ -113,7 +113,9 @@ fn default_true() -> bool {
 
 /// Open a cohort. The caller leads it.
 #[utoipa::path(
-    post, path = "/api/cohorts", tag = "education",
+    post, path = "/api/cohorts",
+    operation_id = "cohortsCreate",
+    tag = "education",
     request_body = CreateCohortBody,
     responses(
         (status = 201, description = "The cohort was opened, with the caller leading it"),
@@ -216,7 +218,9 @@ pub struct ListCohortsQuery {
 /// never appear here, even for their own members (they reach them through
 /// `/users/me/cohorts`).
 #[utoipa::path(
-    get, path = "/api/cohorts", tag = "education",
+    get, path = "/api/cohorts",
+    operation_id = "cohortsList",
+    tag = "education",
     params(ListCohortsQuery),
     responses((status = 200, body = serde_json::Value)),
 )]
@@ -272,7 +276,9 @@ pub async fn list(
 
 /// One cohort. Private cohorts answer only to their own members.
 #[utoipa::path(
-    get, path = "/api/cohorts/{id}", tag = "education",
+    get, path = "/api/cohorts/{id}",
+    operation_id = "cohortsFetch",
+    tag = "education",
     params(("id" = uuid::Uuid, Path, description = "Cohort id")),
     responses(
         (status = 200, body = serde_json::Value),
@@ -336,7 +342,9 @@ pub struct UpdateCohortBody {
 
 /// Change a cohort. Whoever leads it.
 #[utoipa::path(
-    patch, path = "/api/cohorts/{id}", tag = "education",
+    patch, path = "/api/cohorts/{id}",
+    operation_id = "cohortsUpdate",
+    tag = "education",
     params(("id" = uuid::Uuid, Path)),
     request_body = UpdateCohortBody,
     responses(
@@ -747,7 +755,9 @@ pub struct ListMessagesQuery {
 
 /// A cohort's thread. Members only.
 #[utoipa::path(
-    get, path = "/api/cohorts/{id}/messages", tag = "education",
+    get, path = "/api/cohorts/{id}/messages",
+    operation_id = "cohortsListMessages",
+    tag = "education",
     params(("id" = uuid::Uuid, Path), ListMessagesQuery),
     responses(
         (status = 200, body = serde_json::Value),
@@ -770,7 +780,9 @@ pub async fn list_messages(
 /// The caller's cohorts, including private ones. This is how a member
 /// reaches a private cohort — it never appears in discovery.
 #[utoipa::path(
-    get, path = "/api/users/me/cohorts", tag = "education",
+    get, path = "/api/users/me/cohorts",
+    operation_id = "cohortsListMine",
+    tag = "education",
     responses((status = 200, body = serde_json::Value)),
     security(("cookie_auth" = [])),
 )]

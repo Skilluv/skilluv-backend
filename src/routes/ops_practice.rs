@@ -56,7 +56,9 @@ fn build_response(data: Value) -> Value {
 
 /// The vocabulary of the domain, so a client does not hard-code it.
 #[utoipa::path(
-    get, path = "/api/ops/reference", tag = "work",
+    get, path = "/api/ops/reference",
+    operation_id = "opsPracticeReference",
+    tag = "work",
     responses((status = 200, body = serde_json::Value)),
 )]
 pub async fn reference(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
@@ -264,7 +266,9 @@ pub struct ActionBody {
 }
 
 #[utoipa::path(
-    post, path = "/api/ops/incidents/{id}/actions", tag = "work",
+    post, path = "/api/ops/incidents/{id}/actions",
+    operation_id = "opsPracticeAddAction",
+    tag = "work",
     params(("id" = Uuid, Path, description = "Incident id")),
     request_body = ActionBody,
     responses(

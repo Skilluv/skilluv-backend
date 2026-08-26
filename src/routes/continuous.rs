@@ -140,7 +140,9 @@ pub struct CheckInBody {
 
 /// A monthly check-in. Either side can write; both should.
 #[utoipa::path(
-    post, path = "/api/onboardings/{id}/check-in", tag = "work",
+    post, path = "/api/onboardings/{id}/check-in",
+    operation_id = "continuousCheckIn",
+    tag = "work",
     params(("id" = Uuid, Path, description = "Onboarding id")),
     request_body = CheckInBody,
     responses(

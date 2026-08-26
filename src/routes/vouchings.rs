@@ -68,7 +68,9 @@ pub struct CreateVouchingBody {
 /// Vouch for somebody. A vouching carries the voucher's own standing,
 /// which is why it can be broken.
 #[utoipa::path(
-    post, path = "/api/vouchings", tag = "profile",
+    post, path = "/api/vouchings",
+    operation_id = "vouchingsCreate",
+    tag = "profile",
     request_body = CreateVouchingBody,
     responses(
         (status = 201, description = "Vouched"),
@@ -176,7 +178,9 @@ pub async fn list_for_user(
 
 /// Vouchings the caller wrote for other people.
 #[utoipa::path(
-    get, path = "/api/users/me/vouchings", tag = "profile",
+    get, path = "/api/users/me/vouchings",
+    operation_id = "vouchingsListMine",
+    tag = "profile",
     responses((status = 200, body = serde_json::Value)),
     security(("cookie_auth" = [])),
 )]
@@ -196,7 +200,9 @@ pub async fn list_mine(
 /// Withdraw a vouching the caller wrote. Their standing backed it, so it
 /// is theirs to take back.
 #[utoipa::path(
-    delete, path = "/api/vouchings/{id}", tag = "profile",
+    delete, path = "/api/vouchings/{id}",
+    operation_id = "vouchingsWithdraw",
+    tag = "profile",
     params(("id" = uuid::Uuid, Path)),
     responses(
         (status = 204, description = "Withdrawn"),

@@ -536,7 +536,9 @@ struct ApplyBody {
 
 /// Apply to join a guild.
 #[utoipa::path(
-    post, path = "/api/guilds/{id}/applications", tag = "guilds",
+    post, path = "/api/guilds/{id}/applications",
+    operation_id = "guildApply",
+    tag = "guilds",
     params(("id" = uuid::Uuid, Path)),
     request_body(content = serde_json::Value),
     responses((status = 200, body = serde_json::Value)),

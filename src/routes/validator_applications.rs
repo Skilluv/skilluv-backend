@@ -63,7 +63,9 @@ fn wrap(data: serde_json::Value) -> serde_json::Value {
 
 /// SKI-81 — user self-nominates for a validator domain.
 #[utoipa::path(
-    post, path = "/api/me/apply-as-validator", tag = "profile",
+    post, path = "/api/me/apply-as-validator",
+    operation_id = "validatorApplicationsApply",
+    tag = "profile",
     request_body = ApplyInput,
     responses(
         (status = 201, description = "The application is queued for review"),
@@ -122,7 +124,9 @@ pub async fn accept_invitation(
 
 /// Withdraw your own application.
 #[utoipa::path(
-    post, path = "/api/validator-applications/{id}/withdraw", tag = "profile",
+    post, path = "/api/validator-applications/{id}/withdraw",
+    operation_id = "validatorApplicationsWithdraw",
+    tag = "profile",
     params(("id" = uuid::Uuid, Path, description = "The application to withdraw")),
     responses(
         (status = 200, description = "Withdrawn"),

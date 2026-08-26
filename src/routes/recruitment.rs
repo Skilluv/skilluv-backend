@@ -492,7 +492,9 @@ pub struct DepartureBody {
 
 /// Admin: somebody left inside the guarantee.
 #[utoipa::path(
-    post, path = "/api/admin/recruitment/fees/{id}/departure", tag = "admin",
+    post, path = "/api/admin/recruitment/fees/{id}/departure",
+    operation_id = "recruitmentRecordDeparture",
+    tag = "admin",
     params(("id" = Uuid, Path, description = "Success fee id")),
     request_body = DepartureBody,
     responses(

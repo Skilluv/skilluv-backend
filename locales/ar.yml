@@ -426,6 +426,59 @@ notification:
       body: "الطرفان غير متفقين. لا أحد يُدفع له قبل الحسم."
       cta: "فتح النزاعات"
 
+  # Cyber disclosure notifications. Transactional throughout, like the French
+  # and English sets: nobody can opt out of learning what happened to a report
+  # they filed themselves.
+  security:
+    finding_received:
+      title: "وصل تقريرك"
+      body: "{title} في قائمة الانتطار. سيقرأه أحدهم خلال {days} أيام ويجيبك في الحالتين."
+      cta: "عرض تقاريري"
+    finding_triaged:
+      title: "تقريرك تحت الفحص"
+      body: "{title} تجاوز الفرز، وهو الآن عند مراجع سيحاول إعادة إنتاجه."
+      cta: "عرض تقاريري"
+    finding_confirmed:
+      title: "أُعيد إنتاجه - الثغرة حقيقية"
+      body: "وصل شخص آخر إلى النتيجة نفسها في {title}. الخطورة {severity}. الإصلاح ليس عملك، والفضل عملك."
+      cta: "عرض تقاريري"
+    finding_duplicate:
+      title: "معروف مسبقًا"
+      body: "{title} أُبلغ عنه قبل تقريرك. عملك مسجّل كاكتشاف مستقل - لا مكافأة، فالأسبقية هي التي تحددها."
+      cta: "عرض تقاريري"
+    finding_rejected:
+      title: "غير مقبول"
+      body: "{title} لم يُقبل. {reason}"
+      cta: "عرض تقاريري"
+    finding_round:
+      title: "المراجع يحتاج المزيد"
+      body: "بخصوص {title}: {reason} الكلمة لك - أجب على التقرير."
+      cta: "الرد على المراجع"
+    finding_fixed:
+      title: "شُحن الإصلاح"
+      body: "{title} أُصلح. يأتي بعده النشر التفصيلي، وعليه اسمك."
+      cta: "عرض تقاريري"
+    finding_published:
+      title: "أصبح علنيًا"
+      body: "{title} نُشر، مع الشرح واسمك عليه. تجده في لوحة الشرف وعلى ملفك."
+      cta: "عرض لوحة الشرف"
+    severity_changed:
+      title: "تغيّرت الخطورة"
+      body: "{title} انتقل من {before} إلى {after}. السبب مكتوب على التقرير، ويمكنك الاعتراض عليه."
+      cta: "قراءة التبرير"
+    embargo_ending:
+      title: "مدة الحجب تقترب من نهايتها"
+      body: "{title} يخرج من الحجب بعد {days} أيام. لا شيء يُنشر تلقائيًا."
+      cta: "عرض تقاريري"
+    triage_queued:
+      title: "{count} تقرير في انتطار الفرز"
+      body: "لم يقرأها أحد بعد. المدة المعلنة {days} أيام."
+      cta: "فتح القائمة"
+    dedup_suspected:
+      title: "تقريران متشابهان"
+      body: "{title} يشبه تقريرًا مقدّمًا سابقًا. لم يُدمج شيء - الدمج يحدد من يُدفع له."
+      cta: "المقارنة بينهما"
+
 # Vocabulary reused inside notification bodies, so a translator writes
 # one sentence with a placeholder rather than two parallel titles.
 guild:

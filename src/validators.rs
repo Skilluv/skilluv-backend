@@ -33,7 +33,39 @@ pub const SKILL_DOMAINS: &[&str] = &[
     "ai",
     "soft_skills",
     "audio",
+    "quality",
+    "leadership",
+    "communication",
+    "education",
 ];
+
+/// The same twelve domains as a type, so a `domain` parameter in the OpenAPI
+/// document says which values it takes.
+///
+/// The guard below stays a `&[&str]`: it runs on the request path against a
+/// string that arrived as a string, and converting to an enum to compare would
+/// buy nothing. This exists for the document, which described every one of
+/// these parameters as `string` — so a generated client offered no completion,
+/// and the contract fuzzer read a correct 400 as a defect, because by the
+/// document `"0"` was a valid domain.
+///
+/// `the_schema_enum_matches_the_guard` fails when the two drift.
+#[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SkillDomain {
+    Code,
+    Design,
+    Game,
+    Security,
+    Ops,
+    Ai,
+    SoftSkills,
+    Audio,
+    Quality,
+    Leadership,
+    Communication,
+    Education,
+}
 
 /// Refuse a domain nothing knows, naming what was allowed.
 ///
@@ -413,5 +445,33 @@ mod tests {
         assert!(validate_bounded_line_opt(None, "name", 1, 50).is_ok());
         assert!(validate_bounded_line_opt(Some("ok"), "name", 1, 50).is_ok());
         assert!(validate_bounded_line_opt(Some(" bad"), "name", 1, 50).is_err());
+    }
+
+    /// The document and the guard describe the same twelve domains.
+    ///
+    /// Order included: the enum is what a generated client offers in a
+    /// dropdown, and a reader comparing it to `SKILL_DOMAINS` should not have
+    /// to sort two lists in their head.
+    #[test]
+    fn the_schema_enum_matches_the_guard() {
+        let schema =
+            serde_json::to_value(<SkillDomain as utoipa::PartialSchema>::schema()).unwrap();
+        let documented: Vec<String> = schema["enum"]
+            .as_array()
+            .expect("a unit enum documents its values under `enum`")
+            .iter()
+            .map(|v| v.as_str().expect("each value is a string").to_string())
+            .collect();
+        assert_eq!(
+            documented, SKILL_DOMAINS,
+            "SkillDomain and SKILL_DOMAINS have drifted — a parameter now              documents a value the guard refuses, or refuses one it documents"
+        );
+
+        // And each one really deserializes, which is what proves the snake_case
+        // renaming covers `soft_skills`.
+        for domain in SKILL_DOMAINS {
+            serde_json::from_value::<SkillDomain>(serde_json::Value::String((*domain).to_string()))
+                .unwrap_or_else(|e| panic!("{domain} is not a SkillDomain variant: {e}"));
+        }
     }
 }

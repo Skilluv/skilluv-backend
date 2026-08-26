@@ -87,7 +87,7 @@ fn validate_slug(slug: &str) -> Result<(), AppError> {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CreateCohortBody {
     pub slug: String,
@@ -111,7 +111,18 @@ fn default_true() -> bool {
     true
 }
 
-async fn create(
+/// Open a cohort. The caller leads it.
+#[utoipa::path(
+    post, path = "/api/cohorts",
+    operation_id = "cohortsCreate",
+    tag = "education",
+    request_body = CreateCohortBody,
+    responses(
+        (status = 201, description = "The cohort was opened, with the caller leading it"),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<CreateCohortBody>,
@@ -187,7 +198,11 @@ struct MyCohortRow {
     role: String,
 }
 
-#[derive(Debug, Deserialize)]
+/// `deny_unknown_fields` like every other listing here: a caller who writes
+/// `?orientaton=rust` gets every cohort and believes the filter worked, which
+/// is worse than a 400 naming the parameter.
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[serde(deny_unknown_fields)]
 pub struct ListCohortsQuery {
     /// Filter by orientation slug (not id — this is the discovery surface,
     /// and slugs are what appear in URLs).
@@ -206,7 +221,14 @@ pub struct ListCohortsQuery {
 /// Discovery listing. Public, non-archived cohorts only — private cohorts
 /// never appear here, even for their own members (they reach them through
 /// `/users/me/cohorts`).
-async fn list(
+#[utoipa::path(
+    get, path = "/api/cohorts",
+    operation_id = "cohortsList",
+    tag = "education",
+    params(ListCohortsQuery),
+    responses((status = 200, body = serde_json::Value)),
+)]
+pub async fn list(
     State(state): State<AppState>,
     Query(q): Query<ListCohortsQuery>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -256,7 +278,18 @@ async fn list(
     }))))
 }
 
-async fn fetch(
+/// One cohort. Private cohorts answer only to their own members.
+#[utoipa::path(
+    get, path = "/api/cohorts/{id}",
+    operation_id = "cohortsFetch",
+    tag = "education",
+    params(("id" = uuid::Uuid, Path, description = "Cohort id")),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 404, description = "No such cohort, or a private one you are not in", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn fetch(
     State(state): State<AppState>,
     OptionalAuth(auth): OptionalAuth,
     Path(id): Path<Uuid>,
@@ -292,7 +325,7 @@ async fn fetch(
     }))))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct UpdateCohortBody {
     #[serde(default)]
@@ -311,7 +344,21 @@ pub struct UpdateCohortBody {
     pub archive: Option<bool>,
 }
 
-async fn update(
+/// Change a cohort. Whoever leads it.
+#[utoipa::path(
+    patch, path = "/api/cohorts/{id}",
+    operation_id = "cohortsUpdate",
+    tag = "education",
+    params(("id" = uuid::Uuid, Path)),
+    request_body = UpdateCohortBody,
+    responses(
+        (status = 200, description = "Updated"),
+        (status = 403, description = "Only the people leading a cohort change it", body = crate::api_response::ErrorResponse),
+        (status = 409, description = "The change conflicts with where the cohort already is", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn update(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -388,7 +435,18 @@ async fn update(
     Ok(Json(wrap(json!({ "cohort": updated }))))
 }
 
-async fn join(
+/// Join a public cohort.
+#[utoipa::path(
+    post, path = "/api/cohorts/{id}/join", tag = "education",
+    params(("id" = uuid::Uuid, Path)),
+    responses(
+        (status = 201, description = "Joined"),
+        (status = 403, description = "Private cohorts are joined by invitation", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "No such cohort", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn join(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -397,7 +455,18 @@ async fn join(
     Ok((StatusCode::CREATED, Json(wrap(json!({ "member": member })))))
 }
 
-async fn leave(
+/// Leave a cohort. Recorded as a departure, not as an absence — a cohort
+/// that counts only its survivors cannot tell you it is failing.
+#[utoipa::path(
+    delete, path = "/api/cohorts/{id}/leave", tag = "education",
+    params(("id" = uuid::Uuid, Path)),
+    responses(
+        (status = 204, description = "Left"),
+        (status = 404, description = "You are not in that cohort", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn leave(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -406,8 +475,9 @@ async fn leave(
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
+#[schema(as = CohortAddMemberBody)]
 pub struct AddMemberBody {
     pub user_id: Uuid,
     /// `member` (default) or `organizer`. Re-posting with a different role
@@ -416,7 +486,18 @@ pub struct AddMemberBody {
     pub role: Option<String>,
 }
 
-async fn add_member(
+/// Add somebody to a cohort.
+#[utoipa::path(
+    post, path = "/api/cohorts/{id}/members", tag = "education",
+    params(("id" = uuid::Uuid, Path)),
+    request_body = AddMemberBody,
+    responses(
+        (status = 201, description = "Added"),
+        (status = 403, description = "Only the people leading a cohort add members", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn add_member(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -428,7 +509,18 @@ async fn add_member(
     Ok((StatusCode::CREATED, Json(wrap(json!({ "member": member })))))
 }
 
-async fn remove_member(
+/// Remove somebody from a cohort.
+#[utoipa::path(
+    delete, path = "/api/cohorts/{id}/members/{user_id}", tag = "education",
+    params(("id" = uuid::Uuid, Path, description = "Cohort id"), ("user_id" = uuid::Uuid, Path, description = "Who to remove")),
+    responses(
+        (status = 204, description = "Removed"),
+        (status = 403, description = "Only the people leading a cohort remove members", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "No such cohort, or no such member", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn remove_member(
     State(state): State<AppState>,
     auth: AuthUser,
     Path((id, target)): Path<(Uuid, Uuid)>,
@@ -440,7 +532,16 @@ async fn remove_member(
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn list_members(
+/// Who is in a cohort. Follows the same visibility rule as the cohort.
+#[utoipa::path(
+    get, path = "/api/cohorts/{id}/members", tag = "education",
+    params(("id" = uuid::Uuid, Path, description = "Cohort id")),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 404, description = "No such cohort, or a private one you are not in", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn list_members(
     State(state): State<AppState>,
     OptionalAuth(auth): OptionalAuth,
     Path(id): Path<Uuid>,
@@ -478,7 +579,7 @@ async fn list_members(
     Ok(Json(wrap(json!({ "members": members }))))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CreateMilestoneBody {
     pub title: String,
@@ -487,7 +588,18 @@ pub struct CreateMilestoneBody {
     pub target_date: chrono::NaiveDate,
 }
 
-async fn create_milestone(
+/// Add a milestone to a cohort's plan.
+#[utoipa::path(
+    post, path = "/api/cohorts/{id}/milestones", tag = "education",
+    params(("id" = uuid::Uuid, Path)),
+    request_body = CreateMilestoneBody,
+    responses(
+        (status = 201, description = "Added to the plan"),
+        (status = 403, description = "Only the people leading a cohort set milestones", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create_milestone(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -526,7 +638,16 @@ async fn create_milestone(
     ))
 }
 
-async fn list_milestones(
+/// A cohort's plan. Public where the cohort is.
+#[utoipa::path(
+    get, path = "/api/cohorts/{id}/milestones", tag = "education",
+    params(("id" = uuid::Uuid, Path)),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 404, description = "No such cohort", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn list_milestones(
     State(state): State<AppState>,
     OptionalAuth(auth): OptionalAuth,
     Path(id): Path<Uuid>,
@@ -543,7 +664,17 @@ async fn list_milestones(
     Ok(Json(wrap(json!({ "milestones": milestones }))))
 }
 
-async fn delete_milestone(
+/// Remove a milestone from a cohort's plan.
+#[utoipa::path(
+    delete, path = "/api/cohorts/{id}/milestones/{milestone_id}", tag = "education",
+    params(("id" = uuid::Uuid, Path, description = "Cohort id"), ("milestone_id" = uuid::Uuid, Path, description = "Which milestone")),
+    responses(
+        (status = 204, description = "Removed"),
+        (status = 404, description = "No such milestone in that cohort", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn delete_milestone(
     State(state): State<AppState>,
     auth: AuthUser,
     Path((id, milestone_id)): Path<(Uuid, Uuid)>,
@@ -564,13 +695,25 @@ async fn delete_milestone(
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PostMessageBody {
     pub body: String,
 }
 
-async fn post_message(
+/// Post to a cohort's thread. Members only.
+#[utoipa::path(
+    post, path = "/api/cohorts/{id}/messages", tag = "education",
+    params(("id" = uuid::Uuid, Path, description = "Cohort id")),
+    request_body = PostMessageBody,
+    responses(
+        (status = 201, description = "Posted"),
+        (status = 403, description = "Only members write to a cohort", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "No such cohort", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn post_message(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -605,7 +748,7 @@ async fn post_message(
     ))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
 pub struct ListMessagesQuery {
     #[serde(default)]
     pub limit: Option<i64>,
@@ -614,7 +757,20 @@ pub struct ListMessagesQuery {
     pub before: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-async fn list_messages(
+/// A cohort's thread. Members only.
+#[utoipa::path(
+    get, path = "/api/cohorts/{id}/messages",
+    operation_id = "cohortsListMessages",
+    tag = "education",
+    params(("id" = uuid::Uuid, Path), ListMessagesQuery),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 403, description = "Members only", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "No such cohort", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_messages(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -627,7 +783,14 @@ async fn list_messages(
 
 /// The caller's cohorts, including private ones. This is how a member
 /// reaches a private cohort — it never appears in discovery.
-async fn list_mine(
+#[utoipa::path(
+    get, path = "/api/users/me/cohorts",
+    operation_id = "cohortsListMine",
+    tag = "education",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_mine(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<impl IntoResponse, AppError> {
@@ -650,4 +813,248 @@ async fn list_mine(
         .collect();
 
     Ok(Json(wrap(json!({ "cohorts": items }))))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SKI-295 (T2-01b) — admin moderation
+// ═══════════════════════════════════════════════════════════════════
+//
+// The organizer-only surface has no answer for a cohort that has gone
+// wrong: `PATCH /cohorts/{id}` goes through `assert_organizer`, and the
+// discovery listing filters on `is_public AND archived_at IS NULL`, so a
+// private cohort was invisible to the very people whose job is to look at
+// it. The only recourse was an UPDATE in the database.
+//
+// Shaped after `POST /api/admin/guilds/{id}/dissolve`, which solved the
+// same problem for guilds: one archive gesture, one listing that can see
+// what it must moderate.
+//
+// Archiving is deliberately *not* a deletion, and members keep reading the
+// chat afterwards — `cohorts::list_messages` gates on membership alone,
+// never on `archived_at`. A cohort that turned abusive is also a cohort
+// where several people did honest work, and erasing their history to
+// punish one organizer would cost more than it fixes.
+
+/// Capabilities allowed to moderate a cohort. `community_moderator` sits
+/// alongside `admin` for the same reason it does on external signals and
+/// vouchings: a cohort name or description is user content, and vetting it
+/// is community moderation, not platform administration.
+const COHORT_MODERATOR_CAPS: &[&str] = &["admin", "community_moderator"];
+
+/// Mounted behind `admin_gate` in `lib.rs`.
+pub fn admin_cohort_routes() -> Router<AppState> {
+    Router::new()
+        .route("/admin/cohorts", get(admin_list))
+        .route("/admin/cohorts/{id}/archive", post(admin_archive))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AdminListCohortsQuery {
+    #[serde(default)]
+    pub orientation: Option<String>,
+    /// Include cohorts that are not publicly discoverable.
+    #[serde(default)]
+    pub include_private: bool,
+    /// Include cohorts that have already been archived.
+    #[serde(default)]
+    pub include_archived: bool,
+    #[serde(default)]
+    pub limit: Option<i64>,
+    #[serde(default)]
+    pub offset: Option<i64>,
+}
+
+/// Join row for the admin listing: the public projection plus the two
+/// things moderation needs and discovery does not — who runs it, and
+/// whether the chat is active.
+#[derive(Debug, sqlx::FromRow)]
+struct AdminCohortRow {
+    #[sqlx(flatten)]
+    cohort: cohorts::Cohort,
+    member_count: i64,
+    orientation_slug: Option<String>,
+    message_count: i64,
+    organizer_username: Option<String>,
+    organizer_user_id: Option<Uuid>,
+}
+
+#[utoipa::path(
+    get, path = "/api/admin/cohorts", tag = "admin",
+    operation_id = "adminCohortsList",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_list(
+    _gate: crate::middleware::admin_gate::AdminGate,
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Query(q): Query<AdminListCohortsQuery>,
+) -> Result<impl IntoResponse, AppError> {
+    crate::middleware::capabilities::require_any_capability(
+        &state.db,
+        auth.user_id,
+        COHORT_MODERATOR_CAPS,
+    )
+    .await?;
+
+    let limit = q.limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT);
+    let offset = q.offset.unwrap_or(0).max(0);
+
+    let rows: Vec<AdminCohortRow> = sqlx::query_as(
+        r#"
+        SELECT c.*,
+               (SELECT COUNT(*) FROM cohort_members m WHERE m.cohort_id = c.id)
+                   AS member_count,
+               o.slug AS orientation_slug,
+               (SELECT COUNT(*) FROM cohort_messages g WHERE g.cohort_id = c.id)
+                   AS message_count,
+               org.username AS organizer_username,
+               org.id       AS organizer_user_id
+          FROM cohorts c
+          LEFT JOIN orientations o ON o.id = c.orientation_id
+          LEFT JOIN LATERAL (
+              SELECT u.id, u.username
+                FROM cohort_members m
+                JOIN users u ON u.id = m.user_id
+               WHERE m.cohort_id = c.id AND m.role = 'organizer'
+               ORDER BY m.joined_at ASC
+               LIMIT 1
+          ) org ON TRUE
+         WHERE ($1::BOOLEAN OR c.is_public = TRUE)
+           AND ($2::BOOLEAN OR c.archived_at IS NULL)
+           AND ($3::TEXT IS NULL OR o.slug = $3)
+         ORDER BY c.created_at DESC
+         LIMIT $4 OFFSET $5
+        "#,
+    )
+    .bind(q.include_private)
+    .bind(q.include_archived)
+    .bind(q.orientation.as_deref())
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(&state.db)
+    .await?;
+
+    let total: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+          FROM cohorts c
+          LEFT JOIN orientations o ON o.id = c.orientation_id
+         WHERE ($1::BOOLEAN OR c.is_public = TRUE)
+           AND ($2::BOOLEAN OR c.archived_at IS NULL)
+           AND ($3::TEXT IS NULL OR o.slug = $3)
+        "#,
+    )
+    .bind(q.include_private)
+    .bind(q.include_archived)
+    .bind(q.orientation.as_deref())
+    .fetch_one(&state.db)
+    .await?;
+
+    // Same projection as the public listing, so the admin table and the
+    // discovery page render from one shape.
+    let cohorts_json: Vec<serde_json::Value> = rows
+        .into_iter()
+        .map(|r| {
+            let seats_left = (r.cohort.max_members as i64 - r.member_count).max(0);
+            json!({
+                "cohort": r.cohort,
+                "orientation_slug": r.orientation_slug,
+                "member_count": r.member_count,
+                "seats_left": seats_left,
+                "message_count": r.message_count,
+                "organizer_user_id": r.organizer_user_id,
+                "organizer_username": r.organizer_username,
+            })
+        })
+        .collect();
+
+    Ok(Json(wrap(json!({
+        "cohorts": cohorts_json,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }))))
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct AdminArchiveBody {
+    /// At least 8 characters. A cohort frozen without a recorded motive is
+    /// the real problem; the missing audit entry only documents it.
+    pub reason: String,
+}
+
+/// Freeze a cohort from the admin side.
+///
+/// One-way, exactly like the organizer's own archive: un-archiving would
+/// resurrect a cycle everyone has been told is over. Archiving an already
+/// archived cohort answers 409 rather than succeeding silently — a
+/// moderator needs to know the gesture they just made was somebody else's.
+#[utoipa::path(
+    post, path = "/api/admin/cohorts/{id}/archive", tag = "admin",
+    operation_id = "adminCohortArchive",
+    params(("id" = uuid::Uuid, Path)),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_archive(
+    _gate: crate::middleware::admin_gate::AdminGate,
+    State(state): State<AppState>,
+    auth: AuthUser,
+    headers: axum::http::HeaderMap,
+    Path(id): Path<Uuid>,
+    Json(body): Json<AdminArchiveBody>,
+) -> Result<impl IntoResponse, AppError> {
+    crate::middleware::capabilities::require_any_capability(
+        &state.db,
+        auth.user_id,
+        COHORT_MODERATOR_CAPS,
+    )
+    .await?;
+
+    let reason = body.reason.trim();
+    if reason.chars().count() < 8 {
+        return Err(AppError::Validation(
+            "reason must be at least 8 characters — archiving is irreversible".into(),
+        ));
+    }
+
+    // Read first: `get` answers 404 for an unknown id, and the archived
+    // check needs the prior state anyway.
+    let existing = cohorts::get(&state.db, id).await?;
+    if existing.archived_at.is_some() {
+        return Err(AppError::Conflict("cohort is already archived".into()));
+    }
+
+    let updated: cohorts::Cohort = sqlx::query_as(
+        "UPDATE cohorts
+            SET archived_at = NOW(), updated_at = NOW()
+          WHERE id = $1
+          RETURNING *",
+    )
+    .bind(id)
+    .fetch_one(&state.db)
+    .await?;
+
+    crate::services::audit::record(
+        &state.db,
+        crate::services::audit::AuditEntry {
+            actor_type: crate::services::audit::ActorType::Admin,
+            actor_id: Some(auth.user_id),
+            action: "cohort.archive",
+            target_type: Some("cohort"),
+            target_id: Some(id),
+            metadata: Some(json!({
+                "slug": updated.slug,
+                "name": updated.name,
+                "is_public": updated.is_public,
+                "reason": reason,
+            })),
+            headers: Some(&headers),
+        },
+    )
+    .await;
+
+    Ok(Json(wrap(json!({ "cohort": updated }))))
 }

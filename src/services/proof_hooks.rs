@@ -124,6 +124,91 @@ async fn recompute_inner(
         }
     }
 
+    // 1quater. Quality attestations.
+    //
+    // Here for the reason the two above are, and with one extra: this
+    // domain's signature basis waits on a fix confirmation that arrives long
+    // after the deliverable was verified. Hooking verification alone would
+    // have left every confirmed defect permanently unattested.
+    match crate::services::quality_attestations::issue_for_user(db, user_id).await {
+        Ok(issued) if !issued.is_empty() => {
+            tracing::info!(user_id = %user_id, ?issued, "quality attestations issued");
+        }
+        Ok(_) => {}
+        Err(e) => {
+            tracing::warn!(user_id = %user_id, error = %e, "P19: quality attestations failed");
+            errors.push(format!("quality_attestations: {e}"));
+        }
+    }
+
+    // 1quinquies. Leadership attestations.
+    //
+    // The one with the most reasons to run here rather than at verification:
+    // a redaction confirmation, a retrospective's last action item and a
+    // cohort's conclusion all arrive well after the deliverable was
+    // verified.
+    match crate::services::leadership_attestations::issue_for_user(db, user_id).await {
+        Ok(issued) if !issued.is_empty() => {
+            tracing::info!(user_id = %user_id, ?issued, "leadership attestations issued");
+        }
+        Ok(_) => {}
+        Err(e) => {
+            tracing::warn!(user_id = %user_id, error = %e, "P19: leadership attestations failed");
+            errors.push(format!("leadership_attestations: {e}"));
+        }
+    }
+
+    // 1sexies. Communication attestations, for the same reason and in the
+    // same place. The published address of an article or a talk recording
+    // usually lands after the work is verified, so the generator is run from
+    // here rather than from the verification.
+    match crate::services::communication_attestations::issue_for_user(db, user_id).await {
+        Ok(issued) if !issued.is_empty() => {
+            tracing::info!(user_id = %user_id, ?issued, "communication attestations issued");
+        }
+        Ok(_) => {}
+        Err(e) => {
+            tracing::warn!(user_id = %user_id, error = %e, "P19: communication attestations failed");
+            errors.push(format!("communication_attestations: {e}"));
+        }
+    }
+
+    // 1septies. Education attestations. The one with the most reasons to
+    // arrive late: the learner-data declaration, the cohort's conclusion and
+    // the first adoption all happen after the work is verified.
+    //
+    // Seven blocks doing the same thing with a different function is where this
+    // stops scaling. The eighth domain should turn them into a list of
+    // generators rather than an eighth block and an eighth Latin ordinal —
+    // each one is `fn(&PgPool, Uuid) -> Result<Vec<String>>`, which is a
+    // shape a slice of function pointers can hold.
+    match crate::services::education_attestations::issue_for_user(db, user_id).await {
+        Ok(issued) if !issued.is_empty() => {
+            tracing::info!(user_id = %user_id, ?issued, "education attestations issued");
+        }
+        Ok(_) => {}
+        Err(e) => {
+            tracing::warn!(user_id = %user_id, error = %e, "P19: education attestations failed");
+            errors.push(format!("education_attestations: {e}"));
+        }
+    }
+
+    // 1octies. Security attestations, and the sharpest version of the reason
+    // all seven are here rather than at the point of verification: a finding is
+    // confirmed in March and published in June, and the publication earns a
+    // second basis on the same row. Hooking the confirmation alone would leave
+    // every disclosure permanently unattested.
+    match crate::services::security_attestations::issue_for_user(db, user_id).await {
+        Ok(issued) if !issued.is_empty() => {
+            tracing::info!(user_id = %user_id, ?issued, "security attestations issued");
+        }
+        Ok(_) => {}
+        Err(e) => {
+            tracing::warn!(user_id = %user_id, error = %e, "P19: security attestations failed");
+            errors.push(format!("security_attestations: {e}"));
+        }
+    }
+
     // 2. Badges
     let badges = match badge_engine::recompute_badges_for_user(db, user_id).await {
         Ok(r) => r,

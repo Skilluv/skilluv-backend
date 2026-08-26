@@ -40,13 +40,13 @@ pub struct ValidatorApplication {
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct ApplyInput {
     pub domain: String,
     pub motivation: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct InviteInput {
     pub user_id: Uuid,
     pub domain: String,

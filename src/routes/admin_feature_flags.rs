@@ -105,7 +105,9 @@ fn default_rollout() -> i16 {
 
 /// SKI-33 admin — create or update a flag (idempotent upsert).
 #[utoipa::path(
-    post, path = "/api/admin/feature-flags", tag = "admin",
+    post, path = "/api/admin/feature-flags",
+    operation_id = "adminFeatureFlagsUpsert",
+    tag = "admin",
     request_body(content = serde_json::Value),
     responses(
         (status = 200, description = "flag upserted", body = crate::api_response::ApiResponse<FeatureFlagUpserted>),
@@ -135,7 +137,9 @@ pub async fn upsert(
 
 /// SKI-33 admin — delete a flag.
 #[utoipa::path(
-    delete, path = "/api/admin/feature-flags/{key}", tag = "admin",
+    delete, path = "/api/admin/feature-flags/{key}",
+    operation_id = "adminFeatureFlagsRemove",
+    tag = "admin",
     params(("key" = String, Path)),
     responses(
         (status = 200, description = "flag removed", body = crate::api_response::ApiResponse<FeatureFlagRemoved>),

@@ -435,7 +435,9 @@ pub struct SubmitBody {
 }
 
 #[utoipa::path(
-    post, path = "/api/contests/{id}/submit", tag = "work",
+    post, path = "/api/contests/{id}/submit",
+    operation_id = "contestsSubmit",
+    tag = "work",
     params(("id" = Uuid, Path, description = "Contest id")),
     request_body = SubmitBody,
     responses(
@@ -516,7 +518,9 @@ pub async fn propose_interview(
 }
 
 #[utoipa::path(
-    post, path = "/api/enterprise/interviews/{id}/complete", tag = "enterprise",
+    post, path = "/api/enterprise/interviews/{id}/complete",
+    operation_id = "contestsComplete",
+    tag = "enterprise",
     params(("id" = Uuid, Path, description = "Interview id")),
     responses(
         (status = 200, body = serde_json::Value),

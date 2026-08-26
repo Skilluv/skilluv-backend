@@ -70,6 +70,50 @@ async fn a_verified_design_deliverable(app: &TestApp, user: Uuid) -> Uuid {
     .unwrap()
 }
 
+/// A verified deliverable in any domain, on a slice that domain accepts.
+///
+/// The subtype columns differ per domain and several are required by a CHECK,
+/// so this uses the plain `documentation` surface — which every domain
+/// accepts, carries no subtype, and is enough for a featuring: what the
+/// endpoint asks for is verified work, not work of a particular shape.
+async fn a_verified_deliverable_in(app: &TestApp, user: Uuid, domain: &str) -> Uuid {
+    let project: Uuid = sqlx::query_scalar(
+        "INSERT INTO projects (slug, name, owner_type, owner_id)
+         VALUES ($1, 'Projet mis en avant', 'user', $2) RETURNING id",
+    )
+    .bind(format!("featured-{}", Uuid::new_v4()))
+    .bind(user)
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+
+    let slice: Uuid = sqlx::query_scalar(
+        "INSERT INTO project_slices
+            (project_id, slice_type, title, description, primary_domain, difficulty, status)
+         VALUES ($1, 'documentation', 'Un travail', 'Une description.', $2, 2, 'validated')
+         RETURNING id",
+    )
+    .bind(project)
+    .bind(domain)
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+
+    sqlx::query_scalar(
+        "INSERT INTO deliverables
+            (slice_id, user_id, artifact_type, artifact_url, verifiable_by,
+             verification_status, verified_at, public)
+         VALUES ($1, $2, 'documentation', 'https://example.org/work', 'human_review',
+                 'verified', NOW(), TRUE)
+         RETURNING id",
+    )
+    .bind(slice)
+    .bind(user)
+    .fetch_one(&app.db)
+    .await
+    .unwrap()
+}
+
 /// The Monday of a week comfortably in the past, so no test depends on today.
 const A_MONDAY: &str = "2026-06-01";
 const THE_MONDAY_AFTER: &str = "2026-06-08";
@@ -150,6 +194,101 @@ async fn a_featuring_says_why_and_leaves_an_attestation() {
     .await
     .unwrap();
     assert_eq!(basis.as_deref(), Some("featured_designer"));
+}
+
+/// Every domain that declares a featuring basis actually issues it.
+///
+/// This is the guard for a bug that hid for two domains. `featured_ops_engineer`
+/// and `featured_audio_creator` existed as bases, were counted by
+/// `ops_profile` and `audio_profile`, and nothing ever issued them: the
+/// dispatch in `services::featured` had no arm and fell through to `_ => {}`.
+/// The featuring was recorded, the announcement went out, and the only symptom
+/// was a term stuck at zero on somebody else's profile — which is why nobody
+/// found it.
+///
+/// The list is read from `attestation_bases` rather than written here, so the
+/// eighth domain to declare a basis and forget the arm fails in CI instead of
+/// on a person.
+#[tokio::test]
+async fn every_domain_that_declares_a_featuring_basis_issues_it() {
+    let app = TestApp::spawn().await;
+    app.register_user("feat_admin_all").await;
+    let admin = user_id(&app, "feat_admin_all").await;
+    grant(&app, admin, "admin").await;
+
+    let declared: Vec<(String, String)> = sqlx::query_as(
+        r"SELECT skill_domain, basis FROM attestation_bases
+           WHERE basis LIKE 'featured\_%' AND skill_domain IS NOT NULL
+           ORDER BY skill_domain",
+    )
+    .fetch_all(&app.db)
+    .await
+    .unwrap();
+
+    assert!(
+        declared.len() >= 7,
+        "seven domains declare a featuring basis, got {declared:?}"
+    );
+
+    // A different week per domain: the endpoint allows one featuring per
+    // domain per week, and reusing one Monday would make this test pass for
+    // the first domain and refuse the rest.
+    let mondays = [
+        "2026-06-01",
+        "2026-06-08",
+        "2026-06-15",
+        "2026-06-22",
+        "2026-06-29",
+        "2026-07-06",
+        "2026-07-13",
+        "2026-07-20",
+    ];
+
+    let mut missing = Vec::new();
+
+    for (n, (domain, basis)) in declared.iter().enumerate() {
+        let username = format!("feat_all_{n}");
+        app.register_user(&username).await;
+        let person = user_id(&app, &username).await;
+        let deliverable = a_verified_deliverable_in(&app, person, domain).await;
+
+        app.login("feat_admin_all").await;
+        let resp = app
+            .post(
+                "/api/admin/featured",
+                &json!({
+                    "skill_domain": domain,
+                    "week_of": mondays[n % mondays.len()],
+                    "user_id": person,
+                    "reason_md": a_reason(),
+                    "deliverable_id": deliverable,
+                }),
+            )
+            .await;
+        assert_eq!(
+            resp.status().as_u16(),
+            201,
+            "featuring in {domain} was refused: {:?}",
+            resp.text().await
+        );
+
+        let issued: Option<String> =
+            sqlx::query_scalar("SELECT basis FROM attestations WHERE user_id = $1 AND basis = $2")
+                .bind(person)
+                .bind(basis)
+                .fetch_optional(&app.db)
+                .await
+                .unwrap();
+
+        if issued.is_none() {
+            missing.push(format!("{domain} declares {basis} and issued nothing"));
+        }
+    }
+
+    assert!(
+        missing.is_empty(),
+        "a featuring was recorded and no attestation followed — the symptom is a          profile term stuck at zero, which is why this is checked here: {missing:?}"
+    );
 }
 
 #[tokio::test]

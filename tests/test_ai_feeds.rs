@@ -14,7 +14,7 @@ async fn json(app: &TestApp, path: &str) -> serde_json::Value {
 #[tokio::test]
 async fn the_toolkit_answers_without_an_account() {
     let app = TestApp::spawn().await;
-    let data = json(&app, "/api/ai/toolkit").await;
+    let data = json(&app, "/api/domains/ai/toolkit").await;
     let resources = data["resources"].as_array().unwrap();
 
     assert!(resources.len() >= 20, "got {}", resources.len());
@@ -34,7 +34,7 @@ async fn the_toolkit_answers_without_an_account() {
 #[tokio::test]
 async fn filtering_the_toolkit_keeps_what_serves_everyone() {
     let app = TestApp::spawn().await;
-    let data = json(&app, "/api/ai/toolkit?orientation=nlp-engineer").await;
+    let data = json(&app, "/api/domains/ai/toolkit?orientation=nlp-engineer").await;
     let slugs: Vec<&str> = data["resources"]
         .as_array()
         .unwrap()
@@ -54,7 +54,7 @@ async fn filtering_the_toolkit_keeps_what_serves_everyone() {
 #[tokio::test]
 async fn an_unknown_toolkit_category_returns_nothing_rather_than_everything() {
     let app = TestApp::spawn().await;
-    let data = json(&app, "/api/ai/toolkit?category=inventee").await;
+    let data = json(&app, "/api/domains/ai/toolkit?category=inventee").await;
     assert!(data["resources"].as_array().unwrap().is_empty());
 }
 
@@ -264,12 +264,37 @@ async fn a_guide_is_served_with_its_body() {
     let body: serde_json::Value = resp.json().await.unwrap();
 
     assert_eq!(body["data"]["skill_domain"], "ai");
+    assert_eq!(
+        body["data"]["locale"], "en",
+        "English with no Accept-Language asked for: migration 0304 gave this guide an English row"
+    );
     assert!(
         body["data"]["body_md"]
             .as_str()
             .unwrap()
-            .contains("Double usage"),
+            .contains("Dual use"),
         "the template must carry the section the disclosure policy requires"
+    );
+
+    // And the French row still carries the same section. This assertion used
+    // to be the only one, made against the default locale, so it stopped
+    // testing the French guide the moment an English one existed beside it.
+    let fr: serde_json::Value = app
+        .get_with_header(
+            "/api/guides/template-red-team-report",
+            "accept-language",
+            "fr",
+        )
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(fr["data"]["locale"], "fr");
+    assert!(
+        fr["data"]["body_md"]
+            .as_str()
+            .unwrap()
+            .contains("Double usage")
     );
 }
 
@@ -280,15 +305,27 @@ async fn the_ai_award_categories_join_the_existing_ceremony() {
     // One ceremony, not two: an AI researcher and a library author named on
     // the same evening is what makes the AI categories visible to people who
     // would never have looked for them.
-    let ai: Vec<String> = sqlx::query_scalar(
-        "SELECT slug FROM award_categories
-          WHERE slug LIKE '%ai%' OR slug = 'best-dataset-published'
-          ORDER BY slug",
-    )
-    .fetch_all(&app.db)
-    .await
-    .unwrap();
-    assert_eq!(ai.len(), 6, "got {ai:?}");
+    // Named rather than matched. This was `slug LIKE '%ai%'`, which is a
+    // substring and therefore also catches `best-blockchain-project`,
+    // `best-trainer` and `cross-domain-educator` — three letters in the
+    // middle of an unrelated word. It passed while those categories did not
+    // exist and broke the day two domains added theirs, which is the wrong
+    // reason for a test about the AI categories to fail.
+    const AI_CATEGORIES: &[&str] = &[
+        "best-ai-application",
+        "best-ai-model",
+        "best-ai-safety-research",
+        "best-dataset-published",
+        "rookie-ai-researcher",
+    ];
+
+    let ai: Vec<String> =
+        sqlx::query_scalar("SELECT slug FROM award_categories WHERE slug = ANY($1) ORDER BY slug")
+            .bind(AI_CATEGORIES)
+            .fetch_all(&app.db)
+            .await
+            .unwrap();
+    assert_eq!(ai.len(), AI_CATEGORIES.len(), "got {ai:?}");
 
     // The claim is that the AI categories live in the same table as the code
     // ones — one ceremony — not that the table has a particular size. Every
@@ -299,15 +336,15 @@ async fn the_ai_award_categories_join_the_existing_ceremony() {
         .await
         .unwrap();
     assert!(
-        total >= 14,
-        "eight code categories plus six AI ones, at least: got {total}"
+        total >= 13,
+        "eight code categories plus the five AI ones, at least: got {total}"
     );
 
     let inactive: Vec<String> = sqlx::query_scalar(
         "SELECT slug FROM award_categories
-          WHERE (slug LIKE '%ai%' OR slug = 'best-dataset-published')
-            AND is_active = FALSE",
+          WHERE slug = ANY($1) AND is_active = FALSE",
     )
+    .bind(AI_CATEGORIES)
     .fetch_all(&app.db)
     .await
     .unwrap();
@@ -366,7 +403,7 @@ async fn ai_mentor_matching_needs_a_family_to_match_on() {
 
     // Refused with a message that names the fix, rather than an empty list
     // that reads as "there is nobody".
-    let resp = app.get("/api/ai/mentors/for-me").await;
+    let resp = app.get("/api/domains/ai/mentors/for-me").await;
     assert_eq!(resp.status().as_u16(), 400);
     let body = resp.text().await.unwrap_or_default();
     assert!(
@@ -409,10 +446,10 @@ async fn an_ai_mentor_is_suggested_with_the_reasoning_attached() {
     }
 
     app.login("ai_mentee").await;
-    let resp = app.get("/api/ai/mentors/for-me").await;
+    let resp = app.get("/api/domains/ai/mentors/for-me").await;
     assert_eq!(resp.status().as_u16(), 200, "{:?}", resp.text().await);
     let body: serde_json::Value = resp.json().await.unwrap();
-    let mentors = body["data"].as_array().unwrap();
+    let mentors = body["data"]["mentors"].as_array().unwrap();
 
     assert_eq!(
         mentors.len(),

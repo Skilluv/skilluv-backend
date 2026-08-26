@@ -39,7 +39,10 @@ pub fn enterprise_credits_routes() -> Router<AppState> {
         .route("/enterprise/invoices/{id}/html", get(get_invoice_html))
         // Alias — front called it `/preview` (per BE-P0-13 audit) and there's
         // no reason to make the front migrate the name for a doc mismatch.
-        .route("/enterprise/invoices/{id}/preview", get(get_invoice_html))
+        .route(
+            "/enterprise/invoices/{id}/preview",
+            get(get_invoice_preview),
+        )
         // BE-P0-36 — PDF endpoint. Delegates to the external
         // `skilluv-pdf-renderer` service (Python + weasyprint) via HTTP.
         // Returns 503 when `PDF_RENDERER_URL` isn't configured.
@@ -856,6 +859,25 @@ pub async fn get_invoice_html(
     ))
 }
 
+/// Render an invoice as HTML. Alias of `/html`, kept for the front.
+///
+/// A thin wrapper rather than a second route onto the same handler: a route
+/// the published document does not mention is a route nobody can find, and
+/// one function carries one `#[utoipa::path]`.
+#[utoipa::path(
+    get, path = "/api/enterprise/invoices/{id}/preview", tag = "enterprise",
+    params(("id" = uuid::Uuid, Path)),
+    responses((status = 200, description = "HTML content, same as /html")),
+    security(("cookie_auth" = [])),
+)]
+pub async fn get_invoice_preview(
+    state: State<AppState>,
+    auth: AuthUser,
+    id: axum::extract::Path<Uuid>,
+) -> Result<axum::response::Html<String>, AppError> {
+    get_invoice_html(state, auth, id).await
+}
+
 // BE-P0-36 / BE-P2-INVOICE-PDF — invoice PDF via external renderer.
 //
 // The backend stays in Rust land : it renders the same HTML as `/html` then
@@ -869,7 +891,17 @@ pub async fn get_invoice_html(
 //
 // When `PDF_RENDERER_URL` isn't configured we surface a clear 503 rather than
 // a broken blob or 500 — the front knows to fall back to browser print.
-async fn get_invoice_pdf(
+/// An invoice as a PDF, rendered by the sidecar service.
+#[utoipa::path(
+    get, path = "/api/enterprise/invoices/{id}/pdf", tag = "enterprise",
+    params(("id" = uuid::Uuid, Path)),
+    responses(
+        (status = 200, description = "The invoice as a PDF", content_type = "application/pdf"),
+        (status = 503, description = "PDF_RENDERER_URL is not configured", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn get_invoice_pdf(
     State(state): State<AppState>,
     auth: AuthUser,
     axum::extract::Path(id): axum::extract::Path<Uuid>,

@@ -48,7 +48,7 @@ fn wrap(data: serde_json::Value) -> serde_json::Value {
     })
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
 pub struct TimelineQuery {
     /// Narrow to a single event type.
     #[serde(default)]
@@ -59,7 +59,16 @@ pub struct TimelineQuery {
     pub offset: Option<i64>,
 }
 
-async fn get_timeline(
+/// Somebody's timeline. Follows the privacy they set on their profile.
+#[utoipa::path(
+    get, path = "/api/users/{id}/timeline", tag = "profile",
+    params(("id" = uuid::Uuid, Path, description = "Whose timeline"), TimelineQuery),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 404, description = "No such user, or a timeline they keep private", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn get_timeline(
     State(state): State<AppState>,
     OptionalAuth(auth): OptionalAuth,
     Path(user_id): Path<Uuid>,
@@ -107,7 +116,17 @@ async fn get_timeline(
 /// `AdminGate` only enforces the admin origin and mandatory 2FA; it
 /// deliberately does not check the role (see its doc comment). The
 /// capability check below is what actually restricts this to admins.
-async fn admin_backfill_timeline(
+#[utoipa::path(
+    post, path = "/api/admin/users/{id}/backfill-timeline", tag = "admin",
+    params(("id" = uuid::Uuid, Path, description = "Whose timeline to replay")),
+    responses(
+        (status = 200, description = "Replayed. `rows_inserted: 0` means it was already complete"),
+        (status = 403, description = "Admins only", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "No such user", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_backfill_timeline(
     _gate: AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,

@@ -134,26 +134,33 @@ async fn approve_verdict_triggers_recompute_capabilities_and_rank() {
         .expect("submit");
     }
 
-    // Le hook est async → laisse 800ms pour qu'il s'exécute.
-    tokio::time::sleep(Duration::from_millis(800)).await;
-
-    // Vérifie que challenger a été accordée (auto via capabilities_engine).
-    let has_challenger: bool = sqlx::query_scalar(
-        "SELECT EXISTS (SELECT 1 FROM user_capabilities
-                        WHERE user_id = $1 AND capability = 'challenger' AND revoked_at IS NULL)",
-    )
-    .bind(author)
-    .fetch_one(&db)
-    .await
-    .unwrap();
-    assert!(has_challenger, "challenger auto-accordé via hook");
-
-    // Vérifie que le rank a été promu à ranger (4 verified).
-    let rank: String = sqlx::query_scalar("SELECT rank FROM user_ranks WHERE user_id = $1")
+    // Le hook est async. On l'attend en pollant jusqu'à 8s plutôt qu'avec un
+    // sleep fixe : sous la charge de la CI (huit shards nextest, un Postgres
+    // partagé), 800ms ne suffisaient pas et le test tombait par intermittence.
+    // Un poll passe dès que le hook a fini et ne dépend plus de la latence.
+    let mut rank = String::new();
+    let mut has_challenger = false;
+    for _ in 0..80 {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        has_challenger = sqlx::query_scalar(
+            "SELECT EXISTS (SELECT 1 FROM user_capabilities
+                            WHERE user_id = $1 AND capability = 'challenger' AND revoked_at IS NULL)",
+        )
         .bind(author)
         .fetch_one(&db)
         .await
         .unwrap();
+        rank = sqlx::query_scalar("SELECT rank FROM user_ranks WHERE user_id = $1")
+            .bind(author)
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        if has_challenger && rank == "ranger" {
+            break;
+        }
+    }
+
+    assert!(has_challenger, "challenger auto-accordé via hook");
     assert_eq!(rank, "ranger", "rank auto-promu via hook après 4 verified");
 
     db.close().await;

@@ -29,22 +29,15 @@ use crate::api_response::ApiResponse;
 use crate::errors::AppError;
 use crate::services::ai_profile::{self, AiProfile};
 
-/// Ten minutes. The underlying rows change when an operator edits them or
-/// when the weekly stats sweep runs, so a fresher answer would be precision
-/// the data does not have.
-const AI_CACHE_TTL_SECS: u64 = 600;
-
 /// Long enough to be a real listing, short enough that nobody paginates
 /// through a feed whose whole point is "the best ones right now".
 const MAX_AI_LIMIT: i64 = 100;
 
 pub fn ai_routes() -> Router<AppState> {
     Router::new()
-        .route("/ai/toolkit", get(toolkit))
         .route("/ai/competitions", get(competitions))
         .route("/ai/artifacts", get(artifacts))
         .route("/users/{username}/ai-profile", get(user_ai_profile))
-        .route("/ai/mentors/for-me", get(mentor_matches))
 }
 
 fn check_limit(limit: i64) -> Result<i64, AppError> {
@@ -64,20 +57,6 @@ fn default_limit() -> i64 {
 // GET /ai/toolkit
 // ═══════════════════════════════════════════════════════════════════
 
-#[derive(Debug, Deserialize, IntoParams)]
-#[into_params(parameter_in = Query)]
-#[serde(deny_unknown_fields)]
-pub struct ToolkitQuery {
-    /// `framework`, `llm_tooling`, `mlops`, `data_stack`, `compute`,
-    /// `safety`, `hub`, `community`, `learning`.
-    #[param(max_length = 20)]
-    pub category: Option<String>,
-    /// Restrict to resources tagged for one trade. Resources tagged for none
-    /// serve the whole domain and are always included.
-    #[param(max_length = 60)]
-    pub orientation: Option<String>,
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone, sqlx::FromRow, ToSchema)]
 pub struct ToolkitRow {
     pub slug: String,
@@ -89,82 +68,6 @@ pub struct ToolkitRow {
     /// auditable without paying.
     pub access_note: String,
     pub orientation_slugs: Vec<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
-pub struct ToolkitResponse {
-    pub resources: Vec<ToolkitRow>,
-    /// Echoed back so a cached response is self-describing.
-    pub category: Option<String>,
-    pub orientation: Option<String>,
-}
-
-/// The curated AI toolkit: frameworks, hubs, compute, communities, courses.
-#[utoipa::path(
-    get,
-    path = "/api/ai/toolkit",
-    tag = "ai",
-    params(ToolkitQuery),
-    responses(
-        (status = 200, description = "Curated AI resources", body = ApiResponse<ToolkitResponse>),
-        (status = 400, description = "Invalid filter", body = crate::api_response::ErrorResponse),
-    ),
-    operation_id = "aiToolkit",
-)]
-pub async fn toolkit(
-    State(state): State<AppState>,
-    Query(q): Query<ToolkitQuery>,
-) -> Result<Json<ApiResponse<ToolkitResponse>>, AppError> {
-    crate::validators::check_max_len_opt(&q.category, "category", 20)?;
-    crate::validators::check_max_len_opt(&q.orientation, "orientation", 60)?;
-
-    // Namespaced by database, like the code feeds: a Redis instance shared
-    // between staging and production would otherwise serve one's listing to
-    // the other.
-    let cache_key = format!(
-        "ai:toolkit:{}:{}:{}",
-        state.db.connect_options().get_database().unwrap_or("db"),
-        q.category.as_deref().unwrap_or("-"),
-        q.orientation.as_deref().unwrap_or("-"),
-    );
-    let mut redis = state.redis.clone();
-    if let Some(cached) =
-        crate::services::cache::get_json::<ToolkitResponse>(&mut redis, &cache_key).await?
-    {
-        return Ok(Json(ApiResponse::new(cached)));
-    }
-
-    let resources = sqlx::query_as::<_, ToolkitRow>(
-        r#"
-        SELECT slug, display_name, category, url, summary, access_note,
-               orientation_slugs
-          FROM external_resources
-         WHERE is_curated = TRUE
-           AND domain = 'ai'
-           AND ($1::TEXT IS NULL OR category = $1)
-           -- A resource tagged for no trade serves every trade, so it stays
-           -- in a filtered listing. Excluding it would hide HuggingFace from
-           -- somebody who asked for the NLP toolkit.
-           AND ($2::TEXT IS NULL
-                OR cardinality(orientation_slugs) = 0
-                OR $2 = ANY(orientation_slugs))
-         ORDER BY category, sort_order, display_name
-        "#,
-    )
-    .bind(q.category.as_deref())
-    .bind(q.orientation.as_deref())
-    .fetch_all(&state.db)
-    .await?;
-
-    let response = ToolkitResponse {
-        resources,
-        category: q.category.clone(),
-        orientation: q.orientation.clone(),
-    };
-    let _ = crate::services::cache::set_json(&mut redis, &cache_key, &response, AI_CACHE_TTL_SECS)
-        .await;
-
-    Ok(Json(ApiResponse::new(response)))
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -383,40 +286,4 @@ pub async fn user_ai_profile(
 ) -> Result<Json<ApiResponse<AiProfile>>, AppError> {
     let profile = ai_profile::build(&state.db, &username).await?;
     Ok(Json(ApiResponse::new(profile)))
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// GET /ai/mentors/for-me
-// ═══════════════════════════════════════════════════════════════════
-
-/// Mentors worth suggesting to the caller, best first, with the reasoning.
-///
-/// The matching is the same module the code domain uses: what differs between
-/// the two is which domain to score, which answer key holds the tools, and
-/// how many mentees is too many. Three strings, not a second implementation.
-///
-/// AI caps a mentor at three active mentees where code allows five —
-/// reading somebody's training run is not reviewing a pull request.
-#[utoipa::path(
-    get, path = "/api/ai/mentors/for-me", tag = "ai",
-    responses(
-        (status = 200, description = "Suggested mentors", body = ApiResponse<Vec<crate::services::mentorship_matching::Match>>),
-        (status = 400, description = "AI onboarding not answered", body = crate::api_response::ErrorResponse),
-        (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
-    ),
-    security(("cookie_auth" = [])),
-    operation_id = "aiMentorMatches",
-)]
-pub async fn mentor_matches(
-    State(state): State<AppState>,
-    auth: crate::middleware::AuthUser,
-) -> Result<Json<ApiResponse<Vec<crate::services::mentorship_matching::Match>>>, AppError> {
-    let matches = crate::services::mentorship_matching::matches_for(
-        &state.db,
-        crate::services::mentorship_matching::AI,
-        auth.user_id,
-        10,
-    )
-    .await?;
-    Ok(Json(ApiResponse::new(matches)))
 }

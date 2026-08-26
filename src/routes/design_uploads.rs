@@ -124,7 +124,9 @@ pub struct CompleteBody {
 
 /// Assemble the parts.
 #[utoipa::path(
-    post, path = "/api/design/uploads/{id}/complete", tag = "design",
+    post, path = "/api/design/uploads/{id}/complete",
+    operation_id = "designUploadsComplete",
+    tag = "design",
     params(("id" = Uuid, Path, description = "upload session id")),
     request_body = CompleteBody,
     responses(

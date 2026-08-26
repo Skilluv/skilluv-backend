@@ -62,6 +62,16 @@ fn wrap(data: serde_json::Value) -> serde_json::Value {
 // ─── User routes ─────────────────────────────────────────────────
 
 /// SKI-81 — user self-nominates for a validator domain.
+#[utoipa::path(
+    post, path = "/api/me/apply-as-validator",
+    operation_id = "validatorApplicationsApply",
+    tag = "profile",
+    request_body = ApplyInput,
+    responses(
+        (status = 201, description = "The application is queued for review"),
+    ),
+    security(("cookie_auth" = [])),
+)]
 pub async fn apply(
     State(state): State<AppState>,
     auth: AuthUser,
@@ -74,6 +84,12 @@ pub async fn apply(
     ))
 }
 
+/// The caller's applications to become a validator, and where each stands.
+#[utoipa::path(
+    get, path = "/api/me/validator-applications", tag = "profile",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
 pub async fn my_applications(
     State(state): State<AppState>,
     auth: AuthUser,
@@ -88,6 +104,15 @@ pub async fn my_applications(
 }
 
 /// SKI-82 — invitee accepts the pending invitation.
+#[utoipa::path(
+    post, path = "/api/validator-applications/{id}/accept", tag = "profile",
+    params(("id" = uuid::Uuid, Path)),
+    responses(
+        (status = 200, description = "Accepted"),
+        (status = 404, description = "No invitation of yours with that id", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
 pub async fn accept_invitation(
     State(state): State<AppState>,
     auth: AuthUser,
@@ -97,6 +122,18 @@ pub async fn accept_invitation(
     Ok(Json(wrap(json!({ "application": app }))))
 }
 
+/// Withdraw your own application.
+#[utoipa::path(
+    post, path = "/api/validator-applications/{id}/withdraw",
+    operation_id = "validatorApplicationsWithdraw",
+    tag = "profile",
+    params(("id" = uuid::Uuid, Path, description = "The application to withdraw")),
+    responses(
+        (status = 200, description = "Withdrawn"),
+        (status = 404, description = "No application of yours with that id", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
 pub async fn withdraw(
     State(state): State<AppState>,
     auth: AuthUser,
@@ -111,6 +148,15 @@ pub async fn withdraw(
 // ─── Admin routes ────────────────────────────────────────────────
 
 /// SKI-82 — admin invites a user (bypasses stats).
+#[utoipa::path(
+    post, path = "/api/admin/validators/invite", tag = "admin",
+    request_body = crate::services::validator_applications::InviteInput,
+    responses(
+        (status = 201, description = "Invited. The invitation waits until they accept"),
+        (status = 403, description = "Admins only", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
 pub async fn admin_invite(
     State(state): State<AppState>,
     auth: AuthUser,
@@ -123,6 +169,18 @@ pub async fn admin_invite(
     ))
 }
 
+/// Approve an application. Grants the capability, which is what makes it
+/// real — the row on its own validates nothing.
+#[utoipa::path(
+    post, path = "/api/admin/validator-applications/{id}/approve", tag = "admin",
+    params(("id" = uuid::Uuid, Path)),
+    responses(
+        (status = 200, description = "Approved, and the capability granted"),
+        (status = 403, description = "Admins only", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "No such application", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
 pub async fn admin_approve(
     State(state): State<AppState>,
     auth: AuthUser,
@@ -133,12 +191,25 @@ pub async fn admin_approve(
     Ok(Json(wrap(json!({ "application": app }))))
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
+#[schema(as = ValidatorApplicationRejectBody)]
 pub struct RejectBody {
     pub reason: String,
 }
 
+/// Reject an application, with a reason the applicant reads.
+#[utoipa::path(
+    post, path = "/api/admin/validator-applications/{id}/reject", tag = "admin",
+    params(("id" = uuid::Uuid, Path, description = "The application to reject")),
+    request_body = RejectBody,
+    responses(
+        (status = 200, description = "Rejected, with the reason recorded"),
+        (status = 403, description = "Admins only", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "No such application", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
 pub async fn admin_reject(
     State(state): State<AppState>,
     auth: AuthUser,
@@ -159,7 +230,7 @@ pub async fn admin_reject(
 
 // ─── SKI-107 — admin listing with live stats ─────────────────────
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
 pub struct ListApplicationsQuery {
     #[serde(default)]
     status: Option<String>,
@@ -199,6 +270,16 @@ type AppListRow = (
     i32,            // tenure_days
 );
 
+/// Validator applications, filterable by where they stand.
+#[utoipa::path(
+    get, path = "/api/admin/validator-applications", tag = "admin",
+    params(ListApplicationsQuery),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 403, description = "Admins only", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
 pub async fn list_applications_admin(
     _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,

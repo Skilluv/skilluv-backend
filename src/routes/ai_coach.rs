@@ -80,7 +80,7 @@ pub struct PerfQuery {
         (status = 200, description = "Coach analysis (see docs/BACKEND-INTEGRATION.md §6 for data shape)", body = AiCoachEnvelope),
         (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
         (status = 429, description = "Refresh rate-limit hit", body = crate::api_response::ErrorResponse),
-        (status = 500, description = "AI worker offline", body = crate::api_response::ErrorResponse),
+        (status = 503, description = "The AI worker is not connected on this deployment", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
 )]
@@ -114,10 +114,13 @@ pub async fn my_performance(
     }
 
     // Cache miss : agrège snapshots + appel IA.
-    let ai = state
-        .ai
-        .as_deref()
-        .ok_or_else(|| AppError::Internal("AI client not connected".into()))?;
+    let ai = state.ai.as_deref().ok_or_else(|| {
+        // Not `Internal`. The worker being absent is a deployment that
+        // does not have this integration, and saying "the server failed"
+        // sends a caller looking for a fault that is not there — the same
+        // distinction the four Stripe handlers were corrected for.
+        AppError::ServiceUnavailable("the AI worker is not connected on this deployment".into())
+    })?;
 
     let request = build_analyze_request(&state.db, auth.user_id).await?;
     let started = std::time::Instant::now();
@@ -324,7 +327,7 @@ pub struct SuggestBody {
         (status = 200, description = "Ranked orientation suggestions (see docs/BACKEND-INTEGRATION.md §6)", body = AiCoachEnvelope),
         (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
         (status = 429, description = "Refresh rate-limit hit", body = crate::api_response::ErrorResponse),
-        (status = 500, description = "AI worker offline", body = crate::api_response::ErrorResponse),
+        (status = 503, description = "The AI worker is not connected on this deployment", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
 )]
@@ -357,10 +360,13 @@ pub async fn suggest_orientations(
         return Ok(Json(json!({ "data": v, "cached": true })));
     }
 
-    let ai = state
-        .ai
-        .as_deref()
-        .ok_or_else(|| AppError::Internal("AI client not connected".into()))?;
+    let ai = state.ai.as_deref().ok_or_else(|| {
+        // Not `Internal`. The worker being absent is a deployment that
+        // does not have this integration, and saying "the server failed"
+        // sends a caller looking for a fault that is not there — the same
+        // distinction the four Stripe handlers were corrected for.
+        AppError::ServiceUnavailable("the AI worker is not connected on this deployment".into())
+    })?;
 
     // Agrège skills user + langues.
     let skills: Vec<AiCoachRow302> = sqlx::query_as(

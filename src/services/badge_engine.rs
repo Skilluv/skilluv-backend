@@ -16,9 +16,15 @@
 //!                                   // (via user_skills touchées)
 //!     "display_category": "craft" // filtre par catégorie UX (P17.2)
 //!     "skill_domain": "code"      // filtre : domaine du challenge derrière la preuve
-//!     "distinct_over": "challenge_language" // compte des valeurs distinctes,
+//!     "distinct_over": "challenge_language" | "orientation" | "target_domain"
+//!                       | "target_language"
+//!                                   // compte des valeurs distinctes,
 //!                                   // pas des preuves : "trois langages" et non
-//!                                   // "trois livrables"
+//!                                   // "trois livrables". Also accepts
+//!                                   // "orientation" (distinct trades) and
+//!                                   // "target_domain" (distinct domains the
+//!                                   // work was aimed at, for quality and
+//!                                   // leadership).
 //!     "attestation_basis": "ai_model_shipped" // filtre : ce sur quoi
 //!                                   // l'attestation se fonde. Rend comptable
 //!                                   // ce qui était une appréciation.
@@ -31,6 +37,18 @@
 //!     "mission_completed"           // proof_type : une mission cloturee.
 //!                                   // Le domaine est porte par la mission
 //!                                   // elle-meme, pas par un challenge.
+//!     "security_finding_confirmed"  // proof_type : une vulnérabilité reportée
+//!                                   // et reproduite par quelqu'un d'autre.
+//!                                   // `min_severity` restreint au palier
+//!                                   // décidé par le validateur, jamais celui
+//!                                   // proposé par le rapporteur.
+//!     "security_ctf_first_solve"    // proof_type : un challenge résolu avant
+//!                                   // tout le monde. Une propriété d'un
+//!                                   // horodatage entre tous les users, qu'aucun
+//!                                   // autre proof_type ne peut voir.
+//!     "min_severity": "high"      // 'critical' | 'high' | 'medium' | 'low'
+//!                                   // | 'informational'. Uniquement avec
+//!                                   // `security_finding_confirmed`.
 //!     "manual": true              // le moteur n'attribue jamais : un opérateur
 //!                                   // décide, et la raison est enregistrée
 //!     "min_validation_rounds": 5  // ne compte que les livrables passés par
@@ -77,9 +95,26 @@ pub const PROOF_TYPES: &[&str] = &[
     "mission_completed",
     "onboarding_bonjour_completed",
     "orientation",
+    "security_ctf_first_solve",
+    "security_finding_confirmed",
     "slice_merged_upstream",
     "tournament_judged",
     "tournament_podium",
+];
+
+/// Every `distinct_over` dimension this engine knows how to count.
+///
+/// A rule naming anything else fails loudly rather than silently — the engine
+/// returns an error — but it fails at recompute time, on somebody's account,
+/// long after the migration that seeded it was merged. The list is public and
+/// asserted against the seeded rules by
+/// `tests/test_quality_domain.rs::every_seeded_rule_counts_something_real`,
+/// so the failure moves to CI where it belongs.
+pub const DISTINCT_DIMENSIONS: &[&str] = &[
+    "challenge_language",
+    "orientation",
+    "target_domain",
+    "target_language",
 ];
 
 #[derive(Debug, Deserialize, Default, Clone)]
@@ -133,6 +168,30 @@ struct RuleConditions {
     /// Only count contest finishes at this rank or better. `1` is "won".
     #[serde(default)]
     rank_at_most: Option<i16>,
+    /// Only count findings at this severity or above. Only meaningful
+    /// alongside `security_finding_confirmed`.
+    ///
+    /// The severity read is `security_findings.severity_tier`, which is what a
+    /// validator settled — never `severity_reported_tier`, which is what the
+    /// reporter claimed. A badge keyed to a self-rated severity is a badge you
+    /// award yourself, and every bounty programme has already found that out.
+    #[serde(default)]
+    min_severity: Option<String>,
+}
+
+/// The severity ladder, as a number so a comparison is possible.
+///
+/// Kept here rather than in SQL because the same order is needed by the
+/// condition parser and by the query, and two copies of an ordering is how
+/// `high` comes to sort below `medium` in one of them.
+fn severity_rank(tier: &str) -> i16 {
+    match tier {
+        "critical" => 5,
+        "high" => 4,
+        "medium" => 3,
+        "low" => 2,
+        _ => 1,
+    }
 }
 fn one() -> i64 {
     1
@@ -195,6 +254,14 @@ async fn count_matching_proofs(
     let want_mission_completed = conds.proof_types.iter().any(|t| t == "mission_completed");
     let want_contest_won = conds.proof_types.iter().any(|t| t == "contest_won");
     let want_mentee_guided = conds.proof_types.iter().any(|t| t == "mentee_guided");
+    let want_security_finding = conds
+        .proof_types
+        .iter()
+        .any(|t| t == "security_finding_confirmed");
+    let want_first_solve = conds
+        .proof_types
+        .iter()
+        .any(|t| t == "security_ctf_first_solve");
     // A variant of the deliverable count rather than a source of its own:
     // being featured is a property of a deliverable, not a different proof.
     let featured_only = conds
@@ -225,12 +292,20 @@ async fn count_matching_proofs(
             LEFT JOIN slice_skills ss ON ss.slice_id = d.slice_id
             LEFT JOIN skill_nodes sn  ON sn.id = ss.skill_id
             LEFT JOIN challenge_templates ct ON ct.id = d.challenge_id
+            LEFT JOIN project_slices dps ON dps.id = d.slice_id
             WHERE d.user_id = $1
               AND d.verification_status = 'verified'
               AND d.revoked_at IS NULL
               AND ($2::VARCHAR IS NULL OR sn.slug = $2)
               AND ($3::VARCHAR IS NULL OR sn.display_category = $3)
-              AND ($4::VARCHAR IS NULL OR ct.skill_domain = $4)
+              -- The domain of a deliverable is whichever of the two things
+              -- behind it carries one. Reading `ct.skill_domain` alone was a
+              -- silent undercount: work delivered against a project slice has
+              -- no challenge, so every `skill_domain` badge counted only the
+              -- training catalogue and ignored the real artefacts — which are
+              -- the ones the platform exists to produce.
+              AND ($4::VARCHAR IS NULL
+                   OR ct.skill_domain = $4 OR dps.primary_domain = $4)
               AND ($5::BOOLEAN IS FALSE OR d.featured)
               AND ($6::SMALLINT IS NULL OR EXISTS (
                       SELECT 1 FROM slice_validation_decisions v
@@ -254,12 +329,20 @@ async fn count_matching_proofs(
             LEFT JOIN slice_skills ss ON ss.slice_id = d.slice_id
             LEFT JOIN skill_nodes sn  ON sn.id = ss.skill_id
             LEFT JOIN challenge_templates ct ON ct.id = d.challenge_id
+            LEFT JOIN project_slices dps ON dps.id = d.slice_id
             WHERE d.user_id = $1
               AND d.verification_status = 'verified'
               AND d.revoked_at IS NULL
               AND ($2::VARCHAR IS NULL OR sn.slug = $2)
               AND ($3::VARCHAR IS NULL OR sn.display_category = $3)
-              AND ($4::VARCHAR IS NULL OR ct.skill_domain = $4)
+              -- The domain of a deliverable is whichever of the two things
+              -- behind it carries one. Reading `ct.skill_domain` alone was a
+              -- silent undercount: work delivered against a project slice has
+              -- no challenge, so every `skill_domain` badge counted only the
+              -- training catalogue and ignored the real artefacts — which are
+              -- the ones the platform exists to produce.
+              AND ($4::VARCHAR IS NULL
+                   OR ct.skill_domain = $4 OR dps.primary_domain = $4)
               AND ($5::BOOLEAN IS FALSE OR d.featured)
               AND ($6::SMALLINT IS NULL OR EXISTS (
                       SELECT 1 FROM slice_validation_decisions v
@@ -623,6 +706,63 @@ async fn count_matching_proofs(
         total += matched;
     }
 
+    if want_security_finding {
+        // Originals only, and the validator's severity. A duplicate is real
+        // work and it is not a second vulnerability — counting it here would
+        // make the number of confirmed findings larger than the number of
+        // findings.
+        let floor = conds
+            .min_severity
+            .as_deref()
+            .map(severity_rank)
+            .unwrap_or(1);
+
+        let matched: i64 = sqlx::query_scalar(
+            r#"
+            SELECT count(*) FROM security_findings
+             WHERE reporter_user_id = $1
+               AND status IN ('confirmed', 'fixed', 'published')
+               AND dedup_state <> 'duplicate_confirmed'
+               AND CASE severity_tier
+                       WHEN 'critical' THEN 5 WHEN 'high' THEN 4
+                       WHEN 'medium' THEN 3 WHEN 'low' THEN 2 ELSE 1 END >= $2
+            "#,
+        )
+        .bind(user_id)
+        .bind(floor)
+        .fetch_one(db)
+        .await?;
+
+        let ids: Vec<Uuid> = sqlx::query_scalar(
+            r#"
+            SELECT id FROM security_findings
+             WHERE reporter_user_id = $1
+               AND status IN ('confirmed', 'fixed', 'published')
+               AND dedup_state <> 'duplicate_confirmed'
+               AND CASE severity_tier
+                       WHEN 'critical' THEN 5 WHEN 'high' THEN 4
+                       WHEN 'medium' THEN 3 WHEN 'low' THEN 2 ELSE 1 END >= $2
+             ORDER BY created_at DESC
+             LIMIT 25
+            "#,
+        )
+        .bind(user_id)
+        .bind(floor)
+        .fetch_all(db)
+        .await?;
+
+        total += matched;
+        sources.extend(ids);
+    }
+
+    if want_first_solve {
+        // Being first is a property of one timestamp among everybody's, which
+        // is why no existing proof type can see it. The row it reads cannot be
+        // back-dated and the unique index makes a tie impossible.
+        let matched = crate::services::security_practice::first_solve_count(db, user_id).await?;
+        total += matched;
+    }
+
     Ok((total, sources))
 }
 
@@ -642,9 +782,16 @@ async fn count_distinct_dimension(
     if dimension == "orientation" {
         return count_distinct_orientations(db, user_id, conds).await;
     }
+    if dimension == "target_domain" {
+        return count_distinct_target_domains(db, user_id, conds).await;
+    }
+    if dimension == "target_language" {
+        return count_distinct_target_languages(db, user_id, conds).await;
+    }
     if dimension != "challenge_language" {
         return Err(AppError::Internal(format!(
-            "badge rule asks to count distinct '{dimension}', which nothing implements"
+            "badge rule asks to count distinct '{dimension}', which nothing              implements. Known dimensions: {}",
+            DISTINCT_DIMENSIONS.join(", ")
         )));
     }
 
@@ -676,6 +823,67 @@ async fn count_distinct_dimension(
           AND ct.language IS NOT NULL
           AND ($2::VARCHAR IS NULL OR ct.skill_domain = $2)
         ORDER BY ct.language, d.id
+        LIMIT 25
+        "#,
+    )
+    .bind(user_id)
+    .bind(conds.skill_domain.as_deref())
+    .fetch_all(db)
+    .await?;
+
+    Ok((matched, sources))
+}
+
+/// How many distinct target languages this person's validated translations
+/// cover.
+///
+/// Only translations that were actually reviewed count. The target languages
+/// of an unreviewed translation are tags somebody typed, and a badge that read
+/// them would be awarded for typing five of them.
+///
+/// The sample is one slice per language, which is what makes the badge
+/// auditable: a reader can open five artefacts and see five languages.
+async fn count_distinct_target_languages(
+    db: &PgPool,
+    user_id: Uuid,
+    conds: &RuleConditions,
+) -> Result<(i64, Vec<Uuid>), AppError> {
+    let matched: i64 = sqlx::query_scalar(
+        r#"
+        SELECT count(DISTINCT lang)
+        FROM deliverables d
+        JOIN project_slices ps ON ps.id = d.slice_id
+        JOIN attestations a
+          ON d.id = ANY (a.linked_deliverable_ids)
+         AND a.basis = 'communication_translation_validated'
+         AND a.revoked_at IS NULL
+        CROSS JOIN LATERAL unnest(ps.communication_target_languages) AS lang
+        WHERE d.user_id = $1
+          AND d.verification_status = 'verified'
+          AND d.revoked_at IS NULL
+          AND ($2::VARCHAR IS NULL OR ps.primary_domain = $2)
+        "#,
+    )
+    .bind(user_id)
+    .bind(conds.skill_domain.as_deref())
+    .fetch_one(db)
+    .await?;
+
+    let sources: Vec<Uuid> = sqlx::query_scalar(
+        r#"
+        SELECT DISTINCT ON (lang) d.id
+        FROM deliverables d
+        JOIN project_slices ps ON ps.id = d.slice_id
+        JOIN attestations a
+          ON d.id = ANY (a.linked_deliverable_ids)
+         AND a.basis = 'communication_translation_validated'
+         AND a.revoked_at IS NULL
+        CROSS JOIN LATERAL unnest(ps.communication_target_languages) AS lang
+        WHERE d.user_id = $1
+          AND d.verification_status = 'verified'
+          AND d.revoked_at IS NULL
+          AND ($2::VARCHAR IS NULL OR ps.primary_domain = $2)
+        ORDER BY lang, d.id
         LIMIT 25
         "#,
     )
@@ -728,6 +936,63 @@ async fn count_distinct_orientations(
            AND ps.orientation_id IS NOT NULL
            AND ($2::VARCHAR IS NULL OR o.primary_domain = $2)
          ORDER BY ps.orientation_id, d.id
+         LIMIT 25
+        "#,
+    )
+    .bind(user_id)
+    .bind(conds.skill_domain.as_deref())
+    .fetch_all(db)
+    .await?;
+
+    Ok((matched, sources))
+}
+
+/// How many distinct domains this user's verified work was *aimed at*.
+///
+/// Reads `project_slices.target_domain`, which migration 0450 added for the
+/// trades that work on somebody else's domain — quality and leadership. Work
+/// that carries no target is not counted: NULL means cross-domain there, and
+/// crediting a cross-domain artefact as one more domain would let a single
+/// piece of work satisfy a badge about breadth.
+///
+/// Distinct from `orientation`, and the difference is the point. Somebody
+/// holding three quality orientations who tests one product three ways covers
+/// three trades and one domain; somebody who tested a codebase, an interface
+/// and a game covers one trade and three domains. The badges that talk about
+/// breadth mean the second.
+async fn count_distinct_target_domains(
+    db: &PgPool,
+    user_id: Uuid,
+    conds: &RuleConditions,
+) -> Result<(i64, Vec<Uuid>), AppError> {
+    let matched: i64 = sqlx::query_scalar(
+        r#"
+        SELECT count(DISTINCT ps.target_domain)
+          FROM deliverables d
+          JOIN project_slices ps ON ps.id = d.slice_id
+         WHERE d.user_id = $1
+           AND d.verification_status = 'verified'
+           AND d.revoked_at IS NULL
+           AND ps.target_domain IS NOT NULL
+           AND ($2::VARCHAR IS NULL OR ps.primary_domain = $2)
+        "#,
+    )
+    .bind(user_id)
+    .bind(conds.skill_domain.as_deref())
+    .fetch_one(db)
+    .await?;
+
+    let sources: Vec<Uuid> = sqlx::query_scalar(
+        r#"
+        SELECT DISTINCT ON (ps.target_domain) d.id
+          FROM deliverables d
+          JOIN project_slices ps ON ps.id = d.slice_id
+         WHERE d.user_id = $1
+           AND d.verification_status = 'verified'
+           AND d.revoked_at IS NULL
+           AND ps.target_domain IS NOT NULL
+           AND ($2::VARCHAR IS NULL OR ps.primary_domain = $2)
+         ORDER BY ps.target_domain, d.id
          LIMIT 25
         "#,
     )

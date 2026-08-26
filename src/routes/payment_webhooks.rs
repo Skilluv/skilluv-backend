@@ -35,6 +35,7 @@ const SIGNATURE_HEADERS: [&str; 5] = [
 #[utoipa::path(
     post,
     path = "/api/webhooks/payments/{provider}",
+    operation_id = "paymentWebhooksReceive",
     tag = "payments",
     params(("provider" = String, Path, description = "Provider name, e.g. stripe, fedapay, mtn")),
     // The body is whatever the provider sends and is verified byte for byte

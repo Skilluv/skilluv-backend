@@ -100,8 +100,23 @@ check "design attestation bases" \
     "SELECT count(*) FROM attestation_bases WHERE skill_domain='design'" "7"
 check "design and ops deliverable formats" \
     "SELECT count(*) FROM mission_deliverable_formats WHERE skill_domain IN ('design','ops')" "9"
-check "domain curator capabilities" \
-    "SELECT count(*) FROM capability_catalog WHERE family='domain_curator'" "9"
+# Derived, not counted. This was `= 9`, and it went stale twice over: two
+# domains opened and pushed it to eleven, which made the check fail for a
+# reason that had nothing to do with the two domains that had opened *without*
+# a curator. A number wrong for one reason hides that it is also wrong for
+# another.
+#
+# Every active domain has one, plus `all`. What this catches is a guard on a
+# capability the catalogue has no row for: ungrantable, and therefore a dead
+# endpoint. Terrain adoption was exactly that for quality and leadership.
+check "every active domain has a curator" \
+    "SELECT coalesce(string_agg(d.slug, ','), '')
+       FROM skill_domains d
+      WHERE d.is_active
+        AND NOT EXISTS (SELECT 1 FROM capability_catalog c
+                         WHERE c.family = 'domain_curator' AND c.scope = d.slug)" ""
+check "the cross-domain curator exists" \
+    "SELECT count(*) FROM capability_catalog WHERE capability='domain_curator:all'" "1"
 
 # Every capability's name has to equal its parts, which is the constraint the
 # NULL scope violated.

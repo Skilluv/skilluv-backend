@@ -4,7 +4,7 @@
 //! serveur IA up + un GRPC_AI_URL configuré → non testable en unit. On
 //! couvre ici :
 //!   - Route exists + capability gate (admin OR plagiarism_reviewer).
-//!   - Comportement quand ai_client absent (fallback 500).
+//!   - Comportement quand ai_client absent (503 : intégration absente).
 //!   - Rate-limit destructif appliqué.
 //!   - Payload rejeté si code_content vide.
 
@@ -130,12 +130,14 @@ async fn deep_scan_route_rejects_admin_without_ai_client() {
         .send()
         .await
         .unwrap();
-    // En tests, GRPC_AI_URL n'est pas configuré → state.ai = None → 500.
-    // On accepte aussi 400 si validation antérieure. Le point est : PAS 403.
+    // GRPC_AI_URL is unset in tests, so `state.ai` is None and the handler
+    // answers 503 — an integration this deployment does not have, rather than
+    // a fault. 400 is accepted too, for a validation that fires earlier. The
+    // point of this test is neither: it is that the answer is not 403.
     let s = resp.status().as_u16();
     assert!(
-        matches!(s, 500 | 400),
-        "admin passe le capability gate, échoue plus loin (statut vu: {s})"
+        matches!(s, 503 | 400),
+        "an admin clears the capability gate and fails further along (saw {s})"
     );
 }
 
@@ -212,10 +214,11 @@ async fn plagiarism_reviewer_capability_grants_access() {
         .send()
         .await
         .unwrap();
-    // Passe le capability gate (ni 403), échoue plus loin car ai_client absent.
+    // Clears the capability gate, then fails further along because no AI
+    // worker is connected — 503, not 403.
     let s = resp.status().as_u16();
     assert!(
-        matches!(s, 500 | 400),
-        "plagiarism_reviewer passe le gate (statut vu: {s})"
+        matches!(s, 503 | 400),
+        "plagiarism_reviewer clears the gate (saw {s})"
     );
 }

@@ -99,7 +99,19 @@ type AttestationRow = (
     Option<String>, // display_name
 );
 
-async fn verify(
+/// Check an attestation by its hash. Public: this is the surface a
+/// recruiter reaches from the certificate without holding an account.
+#[utoipa::path(
+    get, path = "/api/verify/{hash}",
+    operation_id = "attestationsPublicVerify",
+    tag = "attestations",
+    params(("hash" = String, Path, description = "The attestation hash printed on the certificate")),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 404, description = "No attestation carries that hash", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn verify(
     State(state): State<AppState>,
     Path(hash): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -292,7 +304,17 @@ async fn load_card_data(
     }))
 }
 
-async fn verify_pdf(
+/// The same attestation as a PDF, rendered by the sidecar service.
+#[utoipa::path(
+    get, path = "/api/verify/{hash}/pdf", tag = "attestations",
+    params(("hash" = String, Path, description = "The attestation hash printed on the certificate")),
+    responses(
+        (status = 200, description = "The certificate as a PDF", content_type = "application/pdf"),
+        (status = 404, description = "No attestation carries that hash", body = crate::api_response::ErrorResponse),
+        (status = 503, description = "PDF_RENDERER_URL is not configured", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn verify_pdf(
     State(state): State<AppState>,
     Path(hash): Path<String>,
 ) -> Result<axum::response::Response, AppError> {

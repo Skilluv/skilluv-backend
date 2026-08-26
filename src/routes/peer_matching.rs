@@ -86,8 +86,9 @@ struct MatchRow {
     orientation_slug: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
+#[schema(as = PeerMatchingEnrollBody)]
 pub struct EnrollBody {
     pub orientation_id: Uuid,
     /// Sessions per week, 1..5. Defaults to 1.
@@ -95,7 +96,16 @@ pub struct EnrollBody {
     pub weekly_cadence: Option<i16>,
 }
 
-async fn enroll(
+/// Open yourself to being matched with a peer on one orientation.
+#[utoipa::path(
+    post, path = "/api/users/me/peer-matching/enroll", tag = "social",
+    request_body = EnrollBody,
+    responses(
+        (status = 201, description = "Open to being matched on that orientation"),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn enroll(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<EnrollBody>,
@@ -113,7 +123,16 @@ async fn enroll(
     ))
 }
 
-async fn unenroll(
+/// Stop being offered matches on one orientation.
+#[utoipa::path(
+    delete, path = "/api/users/me/peer-matching/enroll/{orientation_id}", tag = "social",
+    params(("orientation_id" = uuid::Uuid, Path, description = "Which orientation to stop on")),
+    responses(
+        (status = 204, description = "No longer open to matches on that orientation"),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn unenroll(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(orientation_id): Path<Uuid>,
@@ -122,7 +141,13 @@ async fn unenroll(
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn list_enrollments(
+/// The orientations the caller opened themselves to being matched on.
+#[utoipa::path(
+    get, path = "/api/users/me/peer-matching/enrollments", tag = "social",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_enrollments(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<impl IntoResponse, AppError> {
@@ -155,12 +180,20 @@ async fn list_enrollments(
     Ok(Json(wrap(json!({ "enrollments": enrollments }))))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
 pub struct ProposalsQuery {
     pub orientation_id: Uuid,
 }
 
-async fn proposals(
+/// Candidate peers for one orientation, ranked. Proposals only — pairing
+/// is a separate, deliberate act.
+#[utoipa::path(
+    get, path = "/api/peer-matching/proposals", tag = "social",
+    params(ProposalsQuery),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn proposals(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<ProposalsQuery>,
@@ -172,14 +205,23 @@ async fn proposals(
     }))))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CreateMatchBody {
     pub peer_id: Uuid,
     pub orientation_id: Uuid,
 }
 
-async fn create_match(
+/// Pair with a peer. A deliberate act on a proposal, never automatic.
+#[utoipa::path(
+    post, path = "/api/peer-matching/matches", tag = "social",
+    request_body = CreateMatchBody,
+    responses(
+        (status = 201, description = "Paired"),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create_match(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<CreateMatchBody>,
@@ -189,14 +231,21 @@ async fn create_match(
     Ok((StatusCode::CREATED, Json(wrap(json!({ "match": m })))))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
 pub struct ListMatchesQuery {
     /// Include matches that have ended. Off by default.
     #[serde(default)]
     pub include_ended: bool,
 }
 
-async fn list_matches(
+/// The caller's peer matches, with the other side resolved.
+#[utoipa::path(
+    get, path = "/api/users/me/peer-matches", tag = "social",
+    params(ListMatchesQuery),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_matches(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<ListMatchesQuery>,
@@ -236,7 +285,17 @@ async fn list_matches(
     Ok(Json(wrap(json!({ "matches": matches }))))
 }
 
-async fn end_match(
+/// End a pairing.
+#[utoipa::path(
+    delete, path = "/api/peer-matches/{id}", tag = "social",
+    params(("id" = uuid::Uuid, Path)),
+    responses(
+        (status = 204, description = "Ended"),
+        (status = 403, description = "Only the two sides of a match end it", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn end_match(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -245,13 +304,25 @@ async fn end_match(
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ScheduleSessionBody {
     pub session_at: chrono::DateTime<chrono::Utc>,
 }
 
-async fn schedule_session(
+/// Schedule a session between the two sides of a match.
+#[utoipa::path(
+    post, path = "/api/peer-matches/{id}/sessions", tag = "social",
+    params(("id" = uuid::Uuid, Path, description = "The match")),
+    request_body = ScheduleSessionBody,
+    responses(
+        (status = 201, description = "Scheduled"),
+        (status = 403, description = "Only the two sides of a match schedule its sessions", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "No such match", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn schedule_session(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -265,7 +336,19 @@ async fn schedule_session(
     ))
 }
 
-async fn list_sessions(
+/// The sessions on one match.
+#[utoipa::path(
+    get, path = "/api/peer-matches/{id}/sessions",
+    operation_id = "peerMatchingListSessions",
+    tag = "social",
+    params(("id" = uuid::Uuid, Path)),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 403, description = "Only the two sides of a match read its sessions", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_sessions(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -283,8 +366,9 @@ async fn list_sessions(
     Ok(Json(wrap(json!({ "sessions": sessions }))))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
+#[schema(as = PeerSessionCheckInBody)]
 pub struct CheckInBody {
     #[serde(default)]
     pub notes: Option<String>,
@@ -292,7 +376,20 @@ pub struct CheckInBody {
     pub rating: Option<i16>,
 }
 
-async fn check_in(
+/// Record that a session happened, and what came of it.
+#[utoipa::path(
+    patch, path = "/api/peer-sessions/{id}",
+    operation_id = "peerMatchingCheckIn",
+    tag = "social",
+    params(("id" = uuid::Uuid, Path)),
+    request_body = CheckInBody,
+    responses(
+        (status = 200, description = "Recorded"),
+        (status = 403, description = "Only the two sides of a session check in", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn check_in(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -309,7 +406,19 @@ async fn check_in(
     Ok(Json(wrap(json!({ "session": session }))))
 }
 
-async fn cancel_session(
+/// Cancel a scheduled session.
+#[utoipa::path(
+    delete, path = "/api/peer-sessions/{id}",
+    operation_id = "peerMatchingCancelSession",
+    tag = "social",
+    params(("id" = uuid::Uuid, Path)),
+    responses(
+        (status = 200, description = "Cancelled"),
+        (status = 403, description = "Only the two sides of a session cancel it", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn cancel_session(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,

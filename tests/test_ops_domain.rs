@@ -671,9 +671,9 @@ async fn no_ops_read_endpoint_answers_500() {
 
     for path in [
         "/api/ops/reference",
-        "/api/ops/toolkit",
+        "/api/domains/ops/toolkit",
         "/api/ops/incidents",
-        "/api/ops/mentors/for-me",
+        "/api/domains/ops/mentors/for-me",
         "/api/ops/onboarding",
         "/api/users/ops_smoke/ops-profile",
         "/api/admin/ops/overdue-actions",

@@ -94,7 +94,9 @@ pub async fn start(
 
 /// Disconnect a tool, wiping its tokens.
 #[utoipa::path(
-    post, path = "/api/design/cloud/{provider}/disconnect", tag = "design",
+    post, path = "/api/design/cloud/{provider}/disconnect",
+    operation_id = "designCloudDisconnect",
+    tag = "design",
     params(("provider" = String, Path, description = "figma, miro or webflow")),
     responses(
         (status = 204, description = "Disconnected, or was not connected"),

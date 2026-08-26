@@ -168,7 +168,9 @@ pub struct ListQuery {
 
 /// Public: paginated list of open bounties (skill / tag filters).
 #[utoipa::path(
-    get, path = "/api/bounties", tag = "wallet",
+    get, path = "/api/bounties",
+    operation_id = "bountiesListBounties",
+    tag = "wallet",
     params(ListQuery),
     responses((status = 200, body = serde_json::Value)),
 )]

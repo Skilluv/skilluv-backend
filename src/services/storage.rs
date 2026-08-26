@@ -355,6 +355,49 @@ impl StorageService {
         Ok(())
     }
 
+    /// Everything under one prefix in the private bucket, with when it was
+    /// last modified.
+    ///
+    /// The only honest source for "what is in the bucket that nothing points
+    /// at". A table of uploads would be a second record of what exists, and
+    /// the question a cleanup sweep asks is answered wrongly by anything
+    /// except the bucket itself.
+    ///
+    /// Paginated by the client library. The prefix is required rather than
+    /// optional: listing a whole bucket is a request nobody here has a use for
+    /// and a cost somebody would eventually pay for by accident.
+    pub async fn list_private(
+        &self,
+        prefix: &str,
+    ) -> Result<Vec<(String, chrono::DateTime<chrono::Utc>)>, AppError> {
+        if prefix.trim().is_empty() {
+            return Err(AppError::Internal(
+                "listing the private bucket needs a prefix".into(),
+            ));
+        }
+
+        let pages = self
+            .private_bucket
+            .list(prefix.to_string(), None)
+            .await
+            .map_err(|e| AppError::Internal(format!("list {prefix} failed: {e}")))?;
+
+        let mut out = Vec::new();
+        for page in pages {
+            for object in page.contents {
+                // A malformed date is not a reason to skip an object: the
+                // sweep's other condition is whether anything references it,
+                // and treating an undateable object as brand new means it
+                // survives until somebody looks.
+                let modified = chrono::DateTime::parse_from_rfc3339(&object.last_modified)
+                    .map(|d| d.with_timezone(&chrono::Utc))
+                    .unwrap_or_else(|_| chrono::Utc::now());
+                out.push((object.key, modified));
+            }
+        }
+        Ok(out)
+    }
+
     /// How many bytes the store actually holds.
     ///
     /// Read back rather than trusted: the ceiling checked before the upload

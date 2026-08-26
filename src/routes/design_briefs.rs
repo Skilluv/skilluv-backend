@@ -63,7 +63,9 @@ async fn require_curator(state: &AppState, auth: &AuthUser) -> Result<(), AppErr
 
 /// Write a brief and put it in the queue.
 #[utoipa::path(
-    post, path = "/api/design/briefs", tag = "design",
+    post, path = "/api/design/briefs",
+    operation_id = "designBriefsPropose",
+    tag = "design",
     request_body = design_briefs::ProposeInput,
     responses(
         (status = 201, description = "queued for curation"),
@@ -86,7 +88,9 @@ pub async fn propose(
 
 /// Your own briefs, whatever became of them.
 #[utoipa::path(
-    get, path = "/api/design/briefs/mine", tag = "design",
+    get, path = "/api/design/briefs/mine",
+    operation_id = "designBriefsMine",
+    tag = "design",
     responses((status = 200, description = "your briefs, newest first")),
     security(("cookie_auth" = [])),
 )]
@@ -100,7 +104,9 @@ pub async fn mine(
 
 /// Take back a brief nobody has read yet.
 #[utoipa::path(
-    post, path = "/api/design/briefs/{id}/withdraw", tag = "design",
+    post, path = "/api/design/briefs/{id}/withdraw",
+    operation_id = "designBriefsWithdraw",
+    tag = "design",
     params(("id" = Uuid, Path)),
     responses(
         (status = 200, description = "withdrawn"),
@@ -131,7 +137,9 @@ pub struct QueueQuery {
 /// Oldest first so nobody waits twice — the same rule the review queue
 /// follows, and for the same reason.
 #[utoipa::path(
-    get, path = "/api/admin/design/briefs", tag = "admin",
+    get, path = "/api/admin/design/briefs",
+    operation_id = "designBriefsQueue",
+    tag = "admin",
     params(QueueQuery),
     responses((status = 200, description = "the queue, oldest first")),
     security(("cookie_auth" = [])),
@@ -177,7 +185,9 @@ pub struct RejectBody {
 
 /// Refuse a brief, saying why.
 #[utoipa::path(
-    post, path = "/api/admin/design/briefs/{id}/reject", tag = "admin",
+    post, path = "/api/admin/design/briefs/{id}/reject",
+    operation_id = "designBriefsReject",
+    tag = "admin",
     params(("id" = Uuid, Path)),
     request_body = RejectBody,
     responses(

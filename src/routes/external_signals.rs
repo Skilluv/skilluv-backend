@@ -7,7 +7,7 @@
 //!   GET    /api/users/{id}/external-signals      (public if the profile is)
 //!   GET    /api/moderation/external-signals      (moderator — review queue)
 //!   POST   /api/moderation/external-signals/{id}/verify   (moderator)
-//!   DELETE /api/moderation/external-signals/{id}          (moderator)
+//!   DELETE /api/moderation/external-signals/{id}?reason=… (moderator)
 //!
 //! Every response separates `verified` from `declared`. That split is the
 //! feature: an external signal is context, never proof, and the API shape
@@ -16,6 +16,7 @@
 //! See migration 0145 for why nothing here touches the proof engine.
 
 use axum::extract::{Path, Query, State};
+use axum::http::HeaderMap;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::{delete, get, post};
@@ -76,7 +77,7 @@ fn split_buckets(signals: Vec<external_signals::ExternalSignal>) -> serde_json::
     })
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CreateSignalBody {
     /// `github` | `medium` | `dev_to` | `conf_ref` | `behance` |
@@ -96,7 +97,19 @@ struct CreateSignalResponse {
     auto_verified: bool,
 }
 
-async fn create(
+/// Declare a signal from outside the platform. Declared is not verified,
+/// and the profile shows the difference.
+#[utoipa::path(
+    post, path = "/api/users/me/external-signals",
+    operation_id = "externalSignalsCreate",
+    tag = "profile",
+    request_body = CreateSignalBody,
+    responses(
+        (status = 201, description = "Declared. Unverified until a moderator confirms it"),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<CreateSignalBody>,
@@ -123,7 +136,15 @@ async fn create(
     ))
 }
 
-async fn list_mine(
+/// The caller's own signals, verified and declared alike.
+#[utoipa::path(
+    get, path = "/api/users/me/external-signals",
+    operation_id = "externalSignalsListMine",
+    tag = "profile",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_mine(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<impl IntoResponse, AppError> {
@@ -131,7 +152,19 @@ async fn list_mine(
     Ok(Json(wrap(split_buckets(signals))))
 }
 
-async fn remove(
+/// Withdraw one of the caller's own signals.
+#[utoipa::path(
+    delete, path = "/api/users/me/external-signals/{id}",
+    operation_id = "externalSignalsRemove",
+    tag = "profile",
+    params(("id" = uuid::Uuid, Path)),
+    responses(
+        (status = 204, description = "Removed"),
+        (status = 404, description = "No signal of yours with that id", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn remove(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -155,7 +188,12 @@ async fn remove(
 /// Unverified signals are visible here too — hiding them would make the
 /// "declared vs verified" distinction invisible precisely where it
 /// matters, on the profile a recruiter reads.
-async fn list_public(
+#[utoipa::path(
+    get, path = "/api/users/{user_id}/external-signals", tag = "profile",
+    params(("user_id" = uuid::Uuid, Path, description = "Whose profile")),
+    responses((status = 200, body = serde_json::Value)),
+)]
+pub async fn list_public(
     State(state): State<AppState>,
     OptionalAuth(auth): OptionalAuth,
     Path(user_id): Path<Uuid>,
@@ -180,13 +218,23 @@ async fn list_public(
     Ok(Json(wrap(split_buckets(signals))))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
 pub struct PendingQuery {
     #[serde(default)]
     pub limit: Option<i64>,
 }
 
-async fn list_pending(
+/// Signals still waiting on a human to verify them. Moderators only.
+#[utoipa::path(
+    get, path = "/api/moderation/external-signals", tag = "moderation",
+    params(PendingQuery),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 403, description = "Not a moderator", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_pending(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<PendingQuery>,
@@ -207,9 +255,21 @@ async fn list_pending(
     Ok(Json(wrap(json!({ "pending": signals }))))
 }
 
-async fn moderator_verify(
+/// Confirm a declared signal. Moderators only.
+#[utoipa::path(
+    post, path = "/api/moderation/external-signals/{id}/verify", tag = "moderation",
+    params(("id" = uuid::Uuid, Path, description = "The signal to verify")),
+    responses(
+        (status = 200, description = "Verified"),
+        (status = 403, description = "Not a moderator", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "No such signal", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn moderator_verify(
     State(state): State<AppState>,
     auth: AuthUser,
+    headers: HeaderMap,
     Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse, AppError> {
     capabilities::require_any_capability(&state.db, auth.user_id, MODERATOR_CAPS).await?;
@@ -229,26 +289,107 @@ async fn moderator_verify(
 
     let signal = signal
         .ok_or_else(|| AppError::NotFound(format!("pending external signal {id} not found")))?;
+
+    // SKI-299 — a verification is a moderation decision: it moves a claim
+    // from "declared" to "confirmed" on a public profile. `verified_by`
+    // says who, but on a row a later decision overwrites; the journal is
+    // what survives the next one.
+    crate::services::audit::record(
+        &state.db,
+        crate::services::audit::AuditEntry {
+            actor_type: crate::services::audit::ActorType::Admin,
+            actor_id: Some(auth.user_id),
+            action: "external_signal.verify",
+            target_type: Some("external_signal"),
+            target_id: Some(id),
+            metadata: Some(json!({
+                "owner_id": signal.user_id,
+                "provider": signal.provider,
+                "url": signal.url,
+            })),
+            headers: Some(&headers),
+        },
+    )
+    .await;
+
     Ok(Json(wrap(json!({ "signal": signal }))))
 }
 
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+pub struct ModeratorDeleteQuery {
+    /// Mandatory, at least 8 characters.
+    ///
+    /// A query parameter rather than a body because DELETE bodies are
+    /// stripped by enough proxies that a required one would fail in
+    /// production for reasons nobody could reproduce locally.
+    pub reason: String,
+}
+
 /// Remove a signal as a moderator (bogus or abusive claim).
-async fn moderator_delete(
+///
+/// SKI-299 — this is the most destructive endpoint of the Post-MVP batch:
+/// the row is gone, and nothing anywhere recorded who removed it or why.
+/// The endpoint did not even accept a motive, which is the real problem —
+/// the missing journal entry was only its consequence.
+///
+/// The signal is captured before the delete, so the audit entry carries
+/// what was destroyed rather than just its id. An id pointing at a row
+/// that no longer exists documents nothing.
+#[utoipa::path(
+    delete, path = "/api/moderation/external-signals/{id}", tag = "moderation",
+    params(("id" = uuid::Uuid, Path), ModeratorDeleteQuery),
+    responses(
+        (status = 204, description = "Removed"),
+        (status = 403, description = "Not a moderator", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "No such signal", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn moderator_delete(
     State(state): State<AppState>,
     auth: AuthUser,
+    headers: HeaderMap,
     Path(id): Path<Uuid>,
+    Query(q): Query<ModeratorDeleteQuery>,
 ) -> Result<impl IntoResponse, AppError> {
     capabilities::require_any_capability(&state.db, auth.user_id, MODERATOR_CAPS).await?;
 
-    let affected = sqlx::query("DELETE FROM external_signals WHERE id = $1")
-        .bind(id)
-        .execute(&state.db)
-        .await?
-        .rows_affected();
-    if affected == 0 {
-        return Err(AppError::NotFound(format!(
-            "external signal {id} not found"
-        )));
+    let reason = q.reason.trim();
+    if reason.chars().count() < 8 {
+        return Err(AppError::Validation(
+            "reason must be at least 8 characters — this deletes a user declaration for good"
+                .into(),
+        ));
     }
+
+    let deleted: Option<external_signals::ExternalSignal> =
+        sqlx::query_as("DELETE FROM external_signals WHERE id = $1 RETURNING *")
+            .bind(id)
+            .fetch_optional(&state.db)
+            .await?;
+    let deleted =
+        deleted.ok_or_else(|| AppError::NotFound(format!("external signal {id} not found")))?;
+
+    crate::services::audit::record(
+        &state.db,
+        crate::services::audit::AuditEntry {
+            actor_type: crate::services::audit::ActorType::Admin,
+            actor_id: Some(auth.user_id),
+            action: "external_signal.delete",
+            target_type: Some("external_signal"),
+            target_id: Some(id),
+            metadata: Some(json!({
+                "owner_id": deleted.user_id,
+                "provider": deleted.provider,
+                "url": deleted.url,
+                "title": deleted.title,
+                "was_verified": deleted.verified_at.is_some(),
+                "reason": reason,
+            })),
+            headers: Some(&headers),
+        },
+    )
+    .await;
+
     Ok(StatusCode::NO_CONTENT)
 }

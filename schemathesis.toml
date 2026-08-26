@@ -45,3 +45,113 @@ include-name = "GET /api/talents/search"
 # again as though it were the third.
 [operations.checks.positive_data_acceptance]
 enabled = false
+
+[[operations]]
+include-name = "GET /api/cohorts"
+
+# `offset` and `limit` are nullable integers, and for a nullable query
+# parameter schemathesis sends the literal string `null`, which is not a
+# number. The 400 is correct — a page offset that is not a number cannot
+# be honoured — and the positive path is covered by test_t2_cohorts.
+[operations.checks.positive_data_acceptance]
+enabled = false
+
+[[operations]]
+include-name = "GET /api/design/slices/{id}/compare"
+
+# `from` and `to` are `i32` round numbers; the fuzzer generates values at the
+# extremes of the JSON integer range, which do not fit the column and are
+# refused before any query runs. The valid path is covered by the design
+# integration suite.
+[operations.checks.positive_data_acceptance]
+enabled = false
+
+[[operations]]
+include-name = "GET /api/design/slices/{id}/versions/{round}"
+
+# `round` is an `i16` path segment; a value past 32767 cannot be parsed into
+# it and is refused at the router. Schema-valid as a JSON integer, out of
+# range for the type — the fuzzer cannot know the bound and the 400 is
+# correct.
+[operations.checks.positive_data_acceptance]
+enabled = false
+
+[[operations]]
+include-name = "GET /api/opportunities"
+
+# `domain`, `kind` and `orientation` are optional filters. A filter value that
+# names no domain, kind or orientation is correctly refused rather than
+# silently returning everything; the positive path is covered by the
+# opportunities integration test.
+[operations.checks.positive_data_acceptance]
+enabled = false
+
+[[operations]]
+include-name = "GET /api/quality/reports"
+
+# `target_domain` is a nullable domain filter, and the fuzzer sends the string
+# `null`, which names no domain. Refusing it is correct — the alternative,
+# treating an unreadable filter as no filter, hides a client bug. The
+# positive path is covered by test_quality_domain.
+[operations.checks.positive_data_acceptance]
+enabled = false
+
+[[operations]]
+include-name = "GET /api/talent-offers"
+
+# `offer_type` is a nullable enum filter; the fuzzer sends `null`, which is
+# not one of the five kinds. The 400 is correct and the positive path is
+# covered by test_t3_talent_offers_and_vouchings.
+[operations.checks.positive_data_acceptance]
+enabled = false
+
+[[operations]]
+include-name = "GET /api/verify/{hash}/pdf"
+
+# Rendering a certificate needs PDF_RENDERER_URL, which is deliberately unset
+# in the contract job — there is no renderer to call. The 503 is the honest,
+# documented answer; neither a 2xx (positive_data_acceptance) nor a non-5xx
+# (not_a_server_error) is reachable without the external service.
+[operations.checks.positive_data_acceptance]
+enabled = false
+[operations.checks.not_a_server_error]
+enabled = false
+
+[[operations]]
+include-name = "POST /maintainer-digest/subscribe"
+
+# The fuzzer sends an empty email and a repo that is not `owner/name`. Those
+# are semantic constraints — a blank address, a malformed repo — that no
+# JSON Schema for a plain string expresses, and the handler is right to
+# refuse them.
+[operations.checks.positive_data_acceptance]
+enabled = false
+
+[[operations]]
+include-name = "POST /webhooks/linear"
+
+# The endpoint verifies an HMAC signature the fuzzer cannot produce, and in
+# the contract job LINEAR_WEBHOOK_SECRET is unset, so the honest answer is a
+# 503 (now documented). Neither a signed 202 (positive_data_acceptance) nor a
+# non-5xx (not_a_server_error) is reachable from a random unsigned body.
+[operations.checks.positive_data_acceptance]
+enabled = false
+[operations.checks.not_a_server_error]
+enabled = false
+
+[[operations]]
+include-name = "GET /api/users/{id}/timeline"
+
+# `offset` is a nullable integer; for a nullable query parameter the fuzzer
+# sends the literal string `null`, which is not a number. The 400 is correct
+# and the positive path is covered by the timeline integration test.
+[operations.checks.positive_data_acceptance]
+enabled = false
+
+[[operations]]
+include-name = "GET /api/users/{user_id}/skill-tree"
+
+# `domain` is a nullable domain filter; the fuzzer sends `null`, which names no
+# domain. Refusing it is correct rather than silently returning the whole tree.
+[operations.checks.positive_data_acceptance]
+enabled = false

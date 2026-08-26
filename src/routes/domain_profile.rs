@@ -50,6 +50,7 @@ pub fn domain_profile_routes() -> Router<AppState> {
             "/users/me/domain-profile/{domain}/questions",
             get(list_questions),
         )
+        .route("/domains/{domain}/mentors/for-me", get(mentor_matches))
 }
 
 use crate::validators::SKILL_DOMAINS as DOMAINS;
@@ -285,11 +286,209 @@ const CODE_QUESTIONS: &[Question] = &[
     free_text("github_username", 39),
 ];
 
+/// Communication only. Which formats somebody actually works in.
+///
+/// Plural, like the AI frameworks and the audio stations: the person who
+/// writes the documentation and then films the tutorial is this domain's
+/// normal shape rather than its exception, and forcing a choice would lose
+/// half of what the matching needs.
+const COMMUNICATION_FORMATS: &[&str] = &[
+    "documentation",
+    "articles",
+    "talks",
+    "video",
+    "livestream",
+    "podcast",
+    "translation",
+    "research",
+];
+
+/// Communication and education both ask it: what the person communicates or
+/// teaches *about*.
+///
+/// A domain slug rather than free text, because it is used to pick which
+/// challenges to show — somebody who documents infrastructure should not be
+/// handed a game-audio brief. `cross` is a real answer and the most common
+/// one among people who have done this for a while.
+const SUBJECT_DOMAINS: &[&str] = &[
+    "code", "design", "game", "ai", "ops", "security", "audio", "cross",
+];
+
+/// Education only. Where the person teaches.
+///
+/// Asked because it is the single most useful thing to know when pairing two
+/// educators: a bootcamp instructor and somebody running community workshops
+/// share a craft and almost no constraints. Plural, because most people who
+/// teach for a living do it in two of these.
+const TEACHING_SETTINGS: &[&str] = &[
+    "bootcamp",
+    "school",
+    "university",
+    "in_company",
+    "community",
+    "self_paced",
+    "one_to_one",
+];
+
+/// Education only. Who they teach.
+///
+/// A different question from `level`, which asks how experienced the *teacher*
+/// is. Somebody twenty years into the trade may teach absolute beginners, and
+/// conflating the two would recommend them a curriculum-design brief for
+/// senior engineers.
+const LEARNER_LEVELS: &[&str] = &["beginner", "junior", "mid", "senior", "mixed"];
+
+const EDUCATION_QUESTIONS: &[Question] = &[
+    closed_multi("main_settings", TEACHING_SETTINGS),
+    closed("learner_level", LEARNER_LEVELS),
+    closed("subject_domain", SUBJECT_DOMAINS),
+];
+
+/// Security only. Which certifications somebody says they hold.
+///
+/// A routing hint and never a claim. What a certification actually is on this
+/// platform is a row in `external_credentials` with somebody's verification
+/// against it; this answer is the wizard asking "what should we show you
+/// first", and an OSCP holder shown the introduction to intercepting proxies
+/// reads the platform as being for beginners.
+///
+/// `none` is a real answer and the most common one. It is listed so that
+/// leaving the question blank and answering it honestly are distinguishable.
+const SECURITY_CERTIFICATIONS: &[&str] = &[
+    "none",
+    "security_plus",
+    "oscp_or_offsec",
+    "ceh",
+    "cissp_or_cism",
+    "gcih_or_giac",
+    "cloud_security",
+    "other",
+];
+
+/// Security only. What somebody can actually run.
+///
+/// The single most useful thing to know before recommending anything in this
+/// domain, and the analogue of the AI wizard's `compute` question. Somebody on
+/// a locked-down work laptop cannot run a vulnerable virtual machine, and
+/// pointing them at one wastes their week; they can work through hosted labs
+/// all day.
+const SECURITY_LAB_SETUPS: &[&str] = &[
+    // A browser and nothing else. Hosted labs only.
+    "browser_only",
+    // Can install tools locally but not run virtual machines.
+    "local_tools",
+    // Can run virtual machines on their own machine.
+    "local_vms",
+    // Has a separate machine or a home lab.
+    "home_lab",
+    // Can spin up cloud instances and pay for them.
+    "cloud",
+];
+
+const SECURITY_QUESTIONS: &[Question] = &[
+    closed_multi("security_certifications", SECURITY_CERTIFICATIONS),
+    closed("security_lab_setup", SECURITY_LAB_SETUPS),
+    // Open, for the reason the code and quality ones are: what a security
+    // person works in runs from Burp to Volatility to a spreadsheet of
+    // controls, and a closed list would refuse real answers. Read as a bonus
+    // in the mentor matching, never as a filter.
+    open_multi("security_tools", 40),
+];
+
+const COMMUNICATION_QUESTIONS: &[Question] = &[
+    closed_multi("main_formats", COMMUNICATION_FORMATS),
+    closed("subject_domain", SUBJECT_DOMAINS),
+    // Recorded as an unconfirmed signal, never fetched. A handle is a link a
+    // reader can follow; an article counts here when it arrives as work that
+    // was reviewed.
+    free_text("dev_to_username", 60),
+    free_text("blog_url", 500),
+];
+
 const AUDIO_QUESTIONS: &[Question] = &[
     closed("audio_destination", AUDIO_DESTINATIONS),
     closed_multi("main_daws", AUDIO_DAWS),
     free_text("soundcloud_username", 60),
     free_text("bandcamp_username", 60),
+];
+
+/// Quality only. Where somebody is arriving from.
+///
+/// Asked because this domain receives more career changers than any other on
+/// the platform, and the first month of a developer moving into testing and of
+/// somebody arriving from support have almost nothing in common. It steers
+/// which guide is shown first and nothing else — it is a statement about a
+/// path, never about a level.
+const QUALITY_BACKGROUNDS: &[&str] = &[
+    "developer_moving_across",
+    "professional_tester",
+    "support_or_operations",
+    "career_change",
+    "student",
+    "other",
+];
+
+/// Quality only. Which domains somebody wants to put to the test.
+///
+/// The one wizard answer in this domain that has no equivalent anywhere else,
+/// and the reason it exists: every other trade works *in* a domain, this one
+/// works *on* one. Somebody who wants to test games and is shown a queue of
+/// API test plans reads the platform as empty.
+///
+/// Closed against the same domain list every other guard reads, so a domain
+/// opened later becomes an answer here without anybody editing this file.
+/// Multi, capped by `MAX_SELECTIONS`: two is a specialisation, everything is
+/// an absence of one.
+const QUALITY_TARGET_DOMAINS: &[&str] = crate::validators::SKILL_DOMAINS;
+
+const QUALITY_QUESTIONS: &[Question] = &[
+    closed("quality_background", QUALITY_BACKGROUNDS),
+    closed_multi("quality_target_domains", QUALITY_TARGET_DOMAINS),
+    // Open, for the reason the code one is: the set of things a tester works
+    // in runs from Playwright to a screen reader to a spreadsheet, and a
+    // closed list would refuse real answers. Read as a bonus in the matching,
+    // never as a filter.
+    open_multi("quality_tools", 40),
+];
+
+/// Leadership only. How long somebody has been leading, as distinct from how
+/// long they have been working.
+///
+/// Its own ladder rather than the shared one, because the shared vocabulary
+/// (`debutant` … `researcher`) is about depth in a craft and this question is
+/// about a different axis entirely: a principal engineer of fifteen years who
+/// has never written a roadmap answers `aspiring` here, honestly, and the
+/// shared list has no word that lets them.
+const LEADERSHIP_LEVELS: &[&str] = &[
+    "aspiring",    // no formal leading yet, and wants to
+    "emerging",    // leads something small, informally
+    "lead",        // a team or a track, formally
+    "senior_lead", // several teams, or a function
+    "executive",
+];
+
+/// Leadership only. What kind of leading somebody is here to do. Not the same
+/// question as the trade — somebody can want `lead-tech` artefacts while
+/// their situation only offers them community work.
+const LEADERSHIP_CONTEXTS: &[&str] = &[
+    "employed_team", // they lead people at work
+    "open_source",   // they lead in a project they do not own
+    "community",     // a group, a chapter, a server
+    "own_venture",
+    "none_yet", // practising before the situation exists
+];
+
+const LEADERSHIP_QUESTIONS: &[Question] = &[
+    closed("leadership_level", LEADERSHIP_LEVELS),
+    closed("leadership_context", LEADERSHIP_CONTEXTS),
+    // Which domains they want to hold a direction for. Same list and same
+    // reasoning as quality's: this trade works *on* a domain rather than in
+    // one.
+    closed_multi("leadership_target_domains", QUALITY_TARGET_DOMAINS),
+    // Open, like code's and quality's. What a leader works in runs from Linear
+    // to a shared document to a whiteboard, and a closed list would refuse
+    // real answers.
+    open_multi("leadership_tools", 40),
 ];
 
 /// Which wizard a field belongs to, for the message when it arrives on
@@ -313,7 +512,12 @@ pub fn questions_for(domain: &str) -> &'static [Question] {
         "ai" => AI_QUESTIONS,
         "audio" => AUDIO_QUESTIONS,
         "code" => CODE_QUESTIONS,
+        "communication" => COMMUNICATION_QUESTIONS,
         "design" => DESIGN_QUESTIONS,
+        "quality" => QUALITY_QUESTIONS,
+        "leadership" => LEADERSHIP_QUESTIONS,
+        "education" => EDUCATION_QUESTIONS,
+        "security" => SECURITY_QUESTIONS,
         _ => &[],
     }
 }
@@ -928,6 +1132,69 @@ pub async fn list_questions(
     }
 
     Ok(Json(ApiResponse::new(specs)))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// GET /domains/{domain}/mentors/for-me
+// ═══════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+pub struct MentorMatchQuery {
+    /// How many suggestions to return. Clamped to 50, because a list nobody
+    /// reads to the end is a list that suggests nobody.
+    #[serde(default)]
+    pub limit: Option<i64>,
+}
+
+/// Mentors worth suggesting in one domain, with the reasoning attached.
+///
+/// One endpoint rather than one per domain. There were seven, each a
+/// thirteen-line wrapper around the same `matches_for`, and they had already
+/// drifted: some accepted a `limit` and some hardcoded ten, some answered a
+/// bare array and some an envelope, and the two domains added last had no
+/// endpoint at all — which is the failure mode a copy carries. What differs
+/// between domains is the matching rules, and those live in one table of
+/// constants the matcher reads.
+///
+/// The reasoning ships with each suggestion on purpose. A recommendation
+/// nobody can argue with is one nobody can correct, and the first thing we
+/// will get wrong here is who should be suggested to whom.
+#[utoipa::path(
+    get, path = "/api/domains/{domain}/mentors/for-me", tag = "mentorship",
+    params(
+        ("domain" = String, Path, description = "Which domain to look for a mentor in"),
+        MentorMatchQuery,
+    ),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 400, description = "No such domain, or one with no mentorship rules", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn mentor_matches(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(domain): Path<String>,
+    axum::extract::Query(q): axum::extract::Query<MentorMatchQuery>,
+) -> Result<Json<ApiResponse<serde_json::Value>>, AppError> {
+    let rules = crate::services::mentorship_matching::rules_for(&domain).ok_or_else(|| {
+        AppError::Validation(format!(
+            "no mentorship rules for domain `{domain}` — how many mentees somebody              can carry and what their tools are called differ per domain, and              guessing them would match people badly rather than not at all"
+        ))
+    })?;
+
+    let limit = q.limit.unwrap_or(10).clamp(1, 50);
+    let mentors =
+        crate::services::mentorship_matching::matches_for(&state.db, rules, auth.user_id, limit)
+            .await?;
+    let suggested =
+        crate::services::mentorship_matching::could_use_a_mentor(&state.db, &domain, auth.user_id)
+            .await?;
+
+    Ok(Json(ApiResponse::new(json!({
+        "mentors": mentors,
+        "suggested": suggested,
+    }))))
 }
 
 #[cfg(test)]

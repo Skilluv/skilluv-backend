@@ -430,6 +430,59 @@ notification:
       body: "Les deux parties ne sont pas d'accord. Personne n'est paye tant que ce n'est pas decide."
       cta: "Ouvrir les litiges"
 
+  # Divulgation cyber. Transactionnel de bout en bout : personne ne peut se
+  # desabonner du sort de son propre rapport. Ne pas etre tenu au courant est
+  # la premiere cause de mort d'un programme de divulgation.
+  security:
+    finding_received:
+      title: "Votre rapport est arrive"
+      body: "{title} est dans la file. Quelqu'un le lira sous {days} jours et vous repondra dans un sens ou dans l'autre."
+      cta: "Voir mes rapports"
+    finding_triaged:
+      title: "Votre rapport est en cours d'examen"
+      body: "{title} a passe le tri et se trouve chez un relecteur qui va tenter de le reproduire."
+      cta: "Voir mes rapports"
+    finding_confirmed:
+      title: "Reproduit - c'est reel"
+      body: "Quelqu'un d'autre est arrive au meme resultat sur {title}. Gravite {severity}. Le correctif n'est pas votre travail ; le merite l'est deja."
+      cta: "Voir mes rapports"
+    finding_duplicate:
+      title: "Deja connu"
+      body: "{title} avait ete signale avant le votre. Votre travail est enregistre comme decouverte independante - pas de prime, c'est le premier arrive qui la recoit, et aucun doute sur ce que vous avez fait."
+      cta: "Voir mes rapports"
+    finding_rejected:
+      title: "Non retenu"
+      body: "{title} n'a pas ete retenu. {reason}"
+      cta: "Voir mes rapports"
+    finding_round:
+      title: "Un relecteur a besoin de plus"
+      body: "Sur {title} : {reason} La parole est a vous - repondez sur le rapport."
+      cta: "Repondre au relecteur"
+    finding_fixed:
+      title: "Le correctif est livre"
+      body: "{title} est corrige. Vient ensuite le compte rendu public, avec votre nom."
+      cta: "Voir mes rapports"
+    finding_published:
+      title: "C'est public"
+      body: "{title} est divulgue, avec le compte rendu et votre nom. C'est au tableau d'honneur et sur votre profil."
+      cta: "Voir le tableau d'honneur"
+    severity_changed:
+      title: "La gravite a change"
+      body: "{title} passe de {before} a {after}. La raison est sur le rapport, et vous pouvez la contester."
+      cta: "Lire la justification"
+    embargo_ending:
+      title: "Un embargo arrive a son terme"
+      body: "{title} sort d'embargo dans {days} jours. Rien n'est publie automatiquement - dites-le si vous voulez le prolonger."
+      cta: "Voir mes rapports"
+    triage_queued:
+      title: "{count} rapport(s) en attente de tri"
+      body: "Personne ne les a encore lus. L'engagement affiche est de {days} jours."
+      cta: "Ouvrir la file"
+    dedup_suspected:
+      title: "Deux rapports se ressemblent"
+      body: "{title} ressemble a un rapport deja depose. Rien n'a ete fusionne - une fusion decide qui est paye."
+      cta: "Les comparer"
+
 # Vocabulary reused inside notification bodies, so a translator writes
 # one sentence with a placeholder rather than two parallel titles.
 guild:

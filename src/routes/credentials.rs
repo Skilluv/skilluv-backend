@@ -95,7 +95,9 @@ pub struct ReviewBody {
 }
 
 #[utoipa::path(
-    post, path = "/api/admin/credentials/{id}/verify", tag = "admin",
+    post, path = "/api/admin/credentials/{id}/verify",
+    operation_id = "credentialsVerify",
+    tag = "admin",
     params(("id" = Uuid, Path, description = "Credential id")),
     request_body = ReviewBody,
     responses(

@@ -49,8 +49,9 @@ fn peek_user(headers: &HeaderMap, jwt_secret: &str) -> Option<Uuid> {
     claims.sub.parse::<Uuid>().ok()
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
+#[schema(as = SliceDiaryCreateEntryBody)]
 pub struct CreateEntryBody {
     /// Markdown, 1..4000 chars. Longer entries are rejected — the diary
     /// is a running log, not an essay.
@@ -84,7 +85,21 @@ fn wrap(data: serde_json::Value) -> serde_json::Value {
     })
 }
 
-async fn create(
+/// Write a diary entry against a slice. The diary is what the work looked
+/// like while it was happening, not a summary written afterwards.
+#[utoipa::path(
+    post, path = "/api/slices/{id}/diary",
+    operation_id = "sliceDiaryCreate",
+    tag = "slices",
+    params(("id" = uuid::Uuid, Path, description = "The slice")),
+    request_body = CreateEntryBody,
+    responses(
+        (status = 201, description = "The entry was written"),
+        (status = 403, description = "The diary belongs to whoever claimed the slice", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(slice_id): Path<Uuid>,
@@ -147,7 +162,18 @@ async fn create(
     Ok((StatusCode::CREATED, Json(wrap(json!({ "entry": entry })))))
 }
 
-async fn list(
+/// A slice's diary, in the order it was written.
+#[utoipa::path(
+    get, path = "/api/slices/{id}/diary",
+    operation_id = "sliceDiaryList",
+    tag = "slices",
+    params(("id" = uuid::Uuid, Path, description = "The slice")),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 404, description = "No such slice", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn list(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(slice_id): Path<Uuid>,

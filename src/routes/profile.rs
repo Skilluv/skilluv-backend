@@ -383,6 +383,17 @@ pub async fn public_profile(
 
     Ok(Json(build_response(json!({
         "user": {
+            // SKI-300 — four public endpoints (timeline, skill tree, external
+            // signals, vouchings) are addressed by UUID, and this was the only
+            // place a visitor could have resolved a username to one. Without
+            // it the front could render those sections on your own profile
+            // (the id came from the auth store) and on nobody else's.
+            //
+            // Exposing it is safe here because the guard above already turned
+            // a hidden or banned profile into a 404: an id is only handed out
+            // for a profile that is public anyway, and it already appears in
+            // the URLs of the four endpoints it unlocks.
+            "id": user.id,
             "username": user.username,
             "display_name": user.display_name,
             "title": user.title,

@@ -356,6 +356,7 @@ pub struct UpdateBody {
 #[utoipa::path(
     patch,
     path = "/api/enterprises/me/agency-clients/{id}",
+    operation_id = "agencyClientsUpdate",
     tag = "enterprise",
     params(("id" = Uuid, Path, description = "Agency-client UUID")),
     request_body = UpdateBody,

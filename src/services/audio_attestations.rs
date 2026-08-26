@@ -317,6 +317,60 @@ pub async fn issue_for_user(db: &PgPool, user_id: Uuid) -> Result<Vec<String>, A
     Ok(issued)
 }
 
+/// What this domain may issue editorially.
+///
+/// Only the one basis: everything else audio issues rests on a delivered
+/// artefact and is written by the generators above. A featuring rests on
+/// somebody's judgement, and says so.
+///
+/// `allows_stored_objects` is FALSE even though audio deliverables are
+/// routinely five-gigabyte session files with no free home elsewhere. A
+/// featuring does not point at a session file — it points at where the work
+/// can be heard, and an `s3://` link would mean the proof is a copy we made.
+const EDITORIAL: crate::services::artefact_attestations::Domain =
+    crate::services::artefact_attestations::Domain {
+        name: "audio",
+        bases: &["featured_audio_creator"],
+        artifact_bases: &[],
+        allows_stored_objects: false,
+    };
+
+/// Featured.
+///
+/// `featured_audio_creator` has existed as a basis since migration 0406 and
+/// as a count on `audio_profile` since 0413, and nothing has ever issued it:
+/// the weekly featuring recorded the row and fell through to a match arm that
+/// did nothing. So an audio creator put forward by the community got the
+/// announcement and no attestation, and the term on their profile stayed at
+/// zero — visible only as an absence, which is why it survived two domains.
+pub async fn featured_audio_creator(
+    db: &PgPool,
+    user_id: Uuid,
+    profile_url: &str,
+    citation: &str,
+) -> Result<crate::services::artefact_attestations::Issued, AppError> {
+    if citation.trim().is_empty() {
+        return Err(AppError::Validation(
+            "featuring somebody without saying why is a decision nobody can question".into(),
+        ));
+    }
+    crate::services::artefact_attestations::issue(
+        db,
+        user_id,
+        "featured_audio_creator",
+        &crate::services::artefact_attestations::Evidence {
+            url: profile_url.to_string(),
+            title: "Mis en avant".into(),
+            description: citation.trim().to_string(),
+            deliverable_id: None,
+            project_id: None,
+            skill_node_ids: vec![],
+        },
+        &EDITORIAL,
+    )
+    .await
+}
+
 /// Attest a credit on somebody else's released work.
 ///
 /// Separate from the automatic generators because nothing here can see a

@@ -18,8 +18,6 @@ pub fn ops_routes() -> Router<AppState> {
     Router::new()
         .route("/ops/reference", get(reference))
         .route("/users/{username}/ops-profile", get(ops_profile))
-        .route("/ops/toolkit", get(toolkit))
-        .route("/ops/mentors/for-me", get(ops_mentor_matches))
         .route("/ops/onboarding", post(complete_onboarding))
         .route("/ops/onboarding/skip", post(skip_onboarding))
         // Service objectives.
@@ -58,7 +56,9 @@ fn build_response(data: Value) -> Value {
 
 /// The vocabulary of the domain, so a client does not hard-code it.
 #[utoipa::path(
-    get, path = "/api/ops/reference", tag = "work",
+    get, path = "/api/ops/reference",
+    operation_id = "opsPracticeReference",
+    tag = "work",
     responses((status = 200, body = serde_json::Value)),
 )]
 pub async fn reference(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
@@ -266,7 +266,9 @@ pub struct ActionBody {
 }
 
 #[utoipa::path(
-    post, path = "/api/ops/incidents/{id}/actions", tag = "work",
+    post, path = "/api/ops/incidents/{id}/actions",
+    operation_id = "opsPracticeAddAction",
+    tag = "work",
     params(("id" = Uuid, Path, description = "Incident id")),
     request_body = ActionBody,
     responses(
@@ -469,7 +471,20 @@ pub async fn attest_featured(
     Json(body): Json<FeaturedBody>,
 ) -> Result<Json<Value>, AppError> {
     crate::routes::admin::require_admin(&state, &auth).await?;
-    ops_practice::attest_featured(&state.db, body.user_id, &body.reason).await?;
+
+    // The same address the weekly featuring would have used. Building one
+    // here instead would be a second convention for "what does a featuring
+    // point at", and the two would drift.
+    let evidence_url = crate::services::featured::evidence_url_of(
+        &state.db,
+        body.user_id,
+        None,
+        &state.config.frontend_url,
+    )
+    .await;
+
+    ops_practice::featured_ops_engineer(&state.db, body.user_id, &evidence_url, &body.reason)
+        .await?;
     Ok(Json(build_response(json!({ "issued": true }))))
 }
 
@@ -497,27 +512,6 @@ pub async fn ops_profile(
 ) -> Result<Json<Value>, AppError> {
     let profile = crate::services::ops_profile::build(&state.db, &username).await?;
     Ok(Json(build_response(json!({ "profile": profile }))))
-}
-
-/// Ops mentors worth suggesting to the person asking, best first.
-///
-/// Each match carries the reasoning that produced it, so somebody who was
-/// suggested a bad fit can say so — and so that "matched by an algorithm"
-/// never has to be taken on trust.
-#[utoipa::path(
-    get, path = "/api/ops/mentors/for-me", tag = "work",
-    responses(
-        (status = 200, body = serde_json::Value),
-        (status = 400, description = "The ops onboarding has not been answered", body = crate::api_response::ErrorResponse),
-    ),
-    security(("cookie_auth" = [])),
-)]
-pub async fn ops_mentor_matches(
-    State(state): State<AppState>,
-    auth: AuthUser,
-) -> Result<Json<Value>, AppError> {
-    let matches = crate::services::ops_mentorship::matches_for(&state.db, auth.user_id, 10).await?;
-    Ok(Json(build_response(json!({ "matches": matches }))))
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -564,55 +558,4 @@ pub async fn skip_onboarding(
 ) -> Result<Json<Value>, AppError> {
     crate::services::ops_onboarding::skip(&state.db, auth.user_id).await?;
     Ok(Json(build_response(json!({ "skipped": true }))))
-}
-
-#[derive(Debug, Deserialize, utoipa::IntoParams)]
-pub struct ToolkitQuery {
-    pub category: Option<String>,
-    pub orientation: Option<String>,
-}
-
-/// The curated ops toolkit, including where to practise without a budget.
-///
-/// The `access_note` on every row is the point of the list. A page that names
-/// Terraform, Kubernetes and Datadog without saying what each one costs to
-/// reach is a page that tells somebody in Cotonou the trade is not for them.
-#[utoipa::path(
-    get, path = "/api/ops/toolkit", tag = "work",
-    params(ToolkitQuery),
-    responses(
-        (status = 200, body = serde_json::Value),
-        (status = 400, description = "Invalid filter", body = crate::api_response::ErrorResponse),
-    ),
-    operation_id = "opsPracticeToolkit",
-)]
-pub async fn toolkit(
-    State(state): State<AppState>,
-    axum::extract::Query(q): axum::extract::Query<ToolkitQuery>,
-) -> Result<Json<Value>, AppError> {
-    crate::validators::check_max_len_opt(&q.category, "category", 20)?;
-    crate::validators::check_max_len_opt(&q.orientation, "orientation", 60)?;
-
-    let resources: Vec<Value> = sqlx::query_scalar(
-        "SELECT jsonb_build_object(
-                    'slug', slug, 'display_name', display_name,
-                    'category', category, 'url', url, 'summary', summary,
-                    'access_note', access_note,
-                    'orientation_slugs', orientation_slugs)
-           FROM external_resources
-          WHERE is_curated = TRUE AND domain = 'ops'
-            AND ($1::TEXT IS NULL OR category = $1)
-            -- A resource tagged for no trade serves every trade: excluding it
-            -- would hide Docker from somebody who asked for the SRE toolkit.
-            AND ($2::TEXT IS NULL
-                 OR cardinality(orientation_slugs) = 0
-                 OR $2 = ANY(orientation_slugs))
-          ORDER BY category, sort_order, display_name",
-    )
-    .bind(q.category.as_deref())
-    .bind(q.orientation.as_deref())
-    .fetch_all(&state.db)
-    .await?;
-
-    Ok(Json(build_response(json!({ "resources": resources }))))
 }

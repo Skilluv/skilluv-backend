@@ -227,11 +227,15 @@ async fn async_main(config: AppConfig) {
     spawn_audio_analysis_worker(state.clone());
     spawn_design_upload_sweeper(state.clone());
     spawn_code_portfolio_worker(state.clone());
+    spawn_portfolio_sync_worker(state.clone());
     spawn_release_sweep_worker(state.clone());
     spawn_credential_expiry_worker(state.clone());
     spawn_ats_erasure_worker(state.clone());
     spawn_payout_reconciliation_worker(state.clone());
     spawn_profile_readme_sync_worker(state.clone());
+    spawn_security_embargo_worker(state.clone());
+    spawn_security_dedup_worker(state.clone());
+    spawn_security_proof_sweeper(state.clone());
 
     let app = build_router(state);
     tracing::info!("Skilluv backend listening on {}", addr);
@@ -305,6 +309,146 @@ fn spawn_credential_expiry_worker(state: skilluv_backend::AppState) {
                     error = %e,
                     "credential expiry sweep failed - somebody's certification \
                      will lapse without warning"
+                ),
+            }
+        }
+    });
+}
+
+/// Walks the disclosure clocks, once a day.
+///
+/// Daily rather than hourly because what it produces is an item on somebody's
+/// list, and an item that appears at 03:14 instead of 04:00 is the same item.
+///
+/// It never publishes anything. An expired embargo becomes
+/// `partially_disclosed` and waits for an administrator, because publishing a
+/// vulnerability is irreversible and a cron job is the wrong thing to be
+/// holding that decision — the argument `sweep_embargoes` makes in full.
+/// Deletes proof uploads no report references, once a day.
+///
+/// Uploads happen before a report is submitted — that is the shape of the form
+/// — so an abandoned draft leaves files behind. A bucket that only grows is one
+/// that eventually holds somebody's proof of a vulnerability they never
+/// reported, which is the worst thing in it to be keeping.
+///
+/// Thirty days, so that a report started on a Friday and finished a fortnight
+/// later still finds its screenshots.
+fn spawn_security_proof_sweeper(state: skilluv_backend::AppState) {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(24 * 60 * 60));
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+
+            let listing = match state.storage.list_private("security-proofs/").await {
+                Ok(listing) => listing,
+                Err(e) => {
+                    // Not an error worth waking anybody for: no object store in
+                    // development means no uploads to sweep.
+                    tracing::debug!(error = %e, "proof sweep found no object store");
+                    continue;
+                }
+            };
+
+            match skilluv_backend::services::security_proofs::sweep_orphans(
+                &state.db,
+                &state.storage,
+                &listing,
+            )
+            .await
+            {
+                Ok(deleted) if deleted > 0 => {
+                    tracing::info!(deleted, "orphaned vulnerability proofs deleted");
+                }
+                Ok(_) => {}
+                Err(e) => tracing::error!(
+                    error = %e,
+                    "proof sweep failed - unreferenced evidence of unfixed                      vulnerabilities is still in the bucket"
+                ),
+            }
+        }
+    });
+}
+
+fn spawn_security_embargo_worker(state: skilluv_backend::AppState) {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(24 * 60 * 60));
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+            match skilluv_backend::services::security_findings::sweep_embargoes(&state.db).await {
+                Ok(sweep) => {
+                    if !sweep.expired.is_empty() {
+                        tracing::warn!(
+                            count = sweep.expired.len(),
+                            "embargoes ran out - these findings are waiting on a                              publication decision nobody has taken"
+                        );
+                    }
+                    for (finding_id, days) in &sweep.reminded {
+                        // The reporter is told, because the clock is a promise
+                        // this platform made them and they are the one who
+                        // finds out whether it was kept.
+                        match skilluv_backend::services::security_findings::notifiable(
+                            &state.db,
+                            *finding_id,
+                        )
+                        .await
+                        {
+                            Ok(f) => {
+                                let _ = skilluv_backend::services::notify::send(
+                                    &state,
+                                    skilluv_backend::services::notify::Recipient::User(
+                                        f.reporter_user_id,
+                                    ),
+                                    "security.embargo_ending",
+                                )
+                                .arg("title", f.title)
+                                .arg("days", days.to_string())
+                                .payload(serde_json::json!({ "finding_id": finding_id }))
+                                .execute()
+                                .await;
+                            }
+                            Err(e) => tracing::warn!(
+                                finding = %finding_id, error = %e,
+                                "an embargo reminder had nobody to send to"
+                            ),
+                        }
+                    }
+                    if !sweep.reminded.is_empty() {
+                        tracing::info!(count = sweep.reminded.len(), "embargo reminders sent");
+                    }
+                }
+                Err(e) => tracing::error!(
+                    error = %e,
+                    "embargo sweep failed - a disclosure deadline may pass unnoticed"
+                ),
+            }
+        }
+    });
+}
+
+/// Looks for findings that resemble each other, every fifteen minutes.
+///
+/// Frequent, because the result is what a triager reads *before* deciding, and
+/// a duplicate detected after somebody has spent an afternoon reproducing it
+/// has cost exactly what the scan exists to save. Cheap: it only touches rows
+/// nothing has scanned yet.
+fn spawn_security_dedup_worker(state: skilluv_backend::AppState) {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(15 * 60));
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+            match skilluv_backend::services::security_findings::sweep_similarity(&state.db, 50)
+                .await
+            {
+                Ok(scanned) if scanned > 0 => {
+                    tracing::info!(scanned, "findings scanned for look-alikes");
+                }
+                Ok(_) => {}
+                Err(e) => tracing::error!(
+                    error = %e,
+                    "similarity sweep failed - triagers will be reading without                      duplicate candidates"
                 ),
             }
         }
@@ -583,6 +727,14 @@ fn spawn_craft_score_worker(state: skilluv_backend::AppState) {
                     "audio",
                     skilluv_backend::services::audio_profile::sweep(&state.db, 500).await,
                 ),
+                (
+                    "communication",
+                    skilluv_backend::services::communication_profile::sweep(&state.db, 500).await,
+                ),
+                (
+                    "education",
+                    skilluv_backend::services::education_profile::sweep(&state.db, 500).await,
+                ),
             ] {
                 match outcome {
                     Ok(0) => tracing::debug!(domain, "craft_score worker : nothing stale"),
@@ -632,6 +784,47 @@ fn spawn_artifact_stats_worker(state: skilluv_backend::AppState) {
                 Err(e) => tracing::error!(
                     error = %e,
                     "artifact_stats worker : sweep failed, figures stay as they were"
+                ),
+            }
+        }
+    });
+}
+
+/// Refreshes the external accounts linked outside the code forges.
+///
+/// Weekly, because these figures move slowly and every one of these services
+/// is somebody else's, run for free. `spawn_code_portfolio_worker` covers the
+/// forges, where the figures and the verification are a different problem.
+fn spawn_portfolio_sync_worker(state: skilluv_backend::AppState) {
+    tokio::spawn(async move {
+        if std::env::var("SKILLUV_PORTFOLIO_SYNC_ENABLED").as_deref() != Ok("1") {
+            tracing::info!("portfolio_sync worker : disabled (env flag absent)");
+            return;
+        }
+
+        let client = match reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(20))
+            .build()
+        {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::error!(error = %e, "portfolio_sync worker : no HTTP client, giving up");
+                return;
+            }
+        };
+
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(24 * 60 * 60));
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+            match skilluv_backend::services::portfolio_sync::sync_stale(&state.db, &client).await {
+                Ok(0) => tracing::debug!("portfolio_sync worker : nothing stale"),
+                Ok(n) => {
+                    tracing::info!(refreshed = n, "portfolio_sync worker : accounts refreshed")
+                }
+                Err(e) => tracing::error!(
+                    error = %e,
+                    "portfolio_sync worker : sweep failed, figures stay as they were"
                 ),
             }
         }

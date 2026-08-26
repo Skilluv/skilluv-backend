@@ -76,35 +76,115 @@ async fn the_listing_answers_in_the_requested_language() {
     assert_eq!(guides.len(), 8);
     assert!(guides.iter().all(|g| g["locale"] == "en"));
 
-    // No header at all: French, the language these are written in first.
+    // French is still served to somebody who asks for it: these eight were
+    // written in French first, and the English rows arrived in 0421.
+    let french: Value = reqwest::Client::new()
+        .get(format!(
+            "{}/api/guides?domain=code&kind=onboarding",
+            app.addr
+        ))
+        .header("Accept-Language", "fr-FR,fr;q=0.9")
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let guides = french["data"].as_array().unwrap();
+    assert_eq!(guides.len(), 8);
+    assert!(guides.iter().all(|g| g["locale"] == "fr"));
+
+    // No header at all: English. It was French, from when the whole table
+    // was; the repository's default is English now, and a reader who
+    // expressed no preference gets the locale the content is authored in.
     let default: Value = app
         .get("/api/guides?domain=code&kind=onboarding")
         .await
         .json()
         .await
         .unwrap();
-    assert!(default["data"].as_array().unwrap()[0]["locale"] == "fr");
+    assert_eq!(default["data"].as_array().unwrap()[0]["locale"], "en");
+}
+
+/// A guide with no row in the requested locale is served in the next best
+/// one, rather than disappearing.
+///
+/// The chain is requested → English → French. Before it was widened, the
+/// listing filtered on the requested locale exactly, so a domain seeded in
+/// one language only was missing entirely from the other's list — and the
+/// list looked complete.
+#[tokio::test]
+async fn a_guide_with_no_row_in_your_language_is_still_served() {
+    let app = TestApp::spawn().await;
+
+    let asked_for_wolof: Value = reqwest::Client::new()
+        .get(format!(
+            "{}/api/guides?domain=code&kind=onboarding",
+            app.addr
+        ))
+        .header("Accept-Language", "wo")
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+
+    let guides = asked_for_wolof["data"].as_array().unwrap();
+    assert_eq!(
+        guides.len(),
+        8,
+        "a language nobody translated into cost the reader the whole list"
+    );
+    assert!(
+        guides.iter().all(|g| g["locale"] == "en"),
+        "the fallback should land on English, not on nothing"
+    );
 }
 
 #[tokio::test]
 async fn a_guide_carries_a_body_somebody_can_act_on() {
     let app = TestApp::spawn().await;
 
-    let body: Value = app
-        .get("/api/guides/onboarding-systems")
-        .await
-        .json()
-        .await
-        .unwrap();
-    let markdown = body["data"]["body_md"].as_str().unwrap();
+    // Asserted in both locales, because the four headings are the contract
+    // and a translation that dropped one would be a guide that stopped
+    // answering.
+    for (accept, headings) in [
+        (
+            "en",
+            [
+                "Thirty days",
+                "Tools",
+                "First challenge",
+                "Where the people are",
+            ],
+        ),
+        (
+            "fr-FR,fr;q=0.9",
+            ["Trente jours", "Outils", "Premier défi", "Où sont les gens"],
+        ),
+    ] {
+        let body: Value = reqwest::Client::new()
+            .get(format!("{}/api/guides/onboarding-systems", app.addr))
+            .header("Accept-Language", accept)
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        let markdown = body["data"]["body_md"].as_str().unwrap();
 
-    // The five things somebody arriving actually asks. A guide that answers
-    // fewer is a welcome message.
-    assert!(markdown.contains("Trente jours"), "no thirty-day path");
-    assert!(markdown.contains("Outils"), "nothing to install");
-    assert!(markdown.contains("Premier défi"), "nothing to attempt");
-    assert!(markdown.contains("Où sont les gens"), "nowhere to go");
-    assert!(markdown.len() > 800, "a guide of four lines is a stub");
+        // The four things somebody arriving actually asks. A guide that
+        // answers fewer is a welcome message.
+        for heading in headings {
+            assert!(
+                markdown.contains(heading),
+                "the {accept} guide is missing: {heading}"
+            );
+        }
+        assert!(markdown.len() > 800, "a guide of four lines is a stub");
+    }
 }
 
 #[tokio::test]
@@ -468,7 +548,7 @@ async fn matching_needs_the_onboarding_answered_first() {
     a_user(&app, "match_unanswered").await;
     app.login("match_unanswered").await;
 
-    let resp = app.get("/api/code/mentors/for-me").await;
+    let resp = app.get("/api/domains/code/mentors/for-me").await;
     assert_eq!(
         resp.status(),
         400,
@@ -564,7 +644,7 @@ async fn a_mentor_is_suggested_with_the_reasoning_attached() {
 
     app.login("match_mentee").await;
     let body: Value = app
-        .get("/api/code/mentors/for-me")
+        .get("/api/domains/code/mentors/for-me")
         .await
         .json()
         .await

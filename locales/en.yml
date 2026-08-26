@@ -431,6 +431,59 @@ notification:
       body: "The two sides disagree. Nobody is paid until this is settled."
       cta: "Open the disputes"
 
+  # Cyber disclosure. Transactional throughout: a person cannot opt out of
+  # being told what happened to a report they filed. Not being told is the
+  # single most common way a disclosure programme dies.
+  security:
+    finding_received:
+      title: "Your report has arrived"
+      body: "{title} is in the queue. Somebody will read it within {days} days and tell you either way."
+      cta: "See my reports"
+    finding_triaged:
+      title: "Your report is being looked at"
+      body: "{title} passed triage and is with a reviewer who will try to reproduce it."
+      cta: "See my reports"
+    finding_confirmed:
+      title: "Reproduced - it is real"
+      body: "Somebody else got to the same result on {title}. Rated {severity}. The fix is not your work and the credit already is."
+      cta: "See my reports"
+    finding_duplicate:
+      title: "Already known"
+      body: "{title} had been reported before yours. Your work is recorded as an independent co-discovery - no bounty, because first-to-file decides that, and no doubt about what you did."
+      cta: "See my reports"
+    finding_rejected:
+      title: "Not accepted"
+      body: "{title} was not accepted. {reason}"
+      cta: "See my reports"
+    finding_round:
+      title: "A reviewer needs something more"
+      body: "On {title}: {reason} You have the floor - answer on the report."
+      cta: "Answer the reviewer"
+    finding_fixed:
+      title: "The fix has shipped"
+      body: "{title} is fixed. The write-up comes next, and then your name on it."
+      cta: "See my reports"
+    finding_published:
+      title: "It is public"
+      body: "{title} has been disclosed, with the write-up and your name on it. It is on the hall of fame and on your profile."
+      cta: "See the hall of fame"
+    severity_changed:
+      title: "The severity changed"
+      body: "{title} moved from {before} to {after}. The reason is on the report, and you can argue with it."
+      cta: "Read the reasoning"
+    embargo_ending:
+      title: "An embargo is running out"
+      body: "{title} comes out of embargo in {days} days. Nothing is published automatically - say if you want it held longer."
+      cta: "See my reports"
+    triage_queued:
+      title: "{count} report(s) waiting on triage"
+      body: "Nobody has read them yet. The published commitment is {days} days."
+      cta: "Open the queue"
+    dedup_suspected:
+      title: "Two reports look alike"
+      body: "{title} resembles something already filed. Nothing has been merged - a merge decides who is paid."
+      cta: "Compare them"
+
 # Vocabulary reused inside notification bodies, so a translator writes
 # one sentence with a placeholder rather than two parallel titles.
 guild:

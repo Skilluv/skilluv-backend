@@ -44,6 +44,24 @@ pub struct Evidence {
     pub skill_node_ids: Vec<Uuid>,
 }
 
+/// What an attestation rests on when it does not rest on a deliverable.
+///
+/// A separate argument rather than two more fields on [`Evidence`], so that
+/// the eighteen places that build an `Evidence` literal do not all have to
+/// mention two links that only one domain uses. [`issue`] passes an empty one.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Links {
+    /// The reported vulnerability this rests on. Security only, and needed on
+    /// its own rather than through the deliverable because an independent
+    /// co-discovery has a finding and no fix of its own (migration 0559).
+    pub security_finding_id: Option<Uuid>,
+    /// The catalogue challenge this rests on, where completing the challenge
+    /// is itself the attestable act — a captured flag, a passed lab. Also the
+    /// key the uniqueness rule of 0559 uses, since those produce no
+    /// deliverable to be unique per.
+    pub challenge_template_id: Option<Uuid>,
+}
+
 /// What came back.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct Issued {
@@ -87,6 +105,19 @@ pub async fn issue(
     user_id: Uuid,
     basis: &str,
     evidence: &Evidence,
+    domain: &Domain,
+) -> Result<Issued, AppError> {
+    issue_linked(db, user_id, basis, evidence, Links::default(), domain).await
+}
+
+/// [`issue`], for an attestation that rests on something other than a
+/// deliverable.
+pub async fn issue_linked(
+    db: &PgPool,
+    user_id: Uuid,
+    basis: &str,
+    evidence: &Evidence,
+    links: Links,
     domain: &Domain,
 ) -> Result<Issued, AppError> {
     if !domain.bases.contains(&basis) {
@@ -146,13 +177,22 @@ pub async fn issue(
     let projects: Vec<Uuid> = evidence.project_id.into_iter().collect();
     let deliverables: Vec<Uuid> = evidence.deliverable_id.into_iter().collect();
 
-    let row: (Uuid, String) = sqlx::query_as(
+    // `ON CONFLICT DO NOTHING`, and the existing row read back when it fires.
+    //
+    // Three partial unique indexes cover this table — per deliverable (0198),
+    // per challenge and per finding (0559) — and every generator that reaches
+    // here is re-runnable by design: the proof orchestrator sweeps the same
+    // user repeatedly, and a hook can fire twice for one event. Erroring on the
+    // second pass would mean a caller has to distinguish "already issued" from
+    // "went wrong", and every caller would have to do it.
+    let inserted: Option<(Uuid, String)> = sqlx::query_as(
         r#"
         INSERT INTO attestations
             (user_id, attestation_type, title, description, basis,
              linked_deliverable_ids, linked_project_ids, linked_skill_node_ids,
-             verification_code)
-        VALUES ($1, 'artefact', $2, $3, $4, $5, $6, $7, $8)
+             verification_code, security_finding_id, challenge_template_id)
+        VALUES ($1, 'artefact', $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        ON CONFLICT DO NOTHING
         RETURNING id, verification_code
         "#,
     )
@@ -164,8 +204,55 @@ pub async fn issue(
     .bind(&projects)
     .bind(&evidence.skill_node_ids)
     .bind(verification_code())
-    .fetch_one(db)
+    .bind(links.security_finding_id)
+    .bind(links.challenge_template_id)
+    .fetch_optional(db)
     .await?;
+
+    let row: (Uuid, String) = match inserted {
+        Some(row) => row,
+        None => {
+            // Already issued. Return the one that exists, so the caller sees
+            // the same verification code it would have seen the first time.
+            let existing: Option<(Uuid, String)> = sqlx::query_as(
+                r#"
+                SELECT id, verification_code
+                  FROM attestations
+                 WHERE user_id = $1
+                   AND attestation_type = 'artefact'
+                   AND basis = $2
+                   AND revoked_at IS NULL
+                   AND linked_deliverable_ids = $3
+                   AND security_finding_id IS NOT DISTINCT FROM $4
+                   AND challenge_template_id IS NOT DISTINCT FROM $5
+                 LIMIT 1
+                "#,
+            )
+            .bind(user_id)
+            .bind(basis)
+            .bind(&deliverables)
+            .bind(links.security_finding_id)
+            .bind(links.challenge_template_id)
+            .fetch_optional(db)
+            .await?;
+
+            let Some(row) = existing else {
+                // The insert was refused and nothing matching is there to
+                // read. That means a constraint refused it for a reason other
+                // than the uniqueness rules, and saying so is better than
+                // returning something invented.
+                return Err(AppError::Internal(format!(
+                    "a {basis} attestation was refused and no existing one                      explains why"
+                )));
+            };
+            // Not counted in the metric: nothing was issued.
+            return Ok(Issued {
+                id: row.0,
+                basis: basis.to_string(),
+                verification_code: row.1,
+            });
+        }
+    };
 
     // One metric with a domain label, rather than one metric per domain. A
     // dashboard asking "how many attestations were issued this week" should

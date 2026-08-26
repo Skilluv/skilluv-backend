@@ -64,6 +64,17 @@ pub async fn list(
     Query(q): Query<ListQuery>,
 ) -> Result<impl IntoResponse, AppError> {
     crate::validators::check_max_len_opt(&q.kind, "kind", 30)?;
+    // The document says 1..=100 and nothing enforced it, so `limit=0` was
+    // documented as invalid and answered 200. Enforced rather than clamped:
+    // a caller who asked for zero rows and got twenty-five has been ignored,
+    // and silently ignoring a parameter is how a paginating client breaks.
+    if let Some(limit) = q.limit
+        && !(1..=100).contains(&limit)
+    {
+        return Err(AppError::Validation(
+            "limit must be between 1 and 100".into(),
+        ));
+    }
     let rows = series::list(&state.db, q.kind.as_deref(), q.limit.unwrap_or(25)).await?;
     Ok(Json(wrap(json!({ "series": rows }))))
 }

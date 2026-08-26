@@ -45,13 +45,22 @@ pub fn challenge_feed_routes() -> Router<AppState> {
     Router::new().route("/me/feed/challenges", get(feed))
 }
 
-#[derive(Debug, Deserialize)]
-struct FeedQuery {
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+pub struct FeedQuery {
     #[serde(default)]
     limit: Option<i64>,
 }
 
-async fn feed(
+/// Challenges picked for the caller, from what they have done and declared.
+#[utoipa::path(
+    get, path = "/api/me/feed/challenges", tag = "feed",
+    params(FeedQuery),
+    responses(
+        (status = 200, body = serde_json::Value),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn feed(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<FeedQuery>,

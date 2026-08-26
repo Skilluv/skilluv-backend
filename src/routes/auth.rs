@@ -2657,6 +2657,7 @@ pub async fn regenerate_backup_codes(
 #[utoipa::path(
     get,
     path = "/api/auth/sessions",
+    operation_id = "authListSessions",
     tag = "auth",
     responses(
         (status = 200, description = "Active sessions list", body = ApiResponse<ListSessionsResponse>),

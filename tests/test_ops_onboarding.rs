@@ -194,7 +194,9 @@ async fn the_ops_guides_do_not_leak_into_the_code_catalogue() {
 async fn the_toolkit_says_what_each_thing_costs_to_reach() {
     let app = TestApp::spawn().await;
 
-    let resp = app.get("/api/ops/toolkit?category=cloud_free_tier").await;
+    let resp = app
+        .get("/api/domains/ops/toolkit?category=cloud_free_tier")
+        .await;
     assert_eq!(resp.status(), 200);
     let jv: serde_json::Value = resp.json().await.unwrap();
     let resources = jv["data"]["resources"].as_array().unwrap();
@@ -216,7 +218,7 @@ async fn the_toolkit_says_what_each_thing_costs_to_reach() {
 }
 
 #[tokio::test]
-async fn a_guide_falls_back_to_french_rather_than_disappearing() {
+async fn a_guide_falls_back_rather_than_disappearing() {
     let app = TestApp::spawn().await;
 
     // Arabic has no ops guides. A half-translated catalogue should show the
@@ -227,7 +229,11 @@ async fn a_guide_falls_back_to_french_rather_than_disappearing() {
     assert_eq!(resp.status(), 200);
 
     let jv: serde_json::Value = resp.json().await.unwrap();
-    assert_eq!(jv["data"]["locale"], "fr");
+    // English, because the chain is asked-for, then English, then French —
+    // English sits in the middle since it became the locale this content is
+    // written in. This asserted French, which was right when French was the
+    // fallback and silently wrong afterwards.
+    assert_eq!(jv["data"]["locale"], "en");
 
     drop(app);
 }

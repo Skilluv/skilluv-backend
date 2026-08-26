@@ -62,7 +62,7 @@ fn normalize_opt(value: Option<String>) -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CreateBookmarkBody {
     pub target_type: String,
@@ -102,7 +102,18 @@ fn validate_folder(slug: &str) -> Result<(), AppError> {
     }
 }
 
-async fn create(
+/// Bookmark something, optionally into a folder.
+#[utoipa::path(
+    post, path = "/api/bookmarks",
+    operation_id = "bookmarksCreate",
+    tag = "profile",
+    request_body = CreateBookmarkBody,
+    responses(
+        (status = 201, description = "Bookmarked"),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<CreateBookmarkBody>,
@@ -146,7 +157,19 @@ async fn create(
     Ok((StatusCode::CREATED, Json(wrap(json!({ "bookmark": row })))))
 }
 
-async fn remove(
+/// Remove one of the caller's bookmarks.
+#[utoipa::path(
+    delete, path = "/api/bookmarks/{id}",
+    operation_id = "bookmarksRemove",
+    tag = "profile",
+    params(("id" = uuid::Uuid, Path)),
+    responses(
+        (status = 204, description = "Removed"),
+        (status = 404, description = "No bookmark of yours with that id", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn remove(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -166,7 +189,7 @@ async fn remove(
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
 pub struct ListQuery {
     /// Narrow to one target type.
     #[serde(default)]
@@ -185,7 +208,16 @@ pub struct ListQuery {
 /// acceptable trade for keeping the filter a single flat query param.
 const UNFILED: &str = "unfiled";
 
-async fn list_mine(
+/// The caller's bookmarks, newest first.
+#[utoipa::path(
+    get, path = "/api/users/me/bookmarks",
+    operation_id = "bookmarksListMine",
+    tag = "profile",
+    params(ListQuery),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_mine(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<ListQuery>,
@@ -256,7 +288,12 @@ async fn list_mine(
 /// Folder facets with counts, so the front end can render the sidebar
 /// without pulling every bookmark. Unfiled bookmarks are reported under
 /// the `unfiled` key that `list_mine` accepts as a filter.
-async fn list_folders(
+#[utoipa::path(
+    get, path = "/api/users/me/bookmarks/folders", tag = "profile",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_folders(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<impl IntoResponse, AppError> {

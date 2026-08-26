@@ -20,8 +20,9 @@ pub fn maintainer_digest_routes() -> Router<AppState> {
         .route("/maintainer-digest/unsubscribe/{token}", get(unsubscribe))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
+#[schema(as = MaintainerDigestSubscribeBody)]
 pub struct SubscribeBody {
     pub github_login: String,
     pub email: String,
@@ -29,7 +30,20 @@ pub struct SubscribeBody {
     pub repos: Vec<String>,
 }
 
-async fn subscribe(
+/// Ask for the maintainer digest. Nothing is sent until the mailed link
+/// is followed — the address is not taken at its word.
+#[utoipa::path(
+    // Mounted at the root, not under `/api`: public and self-serve. The
+    // document claimed `/api/maintainer-digest/...` for all three of these,
+    // which 404s.
+    post, path = "/maintainer-digest/subscribe", tag = "public",
+    request_body = SubscribeBody,
+    responses(
+        (status = 202, description = "A confirmation mail was sent. Nothing is delivered until the link is followed"),
+        (status = 400, description = "A missing field, or a repo that is not owner/name", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn subscribe(
     State(state): State<AppState>,
     Json(body): Json<SubscribeBody>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -68,7 +82,19 @@ async fn subscribe(
     ))
 }
 
-async fn confirm(
+/// Confirm a maintainer's digest subscription from the emailed link.
+///
+/// A GET because it is reached by clicking a link in a mail client, and
+/// the token is single use.
+#[utoipa::path(
+    get, path = "/maintainer-digest/confirm/{token}", tag = "public",
+    params(("token" = String, Path, description = "The one-shot token mailed to the maintainer")),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 404, description = "Unknown or already spent token", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn confirm(
     State(state): State<AppState>,
     Path(token): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -79,7 +105,16 @@ async fn confirm(
     })))
 }
 
-async fn unsubscribe(
+/// Stop a maintainer's digest from the link every digest carries.
+#[utoipa::path(
+    get, path = "/maintainer-digest/unsubscribe/{token}", tag = "public",
+    params(("token" = String, Path, description = "The unsubscribe token carried by every digest")),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 404, description = "Unknown token", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn unsubscribe(
     State(state): State<AppState>,
     Path(token): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {

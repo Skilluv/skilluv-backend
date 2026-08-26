@@ -136,6 +136,77 @@ pub const DESIGN: DomainRules = DomainRules {
     families_are_trade_slugs: true,
 };
 
+/// Four, which is the code number rather than the design one, and for the
+/// reason that separates them: a quality session is usually reading a report
+/// or a suite and saying what is missing, which is closer to reading a diff
+/// than to critiquing an artefact.
+///
+/// `quality_tools` is open text, so the overlap it produces is a bonus and
+/// never a filter — somebody who lists "axe" and somebody who lists "axe
+/// DevTools" are the same answer, and a filter would separate them.
+pub const QUALITY: DomainRules = DomainRules {
+    domain: "quality",
+    tools_key: "quality_tools",
+    families_key: "preferred_families",
+    max_active_mentees: 4,
+    tools_label: "outils",
+    families_are_trade_slugs: false,
+};
+
+/// Three, like design and for the same reason: a leadership session is
+/// reading somebody's document and saying what is missing from it, which is
+/// slower and more attentive than reading a diff. A mentor carrying five is
+/// carrying them badly.
+pub const LEADERSHIP: DomainRules = DomainRules {
+    domain: "leadership",
+    tools_key: "leadership_tools",
+    families_key: "preferred_families",
+    max_active_mentees: 3,
+    tools_label: "outils",
+    families_are_trade_slugs: false,
+};
+
+/// Four. A communication mentee usually arrives with a draft rather than an
+/// emergency, and reading a draft properly is an hour — slower than a diff,
+/// faster than listening to a mix twice.
+pub const COMMUNICATION: DomainRules = DomainRules {
+    domain: "communication",
+    tools_key: "main_formats",
+    families_key: "preferred_families",
+    max_active_mentees: 4,
+    tools_label: "formats",
+    families_are_trade_slugs: false,
+};
+
+/// Three. An education session is a conversation about somebody else's
+/// learners — what went wrong in a cohort, why a lesson lost the room — and it
+/// does not compress. Three is what a working trainer can carry.
+pub const EDUCATION: DomainRules = DomainRules {
+    domain: "education",
+    tools_key: "main_settings",
+    families_key: "preferred_families",
+    max_active_mentees: 3,
+    tools_label: "cadres",
+    families_are_trade_slugs: false,
+};
+
+/// Three. A security mentoring session is somebody reading a report that did
+/// not land, or sitting with a junior who has been stuck on the same box for a
+/// week — and both of those are an hour that does not compress. Three is what a
+/// working practitioner can carry.
+///
+/// `security_tools` is open text, so the overlap it produces is a bonus and
+/// never a filter: somebody who writes "burp" and somebody who writes "Burp
+/// Suite Community" are the same answer, and a filter would separate them.
+pub const SECURITY: DomainRules = DomainRules {
+    domain: "security",
+    tools_key: "security_tools",
+    families_key: "preferred_families",
+    max_active_mentees: 3,
+    tools_label: "outils",
+    families_are_trade_slugs: false,
+};
+
 /// The rules for a domain named at runtime.
 ///
 /// The wizard validates its answers against the same distinction the matcher
@@ -149,6 +220,11 @@ pub fn rules_for(domain: &str) -> Option<DomainRules> {
         "ops" => Some(OPS),
         "audio" => Some(AUDIO),
         "design" => Some(DESIGN),
+        "quality" => Some(QUALITY),
+        "leadership" => Some(LEADERSHIP),
+        "communication" => Some(COMMUNICATION),
+        "education" => Some(EDUCATION),
+        "security" => Some(SECURITY),
         _ => None,
     }
 }
@@ -496,6 +572,46 @@ pub async fn matches_for(
     });
     matches.truncate(limit.clamp(1, 50) as usize);
     Ok(matches)
+}
+
+/// Whether somebody looks stuck enough that suggesting a mentor is worth it.
+///
+/// Three pieces of work handed in for review in this domain and none of them
+/// validated. Not a judgement about the person — it is the shape of somebody
+/// repeating a mistake nobody has named for them yet, which is the one thing
+/// a mentor fixes faster than another attempt does.
+///
+/// Returned rather than pushed. Telling somebody "you seem to be struggling"
+/// unprompted lands badly however it is worded; this way the suggestion sits
+/// beside their work because they opened the page.
+///
+/// The slice types are read from `slice_types` rather than named here, so a
+/// domain that gains a surface gains it in this signal too. Types with no
+/// domain — a repository issue, a piece of documentation — belong to every
+/// domain and are deliberately excluded: failing to get a doc fix merged says
+/// nothing about somebody's design.
+pub async fn could_use_a_mentor(
+    db: &PgPool,
+    domain: &str,
+    user_id: Uuid,
+) -> Result<bool, AppError> {
+    let (handed_in, validated): (i64, i64) = sqlx::query_as(
+        r#"
+        SELECT count(DISTINCT d.slice_id) FILTER (WHERE TRUE),
+               count(DISTINCT d.slice_id) FILTER (WHERE s.status = 'validated')
+          FROM slice_validation_decisions d
+          JOIN project_slices s ON s.id = d.slice_id
+          JOIN slice_types t ON t.slug = s.slice_type
+         WHERE s.claimed_by_user_id = $1
+           AND t.skill_domain = $2
+        "#,
+    )
+    .bind(user_id)
+    .bind(domain)
+    .fetch_one(db)
+    .await?;
+
+    Ok(handed_in >= 3 && validated == 0)
 }
 
 #[cfg(test)]

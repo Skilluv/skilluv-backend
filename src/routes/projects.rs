@@ -502,7 +502,7 @@ pub async fn unmark_project_interested(
 // P26 v2 SKI-122 — active Skilluvers on a project
 // ═══════════════════════════════════════════════════════════════════
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
 pub struct ActiveWindowQuery {
     /// Rolling window in days (default 30, capped 180 to keep query cheap).
     #[serde(default)]
@@ -517,7 +517,15 @@ pub struct ActiveWindowQuery {
 /// A user is "active" if in the window they either claimed a slice on
 /// this project, submitted a PR, or had one validated. Distinct users;
 /// the payload is capped at 20 users to keep the response bounded.
-async fn active_skilluvers(
+#[utoipa::path(
+    get, path = "/api/projects/{slug}/active-skilluvers", tag = "projects",
+    params(("slug" = String, Path, description = "Project slug")),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 404, description = "No such project", body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn active_skilluvers(
     State(state): State<AppState>,
     Path(slug): Path<String>,
     axum::extract::Query(q): axum::extract::Query<ActiveWindowQuery>,

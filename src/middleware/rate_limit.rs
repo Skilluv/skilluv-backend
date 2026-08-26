@@ -46,6 +46,13 @@ impl RateLimiter {
         if is_whitelisted_ip(identifier) {
             return Ok(());
         }
+        // A declared research token multiplies the ceiling — see
+        // `middleware::security_research`. Applied here rather than at every
+        // call site because this function is called from a hundred handlers
+        // and none of them sees the request.
+        let max_requests = max_requests
+            .saturating_mul(crate::middleware::security_research::rate_limit_multiplier());
+
         let key = format!("ratelimit:{category}:{identifier}");
 
         let count: i64 = redis.incr(&key, 1).await?;

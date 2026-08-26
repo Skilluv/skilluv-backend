@@ -234,6 +234,7 @@ pub async fn mark_deliverable_valid(
     _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
+    headers: axum::http::HeaderMap,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Value>, AppError> {
     require_admin(&state, &auth).await?;
@@ -250,6 +251,21 @@ pub async fn mark_deliverable_valid(
     if res.rows_affected() == 0 {
         return Err(AppError::NotFound("deliverable not found".into()));
     }
+
+    crate::services::audit::record(
+        &state.db,
+        crate::services::audit::AuditEntry {
+            actor_type: crate::services::audit::ActorType::Admin,
+            actor_id: Some(auth.user_id),
+            action: "fraud.deliverable_mark_valid",
+            target_type: Some("deliverable"),
+            target_id: Some(id),
+            metadata: Some(json!({ "cleared": "plagiarism_score" })),
+            headers: Some(&headers),
+        },
+    )
+    .await;
+
     Ok(Json(build_response(json!({ "marked_valid": true }))))
 }
 
@@ -275,6 +291,7 @@ pub async fn revoke_deliverable(
     _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
+    headers: axum::http::HeaderMap,
     Path(id): Path<Uuid>,
     Json(body): Json<RevokeBody>,
 ) -> Result<Json<Value>, AppError> {
@@ -293,6 +310,21 @@ pub async fn revoke_deliverable(
         return Err(AppError::NotFound("deliverable not found".into()));
     }
     metrics::counter!("skilluv_fraud_deliverables_revoked_total").increment(1);
+
+    crate::services::audit::record(
+        &state.db,
+        crate::services::audit::AuditEntry {
+            actor_type: crate::services::audit::ActorType::Admin,
+            actor_id: Some(auth.user_id),
+            action: "fraud.deliverable_revoke",
+            target_type: Some("deliverable"),
+            target_id: Some(id),
+            metadata: Some(json!({ "reason": body.reason })),
+            headers: Some(&headers),
+        },
+    )
+    .await;
+
     Ok(Json(build_response(json!({ "revoked": true }))))
 }
 
@@ -312,6 +344,7 @@ pub async fn mark_user_valid(
     _gate: crate::middleware::admin_gate::AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
+    headers: axum::http::HeaderMap,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Value>, AppError> {
     require_admin(&state, &auth).await?;
@@ -327,6 +360,21 @@ pub async fn mark_user_valid(
     if res.rows_affected() == 0 {
         return Err(AppError::NotFound("user not found".into()));
     }
+
+    crate::services::audit::record(
+        &state.db,
+        crate::services::audit::AuditEntry {
+            actor_type: crate::services::audit::ActorType::Admin,
+            actor_id: Some(auth.user_id),
+            action: "fraud.user_mark_valid",
+            target_type: Some("user"),
+            target_id: Some(id),
+            metadata: Some(json!({ "cleared": "suspected_multi_account" })),
+            headers: Some(&headers),
+        },
+    )
+    .await;
+
     Ok(Json(build_response(json!({ "marked_valid": true }))))
 }
 
@@ -512,7 +560,7 @@ pub async fn deep_plagiarism_scan_endpoint(
     }
 
     let ai = state.ai.as_deref().ok_or_else(|| {
-        AppError::Internal("AI client not connected (grpc_ai_url absent en dev)".into())
+        AppError::ServiceUnavailable("the AI worker is not connected on this deployment".into())
     })?;
 
     // 2. Construit le comparison_pool (challenges similaires, cap 200).

@@ -115,9 +115,15 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::orientation_routes())
         .nest("/api", routes::ai_routes())
         .nest("/api", routes::audio_routes())
+        .nest("/api", routes::communication_routes())
+        .nest("/api", routes::education_routes())
+        .nest("/api", routes::slice_revision_routes())
+        .nest("/api", routes::portfolio_account_routes())
+        .nest("/api", routes::opportunity_routes())
         .nest("/api", routes::ai_safety_routes())
         .nest("/api", routes::benchmark_routes())
         .nest("/api", routes::domain_profile_routes())
+        .nest("/api", routes::practice_routes())
         .nest("/api", routes::guide_routes())
         .nest("/api", routes::award_routes())
         .nest("/api", routes::code_routes())
@@ -138,6 +144,10 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::additional_product_routes())
         .nest("/api", routes::enterprise_overview_routes())
         .nest("/api", routes::ops_routes())
+        .nest("/api", routes::quality_routes())
+        .nest("/api", routes::security_routes())
+        .nest("/api", admin_gate(routes::admin_security_routes()))
+        .nest("/api", routes::leadership_routes())
         .nest("/api", routes::credential_routes())
         .nest("/api", routes::ats_routes())
         .nest("/api", routes::talent_line_routes())
@@ -195,6 +205,11 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::talent_offer_routes())
         .nest("/api", routes::vouching_routes())
         .nest("/api", routes::ai_companion_routes())
+        // SKI-295/296/298 — the admin side of those three surfaces. Behind
+        // `admin_gate` like every other `/api/admin/*` router.
+        .nest("/api", admin_gate(routes::admin_cohort_routes()))
+        .nest("/api", admin_gate(routes::admin_talent_offer_routes()))
+        .nest("/api", admin_gate(routes::admin_ai_companion_routes()))
         // SKI-288 — attestation verification under /api as well. The front
         // end owns /verify/{hash} on its own origin, so the root-level
         // route below is unreachable from the browser app.
@@ -217,11 +232,11 @@ pub fn build_router(state: AppState) -> Router {
         // but return 403 in prod. See src/routes/dev.rs.
         .nest("/api", routes::dev_routes())
         .nest("/api", routes::public_api_routes())
-        // BE-P1-CONTRACT — the legacy routes::openapi_routes() serving a
-        // hand-written spec at /api/docs/openapi.json is superseded by
-        // openapi::attach() below (utoipa-generated spec at
-        // /api/openapi.json + Swagger UI at /api/docs/*). Removed here to
-        // avoid the 'Overlapping method route' axum panic between the two.
+        // The hand-written spec that used to serve /api/docs/openapi.json is
+        // gone: `openapi::attach()` below publishes the generated one at
+        // /api/openapi.json with Swagger UI at /api/docs/*. The module stayed
+        // in the tree unmounted long after it stopped being reachable, which
+        // is how it came to describe an API three years of routes out of date.
         .nest("/api", routes::sponsored_routes())
         .nest("/api", routes::enterprise_credits_routes())
         .nest("/api", routes::enterprise_pipeline_routes())
@@ -289,6 +304,14 @@ pub fn build_router(state: AppState) -> Router {
     let router = openapi::attach(router);
 
     router
+        // Recognise a declared research token and run the request inside its
+        // scope. Innermost of the layers below, so the task-local it sets is
+        // visible to every handler and to `RateLimiter::check`, which is a
+        // plain function and cannot be handed a request.
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            middleware::security_research::resolve,
+        ))
         // Rejette au niveau HTTP les methodes deprecated / dangereuses AVANT
         // toute autre middleware. Deux objectifs :
         //   1. Securite : TRACE est un vecteur XST connu (Cross-Site Tracing,

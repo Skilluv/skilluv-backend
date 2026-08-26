@@ -82,6 +82,13 @@ pub struct AiInteraction {
     pub disclosed_on_deliverable_id: Option<Uuid>,
     pub disclosed_at: Option<chrono::DateTime<chrono::Utc>>,
     pub request_hash: Option<String>,
+    /// True when the answer came from the response cache — no worker call,
+    /// no tokens. Migration 0444 explains why this is stored rather than
+    /// inferred from `tokens_used`.
+    pub cached: bool,
+    /// `burst` | `daily_quota` when the request was refused by a guard
+    /// rail, `None` otherwise.
+    pub refusal_kind: Option<String>,
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
@@ -185,41 +192,74 @@ pub async fn used_today(db: &PgPool, user_id: Uuid) -> Result<i64, AppError> {
     Ok(used)
 }
 
+/// Everything one ledger row records.
+///
+/// A struct rather than a dozen positional arguments: the call sites all
+/// differ by one or two fields, and a transposed `&str` pair among ten
+/// would compile and quietly corrupt the disclosure ledger.
+pub struct RecordParams<'a> {
+    pub interaction_type: &'a str,
+    pub prompt: &'a str,
+    pub skill_slug: Option<&'a str>,
+    pub status: &'a str,
+    pub disclosure_label: &'a str,
+    pub model_version: Option<&'a str>,
+    pub tokens_used: i32,
+    pub request_hash: Option<&'a str>,
+    /// Served from the response cache.
+    pub cached: bool,
+    /// Set only alongside `status = "rate_limited"`.
+    pub refusal_kind: Option<&'a str>,
+}
+
+impl<'a> RecordParams<'a> {
+    /// A plain exchange: reached the worker, spent tokens.
+    pub fn call(interaction_type: &'a str, prompt: &'a str) -> Self {
+        Self {
+            interaction_type,
+            prompt,
+            skill_slug: None,
+            status: "ok",
+            disclosure_label: "",
+            model_version: None,
+            tokens_used: 0,
+            request_hash: None,
+            cached: false,
+            refusal_kind: None,
+        }
+    }
+}
+
 /// Record an interaction in the disclosure ledger. Best-effort on the
 /// caller's side is not acceptable here — an undisclosed AI interaction is
 /// exactly what this table exists to prevent — so errors propagate.
-#[allow(clippy::too_many_arguments)]
 pub async fn record(
     db: &PgPool,
     user_id: Uuid,
-    interaction_type: &str,
-    prompt: &str,
-    skill_slug: Option<&str>,
-    status: &str,
-    disclosure_label: &str,
-    model_version: Option<&str>,
-    tokens_used: i32,
-    request_hash: Option<&str>,
+    params: RecordParams<'_>,
 ) -> Result<AiInteraction, AppError> {
-    let truncated: String = prompt.chars().take(MAX_PROMPT_CHARS).collect();
+    let truncated: String = params.prompt.chars().take(MAX_PROMPT_CHARS).collect();
     let interaction: AiInteraction = sqlx::query_as(
         r#"
         INSERT INTO ai_interactions
             (user_id, interaction_type, prompt, skill_slug, status,
-             disclosure_label, model_version, tokens_used, request_hash)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+             disclosure_label, model_version, tokens_used, request_hash,
+             cached, refusal_kind)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         RETURNING *
         "#,
     )
     .bind(user_id)
-    .bind(interaction_type)
+    .bind(params.interaction_type)
     .bind(&truncated)
-    .bind(skill_slug)
-    .bind(status)
-    .bind(disclosure_label)
-    .bind(model_version)
-    .bind(tokens_used.max(0))
-    .bind(request_hash)
+    .bind(params.skill_slug)
+    .bind(params.status)
+    .bind(params.disclosure_label)
+    .bind(params.model_version)
+    .bind(params.tokens_used.max(0))
+    .bind(params.request_hash)
+    .bind(params.cached)
+    .bind(params.refusal_kind)
     .fetch_one(db)
     .await?;
     Ok(interaction)
@@ -328,6 +368,156 @@ pub(crate) fn decode_cache(
         c.disclosure_label,
         c.model_version,
     ))
+}
+
+/// SKI-298 (T3-01b) — operational projection of the companion.
+///
+/// The ticket's premise is that a feature whose cost can explode has no
+/// business shipping without a way to watch the cost. Everything here is
+/// an aggregate: no prompt text crosses this boundary, because the point
+/// is spending and quota pressure, and reading learners' questions is not
+/// needed to answer either.
+#[derive(Debug, Clone, Serialize)]
+pub struct AdminStats {
+    pub window_days: i64,
+    pub total_requests: i64,
+    /// Requests that actually reached the worker and were billed.
+    pub billed_calls: i64,
+    pub cache_hits: i64,
+    /// Hits over (hits + billed calls). `None` when neither happened —
+    /// a rate of 0.0 on an empty window would read as "the cache is
+    /// broken" rather than "nothing was asked".
+    pub cache_hit_rate: Option<f64>,
+    pub tokens_total: i64,
+    pub refused_burst: i64,
+    pub refused_daily_quota: i64,
+    /// Worker unreachable or erroring — the gRPC side of the story.
+    pub worker_failures: i64,
+    pub distinct_users: i64,
+    pub by_interaction_type: std::collections::BTreeMap<String, i64>,
+    pub by_status: std::collections::BTreeMap<String, i64>,
+    pub top_consumers: Vec<TopConsumer>,
+}
+
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+pub struct TopConsumer {
+    pub user_id: Uuid,
+    pub username: String,
+    pub display_name: String,
+    pub requests: i64,
+    pub tokens_used: i64,
+}
+
+/// Longest window the stats endpoint will aggregate over.
+pub const MAX_STATS_WINDOW_DAYS: i64 = 365;
+
+pub async fn admin_stats(
+    db: &PgPool,
+    window_days: i64,
+    top_n: i64,
+) -> Result<AdminStats, AppError> {
+    let window_days = window_days.clamp(1, MAX_STATS_WINDOW_DAYS);
+
+    // One pass for the scalars. Splitting these into separate queries would
+    // let them disagree about the window boundary between round trips.
+    let totals: (i64, i64, i64, i64, i64, i64, i64, i64) = sqlx::query_as(
+        r#"
+        SELECT COUNT(*),
+               COUNT(*) FILTER (WHERE status = 'ok' AND NOT cached),
+               COUNT(*) FILTER (WHERE cached),
+               COALESCE(SUM(tokens_used), 0)::BIGINT,
+               COUNT(*) FILTER (WHERE refusal_kind = 'burst'),
+               COUNT(*) FILTER (WHERE refusal_kind = 'daily_quota'),
+               COUNT(*) FILTER (WHERE status IN ('unavailable', 'error')),
+               COUNT(DISTINCT user_id)
+          FROM ai_interactions
+         WHERE created_at >= NOW() - MAKE_INTERVAL(days => $1::INT)
+        "#,
+    )
+    .bind(window_days as i32)
+    .fetch_one(db)
+    .await?;
+
+    let (total, billed, hits, tokens, burst, quota, failures, users) = totals;
+
+    let by_interaction_type = count_by_type(db, window_days).await?;
+    let by_status = count_by_status(db, window_days).await?;
+
+    let top_consumers: Vec<TopConsumer> = sqlx::query_as(
+        r#"
+        SELECT a.user_id,
+               u.username,
+               COALESCE(NULLIF(u.display_name, ''), u.username) AS display_name,
+               COUNT(*)                          AS requests,
+               COALESCE(SUM(a.tokens_used), 0)::BIGINT AS tokens_used
+          FROM ai_interactions a
+          JOIN users u ON u.id = a.user_id
+         WHERE a.created_at >= NOW() - MAKE_INTERVAL(days => $1::INT)
+         GROUP BY a.user_id, u.username, u.display_name
+         ORDER BY requests DESC, tokens_used DESC
+         LIMIT $2
+        "#,
+    )
+    .bind(window_days as i32)
+    .bind(top_n.clamp(1, 100))
+    .fetch_all(db)
+    .await?;
+
+    let served = hits + billed;
+    Ok(AdminStats {
+        window_days,
+        total_requests: total,
+        billed_calls: billed,
+        cache_hits: hits,
+        cache_hit_rate: (served > 0).then(|| hits as f64 / served as f64),
+        tokens_total: tokens,
+        refused_burst: burst,
+        refused_daily_quota: quota,
+        worker_failures: failures,
+        distinct_users: users,
+        by_interaction_type,
+        by_status,
+        top_consumers,
+    })
+}
+
+/// Counts by interaction type over the window.
+async fn count_by_type(
+    db: &PgPool,
+    window_days: i64,
+) -> Result<std::collections::BTreeMap<String, i64>, AppError> {
+    let rows: Vec<(String, i64)> = sqlx::query_as(
+        "SELECT interaction_type, COUNT(*)
+           FROM ai_interactions
+          WHERE created_at >= NOW() - MAKE_INTERVAL(days => $1::INT)
+          GROUP BY 1",
+    )
+    .bind(window_days as i32)
+    .fetch_all(db)
+    .await?;
+    Ok(rows.into_iter().collect())
+}
+
+/// Counts by outcome over the window.
+///
+/// A sibling of [`count_by_type`] rather than one function taking the
+/// column name: interpolating a column into the SQL would trade a
+/// compile-time guarantee for a runtime `debug_assert`, and the two value
+/// sets are both fixed by a CHECK constraint anyway.
+async fn count_by_status(
+    db: &PgPool,
+    window_days: i64,
+) -> Result<std::collections::BTreeMap<String, i64>, AppError> {
+    let rows: Vec<(String, i64)> = sqlx::query_as(
+        "SELECT status, COUNT(*)
+           FROM ai_interactions
+          WHERE created_at >= NOW() - MAKE_INTERVAL(days => $1::INT)
+          GROUP BY 1",
+    )
+    .bind(window_days as i32)
+    .fetch_all(db)
+    .await?;
+    Ok(rows.into_iter().collect())
 }
 
 /// Redis key for a cached answer.

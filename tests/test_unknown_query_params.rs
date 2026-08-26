@@ -22,6 +22,7 @@ const LISTINGS: &[&str] = &[
     "/api/missions?limit=5",
     "/api/feed/public?limit=5",
     "/api/talents/search?limit=5",
+    "/api/quality/reports?limit=5",
 ];
 
 #[tokio::test]

@@ -56,7 +56,9 @@ fn build_response(data: Value) -> Value {
 // ═══════════════════════════════════════════════════════════════════
 
 #[utoipa::path(
-    post, path = "/api/enterprise/placements", tag = "enterprise",
+    post, path = "/api/enterprise/placements",
+    operation_id = "additionalProductsPropose",
+    tag = "enterprise",
     request_body(content = serde_json::Value, description = "PlacementInput"),
     responses(
         (status = 200, body = serde_json::Value),

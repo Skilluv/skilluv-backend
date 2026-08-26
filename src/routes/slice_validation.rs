@@ -38,6 +38,16 @@ fn wrap(data: serde_json::Value) -> serde_json::Value {
 }
 
 /// SKI-83 — POST /api/slices/{id}/validation/pickup
+#[utoipa::path(
+    post, path = "/api/slices/{id}/validation/pickup", tag = "slices",
+    params(("id" = uuid::Uuid, Path, description = "The slice to pick up for validation")),
+    responses(
+        (status = 200, description = "The slice is now yours to validate"),
+        (status = 403, description = "Not eligible to validate this slice", body = crate::api_response::ErrorResponse),
+        (status = 409, description = "Somebody else picked it up first", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
 pub async fn pickup(
     State(state): State<AppState>,
     auth: AuthUser,
@@ -48,6 +58,15 @@ pub async fn pickup(
 }
 
 /// SKI-84 — POST /api/slices/{id}/validation/approve
+#[utoipa::path(
+    post, path = "/api/slices/{id}/validation/approve", tag = "slices",
+    params(("id" = uuid::Uuid, Path)),
+    responses(
+        (status = 200, description = "Validated"),
+        (status = 403, description = "The slice is not yours to validate", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
 pub async fn approve(
     State(state): State<AppState>,
     auth: AuthUser,
@@ -58,8 +77,9 @@ pub async fn approve(
     Ok((StatusCode::OK, Json(wrap(json!({ "slice": slice })))))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
+#[schema(as = SliceValidationRejectBody)]
 pub struct RejectBody {
     /// Feedback shown to the challenger. Required, ≤ 2000 chars.
     pub reason: String,
@@ -74,6 +94,18 @@ pub struct RejectBody {
 }
 
 /// SKI-85 — POST /api/slices/{id}/validation/reject
+#[utoipa::path(
+    post, path = "/api/slices/{id}/validation/reject",
+    operation_id = "sliceValidationReject",
+    tag = "slices",
+    params(("id" = uuid::Uuid, Path)),
+    request_body = RejectBody,
+    responses(
+        (status = 200, description = "Sent back, with what has to change"),
+        (status = 403, description = "The slice is not yours to validate", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
 pub async fn reject(
     State(state): State<AppState>,
     auth: AuthUser,
@@ -92,6 +124,11 @@ pub async fn reject(
 }
 
 /// SKI-86 — GET /api/me/validation/queue
+#[utoipa::path(
+    get, path = "/api/me/validation/queue", tag = "slices",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
 pub async fn my_queue(
     State(state): State<AppState>,
     auth: AuthUser,

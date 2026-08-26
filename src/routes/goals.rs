@@ -53,7 +53,7 @@ fn wrap(data: serde_json::Value) -> serde_json::Value {
     })
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CreateGoalBody {
     /// `rank` | `skill_level` | `capability` | `artifact_count`
@@ -68,7 +68,19 @@ pub struct CreateGoalBody {
     pub deadline: Option<chrono::NaiveDate>,
 }
 
-async fn create(
+/// Set a goal. Progress is recomputed on every read, never stored.
+#[utoipa::path(
+    post, path = "/api/users/me/goals",
+    operation_id = "goalsCreate",
+    tag = "profile",
+    request_body = CreateGoalBody,
+    responses(
+        (status = 201, description = "The goal was set"),
+        (status = 409, description = "A live goal of that kind already exists", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn create(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<CreateGoalBody>,
@@ -136,14 +148,23 @@ async fn create(
     Ok((StatusCode::CREATED, Json(wrap(json!({ "goal": progress })))))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
 pub struct ListGoalsQuery {
     /// Include archived goals (achieved or expired). Off by default.
     #[serde(default)]
     pub include_archived: bool,
 }
 
-async fn list_mine(
+/// The caller's goals with their progress recomputed on read.
+#[utoipa::path(
+    get, path = "/api/users/me/goals",
+    operation_id = "goalsListMine",
+    tag = "profile",
+    params(ListGoalsQuery),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_mine(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<ListGoalsQuery>,
@@ -152,7 +173,19 @@ async fn list_mine(
     Ok(Json(wrap(json!({ "goals": goals }))))
 }
 
-async fn fetch(
+/// One of the caller's goals, with its progress.
+#[utoipa::path(
+    get, path = "/api/users/me/goals/{id}",
+    operation_id = "goalsFetch",
+    tag = "profile",
+    params(("id" = uuid::Uuid, Path)),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 404, description = "No goal of yours with that id", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn fetch(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -161,7 +194,7 @@ async fn fetch(
     Ok(Json(wrap(json!({ "goal": progress }))))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct UpdateGoalBody {
     /// New deadline. Explicit `null` clears it; omitting the field leaves
@@ -182,7 +215,20 @@ where
     Ok(Some(Option::<T>::deserialize(deserializer)?))
 }
 
-async fn update(
+/// Change a goal's target or its deadline.
+#[utoipa::path(
+    patch, path = "/api/users/me/goals/{id}",
+    operation_id = "goalsUpdate",
+    tag = "profile",
+    params(("id" = uuid::Uuid, Path)),
+    request_body = UpdateGoalBody,
+    responses(
+        (status = 200, description = "Updated"),
+        (status = 404, description = "No goal of yours with that id", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn update(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -224,7 +270,19 @@ async fn update(
     Ok(Json(wrap(json!({ "goal": progress }))))
 }
 
-async fn remove(
+/// Drop a goal.
+#[utoipa::path(
+    delete, path = "/api/users/me/goals/{id}",
+    operation_id = "goalsRemove",
+    tag = "profile",
+    params(("id" = uuid::Uuid, Path)),
+    responses(
+        (status = 204, description = "Deleted"),
+        (status = 404, description = "No goal of yours with that id", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn remove(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,

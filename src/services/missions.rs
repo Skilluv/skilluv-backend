@@ -133,6 +133,18 @@ pub struct Mission {
     pub oncall_has_backup: bool,
     pub production_access_required: bool,
     pub compliance_frameworks: Vec<String>,
+
+    /// What the client may do with the delivered work. Orthogonal to
+    /// `ip_terms`, which says who owns it (migration 0413). Compulsory for
+    /// audio and communication, where the licence is where the disputes are.
+    pub licensing_scope: Option<String>,
+    /// Education: who is being taught. Not a level of the person doing the
+    /// work, which is what every other level field here means.
+    pub target_audience: Option<String>,
+    pub target_learners: Option<i32>,
+    /// Education: hours in front of people. Distinct from `estimated_days`,
+    /// which says how long the work takes.
+    pub delivery_hours: Option<i32>,
 }
 
 const MISSION_SELECT: &str = r#"
@@ -150,7 +162,9 @@ const MISSION_SELECT: &str = r#"
                AS application_count,
            m.target_platforms, m.includes_oncall, m.oncall_window,
            m.oncall_response_minutes, m.oncall_has_backup,
-           m.production_access_required, m.compliance_frameworks
+           m.production_access_required, m.compliance_frameworks,
+           m.licensing_scope,
+           m.target_audience, m.target_learners, m.delivery_hours
       FROM missions m
       JOIN mission_types mt ON mt.id = m.mission_type_id
       LEFT JOIN orientations o ON o.id = m.orientation_id
@@ -172,6 +186,37 @@ pub struct CreateMissionInput {
     pub deliverable_format: String,
     #[serde(default)]
     pub nda_required: bool,
+    /// Which confidentiality agreement. `mutual_standard`, `mutual_extended`,
+    /// or `client_custom` with `nda_document_url`.
+    ///
+    /// Defaults to `mutual_standard` when an agreement is required and none is
+    /// named, because a mission that says "you must sign" and names nothing is
+    /// what `nda_required` was for eighteen months — advice with no document
+    /// behind it.
+    #[serde(default)]
+    pub nda_template: Option<String>,
+    #[serde(default)]
+    pub nda_document_url: Option<String>,
+    /// Nobody applies below this rank. The gate `project_slices` has had since
+    /// 0058 and this table did not.
+    #[serde(default)]
+    pub min_rank: Option<String>,
+    /// Credentials an applicant must have declared. Matched on the name or the
+    /// level, case-insensitively; declared is enough, and the application says
+    /// which of the two it found.
+    #[serde(default)]
+    pub required_credentials: Vec<String>,
+    /// Whether the listing names the client.
+    #[serde(default)]
+    pub client_anonymous: bool,
+    /// The written authorisation. Required before an offensive security
+    /// engagement can leave draft, by a trigger rather than by a policy page.
+    #[serde(default)]
+    pub rules_of_engagement_url: Option<String>,
+    #[serde(default)]
+    pub allows_public_disclosure: bool,
+    #[serde(default = "yes")]
+    pub credits_researcher_in_disclosure: bool,
     #[serde(default)]
     pub ip_terms: Option<String>,
     #[serde(default)]
@@ -219,6 +264,30 @@ pub struct CreateMissionInput {
     /// background check before applying rather than after being refused.
     #[serde(default)]
     pub compliance_frameworks: Vec<String>,
+
+    /// One of `mission_licensing_scopes` (migration 0413): what the client may
+    /// do with the work, as distinct from who owns it.
+    ///
+    /// This field was missing until communication opened, and its absence was
+    /// a live bug rather than a gap: migration 0413 made the column compulsory
+    /// for audio missions, so from that migration until this one an audio
+    /// mission could not be created through the API at all — the insert was
+    /// refused by a constraint naming a column the request had no way to set.
+    #[serde(default)]
+    pub licensing_scope: Option<String>,
+
+    /// Education: `beginner`, `junior`, `mid`, `senior` or `mixed`.
+    /// Compulsory for an education mission — without it an applicant cannot
+    /// tell whether they are the right trainer.
+    #[serde(default)]
+    pub target_audience: Option<String>,
+    /// Education: how many people. Twelve and two hundred are different work.
+    #[serde(default)]
+    pub target_learners: Option<i32>,
+    /// Education: hours in front of people, which is not the same question as
+    /// how long the preparation takes.
+    #[serde(default)]
+    pub delivery_hours: Option<i32>,
 }
 
 fn yes() -> bool {
@@ -332,20 +401,55 @@ pub async fn create(
         None => None,
     };
 
+    // An agreement that is required names itself. The standard one unless the
+    // client picked otherwise, which is the constraint of 0560 met with a
+    // default rather than with a refusal — refusing would break every existing
+    // caller that set the flag and knew nothing about templates.
+    let nda_template = match (input.nda_required, input.nda_template.as_deref()) {
+        (false, _) => None,
+        (true, None) => Some("mutual_standard".to_string()),
+        (true, Some(t)) => {
+            if !matches!(t, "mutual_standard" | "mutual_extended" | "client_custom") {
+                return Err(AppError::Validation(format!(
+                    "'{t}' is not a confidentiality agreement this platform knows"
+                )));
+            }
+            if t == "client_custom" && input.nda_document_url.is_none() {
+                return Err(AppError::Validation(
+                    "a client's own agreement says where it is — and it has to be                      uploaded here rather than linked, because an agreement this                      platform cannot read is one it cannot hash"
+                        .into(),
+                ));
+            }
+            Some(t.to_string())
+        }
+    };
+
+    if let Some(rank) = input.min_rank.as_deref()
+        && !matches!(rank, "apprenti" | "ranger" | "artisan" | "maitre" | "doyen")
+    {
+        return Err(AppError::Validation(format!("'{rank}' is not a rank")));
+    }
+
     let id: Uuid = sqlx::query_scalar(
         r#"
         INSERT INTO missions
             (slug, enterprise_id, mission_type_id, skill_domain, title, description,
              acceptance_criteria, target_languages, target_frameworks, orientation_id,
-             deliverable_format, nda_required, ip_terms, payment_model,
+             deliverable_format, nda_required, nda_template, nda_document_url,
+             min_rank, required_credentials, client_anonymous,
+             rules_of_engagement_url, allows_public_disclosure,
+             credits_researcher_in_disclosure,
+             ip_terms, payment_model,
              budget_eur, hourly_rate_eur, revenue_share_percent,
              remote_only, urgency, estimated_days, applications_close_at, created_by,
              upstream_license_spdx,
              target_platforms, includes_oncall, oncall_window,
              oncall_response_minutes, oncall_has_backup,
-             production_access_required, compliance_frameworks)
+             production_access_required, compliance_frameworks,
+             licensing_scope, target_audience, target_learners, delivery_hours)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,
-                $23,$24,$25,$26,$27,$28,$29,$30)
+                $23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,
+                $35,$36,$37,$38,$39,$40,$41,$42)
         RETURNING id
         "#,
     )
@@ -361,6 +465,14 @@ pub async fn create(
     .bind(orientation_id)
     .bind(&input.deliverable_format)
     .bind(input.nda_required)
+    .bind(nda_template.as_deref())
+    .bind(input.nda_document_url.as_deref())
+    .bind(input.min_rank.as_deref())
+    .bind(&input.required_credentials)
+    .bind(input.client_anonymous)
+    .bind(input.rules_of_engagement_url.as_deref())
+    .bind(input.allows_public_disclosure)
+    .bind(input.credits_researcher_in_disclosure)
     .bind(&ip_terms)
     .bind(&payment_model)
     .bind(input.budget_eur.as_ref())
@@ -379,6 +491,10 @@ pub async fn create(
     .bind(input.oncall_has_backup)
     .bind(input.production_access_required)
     .bind(&input.compliance_frameworks)
+    .bind(input.licensing_scope.as_deref())
+    .bind(input.target_audience.as_deref())
+    .bind(input.target_learners)
+    .bind(input.delivery_hours)
     .fetch_one(db)
     .await
     .map_err(|e| {
@@ -458,6 +574,9 @@ pub struct MissionFilter {
     pub min_budget_eur: Option<bigdecimal::BigDecimal>,
     pub remote_only: Option<bool>,
     pub urgency: Option<String>,
+    /// Education: who the mission teaches. A trainer filtering for beginners
+    /// and one filtering for senior engineers are looking for different work.
+    pub target_audience: Option<String>,
 }
 
 /// Missions anybody can apply to.
@@ -485,9 +604,10 @@ pub async fn list_open(
                 OR COALESCE(m.budget_eur, m.hourly_rate_eur) >= $8)
            AND ($9::BOOLEAN IS NULL OR m.remote_only = $9)
            AND ($10::TEXT IS NULL OR m.urgency = $10)
+           AND ($11::TEXT IS NULL OR m.target_audience = $11)
          ORDER BY CASE m.urgency WHEN 'urgent' THEN 0 WHEN 'soon' THEN 1 ELSE 2 END,
                   m.published_at DESC NULLS LAST
-         LIMIT $11 OFFSET $12"
+         LIMIT $12 OFFSET $13"
     );
 
     let orientation_id: Option<Uuid> = match &filter.orientation {
@@ -515,6 +635,7 @@ pub async fn list_open(
         .bind(filter.min_budget_eur.as_ref())
         .bind(filter.remote_only)
         .bind(filter.urgency.as_deref())
+        .bind(filter.target_audience.as_deref())
         .bind(limit)
         .bind(offset)
         .fetch_all(db)
@@ -907,6 +1028,14 @@ pub async fn apply(
         ));
     }
 
+    // The three gates a mission may set, checked here rather than left to the
+    // enterprise to notice after selection.
+    //
+    // All three are generic — any domain may set them — and all three arrived
+    // with security, which is where a mission that says "OSCP, artisan or
+    // above, sign the NDA first" is ordinary rather than exotic.
+    check_application_gates(db, mission_id, user_id).await?;
+
     let id: Uuid = sqlx::query_scalar(
         r#"
         INSERT INTO mission_applications
@@ -945,6 +1074,113 @@ pub async fn apply(
         .fetch_one(db)
         .await
         .map_err(AppError::from)
+}
+
+/// The rank, the credentials and the confidentiality agreement.
+///
+/// Refused here, at application, and never later. A gate checked after
+/// selection is a gate that costs the applicant the mission — which is the
+/// argument the on-call question above already makes.
+///
+/// ## Why a declared credential is enough
+///
+/// The check is that the applicant has *declared* the credential, not that
+/// somebody verified it. Verification is a separate act with its own queue, and
+/// refusing every applicant whose OSCP nobody has got round to checking would
+/// make the filter a filter on this platform's own backlog. What the enterprise
+/// sees on the application is which of the two it is — declared or verified —
+/// so the decision stays theirs.
+async fn check_application_gates(
+    db: &PgPool,
+    mission_id: Uuid,
+    user_id: Uuid,
+) -> Result<(), AppError> {
+    #[derive(sqlx::FromRow)]
+    struct Gates {
+        min_rank: Option<String>,
+        required_credentials: Vec<String>,
+        nda_required: bool,
+    }
+
+    let gates: Gates = sqlx::query_as(
+        "SELECT min_rank, required_credentials, nda_required
+           FROM missions WHERE id = $1",
+    )
+    .bind(mission_id)
+    .fetch_optional(db)
+    .await?
+    .ok_or_else(|| AppError::NotFound("mission not found".into()))?;
+
+    if let Some(required) = gates.min_rank.as_deref() {
+        let held: Option<String> =
+            sqlx::query_scalar("SELECT rank FROM user_ranks WHERE user_id = $1")
+                .bind(user_id)
+                .fetch_optional(db)
+                .await?;
+        let ladder = ["apprenti", "ranger", "artisan", "maitre", "doyen"];
+        let position = |r: &str| ladder.iter().position(|x| *x == r);
+        let (Some(need), Some(have)) = (
+            position(required),
+            held.as_deref().and_then(position).or(Some(0)),
+        ) else {
+            // A rank nobody recognises is a seeding mistake, and refusing every
+            // applicant because of it would be worse than letting them through
+            // to a human.
+            tracing::warn!(mission = %mission_id, required,
+                "a mission requires a rank that is not on the ladder");
+            return Ok(());
+        };
+        if have < need {
+            return Err(AppError::Validation(format!(
+                "this mission is open from {required} upwards. What raises a rank                  is verified work, and the mission board is not the place it                  starts"
+            )));
+        }
+    }
+
+    if !gates.required_credentials.is_empty() {
+        // Matched on the name, case-insensitively, because an enterprise types
+        // "OSCP" and a holder typed "oscp".
+        let missing: Vec<String> = sqlx::query_scalar(
+            "SELECT r FROM unnest($2::TEXT[]) AS r
+              WHERE NOT EXISTS (
+                  SELECT 1 FROM external_credentials c
+                   WHERE c.user_id = $1
+                     AND (lower(c.name) = lower(r) OR lower(c.level) = lower(r))
+                     AND (c.expires_on IS NULL OR c.expires_on >= CURRENT_DATE))",
+        )
+        .bind(user_id)
+        .bind(&gates.required_credentials)
+        .fetch_all(db)
+        .await?;
+
+        if !missing.is_empty() {
+            return Err(AppError::Validation(format!(
+                "this mission asks for {}. Declare it on your profile first —                  declared is enough to apply, and the enterprise is told which                  of your credentials anybody has checked",
+                missing.join(", ")
+            )));
+        }
+    }
+
+    if gates.nda_required {
+        let signed: bool = sqlx::query_scalar(
+            "SELECT EXISTS (
+                 SELECT 1 FROM mission_nda_signatures
+                  WHERE mission_id = $1 AND signer_user_id = $2
+                    AND released_at IS NULL)",
+        )
+        .bind(mission_id)
+        .bind(user_id)
+        .fetch_one(db)
+        .await?;
+        if !signed {
+            return Err(AppError::Validation(
+                "this mission requires a confidentiality agreement. Sign it                  first: most of what makes an engagement like this describable                  is what the client has agreed you may say"
+                    .into(),
+            ));
+        }
+    }
+
+    Ok(())
 }
 
 /// The trigger speaks SQL; this says the same in words the applicant can act

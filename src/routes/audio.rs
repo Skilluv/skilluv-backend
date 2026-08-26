@@ -1,5 +1,4 @@
-//! Audio work: the files, the sources they came from, the castings, and the
-//! revision rounds.
+//! Audio work: the files, the sources they came from, and the castings.
 //!
 //! ## What is not here
 //!
@@ -10,6 +9,14 @@
 //!
 //! The challenge catalogue, the contests, the missions and the badges are the
 //! platform's own, keyed by domain. Audio adds rows to them and no routes.
+//!
+//! The revision rounds and the external portfolios were here and are not any
+//! more. Both read tables that carry a domain of their own — 0412 and 0415 —
+//! and both had the domain inlined in a query rather than taken from the row.
+//! They are `routes::slice_revisions` and `routes::portfolios`, at
+//! `/api/slices/{id}/revisions` and `/api/portfolios`, and they serve every
+//! domain. Copying them per domain would have meant one enforcement of the
+//! round ceiling per copy.
 //!
 //! ## Listening is always a signed, short-lived URL
 //!
@@ -54,29 +61,12 @@ pub fn audio_routes() -> Router<AppState> {
             "/audio/slices/{slice_id}/sources/complete",
             post(complete_sources),
         )
-        .route(
-            "/audio/slices/{slice_id}/revisions",
-            get(list_revisions).post(request_revision),
-        )
-        .route(
-            "/audio/revisions/{round_id}/resolve",
-            post(resolve_revision),
-        )
         .route("/audio/castings", get(list_castings).post(open_casting))
         .route("/audio/castings/{casting_id}", get(get_casting))
         .route("/audio/castings/{casting_id}/auditions", post(audition))
         .route("/audio/castings/{casting_id}/select", post(select_voice))
         .route("/audio/deliverables/{deliverable_id}/credit", post(credit))
-        .route("/audio/mentors/for-me", get(mentor_matches))
         .route("/projects/{slug}/credits", get(project_credits))
-        .route(
-            "/audio/portfolios",
-            get(my_portfolios).post(declare_portfolio),
-        )
-        .route(
-            "/audio/portfolios/{id}",
-            axum::routing::delete(drop_portfolio),
-        )
 }
 
 /// Whether this person may act on the work of this slice.
@@ -501,162 +491,6 @@ pub async fn complete_sources(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Revision rounds
-// ═══════════════════════════════════════════════════════════════════
-
-#[derive(Debug, Serialize, sqlx::FromRow, ToSchema)]
-pub struct RevisionRow {
-    pub id: Uuid,
-    pub round_no: i16,
-    pub kind: String,
-    pub notes_md: String,
-    pub requested_at: chrono::DateTime<chrono::Utc>,
-    pub resolved_at: Option<chrono::DateTime<chrono::Utc>>,
-    pub resolution_note: Option<String>,
-}
-
-#[derive(Debug, Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
-pub struct RequestRevisionBody {
-    /// One of `revision_round_kinds` for this domain.
-    pub kind: String,
-    pub notes_md: String,
-}
-
-/// The rounds this delivery has been through, and how many remain.
-#[utoipa::path(
-    get, path = "/api/audio/slices/{slice_id}/revisions", tag = "audio",
-    params(("slice_id" = Uuid, Path, description = "Slice")),
-    responses((status = 200, description = "Rounds", body = ApiResponse<serde_json::Value>)),
-    security(("cookie_auth" = [])),
-)]
-pub async fn list_revisions(
-    State(state): State<AppState>,
-    _auth: AuthUser,
-    Path(slice_id): Path<Uuid>,
-) -> Result<Json<ApiResponse<serde_json::Value>>, AppError> {
-    let rows: Vec<RevisionRow> = sqlx::query_as(
-        "SELECT id, round_no, kind, notes_md, requested_at, resolved_at, resolution_note
-           FROM slice_revision_rounds WHERE slice_id = $1 ORDER BY round_no",
-    )
-    .bind(slice_id)
-    .fetch_all(&state.db)
-    .await?;
-
-    let allowed: Option<i16> = sqlx::query_scalar(
-        "SELECT l.max_rounds FROM project_slices ps
-           JOIN revision_round_limits l ON l.skill_domain = ps.primary_domain
-          WHERE ps.id = $1",
-    )
-    .bind(slice_id)
-    .fetch_optional(&state.db)
-    .await?;
-
-    Ok(Json(ApiResponse::new(json!({
-        "rounds": rows,
-        "max_rounds": allowed,
-        "remaining": allowed.map(|a| (a as i64 - rows.len() as i64).max(0)),
-    }))))
-}
-
-/// Ask for a change.
-///
-/// Open to whoever commissioned the work rather than to whoever did it: a
-/// round the maker can open is a round the maker can spend.
-#[utoipa::path(
-    post, path = "/api/audio/slices/{slice_id}/revisions", tag = "audio",
-    params(("slice_id" = Uuid, Path, description = "Slice")),
-    request_body = RequestRevisionBody,
-    responses(
-        (status = 200, description = "Opened", body = ApiResponse<serde_json::Value>),
-        (status = 400, description = "No rounds left, or unknown kind", body = crate::api_response::ErrorResponse),
-    ),
-    security(("cookie_auth" = [])),
-)]
-pub async fn request_revision(
-    State(state): State<AppState>,
-    auth: AuthUser,
-    Path(slice_id): Path<Uuid>,
-    Json(body): Json<RequestRevisionBody>,
-) -> Result<Json<ApiResponse<serde_json::Value>>, AppError> {
-    if body.notes_md.trim().is_empty() {
-        return Err(AppError::Validation(
-            "a round has to say what to change — a rejection with no statement \
-             cannot be acted on"
-                .into(),
-        ));
-    }
-    crate::validators::check_max_len(&body.notes_md, "notes_md", 8000)?;
-
-    // The database counts the rounds and enforces the limit, because the count
-    // is the one both sides quote and a check here would race with itself.
-    let id: Uuid = sqlx::query_scalar(
-        r#"
-        INSERT INTO slice_revision_rounds
-            (slice_id, round_no, kind, requested_by, notes_md)
-        VALUES (
-            $1,
-            (SELECT COALESCE(max(round_no), 0) + 1
-               FROM slice_revision_rounds WHERE slice_id = $1),
-            $2, $3, $4)
-        RETURNING id
-        "#,
-    )
-    .bind(slice_id)
-    .bind(&body.kind)
-    .bind(auth.user_id)
-    .bind(body.notes_md.trim())
-    .fetch_one(&state.db)
-    .await?;
-
-    Ok(Json(ApiResponse::new(json!({ "id": id }))))
-}
-
-#[derive(Debug, Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
-pub struct ResolveRevisionBody {
-    pub resolution_note: Option<String>,
-}
-
-/// Close a round.
-///
-/// Only the person who opened it. A counter the maker can run down alone is
-/// not a count both sides agree on, which is the only kind worth keeping.
-#[utoipa::path(
-    post, path = "/api/audio/revisions/{round_id}/resolve", tag = "audio",
-    params(("round_id" = Uuid, Path, description = "Round")),
-    request_body = ResolveRevisionBody,
-    responses(
-        (status = 200, description = "Closed", body = ApiResponse<serde_json::Value>),
-        (status = 403, description = "Not the person who asked", body = crate::api_response::ErrorResponse),
-    ),
-    security(("cookie_auth" = [])),
-)]
-pub async fn resolve_revision(
-    State(state): State<AppState>,
-    auth: AuthUser,
-    Path(round_id): Path<Uuid>,
-    Json(body): Json<ResolveRevisionBody>,
-) -> Result<Json<ApiResponse<serde_json::Value>>, AppError> {
-    let done = sqlx::query(
-        "UPDATE slice_revision_rounds
-            SET resolved_at = NOW(), resolved_by = $2, resolution_note = $3
-          WHERE id = $1 AND requested_by = $2 AND resolved_at IS NULL",
-    )
-    .bind(round_id)
-    .bind(auth.user_id)
-    .bind(&body.resolution_note)
-    .execute(&state.db)
-    .await?;
-
-    if done.rows_affected() == 0 {
-        // Closed by whoever opened it, and only once.
-        return Err(AppError::Forbidden);
-    }
-    Ok(Json(ApiResponse::new(json!({ "resolved": true }))))
-}
-
-// ═══════════════════════════════════════════════════════════════════
 // Voice castings
 // ═══════════════════════════════════════════════════════════════════
 
@@ -1061,212 +895,6 @@ pub async fn credit(
         // conclusion, and re-running has to be free.
         "already_attested": id.is_none(),
     }))))
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// Mentors
-// ═══════════════════════════════════════════════════════════════════
-
-/// Mentors worth suggesting to the caller, best first, with the reasoning.
-///
-/// The same module the code and AI domains use. What differs is three strings:
-/// which domain to score, which answer holds the tools, and how many mentees is
-/// too many. Audio caps a mentor at three, like AI and for a related reason —
-/// listening to somebody's mix and saying something useful about it is not a
-/// fifteen-minute pass over a diff.
-#[utoipa::path(
-    get, path = "/api/audio/mentors/for-me", tag = "audio",
-    responses(
-        (status = 200, description = "Suggested mentors", body = ApiResponse<Vec<crate::services::mentorship_matching::Match>>),
-        (status = 400, description = "Audio onboarding not answered", body = crate::api_response::ErrorResponse),
-    ),
-    security(("cookie_auth" = [])),
-    operation_id = "audioMentorMatches",
-)]
-pub async fn mentor_matches(
-    State(state): State<AppState>,
-    auth: AuthUser,
-) -> Result<Json<ApiResponse<Vec<crate::services::mentorship_matching::Match>>>, AppError> {
-    let matches = crate::services::mentorship_matching::matches_for(
-        &state.db,
-        crate::services::mentorship_matching::AUDIO,
-        auth.user_id,
-        10,
-    )
-    .await?;
-    Ok(Json(ApiResponse::new(matches)))
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// External portfolios
-// ═══════════════════════════════════════════════════════════════════
-//
-// Declared rather than fetched, and the row says so. SoundCloud closed its API
-// to new applications in 2019, Bandcamp never had one, and Voice123 and Casting
-// Call Club publish nothing machine-readable. Every one of them is where this
-// domain's careers actually live.
-//
-// Refusing the ones that cannot be checked would erase the recorded work of
-// most musicians on the platform. Accepting their figures as verified would
-// make the craft score a self-assessment. So they are accepted, marked, and
-// counted at half weight by `audio_profile::reach` — the only one of the three
-// that is honest about what it knows.
-
-#[derive(Debug, Serialize, sqlx::FromRow, ToSchema)]
-pub struct PortfolioRow {
-    pub id: Uuid,
-    pub platform: String,
-    pub handle: String,
-    pub profile_url: String,
-    pub items_count: Option<i32>,
-    pub reach_count: Option<i64>,
-    pub figures_are_declared: bool,
-    pub verified_at: Option<chrono::DateTime<chrono::Utc>>,
-}
-
-/// The audio accounts the caller has linked.
-#[utoipa::path(
-    get, path = "/api/audio/portfolios", tag = "audio",
-    responses((status = 200, description = "Linked accounts", body = ApiResponse<Vec<PortfolioRow>>)),
-    security(("cookie_auth" = [])),
-    operation_id = "audioMyPortfolios",
-)]
-pub async fn my_portfolios(
-    State(state): State<AppState>,
-    auth: AuthUser,
-) -> Result<Json<ApiResponse<Vec<PortfolioRow>>>, AppError> {
-    let rows: Vec<PortfolioRow> = sqlx::query_as(
-        "SELECT p.id, p.platform, p.handle, p.profile_url, p.items_count,
-                p.reach_count, p.figures_are_declared, p.verified_at
-           FROM user_external_portfolios p
-           JOIN portfolio_platforms pf ON pf.slug = p.platform
-          WHERE p.user_id = $1 AND pf.skill_domain = 'audio'
-          ORDER BY pf.sort_order",
-    )
-    .bind(auth.user_id)
-    .fetch_all(&state.db)
-    .await?;
-
-    Ok(Json(ApiResponse::new(rows)))
-}
-
-#[derive(Debug, Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
-pub struct DeclarePortfolioBody {
-    /// One of the audio rows of `portfolio_platforms`: `soundcloud`,
-    /// `bandcamp`, `freesound`, `opengameart`, `voice123`, `castingcallclub`,
-    /// `bandlab`.
-    pub platform: String,
-    pub handle: String,
-    pub profile_url: String,
-    /// Tracks, sounds or roles — whatever the platform's `items_label` says.
-    pub items_count: Option<i32>,
-    /// Plays or downloads, where the platform shows them.
-    pub reach_count: Option<i64>,
-}
-
-/// Link an audio account, with the figures the person reads on it.
-#[utoipa::path(
-    post, path = "/api/audio/portfolios", tag = "audio",
-    request_body = DeclarePortfolioBody,
-    responses(
-        (status = 200, description = "Linked", body = ApiResponse<serde_json::Value>),
-        (status = 400, description = "Not an audio platform", body = crate::api_response::ErrorResponse),
-    ),
-    security(("cookie_auth" = [])),
-)]
-pub async fn declare_portfolio(
-    State(state): State<AppState>,
-    auth: AuthUser,
-    Json(body): Json<DeclarePortfolioBody>,
-) -> Result<Json<ApiResponse<serde_json::Value>>, AppError> {
-    crate::validators::check_max_len(&body.handle, "handle", 120)?;
-    crate::validators::validate_url(&body.profile_url, "profile_url", 500)?;
-    if !body.profile_url.starts_with("https://") {
-        return Err(AppError::Validation(
-            "profile_url must start with https://".into(),
-        ));
-    }
-    if body.items_count.is_some_and(|n| n < 0) || body.reach_count.is_some_and(|n| n < 0) {
-        return Err(AppError::Validation("a count cannot be negative".into()));
-    }
-
-    let known: Option<String> = sqlx::query_scalar(
-        "SELECT slug FROM portfolio_platforms
-          WHERE slug = $1 AND skill_domain = 'audio'",
-    )
-    .bind(&body.platform)
-    .fetch_optional(&state.db)
-    .await?;
-
-    if known.is_none() {
-        let options: Vec<String> = sqlx::query_scalar(
-            "SELECT slug FROM portfolio_platforms WHERE skill_domain = 'audio' ORDER BY sort_order",
-        )
-        .fetch_all(&state.db)
-        .await?;
-        return Err(AppError::Validation(format!(
-            "platform must be one of: {}",
-            options.join(", ")
-        )));
-    }
-
-    let id: Uuid = sqlx::query_scalar(
-        r#"
-        INSERT INTO user_external_portfolios
-            (user_id, platform, handle, profile_url, items_count, reach_count,
-             figures_are_declared, sync_enabled)
-        VALUES ($1, $2, $3, $4, $5, $6, TRUE, FALSE)
-        ON CONFLICT (user_id, platform, handle) DO UPDATE
-            SET profile_url = EXCLUDED.profile_url,
-                items_count = EXCLUDED.items_count,
-                reach_count = EXCLUDED.reach_count,
-                updated_at = NOW()
-        RETURNING id
-        "#,
-    )
-    .bind(auth.user_id)
-    .bind(&body.platform)
-    .bind(body.handle.trim())
-    .bind(body.profile_url.trim())
-    .bind(body.items_count)
-    .bind(body.reach_count)
-    .fetch_one(&state.db)
-    .await?;
-
-    Ok(Json(ApiResponse::new(json!({
-        "id": id,
-        // Said out loud, because it changes what the figure is worth: nothing
-        // on these platforms can be checked automatically.
-        "figures_are_declared": true,
-    }))))
-}
-
-/// Unlink an account.
-#[utoipa::path(
-    delete, path = "/api/audio/portfolios/{id}", tag = "audio",
-    params(("id" = Uuid, Path, description = "Portfolio row")),
-    responses(
-        (status = 200, description = "Removed", body = ApiResponse<serde_json::Value>),
-        (status = 404, description = "Not the caller's", body = crate::api_response::ErrorResponse),
-    ),
-    security(("cookie_auth" = [])),
-    operation_id = "audioDropPortfolio",
-)]
-pub async fn drop_portfolio(
-    State(state): State<AppState>,
-    auth: AuthUser,
-    Path(id): Path<Uuid>,
-) -> Result<Json<ApiResponse<serde_json::Value>>, AppError> {
-    let done = sqlx::query("DELETE FROM user_external_portfolios WHERE id = $1 AND user_id = $2")
-        .bind(id)
-        .bind(auth.user_id)
-        .execute(&state.db)
-        .await?;
-    if done.rows_affected() == 0 {
-        return Err(AppError::NotFound("portfolio not found".into()));
-    }
-    Ok(Json(ApiResponse::new(json!({ "removed": true }))))
 }
 
 // ═══════════════════════════════════════════════════════════════════

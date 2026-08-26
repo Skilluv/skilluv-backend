@@ -161,6 +161,7 @@ pub struct GrantBody {
 pub async fn admin_grant_capability(
     State(state): State<AppState>,
     auth: AuthUser,
+    headers: axum::http::HeaderMap,
     Path(target_id): Path<Uuid>,
     Json(body): Json<GrantBody>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -185,6 +186,27 @@ pub async fn admin_grant_capability(
     .bind(body.expires_at)
     .execute(&state.db)
     .await?;
+
+    // SKI-299 — granting a capability is how someone becomes able to ban,
+    // revoke or moderate. `granted_by` sits on the row, but the row is
+    // mutable and the journal is not.
+    crate::services::audit::record(
+        &state.db,
+        crate::services::audit::AuditEntry {
+            actor_type: crate::services::audit::ActorType::Admin,
+            actor_id: Some(auth.user_id),
+            action: "capability.grant",
+            target_type: Some("user"),
+            target_id: Some(target_id),
+            metadata: Some(serde_json::json!({
+                "capability": body.capability,
+                "reason": reason,
+                "expires_at": body.expires_at.map(|d| d.to_rfc3339()),
+            })),
+            headers: Some(&headers),
+        },
+    )
+    .await;
 
     Ok((
         StatusCode::CREATED,
@@ -218,6 +240,7 @@ pub async fn admin_grant_capability(
 pub async fn admin_revoke_capability(
     State(state): State<AppState>,
     auth: AuthUser,
+    headers: axum::http::HeaderMap,
     Path((target_id, cap)): Path<(Uuid, String)>,
 ) -> Result<Json<ApiResponse<CapabilityRevokeResponse>>, AppError> {
     require_capability(&state.db, auth.user_id, "admin").await?;
@@ -239,6 +262,20 @@ pub async fn admin_revoke_capability(
             "active capability '{cap}' not found on user {target_id}"
         )));
     }
+    crate::services::audit::record(
+        &state.db,
+        crate::services::audit::AuditEntry {
+            actor_type: crate::services::audit::ActorType::Admin,
+            actor_id: Some(auth.user_id),
+            action: "capability.revoke",
+            target_type: Some("user"),
+            target_id: Some(target_id),
+            metadata: Some(serde_json::json!({ "capability": cap })),
+            headers: Some(&headers),
+        },
+    )
+    .await;
+
     Ok(Json(ApiResponse::new(CapabilityRevokeResponse {
         revoked: true,
         user_id: target_id,

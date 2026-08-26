@@ -11,7 +11,7 @@
 //! written again here.
 
 use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -22,8 +22,8 @@ use uuid::Uuid;
 
 use crate::AppState;
 use crate::errors::AppError;
-use crate::middleware::AuthUser;
-use crate::services::missions;
+use crate::middleware::{AuthUser, extract_ip};
+use crate::services::{mission_nda, missions};
 
 pub fn mission_routes() -> Router<AppState> {
     Router::new()
@@ -31,6 +31,8 @@ pub fn mission_routes() -> Router<AppState> {
         .route("/missions", get(list_missions).post(create_mission))
         .route("/missions/{slug}", get(get_mission))
         .route("/missions/{slug}/apply", post(apply_to_mission))
+        .route("/missions/{slug}/nda", get(read_nda).post(sign_nda))
+        .route("/missions/{slug}/nda/signature", get(my_nda_signature))
         .route("/missions/{slug}/applications", get(list_applications))
         .route("/missions/{slug}/status", post(set_mission_status))
         .route("/mission-applications/{id}/decision", post(decide))
@@ -127,6 +129,9 @@ pub struct MissionQuery {
     pub ip_terms: Option<String>,
     #[param(max_length = 30)]
     pub payment_model: Option<String>,
+    /// Education: `beginner`, `junior`, `mid`, `senior`, `mixed`.
+    #[param(max_length = 20)]
+    pub target_audience: Option<String>,
     pub min_budget_eur: Option<f64>,
     pub remote_only: Option<bool>,
     /// One of the three the column allows. A free string here silently
@@ -180,6 +185,7 @@ pub async fn list_missions(
         ("orientation", &q.orientation, 100),
         ("ip_terms", &q.ip_terms, 40),
         ("payment_model", &q.payment_model, 30),
+        ("target_audience", &q.target_audience, 20),
     ] {
         crate::validators::check_max_len_opt(value, name, max)?;
     }
@@ -197,6 +203,7 @@ pub async fn list_missions(
             .and_then(|v| bigdecimal::BigDecimal::try_from(v).ok()),
         remote_only: q.remote_only,
         urgency: q.urgency.map(|u| u.as_str().to_string()),
+        target_audience: q.target_audience,
     };
     let rows = missions::list_open(&state.db, &filter, q.limit, q.offset).await?;
     Ok(Json(build_response(json!({ "missions": rows }))))
@@ -330,6 +337,124 @@ pub async fn apply_to_mission(
 
     metrics::counter!("skilluv_mission_applications_total").increment(1);
     Ok(Json(build_response(json!({ "application": application }))))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// The confidentiality agreement
+// ═══════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Deserialize, IntoParams)]
+#[serde(deny_unknown_fields)]
+pub struct NdaQuery {
+    /// `en` or `fr`. A template with no version in that language falls back to
+    /// English rather than refusing.
+    #[param(nullable)]
+    pub locale: Option<String>,
+}
+
+/// The agreement this mission asks for, with the hash of what is served.
+///
+/// The hash is quoted back when signing, which is what makes the signature
+/// name a document rather than a moment.
+#[utoipa::path(
+    get, path = "/api/missions/{slug}/nda",
+    operation_id = "missionsReadNda",
+    tag = "missions",
+    params(("slug" = String, Path, description = "Mission slug"), NdaQuery),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 404, description = "This mission asks for no agreement", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn read_nda(
+    State(state): State<AppState>,
+    _auth: AuthUser,
+    Path(slug): Path<String>,
+    Query(q): Query<NdaQuery>,
+) -> Result<Json<Value>, AppError> {
+    let mission = missions::by_slug(&state.db, &slug).await?;
+    let agreement = mission_nda::agreement_for(
+        &state.db,
+        &state.storage,
+        mission.id,
+        q.locale.as_deref().unwrap_or("en"),
+    )
+    .await?;
+
+    Ok(Json(build_response(json!({
+        "agreement": agreement,
+        // Said in the response and not only in a document, because the whole
+        // failure mode of a self-drafted agreement is that everybody assumes
+        // somebody checked.
+        "notice": if agreement.is_reviewed {
+            "This text has been reviewed."
+        } else {
+            "This text is a draft. No lawyer has reviewed it."
+        },
+    }))))
+}
+
+/// Sign it.
+#[utoipa::path(
+    post, path = "/api/missions/{slug}/nda",
+    operation_id = "missionsSignNda",
+    tag = "missions",
+    params(("slug" = String, Path, description = "Mission slug")),
+    request_body = mission_nda::SignatureInput,
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 409, description = "The agreement changed since it was shown to you", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn sign_nda(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(slug): Path<String>,
+    headers: HeaderMap,
+    Json(input): Json<mission_nda::SignatureInput>,
+) -> Result<Json<Value>, AppError> {
+    let mission = missions::by_slug(&state.db, &slug).await?;
+
+    // Parsed rather than stored as text, and absent rather than invented when
+    // there is no forwarded address to trust. Migration 0557 says why.
+    let ip = extract_ip(&headers).parse().ok();
+    let user_agent = headers
+        .get(axum::http::header::USER_AGENT)
+        .and_then(|v| v.to_str().ok());
+
+    let id = mission_nda::sign(
+        &state.db,
+        &state.storage,
+        mission.id,
+        auth.user_id,
+        ip,
+        user_agent,
+        input,
+    )
+    .await?;
+
+    Ok(Json(build_response(json!({ "signature_id": id }))))
+}
+
+/// The signature I gave, if I gave one.
+#[utoipa::path(
+    get, path = "/api/missions/{slug}/nda/signature",
+    operation_id = "missionsMyNdaSignature",
+    tag = "missions",
+    params(("slug" = String, Path, description = "Mission slug")),
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn my_nda_signature(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(slug): Path<String>,
+) -> Result<Json<Value>, AppError> {
+    let mission = missions::by_slug(&state.db, &slug).await?;
+    let signature = mission_nda::signature_of(&state.db, mission.id, auth.user_id).await?;
+    Ok(Json(build_response(json!({ "signature": signature }))))
 }
 
 /// Every application to a mission. The publishing enterprise only.

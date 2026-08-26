@@ -810,3 +810,234 @@ pub async fn list_mine(
 
     Ok(Json(wrap(json!({ "cohorts": items }))))
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// SKI-295 (T2-01b) — admin moderation
+// ═══════════════════════════════════════════════════════════════════
+//
+// The organizer-only surface has no answer for a cohort that has gone
+// wrong: `PATCH /cohorts/{id}` goes through `assert_organizer`, and the
+// discovery listing filters on `is_public AND archived_at IS NULL`, so a
+// private cohort was invisible to the very people whose job is to look at
+// it. The only recourse was an UPDATE in the database.
+//
+// Shaped after `POST /api/admin/guilds/{id}/dissolve`, which solved the
+// same problem for guilds: one archive gesture, one listing that can see
+// what it must moderate.
+//
+// Archiving is deliberately *not* a deletion, and members keep reading the
+// chat afterwards — `cohorts::list_messages` gates on membership alone,
+// never on `archived_at`. A cohort that turned abusive is also a cohort
+// where several people did honest work, and erasing their history to
+// punish one organizer would cost more than it fixes.
+
+/// Capabilities allowed to moderate a cohort. `community_moderator` sits
+/// alongside `admin` for the same reason it does on external signals and
+/// vouchings: a cohort name or description is user content, and vetting it
+/// is community moderation, not platform administration.
+const COHORT_MODERATOR_CAPS: &[&str] = &["admin", "community_moderator"];
+
+/// Mounted behind `admin_gate` in `lib.rs`.
+pub fn admin_cohort_routes() -> Router<AppState> {
+    Router::new()
+        .route("/admin/cohorts", get(admin_list))
+        .route("/admin/cohorts/{id}/archive", post(admin_archive))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AdminListCohortsQuery {
+    #[serde(default)]
+    pub orientation: Option<String>,
+    /// Include cohorts that are not publicly discoverable.
+    #[serde(default)]
+    pub include_private: bool,
+    /// Include cohorts that have already been archived.
+    #[serde(default)]
+    pub include_archived: bool,
+    #[serde(default)]
+    pub limit: Option<i64>,
+    #[serde(default)]
+    pub offset: Option<i64>,
+}
+
+/// Join row for the admin listing: the public projection plus the two
+/// things moderation needs and discovery does not — who runs it, and
+/// whether the chat is active.
+#[derive(Debug, sqlx::FromRow)]
+struct AdminCohortRow {
+    #[sqlx(flatten)]
+    cohort: cohorts::Cohort,
+    member_count: i64,
+    orientation_slug: Option<String>,
+    message_count: i64,
+    organizer_username: Option<String>,
+    organizer_user_id: Option<Uuid>,
+}
+
+async fn admin_list(
+    _gate: crate::middleware::admin_gate::AdminGate,
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Query(q): Query<AdminListCohortsQuery>,
+) -> Result<impl IntoResponse, AppError> {
+    crate::middleware::capabilities::require_any_capability(
+        &state.db,
+        auth.user_id,
+        COHORT_MODERATOR_CAPS,
+    )
+    .await?;
+
+    let limit = q.limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT);
+    let offset = q.offset.unwrap_or(0).max(0);
+
+    let rows: Vec<AdminCohortRow> = sqlx::query_as(
+        r#"
+        SELECT c.*,
+               (SELECT COUNT(*) FROM cohort_members m WHERE m.cohort_id = c.id)
+                   AS member_count,
+               o.slug AS orientation_slug,
+               (SELECT COUNT(*) FROM cohort_messages g WHERE g.cohort_id = c.id)
+                   AS message_count,
+               org.username AS organizer_username,
+               org.id       AS organizer_user_id
+          FROM cohorts c
+          LEFT JOIN orientations o ON o.id = c.orientation_id
+          LEFT JOIN LATERAL (
+              SELECT u.id, u.username
+                FROM cohort_members m
+                JOIN users u ON u.id = m.user_id
+               WHERE m.cohort_id = c.id AND m.role = 'organizer'
+               ORDER BY m.joined_at ASC
+               LIMIT 1
+          ) org ON TRUE
+         WHERE ($1::BOOLEAN OR c.is_public = TRUE)
+           AND ($2::BOOLEAN OR c.archived_at IS NULL)
+           AND ($3::TEXT IS NULL OR o.slug = $3)
+         ORDER BY c.created_at DESC
+         LIMIT $4 OFFSET $5
+        "#,
+    )
+    .bind(q.include_private)
+    .bind(q.include_archived)
+    .bind(q.orientation.as_deref())
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(&state.db)
+    .await?;
+
+    let total: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+          FROM cohorts c
+          LEFT JOIN orientations o ON o.id = c.orientation_id
+         WHERE ($1::BOOLEAN OR c.is_public = TRUE)
+           AND ($2::BOOLEAN OR c.archived_at IS NULL)
+           AND ($3::TEXT IS NULL OR o.slug = $3)
+        "#,
+    )
+    .bind(q.include_private)
+    .bind(q.include_archived)
+    .bind(q.orientation.as_deref())
+    .fetch_one(&state.db)
+    .await?;
+
+    // Same projection as the public listing, so the admin table and the
+    // discovery page render from one shape.
+    let cohorts_json: Vec<serde_json::Value> = rows
+        .into_iter()
+        .map(|r| {
+            let seats_left = (r.cohort.max_members as i64 - r.member_count).max(0);
+            json!({
+                "cohort": r.cohort,
+                "orientation_slug": r.orientation_slug,
+                "member_count": r.member_count,
+                "seats_left": seats_left,
+                "message_count": r.message_count,
+                "organizer_user_id": r.organizer_user_id,
+                "organizer_username": r.organizer_username,
+            })
+        })
+        .collect();
+
+    Ok(Json(wrap(json!({
+        "cohorts": cohorts_json,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }))))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AdminArchiveBody {
+    /// At least 8 characters. A cohort frozen without a recorded motive is
+    /// the real problem; the missing audit entry only documents it.
+    pub reason: String,
+}
+
+/// Freeze a cohort from the admin side.
+///
+/// One-way, exactly like the organizer's own archive: un-archiving would
+/// resurrect a cycle everyone has been told is over. Archiving an already
+/// archived cohort answers 409 rather than succeeding silently — a
+/// moderator needs to know the gesture they just made was somebody else's.
+async fn admin_archive(
+    _gate: crate::middleware::admin_gate::AdminGate,
+    State(state): State<AppState>,
+    auth: AuthUser,
+    headers: axum::http::HeaderMap,
+    Path(id): Path<Uuid>,
+    Json(body): Json<AdminArchiveBody>,
+) -> Result<impl IntoResponse, AppError> {
+    crate::middleware::capabilities::require_any_capability(
+        &state.db,
+        auth.user_id,
+        COHORT_MODERATOR_CAPS,
+    )
+    .await?;
+
+    let reason = body.reason.trim();
+    if reason.chars().count() < 8 {
+        return Err(AppError::Validation(
+            "reason must be at least 8 characters — archiving is irreversible".into(),
+        ));
+    }
+
+    // Read first: `get` answers 404 for an unknown id, and the archived
+    // check needs the prior state anyway.
+    let existing = cohorts::get(&state.db, id).await?;
+    if existing.archived_at.is_some() {
+        return Err(AppError::Conflict("cohort is already archived".into()));
+    }
+
+    let updated: cohorts::Cohort = sqlx::query_as(
+        "UPDATE cohorts
+            SET archived_at = NOW(), updated_at = NOW()
+          WHERE id = $1
+          RETURNING *",
+    )
+    .bind(id)
+    .fetch_one(&state.db)
+    .await?;
+
+    crate::services::audit::record(
+        &state.db,
+        crate::services::audit::AuditEntry {
+            actor_type: crate::services::audit::ActorType::Admin,
+            actor_id: Some(auth.user_id),
+            action: "cohort.archive",
+            target_type: Some("cohort"),
+            target_id: Some(id),
+            metadata: Some(json!({
+                "slug": updated.slug,
+                "name": updated.name,
+                "is_public": updated.is_public,
+                "reason": reason,
+            })),
+            headers: Some(&headers),
+        },
+    )
+    .await;
+
+    Ok(Json(wrap(json!({ "cohort": updated }))))
+}

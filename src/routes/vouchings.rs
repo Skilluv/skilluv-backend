@@ -5,14 +5,15 @@
 //!   GET    /api/users/{id}/vouchings             (public if profile is)
 //!   GET    /api/users/me/vouchings               (auth — what I back)
 //!   DELETE /api/vouchings/{id}                   (voucher — withdraw)
+//!   GET    /api/moderation/vouchings            (moderator — the queue)
 //!   POST   /api/moderation/vouchings/{id}/break  (moderator)
 //!
 //! Breaking a vouching costs the voucher a rank for three months, so it is
 //! a moderator action behind an explicit endpoint, never a side effect of
 //! a fraud flag being set somewhere else.
 
-use axum::extract::{Path, State};
-use axum::http::StatusCode;
+use axum::extract::{Path, Query, State};
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -36,6 +37,7 @@ pub fn vouching_routes() -> Router<AppState> {
         .route("/vouchings/{id}", axum::routing::delete(withdraw))
         .route("/users/{user_id}/vouchings", get(list_for_user))
         .route("/users/me/vouchings", get(list_mine))
+        .route("/moderation/vouchings", get(moderation_queue))
         .route("/moderation/vouchings/{id}/break", post(break_vouching))
 }
 
@@ -127,52 +129,11 @@ pub async fn list_for_user(
         return Err(AppError::NotFound(format!("user {user_id} not found")));
     }
 
-    let rows: Vec<(
-        Uuid,
-        Uuid,
-        String,
-        String,
-        chrono::DateTime<chrono::Utc>,
-        String,
-    )> = sqlx::query_as(
-        r#"
-        SELECT v.id,
-               v.voucher_id,
-               COALESCE(NULLIF(u.display_name, ''), u.username),
-               v.statement,
-               v.active_until,
-               v.at_stake_kind
-          FROM vouchings v
-          JOIN users u ON u.id = v.voucher_id
-         WHERE v.vouched_id = $1
-           AND v.broken_at IS NULL
-           AND v.active_until > NOW()
-         ORDER BY v.created_at DESC
-        "#,
-    )
-    .bind(user_id)
-    .fetch_all(&state.db)
-    .await?;
-
-    let vouchings_json: Vec<serde_json::Value> = rows
-        .into_iter()
-        .map(
-            |(id, voucher_id, voucher_name, statement, active_until, at_stake_kind)| {
-                json!({
-                    "id": id,
-                    "voucher_id": voucher_id,
-                    "voucher_display_name": voucher_name,
-                    "statement": statement,
-                    "active_until": active_until.to_rfc3339(),
-                    "at_stake_kind": at_stake_kind,
-                })
-            },
-        )
-        .collect();
+    let vouchings = vouchings::list_for_vouched_resolved(&state.db, user_id).await?;
 
     Ok(Json(wrap(json!({
-        "vouchings": vouchings_json,
-        "count": vouchings_json.len(),
+        "vouchings": vouchings,
+        "count": vouchings.len(),
     }))))
 }
 
@@ -188,8 +149,11 @@ pub async fn list_mine(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<impl IntoResponse, AppError> {
-    let given = vouchings::list_for_voucher(&state.db, auth.user_id).await?;
-    let received = vouchings::list_for_vouched(&state.db, auth.user_id).await?;
+    // Resolved on both sides: a "my cautions" page built on the raw rows
+    // could only print UUIDs, which is the same dead end SKI-301 reports on
+    // the public listing.
+    let given = vouchings::list_given_resolved(&state.db, auth.user_id).await?;
+    let received = vouchings::list_received_resolved(&state.db, auth.user_id).await?;
     Ok(Json(wrap(json!({
         "given": given,
         "received": received,
@@ -242,10 +206,96 @@ pub struct BreakBody {
 pub async fn break_vouching(
     State(state): State<AppState>,
     auth: AuthUser,
+    headers: HeaderMap,
     Path(id): Path<Uuid>,
     Json(body): Json<BreakBody>,
 ) -> Result<impl IntoResponse, AppError> {
     capabilities::require_any_capability(&state.db, auth.user_id, MODERATOR_CAPS).await?;
     let report = vouchings::break_vouching(&state.db, id, auth.user_id, &body.reason).await?;
+
+    // SKI-299 — this costs the voucher a rank for ninety days. `broken_by`
+    // records who, but only on the row itself, which the same moderator can
+    // keep editing; the append-only journal is what makes the decision
+    // reviewable afterwards by someone who was not in the room.
+    crate::services::audit::record(
+        &state.db,
+        crate::services::audit::AuditEntry {
+            actor_type: crate::services::audit::ActorType::Admin,
+            actor_id: Some(auth.user_id),
+            action: "vouching.break",
+            target_type: Some("vouching"),
+            target_id: Some(id),
+            metadata: Some(json!({
+                "voucher_id": report.vouching.voucher_id,
+                "vouched_id": report.vouching.vouched_id,
+                "at_stake_kind": report.vouching.at_stake_kind,
+                "reason": body.reason,
+                "penalty_applied": report.penalty_applied,
+                "voucher_rank_before": report.voucher_rank_before,
+                "voucher_rank_effective": report.voucher_rank_effective,
+                "penalty_until": report.penalty_until.map(|d| d.to_rfc3339()),
+            })),
+            headers: Some(&headers),
+        },
+    )
+    .await;
+
     Ok(Json(wrap(json!(report))))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct QueueQuery {
+    /// `live` (default) | `broken` | `expired`.
+    #[serde(default)]
+    pub status: Option<String>,
+    #[serde(default)]
+    pub voucher_id: Option<Uuid>,
+    #[serde(default)]
+    pub vouched_id: Option<Uuid>,
+    #[serde(default)]
+    pub at_stake_kind: Option<String>,
+    #[serde(default)]
+    pub limit: Option<i64>,
+    #[serde(default)]
+    pub offset: Option<i64>,
+}
+
+/// SKI-297 — the queue the break endpoint always needed.
+///
+/// Same gate as the break itself: a moderator who may end a vouching may
+/// read the list of them, and splitting the two would mean granting the
+/// destructive half without the half that tells you where to point it.
+async fn moderation_queue(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Query(q): Query<QueueQuery>,
+) -> Result<impl IntoResponse, AppError> {
+    capabilities::require_any_capability(&state.db, auth.user_id, MODERATOR_CAPS).await?;
+
+    let limit = q.limit.unwrap_or(50).clamp(1, 200);
+    let offset = q.offset.unwrap_or(0).max(0);
+    let status = q
+        .status
+        .unwrap_or_else(|| vouchings::STATUS_LIVE.to_string());
+
+    let (vouchings_rows, total) = vouchings::moderation_queue(
+        &state.db,
+        vouchings::QueueFilter {
+            status: status.clone(),
+            voucher_id: q.voucher_id,
+            vouched_id: q.vouched_id,
+            at_stake_kind: q.at_stake_kind,
+            limit,
+            offset,
+        },
+    )
+    .await?;
+
+    Ok(Json(wrap(json!({
+        "vouchings": vouchings_rows,
+        "status": status,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }))))
 }

@@ -338,6 +338,20 @@ pub async fn assert_no_cycle(
     ))
 }
 
+/// A skill's current prerequisites.
+///
+/// Read separately from `set_prerequisites` rather than returned by it,
+/// because the caller that needs the previous list — the audit entry on
+/// the admin PUT — needs it even when the replacement is rejected.
+pub async fn prerequisites_of(db: &PgPool, skill_id: Uuid) -> Result<Vec<Uuid>, AppError> {
+    let current: Option<Vec<Uuid>> =
+        sqlx::query_scalar("SELECT prerequisite_skill_ids FROM skill_nodes WHERE id = $1")
+            .bind(skill_id)
+            .fetch_optional(db)
+            .await?;
+    current.ok_or_else(|| AppError::NotFound(format!("skill {skill_id} not found")))
+}
+
 /// Replace a skill's prerequisites, after the cycle check.
 pub async fn set_prerequisites(
     db: &PgPool,

@@ -121,6 +121,9 @@ struct AuditEntry {
     details: Option<serde_json::Value>,
     ip_address: Option<String>,
     created_at: chrono::DateTime<chrono::Utc>,
+    /// `admin_audit_log` or `audit_log` — which of the two journals this
+    /// row came from. Additive; see [`audit_log`] for why there are two.
+    source: String,
 }
 
 // ─── Routes ─────────────────────────────────────────────────────
@@ -240,6 +243,9 @@ pub struct AuditEntryView {
     pub details: Option<serde_json::Value>,
     pub ip_address: Option<String>,
     pub created_at: chrono::DateTime<chrono::Utc>,
+    /// Which journal the row came from: `admin_audit_log` (legacy) or
+    /// `audit_log` (append-only, migration 0099).
+    pub source: String,
 }
 
 /// Response of `GET /admin/audit-log`.
@@ -813,7 +819,24 @@ pub async fn handle_report(
     }))))
 }
 
-/// Legacy admin audit log listing.
+/// The admin audit log — both journals, one listing.
+///
+/// SKI-299. There are two audit tables and they were never reconciled:
+/// `admin_audit_log` (0014), written by the legacy admin handlers and the
+/// only one this endpoint used to read, and `audit_log` (0024), the
+/// append-only journal that migration 0099 hardened with
+/// `REVOKE UPDATE, DELETE` and a dedicated `audit_admin` role.
+///
+/// New instrumentation writes to the hardened one, which meant the newly
+/// audited moderation actions would have been invisible on the screen an
+/// operator actually opens. Rather than write every entry twice — two
+/// copies that can disagree is worse than one gap — the listing reads both
+/// and labels each row with its `source`.
+///
+/// The projection is unchanged for existing consumers: `metadata` is
+/// surfaced as `details` and `ip` as `ip_address`, and only rows carrying
+/// an actor are taken from the generic journal, so `admin_id` stays
+/// non-null exactly as before.
 #[utoipa::path(
     get, path = "/api/admin/audit-log", tag = "admin",
     responses((status = 200, body = AuditLogResponse), (status = 403, body = crate::api_response::ErrorResponse)),
@@ -830,39 +853,60 @@ pub async fn audit_log(
     let page = query.page.unwrap_or(1).max(1);
     let per_page = query.per_page.unwrap_or(20).clamp(1, 50);
     let offset = (page - 1) * per_page;
+    let action = query.action.as_deref();
 
-    let (entries, total) = if let Some(ref action) = query.action {
-        let entries: Vec<AuditEntry> = sqlx::query_as(
-            "SELECT * FROM admin_audit_log WHERE action = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3",
-        )
-        .bind(action)
-        .bind(per_page)
-        .bind(offset)
-        .fetch_all(&state.db)
-        .await?;
+    // `$1` is the optional action filter, applied identically to both
+    // halves so a filtered page cannot silently drop one journal.
+    let entries: Vec<AuditEntry> = sqlx::query_as(
+        r#"
+        SELECT * FROM (
+            SELECT id,
+                   admin_id,
+                   action,
+                   target_type,
+                   target_id,
+                   details,
+                   ip_address,
+                   created_at,
+                   'admin_audit_log'::TEXT AS source
+              FROM admin_audit_log
+             WHERE ($1::TEXT IS NULL OR action = $1)
+            UNION ALL
+            SELECT id,
+                   actor_id AS admin_id,
+                   action,
+                   target_type,
+                   target_id,
+                   metadata AS details,
+                   ip       AS ip_address,
+                   created_at,
+                   'audit_log'::TEXT AS source
+              FROM audit_log
+             WHERE actor_id IS NOT NULL
+               AND ($1::TEXT IS NULL OR action = $1)
+        ) merged
+         ORDER BY created_at DESC, id DESC
+         LIMIT $2 OFFSET $3
+        "#,
+    )
+    .bind(action)
+    .bind(per_page)
+    .bind(offset)
+    .fetch_all(&state.db)
+    .await?;
 
-        let total: i64 =
-            sqlx::query_scalar("SELECT COUNT(*) FROM admin_audit_log WHERE action = $1")
-                .bind(action)
-                .fetch_one(&state.db)
-                .await?;
-
-        (entries, total)
-    } else {
-        let entries: Vec<AuditEntry> = sqlx::query_as(
-            "SELECT * FROM admin_audit_log ORDER BY created_at DESC LIMIT $1 OFFSET $2",
-        )
-        .bind(per_page)
-        .bind(offset)
-        .fetch_all(&state.db)
-        .await?;
-
-        let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM admin_audit_log")
-            .fetch_one(&state.db)
-            .await?;
-
-        (entries, total)
-    };
+    let total: i64 = sqlx::query_scalar(
+        r#"
+        SELECT (SELECT COUNT(*) FROM admin_audit_log
+                 WHERE ($1::TEXT IS NULL OR action = $1))
+             + (SELECT COUNT(*) FROM audit_log
+                 WHERE actor_id IS NOT NULL
+                   AND ($1::TEXT IS NULL OR action = $1))
+        "#,
+    )
+    .bind(action)
+    .fetch_one(&state.db)
+    .await?;
 
     Ok(Json(json!({
         "data": entries,

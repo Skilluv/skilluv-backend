@@ -6,6 +6,9 @@
 //!   GET    /api/users/me/talent-offers (auth)
 //!   PATCH  /api/talent-offers/{id}     (owner)
 //!   DELETE /api/talent-offers/{id}     (owner)
+//!   GET    /api/admin/talent-offers   (moderator)
+//!   POST   /api/admin/talent-offers/{id}/deactivate  (moderator)
+//!   POST   /api/admin/talent-offers/{id}/reinstate   (moderator)
 //!
 //! Browse is public and unauthenticated on purpose: the point of inverting
 //! the marketplace is that the offer finds the person, and requiring a
@@ -261,4 +264,183 @@ pub async fn remove(
         return Err(AppError::NotFound(format!("offer {id} not found")));
     }
     Ok(StatusCode::NO_CONTENT)
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SKI-296 (T3-02b) — admin moderation
+// ═══════════════════════════════════════════════════════════════════
+//
+// The owner-scoped surface left one abusive offer with no proportionate
+// answer. `PATCH` and `DELETE` both filter on `user_id = $auth`, and the
+// public browse only shows compliant offers, so an offer nobody could
+// inspect was also an offer nobody could pull. The available lever was to
+// ban the author or let them fall below Artisan — which takes down five
+// offers to deal with one.
+//
+// So: a hold on the single offer, kept readable, plus a listing that can
+// see what the browse hides. Both under `admin_gate`.
+
+/// Capabilities allowed to moderate an offer. Same family as cohorts and
+/// external signals — an offer description is user content.
+const OFFER_MODERATOR_CAPS: &[&str] = &["admin", "community_moderator"];
+
+/// Mounted behind `admin_gate` in `lib.rs`.
+pub fn admin_talent_offer_routes() -> Router<AppState> {
+    Router::new()
+        .route("/admin/talent-offers", get(admin_browse))
+        .route(
+            "/admin/talent-offers/{id}/deactivate",
+            post(admin_deactivate),
+        )
+        .route("/admin/talent-offers/{id}/reinstate", post(admin_reinstate))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AdminBrowseQuery {
+    #[serde(default)]
+    pub offer_type: Option<String>,
+    #[serde(default)]
+    pub skill: Option<String>,
+    #[serde(default)]
+    pub user_id: Option<Uuid>,
+    /// Include paused and held offers, and offers whose author is hidden,
+    /// banned or below the rank bar.
+    #[serde(default)]
+    pub include_inactive: bool,
+    /// Only offers currently under a moderation hold.
+    #[serde(default)]
+    pub held_only: bool,
+    #[serde(default)]
+    pub limit: Option<i64>,
+    #[serde(default)]
+    pub offset: Option<i64>,
+}
+
+async fn admin_browse(
+    _gate: crate::middleware::admin_gate::AdminGate,
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Query(q): Query<AdminBrowseQuery>,
+) -> Result<impl IntoResponse, AppError> {
+    crate::middleware::capabilities::require_any_capability(
+        &state.db,
+        auth.user_id,
+        OFFER_MODERATOR_CAPS,
+    )
+    .await?;
+
+    let limit = q.limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT);
+    let offset = q.offset.unwrap_or(0).max(0);
+
+    let (offers, total) = talent_offers::admin_browse(
+        &state.db,
+        talent_offers::AdminBrowseFilter {
+            offer_type: q.offer_type.as_deref(),
+            skill_slug: q.skill.as_deref(),
+            user_id: q.user_id,
+            // `held_only` implies looking past the public filter; requiring
+            // the caller to pass both flags would only be a way to get an
+            // empty page by mistake.
+            include_inactive: q.include_inactive || q.held_only,
+            held_only: q.held_only,
+            limit,
+            offset,
+        },
+    )
+    .await?;
+
+    Ok(Json(wrap(json!({
+        "offers": offers,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }))))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AdminDeactivateBody {
+    /// At least 8 characters. It is shown to nobody automatically, but it
+    /// is what an appeal is instructed against.
+    pub reason: String,
+}
+
+/// Pull an offer from the marketplace.
+///
+/// Not a delete: the offer stays readable so a dispute over it can be
+/// instructed against what was actually published, rather than against
+/// somebody's recollection of it.
+async fn admin_deactivate(
+    _gate: crate::middleware::admin_gate::AdminGate,
+    State(state): State<AppState>,
+    auth: AuthUser,
+    headers: axum::http::HeaderMap,
+    Path(id): Path<Uuid>,
+    Json(body): Json<AdminDeactivateBody>,
+) -> Result<impl IntoResponse, AppError> {
+    crate::middleware::capabilities::require_any_capability(
+        &state.db,
+        auth.user_id,
+        OFFER_MODERATOR_CAPS,
+    )
+    .await?;
+
+    let offer = talent_offers::moderation_hold(&state.db, id, auth.user_id, &body.reason).await?;
+
+    crate::services::audit::record(
+        &state.db,
+        crate::services::audit::AuditEntry {
+            actor_type: crate::services::audit::ActorType::Admin,
+            actor_id: Some(auth.user_id),
+            action: "talent_offer.deactivate",
+            target_type: Some("talent_offer"),
+            target_id: Some(id),
+            metadata: Some(json!({
+                "author_id": offer.user_id,
+                "offer_type": offer.offer_type,
+                "reason": offer.moderation_reason,
+            })),
+            headers: Some(&headers),
+        },
+    )
+    .await;
+
+    Ok(Json(wrap(json!({ "offer": offer }))))
+}
+
+/// Lift a hold placed in error.
+///
+/// Deliberately a separate endpoint from the author's `PATCH`: the whole
+/// value of the hold is that the person it was placed on cannot undo it.
+async fn admin_reinstate(
+    _gate: crate::middleware::admin_gate::AdminGate,
+    State(state): State<AppState>,
+    auth: AuthUser,
+    headers: axum::http::HeaderMap,
+    Path(id): Path<Uuid>,
+) -> Result<impl IntoResponse, AppError> {
+    crate::middleware::capabilities::require_any_capability(
+        &state.db,
+        auth.user_id,
+        OFFER_MODERATOR_CAPS,
+    )
+    .await?;
+
+    let offer = talent_offers::moderation_release(&state.db, id).await?;
+
+    crate::services::audit::record(
+        &state.db,
+        crate::services::audit::AuditEntry {
+            actor_type: crate::services::audit::ActorType::Admin,
+            actor_id: Some(auth.user_id),
+            action: "talent_offer.reinstate",
+            target_type: Some("talent_offer"),
+            target_id: Some(id),
+            metadata: Some(json!({ "author_id": offer.user_id })),
+            headers: Some(&headers),
+        },
+    )
+    .await;
+
+    Ok(Json(wrap(json!({ "offer": offer }))))
 }

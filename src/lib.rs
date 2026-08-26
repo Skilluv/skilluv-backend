@@ -205,6 +205,11 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::talent_offer_routes())
         .nest("/api", routes::vouching_routes())
         .nest("/api", routes::ai_companion_routes())
+        // SKI-295/296/298 — the admin side of those three surfaces. Behind
+        // `admin_gate` like every other `/api/admin/*` router.
+        .nest("/api", admin_gate(routes::admin_cohort_routes()))
+        .nest("/api", admin_gate(routes::admin_talent_offer_routes()))
+        .nest("/api", admin_gate(routes::admin_ai_companion_routes()))
         // SKI-288 — attestation verification under /api as well. The front
         // end owns /verify/{hash} on its own origin, so the root-level
         // route below is unreachable from the browser app.

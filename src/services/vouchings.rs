@@ -178,6 +178,125 @@ pub async fn list_for_voucher(db: &PgPool, voucher_id: Uuid) -> Result<Vec<Vouch
     Ok(rows)
 }
 
+/// A vouching with both parties resolved.
+///
+/// SKI-301: `voucher_display_name` alone was unusable. Skilluv profiles are
+/// addressed by username — a link built from a display name 404s on the
+/// first space, accent or homonym — so the one thing a caution is for,
+/// going to check who gave it, was the one thing the payload did not allow.
+///
+/// Usernames are nullable because the join is a LEFT JOIN: the FK cascades
+/// today, so a deleted account takes its vouchings with it, but a response
+/// that 500s the moment that stops being true is not worth the two columns
+/// it saves.
+/// One row of the profile listing: the vouching plus who gave it.
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+pub struct VouchingWithVoucher {
+    pub id: Uuid,
+    pub voucher_id: Uuid,
+    pub voucher_username: Option<String>,
+    pub voucher_display_name: Option<String>,
+    pub statement: String,
+    pub active_until: chrono::DateTime<chrono::Utc>,
+    pub at_stake_kind: String,
+}
+
+/// Live vouchings backing a user, with the voucher resolved — the profile
+/// section a recruiter reads.
+pub async fn list_for_vouched_resolved(
+    db: &PgPool,
+    vouched_id: Uuid,
+) -> Result<Vec<VouchingWithVoucher>, AppError> {
+    let rows: Vec<VouchingWithVoucher> = sqlx::query_as(
+        r#"
+        SELECT v.id,
+               v.voucher_id,
+               u.username                                       AS voucher_username,
+               COALESCE(NULLIF(u.display_name, ''), u.username) AS voucher_display_name,
+               v.statement,
+               v.active_until,
+               v.at_stake_kind
+          FROM vouchings v
+          LEFT JOIN users u ON u.id = v.voucher_id
+         WHERE v.vouched_id = $1
+           AND v.broken_at IS NULL
+           AND v.active_until > NOW()
+         ORDER BY v.created_at DESC
+        "#,
+    )
+    .bind(vouched_id)
+    .fetch_all(db)
+    .await?;
+    Ok(rows)
+}
+
+/// One row of "my vouchings", carrying the *other* party.
+///
+/// Which side "other" means depends on the bucket: on `given` it is the
+/// person backed, on `received` it is the backer. Resolving it here rather
+/// than returning raw `Vouching` rows is what makes a "my cautions" page
+/// renderable at all — it used to show two UUIDs.
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+pub struct VouchingWithParty {
+    // `sqlx(flatten)` maps `v.*` onto the struct; `serde(flatten)` keeps the
+    // wire shape a single object, so a client that already reads `Vouching`
+    // rows does not suddenly have to unwrap them.
+    #[sqlx(flatten)]
+    #[serde(flatten)]
+    pub vouching: Vouching,
+    pub other_user_id: Uuid,
+    pub other_username: Option<String>,
+    pub other_display_name: Option<String>,
+}
+
+/// Everything a voucher is currently backing, plus their history.
+pub async fn list_given_resolved(
+    db: &PgPool,
+    voucher_id: Uuid,
+) -> Result<Vec<VouchingWithParty>, AppError> {
+    let rows: Vec<VouchingWithParty> = sqlx::query_as(
+        r#"
+        SELECT v.*,
+               v.vouched_id                                     AS other_user_id,
+               u.username                                       AS other_username,
+               COALESCE(NULLIF(u.display_name, ''), u.username) AS other_display_name
+          FROM vouchings v
+          LEFT JOIN users u ON u.id = v.vouched_id
+         WHERE v.voucher_id = $1
+         ORDER BY v.created_at DESC
+        "#,
+    )
+    .bind(voucher_id)
+    .fetch_all(db)
+    .await?;
+    Ok(rows)
+}
+
+/// Live vouchings backing me, with the voucher resolved.
+pub async fn list_received_resolved(
+    db: &PgPool,
+    vouched_id: Uuid,
+) -> Result<Vec<VouchingWithParty>, AppError> {
+    let rows: Vec<VouchingWithParty> = sqlx::query_as(
+        r#"
+        SELECT v.*,
+               v.voucher_id                                     AS other_user_id,
+               u.username                                       AS other_username,
+               COALESCE(NULLIF(u.display_name, ''), u.username) AS other_display_name
+          FROM vouchings v
+          LEFT JOIN users u ON u.id = v.voucher_id
+         WHERE v.vouched_id = $1
+           AND v.broken_at IS NULL
+           AND v.active_until > NOW()
+         ORDER BY v.created_at DESC
+        "#,
+    )
+    .bind(vouched_id)
+    .fetch_all(db)
+    .await?;
+    Ok(rows)
+}
+
 /// Count of live vouchings, used by talent search to boost a profile.
 pub async fn live_count(db: &PgPool, vouched_id: Uuid) -> Result<i64, AppError> {
     let count: i64 = sqlx::query_scalar(
@@ -188,6 +307,155 @@ pub async fn live_count(db: &PgPool, vouched_id: Uuid) -> Result<i64, AppError> 
     .fetch_one(db)
     .await?;
     Ok(count)
+}
+
+/// SKI-297 (T3-03b) — the moderation queue.
+///
+/// `POST /moderation/vouchings/{id}/break` shipped without any way to find
+/// the id it takes. The only reads were "vouchings backing user X" and
+/// "mine", so a moderator had to already know which mentee to look at —
+/// which is backwards: the trigger is a fraud finding, and the question it
+/// raises is "who put their rank behind this person".
+///
+/// Broken vouchings were unreadable anywhere at all, so a past decision
+/// could not be reviewed and a voucher who had several broken could not be
+/// spotted. Both are now `status` values on one listing.
+pub const STATUS_LIVE: &str = "live";
+pub const STATUS_BROKEN: &str = "broken";
+pub const STATUS_EXPIRED: &str = "expired";
+pub const QUEUE_STATUSES: &[&str] = &[STATUS_LIVE, STATUS_BROKEN, STATUS_EXPIRED];
+
+/// One row of the moderation queue.
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+pub struct VouchingQueueRow {
+    pub id: Uuid,
+    pub status: String,
+    pub voucher_id: Uuid,
+    pub voucher_username: Option<String>,
+    pub voucher_display_name: Option<String>,
+    /// The voucher's *raw* rank. What is at stake is read from here, so a
+    /// moderator sees the cost before they impose it.
+    pub voucher_rank: String,
+    pub vouched_id: Uuid,
+    pub vouched_username: Option<String>,
+    pub vouched_display_name: Option<String>,
+    /// True when the backed user is already under suspicion — a revoked
+    /// deliverable or a multi-account flag. This is the column that turns a
+    /// listing into a queue: it is what a moderator sorts on.
+    pub vouched_user_flagged: bool,
+    pub at_stake_kind: String,
+    pub statement: String,
+    pub active_until: chrono::DateTime<chrono::Utc>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub broken_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub broken_by: Option<Uuid>,
+    pub break_reason: Option<String>,
+}
+
+pub struct QueueFilter {
+    /// One of [`QUEUE_STATUSES`]. Defaults to `live`.
+    pub status: String,
+    pub voucher_id: Option<Uuid>,
+    pub vouched_id: Option<Uuid>,
+    pub at_stake_kind: Option<String>,
+    pub limit: i64,
+    pub offset: i64,
+}
+
+/// The moderation queue, plus the total for the filter.
+pub async fn moderation_queue(
+    db: &PgPool,
+    filter: QueueFilter,
+) -> Result<(Vec<VouchingQueueRow>, i64), AppError> {
+    if !QUEUE_STATUSES.contains(&filter.status.as_str()) {
+        return Err(AppError::Validation(format!(
+            "status must be one of: {}",
+            QUEUE_STATUSES.join(", ")
+        )));
+    }
+    if let Some(kind) = filter.at_stake_kind.as_deref()
+        && kind != AT_STAKE_RANK
+        && kind != AT_STAKE_REPUTATION
+    {
+        return Err(AppError::Validation(format!(
+            "at_stake_kind must be '{AT_STAKE_RANK}' or '{AT_STAKE_REPUTATION}'"
+        )));
+    }
+
+    // The three statuses are mutually exclusive and derived, not stored:
+    // "expired" is only the absence of a break plus a date in the past, and
+    // materialising it as a column would need a cron to stay true.
+    //
+    // Expressed as a bound predicate rather than an interpolated fragment,
+    // so the SQL stays one literal string. The status has already been
+    // checked against `QUEUE_STATUSES` above; building the WHERE clause by
+    // formatting would make that check the only thing standing between a
+    // query parameter and the query text.
+    let rows: Vec<VouchingQueueRow> = sqlx::query_as(
+        r#"
+        SELECT v.id,
+               $1::TEXT                                             AS status,
+               v.voucher_id,
+               vu.username                                          AS voucher_username,
+               COALESCE(NULLIF(vu.display_name, ''), vu.username)   AS voucher_display_name,
+               COALESCE(vr.rank, 'apprenti')                        AS voucher_rank,
+               v.vouched_id,
+               du.username                                          AS vouched_username,
+               COALESCE(NULLIF(du.display_name, ''), du.username)   AS vouched_display_name,
+               COALESCE(du.suspected_multi_account, FALSE)
+                OR EXISTS (SELECT 1 FROM deliverables d
+                            WHERE d.user_id = v.vouched_id
+                              AND d.revoked_at IS NOT NULL)         AS vouched_user_flagged,
+               v.at_stake_kind,
+               v.statement,
+               v.active_until,
+               v.created_at,
+               v.broken_at,
+               v.broken_by,
+               v.break_reason
+          FROM vouchings v
+          LEFT JOIN users vu      ON vu.id = v.voucher_id
+          LEFT JOIN users du      ON du.id = v.vouched_id
+          LEFT JOIN user_ranks vr ON vr.user_id = v.voucher_id
+         WHERE (($1::TEXT = 'live'    AND v.broken_at IS NULL AND v.active_until >  NOW())
+             OR ($1::TEXT = 'broken'  AND v.broken_at IS NOT NULL)
+             OR ($1::TEXT = 'expired' AND v.broken_at IS NULL AND v.active_until <= NOW()))
+           AND ($2::UUID IS NULL OR v.voucher_id = $2)
+           AND ($3::UUID IS NULL OR v.vouched_id = $3)
+           AND ($4::TEXT IS NULL OR v.at_stake_kind = $4)
+         ORDER BY vouched_user_flagged DESC, v.created_at DESC
+         LIMIT $5 OFFSET $6
+        "#,
+    )
+    .bind(&filter.status)
+    .bind(filter.voucher_id)
+    .bind(filter.vouched_id)
+    .bind(filter.at_stake_kind.as_deref())
+    .bind(filter.limit)
+    .bind(filter.offset)
+    .fetch_all(db)
+    .await?;
+
+    let total: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+          FROM vouchings v
+         WHERE (($1::TEXT = 'live'    AND v.broken_at IS NULL AND v.active_until >  NOW())
+             OR ($1::TEXT = 'broken'  AND v.broken_at IS NOT NULL)
+             OR ($1::TEXT = 'expired' AND v.broken_at IS NULL AND v.active_until <= NOW()))
+           AND ($2::UUID IS NULL OR v.voucher_id = $2)
+           AND ($3::UUID IS NULL OR v.vouched_id = $3)
+           AND ($4::TEXT IS NULL OR v.at_stake_kind = $4)
+        "#,
+    )
+    .bind(&filter.status)
+    .bind(filter.voucher_id)
+    .bind(filter.vouched_id)
+    .bind(filter.at_stake_kind.as_deref())
+    .fetch_one(db)
+    .await?;
+
+    Ok((rows, total))
 }
 
 /// Withdraw a vouching you made, before anything goes wrong.
@@ -388,6 +656,26 @@ mod unit {
         assert_eq!(demoted_label(ranks::RANK_RANGER), ranks::RANK_APPRENTI);
         assert_eq!(demoted_label(ranks::RANK_APPRENTI), ranks::RANK_APPRENTI);
         assert_eq!(demoted_label("legende"), ranks::RANK_APPRENTI);
+    }
+
+    #[test]
+    fn the_queue_statuses_partition_the_table() {
+        // Every vouching is in exactly one of the three buckets, and the
+        // SQL predicate mirrors `is_live`. If a fourth status is ever
+        // added, this fails before the queue starts hiding rows.
+        assert_eq!(
+            QUEUE_STATUSES,
+            &[STATUS_LIVE, STATUS_BROKEN, STATUS_EXPIRED]
+        );
+
+        let now = chrono::Utc::now();
+        let live = vouching_with(None, 30);
+        let expired = vouching_with(None, -1);
+        let broken = vouching_with(Some(now), 30);
+
+        assert!(live.is_live(now));
+        assert!(!expired.is_live(now) && expired.broken_at.is_none());
+        assert!(broken.broken_at.is_some());
     }
 
     #[test]

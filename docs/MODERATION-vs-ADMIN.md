@@ -88,6 +88,52 @@ async fn admin_grant(...) {
 }
 ```
 
+## Les surfaces de modération Post-MVP (SKI-295 → SKI-299)
+
+Trois familles livrées en Post-MVP T2/T3 étaient scopées uniquement sur leur
+propriétaire, ce qui laissait la modération sans prise. Le correctif suit la
+même forme partout : **un geste sur l'objet, et un listing qui voit ce que la
+surface publique cache**. Les deux sont inutiles l'un sans l'autre — un geste
+dont on ne peut pas trouver la cible ne sert à rien, et c'est exactement ce
+qu'était `POST /moderation/vouchings/{id}/break` avant SKI-297.
+
+| Objet | Listing | Geste | Capabilities |
+|---|---|---|---|
+| Cohortes | `GET /api/admin/cohorts?include_private&include_archived` | `POST /api/admin/cohorts/{id}/archive` | `admin` \| `community_moderator` |
+| Offres de talents | `GET /api/admin/talent-offers?include_inactive&held_only` | `POST /api/admin/talent-offers/{id}/deactivate` et `/reinstate` | `admin` \| `community_moderator` |
+| Vouchings | `GET /api/moderation/vouchings?status=live\|broken\|expired` | `POST /api/moderation/vouchings/{id}/break` | `community_moderator` \| `plagiarism_reviewer` |
+| Signaux externes | `GET /api/moderation/external-signals` | `/verify` et `DELETE ?reason=` | `community_moderator` \| `community_curator` |
+
+Les deux premières familles sont sous `/api/admin/**` (donc derrière
+`AdminGate` : origin admin + 2FA obligatoire), les deux dernières sous
+`/api/moderation/**` et consommables depuis le front. Le critère est celui de
+ce document : un signal externe ou un vouching se modère depuis le profil où on
+le voit, une cohorte ou une offre se modère depuis un tableau.
+
+### Deux invariants qui reviennent partout
+
+**Un geste de modération n'est pas réversible par la personne visée.** C'est
+pour cela que `talent_offers` porte une colonne `moderation_held_at` distincte
+de `active` : `active` est l'interrupteur de l'auteur, et un modérateur qui se
+contenterait de le baisser serait défait par la requête `PATCH` suivante. Voir
+migration 0443.
+
+**Un geste destructeur porte un motif, et le motif est journalisé.** Minimum 8
+caractères sur l'archive de cohorte, la mise en retrait d'une offre, la rupture
+d'un vouching et la suppression d'un signal externe. Le journal correspondant
+est décrit dans `AUDIT-APPEND-ONLY.md`.
+
+### Ce qui n'est pas fait, volontairement
+
+- Archiver une cohorte ne coupe pas la lecture du chat à ses membres. Une
+  cohorte devenue abusive est aussi une cohorte où plusieurs personnes ont
+  travaillé honnêtement.
+- Retirer une offre ne la supprime pas. Un litige s'instruit contre ce qui a
+  été publié, pas contre le souvenir qu'on en a.
+- Rien de tout cela ne touche le moteur de preuves. Un signal externe reste du
+  contexte déclaré, un vouching reste une caution — voir migrations 0145 et
+  0148.
+
 ## Comment le front conditionne l'UI
 
 `GET /api/users/me/capabilities` retourne la liste actives. Le front

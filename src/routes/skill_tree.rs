@@ -150,6 +150,7 @@ pub async fn set_prerequisites(
     _gate: AdminGate,
     State(state): State<AppState>,
     auth: AuthUser,
+    headers: axum::http::HeaderMap,
     Path(id): Path<Uuid>,
     Json(body): Json<SetPrerequisitesBody>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -160,8 +161,34 @@ pub async fn set_prerequisites(
             "at most 20 prerequisites per skill".into(),
         ));
     }
+
+    // Captured before the replacement: PUT is a full overwrite, so without
+    // the previous list the journal could say what the graph became but
+    // never what it was, which is the half an incident needs.
+    let previous = skill_tree::prerequisites_of(&state.db, id).await?;
+
     let updated =
         skill_tree::set_prerequisites(&state.db, id, &body.prerequisite_skill_ids).await?;
+
+    // SKI-299 — one edit here locks or unlocks a node for every user on the
+    // platform, and nothing about the resulting state says who chose it.
+    crate::services::audit::record(
+        &state.db,
+        crate::services::audit::AuditEntry {
+            actor_type: crate::services::audit::ActorType::Admin,
+            actor_id: Some(auth.user_id),
+            action: "skill.set_prerequisites",
+            target_type: Some("skill_node"),
+            target_id: Some(id),
+            metadata: Some(json!({
+                "before": previous,
+                "after": updated,
+            })),
+            headers: Some(&headers),
+        },
+    )
+    .await;
+
     Ok(Json(wrap(json!({
         "skill_id": id,
         "prerequisite_skill_ids": updated,

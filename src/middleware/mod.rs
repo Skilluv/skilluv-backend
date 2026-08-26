@@ -6,6 +6,7 @@ pub mod capabilities;
 pub mod csrf;
 pub mod rate_limit;
 pub mod security_headers;
+pub mod security_research;
 pub mod validated_query;
 
 pub use auth::{AuthUser, AuthUserComplete, OptionalAuth, TenantContext};

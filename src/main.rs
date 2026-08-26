@@ -233,6 +233,8 @@ async fn async_main(config: AppConfig) {
     spawn_ats_erasure_worker(state.clone());
     spawn_payout_reconciliation_worker(state.clone());
     spawn_profile_readme_sync_worker(state.clone());
+    spawn_security_embargo_worker(state.clone());
+    spawn_security_dedup_worker(state.clone());
 
     let app = build_router(state);
     tracing::info!("Skilluv backend listening on {}", addr);
@@ -306,6 +308,70 @@ fn spawn_credential_expiry_worker(state: skilluv_backend::AppState) {
                     error = %e,
                     "credential expiry sweep failed - somebody's certification \
                      will lapse without warning"
+                ),
+            }
+        }
+    });
+}
+
+/// Walks the disclosure clocks, once a day.
+///
+/// Daily rather than hourly because what it produces is an item on somebody's
+/// list, and an item that appears at 03:14 instead of 04:00 is the same item.
+///
+/// It never publishes anything. An expired embargo becomes
+/// `partially_disclosed` and waits for an administrator, because publishing a
+/// vulnerability is irreversible and a cron job is the wrong thing to be
+/// holding that decision — the argument `sweep_embargoes` makes in full.
+fn spawn_security_embargo_worker(state: skilluv_backend::AppState) {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(24 * 60 * 60));
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+            match skilluv_backend::services::security_findings::sweep_embargoes(&state.db).await {
+                Ok(sweep) => {
+                    if !sweep.expired.is_empty() {
+                        tracing::warn!(
+                            count = sweep.expired.len(),
+                            "embargoes ran out - these findings are waiting on a                              publication decision nobody has taken"
+                        );
+                    }
+                    if !sweep.reminded.is_empty() {
+                        tracing::info!(count = sweep.reminded.len(), "embargo reminders due");
+                    }
+                }
+                Err(e) => tracing::error!(
+                    error = %e,
+                    "embargo sweep failed - a disclosure deadline may pass unnoticed"
+                ),
+            }
+        }
+    });
+}
+
+/// Looks for findings that resemble each other, every fifteen minutes.
+///
+/// Frequent, because the result is what a triager reads *before* deciding, and
+/// a duplicate detected after somebody has spent an afternoon reproducing it
+/// has cost exactly what the scan exists to save. Cheap: it only touches rows
+/// nothing has scanned yet.
+fn spawn_security_dedup_worker(state: skilluv_backend::AppState) {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(15 * 60));
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+            match skilluv_backend::services::security_findings::sweep_similarity(&state.db, 50)
+                .await
+            {
+                Ok(scanned) if scanned > 0 => {
+                    tracing::info!(scanned, "findings scanned for look-alikes");
+                }
+                Ok(_) => {}
+                Err(e) => tracing::error!(
+                    error = %e,
+                    "similarity sweep failed - triagers will be reading without                      duplicate candidates"
                 ),
             }
         }

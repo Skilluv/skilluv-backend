@@ -145,6 +145,8 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::enterprise_overview_routes())
         .nest("/api", routes::ops_routes())
         .nest("/api", routes::quality_routes())
+        .nest("/api", routes::security_routes())
+        .nest("/api", admin_gate(routes::admin_security_routes()))
         .nest("/api", routes::leadership_routes())
         .nest("/api", routes::credential_routes())
         .nest("/api", routes::ats_routes())
@@ -297,6 +299,14 @@ pub fn build_router(state: AppState) -> Router {
     let router = openapi::attach(router);
 
     router
+        // Recognise a declared research token and run the request inside its
+        // scope. Innermost of the layers below, so the task-local it sets is
+        // visible to every handler and to `RateLimiter::check`, which is a
+        // plain function and cannot be handed a request.
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            middleware::security_research::resolve,
+        ))
         // Rejette au niveau HTTP les methodes deprecated / dangereuses AVANT
         // toute autre middleware. Deux objectifs :
         //   1. Securite : TRACE est un vecteur XST connu (Cross-Site Tracing,

@@ -37,6 +37,18 @@
 //!     "mission_completed"           // proof_type : une mission cloturee.
 //!                                   // Le domaine est porte par la mission
 //!                                   // elle-meme, pas par un challenge.
+//!     "security_finding_confirmed"  // proof_type : une vulnérabilité reportée
+//!                                   // et reproduite par quelqu'un d'autre.
+//!                                   // `min_severity` restreint au palier
+//!                                   // décidé par le validateur, jamais celui
+//!                                   // proposé par le rapporteur.
+//!     "security_ctf_first_solve"    // proof_type : un challenge résolu avant
+//!                                   // tout le monde. Une propriété d'un
+//!                                   // horodatage entre tous les users, qu'aucun
+//!                                   // autre proof_type ne peut voir.
+//!     "min_severity": "high"      // 'critical' | 'high' | 'medium' | 'low'
+//!                                   // | 'informational'. Uniquement avec
+//!                                   // `security_finding_confirmed`.
 //!     "manual": true              // le moteur n'attribue jamais : un opérateur
 //!                                   // décide, et la raison est enregistrée
 //!     "min_validation_rounds": 5  // ne compte que les livrables passés par
@@ -83,6 +95,8 @@ pub const PROOF_TYPES: &[&str] = &[
     "mission_completed",
     "onboarding_bonjour_completed",
     "orientation",
+    "security_ctf_first_solve",
+    "security_finding_confirmed",
     "slice_merged_upstream",
     "tournament_judged",
     "tournament_podium",
@@ -154,6 +168,30 @@ struct RuleConditions {
     /// Only count contest finishes at this rank or better. `1` is "won".
     #[serde(default)]
     rank_at_most: Option<i16>,
+    /// Only count findings at this severity or above. Only meaningful
+    /// alongside `security_finding_confirmed`.
+    ///
+    /// The severity read is `security_findings.severity_tier`, which is what a
+    /// validator settled — never `severity_reported_tier`, which is what the
+    /// reporter claimed. A badge keyed to a self-rated severity is a badge you
+    /// award yourself, and every bounty programme has already found that out.
+    #[serde(default)]
+    min_severity: Option<String>,
+}
+
+/// The severity ladder, as a number so a comparison is possible.
+///
+/// Kept here rather than in SQL because the same order is needed by the
+/// condition parser and by the query, and two copies of an ordering is how
+/// `high` comes to sort below `medium` in one of them.
+fn severity_rank(tier: &str) -> i16 {
+    match tier {
+        "critical" => 5,
+        "high" => 4,
+        "medium" => 3,
+        "low" => 2,
+        _ => 1,
+    }
 }
 fn one() -> i64 {
     1
@@ -216,6 +254,14 @@ async fn count_matching_proofs(
     let want_mission_completed = conds.proof_types.iter().any(|t| t == "mission_completed");
     let want_contest_won = conds.proof_types.iter().any(|t| t == "contest_won");
     let want_mentee_guided = conds.proof_types.iter().any(|t| t == "mentee_guided");
+    let want_security_finding = conds
+        .proof_types
+        .iter()
+        .any(|t| t == "security_finding_confirmed");
+    let want_first_solve = conds
+        .proof_types
+        .iter()
+        .any(|t| t == "security_ctf_first_solve");
     // A variant of the deliverable count rather than a source of its own:
     // being featured is a property of a deliverable, not a different proof.
     let featured_only = conds
@@ -657,6 +703,63 @@ async fn count_matching_proofs(
         .bind(user_id)
         .fetch_one(db)
         .await?;
+        total += matched;
+    }
+
+    if want_security_finding {
+        // Originals only, and the validator's severity. A duplicate is real
+        // work and it is not a second vulnerability — counting it here would
+        // make the number of confirmed findings larger than the number of
+        // findings.
+        let floor = conds
+            .min_severity
+            .as_deref()
+            .map(severity_rank)
+            .unwrap_or(1);
+
+        let matched: i64 = sqlx::query_scalar(
+            r#"
+            SELECT count(*) FROM security_findings
+             WHERE reporter_user_id = $1
+               AND status IN ('confirmed', 'fixed', 'published')
+               AND dedup_state <> 'duplicate_confirmed'
+               AND CASE severity_tier
+                       WHEN 'critical' THEN 5 WHEN 'high' THEN 4
+                       WHEN 'medium' THEN 3 WHEN 'low' THEN 2 ELSE 1 END >= $2
+            "#,
+        )
+        .bind(user_id)
+        .bind(floor)
+        .fetch_one(db)
+        .await?;
+
+        let ids: Vec<Uuid> = sqlx::query_scalar(
+            r#"
+            SELECT id FROM security_findings
+             WHERE reporter_user_id = $1
+               AND status IN ('confirmed', 'fixed', 'published')
+               AND dedup_state <> 'duplicate_confirmed'
+               AND CASE severity_tier
+                       WHEN 'critical' THEN 5 WHEN 'high' THEN 4
+                       WHEN 'medium' THEN 3 WHEN 'low' THEN 2 ELSE 1 END >= $2
+             ORDER BY created_at DESC
+             LIMIT 25
+            "#,
+        )
+        .bind(user_id)
+        .bind(floor)
+        .fetch_all(db)
+        .await?;
+
+        total += matched;
+        sources.extend(ids);
+    }
+
+    if want_first_solve {
+        // Being first is a property of one timestamp among everybody's, which
+        // is why no existing proof type can see it. The row it reads cannot be
+        // back-dated and the unique index makes a tie impossible.
+        let matched = crate::services::security_practice::first_solve_count(db, user_id).await?;
         total += matched;
     }
 

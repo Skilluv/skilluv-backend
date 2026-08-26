@@ -955,6 +955,14 @@ pub async fn apply(
         ));
     }
 
+    // The three gates a mission may set, checked here rather than left to the
+    // enterprise to notice after selection.
+    //
+    // All three are generic — any domain may set them — and all three arrived
+    // with security, which is where a mission that says "OSCP, artisan or
+    // above, sign the NDA first" is ordinary rather than exotic.
+    check_application_gates(db, mission_id, user_id).await?;
+
     let id: Uuid = sqlx::query_scalar(
         r#"
         INSERT INTO mission_applications
@@ -993,6 +1001,113 @@ pub async fn apply(
         .fetch_one(db)
         .await
         .map_err(AppError::from)
+}
+
+/// The rank, the credentials and the confidentiality agreement.
+///
+/// Refused here, at application, and never later. A gate checked after
+/// selection is a gate that costs the applicant the mission — which is the
+/// argument the on-call question above already makes.
+///
+/// ## Why a declared credential is enough
+///
+/// The check is that the applicant has *declared* the credential, not that
+/// somebody verified it. Verification is a separate act with its own queue, and
+/// refusing every applicant whose OSCP nobody has got round to checking would
+/// make the filter a filter on this platform's own backlog. What the enterprise
+/// sees on the application is which of the two it is — declared or verified —
+/// so the decision stays theirs.
+async fn check_application_gates(
+    db: &PgPool,
+    mission_id: Uuid,
+    user_id: Uuid,
+) -> Result<(), AppError> {
+    #[derive(sqlx::FromRow)]
+    struct Gates {
+        min_rank: Option<String>,
+        required_credentials: Vec<String>,
+        nda_required: bool,
+    }
+
+    let gates: Gates = sqlx::query_as(
+        "SELECT min_rank, required_credentials, nda_required
+           FROM missions WHERE id = $1",
+    )
+    .bind(mission_id)
+    .fetch_optional(db)
+    .await?
+    .ok_or_else(|| AppError::NotFound("mission not found".into()))?;
+
+    if let Some(required) = gates.min_rank.as_deref() {
+        let held: Option<String> =
+            sqlx::query_scalar("SELECT rank FROM user_ranks WHERE user_id = $1")
+                .bind(user_id)
+                .fetch_optional(db)
+                .await?;
+        let ladder = ["apprenti", "ranger", "artisan", "maitre", "doyen"];
+        let position = |r: &str| ladder.iter().position(|x| *x == r);
+        let (Some(need), Some(have)) = (
+            position(required),
+            held.as_deref().and_then(position).or(Some(0)),
+        ) else {
+            // A rank nobody recognises is a seeding mistake, and refusing every
+            // applicant because of it would be worse than letting them through
+            // to a human.
+            tracing::warn!(mission = %mission_id, required,
+                "a mission requires a rank that is not on the ladder");
+            return Ok(());
+        };
+        if have < need {
+            return Err(AppError::Validation(format!(
+                "this mission is open from {required} upwards. What raises a rank                  is verified work, and the mission board is not the place it                  starts"
+            )));
+        }
+    }
+
+    if !gates.required_credentials.is_empty() {
+        // Matched on the name, case-insensitively, because an enterprise types
+        // "OSCP" and a holder typed "oscp".
+        let missing: Vec<String> = sqlx::query_scalar(
+            "SELECT r FROM unnest($2::TEXT[]) AS r
+              WHERE NOT EXISTS (
+                  SELECT 1 FROM external_credentials c
+                   WHERE c.user_id = $1
+                     AND (lower(c.name) = lower(r) OR lower(c.level) = lower(r))
+                     AND (c.expires_on IS NULL OR c.expires_on >= CURRENT_DATE))",
+        )
+        .bind(user_id)
+        .bind(&gates.required_credentials)
+        .fetch_all(db)
+        .await?;
+
+        if !missing.is_empty() {
+            return Err(AppError::Validation(format!(
+                "this mission asks for {}. Declare it on your profile first —                  declared is enough to apply, and the enterprise is told which                  of your credentials anybody has checked",
+                missing.join(", ")
+            )));
+        }
+    }
+
+    if gates.nda_required {
+        let signed: bool = sqlx::query_scalar(
+            "SELECT EXISTS (
+                 SELECT 1 FROM mission_nda_signatures
+                  WHERE mission_id = $1 AND signer_user_id = $2
+                    AND released_at IS NULL)",
+        )
+        .bind(mission_id)
+        .bind(user_id)
+        .fetch_one(db)
+        .await?;
+        if !signed {
+            return Err(AppError::Validation(
+                "this mission requires a confidentiality agreement. Sign it                  first: most of what makes an engagement like this describable                  is what the client has agreed you may say"
+                    .into(),
+            ));
+        }
+    }
+
+    Ok(())
 }
 
 /// The trigger speaks SQL; this says the same in words the applicant can act

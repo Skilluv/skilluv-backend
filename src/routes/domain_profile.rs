@@ -344,6 +344,57 @@ const EDUCATION_QUESTIONS: &[Question] = &[
     closed("subject_domain", SUBJECT_DOMAINS),
 ];
 
+/// Security only. Which certifications somebody says they hold.
+///
+/// A routing hint and never a claim. What a certification actually is on this
+/// platform is a row in `external_credentials` with somebody's verification
+/// against it; this answer is the wizard asking "what should we show you
+/// first", and an OSCP holder shown the introduction to intercepting proxies
+/// reads the platform as being for beginners.
+///
+/// `none` is a real answer and the most common one. It is listed so that
+/// leaving the question blank and answering it honestly are distinguishable.
+const SECURITY_CERTIFICATIONS: &[&str] = &[
+    "none",
+    "security_plus",
+    "oscp_or_offsec",
+    "ceh",
+    "cissp_or_cism",
+    "gcih_or_giac",
+    "cloud_security",
+    "other",
+];
+
+/// Security only. What somebody can actually run.
+///
+/// The single most useful thing to know before recommending anything in this
+/// domain, and the analogue of the AI wizard's `compute` question. Somebody on
+/// a locked-down work laptop cannot run a vulnerable virtual machine, and
+/// pointing them at one wastes their week; they can work through hosted labs
+/// all day.
+const SECURITY_LAB_SETUPS: &[&str] = &[
+    // A browser and nothing else. Hosted labs only.
+    "browser_only",
+    // Can install tools locally but not run virtual machines.
+    "local_tools",
+    // Can run virtual machines on their own machine.
+    "local_vms",
+    // Has a separate machine or a home lab.
+    "home_lab",
+    // Can spin up cloud instances and pay for them.
+    "cloud",
+];
+
+const SECURITY_QUESTIONS: &[Question] = &[
+    closed_multi("security_certifications", SECURITY_CERTIFICATIONS),
+    closed("security_lab_setup", SECURITY_LAB_SETUPS),
+    // Open, for the reason the code and quality ones are: what a security
+    // person works in runs from Burp to Volatility to a spreadsheet of
+    // controls, and a closed list would refuse real answers. Read as a bonus
+    // in the mentor matching, never as a filter.
+    open_multi("security_tools", 40),
+];
+
 const COMMUNICATION_QUESTIONS: &[Question] = &[
     closed_multi("main_formats", COMMUNICATION_FORMATS),
     closed("subject_domain", SUBJECT_DOMAINS),
@@ -466,6 +517,7 @@ pub fn questions_for(domain: &str) -> &'static [Question] {
         "quality" => QUALITY_QUESTIONS,
         "leadership" => LEADERSHIP_QUESTIONS,
         "education" => EDUCATION_QUESTIONS,
+        "security" => SECURITY_QUESTIONS,
         _ => &[],
     }
 }

@@ -60,6 +60,22 @@ where
                 HeaderValue::from_static("default-src 'self'"),
             );
 
+            // Where to send a vulnerability, on every response.
+            //
+            // `security.txt` (RFC 9116) is the canonical place for this and is
+            // served under /.well-known; these two headers are for the case
+            // that actually matters, which is somebody who has just found
+            // something while looking at an API response and has no reason to
+            // go and read a file. The cost is forty bytes.
+            headers.insert(
+                "X-Security-Contact",
+                HeaderValue::from_static("mailto:security@skill-uv.com"),
+            );
+            headers.insert(
+                "X-Security-Policy",
+                HeaderValue::from_static("https://skill-uv.com/security"),
+            );
+
             Ok(response)
         })
     }

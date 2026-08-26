@@ -173,12 +173,11 @@ async fn recompute_inner(
         }
     }
 
-    // 1septies. Education attestations. Last of the six, and the one with the
-    // most reasons to arrive late: the learner-data declaration, the cohort's
-    // conclusion and the first adoption all happen after the work is
-    // verified.
+    // 1septies. Education attestations. The one with the most reasons to
+    // arrive late: the learner-data declaration, the cohort's conclusion and
+    // the first adoption all happen after the work is verified.
     //
-    // Six blocks doing the same thing with a different function is where this
+    // Seven blocks doing the same thing with a different function is where this
     // stops scaling. The eighth domain should turn them into a list of
     // generators rather than an eighth block and an eighth Latin ordinal —
     // each one is `fn(&PgPool, Uuid) -> Result<Vec<String>>`, which is a
@@ -191,6 +190,22 @@ async fn recompute_inner(
         Err(e) => {
             tracing::warn!(user_id = %user_id, error = %e, "P19: education attestations failed");
             errors.push(format!("education_attestations: {e}"));
+        }
+    }
+
+    // 1octies. Security attestations, and the sharpest version of the reason
+    // all seven are here rather than at the point of verification: a finding is
+    // confirmed in March and published in June, and the publication earns a
+    // second basis on the same row. Hooking the confirmation alone would leave
+    // every disclosure permanently unattested.
+    match crate::services::security_attestations::issue_for_user(db, user_id).await {
+        Ok(issued) if !issued.is_empty() => {
+            tracing::info!(user_id = %user_id, ?issued, "security attestations issued");
+        }
+        Ok(_) => {}
+        Err(e) => {
+            tracing::warn!(user_id = %user_id, error = %e, "P19: security attestations failed");
+            errors.push(format!("security_attestations: {e}"));
         }
     }
 

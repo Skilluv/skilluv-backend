@@ -109,10 +109,12 @@ enabled = false
 include-name = "GET /api/verify/{hash}/pdf"
 
 # Rendering a certificate needs PDF_RENDERER_URL, which is deliberately unset
-# in the contract job — there is no renderer to call. The 503 is the honest
-# answer and is documented; the fuzzer's expectation of a 2xx cannot be met
-# without the external service.
+# in the contract job — there is no renderer to call. The 503 is the honest,
+# documented answer; neither a 2xx (positive_data_acceptance) nor a non-5xx
+# (not_a_server_error) is reachable without the external service.
 [operations.checks.positive_data_acceptance]
+enabled = false
+[operations.checks.not_a_server_error]
 enabled = false
 
 [[operations]]
@@ -130,7 +132,26 @@ include-name = "POST /webhooks/linear"
 
 # The endpoint verifies an HMAC signature the fuzzer cannot produce, and in
 # the contract job LINEAR_WEBHOOK_SECRET is unset, so the honest answer is a
-# 503 (now documented). Neither a signed 202 nor a meaningful positive case
-# is reachable from a random body.
+# 503 (now documented). Neither a signed 202 (positive_data_acceptance) nor a
+# non-5xx (not_a_server_error) is reachable from a random unsigned body.
+[operations.checks.positive_data_acceptance]
+enabled = false
+[operations.checks.not_a_server_error]
+enabled = false
+
+[[operations]]
+include-name = "GET /api/users/{id}/timeline"
+
+# `offset` is a nullable integer; for a nullable query parameter the fuzzer
+# sends the literal string `null`, which is not a number. The 400 is correct
+# and the positive path is covered by the timeline integration test.
+[operations.checks.positive_data_acceptance]
+enabled = false
+
+[[operations]]
+include-name = "GET /api/users/{user_id}/skill-tree"
+
+# `domain` is a nullable domain filter; the fuzzer sends `null`, which names no
+# domain. Refusing it is correct rather than silently returning the whole tree.
 [operations.checks.positive_data_acceptance]
 enabled = false

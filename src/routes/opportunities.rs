@@ -123,6 +123,9 @@ pub async fn list_opportunities(
     Query(q): Query<OpportunityQuery>,
 ) -> Result<Json<ApiResponse<Vec<OpportunityRow>>>, AppError> {
     crate::validators::check_skill_domain_opt(&q.domain, "domain")?;
+    // The schema declares `orientation` as max 60 characters; enforce it, so a
+    // longer value is a 400 rather than a filter that silently matches nothing.
+    crate::validators::check_max_len_opt(&q.orientation, "orientation", 60)?;
     if let Some(kind) = q.kind.as_deref()
         && !KINDS.contains(&kind)
     {

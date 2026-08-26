@@ -49,6 +49,7 @@ fn required_env() -> Result<(String, String), AppError> {
     responses(
         (status = 202, description = "Accepted for processing"),
         (status = 401, description = "The HMAC signature did not verify", body = crate::api_response::ErrorResponse),
+        (status = 503, description = "LINEAR_WEBHOOK_SECRET is not configured on this instance", body = crate::api_response::ErrorResponse),
     ),
 )]
 pub async fn receive(

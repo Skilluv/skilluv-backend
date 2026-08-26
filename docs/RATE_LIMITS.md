@@ -28,6 +28,33 @@ Audit exhaustif des rate limits appliqués côté backend (SKI-30, 2026-08-10).
 | `POST /contact` | `contact` | enterprise_id | (voir file) | — | Anti-spam. |
 | `POST /forum/questions` | `forum_question` | user_id | tier-based | — | Voir `services::forum::question_rate_limit_for_title` — apprenti = 3/24h, artisan = 10/24h, maitre/legende = illimité. Encourage les seniors à contribuer sans les brider. |
 
+### Security domain
+
+Written in English, like the rest of the security catalogue, because the people
+these limits are aimed at are the ones reading `SECURITY.md`.
+
+| Route | Bucket key | Granularity | Limit | Window | Rationale |
+|---|---|---|---|---|---|
+| `POST /security/reports` | `security_report` | user_id | **5** | 1h | Enough for somebody having a very good afternoon. Report volume is not a virtue here — the fragments are scaled by severity precisely so that filing thirty low-value reports pays less than filing one real one. |
+| `POST /security/reports/uploads` | `security_proof_upload` | user_id | **20** | 1h | Proof files land in the private bucket at up to 20 MB each. Twenty an hour is four or five reports' worth of screenshots; beyond that it is storage, not evidence. |
+| `POST /security/challenges/{id}/flag` | *(table, not Redis)* | user_id × challenge | **10** | 1h | `FLAG_ATTEMPTS_PER_HOUR` in `services/security_practice.rs`. Counted from `security_flag_attempts` rather than Redis because every attempt, right or wrong, is an audit row that survives a Redis flush — a flag is a secret and brute force against it has to be visible afterwards. |
+| lab answers | *(table)* | user_id × challenge | `max_attempts` | then `LAB_COOLDOWN_HOURS` = 24 | A defensive lab has a fixed number of tries set per challenge, then closes for a day. Guessing a multiple-choice analysis is not analysis. |
+
+**Research mode.** A declared research token multiplies every one of the above,
+and every other bucket in the table, by `RATE_LIMIT_MULTIPLIER` = **10**
+(`services/security_research.rs`). It multiplies rather than removes, which is
+what keeps denial of service out of scope in fact and not only in the policy.
+
+The multiplier reaches `RateLimiter::check` through a `tokio::task_local!` set by
+`middleware/security_research.rs` — the limiter is a plain function called from
+about a hundred handlers, and threading a parameter through all of them to
+express one exception would have been the wrong hundred edits.
+
+A token whose traffic exceeds `ABNORMAL_REQUESTS_PER_MINUTE` = **500** in any
+minute is **revoked automatically**, the person is notified with the number, and
+the revocation is recorded with its reason. That ceiling is deliberately far
+above enthusiastic manual testing and far below a load test.
+
 ## Comment ajuster un seuil
 
 1. Localiser l'appel `RateLimiter::check(...)` dans la route concernée.
@@ -52,3 +79,4 @@ Audit exhaustif des rate limits appliqués côté backend (SKI-30, 2026-08-10).
 | Date | Ticket | Change |
 |---|---|---|
 | 2026-08-10 | SKI-30 | Bump `auth:register` 5/h → 20/h (typos légitimes bloquées) + création de cette doc. |
+| 2026-08-24 | Skilluv Cyber | Security domain buckets (reports, proof uploads, flag attempts), research-token ×10 multiplier and the 500 req/min auto-revocation. |

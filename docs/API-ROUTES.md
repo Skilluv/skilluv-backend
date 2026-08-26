@@ -471,6 +471,85 @@ Served to `forum_moderator` or `admin`.
 
 ---
 
+## Security (42 routes)
+
+> The `security` domain: coordinated disclosure, practice ranges, research mode,
+> external bounty claims. Migrations 0542-0563. The narrative documentation is
+> `docs/security/`, and `SECURITY.md` is the policy these routes implement.
+
+### Public — no account
+
+| Method | Path | Body | Response |
+|--------|------|------|----------|
+| GET | `/security/reference` | — | `{ orientations, reviewer_groups, severities, weakness_classes, finding_states, round_kinds, security_kinds, attestation_bases, mission_types, competition_kinds }` |
+| GET | `/security/scope` | — | `{ in_scope, out_of_scope, rules_of_engagement, safe_harbour, contact }` — the machine-readable scope, unauthenticated on purpose: a researcher decides what to touch before they have an account |
+| GET | `/security/hall-of-fame` | — | `{ researchers: [...] }` — confirmed findings only, anonymous reporters counted and not named |
+| GET | `/security/findings/{id}` | — | `{ finding }` — the public card. Before publication it carries the severity, the class and the dates and withholds the title and the reproduction |
+| GET | `/security/ctf/scoreboard` | — | `{ entries, first_solves }` |
+| GET | `/security/external-bounties` | `?platform=&min_reward=&limit=` | `{ programs: [...] }` — curated third-party programmes |
+| GET | `/trust/summary` | — | `{ policy, timelines, contact, threat_model_url, disclosed }` — what a recruiter or a client reads before trusting the platform |
+| GET | `/users/{username}/security-profile` | — | `{ profile }` — score, confirmed findings by severity, captured flags, embargoed findings counted without being described |
+
+### Reporting — authenticated
+
+| Method | Path | Body | Response |
+|--------|------|------|----------|
+| POST | `/security/reports` | `SubmitInput` | `{ finding }` — 5/h. Out-of-scope hosts are refused with the reason, and a CVSS vector is scored server-side rather than trusted |
+| GET | `/security/reports` | — | `{ findings: [...] }` — your own, with the rounds and the reviewer's reasoning |
+| POST | `/security/reports/uploads` | multipart `file` | `{ key, size }` — 20/h, 20 MB each, private bucket. Returns a key and never a URL |
+| GET | `/security/proofs/{key}` | — | `{ url }` — a one-hour signed link. The reporter, a triager, a security reviewer, an administrator; nobody else |
+| POST | `/security/reports/{id}/withdraw` | `{ reason? }` | `{ finding }` — the reporter's own, before confirmation |
+| POST | `/security/reports/{id}/answer-round` | `{ round_no, answer }` | `{ round }` — answering a question the reviewer asked |
+| GET | `/security/external-bounties/claims` | — | `{ claims: [...] }` |
+| POST | `/security/external-bounties/claims` | `ClaimInput` | `{ claim }` — a finding filed elsewhere, declared here for the attestation. Declared is not verified, and the record says which it is |
+
+### Practice — authenticated
+
+| Method | Path | Body | Response |
+|--------|------|------|----------|
+| POST | `/security/challenges/{id}/flag` | `{ flag }` | `{ correct, attempts_left_this_hour, first_solve }` — 10 attempts/h/challenge, counted in `security_flag_attempts` so brute force is visible afterwards. Only the hash is ever stored |
+| POST | `/security/challenges/{id}/answers` | `{ answers }` | `{ score, passed, attempts_left }` — a defensive lab; running out closes it for 24 h |
+
+### Research mode — authenticated
+
+| Method | Path | Body | Response |
+|--------|------|------|----------|
+| GET | `/security/research-token` | — | `{ token }` — the metadata, never the secret again |
+| POST | `/security/research-token` | `{ purpose, targets? }` | `{ token, secret }` — the secret is shown once. Multiplies every rate limit by ten and grants nothing else |
+| DELETE | `/security/research-token` | — | `{ revoked }` |
+
+### Admin — triage and disclosure
+
+> `security_triager` confirms nothing and publishes nothing; a security reviewer
+> confirms; publication is administrator-only. Enforced by the transition table
+> in `services/security_findings.rs`, not by a convention.
+
+| Method | Path | Body | Response |
+|--------|------|------|----------|
+| GET | `/admin/security/findings` | `?state=&severity=&overdue=&limit=` | `{ findings, sla }` — ordered by what is closest to breaching the 7-day triage promise |
+| GET | `/admin/security/findings/{id}` | — | `{ finding, events, rounds, proofs, similar }` |
+| POST | `/admin/security/findings/{id}/transition` | `{ to, reason }` | `{ finding }` — a reason is required for every transition including a refusal |
+| POST | `/admin/security/findings/{id}/severity` | `{ vector, reason }` | `{ finding }` — the reported severity is kept alongside the override, permanently |
+| POST | `/admin/security/findings/{id}/rounds` | `RoundRequest` | `{ round }` — up to five, each with a kind |
+| POST | `/admin/security/findings/{id}/rounds/resolve` | `{ round_no, verdict, note }` | `{ round }` |
+| POST | `/admin/security/findings/{id}/vendor-notified` | `{ note? }` | `{ finding }` — starts the disclosure clock for a third-party finding |
+| POST | `/admin/security/findings/{id}/extension` | `{ days, reason }` | `{ finding }` — asking the reporter, not deciding for them |
+| POST | `/admin/security/findings/{id}/extension/grant` | `{ days, reason }` | `{ finding }` |
+| POST | `/admin/security/findings/{id}/withhold` | `{ reason }` | `{ finding }` — publication withheld, with the reason on the public record |
+| POST | `/admin/security/findings/{id}/rescan` | — | `{ similar }` — trigram similarity against every other finding |
+| GET | `/admin/security/dedup-queue` | — | `{ pairs: [...] }` — candidates for a human. A similarity score never merges anything: a merge decides who is credited |
+| POST | `/admin/security/embargo-sweep` | — | `{ reminded, expired }` — the same sweep the daily worker runs. An expired embargo is flagged for a person and never published automatically |
+| POST | `/admin/security/challenges` | `NewChallenge` | `{ challenge }` — the only way a flag or a lab is created, because the person creating it has to know the answer |
+| GET | `/admin/security/external-bounties` | — | `{ programs: [...] }` |
+| POST | `/admin/security/external-bounties` | `CuratedBounty` | `{ program }` |
+| POST | `/admin/security/research-tokens/{id}/revoke` | `{ reason }` | `{ revoked }` |
+| POST | `/admin/security/findings/{id}/blue-lab` | `LabFromFinding` | `{ challenge }` — a defensive exercise built from a real attack. Requires a written confirmation that no third party's identifiers remain in the artefact |
+| GET | `/admin/security/bounty-claims` | — | `{ claims: [...] }` |
+| POST | `/admin/security/bounty-claims/{id}/verify` | `{ note? }` | `{ claim }` — moves a declaration to verified, and issues the attestation |
+| POST | `/admin/security/bounty-claims/{id}/refuse` | `{ reason }` | `{ claim }` |
+
+---
+
 ## Health & Docs (2 routes)
 
 | Method | Path | Auth | Response |

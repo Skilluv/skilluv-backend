@@ -9,6 +9,50 @@ and the project will follow semantic versioning once 1.0 is reached.
 
 ### Added
 
+* **security:** the domain opens, and with it the first thing this platform
+  runs against itself. Five orientations — red team, blue team, code audit,
+  governance, purple team — replace four that named job titles and reviewed
+  nothing. Forty-six skill nodes, ninety-four edges, six review grids,
+  seventeen attestation bases, twenty-nine badges, twenty craft-score weights,
+  eleven mission types, nine terrains, ten onboarding guides, twenty templates
+  and forty-six seeded challenge drafts. Migrations 0542-0563.
+* **security:** `security_findings` — the one genuinely new object in the
+  domain, and the migration that adds it argues why: a live target, a severity
+  two people negotiate, and an embargo. A state machine with a written reason
+  on every transition, five rounds of questions, append-only events, trigram
+  deduplication that proposes and never merges, and a 90-day disclosure clock
+  that reminds at 30, 7 and 1 days and then hands the decision to a person.
+  Nothing is published by a cron job.
+* **security:** a confirmed finding creates a `deliverables` row and therefore
+  moves the cross-domain rank, exactly as a merged pull request does. A
+  captured flag issues an attestation and creates no deliverable, so a training
+  range cannot promote anybody. That asymmetry is the point of the design.
+* **security:** CVSS 3.1 base scoring in `services/cvss.rs`, including the
+  specification's integer `Roundup`, so the severity on an attestation is
+  computed from the vector rather than taken on trust.
+* **security:** research mode. `POST /api/security/research-token` multiplies
+  every rate limit by ten and grants nothing else; traffic beyond 500 requests
+  in a minute revokes the token automatically and says so. The multiplier
+  reaches the limiter through a task-local rather than through a parameter
+  added to a hundred handlers.
+* **security:** practice ranges. CTF challenges and defensive labs are
+  `challenge_templates` — many solvers, repeatable — and only hashes of flags
+  and answers are stored, so a database dump does not hand anybody the answers.
+  A defensive lab can be generated from a real attack on the platform, once an
+  operator confirms in writing that no third party's identifiers remain in it.
+* **security:** paid work. Eleven mission types, an authorisation trigger that
+  refuses to let an offensive engagement leave draft without rules of
+  engagement, rank and credential gates on applications, and two versioned
+  confidentiality agreements whose signature records the SHA-256 of the exact
+  text shown.
+* **security:** the published policy. `SECURITY.md` gains a safe harbour and
+  timelines that match the constants that enforce them; `THREAT_MODEL.md`,
+  `PRIVACY.md` and `INCIDENT_RESPONSE.md` are new, and each is also an audit
+  exercise in the catalogue — a document nobody has attacked is a document
+  nobody has checked.
+* **security:** external bounty claims. A finding filed on HackerOne or
+  Bugcrowd can be declared here for an attestation, and the record says
+  *declared* until somebody verifies it.
 * **communication:** the domain opens, with five trades — technical writer,
   developer advocate, technical content creator, technical translator,
   research writer — four review families, and every table a domain needs:
@@ -43,6 +87,22 @@ and the project will follow semantic versioning once 1.0 is reached.
 
 ### Fixed
 
+* **openapi:** ninety-four handlers shared a generated `operationId` with
+  another handler, because utoipa derives it from the function name and
+  `list`, `create` and `detail` are not unique across forty-five route files.
+  Every generated client had colliding methods. The ids are explicit now and a
+  test refuses a duplicate.
+* **attestations:** issuing the same artefact attestation twice raised a unique
+  violation instead of returning the existing one, so any generator that ran a
+  second time — a sweep, a retry, a webhook redelivery — failed. The insert
+  reads the row back on conflict.
+* **practice:** the toolkit listing matched a resource's domain and nothing
+  else, so a tool tagged for an orientation in that domain was invisible.
+* **missions:** `production_access` missions required an NDA and had no way to
+  name which one, which the new constraint made explicit; creation now
+  defaults to the standard mutual agreement.
+* **tests:** the orientation cap-of-three test asserted a 400 using a slug that
+  had since been archived, so it passed for the wrong reason.
 * **missions:** `licensing_scope` was not settable through the API, so from
   migration 0413 onwards an audio mission could not be created at all — the
   insert was refused by a constraint naming a column the request had no way to

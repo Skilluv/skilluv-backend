@@ -34,12 +34,17 @@ pub fn well_known_routes() -> Router<AppState> {
 /// intentionally omitted from the OpenAPI schema.
 async fn security_txt() -> impl IntoResponse {
     let one_year_ahead = chrono::Utc::now() + chrono::Duration::days(365);
+    // The two URLs point at the pages that exist. They used to point at
+    // `/legal/security` and an anchor on it, written before the disclosure
+    // programme had a scope page or a hall of fame — and a `Policy:` line
+    // leading somewhere that is not the policy is worse than none, because a
+    // scanner reports it as present.
     let body = format!(
         "Contact: mailto:security@skill-uv.com\n\
          Expires: {}\n\
-         Preferred-Languages: fr, en\n\
-         Policy: https://skill-uv.com/legal/security\n\
-         Acknowledgments: https://skill-uv.com/legal/security#hall-of-fame\n\
+         Preferred-Languages: en, fr\n\
+         Policy: https://skill-uv.com/security\n\
+         Acknowledgments: https://skill-uv.com/security/hall-of-fame\n\
          Canonical: https://skill-uv.com/.well-known/security.txt\n",
         one_year_ahead.to_rfc3339()
     );

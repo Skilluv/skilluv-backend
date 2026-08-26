@@ -962,9 +962,12 @@ pub async fn open_round(
         )));
     }
 
+    // `::SMALLINT` on the way out, because `max(smallint) + 1` is an integer in
+    // PostgreSQL and sqlx does not narrow: without the cast the decode fails and
+    // the endpoint answers 500 to every first round.
     let next: i16 = sqlx::query_scalar(
-        "SELECT COALESCE(max(round_no), 0) + 1 FROM security_finding_rounds
-          WHERE finding_id = $1",
+        "SELECT (COALESCE(max(round_no), 0) + 1)::SMALLINT
+           FROM security_finding_rounds WHERE finding_id = $1",
     )
     .bind(finding_id)
     .fetch_one(db)

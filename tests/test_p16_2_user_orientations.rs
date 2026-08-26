@@ -116,7 +116,7 @@ async fn ended_primary_frees_slot_for_new_primary() {
     let (db, name) = setup_test_db().await;
     let u = create_user_with_domain(&db, None).await;
     let a = orientation_id(&db, "dev-frontend").await;
-    let b = orientation_id(&db, "pentester-web").await;
+    let b = orientation_id(&db, "security-red-team").await;
 
     sqlx::query(
         "INSERT INTO user_orientations (user_id, orientation_id, is_primary, ended_at)
@@ -183,7 +183,7 @@ async fn backfill_assigns_mapped_orientation_from_skill_domain() {
              WHEN 'code'     THEN 'dev-fullstack'
              WHEN 'design'   THEN 'web-designer'
              WHEN 'game'     THEN 'game-programmer'
-             WHEN 'security' THEN 'pentester-web'
+             WHEN 'security' THEN 'security-red-team'
          END
          WHERE u.skill_domain IN ('code','design','game','security')
            AND NOT EXISTS (
@@ -210,7 +210,7 @@ async fn backfill_assigns_mapped_orientation_from_skill_domain() {
     assert_eq!(by_uid[&u_code], "dev-fullstack");
     assert_eq!(by_uid[&u_design], "web-designer");
     assert_eq!(by_uid[&u_game], "game-programmer");
-    assert_eq!(by_uid[&u_sec], "pentester-web");
+    assert_eq!(by_uid[&u_sec], "security-red-team");
 
     db.close().await;
     cleanup_test_db(&name).await;
@@ -222,7 +222,7 @@ async fn user_can_have_multiple_orientations_but_only_one_primary() {
     let u = create_user_with_domain(&db, None).await;
     let a = orientation_id(&db, "dev-frontend").await;
     let b = orientation_id(&db, "web-designer").await;
-    let c = orientation_id(&db, "pentester-web").await;
+    let c = orientation_id(&db, "security-red-team").await;
 
     sqlx::query(
         "INSERT INTO user_orientations (user_id, orientation_id, mode, is_primary)

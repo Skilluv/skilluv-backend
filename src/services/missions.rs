@@ -186,6 +186,37 @@ pub struct CreateMissionInput {
     pub deliverable_format: String,
     #[serde(default)]
     pub nda_required: bool,
+    /// Which confidentiality agreement. `mutual_standard`, `mutual_extended`,
+    /// or `client_custom` with `nda_document_url`.
+    ///
+    /// Defaults to `mutual_standard` when an agreement is required and none is
+    /// named, because a mission that says "you must sign" and names nothing is
+    /// what `nda_required` was for eighteen months — advice with no document
+    /// behind it.
+    #[serde(default)]
+    pub nda_template: Option<String>,
+    #[serde(default)]
+    pub nda_document_url: Option<String>,
+    /// Nobody applies below this rank. The gate `project_slices` has had since
+    /// 0058 and this table did not.
+    #[serde(default)]
+    pub min_rank: Option<String>,
+    /// Credentials an applicant must have declared. Matched on the name or the
+    /// level, case-insensitively; declared is enough, and the application says
+    /// which of the two it found.
+    #[serde(default)]
+    pub required_credentials: Vec<String>,
+    /// Whether the listing names the client.
+    #[serde(default)]
+    pub client_anonymous: bool,
+    /// The written authorisation. Required before an offensive security
+    /// engagement can leave draft, by a trigger rather than by a policy page.
+    #[serde(default)]
+    pub rules_of_engagement_url: Option<String>,
+    #[serde(default)]
+    pub allows_public_disclosure: bool,
+    #[serde(default = "yes")]
+    pub credits_researcher_in_disclosure: bool,
     #[serde(default)]
     pub ip_terms: Option<String>,
     #[serde(default)]
@@ -370,12 +401,45 @@ pub async fn create(
         None => None,
     };
 
+    // An agreement that is required names itself. The standard one unless the
+    // client picked otherwise, which is the constraint of 0560 met with a
+    // default rather than with a refusal — refusing would break every existing
+    // caller that set the flag and knew nothing about templates.
+    let nda_template = match (input.nda_required, input.nda_template.as_deref()) {
+        (false, _) => None,
+        (true, None) => Some("mutual_standard".to_string()),
+        (true, Some(t)) => {
+            if !matches!(t, "mutual_standard" | "mutual_extended" | "client_custom") {
+                return Err(AppError::Validation(format!(
+                    "'{t}' is not a confidentiality agreement this platform knows"
+                )));
+            }
+            if t == "client_custom" && input.nda_document_url.is_none() {
+                return Err(AppError::Validation(
+                    "a client's own agreement says where it is — and it has to be                      uploaded here rather than linked, because an agreement this                      platform cannot read is one it cannot hash"
+                        .into(),
+                ));
+            }
+            Some(t.to_string())
+        }
+    };
+
+    if let Some(rank) = input.min_rank.as_deref()
+        && !matches!(rank, "apprenti" | "ranger" | "artisan" | "maitre" | "doyen")
+    {
+        return Err(AppError::Validation(format!("'{rank}' is not a rank")));
+    }
+
     let id: Uuid = sqlx::query_scalar(
         r#"
         INSERT INTO missions
             (slug, enterprise_id, mission_type_id, skill_domain, title, description,
              acceptance_criteria, target_languages, target_frameworks, orientation_id,
-             deliverable_format, nda_required, ip_terms, payment_model,
+             deliverable_format, nda_required, nda_template, nda_document_url,
+             min_rank, required_credentials, client_anonymous,
+             rules_of_engagement_url, allows_public_disclosure,
+             credits_researcher_in_disclosure,
+             ip_terms, payment_model,
              budget_eur, hourly_rate_eur, revenue_share_percent,
              remote_only, urgency, estimated_days, applications_close_at, created_by,
              upstream_license_spdx,
@@ -384,7 +448,8 @@ pub async fn create(
              production_access_required, compliance_frameworks,
              licensing_scope, target_audience, target_learners, delivery_hours)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,
-                $23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34)
+                $23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,
+                $35,$36,$37,$38,$39,$40,$41,$42)
         RETURNING id
         "#,
     )
@@ -400,6 +465,14 @@ pub async fn create(
     .bind(orientation_id)
     .bind(&input.deliverable_format)
     .bind(input.nda_required)
+    .bind(nda_template.as_deref())
+    .bind(input.nda_document_url.as_deref())
+    .bind(input.min_rank.as_deref())
+    .bind(&input.required_credentials)
+    .bind(input.client_anonymous)
+    .bind(input.rules_of_engagement_url.as_deref())
+    .bind(input.allows_public_disclosure)
+    .bind(input.credits_researcher_in_disclosure)
     .bind(&ip_terms)
     .bind(&payment_model)
     .bind(input.budget_eur.as_ref())

@@ -41,13 +41,33 @@
 -- cloud, ICS — which describes an engagement rather than a craft. The same
 -- person does web and cloud in the same year with the same reading.
 --
--- ## `security-engineer` is archived rather than kept
+-- ## The four that were there are archived rather than kept
 --
--- Keeping it would have meant two ways to say "I read code for security
--- defects" and two answers to how many people in the domain do. It is
--- archived and pointed at `security-code-audit`, which is the mechanism 0089
--- built for exactly this: the people who already chose it keep the row in
--- their history, and nobody chooses it again.
+-- The domain had four orientations, all with `reviewer_group` null:
+--
+--   * `security-engineer` — "threat modeling, secure code review, app sec by
+--     design", which is `security-code-audit`;
+--   * `pentester-web` — which is `security-red-team` with one target named;
+--   * `pentester-mobile` — the same, with a different target named;
+--   * `soc-analyst` — "SIEM, threat detection, incident response, forensics",
+--     which is `security-blue-team`.
+--
+-- All four are archived and pointed at what replaces them. Keeping any of them
+-- would have meant two ways to say one thing and two answers to how many
+-- people in the domain do it — and `pentester-web` alongside
+-- `security-red-team` is the worst case, because a person choosing would have
+-- no way to tell which one a reviewer reads.
+--
+-- Archiving is the mechanism 0089 built for exactly this: the people who
+-- already chose one keep the row in their history, `replaced_by` says where it
+-- went, and nobody chooses it again.
+--
+-- ## Why `pentester-mobile` does not survive as a trade
+--
+-- Because it names a target rather than a craft. The same argument as above
+-- about not splitting by tool or platform: the person who tests a mobile
+-- application this quarter tests its API next quarter, with the same reading.
+-- Mobile is a `tags` entry on `security-red-team`, which is what tags are for.
 --
 -- ## The slugs keep their `security-` prefix
 --
@@ -77,7 +97,8 @@ VALUES
  'The trade is not finding something surprising: it is producing a report '
  'somebody else can follow to the same result.',
  'security', ARRAY['code', 'ops'],
- ARRAY['pentest', 'exploitation', 'ctf', 'bug-bounty', 'offensive'],
+ ARRAY['pentest', 'exploitation', 'ctf', 'bug-bounty', 'offensive',
+       'web', 'mobile', 'api'],
  TRUE, 'red-team'),
 
 ('security-blue-team', 'Blue team',
@@ -124,3 +145,36 @@ UPDATE orientations
        replaced_by = (SELECT id FROM orientations WHERE slug = 'security-code-audit'),
        updated_at = NOW()
  WHERE slug = 'security-engineer';
+
+UPDATE orientations
+   SET is_archived = TRUE,
+       replaced_by = (SELECT id FROM orientations WHERE slug = 'security-red-team'),
+       updated_at = NOW()
+ WHERE slug IN ('pentester-web', 'pentester-mobile');
+
+UPDATE orientations
+   SET is_archived = TRUE,
+       replaced_by = (SELECT id FROM orientations WHERE slug = 'security-blue-team'),
+       updated_at = NOW()
+ WHERE slug = 'soc-analyst';
+
+-- Every security orientation now either carries a review family or is
+-- archived. A curated orientation with a null `reviewer_group` is one nobody
+-- can be granted review rights for — visible rather than silently open, as the
+-- column's own comment says — and this domain had four of them.
+DO $$
+DECLARE
+    orphans INT;
+BEGIN
+    SELECT count(*) INTO orphans
+      FROM orientations
+     WHERE primary_domain = 'security'
+       AND is_curated
+       AND NOT is_archived
+       AND reviewer_group IS NULL;
+
+    IF orphans > 0 THEN
+        RAISE EXCEPTION
+            '% live security orientation(s) have no review family', orphans;
+    END IF;
+END $$;

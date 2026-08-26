@@ -109,10 +109,14 @@ async fn cannot_register_more_than_three_active_orientations() {
             .await;
         assert_eq!(r.status().as_u16(), 201, "slug {slug} should succeed");
     }
+    // A fourth live orientation, so the 400 is the cap and not something else.
+    // This used to name `pentester-web`, which migration 0542 archived when the
+    // security domain opened — and an archived slug is refused for its own
+    // reason, which would have made this assertion pass while testing nothing.
     let over = app
         .post(
             "/api/users/me/orientations",
-            &json!({ "slug": "pentester-web" }),
+            &json!({ "slug": "security-red-team" }),
         )
         .await;
     assert_eq!(over.status().as_u16(), 400, "cap 3 enforced");

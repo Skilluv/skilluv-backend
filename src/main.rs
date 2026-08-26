@@ -235,6 +235,7 @@ async fn async_main(config: AppConfig) {
     spawn_profile_readme_sync_worker(state.clone());
     spawn_security_embargo_worker(state.clone());
     spawn_security_dedup_worker(state.clone());
+    spawn_security_proof_sweeper(state.clone());
 
     let app = build_router(state);
     tracing::info!("Skilluv backend listening on {}", addr);
@@ -323,6 +324,52 @@ fn spawn_credential_expiry_worker(state: skilluv_backend::AppState) {
 /// `partially_disclosed` and waits for an administrator, because publishing a
 /// vulnerability is irreversible and a cron job is the wrong thing to be
 /// holding that decision — the argument `sweep_embargoes` makes in full.
+/// Deletes proof uploads no report references, once a day.
+///
+/// Uploads happen before a report is submitted — that is the shape of the form
+/// — so an abandoned draft leaves files behind. A bucket that only grows is one
+/// that eventually holds somebody's proof of a vulnerability they never
+/// reported, which is the worst thing in it to be keeping.
+///
+/// Thirty days, so that a report started on a Friday and finished a fortnight
+/// later still finds its screenshots.
+fn spawn_security_proof_sweeper(state: skilluv_backend::AppState) {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(24 * 60 * 60));
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+
+            let listing = match state.storage.list_private("security-proofs/").await {
+                Ok(listing) => listing,
+                Err(e) => {
+                    // Not an error worth waking anybody for: no object store in
+                    // development means no uploads to sweep.
+                    tracing::debug!(error = %e, "proof sweep found no object store");
+                    continue;
+                }
+            };
+
+            match skilluv_backend::services::security_proofs::sweep_orphans(
+                &state.db,
+                &state.storage,
+                &listing,
+            )
+            .await
+            {
+                Ok(deleted) if deleted > 0 => {
+                    tracing::info!(deleted, "orphaned vulnerability proofs deleted");
+                }
+                Ok(_) => {}
+                Err(e) => tracing::error!(
+                    error = %e,
+                    "proof sweep failed - unreferenced evidence of unfixed                      vulnerabilities is still in the bucket"
+                ),
+            }
+        }
+    });
+}
+
 fn spawn_security_embargo_worker(state: skilluv_backend::AppState) {
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(24 * 60 * 60));
@@ -337,8 +384,38 @@ fn spawn_security_embargo_worker(state: skilluv_backend::AppState) {
                             "embargoes ran out - these findings are waiting on a                              publication decision nobody has taken"
                         );
                     }
+                    for (finding_id, days) in &sweep.reminded {
+                        // The reporter is told, because the clock is a promise
+                        // this platform made them and they are the one who
+                        // finds out whether it was kept.
+                        match skilluv_backend::services::security_findings::notifiable(
+                            &state.db,
+                            *finding_id,
+                        )
+                        .await
+                        {
+                            Ok(f) => {
+                                let _ = skilluv_backend::services::notify::send(
+                                    &state,
+                                    skilluv_backend::services::notify::Recipient::User(
+                                        f.reporter_user_id,
+                                    ),
+                                    "security.embargo_ending",
+                                )
+                                .arg("title", f.title)
+                                .arg("days", days.to_string())
+                                .payload(serde_json::json!({ "finding_id": finding_id }))
+                                .execute()
+                                .await;
+                            }
+                            Err(e) => tracing::warn!(
+                                finding = %finding_id, error = %e,
+                                "an embargo reminder had nobody to send to"
+                            ),
+                        }
+                    }
                     if !sweep.reminded.is_empty() {
-                        tracing::info!(count = sweep.reminded.len(), "embargo reminders due");
+                        tracing::info!(count = sweep.reminded.len(), "embargo reminders sent");
                     }
                 }
                 Err(e) => tracing::error!(

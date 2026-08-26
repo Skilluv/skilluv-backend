@@ -36,7 +36,9 @@ use crate::api_response::ApiResponse;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
 use crate::middleware::capabilities::require_any_capability;
-use crate::services::{security_findings, security_research};
+use crate::services::{
+    security_external_bounties, security_findings, security_lab_generator, security_research,
+};
 
 pub fn admin_security_routes() -> Router<AppState> {
     Router::new()
@@ -73,6 +75,19 @@ pub fn admin_security_routes() -> Router<AppState> {
         .route(
             "/admin/security/research-tokens/{id}/revoke",
             post(revoke_token),
+        )
+        .route(
+            "/admin/security/findings/{id}/blue-lab",
+            post(lab_from_finding),
+        )
+        .route("/admin/security/bounty-claims", get(bounty_claims))
+        .route(
+            "/admin/security/bounty-claims/{id}/verify",
+            post(verify_bounty_claim),
+        )
+        .route(
+            "/admin/security/bounty-claims/{id}/refuse",
+            post(refuse_bounty_claim),
         )
 }
 
@@ -391,7 +406,35 @@ pub async fn transition(
 ) -> Result<Json<ApiResponse<Value>>, AppError> {
     require_reader(&state, &auth).await?;
     let actor = actor_for(&state, &auth, id).await?;
+    let reason = input.reason.clone();
     let status = security_findings::transition(&state.db, auth.user_id, actor, id, input).await?;
+
+    // Tell the reporter. Transactional, so this is an obligation rather than a
+    // nicety: a reporter who is never told whether their report was read does
+    // not file a second one, and that is how a disclosure programme dies.
+    if let Some(kind) = security_findings::notification_for(&status) {
+        match security_findings::notifiable(&state.db, id).await {
+            Ok(f) => {
+                let _ = crate::services::notify::send(
+                    &state,
+                    crate::services::notify::Recipient::User(f.reporter_user_id),
+                    kind,
+                )
+                .arg("title", f.title)
+                .arg("severity", f.severity_tier)
+                .arg("days", security_findings::TRIAGE_SLA_DAYS.to_string())
+                .arg(
+                    "reason",
+                    reason.unwrap_or_else(|| "No reason was recorded.".to_string()),
+                )
+                .payload(json!({ "finding_id": id, "status": status }))
+                .execute()
+                .await;
+            }
+            Err(e) => tracing::warn!(finding = %id, error = %e,
+                "a finding moved and its reporter was not told"),
+        }
+    }
 
     // The proof engine, after the fact: a confirmation may have earned a badge
     // or a rank, and the person who earned it should be told in the same
@@ -443,7 +486,32 @@ pub async fn severity(
     ) {
         return Err(AppError::Forbidden);
     }
+    let before = security_findings::notifiable(&state.db, id)
+        .await
+        .map(|f| f.severity_tier)
+        .unwrap_or_default();
+    let reason = input.reason.clone();
     let tier = security_findings::override_severity(&state.db, auth.user_id, id, input).await?;
+
+    // A severity decides a payout tier. Changing one without telling the
+    // person is the thing researchers leave a platform over.
+    if before != tier {
+        if let Ok(f) = security_findings::notifiable(&state.db, id).await {
+            let _ = crate::services::notify::send(
+                &state,
+                crate::services::notify::Recipient::User(f.reporter_user_id),
+                "security.severity_changed",
+            )
+            .arg("title", f.title)
+            .arg("before", before)
+            .arg("after", tier.clone())
+            .arg("reason", reason)
+            .payload(json!({ "finding_id": id }))
+            .execute()
+            .await;
+        }
+    }
+
     Ok(Json(ApiResponse::new(json!({ "severity_tier": tier }))))
 }
 
@@ -465,7 +533,24 @@ pub async fn open_round(
     Json(input): Json<security_findings::RoundRequest>,
 ) -> Result<Json<ApiResponse<Value>>, AppError> {
     require_reader(&state, &auth).await?;
+    let asked_for = input.notes_md.clone();
     let round = security_findings::open_round(&state.db, auth.user_id, id, input).await?;
+
+    // The round is a question, and a question nobody hears is a report that
+    // times out for no reason the reporter could have known about.
+    if let Ok(f) = security_findings::notifiable(&state.db, id).await {
+        let _ = crate::services::notify::send(
+            &state,
+            crate::services::notify::Recipient::User(f.reporter_user_id),
+            "security.finding_round",
+        )
+        .arg("title", f.title)
+        .arg("reason", asked_for)
+        .payload(json!({ "finding_id": id, "round_no": round }))
+        .execute()
+        .await;
+    }
+
     Ok(Json(ApiResponse::new(json!({ "round_no": round }))))
 }
 
@@ -1024,4 +1109,131 @@ pub async fn revoke_token(
     require_any_capability(&state.db, auth.user_id, &["admin"]).await?;
     security_research::revoke_by_id(&state.db, id, "by_operator").await?;
     Ok(Json(ApiResponse::new(json!({ "revoked": true }))))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// The loop back to the blue side
+// ═══════════════════════════════════════════════════════════════════
+
+/// Turn a confirmed finding into a defensive exercise.
+///
+/// The artefact is supplied rather than extracted: the request log lives in the
+/// reverse proxy and not in this database, and its redaction is a judgement
+/// about other people's requests that nothing here should be making. What this
+/// endpoint does is everything after the export — the challenge, the questions,
+/// and the answers that are known because the finding is on the record.
+#[utoipa::path(
+    post, path = "/api/admin/security/findings/{id}/blue-lab",
+    operation_id = "adminSecurityLabFromFinding",
+    tag = "admin",
+    params(("id" = Uuid, Path, description = "Finding")),
+    request_body = security_lab_generator::LabFromFinding,
+    responses(
+        (status = 200, body = ApiResponse<serde_json::Value>),
+        (status = 409, description = "The finding is not confirmed", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn lab_from_finding(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<Uuid>,
+    Json(input): Json<security_lab_generator::LabFromFinding>,
+) -> Result<Json<ApiResponse<Value>>, AppError> {
+    require_any_capability(
+        &state.db,
+        auth.user_id,
+        &["admin", "domain_curator:security", "domain_curator:all"],
+    )
+    .await?;
+
+    let challenge_id =
+        security_lab_generator::draft_from_finding(&state.db, id, auth.user_id, input).await?;
+
+    Ok(Json(ApiResponse::new(json!({
+        "challenge_id": challenge_id,
+        "status": "draft",
+        "note": "Read the artefact and check that every question is answerable                  from it before publishing. A redaction that removed an answer                  is only visible from the other side.",
+    }))))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Bounties claimed from elsewhere
+// ═══════════════════════════════════════════════════════════════════
+
+/// The claims waiting on somebody opening a disclosure.
+#[utoipa::path(
+    get, path = "/api/admin/security/bounty-claims",
+    operation_id = "adminSecurityBountyClaims",
+    tag = "admin",
+    responses((status = 200, body = ApiResponse<serde_json::Value>)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn bounty_claims(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Json<ApiResponse<Value>>, AppError> {
+    require_reader(&state, &auth).await?;
+    let claims = security_external_bounties::awaiting_review(&state.db, 100).await?;
+    Ok(Json(ApiResponse::new(json!({ "claims": claims }))))
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BountyVerdict {
+    /// The severity the reviewer settled on, which need not be the one the
+    /// other platform rated it.
+    pub severity: String,
+}
+
+/// Accept a claim.
+#[utoipa::path(
+    post, path = "/api/admin/security/bounty-claims/{id}/verify",
+    operation_id = "adminSecurityVerifyBountyClaim",
+    tag = "admin",
+    params(("id" = Uuid, Path, description = "Claim")),
+    request_body = BountyVerdict,
+    responses(
+        (status = 200, body = ApiResponse<serde_json::Value>),
+        (status = 409, description = "Already decided", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn verify_bounty_claim(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<BountyVerdict>,
+) -> Result<Json<ApiResponse<Value>>, AppError> {
+    require_reader(&state, &auth).await?;
+    let code =
+        security_external_bounties::verify(&state.db, auth.user_id, id, &body.severity).await?;
+    Ok(Json(ApiResponse::new(json!({ "verification_code": code }))))
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BountyRefusal {
+    pub reason: String,
+}
+
+/// Refuse it, with the reason the person will read.
+#[utoipa::path(
+    post, path = "/api/admin/security/bounty-claims/{id}/refuse",
+    operation_id = "adminSecurityRefuseBountyClaim",
+    tag = "admin",
+    params(("id" = Uuid, Path, description = "Claim")),
+    request_body = BountyRefusal,
+    responses((status = 200, body = ApiResponse<serde_json::Value>)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn refuse_bounty_claim(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<BountyRefusal>,
+) -> Result<Json<ApiResponse<Value>>, AppError> {
+    require_reader(&state, &auth).await?;
+    security_external_bounties::refuse(&state.db, auth.user_id, id, &body.reason).await?;
+    Ok(Json(ApiResponse::new(json!({ "refused": true }))))
 }

@@ -35,7 +35,8 @@ use crate::api_response::ApiResponse;
 use crate::errors::AppError;
 use crate::middleware::{AuthUser, RateLimiter};
 use crate::services::{
-    security_findings, security_practice, security_profile, security_proofs, security_research,
+    security_external_bounties, security_findings, security_practice, security_profile,
+    security_proofs, security_research,
 };
 
 pub fn security_routes() -> Router<AppState> {
@@ -47,6 +48,10 @@ pub fn security_routes() -> Router<AppState> {
         .route("/security/findings/{id}", get(finding_card))
         .route("/security/ctf/scoreboard", get(scoreboard))
         .route("/security/external-bounties", get(external_bounties))
+        .route(
+            "/security/external-bounties/claims",
+            get(my_bounty_claims).post(claim_bounty),
+        )
         .route("/trust/summary", get(trust_summary))
         .route("/users/{username}/security-profile", get(profile))
         // Reporting.
@@ -206,6 +211,40 @@ pub async fn submit_report(
     .await?;
 
     let submitted = security_findings::submit(&state.db, auth.user_id, input).await?;
+
+    // The acknowledgement. Seventy-two hours is what the published policy
+    // promises for this one, and the promise is only worth anything if the
+    // message actually goes out.
+    let _ = crate::services::notify::send(
+        &state,
+        crate::services::notify::Recipient::User(auth.user_id),
+        "security.finding_received",
+    )
+    .arg("title", submitted.title.clone())
+    .arg("days", security_findings::TRIAGE_SLA_DAYS.to_string())
+    .payload(json!({ "finding_id": submitted.id }))
+    .execute()
+    .await;
+
+    // And the queue somebody has to work. Anybody who can triage or review,
+    // because a report waiting on "whoever is free" is one that waits for
+    // nobody in particular.
+    if !submitted.triage_skipped {
+        let _ = crate::services::notify::send(
+            &state,
+            crate::services::notify::Recipient::AnyCapability(vec![
+                "security_triager".to_string(),
+                "security_reviewer:all".to_string(),
+                "challenge_validator:security".to_string(),
+            ]),
+            "security.triage_queued",
+        )
+        .arg("count", "1")
+        .arg("days", security_findings::TRIAGE_SLA_DAYS.to_string())
+        .payload(json!({ "finding_id": submitted.id }))
+        .execute()
+        .await;
+    }
 
     // The similarity scan is not on the request path: a reporter should not wait
     // on it, and its result is read by a triager minutes later at the earliest.
@@ -740,4 +779,49 @@ pub async fn revoke_token(
 ) -> Result<Json<ApiResponse<Value>>, AppError> {
     security_research::revoke(&state.db, auth.user_id, "by_holder").await?;
     Ok(Json(ApiResponse::new(json!({ "revoked": true }))))
+}
+
+/// Claim a bounty earned on another platform.
+///
+/// It arrives claimed and stays claimed until a reviewer opens the public
+/// disclosure — the same shape as a declared certification, and for the same
+/// reason: the person filing it is the person it belongs to.
+#[utoipa::path(
+    post, path = "/api/security/external-bounties/claims",
+    operation_id = "securityClaimBounty",
+    tag = "security",
+    request_body = security_external_bounties::ClaimInput,
+    responses(
+        (status = 200, body = ApiResponse<serde_json::Value>),
+        (status = 400, description = "No public disclosure to check", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn claim_bounty(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Json(input): Json<security_external_bounties::ClaimInput>,
+) -> Result<Json<ApiResponse<Value>>, AppError> {
+    let id = security_external_bounties::claim(&state.db, auth.user_id, input).await?;
+    Ok(Json(ApiResponse::new(json!({
+        "id": id,
+        "state": "waiting",
+        "note": "A reviewer will open the disclosure and check that it exists,                  that it names you, and that its severity is what you said.                  That is everything anybody can check from outside, and the                  attestation says as much.",
+    }))))
+}
+
+/// My claims and where they got to.
+#[utoipa::path(
+    get, path = "/api/security/external-bounties/claims",
+    operation_id = "securityMyBountyClaims",
+    tag = "security",
+    responses((status = 200, body = ApiResponse<serde_json::Value>)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn my_bounty_claims(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Json<ApiResponse<Value>>, AppError> {
+    let claims = security_external_bounties::mine(&state.db, auth.user_id).await?;
+    Ok(Json(ApiResponse::new(json!({ "claims": claims }))))
 }

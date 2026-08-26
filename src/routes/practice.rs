@@ -153,9 +153,23 @@ pub async fn toolkit(
         r#"
         SELECT slug, display_name, category, url, summary, access_note,
                orientation_slugs
-          FROM external_resources
+          FROM external_resources r
          WHERE is_curated = TRUE
-           AND domain = $1
+           -- Filed under this domain, or tagged for one of its trades.
+           --
+           -- The second half arrived with security, and it fixes a case that
+           -- was silently wrong before: Juice Shop, ZAP and Semgrep were filed
+           -- under `quality` by 0459, which is right for a testing pipeline and
+           -- is also where a code auditor goes looking. A strict domain filter
+           -- showed each of them to exactly one of the two domains that need
+           -- it, arbitrarily, and nothing said which.
+           --
+           -- Duplicating the rows was the alternative and is worse: two entries
+           -- for one tool drift apart at the first correction.
+           AND (r.domain = $1
+                OR EXISTS (SELECT 1 FROM orientations o
+                            WHERE o.primary_domain = $1
+                              AND o.slug = ANY(r.orientation_slugs)))
            AND ($2::TEXT IS NULL OR category = $2)
            -- A resource tagged for no trade serves every trade, so it stays
            -- in a filtered listing. Excluding it would hide HuggingFace from

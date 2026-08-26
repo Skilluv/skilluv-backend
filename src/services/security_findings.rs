@@ -155,6 +155,48 @@ pub fn allowed_transition(actor: Actor, from: &str, to: &str) -> bool {
     }
 }
 
+/// Which notification a status change earns the reporter.
+///
+/// `None` for the two nobody needs telling about: a withdrawal, which they did
+/// themselves, and a status that is not a transition.
+///
+/// The kinds are rows in `notification_kinds` (migration 0547) and every one of
+/// them is transactional: a reporter cannot opt out of learning what happened
+/// to a report they filed. Not being told is the single most common way a
+/// disclosure programme dies, and it is the one failure this table exists to
+/// prevent.
+pub fn notification_for(status: &str) -> Option<&'static str> {
+    match status {
+        "triaged" => Some("security.finding_triaged"),
+        "confirmed" => Some("security.finding_confirmed"),
+        "duplicate" => Some("security.finding_duplicate"),
+        "not_applicable" => Some("security.finding_rejected"),
+        "fixed" => Some("security.finding_fixed"),
+        "published" => Some("security.finding_published"),
+        _ => None,
+    }
+}
+
+/// Who to tell, and what about.
+#[derive(Debug, sqlx::FromRow)]
+pub struct NotifiableFinding {
+    pub reporter_user_id: Uuid,
+    pub title: String,
+    pub severity_tier: String,
+}
+
+/// The three things a notification about a finding needs.
+pub async fn notifiable(db: &PgPool, finding_id: Uuid) -> Result<NotifiableFinding, AppError> {
+    sqlx::query_as(
+        "SELECT reporter_user_id, title, severity_tier
+           FROM security_findings WHERE id = $1",
+    )
+    .bind(finding_id)
+    .fetch_optional(db)
+    .await?
+    .ok_or_else(|| AppError::NotFound("no such finding".into()))
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // Submission
 // ═══════════════════════════════════════════════════════════════════
@@ -204,6 +246,10 @@ pub struct SubmitInput {
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct Submitted {
     pub id: Uuid,
+    /// Echoed back, trimmed as stored. The acknowledgement quotes it, and a
+    /// reporter who filed three reports in an afternoon needs to know which
+    /// one this is.
+    pub title: String,
     pub status: String,
     pub severity_tier: String,
     pub cvss_score: Option<f64>,
@@ -373,6 +419,7 @@ pub async fn submit(
 
     Ok(Submitted {
         id,
+        title: title.to_string(),
         status: "submitted".into(),
         severity_tier: tier,
         cvss_score: score,

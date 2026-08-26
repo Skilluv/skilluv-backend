@@ -137,6 +137,17 @@ pub struct SearchQuery {
     /// type anybody's.
     #[param(max_length = 30)]
     pub platform: Option<String>,
+    /// A credential the person has declared — `OSCP`, `CISSP`, `CKA`.
+    ///
+    /// Matched case-insensitively on the name or the level, because an
+    /// enterprise types `OSCP` and a holder typed `oscp`.
+    ///
+    /// Declared, not verified, and that is deliberate. Restricting this to
+    /// credentials somebody here has checked would make the filter a filter on
+    /// this platform's own verification backlog; the row that comes back says
+    /// which of the two it is, so a recruiter can decide.
+    #[param(nullable)]
+    pub credential: Option<String>,
     #[param(pattern = r"^[A-Z]{2}$")]
     pub country_iso2: Option<String>,
     /// Two-letter code, matched at B2 or above.
@@ -562,6 +573,16 @@ pub async fn search(
            AND ($19::BIGINT IS NULL OR COALESCE(delivered.n, 0) >= $19)
            AND ($20::INTEGER IS NULL
                 OR feat.week_of >= (CURRENT_DATE - ($20::INTEGER * INTERVAL '1 day')))
+
+           -- Declared credentials, name or level, case-insensitive. Expired
+           -- ones do not count: a certification with a date in the past is
+           -- something the person used to hold.
+           AND ($25::TEXT IS NULL OR EXISTS (
+                   SELECT 1 FROM external_credentials ec
+                    WHERE ec.user_id = u.id
+                      AND (lower(ec.name) = lower($25)
+                           OR lower(ec.level) = lower($25))
+                      AND (ec.expires_on IS NULL OR ec.expires_on >= CURRENT_DATE)))
         ) AS ranked
 
          WHERE ($22::BIGINT IS NULL
@@ -595,6 +616,10 @@ pub async fn search(
     .bind(cursor.map(|c| c.key))
     .bind(cursor.map(|c| c.user_id))
     .bind(q.limit)
+    // Twenty-fifth, and appended rather than inserted: the cursor and the
+    // limit already hold 22 to 24, and renumbering them to keep the filters
+    // contiguous would touch every binding for no gain.
+    .bind(q.credential.as_deref())
     .fetch_all(&state.db)
     .await?;
 
@@ -667,6 +692,7 @@ fn validate(q: &SearchQuery) -> Result<(), AppError> {
     }
     crate::validators::check_max_len_opt(&q.min_tier, "min_tier", 40)?;
     crate::validators::check_max_len_opt(&q.platform, "platform", 30)?;
+    crate::validators::check_max_len_opt(&q.credential, "credential", 60)?;
     crate::validators::check_max_len_opt(&q.badge, "badge", 100)?;
     crate::validators::check_max_len_opt(&q.tag, "tag", 100)?;
     crate::validators::check_max_len_opt(&q.family, "family", 40)?;
@@ -789,6 +815,9 @@ fn filters_applied(q: &SearchQuery, skills: &[String]) -> Vec<String> {
     if q.platform.is_some() {
         note("platform");
     }
+    if q.credential.is_some() {
+        note("credential");
+    }
     if q.country_iso2.is_some() {
         note("country_iso2");
     }
@@ -833,7 +862,7 @@ fn filters_applied(q: &SearchQuery, skills: &[String]) -> Vec<String> {
 fn cache_key_for(state: &AppState, q: &SearchQuery) -> String {
     let field = |value: &Option<String>| value.as_deref().unwrap_or("-").to_string();
     format!(
-        "talents:v4:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}",
+        "talents:v4:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}",
         state.db.connect_options().get_database().unwrap_or("db"),
         field(&q.q),
         field(&q.skill_domain),
@@ -846,6 +875,7 @@ fn cache_key_for(state: &AppState, q: &SearchQuery) -> String {
         field(&q.min_tier),
         q.min_craft_score.unwrap_or(-1),
         field(&q.platform),
+        field(&q.credential),
         field(&q.country_iso2),
         field(&q.language_spoken),
         q.looking_for.map(LookingFor::as_str).unwrap_or("-"),
@@ -1033,6 +1063,7 @@ mod tests {
             min_tier: None,
             min_craft_score: None,
             platform: None,
+            credential: None,
             country_iso2: None,
             language_spoken: None,
             looking_for: None,

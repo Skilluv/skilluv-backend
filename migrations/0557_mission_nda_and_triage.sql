@@ -51,16 +51,22 @@ CREATE TABLE mission_nda_signatures (
     -- a signature proves a click and not an agreement.
     document_url VARCHAR(500) NOT NULL,
     document_sha256 CHAR(64) NOT NULL,
-    -- Which of the three templates, or 'custom' for a document the client
-    -- uploaded. Recorded rather than derived from the URL, because the URL
-    -- will move and the terms that were agreed will not.
+    -- Which agreement: one of the platform's two, or `client_custom` for a
+    -- document the client brought. Recorded rather than derived from the URL,
+    -- because the URL will move and the terms that were agreed will not.
     template VARCHAR(20) NOT NULL
         CHECK (template IN ('mutual_standard', 'mutual_extended', 'client_custom')),
 
     signed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     -- Evidence of the act. `INET` rather than text so that a range query is
     -- possible if a signature is ever contested.
-    signer_ip INET NOT NULL,
+    --
+    -- Nullable, and that is deliberate: behind a reverse proxy that does not
+    -- set a forwarded-for header — a development machine, a misconfigured
+    -- deployment — there is no address the platform can honestly attribute.
+    -- Recording `0.0.0.0` would put a false fact in a legal record, and an
+    -- absent one is worth more than an invented one.
+    signer_ip INET,
     signer_user_agent TEXT,
     -- What the signer typed as their name. Not verified against anything and
     -- kept anyway: it is part of what was done, and a dispute reads it.

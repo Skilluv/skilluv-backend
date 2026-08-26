@@ -323,14 +323,24 @@ pub async fn issue_for_finding(db: &PgPool, finding_id: Uuid) -> Result<Vec<Stri
         let (title, description) = crate::services::attestations::basis_wording(db, basis).await;
         // The write-up if there is one, the card otherwise. A published finding
         // has a write-up by constraint, so the fallback is defensive.
-        let url = f.writeup_url.clone().unwrap_or_else(|| finding_url(finding_id));
+        let url = f
+            .writeup_url
+            .clone()
+            .unwrap_or_else(|| finding_url(finding_id));
         let url = if url.starts_with("https://") {
             url
         } else {
             // A relative path — a write-up committed to this repository. Made
             // absolute so the attestation carries something a stranger can
             // open, which is the whole test the shared issuer applies.
-            format!("{PUBLIC_SITE_URL}{}", if url.starts_with('/') { url } else { format!("/{url}") })
+            format!(
+                "{PUBLIC_SITE_URL}{}",
+                if url.starts_with('/') {
+                    url
+                } else {
+                    format!("/{url}")
+                }
+            )
         };
         let out = artefact_attestations::issue_linked(
             db,
@@ -365,13 +375,20 @@ pub async fn issue_for_finding(db: &PgPool, finding_id: Uuid) -> Result<Vec<Stri
 ///
 /// No deliverable, on purpose (migration 0546): the answer was planted, and a
 /// planted answer does not move a rank. The uniqueness key is the challenge, so
+/// What a challenge has to say about itself for an attestation to name it:
+/// its security kind, its title, its difficulty tier and the target it was
+/// solved against. Named because four optional strings in a row read the same
+/// whichever order they are in, and this is the row a mistake would silently
+/// reorder.
+type ChallengeRow = (Option<String>, String, Option<String>, Option<String>);
+
 /// re-running this after a second attempt issues nothing.
 pub async fn issue_for_challenge(
     db: &PgPool,
     user_id: Uuid,
     challenge_id: Uuid,
 ) -> Result<Option<String>, AppError> {
-    let row: Option<(Option<String>, String, Option<String>, Option<String>)> = sqlx::query_as(
+    let row: Option<ChallengeRow> = sqlx::query_as(
         "SELECT security_kind, title, security_difficulty_tier, security_target_url
            FROM challenge_templates WHERE id = $1",
     )
@@ -392,9 +409,7 @@ pub async fn issue_for_challenge(
     }
 
     let (title, description) = crate::services::attestations::basis_wording(db, basis).await;
-    let tier_text = tier
-        .map(|t| format!(" — {t}"))
-        .unwrap_or_default();
+    let tier_text = tier.map(|t| format!(" — {t}")).unwrap_or_default();
 
     let out = artefact_attestations::issue_linked(
         db,
@@ -504,8 +519,8 @@ mod tests {
             "incident_analysis",
             "purple_exercise",
         ] {
-            let basis = basis_for_subtype(subtype)
-                .unwrap_or_else(|| panic!("{subtype} has no basis"));
+            let basis =
+                basis_for_subtype(subtype).unwrap_or_else(|| panic!("{subtype} has no basis"));
             assert!(
                 SECURITY.bases.contains(&basis),
                 "{subtype} maps to {basis}, which is not a security basis"
@@ -546,11 +561,15 @@ mod tests {
 
     #[test]
     fn a_co_credit_needs_no_deliverable_and_a_confirmation_does() {
-        assert!(!SECURITY
-            .artifact_bases
-            .contains(&"security_finding_co_credit"));
-        assert!(SECURITY
-            .artifact_bases
-            .contains(&"security_finding_confirmed"));
+        assert!(
+            !SECURITY
+                .artifact_bases
+                .contains(&"security_finding_co_credit")
+        );
+        assert!(
+            SECURITY
+                .artifact_bases
+                .contains(&"security_finding_confirmed")
+        );
     }
 }

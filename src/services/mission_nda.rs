@@ -336,9 +336,7 @@ pub async fn release(
     .rows_affected();
 
     if affected == 0 {
-        return Err(AppError::NotFound(
-            "no live signature to release".into(),
-        ));
+        return Err(AppError::NotFound("no live signature to release".into()));
     }
     Ok(())
 }

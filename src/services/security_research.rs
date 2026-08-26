@@ -129,7 +129,18 @@ pub async fn issue(
     .execute(&mut *tx)
     .await?;
 
-    let view: TokenView = sqlx::query_as::<_, (Uuid, String, Option<String>, chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>, Option<chrono::DateTime<chrono::Utc>>, i64)>(
+    let view: TokenView = sqlx::query_as::<
+        _,
+        (
+            Uuid,
+            String,
+            Option<String>,
+            chrono::DateTime<chrono::Utc>,
+            chrono::DateTime<chrono::Utc>,
+            Option<chrono::DateTime<chrono::Utc>>,
+            i64,
+        ),
+    >(
         "INSERT INTO security_research_tokens
              (user_id, token_hash, token_prefix, label, expires_at)
          VALUES ($1, $2, $3, $4, NOW() + make_interval(days => $5::INT))
@@ -143,31 +154,37 @@ pub async fn issue(
     .bind(days as i32)
     .fetch_one(&mut *tx)
     .await
-    .map(|(id, token_prefix, label, issued_at, expires_at, last_used_at, requests_seen)| TokenView {
-        id,
-        token_prefix,
-        label,
-        issued_at,
-        expires_at,
-        last_used_at,
-        requests_seen,
-    })?;
+    .map(
+        |(id, token_prefix, label, issued_at, expires_at, last_used_at, requests_seen)| TokenView {
+            id,
+            token_prefix,
+            label,
+            issued_at,
+            expires_at,
+            last_used_at,
+            requests_seen,
+        },
+    )?;
 
     tx.commit().await?;
     Ok((plaintext, view))
 }
 
+/// The columns behind a `TokenView`, in the order the query selects them.
+/// Seven positional fields is where a tuple stops documenting itself.
+type TokenRow = (
+    Uuid,
+    String,
+    Option<String>,
+    chrono::DateTime<chrono::Utc>,
+    chrono::DateTime<chrono::Utc>,
+    Option<chrono::DateTime<chrono::Utc>>,
+    i64,
+);
+
 /// The live token of this person, if there is one.
 pub async fn current(db: &PgPool, user_id: Uuid) -> Result<Option<TokenView>, AppError> {
-    let row: Option<(
-        Uuid,
-        String,
-        Option<String>,
-        chrono::DateTime<chrono::Utc>,
-        chrono::DateTime<chrono::Utc>,
-        Option<chrono::DateTime<chrono::Utc>>,
-        i64,
-    )> = sqlx::query_as(
+    let row: Option<TokenRow> = sqlx::query_as(
         "SELECT id, token_prefix, label, issued_at, expires_at, last_used_at,
                 requests_seen
            FROM security_research_tokens

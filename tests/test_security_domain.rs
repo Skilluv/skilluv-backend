@@ -133,13 +133,12 @@ async fn security_is_an_open_domain_with_five_trades() {
         "pentester-mobile",
         "soc-analyst",
     ] {
-        let (archived, replaced): (bool, Option<Uuid>) = sqlx::query_as(
-            "SELECT is_archived, replaced_by FROM orientations WHERE slug = $1",
-        )
-        .bind(legacy)
-        .fetch_one(&app.db)
-        .await
-        .unwrap();
+        let (archived, replaced): (bool, Option<Uuid>) =
+            sqlx::query_as("SELECT is_archived, replaced_by FROM orientations WHERE slug = $1")
+                .bind(legacy)
+                .fetch_one(&app.db)
+                .await
+                .unwrap();
         assert!(archived, "{legacy} is still choosable");
         assert!(replaced.is_some(), "{legacy} does not say what replaces it");
     }
@@ -197,12 +196,11 @@ async fn every_trade_makes_its_review_capability_grantable() {
 async fn every_trade_has_a_review_grid_and_a_first_month() {
     let app = TestApp::spawn().await;
 
-    let grids: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM review_grids WHERE domain = 'security'",
-    )
-    .fetch_one(&app.db)
-    .await
-    .unwrap();
+    let grids: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM review_grids WHERE domain = 'security'")
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
     // Five families plus the domain default read when a submission arrives
     // without one.
     assert_eq!(grids, 6);
@@ -241,7 +239,10 @@ async fn the_craft_score_counts_something_for_every_basis_worth_counting() {
     .fetch_one(&app.db)
     .await
     .unwrap();
-    assert!(weights >= 18, "the formula is nearly empty: {weights} terms");
+    assert!(
+        weights >= 18,
+        "the formula is nearly empty: {weights} terms"
+    );
 
     // The tier slugs are what the talent search filters on, and they are shared
     // across domains — a domain that renamed them would drop out of the filter.
@@ -477,12 +478,11 @@ async fn a_reporter_can_withdraw_and_nothing_else() {
         .await;
     assert_eq!(resp.status(), 200);
 
-    let status: String =
-        sqlx::query_scalar("SELECT status FROM security_findings WHERE id = $1")
-            .bind(id)
-            .fetch_one(&app.db)
-            .await
-            .unwrap();
+    let status: String = sqlx::query_scalar("SELECT status FROM security_findings WHERE id = $1")
+        .bind(id)
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
     assert_eq!(status, "withdrawn");
 }
 
@@ -539,12 +539,11 @@ async fn confirming_creates_the_deliverable_that_moves_a_rank_once() {
     assert_eq!(count, 1);
     assert_eq!(fragments, 300, "a high finding is worth 300 fragments");
 
-    let credited: i32 =
-        sqlx::query_scalar("SELECT total_fragments FROM users WHERE id = $1")
-            .bind(reporter)
-            .fetch_one(&app.db)
-            .await
-            .unwrap();
+    let credited: i32 = sqlx::query_scalar("SELECT total_fragments FROM users WHERE id = $1")
+        .bind(reporter)
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
     assert!(credited >= 300, "the reporter was not paid: {credited}");
 
     // And the embargo clock started, without anybody asking for it.
@@ -793,24 +792,22 @@ async fn a_duplicate_earns_a_co_credit_and_no_deliverable() {
     .unwrap();
     assert_eq!(co_credits, 1);
 
-    let deliverables: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM deliverables WHERE security_finding_id = $1",
-    )
-    .bind(duplicate)
-    .fetch_one(&app.db)
-    .await
-    .unwrap();
+    let deliverables: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM deliverables WHERE security_finding_id = $1")
+            .bind(duplicate)
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
     assert_eq!(deliverables, 0, "a duplicate was paid like an original");
 
     // The status and the dedup state cannot disagree: two ways to say one thing
     // is what the constraint refuses.
-    let (status_, state): (String, String) = sqlx::query_as(
-        "SELECT status, dedup_state FROM security_findings WHERE id = $1",
-    )
-    .bind(duplicate)
-    .fetch_one(&app.db)
-    .await
-    .unwrap();
+    let (status_, state): (String, String) =
+        sqlx::query_as("SELECT status, dedup_state FROM security_findings WHERE id = $1")
+            .bind(duplicate)
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
     assert_eq!(status_, "duplicate");
     assert_eq!(state, "duplicate_confirmed");
 }
@@ -819,11 +816,20 @@ async fn a_duplicate_earns_a_co_credit_and_no_deliverable() {
 async fn the_similarity_scan_proposes_and_never_merges() {
     let app = TestApp::spawn().await;
     a_person(&app, "one").await;
-    a_finding(&app, "one", "Reflected cross-site scripting in the search box").await;
+    a_finding(
+        &app,
+        "one",
+        "Reflected cross-site scripting in the search box",
+    )
+    .await;
 
     a_person(&app, "two").await;
-    let second =
-        a_finding(&app, "two", "Reflected cross-site scripting in the search box").await;
+    let second = a_finding(
+        &app,
+        "two",
+        "Reflected cross-site scripting in the search box",
+    )
+    .await;
 
     let reviewer = a_person(&app, "reviewer7").await;
     grant(&app, reviewer, "security_reviewer:red-team").await;
@@ -844,13 +850,12 @@ async fn the_similarity_scan_proposes_and_never_merges() {
 
     // Flagged, not merged. A merge decides who is credited, and a trigram
     // score does not get to.
-    let (state, status_): (String, String) = sqlx::query_as(
-        "SELECT dedup_state, status FROM security_findings WHERE id = $1",
-    )
-    .bind(second)
-    .fetch_one(&app.db)
-    .await
-    .unwrap();
+    let (state, status_): (String, String) =
+        sqlx::query_as("SELECT dedup_state, status FROM security_findings WHERE id = $1")
+            .bind(second)
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
     assert_eq!(state, "suspected");
     assert_eq!(status_, "submitted", "the scan moved a finding by itself");
 }
@@ -969,13 +974,12 @@ async fn a_flag_is_checked_against_a_hash_and_the_plaintext_is_never_stored() {
     let challenge = a_flag_challenge(&app, "curator", "SKILLUV{the_real_one}").await;
 
     // The flag is nowhere in the row.
-    let row: String = sqlx::query_scalar(
-        "SELECT to_jsonb(c)::TEXT FROM challenge_templates c WHERE c.id = $1",
-    )
-    .bind(challenge)
-    .fetch_one(&app.db)
-    .await
-    .unwrap();
+    let row: String =
+        sqlx::query_scalar("SELECT to_jsonb(c)::TEXT FROM challenge_templates c WHERE c.id = $1")
+            .bind(challenge)
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
     assert!(
         !row.contains("the_real_one"),
         "the flag was stored in plaintext"
@@ -1108,7 +1112,10 @@ async fn a_flag_challenge_cannot_exist_without_a_flag() {
     )
     .execute(&app.db)
     .await;
-    assert!(refused.is_err(), "a flag challenge with no flag was accepted");
+    assert!(
+        refused.is_err(),
+        "a flag challenge with no flag was accepted"
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1130,13 +1137,12 @@ async fn a_research_token_is_shown_once_and_replaces_the_last_one() {
     assert!(first.starts_with("srt_"));
 
     // Only the hash is kept.
-    let stored: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM security_research_tokens WHERE token_hash = $1",
-    )
-    .bind(&first)
-    .fetch_one(&app.db)
-    .await
-    .unwrap();
+    let stored: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM security_research_tokens WHERE token_hash = $1")
+            .bind(&first)
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
     assert_eq!(stored, 0, "the plaintext was stored");
 
     // Reading it back never shows the secret again.
@@ -1147,7 +1153,10 @@ async fn a_research_token_is_shown_once_and_replaces_the_last_one() {
     // A second issue supersedes the first, so a revocation actually stops the
     // traffic.
     let resp = app
-        .post("/api/security/research-token", &json!({ "label": "laptop" }))
+        .post(
+            "/api/security/research-token",
+            &json!({ "label": "laptop" }),
+        )
         .await;
     assert_eq!(resp.status(), 200);
 
@@ -1207,12 +1216,11 @@ async fn an_offensive_mission_cannot_leave_draft_unauthorised() {
     .await
     .unwrap();
 
-    let mission_type: Uuid = sqlx::query_scalar(
-        "SELECT id FROM mission_types WHERE slug = 'sec_pentest_web'",
-    )
-    .fetch_one(&app.db)
-    .await
-    .unwrap();
+    let mission_type: Uuid =
+        sqlx::query_scalar("SELECT id FROM mission_types WHERE slug = 'sec_pentest_web'")
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
 
     // A draft is allowed to be incomplete: that is what a draft is for.
     let mission: Uuid = sqlx::query_scalar(
@@ -1353,7 +1361,9 @@ async fn somebody_elses_proof_is_not_yours_to_read() {
     // uploader, which is what makes the ownership check a string comparison.
     app.login("nosy").await;
     let resp = app
-        .get(&format!("/api/security/proofs/security-proofs/{mine}/x.png"))
+        .get(&format!(
+            "/api/security/proofs/security-proofs/{mine}/x.png"
+        ))
         .await;
     assert_eq!(resp.status(), 403);
 

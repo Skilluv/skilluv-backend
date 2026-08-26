@@ -302,8 +302,10 @@ pub async fn draft_from_finding(
     .bind(&input.artifact_key)
     .bind(input.artifact_bytes)
     .bind(serde_json::Value::Array(questions))
-    .bind("Logs from this platform, exported and redacted by an operator after \
-           the finding they document was fixed.")
+    .bind(
+        "Logs from this platform, exported and redacted by an operator after \
+           the finding they document was fixed.",
+    )
     .fetch_one(db)
     .await?;
 

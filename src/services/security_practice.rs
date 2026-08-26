@@ -114,15 +114,11 @@ pub async fn submit_flag(
         ));
     }
     if c.status != "published" {
-        return Err(AppError::Conflict(
-            "that challenge is not open".into(),
-        ));
+        return Err(AppError::Conflict("that challenge is not open".into()));
     }
     let Some(expected) = c.flag_hash else {
         // Refused by a constraint at creation, so this is defence in depth.
-        return Err(AppError::Internal(
-            "a flag challenge with no flag".into(),
-        ));
+        return Err(AppError::Internal("a flag challenge with no flag".into()));
     };
 
     // ── The cap ─────────────────────────────────────────────────────
@@ -252,8 +248,7 @@ pub async fn submit_flag(
     record_success(&mut tx, user_id, challenge_id, fragments).await?;
     tx.commit().await?;
 
-    metrics::counter!("skilluv_security_flag_attempts_total", "result" => "valid")
-        .increment(1);
+    metrics::counter!("skilluv_security_flag_attempts_total", "result" => "valid").increment(1);
     if first_solve {
         metrics::counter!("skilluv_security_first_solves_total").increment(1);
     }
@@ -342,11 +337,7 @@ async fn record_success(
     Ok(())
 }
 
-async fn attestation_code_for(
-    db: &PgPool,
-    user_id: Uuid,
-    challenge_id: Uuid,
-) -> Option<String> {
+async fn attestation_code_for(db: &PgPool, user_id: Uuid, challenge_id: Uuid) -> Option<String> {
     sqlx::query_scalar(
         "SELECT verification_code FROM attestations
           WHERE user_id = $1 AND challenge_template_id = $2 AND revoked_at IS NULL
@@ -472,7 +463,9 @@ pub async fn submit_answers(
     .fetch_one(db)
     .await?;
     if solved {
-        return Err(AppError::Conflict("you have already passed this lab".into()));
+        return Err(AppError::Conflict(
+            "you have already passed this lab".into(),
+        ));
     }
 
     if used >= max_attempts {
@@ -485,14 +478,14 @@ pub async fn submit_answers(
         .fetch_one(db)
         .await?;
         let ready_at = last.map(|t| t + chrono::Duration::hours(LAB_COOLDOWN_HOURS));
-        if let Some(ready_at) = ready_at {
-            if ready_at > chrono::Utc::now() {
-                return Err(AppError::Validation(format!(
-                    "{max_attempts} attempts used. The lab reopens at {}. Go back \
-                     to the artefact — the questions have not changed",
-                    ready_at.to_rfc3339()
-                )));
-            }
+        if let Some(ready_at) = ready_at
+            && ready_at > chrono::Utc::now()
+        {
+            return Err(AppError::Validation(format!(
+                "{max_attempts} attempts used. The lab reopens at {}. Go back \
+                 to the artefact — the questions have not changed",
+                ready_at.to_rfc3339()
+            )));
         }
     }
 
@@ -503,7 +496,11 @@ pub async fn submit_answers(
     let mut hints = Vec::new();
 
     for q in &questions {
-        let given = submission.answers.get(&q.id).map(|s| s.trim()).unwrap_or("");
+        let given = submission
+            .answers
+            .get(&q.id)
+            .map(|s| s.trim())
+            .unwrap_or("");
         let normalised = if q.case_sensitive {
             given.to_string()
         } else {
@@ -591,10 +588,8 @@ pub async fn submit_answers(
     .increment(1);
 
     let attestation_code = if passed {
-        match crate::services::security_attestations::issue_for_challenge(
-            db, user_id, challenge_id,
-        )
-        .await
+        match crate::services::security_attestations::issue_for_challenge(db, user_id, challenge_id)
+            .await
         {
             Ok(_) => attestation_code_for(db, user_id, challenge_id).await,
             Err(e) => {

@@ -31,10 +31,7 @@ pub fn mission_routes() -> Router<AppState> {
         .route("/missions", get(list_missions).post(create_mission))
         .route("/missions/{slug}", get(get_mission))
         .route("/missions/{slug}/apply", post(apply_to_mission))
-        .route(
-            "/missions/{slug}/nda",
-            get(read_nda).post(sign_nda),
-        )
+        .route("/missions/{slug}/nda", get(read_nda).post(sign_nda))
         .route("/missions/{slug}/nda/signature", get(my_nda_signature))
         .route("/missions/{slug}/applications", get(list_applications))
         .route("/missions/{slug}/status", post(set_mission_status))

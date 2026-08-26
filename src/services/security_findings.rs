@@ -92,7 +92,11 @@ fn triage_skip_reason(rank: Option<&str>, confirmed_findings: i64) -> Option<&'s
 
 /// The hosts in scope right now.
 pub fn scope_hosts() -> Vec<String> {
-    parse_scope(std::env::var("SKILLUV_SECURITY_SCOPE_HOSTS").ok().as_deref())
+    parse_scope(
+        std::env::var("SKILLUV_SECURITY_SCOPE_HOSTS")
+            .ok()
+            .as_deref(),
+    )
 }
 
 /// The parsing, separated from the environment so a test can exercise it
@@ -325,7 +329,11 @@ pub async fn submit(
     let (vector, score, tier) = match input.cvss_vector.as_deref() {
         Some(raw) => {
             let scored = cvss::score_vector(raw).map_err(AppError::Validation)?;
-            (Some(scored.vector), Some(scored.score), scored.tier.to_string())
+            (
+                Some(scored.vector),
+                Some(scored.score),
+                scored.tier.to_string(),
+            )
         }
         None => {
             let tier = input.severity_tier.as_deref().unwrap_or("medium");
@@ -347,11 +355,10 @@ pub async fn submit(
     let (mission_id, project_id, host) = resolve_target(db, &input).await?;
 
     // ── Triage ──────────────────────────────────────────────────────
-    let rank: Option<String> =
-        sqlx::query_scalar("SELECT rank FROM user_ranks WHERE user_id = $1")
-            .bind(reporter)
-            .fetch_optional(db)
-            .await?;
+    let rank: Option<String> = sqlx::query_scalar("SELECT rank FROM user_ranks WHERE user_id = $1")
+        .bind(reporter)
+        .fetch_optional(db)
+        .await?;
     let confirmed: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM security_findings
           WHERE reporter_user_id = $1
@@ -408,8 +415,17 @@ pub async fn submit(
     .fetch_one(&mut *tx)
     .await?;
 
-    record_event(&mut tx, id, Some(reporter), "submitted", None, Some("submitted"), None, None)
-        .await?;
+    record_event(
+        &mut tx,
+        id,
+        Some(reporter),
+        "submitted",
+        None,
+        Some("submitted"),
+        None,
+        None,
+    )
+    .await?;
 
     tx.commit().await?;
 
@@ -654,12 +670,11 @@ pub async fn transition(
                     "a finding cannot duplicate itself".into(),
                 ));
             }
-            let exists: bool = sqlx::query_scalar(
-                "SELECT EXISTS (SELECT 1 FROM security_findings WHERE id = $1)",
-            )
-            .bind(original)
-            .fetch_one(&mut *tx)
-            .await?;
+            let exists: bool =
+                sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM security_findings WHERE id = $1)")
+                    .bind(original)
+                    .fetch_one(&mut *tx)
+                    .await?;
             if !exists {
                 return Err(AppError::NotFound("no such original finding".into()));
             }
@@ -677,9 +692,10 @@ pub async fn transition(
             .await?;
         }
         "fixed" => {
-            let url = input.fix_url.as_deref().ok_or_else(|| {
-                AppError::Validation("a fix says where it landed".into())
-            })?;
+            let url = input
+                .fix_url
+                .as_deref()
+                .ok_or_else(|| AppError::Validation("a fix says where it landed".into()))?;
             if !url.starts_with("https://") {
                 return Err(AppError::Validation(
                     "the fix link has to be an https link somebody can open".into(),
@@ -856,7 +872,11 @@ pub async fn override_severity(
     let (vector, score, tier) = match input.cvss_vector.as_deref() {
         Some(raw) => {
             let scored = cvss::score_vector(raw).map_err(AppError::Validation)?;
-            (Some(scored.vector), Some(scored.score), scored.tier.to_string())
+            (
+                Some(scored.vector),
+                Some(scored.score),
+                scored.tier.to_string(),
+            )
         }
         None => {
             let tier = input.severity_tier.as_deref().ok_or_else(|| {
@@ -874,12 +894,11 @@ pub async fn override_severity(
 
     let mut tx = db.begin().await?;
 
-    let before: Option<String> = sqlx::query_scalar(
-        "SELECT severity_tier FROM security_findings WHERE id = $1 FOR UPDATE",
-    )
-    .bind(finding_id)
-    .fetch_optional(&mut *tx)
-    .await?;
+    let before: Option<String> =
+        sqlx::query_scalar("SELECT severity_tier FROM security_findings WHERE id = $1 FOR UPDATE")
+            .bind(finding_id)
+            .fetch_optional(&mut *tx)
+            .await?;
     let Some(before) = before else {
         return Err(AppError::NotFound("no such finding".into()));
     };
@@ -1018,7 +1037,9 @@ pub async fn answer_round(
     answer_md: &str,
 ) -> Result<i16, AppError> {
     if answer_md.trim().is_empty() {
-        return Err(AppError::Validation("an answer with something in it".into()));
+        return Err(AppError::Validation(
+            "an answer with something in it".into(),
+        ));
     }
 
     let round: Option<(Uuid, i16)> = sqlx::query_as(
@@ -1658,16 +1679,27 @@ mod tests {
         // findings adds up to one critical.
         assert!(fragments_for("critical") > fragments_for("high") * 3);
         assert!(fragments_for("high") > fragments_for("medium") * 3);
-        assert_eq!(fragments_for("something_else"), fragments_for("informational"));
+        assert_eq!(
+            fragments_for("something_else"),
+            fragments_for("informational")
+        );
     }
 
     #[test]
     fn a_reporter_can_withdraw_and_nothing_else() {
-        assert!(allowed_transition(Actor::Reporter, "submitted", "withdrawn"));
+        assert!(allowed_transition(
+            Actor::Reporter,
+            "submitted",
+            "withdrawn"
+        ));
         assert!(allowed_transition(Actor::Reporter, "triaged", "withdrawn"));
         assert!(!allowed_transition(Actor::Reporter, "submitted", "triaged"));
         assert!(!allowed_transition(Actor::Reporter, "triaged", "confirmed"));
-        assert!(!allowed_transition(Actor::Reporter, "confirmed", "published"));
+        assert!(!allowed_transition(
+            Actor::Reporter,
+            "confirmed",
+            "published"
+        ));
     }
 
     #[test]
@@ -1675,7 +1707,11 @@ mod tests {
         // Triage decides whether something is worth a reviewer's afternoon.
         // Confirming asserts publicly that a vulnerability is real.
         assert!(allowed_transition(Actor::Triager, "submitted", "triaged"));
-        assert!(allowed_transition(Actor::Triager, "submitted", "not_applicable"));
+        assert!(allowed_transition(
+            Actor::Triager,
+            "submitted",
+            "not_applicable"
+        ));
         assert!(!allowed_transition(Actor::Triager, "triaged", "confirmed"));
         assert!(!allowed_transition(Actor::Triager, "triaged", "duplicate"));
     }
@@ -1690,7 +1726,12 @@ mod tests {
 
     #[test]
     fn nothing_skips_the_middle() {
-        for actor in [Actor::Reporter, Actor::Triager, Actor::Reviewer, Actor::Admin] {
+        for actor in [
+            Actor::Reporter,
+            Actor::Triager,
+            Actor::Reviewer,
+            Actor::Admin,
+        ] {
             assert!(
                 !allowed_transition(actor, "submitted", "published"),
                 "{actor:?} must not publish an untriaged report"

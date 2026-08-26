@@ -403,8 +403,8 @@ mod tests {
 
     #[test]
     fn temporal_metrics_are_accepted_and_ignored() {
-        let with = score_vector("CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H/E:U/RL:O/RC:C")
-            .unwrap();
+        let with =
+            score_vector("CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H/E:U/RL:O/RC:C").unwrap();
         let without = score_vector("CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H").unwrap();
         assert_eq!(with.score, without.score);
         // And the stored vector is the base one either way, so two reports of

@@ -87,7 +87,7 @@ pub fn looks_executable(bytes: &[u8]) -> bool {
         &[0xca, 0xfe, 0xba, 0xbe], // Mach-O fat / Java class
         &[0xfe, 0xed, 0xfa, 0xce], // Mach-O
         &[0xfe, 0xed, 0xfa, 0xcf],
-        b"#!",                     // a script with a shebang
+        b"#!", // a script with a shebang
     ];
     SIGNATURES.iter().any(|sig| bytes.starts_with(sig))
 }
@@ -234,7 +234,10 @@ mod tests {
     #[test]
     fn the_format_list_is_an_allow_list() {
         assert_eq!(content_type_for("png"), Some("image/png"));
-        assert_eq!(content_type_for("pcapng"), Some("application/vnd.tcpdump.pcap"));
+        assert_eq!(
+            content_type_for("pcapng"),
+            Some("application/vnd.tcpdump.pcap")
+        );
         // Every one of these has been somebody's "proof file".
         for ext in ["exe", "sh", "bat", "dll", "so", "jar", "ps1", "apk", "zip"] {
             assert_eq!(content_type_for(ext), None, "{ext} must be refused");

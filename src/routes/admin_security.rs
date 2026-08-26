@@ -130,7 +130,11 @@ async fn require_reader(state: &AppState, auth: &AuthUser) -> Result<(), AppErro
     .fetch_one(&state.db)
     .await?;
 
-    if family { Ok(()) } else { Err(AppError::Forbidden) }
+    if family {
+        Ok(())
+    } else {
+        Err(AppError::Forbidden)
+    }
 }
 
 /// Which actor this person is, taking the strongest they hold.
@@ -373,14 +377,12 @@ pub async fn detail(
     .fetch_all(&state.db)
     .await?;
 
-    Ok(Json(
-        ApiResponse::new(json!({
-            "finding": finding,
-            "events": events,
-            "rounds": rounds,
-            "similar": similar,
-        }))
-    ))
+    Ok(Json(ApiResponse::new(json!({
+        "finding": finding,
+        "events": events,
+        "rounds": rounds,
+        "similar": similar,
+    }))))
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -441,20 +443,19 @@ pub async fn transition(
     // minute. Best-effort — a notification failure must not undo a decision.
     let db = state.db.clone();
     tokio::spawn(async move {
-        let reporter: Option<Uuid> = sqlx::query_scalar(
-            "SELECT reporter_user_id FROM security_findings WHERE id = $1",
-        )
-        .bind(id)
-        .fetch_optional(&db)
-        .await
-        .ok()
-        .flatten();
-        if let Some(reporter) = reporter {
-            if let Err(e) = crate::services::proof_hooks::recompute_all_for_user(&db, reporter).await
-            {
-                tracing::warn!(user = %reporter, error = %e,
-                    "proof recompute after a finding transition failed");
-            }
+        let reporter: Option<Uuid> =
+            sqlx::query_scalar("SELECT reporter_user_id FROM security_findings WHERE id = $1")
+                .bind(id)
+                .fetch_optional(&db)
+                .await
+                .ok()
+                .flatten();
+        if let Some(reporter) = reporter
+            && let Err(e) =
+                crate::services::proof_hooks::recompute_all_for_user(&db, reporter).await
+        {
+            tracing::warn!(user = %reporter, error = %e,
+                "proof recompute after a finding transition failed");
         }
     });
 
@@ -495,21 +496,21 @@ pub async fn severity(
 
     // A severity decides a payout tier. Changing one without telling the
     // person is the thing researchers leave a platform over.
-    if before != tier {
-        if let Ok(f) = security_findings::notifiable(&state.db, id).await {
-            let _ = crate::services::notify::send(
-                &state,
-                crate::services::notify::Recipient::User(f.reporter_user_id),
-                "security.severity_changed",
-            )
-            .arg("title", f.title)
-            .arg("before", before)
-            .arg("after", tier.clone())
-            .arg("reason", reason)
-            .payload(json!({ "finding_id": id }))
-            .execute()
-            .await;
-        }
+    if before != tier
+        && let Ok(f) = security_findings::notifiable(&state.db, id).await
+    {
+        let _ = crate::services::notify::send(
+            &state,
+            crate::services::notify::Recipient::User(f.reporter_user_id),
+            "security.severity_changed",
+        )
+        .arg("title", f.title)
+        .arg("before", before)
+        .arg("after", tier.clone())
+        .arg("reason", reason)
+        .payload(json!({ "finding_id": id }))
+        .execute()
+        .await;
     }
 
     Ok(Json(ApiResponse::new(json!({ "severity_tier": tier }))))
@@ -737,13 +738,11 @@ pub async fn dedup_queue(
     .fetch_all(&state.db)
     .await?;
 
-    Ok(Json(
-        ApiResponse::new(json!({
-            "pairs": pairs,
-            "note": "Nothing here is merged automatically. A merge decides who \
-                     is paid.",
-        }))
-    ))
+    Ok(Json(ApiResponse::new(json!({
+        "pairs": pairs,
+        "note": "Nothing here is merged automatically. A merge decides who \
+                 is paid.",
+    }))))
 }
 
 /// Walk the embargo clocks now rather than waiting for the sweep.
@@ -758,14 +757,12 @@ pub async fn embargo_sweep(
 ) -> Result<Json<ApiResponse<Value>>, AppError> {
     require_any_capability(&state.db, auth.user_id, &["admin"]).await?;
     let sweep = security_findings::sweep_embargoes(&state.db).await?;
-    Ok(Json(
-        ApiResponse::new(json!({
-            "expired": sweep.expired,
-            "reminded": sweep.reminded,
-            "note": "Nothing was published. An expired embargo is an item on \
-                     this list, not an automatic disclosure.",
-        }))
-    ))
+    Ok(Json(ApiResponse::new(json!({
+        "expired": sweep.expired,
+        "reminded": sweep.reminded,
+        "note": "Nothing was published. An expired embargo is an item on \
+                 this list, not an automatic disclosure.",
+    }))))
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -876,9 +873,10 @@ pub async fn create_challenge(
 
     let (flag_hash, questions_json) = match input.kind.as_str() {
         "ctf_flag" => {
-            let flag = input.flag.as_deref().ok_or_else(|| {
-                AppError::Validation("a flag challenge needs the flag".into())
-            })?;
+            let flag = input
+                .flag
+                .as_deref()
+                .ok_or_else(|| AppError::Validation("a flag challenge needs the flag".into()))?;
             if flag.trim().len() < 4 {
                 return Err(AppError::Validation("that flag is too short".into()));
             }
@@ -963,14 +961,12 @@ pub async fn create_challenge(
     .fetch_one(&state.db)
     .await?;
 
-    Ok(Json(
-        ApiResponse::new(json!({
-            "id": id,
-            "status": "draft",
-            "note": "Created as a draft. Publish it once somebody other than \
-                     you has solved it from the instructions alone.",
-        }))
-    ))
+    Ok(Json(ApiResponse::new(json!({
+        "id": id,
+        "status": "draft",
+        "note": "Created as a draft. Publish it once somebody other than \
+                 you has solved it from the instructions alone.",
+    }))))
 }
 
 // ═══════════════════════════════════════════════════════════════════

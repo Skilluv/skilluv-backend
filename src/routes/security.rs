@@ -81,7 +81,9 @@ pub fn security_routes() -> Router<AppState> {
     operation_id = "securityReference", tag = "security",
     responses((status = 200, body = ApiResponse<serde_json::Value>)),
 )]
-pub async fn reference(State(state): State<AppState>) -> Result<Json<ApiResponse<Value>>, AppError> {
+pub async fn reference(
+    State(state): State<AppState>,
+) -> Result<Json<ApiResponse<Value>>, AppError> {
     let orientations: Vec<Value> = sqlx::query_scalar(
         "SELECT jsonb_build_object(
                     'slug', slug, 'name', name, 'description', description,
@@ -153,30 +155,28 @@ pub async fn reference(State(state): State<AppState>) -> Result<Json<ApiResponse
     responses((status = 200, body = ApiResponse<serde_json::Value>)),
 )]
 pub async fn scope() -> Json<ApiResponse<Value>> {
-    Json(
-        ApiResponse::new(json!({
-            "in_scope_hosts": security_findings::scope_hosts(),
-            "policy_url": format!("{}/security", crate::config::PUBLIC_SITE_URL),
-            "contact": "security@skill-uv.com",
-            "triage_sla_days": security_findings::TRIAGE_SLA_DAYS,
-            "default_embargo_days": 90,
-            "out_of_scope": [
-                "denial of service of any kind, including load testing",
-                "brute force beyond the published rate limits",
-                "social engineering of users or staff",
-                "physical attacks",
-                "third-party accounts and services",
-                "reports produced only by a scanner, with no reachability shown",
-            ],
-            "research_mode": {
-                "header": crate::middleware::security_research::TOKEN_HEADER,
-                "handle_header": crate::middleware::security_research::HANDLE_HEADER,
-                "multiplier": security_research::RATE_LIMIT_MULTIPLIER,
-                "how": format!("{}/security/research-mode",
-                               crate::config::PUBLIC_SITE_URL),
-            },
-        })),
-    )
+    Json(ApiResponse::new(json!({
+        "in_scope_hosts": security_findings::scope_hosts(),
+        "policy_url": format!("{}/security", crate::config::PUBLIC_SITE_URL),
+        "contact": "security@skill-uv.com",
+        "triage_sla_days": security_findings::TRIAGE_SLA_DAYS,
+        "default_embargo_days": 90,
+        "out_of_scope": [
+            "denial of service of any kind, including load testing",
+            "brute force beyond the published rate limits",
+            "social engineering of users or staff",
+            "physical attacks",
+            "third-party accounts and services",
+            "reports produced only by a scanner, with no reachability shown",
+        ],
+        "research_mode": {
+            "header": crate::middleware::security_research::TOKEN_HEADER,
+            "handle_header": crate::middleware::security_research::HANDLE_HEADER,
+            "multiplier": security_research::RATE_LIMIT_MULTIPLIER,
+            "how": format!("{}/security/research-mode",
+                           crate::config::PUBLIC_SITE_URL),
+        },
+    })))
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -387,17 +387,14 @@ pub async fn upload_proof(
         ));
     };
 
-    let key =
-        security_proofs::store(&state.storage, auth.user_id, &filename, &bytes).await?;
+    let key = security_proofs::store(&state.storage, auth.user_id, &filename, &bytes).await?;
 
-    Ok(Json(
-        ApiResponse::new(json!({
-            "key": key,
-            "note": "put this key in `proof_keys` on the report. It is not a URL: \
-                     a proof of an unfixed vulnerability does not get a stable \
-                     address."
-        }))
-    ))
+    Ok(Json(ApiResponse::new(json!({
+        "key": key,
+        "note": "put this key in `proof_keys` on the report. It is not a URL: \
+                 a proof of an unfixed vulnerability does not get a stable \
+                 address."
+    }))))
 }
 
 /// A one-hour link to a proof, for whoever is allowed to see it.
@@ -422,12 +419,10 @@ pub async fn download_proof(
         return Err(AppError::Forbidden);
     }
     let url = security_proofs::signed_url(&state.storage, &key).await?;
-    Ok(Json(
-        ApiResponse::new(json!({
-            "url": url,
-            "expires_in_seconds": security_proofs::SIGNED_URL_SECONDS,
-        }))
-    ))
+    Ok(Json(ApiResponse::new(json!({
+        "url": url,
+        "expires_in_seconds": security_proofs::SIGNED_URL_SECONDS,
+    }))))
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -515,7 +510,9 @@ pub async fn submit_answers(
     get, path = "/api/security/ctf/scoreboard", tag = "security",
     responses((status = 200, body = ApiResponse<serde_json::Value>)),
 )]
-pub async fn scoreboard(State(state): State<AppState>) -> Result<Json<ApiResponse<Value>>, AppError> {
+pub async fn scoreboard(
+    State(state): State<AppState>,
+) -> Result<Json<ApiResponse<Value>>, AppError> {
     let board = security_practice::scoreboard(&state.db).await?;
     Ok(Json(ApiResponse::new(board)))
 }
@@ -549,7 +546,9 @@ pub async fn finding_card(
     get, path = "/api/security/hall-of-fame", tag = "security",
     responses((status = 200, body = ApiResponse<serde_json::Value>)),
 )]
-pub async fn hall_of_fame(State(state): State<AppState>) -> Result<Json<ApiResponse<Value>>, AppError> {
+pub async fn hall_of_fame(
+    State(state): State<AppState>,
+) -> Result<Json<ApiResponse<Value>>, AppError> {
     let key = format!(
         "security:hall-of-fame:{}",
         state.db.connect_options().get_database().unwrap_or("db")
@@ -573,7 +572,9 @@ pub async fn hall_of_fame(State(state): State<AppState>) -> Result<Json<ApiRespo
     get, path = "/api/trust/summary", tag = "security",
     responses((status = 200, body = ApiResponse<serde_json::Value>)),
 )]
-pub async fn trust_summary(State(state): State<AppState>) -> Result<Json<ApiResponse<Value>>, AppError> {
+pub async fn trust_summary(
+    State(state): State<AppState>,
+) -> Result<Json<ApiResponse<Value>>, AppError> {
     let key = format!(
         "security:trust-summary:{}",
         state.db.connect_options().get_database().unwrap_or("db")
@@ -692,13 +693,11 @@ pub async fn external_bounties(
     .fetch_all(&state.db)
     .await?;
 
-    Ok(Json(
-        ApiResponse::new(json!({
-            "programmes": programmes,
-            "note": "Curated, not endorsed. This platform does not run any of \
-                     these and cannot help with a report filed on one.",
-        }))
-    ))
+    Ok(Json(ApiResponse::new(json!({
+        "programmes": programmes,
+        "note": "Curated, not endorsed. This platform does not run any of \
+                 these and cannot help with a report filed on one.",
+    }))))
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -738,15 +737,13 @@ pub async fn issue_token(
     )
     .await?;
 
-    Ok(Json(
-        ApiResponse::new(json!({
-            "token": plaintext,
-            "details": view,
-            "header": crate::middleware::security_research::TOKEN_HEADER,
-            "note": "Shown once. It raises your rate limit and grants nothing \
-                     else — denial of service stays out of scope.",
-        }))
-    ))
+    Ok(Json(ApiResponse::new(json!({
+        "token": plaintext,
+        "details": view,
+        "header": crate::middleware::security_research::TOKEN_HEADER,
+        "note": "Shown once. It raises your rate limit and grants nothing \
+                 else — denial of service stays out of scope.",
+    }))))
 }
 
 /// The live token's details, without the secret.

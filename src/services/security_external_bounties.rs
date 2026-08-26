@@ -205,9 +205,7 @@ pub async fn verify(
         &crate::services::artefact_attestations::Evidence {
             url: report_url,
             title,
-            description: format!(
-                "{description}\n\n{organisation} — {platform}, {severity}"
-            ),
+            description: format!("{description}\n\n{organisation} — {platform}, {severity}"),
             deliverable_id: None,
             project_id: None,
             skill_node_ids: Vec::new(),

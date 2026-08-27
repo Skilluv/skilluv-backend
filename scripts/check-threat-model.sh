@@ -53,7 +53,23 @@ if hits=$(grep -rnE '\.(unwrap|expect)\s*\(' src/routes/ --include='*.rs' 2>/dev
   note "WARN — ${count} .unwrap()/.expect() under src/routes/ (a panic is a 500). Not failing the build; triage with clippy::unwrap_used once a compile is affordable."
 fi
 
+# -- D) Auth cookies stay SameSite=Strict (the actual CSRF defense) --------
+# The double-submit require_csrf middleware exists but is deliberately unwired:
+# access_token is HttpOnly; Secure; SameSite=Strict, which blocks the classic
+# CSRF path in modern browsers (see src/middleware/csrf.rs's header). Weakening
+# a cookie to SameSite=None would silently remove that defense, so it is refused.
+if hits=$(grep -rniE 'SameSite=None' src/ --include='*.rs' 2>/dev/null); then
+  note "FAIL — a cookie is SameSite=None, which reopens CSRF. Auth cookies must stay SameSite=Strict."
+  printf '%s
+' "$hits" | sed 's/^/  /'
+  fail=1
+fi
+if ! grep -rqE 'HttpOnly; Secure; SameSite=Strict' src/routes/auth.rs 2>/dev/null; then
+  note "FAIL — the auth cookie builder no longer sets HttpOnly; Secure; SameSite=Strict (CSRF defense)."
+  fail=1
+fi
+
 if [ "$fail" -eq 0 ]; then
-  note "ok — no dynamic SQL, no stray console prints in server code"
+  note "ok — no dynamic SQL, no console prints, auth cookies SameSite=Strict"
 fi
 exit "$fail"

@@ -65,7 +65,12 @@ pub fn game_routes() -> Router<AppState> {
 
 // ── Jams ───────────────────────────────────────────────────────────
 
-async fn jam_detail(
+#[utoipa::path(
+    get, path = "/api/game/jams/{id}", tag = "game",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 404, description = "not found", body = crate::api_response::ErrorResponse)),
+)]
+pub async fn jam_detail(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<ApiResponse<Value>>, AppError> {
@@ -73,7 +78,14 @@ async fn jam_detail(
     Ok(Json(ApiResponse::new(json!({ "jam": jam }))))
 }
 
-async fn jam_submit(
+#[utoipa::path(
+    post, path = "/api/game/jams/{id}/submit", tag = "game",
+    params(("id" = Uuid, Path)),
+    request_body(content = serde_json::Value, description = "jam_submit body"),
+    responses((status = 200, body = serde_json::Value), (status = 401, description = "unauthenticated", body = crate::api_response::ErrorResponse), (status = 404, description = "not found", body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn jam_submit(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -92,7 +104,14 @@ struct VoteBody {
     score: i16,
 }
 
-async fn jam_vote(
+#[utoipa::path(
+    post, path = "/api/game/jams/{id}/vote", tag = "game",
+    params(("id" = Uuid, Path)),
+    request_body(content = serde_json::Value, description = "jam_vote body"),
+    responses((status = 200, body = serde_json::Value), (status = 401, description = "unauthenticated", body = crate::api_response::ErrorResponse), (status = 404, description = "not found", body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn jam_vote(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -112,7 +131,12 @@ async fn jam_vote(
 
 // ── Playtests ──────────────────────────────────────────────────────
 
-async fn playtests_list(
+#[utoipa::path(
+    get, path = "/api/game/slices/{slice_id}/playtests", tag = "game",
+    params(("slice_id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 404, description = "not found", body = crate::api_response::ErrorResponse)),
+)]
+pub async fn playtests_list(
     State(state): State<AppState>,
     Path(slice_id): Path<Uuid>,
 ) -> Result<Json<ApiResponse<Value>>, AppError> {
@@ -120,7 +144,14 @@ async fn playtests_list(
     Ok(Json(ApiResponse::new(json!({ "playtests": playtests }))))
 }
 
-async fn playtest_submit(
+#[utoipa::path(
+    post, path = "/api/game/slices/{slice_id}/playtests", tag = "game",
+    params(("slice_id" = Uuid, Path)),
+    request_body(content = serde_json::Value, description = "playtest_submit body"),
+    responses((status = 200, body = serde_json::Value), (status = 401, description = "unauthenticated", body = crate::api_response::ErrorResponse), (status = 404, description = "not found", body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn playtest_submit(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(slice_id): Path<Uuid>,
@@ -132,7 +163,12 @@ async fn playtest_submit(
     Ok(Json(ApiResponse::new(json!({ "playtest": playtest }))))
 }
 
-async fn gate_status(
+#[utoipa::path(
+    get, path = "/api/game/slices/{slice_id}/gate", tag = "game",
+    params(("slice_id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 404, description = "not found", body = crate::api_response::ErrorResponse)),
+)]
+pub async fn gate_status(
     State(state): State<AppState>,
     Path(slice_id): Path<Uuid>,
 ) -> Result<Json<ApiResponse<Value>>, AppError> {
@@ -140,7 +176,14 @@ async fn gate_status(
     Ok(Json(ApiResponse::new(json!({ "gate": gate }))))
 }
 
-async fn recruit_open(
+#[utoipa::path(
+    post, path = "/api/game/slices/{slice_id}/playtests/recruit", tag = "game",
+    params(("slice_id" = Uuid, Path)),
+    request_body(content = serde_json::Value, description = "recruit_open body"),
+    responses((status = 200, body = serde_json::Value), (status = 401, description = "unauthenticated", body = crate::api_response::ErrorResponse), (status = 404, description = "not found", body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn recruit_open(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(slice_id): Path<Uuid>,
@@ -153,7 +196,13 @@ async fn recruit_open(
     )))
 }
 
-async fn recruit_close(
+#[utoipa::path(
+    post, path = "/api/game/playtests/recruitments/{id}/close", tag = "game",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 401, description = "unauthenticated", body = crate::api_response::ErrorResponse), (status = 404, description = "not found", body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn recruit_close(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -166,7 +215,13 @@ async fn recruit_close(
 
 // ── Mods ───────────────────────────────────────────────────────────
 
-async fn mod_register(
+#[utoipa::path(
+    post, path = "/api/game/mods", tag = "game",
+    request_body(content = serde_json::Value, description = "mod_register body"),
+    responses((status = 200, body = serde_json::Value), (status = 401, description = "unauthenticated", body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn mod_register(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(input): Json<game_mods::RegisterInput>,
@@ -175,7 +230,12 @@ async fn mod_register(
     Ok(Json(ApiResponse::new(json!({ "mod": game_mod }))))
 }
 
-async fn mods_mine(
+#[utoipa::path(
+    get, path = "/api/game/mods/mine", tag = "game",
+    responses((status = 200, body = serde_json::Value), (status = 401, description = "unauthenticated", body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn mods_mine(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<ApiResponse<Value>>, AppError> {
@@ -183,7 +243,12 @@ async fn mods_mine(
     Ok(Json(ApiResponse::new(json!({ "mods": mods }))))
 }
 
-async fn mod_get(
+#[utoipa::path(
+    get, path = "/api/game/mods/{id}", tag = "game",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 404, description = "not found", body = crate::api_response::ErrorResponse)),
+)]
+pub async fn mod_get(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<ApiResponse<Value>>, AppError> {
@@ -193,7 +258,12 @@ async fn mod_get(
 
 // ── Composition ────────────────────────────────────────────────────
 
-async fn composition(
+#[utoipa::path(
+    get, path = "/api/game/projects/{id}/composition", tag = "game",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 404, description = "not found", body = crate::api_response::ErrorResponse)),
+)]
+pub async fn composition(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<ApiResponse<Value>>, AppError> {
@@ -205,14 +275,23 @@ async fn composition(
 
 // ── Featured ───────────────────────────────────────────────────────
 
-async fn featured_recent(
+#[utoipa::path(
+    get, path = "/api/game/featured", tag = "game",
+    responses((status = 200, body = serde_json::Value)),
+)]
+pub async fn featured_recent(
     State(state): State<AppState>,
 ) -> Result<Json<ApiResponse<Value>>, AppError> {
     let featured = game_featured::recent(&state.db, 20).await?;
     Ok(Json(ApiResponse::new(json!({ "featured": featured }))))
 }
 
-async fn featured_of_week(
+#[utoipa::path(
+    get, path = "/api/game/featured/week/{date}", tag = "game",
+    params(("date" = chrono::NaiveDate, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 404, description = "not found", body = crate::api_response::ErrorResponse)),
+)]
+pub async fn featured_of_week(
     State(state): State<AppState>,
     Path(date): Path<NaiveDate>,
 ) -> Result<Json<ApiResponse<Value>>, AppError> {
@@ -220,7 +299,12 @@ async fn featured_of_week(
     Ok(Json(ApiResponse::new(json!({ "featured": featured }))))
 }
 
-async fn featured_of_user(
+#[utoipa::path(
+    get, path = "/api/game/creators/{user_id}/featured", tag = "game",
+    params(("user_id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 404, description = "not found", body = crate::api_response::ErrorResponse)),
+)]
+pub async fn featured_of_user(
     State(state): State<AppState>,
     Path(user_id): Path<Uuid>,
 ) -> Result<Json<ApiResponse<Value>>, AppError> {
@@ -230,7 +314,12 @@ async fn featured_of_user(
 
 // ── Own craft score ────────────────────────────────────────────────
 
-async fn profile_get(
+#[utoipa::path(
+    get, path = "/api/game/profile", tag = "game",
+    responses((status = 200, body = serde_json::Value), (status = 401, description = "unauthenticated", body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn profile_get(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<ApiResponse<Value>>, AppError> {
@@ -241,7 +330,12 @@ async fn profile_get(
     }))))
 }
 
-async fn profile_recompute(
+#[utoipa::path(
+    post, path = "/api/game/profile/recompute", tag = "game",
+    responses((status = 200, body = serde_json::Value), (status = 401, description = "unauthenticated", body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn profile_recompute(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<ApiResponse<Value>>, AppError> {

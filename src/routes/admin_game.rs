@@ -61,7 +61,13 @@ pub fn admin_game_routes() -> Router<AppState> {
 
 // ── Slices ─────────────────────────────────────────────────────────
 
-async fn validate_slice(
+#[utoipa::path(
+    post, path = "/api/admin/game/slices/{slice_id}/validate", tag = "game",
+    params(("slice_id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 401, description = "unauthenticated", body = crate::api_response::ErrorResponse), (status = 404, description = "not found", body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn validate_slice(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(slice_id): Path<Uuid>,
@@ -75,7 +81,12 @@ async fn validate_slice(
 
 // ── Mods ───────────────────────────────────────────────────────────
 
-async fn mods_pending(
+#[utoipa::path(
+    get, path = "/api/admin/game/mods/pending", tag = "game",
+    responses((status = 200, body = serde_json::Value), (status = 401, description = "unauthenticated", body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn mods_pending(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<ApiResponse<Value>>, AppError> {
@@ -89,7 +100,14 @@ struct ReasonBody {
     reason: String,
 }
 
-async fn mod_confirm(
+#[utoipa::path(
+    post, path = "/api/admin/game/mods/{id}/confirm", tag = "game",
+    params(("id" = Uuid, Path)),
+    request_body(content = serde_json::Value, description = "mod_confirm body"),
+    responses((status = 200, body = serde_json::Value), (status = 401, description = "unauthenticated", body = crate::api_response::ErrorResponse), (status = 404, description = "not found", body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn mod_confirm(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -100,7 +118,14 @@ async fn mod_confirm(
     Ok(Json(ApiResponse::new(json!({ "mod": game_mod }))))
 }
 
-async fn mod_refuse(
+#[utoipa::path(
+    post, path = "/api/admin/game/mods/{id}/refuse", tag = "game",
+    params(("id" = Uuid, Path)),
+    request_body(content = serde_json::Value, description = "mod_refuse body"),
+    responses((status = 200, body = serde_json::Value), (status = 401, description = "unauthenticated", body = crate::api_response::ErrorResponse), (status = 404, description = "not found", body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn mod_refuse(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -116,7 +141,14 @@ struct DownloadsBody {
     downloads: i32,
 }
 
-async fn mod_downloads(
+#[utoipa::path(
+    post, path = "/api/admin/game/mods/{id}/downloads", tag = "game",
+    params(("id" = Uuid, Path)),
+    request_body(content = serde_json::Value, description = "mod_downloads body"),
+    responses((status = 200, body = serde_json::Value), (status = 401, description = "unauthenticated", body = crate::api_response::ErrorResponse), (status = 404, description = "not found", body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn mod_downloads(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -129,7 +161,13 @@ async fn mod_downloads(
 
 // ── Jams ───────────────────────────────────────────────────────────
 
-async fn jam_create(
+#[utoipa::path(
+    post, path = "/api/admin/game/jams", tag = "game",
+    request_body(content = serde_json::Value, description = "jam_create body"),
+    responses((status = 200, body = serde_json::Value), (status = 401, description = "unauthenticated", body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn jam_create(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(input): Json<game_jams::CreateJamInput>,
@@ -141,7 +179,13 @@ async fn jam_create(
     Ok(Json(ApiResponse::new(json!({ "jam": jam }))))
 }
 
-async fn jam_finalize(
+#[utoipa::path(
+    post, path = "/api/admin/game/jams/{id}/finalize", tag = "game",
+    params(("id" = Uuid, Path)),
+    responses((status = 200, body = serde_json::Value), (status = 401, description = "unauthenticated", body = crate::api_response::ErrorResponse), (status = 404, description = "not found", body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn jam_finalize(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
@@ -161,7 +205,13 @@ struct ShippedTitleBody {
     title: String,
 }
 
-async fn issue_shipped_title(
+#[utoipa::path(
+    post, path = "/api/admin/game/attestations/shipped-title", tag = "game",
+    request_body(content = serde_json::Value, description = "issue_shipped_title body"),
+    responses((status = 200, body = serde_json::Value), (status = 401, description = "unauthenticated", body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn issue_shipped_title(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<ShippedTitleBody>,
@@ -188,7 +238,13 @@ struct OpenSourceBody {
     what_changed: String,
 }
 
-async fn issue_open_source(
+#[utoipa::path(
+    post, path = "/api/admin/game/attestations/open-source", tag = "game",
+    request_body(content = serde_json::Value, description = "issue_open_source body"),
+    responses((status = 200, body = serde_json::Value), (status = 401, description = "unauthenticated", body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn issue_open_source(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<OpenSourceBody>,
@@ -208,7 +264,13 @@ async fn issue_open_source(
 
 // ── Featured ───────────────────────────────────────────────────────
 
-async fn feature_creator(
+#[utoipa::path(
+    post, path = "/api/admin/game/featured", tag = "game",
+    request_body(content = serde_json::Value, description = "feature_creator body"),
+    responses((status = 200, body = serde_json::Value), (status = 401, description = "unauthenticated", body = crate::api_response::ErrorResponse)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn feature_creator(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(input): Json<game_featured::FeatureInput>,

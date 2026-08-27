@@ -42,8 +42,10 @@ fn build_response(data: Value) -> Value {
 #[serde(deny_unknown_fields)]
 pub struct CategoriesQuery {
     /// Narrow to one family's awards (plus the cross-cutting ones). One of the
-    /// eight domains; omitted returns every category (SKI-314).
-    #[param(max_length = 30)]
+    /// eight domains; omitted returns every category (SKI-314). The pattern
+    /// keeps the schema as strict as the handler, so a contract fuzzer does not
+    /// generate a 31-character "domain" the API then rejects.
+    #[param(pattern = r"^(code|design|game|security|ops|ai|soft_skills|audio)$")]
     pub domain: Option<String>,
 }
 

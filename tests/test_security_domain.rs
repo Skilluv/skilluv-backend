@@ -1467,3 +1467,42 @@ async fn an_expired_embargo_becomes_partially_disclosed_never_public() {
     );
     assert_eq!(stage.as_deref(), Some("partially_disclosed"));
 }
+
+/// AZ-02 (IDOR) -- a reporter cannot act on another reporter's finding by id.
+///
+/// withdraw() passes Actor::Reporter unconditionally, so the only thing
+/// standing between reporter B and reporter A's report is the ownership check
+/// inside transition() ("a reporter is only ever the reporter of their own
+/// report"). The security domain is where this matters most: the object behind
+/// the id is somebody else's unpatched vulnerability.
+#[tokio::test]
+async fn a_reporter_cannot_withdraw_another_reporters_finding() {
+    let app = TestApp::spawn().await;
+    let a_id = a_finding(&app, "idor_reporter_a", "A's private finding").await;
+
+    // A different, unrelated reporter tries to withdraw it by guessing the id.
+    a_person(&app, "idor_reporter_b").await;
+    app.login("idor_reporter_b").await;
+    let resp = app
+        .post(
+            &format!("/api/security/reports/{a_id}/withdraw"),
+            &json!({}),
+        )
+        .await;
+    assert_eq!(
+        resp.status(),
+        reqwest::StatusCode::FORBIDDEN,
+        "reporter B withdrew reporter A's finding (IDOR)"
+    );
+
+    // A's finding is untouched.
+    let status: String = sqlx::query_scalar("SELECT status FROM security_findings WHERE id = $1")
+        .bind(a_id)
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
+    assert_ne!(
+        status, "withdrawn",
+        "A's finding was withdrawn by someone else"
+    );
+}

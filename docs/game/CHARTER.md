@@ -9,13 +9,48 @@ You keep the rights to what you make. Skilluv records the proof — a link, a
 build, a validated slice — never a claim of ownership over your game. An
 attestation says "this person made this and it was reviewed", nothing more.
 
+## What you keep, by how you made it
+
+The rights follow the format the work was made in. Four cases, and they are not
+the same:
+
+- **Individual project** — you keep every right. Skilluv holds only a licence to
+  show the work: to display it on your profile, in a portfolio, in a listing.
+  Nothing else.
+- **Community / open-source project** — the licence is the upstream project's,
+  whatever it chose (MIT, GPL, CC, …). Contributing means accepting that
+  licence; the merged work lives under it, not under a Skilluv one.
+- **Game jam** — you keep the rights to your submission. Skilluv receives a
+  right to showcase it — in the jam results, a highlight reel, the featured
+  page — and nothing more.
+- **Paid mission** — the IP terms are the contract's. Who owns the deliverable,
+  what the client may do with it and what you may show afterwards are settled in
+  the mission agreement before work starts (see the mission section). Skilluv
+  does not override a contract either way.
+
 ## Third-party assets are credited, always
 
 A game is built on other people's work: an engine, a font, a sound pack, a
 shader from a tutorial. Every asset that is not yours is credited, and its
-licence is respected. A slice that ships someone else's asset as its own is not
-a validation problem — it is the end of the relationship. This is the one rule
-with no second chance, because passing off is not a mistake of craft.
+licence is respected — Kenney, Freesound, OpenGameArt, an itch asset pack, a
+marketplace model: name the source and honour its terms. A slice that ships
+someone else's asset as its own is not a validation problem — it is the end of
+the relationship. This is the one rule with no second chance, because passing
+off is not a mistake of craft.
+
+## Engine licences are yours to keep too
+
+The engine you build in comes with its own terms, and they are yours to respect:
+
+- **Godot, Bevy, LÖVE** — open source (MIT and the like). Nothing to owe, and
+  the reason the domain leans on them first.
+- **Unity, Unreal** — free to start, under an EULA, and Unreal takes a royalty
+  past a revenue threshold. If you ship commercially on one of these, the
+  royalty and the licence are yours to settle with the vendor; Skilluv is not a
+  party to it and does not collect on it.
+
+Naming the engine on a slice is not bureaucracy — it is what lets a reviewer
+know which terms apply and which build checks to run.
 
 ## Mods live inside someone else's game, within its rules
 
@@ -71,6 +106,26 @@ a gas fee.
 Any slice with money in it is read against one more question on the design
 grid: no dark patterns. A progression built to frustrate you into paying is a
 design failure here, not a monetisation success.
+
+## Age ratings are yours to declare
+
+A game says who it is for. Where an age rating applies — ESRB, PEGI, or the
+equivalent for your audience — declaring it is the creator's responsibility, and
+the declaration is taken at its word. Skilluv does not rate games and does not
+verify a rating; it records what you declared. Declaring nothing on a game that
+plainly needs a rating, or declaring one it does not deserve, is on you, and a
+reviewer who spots the mismatch will say so.
+
+## Where a game is published
+
+The domain runs on work that reached players, and the platforms it points at are
+the open ones: **itch.io** and **GameJolt** are encouraged — they are
+OSS-friendly, they take a build without a fee, and a reviewer can play a slice
+there. Publishing to **Steam or a console** is out of Skilluv's scope: the
+store fees and the certification process are the creator's to carry, and a
+title that reached players on itch proves exactly what one on Steam would. A
+shipped-title attestation vouches for players being able to reach the game, not
+for which storefront it sits in.
 
 ## Who enforces this
 

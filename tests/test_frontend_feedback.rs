@@ -9,6 +9,16 @@
 mod common;
 use common::TestApp;
 use serde_json::Value;
+use uuid::Uuid;
+
+async fn a_person(app: &TestApp, username: &str) -> Uuid {
+    app.register_user(username).await;
+    sqlx::query_scalar("SELECT id FROM users WHERE username = $1")
+        .bind(username)
+        .fetch_one(&app.db)
+        .await
+        .unwrap()
+}
 
 // SKI-311 — no natural-language string leaves /design/cloud/inspect without a
 // code the client can translate.
@@ -117,4 +127,69 @@ async fn challenges_accept_a_security_kind_filter() {
     // A value outside the six kinds is refused by the pattern.
     let resp = app.get("/api/challenges?security_kind=not_a_kind").await;
     assert_eq!(resp.status(), 400, "an unknown security_kind is refused");
+}
+
+// SKI-331 — a junior can list the placements offered to them, each naming the
+// company and the mentor, and nobody else sees them.
+#[tokio::test]
+async fn a_junior_lists_the_placements_offered_to_them() {
+    let app = TestApp::spawn().await;
+    let owner = a_person(&app, "pl_owner").await;
+    let junior = a_person(&app, "pl_junior").await;
+    let mentor = a_person(&app, "pl_mentor").await;
+    let _outsider = a_person(&app, "pl_outsider").await;
+
+    let enterprise_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO enterprises (owner_id, company_name, slug, company_size)
+         VALUES ($1, 'Acme Studio', 'acme-studio', '11-50') RETURNING id",
+    )
+    .bind(owner)
+    .fetch_one(&app.db)
+    .await
+    .expect("enterprise");
+
+    let placement_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO long_term_placements
+            (enterprise_id, junior_user_id, mentor_user_id,
+             annual_salary_declared, upfront_fee, created_by)
+         VALUES ($1, $2, $3, 45000, 2000, $4) RETURNING id",
+    )
+    .bind(enterprise_id)
+    .bind(junior)
+    .bind(mentor)
+    .bind(owner)
+    .fetch_one(&app.db)
+    .await
+    .expect("placement");
+
+    // The junior sees it, with who is offering and who would mentor.
+    app.login("pl_junior").await;
+    let resp = app.get("/api/users/me/placements").await;
+    assert_eq!(resp.status(), 200);
+    let body: Value = resp.json().await.unwrap();
+    let placements = body["data"]["placements"]
+        .as_array()
+        .expect("placements array");
+    assert_eq!(
+        placements.len(),
+        1,
+        "the junior sees the one placement offered"
+    );
+    let p = &placements[0];
+    assert_eq!(p["id"].as_str().unwrap(), placement_id.to_string());
+    assert_eq!(
+        p["enterprise_name"], "Acme Studio",
+        "the company is named, not just an id"
+    );
+    assert_eq!(p["mentor_username"], "pl_mentor", "the mentor is named");
+    assert_eq!(p["status"], "proposed");
+
+    // An unrelated account sees none of it.
+    app.login("pl_outsider").await;
+    let resp = app.get("/api/users/me/placements").await;
+    let body: Value = resp.json().await.unwrap();
+    assert!(
+        body["data"]["placements"].as_array().unwrap().is_empty(),
+        "a placement is private to the junior it names"
+    );
 }

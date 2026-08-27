@@ -175,6 +175,57 @@ pub async fn placements_for_enterprise(
     Ok(rows)
 }
 
+/// A placement as the junior meets it: the same figures, plus who is offering
+/// it and who would mentor. The enterprise id and mentor id alone do not let a
+/// person decide — an anonymous job offer is not one (SKI-331, the shape
+/// SKI-301 gave the cautions).
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+pub struct JuniorPlacement {
+    pub id: Uuid,
+    pub enterprise_id: Uuid,
+    pub enterprise_name: Option<String>,
+    pub junior_user_id: Uuid,
+    pub mentor_user_id: Option<Uuid>,
+    pub mentor_username: Option<String>,
+    pub duration_months: i16,
+    pub annual_salary_declared: BigDecimal,
+    pub currency: String,
+    pub upfront_fee: BigDecimal,
+    pub monthly_monitoring_fee: BigDecimal,
+    pub guarantee_months: i16,
+    pub started_on: Option<chrono::NaiveDate>,
+    pub status: String,
+    pub junior_accepted_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// The placements offered to one person, the ones still waiting on their answer
+/// first. The read that was missing entirely — a junior had the `respond`
+/// endpoint but no way to find the id to give it (SKI-331).
+pub async fn placements_for_junior(
+    db: &PgPool,
+    junior_user_id: Uuid,
+) -> Result<Vec<JuniorPlacement>, AppError> {
+    let rows = sqlx::query_as::<_, JuniorPlacement>(
+        r#"
+        SELECT p.id, p.enterprise_id, e.company_name AS enterprise_name,
+               p.junior_user_id, p.mentor_user_id, m.username AS mentor_username,
+               p.duration_months, p.annual_salary_declared, p.currency,
+               p.upfront_fee, p.monthly_monitoring_fee, p.guarantee_months,
+               p.started_on, p.status, p.junior_accepted_at, p.created_at
+          FROM long_term_placements p
+          LEFT JOIN enterprises e ON e.id = p.enterprise_id
+          LEFT JOIN users m ON m.id = p.mentor_user_id
+         WHERE p.junior_user_id = $1
+         ORDER BY (p.status = 'proposed') DESC, p.created_at DESC
+        "#,
+    )
+    .bind(junior_user_id)
+    .fetch_all(db)
+    .await?;
+    Ok(rows)
+}
+
 /// The person answers, and accepting books the fee up front.
 pub async fn respond_to_placement(
     db: &PgPool,

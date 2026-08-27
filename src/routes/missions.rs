@@ -828,10 +828,33 @@ pub async fn deliver_round(
 )]
 pub async fn list_rounds(
     State(state): State<AppState>,
-    _auth: AuthUser,
+    auth: AuthUser,
     Path(slug): Path<String>,
 ) -> Result<Json<Value>, AppError> {
     let mission = missions::by_slug(&state.db, &slug).await?;
+
+    // A round carries the artifact_url and the notes on it — the delivery
+    // itself. Only the two parties read it, plus an arbiter reading the trail
+    // to decide a dispute. The arbiter is an administrator; a mission has no
+    // dedicated arbitration capability wired to a route yet. Same shape as
+    // `list_invoices` next door, which is the symmetry SKI-310 restored.
+    let is_talent = mission.assigned_user_id == Some(auth.user_id);
+    if !is_talent {
+        let is_arbiter = crate::middleware::capabilities::require_any_capability(
+            &state.db,
+            auth.user_id,
+            &["admin"],
+        )
+        .await
+        .is_ok();
+        if !is_arbiter {
+            let enterprise = crate::routes::enterprise::require_enterprise(&state, &auth).await?;
+            if mission.enterprise_id != enterprise.id {
+                return Err(AppError::Forbidden);
+            }
+        }
+    }
+
     let rounds = crate::services::mission_delivery::rounds_of(&state.db, mission.id).await?;
     Ok(Json(build_response(json!({ "rounds": rounds }))))
 }
@@ -864,7 +887,9 @@ pub async fn accept_round(
 #[serde(deny_unknown_fields)]
 pub struct RequestChangesBody {
     /// What is wrong. At least twenty characters: "not quite" costs a round
-    /// and teaches nothing.
+    /// and teaches nothing. The bound is in the schema so a client need not
+    /// hardcode its own copy of the threshold (SKI-310).
+    #[schema(min_length = 20, max_length = 4000)]
     pub reason: String,
 }
 

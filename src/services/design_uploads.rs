@@ -16,6 +16,35 @@
 //! that failed is one presigned URL away from being retried, and nothing here
 //! has to remember a byte offset.
 //!
+//! ## Deployment requirement: the bucket must expose the ETag (SKI-309)
+//!
+//! `complete` needs the ETag the store returned for each part. The PUT goes
+//! straight from the browser to the object store — cross-origin — and a browser
+//! can only read a response header the store lists in `Access-Control-Expose-
+//! Headers`. If `ETag` is not in that list, `response.headers.get('ETag')` is
+//! `null` even though the part uploaded perfectly, and `complete` can never be
+//! called: every upload fails *at the end*, on a file that is fine.
+//!
+//! This code is correct on its own; the requirement is on the bucket's CORS
+//! configuration, and nothing in Rust can enforce it. The private bucket (and
+//! its production equivalent) must expose `ETag`. With MinIO's client, once per
+//! bucket:
+//!
+//! ```sh
+//! # cors.json:
+//! # { "CORSRules": [ {
+//! #     "AllowedOrigins": ["https://skill-uv.com"],
+//! #     "AllowedMethods": ["PUT","GET"],
+//! #     "AllowedHeaders": ["*"],
+//! #     "ExposeHeaders": ["ETag"]
+//! # } ] }
+//! mc cors set local/"$MINIO_BUCKET_PRIVATE" cors.json
+//! ```
+//!
+//! The same requirement is written beside the other one-shot bucket policy in
+//! [`crate::services::storage`], because that is the other place a deployer
+//! looks. A fresh bucket without it walks into the identical wall.
+//!
 //! ## Previews are supplied, not rendered
 //!
 //! The backlog asked for ffmpeg, a thumbnailer and headless Blender behind a

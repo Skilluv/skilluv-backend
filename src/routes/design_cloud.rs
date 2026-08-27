@@ -130,9 +130,15 @@ pub struct InspectQuery {
 pub struct InspectResponse {
     /// Null when the URL is not a design tool link at all.
     pub source: Option<design_cloud::CloudSource>,
-    /// Said plainly, because the person pasting is the only one who can fix
-    /// it and the moment they paste is the only moment they will.
-    pub warning: Option<String>,
+    /// A code, not a sentence, so the client renders it in the reader's
+    /// language — this endpoint is public and serves an FR/EN audience, and a
+    /// French warning is worst exactly when an English reader has to act on it
+    /// (SKI-311). `"unrecognised_link"` | `"needs_public_sharing"`, or null.
+    pub warning_code: Option<&'static str>,
+    /// The provider the sharing warning is about, so the client can name it in
+    /// its own sentence ("a Figma link is only visible…"). Null unless
+    /// `warning_code` is `"needs_public_sharing"`.
+    pub warning_provider: Option<String>,
 }
 
 /// Read a pasted link.
@@ -156,20 +162,17 @@ pub async fn inspect(
 
     let source = design_cloud::read_url(&q.url);
 
-    let warning = match &source {
-        None => Some(
-            "Ce lien ne pointe vers aucun outil de design connu. Vérifie que c'est bien \
-             l'adresse du livrable."
-                .to_string(),
-        ),
-        Some(source) if !source.opens_without_account => Some(format!(
-            "Un lien {} n'est visible que si le fichier est partagé publiquement. Vérifie le \
-             partage avant de rendre : un relecteur qui ne peut pas ouvrir ton travail ne peut \
-             pas le valider.",
-            source.provider
-        )),
-        Some(_) => None,
+    let (warning_code, warning_provider) = match &source {
+        None => (Some("unrecognised_link"), None),
+        Some(source) if !source.opens_without_account => {
+            (Some("needs_public_sharing"), Some(source.provider.clone()))
+        }
+        Some(_) => (None, None),
     };
 
-    Ok(Json(ApiResponse::new(InspectResponse { source, warning })))
+    Ok(Json(ApiResponse::new(InspectResponse {
+        source,
+        warning_code,
+        warning_provider,
+    })))
 }

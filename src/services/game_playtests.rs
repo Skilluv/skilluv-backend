@@ -196,20 +196,20 @@ pub async fn submit(db: &PgPool, tester: Uuid, input: SubmitInput) -> Result<Pla
             "difficulty is one of too_easy, balanced, too_hard, unclear".into(),
         ));
     }
-    if let Some(d) = input.session_duration_min {
-        if d < 0 {
-            return Err(AppError::Validation(
-                "a session length is not negative".into(),
-            ));
-        }
+    if let Some(d) = input.session_duration_min
+        && d < 0
+    {
+        return Err(AppError::Validation(
+            "a session length is not negative".into(),
+        ));
     }
 
-    if let Some(creator) = slice_creator(db, input.slice_id).await? {
-        if creator == tester {
-            return Err(AppError::Validation(
-                "you cannot playtest your own slice".into(),
-            ));
-        }
+    if let Some(creator) = slice_creator(db, input.slice_id).await?
+        && creator == tester
+    {
+        return Err(AppError::Validation(
+            "you cannot playtest your own slice".into(),
+        ));
     }
 
     let row: Playtest = sqlx::query_as(

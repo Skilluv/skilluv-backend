@@ -41,6 +41,14 @@ struct ListQuery {
     domain: Option<String>,
     #[param(minimum = 1, maximum = 5)]
     difficulty: Option<i16>,
+    /// Narrow to one cyber discipline — the six `security_kind` values. Only a
+    /// security challenge carries one, so this implies `domain=security`
+    /// (SKI-320). A `/ctf` or `/blue-lab` list is `?security_kind=ctf_flag` /
+    /// `defensive_lab`.
+    #[param(
+        pattern = r"^(ctf_flag|defensive_lab|machine_walkthrough|training_ground|analysis_exercise|audit_exercise)$"
+    )]
+    security_kind: Option<String>,
     #[param(minimum = 1, maximum = 100000)]
     page: Option<i64>,
     #[param(minimum = 1, maximum = 50)]
@@ -119,6 +127,24 @@ pub async fn list_challenges(
     // the refusal named the four, which reads as "AI does not exist here".
     crate::validators::check_skill_domain_opt(&query.domain, "domain")?;
     crate::validators::check_range_opt(query.difficulty.map(i64::from), "difficulty", 1, 5)?;
+    // Enforced at runtime, not only in the schema: a utoipa pattern documents
+    // but does not reject, and a filter that silently accepts a typo returns an
+    // empty list that reads as "no CTFs exist" (SKI-320).
+    if let Some(kind) = query.security_kind.as_deref() {
+        const SECURITY_KINDS: &[&str] = &[
+            "ctf_flag",
+            "defensive_lab",
+            "machine_walkthrough",
+            "training_ground",
+            "analysis_exercise",
+            "audit_exercise",
+        ];
+        if !SECURITY_KINDS.contains(&kind) {
+            return Err(AppError::Validation(format!(
+                "'{kind}' is not a security challenge kind"
+            )));
+        }
+    }
     crate::validators::check_range_opt(query.page, "page", 1, 100_000)?;
     crate::validators::check_range_opt(query.per_page, "per_page", 1, 50)?;
 
@@ -156,6 +182,7 @@ pub async fn list_challenges(
     let mut param_idx = 0u32;
     let mut binds_domain: Option<String> = None;
     let mut binds_difficulty: Option<i16> = None;
+    let mut binds_security_kind: Option<String> = None;
 
     if has_tenant_bind {
         param_idx += 1;
@@ -177,6 +204,14 @@ pub async fn list_challenges(
         sql.push_str(&clause);
         count_sql.push_str(&clause);
         binds_difficulty = Some(difficulty);
+    }
+
+    if let Some(ref kind) = query.security_kind {
+        param_idx += 1;
+        let clause = format!(" AND security_kind = ${param_idx}");
+        sql.push_str(&clause);
+        count_sql.push_str(&clause);
+        binds_security_kind = Some(kind.clone());
     }
 
     sql.push_str(&format!(
@@ -201,6 +236,10 @@ pub async fn list_challenges(
     if let Some(diff) = binds_difficulty {
         challenges_query = challenges_query.bind(diff);
         count_query = count_query.bind(diff);
+    }
+    if let Some(ref kind) = binds_security_kind {
+        challenges_query = challenges_query.bind(kind);
+        count_query = count_query.bind(kind);
     }
 
     let challenges: Vec<ChallengeTemplate> = challenges_query.fetch_all(&state.db).await?;

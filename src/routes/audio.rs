@@ -35,7 +35,7 @@ use uuid::Uuid;
 use crate::AppState;
 use crate::api_response::ApiResponse;
 use crate::errors::AppError;
-use crate::middleware::AuthUser;
+use crate::middleware::{AuthUser, OptionalAuth};
 use crate::services::{audio_attestations, audio_files, audio_profile};
 
 /// The largest single file this endpoint accepts, in bytes.
@@ -624,19 +624,39 @@ pub async fn open_casting(
 )]
 pub async fn get_casting(
     State(state): State<AppState>,
+    // Public, and stays public — but a signed-in opener is told the take is
+    // theirs to decide on, so the front need not infer it from the slice.
+    OptionalAuth(auth): OptionalAuth,
     Path(casting_id): Path<Uuid>,
 ) -> Result<Json<ApiResponse<serde_json::Value>>, AppError> {
-    let casting: Option<CastingRow> = sqlx::query_as(
+    #[derive(sqlx::FromRow)]
+    struct CastingWithOpener {
+        #[sqlx(flatten)]
+        row: CastingRow,
+        opened_by: Option<Uuid>,
+    }
+
+    let found: Option<CastingWithOpener> = sqlx::query_as(
         "SELECT id, slice_id, character_brief_md, sample_line_text, target_language,
-                max_audition_seconds, is_blind, audition_deadline, status
+                max_audition_seconds, is_blind, audition_deadline, status, opened_by
            FROM voice_castings WHERE id = $1",
     )
     .bind(casting_id)
     .fetch_optional(&state.db)
     .await?;
 
-    let casting = casting.ok_or_else(|| AppError::NotFound("casting not found".into()))?;
+    let found = found.ok_or_else(|| AppError::NotFound("casting not found".into()))?;
+    let casting = found.row;
     let hide_names = casting.is_blind && casting.status != "selected";
+
+    // A server-computed boolean rather than the raw opener id: the front needs
+    // to know whether to offer the decision action, and the opener's identity
+    // must not leak from a blind casting.
+    let mine = auth
+        .as_ref()
+        .zip(found.opened_by)
+        .map(|(a, opener)| a.user_id == opener)
+        .unwrap_or(false);
 
     #[derive(sqlx::FromRow)]
     struct Take {
@@ -645,10 +665,13 @@ pub async fn get_casting(
         notes_md: Option<String>,
         duration_ms: Option<i32>,
         submitted_at: chrono::DateTime<chrono::Utc>,
+        audition_url: Option<String>,
+        audition_storage_key: Option<String>,
     }
 
     let takes: Vec<Take> = sqlx::query_as(
-        "SELECT s.id, u.username, s.notes_md, s.duration_ms, s.submitted_at
+        "SELECT s.id, u.username, s.notes_md, s.duration_ms, s.submitted_at,
+                s.audition_url, s.audition_storage_key
            FROM voice_audition_submissions s
            JOIN users u ON u.id = s.voice_actor_user_id
           WHERE s.casting_id = $1 AND s.withdrawn_at IS NULL
@@ -658,28 +681,57 @@ pub async fn get_casting(
     .fetch_all(&state.db)
     .await?;
 
-    let auditions: Vec<serde_json::Value> = takes
-        .into_iter()
-        .enumerate()
-        .map(|(i, t)| {
-            json!({
-                "id": t.id,
-                // A number rather than a name while the casting is blind. The
-                // number is stable within one reading so a listener can refer
-                // to "the third take" out loud.
-                "voice": if hide_names { json!(format!("voix {}", i + 1)) } else { json!(t.username) },
-                "notes_md": t.notes_md,
-                "duration_ms": t.duration_ms,
-                "submitted_at": t.submitted_at,
-            })
-        })
-        .collect();
+    let mut auditions = Vec::with_capacity(takes.len());
+    for (i, t) in takes.into_iter().enumerate() {
+        // Something to listen to, without ever leaking who made it while blind.
+        //
+        // A platform file is stored under `audio/{slice}/{uuid}` — an opaque
+        // key with no name in it — so a short signed URL to it is safe even
+        // during a blind casting. An actor's own hosted link can carry their
+        // identity (a personal site, a named upload), so it is withheld until
+        // the casting is no longer blind. A blind casting with actor-hosted
+        // takes therefore stays unlistenable for those takes, which is what
+        // blindness costs — never a leak.
+        let listen_url = match (&t.audition_storage_key, &t.audition_url, hide_names) {
+            (Some(key), _, _) => Some(
+                state
+                    .storage
+                    .presigned_get_url(key, audio_files::LISTEN_URL_TTL_SECONDS)
+                    .await?,
+            ),
+            (None, Some(url), false) => Some(url.clone()),
+            _ => None,
+        };
+
+        auditions.push(json!({
+            "id": t.id,
+            // A number rather than a name while the casting is blind. The
+            // number is stable within one reading so a listener can refer
+            // to "the third take" out loud.
+            "voice": if hide_names { json!(format!("voix {}", i + 1)) } else { json!(t.username) },
+            "notes_md": t.notes_md,
+            "duration_ms": t.duration_ms,
+            "submitted_at": t.submitted_at,
+            "listen_url": listen_url,
+            "expires_in_seconds": listen_url_ttl_if_signed(&t.audition_storage_key),
+        }));
+    }
 
     Ok(Json(ApiResponse::new(json!({
         "casting": casting,
         "blind": hide_names,
+        "mine": mine,
         "auditions": auditions,
     }))))
+}
+
+/// The TTL to advertise alongside a take's listen URL — only when the URL is a
+/// signed one we minted (a platform file). An actor's own link does not expire
+/// on our schedule, so no figure is claimed for it.
+fn listen_url_ttl_if_signed(storage_key: &Option<String>) -> Option<u32> {
+    storage_key
+        .as_ref()
+        .map(|_| audio_files::LISTEN_URL_TTL_SECONDS)
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -907,8 +959,11 @@ pub struct CreditRow {
     pub display_name: Option<String>,
     /// The words the attestation was issued with.
     pub credit_title: String,
-    /// What was made, when the slice said.
-    pub audio_subtype: Option<String>,
+    /// What was made, from whichever domain's subtype the slice carried. The
+    /// `work_credits` view was widened past audio in migration 0515; this reads
+    /// the generic `subtype` it coalesces, so a design or communication credit
+    /// no longer comes back with a null where its subtype should be.
+    pub subtype: Option<String>,
     /// The public attestation, so a reader can check the credit rather than
     /// take the page's word for it.
     pub verification_code: String,
@@ -936,7 +991,7 @@ pub async fn project_credits(
     Path(slug): Path<String>,
 ) -> Result<Json<ApiResponse<Vec<CreditRow>>>, AppError> {
     let rows: Vec<CreditRow> = sqlx::query_as(
-        "SELECT username, display_name, credit_title, audio_subtype,
+        "SELECT username, display_name, credit_title, subtype,
                 verification_code, issued_at
            FROM work_credits
           WHERE project_slug = $1

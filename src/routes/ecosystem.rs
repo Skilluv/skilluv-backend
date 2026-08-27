@@ -24,6 +24,7 @@ pub fn ecosystem_routes() -> Router<AppState> {
         // Buyers.
         .route("/marketplace/items/{id}/purchase", post(purchase))
         .route("/marketplace/downloads/{token}", get(download))
+        .route("/marketplace/uploads", post(request_upload))
         .route("/marketplace/purchases/{id}/rate", post(rate))
         // Applicants.
         .route("/certifications/request", post(request_certification))
@@ -315,8 +316,44 @@ pub async fn download(
     _auth: AuthUser,
     Path(token): Path<String>,
 ) -> Result<Json<Value>, AppError> {
-    let keys = ecosystem::redeem_download(&state.db, &token).await?;
-    Ok(Json(build_response(json!({ "files": keys }))))
+    let files = ecosystem::redeem_download(&state.db, &state.storage, &token).await?;
+    Ok(Json(build_response(json!({ "files": files }))))
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[schema(as = MarketplaceUploadBody)]
+pub struct UploadBody {
+    /// The file's name, used only to make the stored key readable. The bytes
+    /// go to the returned presigned URL, not through this call.
+    pub filename: String,
+}
+
+/// Ask for somewhere to put a marketplace file.
+///
+/// Returns a presigned PUT and the key to name in `file_keys` when creating the
+/// item. The marketplace had no upload path, so a creator could not deposit an
+/// item from the front at all (SKI-330).
+#[utoipa::path(
+    post, path = "/api/marketplace/uploads", tag = "work",
+    request_body = UploadBody,
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 400, description = "No filename", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn request_upload(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Json(body): Json<UploadBody>,
+) -> Result<Json<Value>, AppError> {
+    if body.filename.trim().is_empty() {
+        return Err(AppError::Validation("a file needs a name".into()));
+    }
+    crate::validators::check_max_len(&body.filename, "filename", 255)?;
+    let target =
+        ecosystem::upload_target(&state.storage, auth.user_id, body.filename.trim()).await?;
+    Ok(Json(build_response(json!({ "upload": target }))))
 }
 
 #[derive(Debug, Deserialize, ToSchema)]

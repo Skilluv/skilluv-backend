@@ -1,0 +1,51 @@
+# cargo-fuzz crate — the nightly amplifier for the pure parsers.
+#
+# This is a SEPARATE workspace (see the empty [workspace] at the bottom) so it
+# never joins the parent crate's normal `cargo build` / `cargo test` / clippy.
+# It builds only under `cargo +nightly fuzz`, which needs libFuzzer and the
+# address sanitizer — neither available on Windows/MSVC. So it is authored here
+# and verified by the nightly CI job (.github/workflows/fuzz-nightly.yml), not
+# locally. The same functions are covered locally, panic-freedom and all, by
+# tests/prop_pure_parsers.rs on the pinned stable toolchain.
+
+[package]
+name = "skilluv-backend-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.skilluv-backend]
+path = ".."
+
+# Keep each target out of the doc/test/bench passes — they are fuzz entrypoints,
+# nothing else builds them.
+[[bin]]
+name = "cvss_score_vector"
+path = "fuzz_targets/cvss_score_vector.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "verify_signature"
+path = "fuzz_targets/verify_signature.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "allowed_transition"
+path = "fuzz_targets/allowed_transition.rs"
+test = false
+doc = false
+bench = false
+
+# Own workspace: isolates this crate from the parent so a plain `cargo build`
+# at the repo root never reaches it.
+[workspace]

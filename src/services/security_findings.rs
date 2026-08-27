@@ -100,16 +100,27 @@ pub fn scope_hosts() -> Vec<String> {
 }
 
 /// The parsing, separated from the environment so a test can exercise it
-/// without mutating process state that every other test shares.
-fn parse_scope(override_list: Option<&str>) -> Vec<String> {
-    match override_list {
-        Some(raw) if !raw.trim().is_empty() => raw
-            .split(',')
-            .map(|h| h.trim().to_ascii_lowercase())
-            .filter(|h| !h.is_empty())
-            .collect(),
-        _ => DEFAULT_SCOPE_HOSTS.iter().map(|h| h.to_string()).collect(),
-    }
+/// without mutating process state that every other test shares. `pub` so the
+/// property test in tests/prop_pure_parsers.rs can reach it directly.
+pub fn parse_scope(override_list: Option<&str>) -> Vec<String> {
+    let defaults =
+        || -> Vec<String> { DEFAULT_SCOPE_HOSTS.iter().map(|h| h.to_string()).collect() };
+
+    let Some(raw) = override_list else {
+        return defaults();
+    };
+    let hosts: Vec<String> = raw
+        .split(',')
+        .map(|h| h.trim().to_ascii_lowercase())
+        .filter(|h| !h.is_empty())
+        .collect();
+
+    // A blank or punctuation-only override ("", "   ", ",") parses to nothing.
+    // Fall back to the defaults rather than return an empty scope: scope_hosts()
+    // gates submission (see the "not in the published scope" rejection below),
+    // and an empty scope would reject every finding — a silent availability
+    // lockout from one malformed env var.
+    if hosts.is_empty() { defaults() } else { hosts }
 }
 
 /// Which transitions are legal, and who may make them.

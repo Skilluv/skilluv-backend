@@ -33,3 +33,7 @@ jobs:
         run: bash scripts/check-threat-model.sh
       - name: Admin authorization guards (AZ-01 static)
         run: python3 scripts/check-admin-guards.py
+      - name: No credential-shaped config defaults (SE-01)
+        run: bash scripts/check-config-secrets.sh
+      - name: .env.example documents every env var (SE-03)
+        run: bash scripts/check-env-example.sh

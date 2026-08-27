@@ -95,3 +95,25 @@ By submitting a contribution, you agree that your work is licensed under the sam
 Contributors are listed automatically via GitHub. Significant contributors may be highlighted in release notes.
 
 Merci pour ta contribution !
+
+## Secret hygiene — pre-commit hook (SE-01)
+
+Install a gitleaks pre-commit hook so a secret never reaches a push in the
+first place:
+
+```bash
+# One-off, per clone:
+cat > .git/hooks/pre-commit <<'HOOK'
+#!/usr/bin/env bash
+gitleaks protect --staged --redact -c .gitleaks.toml || {
+  echo "gitleaks: a staged change looks like a secret. Rotate it, remove it, commit again."
+  exit 1
+}
+HOOK
+chmod +x .git/hooks/pre-commit
+```
+
+The same `.gitleaks.toml` (custom rules for our provider shapes + allowlist for
+placeholders) runs in CI on the full history, and `scripts/check-config-secrets.sh`
+fails on a credential-shaped default in source. See `docs/runbooks/SECRET-ROTATION.md`
+for what to do when one leaks anyway.

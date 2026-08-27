@@ -60,3 +60,9 @@ jobs:
       - name: typos (advisory)
         continue-on-error: true
         run: typos || true
+      # SE-01 -- trufflehog verifies candidate secrets live against the
+      # provider, catching what a regex misses. Whole history.
+      - name: trufflehog (verified secrets, full history)
+        continue-on-error: true
+        run: |
+          docker run --rm -v "$PWD:/repo" trufflesecurity/trufflehog:latest             git file:///repo --only-verified --fail ||             echo "trufflehog found verified secrets -- rotate and scrub (SE-01/SE-03)"

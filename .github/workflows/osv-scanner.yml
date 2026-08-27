@@ -1,0 +1,72 @@
+name: OSV vulnerability scan
+
+# SA-04 — osv-scanner over Cargo.lock.
+#
+# cargo-deny (in ci.yml) checks the RustSec advisory DB; osv-scanner checks
+# Google's OSV database, which aggregates RustSec plus GitHub advisories, CVEs
+# and other sources — a wider net for the same lockfile. Runs on the lockfile
+# alone, so it compiles nothing and is fast.
+#
+# Installed by CLI download (pinned version), the same choice as the gitleaks
+# job in ci.yml: no third-party action SHA to trust, same detection.
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "Cargo.lock"
+      - ".github/workflows/osv-scanner.yml"
+  pull_request:
+    branches: [master]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "Cargo.lock"
+      - ".github/workflows/osv-scanner.yml"
+  schedule:
+    # A lockfile that did not change can still acquire a new advisory. Weekly.
+    - cron: "23 4 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: osv-scanner-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  osv:
+    name: OSV scan (Cargo.lock)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      security-events: write   # upload SARIF to the Security tab
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          persist-credentials: false
+
+      - name: Install osv-scanner
+        run: |
+          VERSION=1.9.1
+          curl -fsSL -o osv-scanner \
+            "https://github.com/google/osv-scanner/releases/download/v${VERSION}/osv-scanner_linux_amd64"
+          chmod +x osv-scanner
+          sudo mv osv-scanner /usr/local/bin/
+          osv-scanner --version
+
+      - name: Scan Cargo.lock (SARIF for the Security tab)
+        # Does not fail the job — SARIF is for visibility. The gate is the next
+        # step. `--format sarif` still exits non-zero on findings, so allow it.
+        continue-on-error: true
+        run: osv-scanner --lockfile Cargo.lock --format sarif > osv.sarif
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd  # v3
+        with:
+          sarif_file: osv.sarif
+          category: osv-scanner
+
+      - name: Gate on findings
+        # The real gate: a readable table, non-zero exit on any vulnerability.
+        run: osv-scanner --lockfile Cargo.lock

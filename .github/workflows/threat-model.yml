@@ -31,3 +31,5 @@ jobs:
           persist-credentials: false
       - name: Run the threat-model checks
         run: bash scripts/check-threat-model.sh
+      - name: Admin authorization guards (AZ-01 static)
+        run: python3 scripts/check-admin-guards.py

@@ -162,6 +162,10 @@ pub async fn admin_invite(
     auth: AuthUser,
     Json(input): Json<InviteInput>,
 ) -> Result<impl IntoResponse, AppError> {
+    // AZ-01: this endpoint had no authorization — any authenticated user could
+    // invite a validator (a self-grant path to validator status), while its
+    // sibling `approve` below already required it. Match that.
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     let app = validator_applications::invite(&state.db, auth.user_id, input).await?;
     Ok((
         StatusCode::CREATED,

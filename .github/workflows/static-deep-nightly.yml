@@ -1,0 +1,62 @@
+name: Nightly deep static analysis
+
+# SA-01 (clippy pedantic + nursery), SA-02 (cargo-geiger unsafe surface),
+# SA-05 (typos). All ADVISORY: the ticket asks to run and triage these, not to
+# gate on them from day one. They compile Rust, so they live in a nightly job
+# on a Linux runner, not on the PR path. Each step is continue-on-error so one
+# noisy tool never hides the others.
+
+on:
+  schedule:
+    - cron: "41 3 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: static-deep-nightly
+  cancel-in-progress: true
+
+jobs:
+  deep:
+    name: clippy pedantic + geiger + typos
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          persist-credentials: false
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4  # stable
+        with:
+          components: clippy
+
+      # SA-01 — the pedantic + nursery groups turn on hundreds of lints the
+      # base build leaves off, several of them real correctness traps. Reported,
+      # not gated: the socle-bloquant subset is chosen from this output.
+      - name: Clippy pedantic + nursery (advisory)
+        continue-on-error: true
+        run: cargo clippy --all-targets -- -W clippy::pedantic -W clippy::nursery
+
+      # SA-02 — counts unsafe across the whole dependency tree: the real memory
+      # attack surface.
+      - name: Install cargo-geiger
+        continue-on-error: true
+        uses: taiki-e/install-action@ba47c86ac325773530516bb756137ac718732518  # v2
+        with:
+          tool: cargo-geiger
+      - name: cargo-geiger (unsafe surface, advisory)
+        continue-on-error: true
+        run: cargo geiger --output-format Ascii || true
+
+      # SA-05 — typos in code and docs.
+      - name: Install typos
+        continue-on-error: true
+        uses: taiki-e/install-action@ba47c86ac325773530516bb756137ac718732518  # v2
+        with:
+          tool: typos-cli
+      - name: typos (advisory)
+        continue-on-error: true
+        run: typos || true

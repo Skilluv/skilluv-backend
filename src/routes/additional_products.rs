@@ -17,6 +17,7 @@ pub fn additional_product_routes() -> Router<AppState> {
     Router::new()
         // Long placements.
         .route("/enterprise/placements", get(my_placements).post(propose))
+        .route("/users/me/placements", get(my_placements_as_junior))
         .route("/placements/{id}/respond", post(respond))
         // Corporate learning.
         .route("/learning/plans", get(list_plans))
@@ -90,6 +91,20 @@ pub async fn propose(
     .execute(&state.db)
     .await;
 
+    // Tell the person it concerns. Without this the proposal sits at
+    // 'proposed' until somebody says it aloud — the whole failure SKI-331
+    // named. Best-effort, like every notify: a delivery hiccup must not undo a
+    // proposal that was recorded.
+    let _ = crate::services::notify::send(
+        &state,
+        crate::services::notify::Recipient::User(placement.junior_user_id),
+        "placement.proposed",
+    )
+    .arg("company", enterprise.company_name.clone())
+    .payload(json!({ "placement_id": placement.id }))
+    .execute()
+    .await;
+
     Ok(Json(build_response(json!({
         "placement": placement,
         "note": "Le placement démarre quand la personne accepte. La garantie porte sur \
@@ -108,6 +123,23 @@ pub async fn my_placements(
 ) -> Result<Json<Value>, AppError> {
     let enterprise = crate::routes::enterprise::require_enterprise(&state, &auth).await?;
     let placements = products::placements_for_enterprise(&state.db, enterprise.id).await?;
+    Ok(Json(build_response(json!({ "placements": placements }))))
+}
+
+/// The placements offered to me — the read a junior needs to find a proposal
+/// and answer it (SKI-331). Proposed ones first, each naming the company and
+/// the mentor. `respond` stays the enterprise-view sibling's opposite number:
+/// only the targeted junior may take it.
+#[utoipa::path(
+    get, path = "/api/users/me/placements", tag = "work",
+    responses((status = 200, body = serde_json::Value)),
+    security(("cookie_auth" = [])),
+)]
+pub async fn my_placements_as_junior(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Json<Value>, AppError> {
+    let placements = products::placements_for_junior(&state.db, auth.user_id).await?;
     Ok(Json(build_response(json!({ "placements": placements }))))
 }
 

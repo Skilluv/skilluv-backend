@@ -41,6 +41,14 @@ pub struct ChallengeTemplate {
     /// de { role_slug, role_display_name?, required_skill_slug?, min_proficiency_level, count }.
     /// NULL = pas de contrainte, team libre-forme.
     pub team_composition: Option<serde_json::Value>,
+    /// The security discipline a cyber challenge is — ctf_flag, defensive_lab,
+    /// machine_walkthrough, training_ground, analysis_exercise, audit_exercise
+    /// (migration on `challenge_templates`). NULL for every non-security
+    /// challenge. Serialized so a client can tell a CTF target from a lab
+    /// rather than submit a flag to something that has none (SKI-320).
+    pub security_kind: Option<String>,
+    /// The cyber difficulty tier, alongside `security_kind`. NULL off-domain.
+    pub security_difficulty_tier: Option<String>,
     /// P26 — Sas compagnonnage débutant. NULL = challenge non-beginner.
     /// 'sas' = review humaine du process ; 'free' = mode libre réservé
     /// aux verified_apprentice (voir migration 0118 + gate submit_challenge).

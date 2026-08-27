@@ -383,7 +383,15 @@ pub struct NextChallengesQuery {
 /// contests in a row" impossible to notice.
 ///
 /// Each suggestion carries the clauses that earned it its points. A
-/// recommendation nobody can argue with is a recommendation nobody trusts.
+/// recommendation nobody can argue with is a recommendation nobody trusts. It
+/// also carries `target_kind` (`"slice"` / `"tournament"`), so a client links
+/// to the target by its nature rather than guessing from the format.
+///
+/// Called without `domain` by an account that has not finished onboarding —
+/// one whose `users.skill_domain` is still null — this answers **400**, not an
+/// empty list: there is no domain to suggest in. A caller that cannot depend on
+/// onboarding being done should pass `domain` explicitly or handle the 400 as
+/// "pick a domain first", never as an outage.
 #[utoipa::path(
     get, path = "/api/users/me/next-challenges", tag = "profile",
     params(NextChallengesQuery),

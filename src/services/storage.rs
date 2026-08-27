@@ -41,6 +41,18 @@ const PRESIGN_MAX_TTL_SECONDS: u32 = 7 * 24 * 3600;
 /// The `private_bucket` gets NO anonymous access — presigned URLs only. The
 /// `rust-s3` crate we use (0.35) has no `put_bucket_policy` helper, so this
 /// policy step remains manual / IaC.
+///
+/// The `private_bucket` also needs a CORS rule that exposes the `ETag`, or
+/// browser multipart uploads (`design_uploads`) fail at the last step — the
+/// browser cannot read the per-part ETag `complete` requires (SKI-309). Once
+/// per private bucket, alongside the download policy above:
+///
+/// ```sh
+/// # cors.json: {"CORSRules":[{"AllowedOrigins":["https://skill-uv.com"],
+/// #   "AllowedMethods":["PUT","GET"],"AllowedHeaders":["*"],
+/// #   "ExposeHeaders":["ETag"]}]}
+/// docker exec skilluv-minio mc cors set local/"$MINIO_BUCKET_PRIVATE" cors.json
+/// ```
 impl StorageService {
     pub async fn new(config: &AppConfig) -> Self {
         let region = || Region::Custom {

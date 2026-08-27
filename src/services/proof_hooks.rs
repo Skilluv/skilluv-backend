@@ -209,6 +209,20 @@ async fn recompute_inner(
         }
     }
 
+    // 1nonies. Game attestations, and the same reason again: a mod is
+    // confirmed and a jam concludes well after the slice they grew from was
+    // verified, so the generator runs here rather than only at verification.
+    match crate::services::game_attestations::issue_for_user(db, user_id).await {
+        Ok(issued) if !issued.is_empty() => {
+            tracing::info!(user_id = %user_id, ?issued, "game attestations issued");
+        }
+        Ok(_) => {}
+        Err(e) => {
+            tracing::warn!(user_id = %user_id, error = %e, "P19: game attestations failed");
+            errors.push(format!("game_attestations: {e}"));
+        }
+    }
+
     // 2. Badges
     let badges = match badge_engine::recompute_badges_for_user(db, user_id).await {
         Ok(r) => r,

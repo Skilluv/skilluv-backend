@@ -316,6 +316,10 @@ pub struct AudioProfile {
     pub capped: bool,
     /// Trades this person has verified work in, by slug.
     pub orientations: Vec<String>,
+    /// The same score, as the one envelope every domain shares (SKI-322): a
+    /// client that reads `score` on any profile reads it on all eight. The flat
+    /// fields above are the earlier shape, kept until the front moves off them.
+    pub score: CraftScore,
     /// Verified work worth listening to first.
     pub highlights: Vec<AudioHighlight>,
 }
@@ -353,13 +357,14 @@ pub async fn build(db: &PgPool, username: &str) -> Result<AudioProfile, AppError
     Ok(AudioProfile {
         username: username.to_string(),
         craft_score: score.score,
-        tier: score.tier_slug,
-        tier_name: score.tier_name,
-        tier_description: score.tier_description,
+        tier: score.tier_slug.clone(),
+        tier_name: score.tier_name.clone(),
+        tier_description: score.tier_description.clone(),
         next_tier_at: score.next_tier_at,
-        breakdown: score.breakdown,
+        breakdown: score.breakdown.clone(),
         capped: score.capped,
         orientations,
+        score,
         highlights,
     })
 }

@@ -13,9 +13,9 @@
 //! who has only ever been agreed with.
 
 use axum::extract::{Path, State};
-use axum::routing::{get, post};
+use axum::routing::{get, post, put};
 use axum::{Json, Router};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -33,6 +33,7 @@ pub fn design_profile_routes() -> Router<AppState> {
     Router::new()
         .route("/users/{username}/design-profile", get(design_profile))
         .route("/users/me/design-profile/recompute", post(recompute_mine))
+        .route("/users/me/availability", put(set_availability))
         .route("/design/tiers", get(list_tiers))
 }
 
@@ -275,15 +276,28 @@ pub async fn design_profile(
 
     // What they say they are open to. A declaration, never a credential —
     // and separated from everything above it for that reason.
-    let availability: Option<(bool, Option<String>)> =
-        sqlx::query_as("SELECT available_for_hire, looking_for FROM users WHERE id = $1")
-            .bind(header.id)
-            .fetch_optional(&state.db)
-            .await?;
+    #[derive(sqlx::FromRow)]
+    struct Availability {
+        available_for_hire: bool,
+        looking_for: Option<String>,
+        day_rate_range: Option<String>,
+        available_from: Option<chrono::NaiveDate>,
+    }
+    let availability: Option<Availability> = sqlx::query_as(
+        "SELECT available_for_hire, looking_for, day_rate_range, available_from
+               FROM users WHERE id = $1",
+    )
+    .bind(header.id)
+    .fetch_optional(&state.db)
+    .await?;
 
     Ok(Json(build_response(json!({
         "username": username,
-        "craft_score": score,
+        // `craft_score` is design's original key; `score` is the shared
+        // envelope every domain now answers, so one client reads all eight
+        // (SKI-322). Both hold the same object until the front moves over.
+        "craft_score": score.clone(),
+        "score": score,
         "missions": {
             "delivered": missions.iter().map(|(_, n)| n).sum::<i64>(),
             "by_type": missions
@@ -307,11 +321,12 @@ pub async fn design_profile(
                 "timeline": detail,
             }))
             .collect::<Vec<_>>(),
-        "availability": availability
-            .map(|(available, looking_for)| json!({
-                "available_for_missions": available,
-                "looking_for": looking_for,
-            })),
+        "availability": availability.map(|a| json!({
+            "available_for_missions": a.available_for_hire,
+            "looking_for": a.looking_for,
+            "day_rate_range": a.day_rate_range,
+            "available_from": a.available_from,
+        })),
         "artefacts": artefacts,
         "contests": contests
             .into_iter()
@@ -345,6 +360,72 @@ pub async fn recompute_mine(
 ) -> Result<Json<Value>, AppError> {
     let score = design_craft_score::recompute(&state.db, auth.user_id).await?;
     Ok(Json(build_response(json!({ "craft_score": score }))))
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct AvailabilityBody {
+    /// The "open to missions" badge. Every field is set as sent, so omitting
+    /// one clears it — this is the whole availability state, not a patch.
+    pub available_for_missions: bool,
+    /// What kind of work, in the person's words. Optional.
+    pub looking_for: Option<String>,
+    /// A day-rate range, e.g. "300-500 EUR". A range, not a price, and public.
+    pub day_rate_range: Option<String>,
+    /// The date the person is next free (YYYY-MM-DD). Optional.
+    pub available_from: Option<chrono::NaiveDate>,
+}
+
+/// Set your mission availability — the badge, the rate range, the next-free
+/// date (SKI-315). Touching `updated_at` is what keeps the badge honest: a
+/// client greys a declaration that has not been refreshed in months rather than
+/// the server presenting a stale "available" as current.
+#[utoipa::path(
+    put, path = "/api/users/me/availability", tag = "profile",
+    request_body = AvailabilityBody,
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 401, description = "unauthenticated", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn set_availability(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Json(body): Json<AvailabilityBody>,
+) -> Result<Json<Value>, AppError> {
+    if let Some(looking) = &body.looking_for {
+        crate::validators::check_max_len(looking, "looking_for", 200)?;
+    }
+    if let Some(rate) = &body.day_rate_range {
+        crate::validators::check_max_len(rate, "day_rate_range", 60)?;
+    }
+
+    sqlx::query(
+        "UPDATE users
+            SET available_for_hire = $2,
+                looking_for = $3,
+                day_rate_range = $4,
+                available_from = $5,
+                updated_at = NOW()
+          WHERE id = $1",
+    )
+    .bind(auth.user_id)
+    .bind(body.available_for_missions)
+    .bind(body.looking_for.as_deref())
+    .bind(body.day_rate_range.as_deref())
+    .bind(body.available_from)
+    .execute(&state.db)
+    .await?;
+
+    Ok(Json(build_response(json!({
+        "availability": {
+            "available_for_missions": body.available_for_missions,
+            "looking_for": body.looking_for,
+            "day_rate_range": body.day_rate_range,
+            "available_from": body.available_from,
+        }
+    }))))
 }
 
 /// GET /design/tiers — the ladder, and the formula behind it.

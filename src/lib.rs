@@ -147,6 +147,8 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::quality_routes())
         .nest("/api", routes::security_routes())
         .nest("/api", admin_gate(routes::admin_security_routes()))
+        .nest("/api", routes::game_routes())
+        .nest("/api", admin_gate(routes::admin_game_routes()))
         .nest("/api", routes::leadership_routes())
         .nest("/api", routes::credential_routes())
         .nest("/api", routes::ats_routes())

@@ -16,6 +16,13 @@ use crate::errors::AppError;
 use crate::middleware::AuthUser;
 use crate::services::plagiarism_cases::{self, Case, FlagInput};
 
+/// How many plagiarism cases one account may open in a window, and how long the
+/// window is (SKI-312). Five an hour is generous for someone genuinely working
+/// through a contest they know well, and nowhere near enough to carpet a fifty-
+/// submission contest with accusations.
+const FLAG_RATE_LIMIT: u64 = 5;
+const FLAG_RATE_WINDOW_SECS: u64 = 3600;
+
 pub fn plagiarism_routes() -> Router<AppState> {
     Router::new()
         .route("/contests/submissions/{id}/flag", post(flag))
@@ -66,6 +73,22 @@ pub async fn flag(
     Path(submission_id): Path<Uuid>,
     Json(input): Json<FlagInput>,
 ) -> Result<(axum::http::StatusCode, Json<ApiResponse<Case>>), AppError> {
+    // Anyone may flag — plagiarism is spotted by whoever recognises the
+    // original, not by whoever judges — but not at any rate. The 409 on an
+    // already-open case stops one person being flagged twice; nothing stopped
+    // one account opening a case per submission and putting a whole contest on
+    // the defensive the night before it closes (SKI-312). A ceiling per account
+    // per window fixes the abuse without touching who is allowed to speak.
+    let mut redis = state.redis.clone();
+    crate::middleware::RateLimiter::check(
+        &mut redis,
+        "plagiarism_flag",
+        &auth.user_id.to_string(),
+        FLAG_RATE_LIMIT,
+        FLAG_RATE_WINDOW_SECS,
+    )
+    .await?;
+
     let case = plagiarism_cases::flag(&state.db, submission_id, auth.user_id, input).await?;
 
     // The accused is told, with the accusation in full. Being disqualified by

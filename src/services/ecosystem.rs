@@ -71,6 +71,34 @@ pub const DOWNLOAD_WINDOW_HOURS: i64 = 48;
 /// low enough to be visible on a share.
 pub const DOWNLOAD_LIMIT: i16 = 10;
 
+/// How long a redeemed download URL stays valid. Short — the 48-hour token and
+/// the ten-download limit are the access control, and a signed URL only needs
+/// to outlive the click that saves the file (SKI-330).
+pub const DOWNLOAD_URL_TTL_SECONDS: u32 = 900;
+
+/// How long a marketplace upload URL stays valid — long enough to push a large
+/// asset over a slow line (SKI-330).
+pub const UPLOAD_URL_TTL_SECONDS: u32 = 3600;
+
+/// One file a buyer can actually save: its name, a short-lived signed URL, and
+/// how long that URL lasts. A raw storage key is not something a browser can
+/// open.
+#[derive(Debug, Clone, Serialize)]
+pub struct DownloadFile {
+    pub name: String,
+    pub url: String,
+    pub expires_in_seconds: u32,
+}
+
+/// What a creator gets to deposit one file: the key to name in `file_keys`
+/// when creating the item, and the presigned PUT to push the bytes to.
+#[derive(Debug, Clone, Serialize)]
+pub struct UploadTarget {
+    pub key: String,
+    pub upload_url: String,
+    pub expires_in_seconds: u32,
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // Certifications
 // ═══════════════════════════════════════════════════════════════════
@@ -659,7 +687,11 @@ pub async fn purchase(
 ///
 /// Bounded by both the window and the count. A permanent link posted once is
 /// the whole catalogue given away.
-pub async fn redeem_download(db: &PgPool, token: &str) -> Result<Vec<String>, AppError> {
+pub async fn redeem_download(
+    db: &PgPool,
+    storage: &crate::services::storage::StorageService,
+    token: &str,
+) -> Result<Vec<DownloadFile>, AppError> {
     let row: Option<(Uuid, Uuid, i16)> = sqlx::query_as(
         "SELECT id, item_id, downloads_used FROM marketplace_purchases
           WHERE download_token = $1 AND token_expires_at > NOW()
@@ -706,7 +738,57 @@ pub async fn redeem_download(db: &PgPool, token: &str) -> Result<Vec<String>, Ap
     .execute(db)
     .await?;
 
-    Ok(keys)
+    // A raw storage key is not something a browser can open. Hand back a
+    // short-lived signed URL per file — the bucket stays private, and the
+    // token window plus the download limit remain the access control.
+    let mut files = Vec::with_capacity(keys.len());
+    for key in keys {
+        let name = key.rsplit('/').next().unwrap_or(&key).to_string();
+        let url = storage
+            .presigned_get_url(&key, DOWNLOAD_URL_TTL_SECONDS)
+            .await?;
+        files.push(DownloadFile {
+            name,
+            url,
+            expires_in_seconds: DOWNLOAD_URL_TTL_SECONDS,
+        });
+    }
+    Ok(files)
+}
+
+/// A presigned target for depositing one marketplace file. The creator PUTs the
+/// bytes to `upload_url`, then names `key` in `file_keys` when creating the
+/// item (SKI-330) — the marketplace had no equivalent of `/design/uploads`, so
+/// nothing could produce those keys from the front.
+pub async fn upload_target(
+    storage: &crate::services::storage::StorageService,
+    creator: Uuid,
+    filename: &str,
+) -> Result<UploadTarget, AppError> {
+    // A slug of the name for readability, but the id is what makes the key
+    // unique and unguessable — two files called "kit.zip" never collide, and
+    // the key carries nothing about who uploaded it beyond their own id.
+    let safe: String = filename
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_' {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    let safe = safe.trim_matches('-');
+    let safe = if safe.is_empty() { "file" } else { safe };
+    let key = format!("marketplace/{creator}/{}-{safe}", Uuid::new_v4());
+    let upload_url = storage
+        .presign_put_url(&key, UPLOAD_URL_TTL_SECONDS)
+        .await?;
+    Ok(UploadTarget {
+        key,
+        upload_url,
+        expires_in_seconds: UPLOAD_URL_TTL_SECONDS,
+    })
 }
 
 /// Rate something you bought.

@@ -46,7 +46,7 @@ pub struct Term {
     pub explanation: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct CraftScore {
     pub score: i32,
     pub tier_slug: String,

@@ -64,8 +64,13 @@ async fn a_private_link_is_warned_about_before_it_is_submitted() {
     // The person pasting is the only one who can fix the sharing, and the
     // moment they paste is the only moment they will.
     assert_eq!(body["data"]["source"]["opens_without_account"], false);
-    let warning = body["data"]["warning"].as_str().unwrap();
-    assert!(warning.contains("partagé publiquement"), "{warning}");
+    // A code the client renders in the reader's language, not a French
+    // sentence, and the provider so it can name it (SKI-311).
+    assert_eq!(
+        body["data"]["warning_code"], "needs_public_sharing",
+        "{body}"
+    );
+    assert_eq!(body["data"]["warning_provider"], "figma", "{body}");
 }
 
 #[tokio::test]
@@ -75,7 +80,7 @@ async fn a_published_site_carries_no_warning() {
 
     // A published Webflow site is a website. That is the whole point of it.
     assert_eq!(body["data"]["source"]["opens_without_account"], true);
-    assert!(body["data"]["warning"].is_null(), "{body}");
+    assert!(body["data"]["warning_code"].is_null(), "{body}");
 }
 
 #[tokio::test]
@@ -85,13 +90,7 @@ async fn a_link_that_is_not_a_design_tool_says_so() {
 
     // A GitHub URL in a design deliverable is a mistake worth surfacing.
     assert!(body["data"]["source"].is_null(), "{body}");
-    assert!(
-        body["data"]["warning"]
-            .as_str()
-            .unwrap()
-            .contains("aucun outil de design"),
-        "{body}"
-    );
+    assert_eq!(body["data"]["warning_code"], "unrecognised_link", "{body}");
 }
 
 #[tokio::test]

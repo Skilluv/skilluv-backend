@@ -59,6 +59,17 @@ impl Format {
             Self::Contest => "contest",
         }
     }
+
+    /// The kind of thing the suggestion points at, so a client can build the
+    /// URL from the target's nature rather than inferring it from the format
+    /// and the URL convention holding still. An individual brief is a slice; a
+    /// contest is a tournament.
+    fn target_kind(self) -> &'static str {
+        match self {
+            Self::Individual => "slice",
+            Self::Contest => "tournament",
+        }
+    }
 }
 
 /// One suggestion, with the arithmetic that produced it.
@@ -69,6 +80,13 @@ pub struct Suggestion {
     pub slug: Option<String>,
     pub title: String,
     pub format: Format,
+    /// What the target is — `"slice"` or `"tournament"`. Derived from `format`
+    /// and returned so a client never infers the target's nature from the URL
+    /// convention (SKI-313): a third format, or a route that moves, would
+    /// otherwise send a click somewhere wrong in silence. Owned rather than
+    /// `&'static str` because a suggestion list is cached and read back
+    /// (`cache::get_json`), which a borrowed field cannot deserialize into.
+    pub target_kind: String,
     pub orientation_slug: Option<String>,
     /// The reviewer family the trade belongs to.
     pub family: Option<String>,
@@ -350,6 +368,7 @@ async fn open_challenges(
                 slug: None,
                 title,
                 format: Format::Individual,
+                target_kind: Format::Individual.target_kind().to_string(),
                 orientation_slug,
                 family,
                 difficulty: Some(difficulty),
@@ -401,6 +420,7 @@ async fn open_contests(
             slug: Some(slug),
             title: name,
             format: Format::Contest,
+            target_kind: Format::Contest.target_kind().to_string(),
             // A contest is addressed to a domain rather than to one trade, so
             // it earns the format and deadline points but never the trade
             // one. That is correct: it is a wider invitation.
@@ -430,6 +450,7 @@ mod tests {
             slug: None,
             title: "Un brief".into(),
             format,
+            target_kind: format.target_kind().to_string(),
             orientation_slug: Some("design-brand-identity".into()),
             family: Some("brand".into()),
             difficulty: Some(3),

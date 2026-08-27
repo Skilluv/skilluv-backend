@@ -1506,3 +1506,53 @@ async fn a_reporter_cannot_withdraw_another_reporters_finding() {
         "A's finding was withdrawn by someone else"
     );
 }
+
+/// CC-01 -- a race on an indivisible action leaves exactly one winner.
+///
+/// withdraw() -> transition() locks the row `FOR UPDATE` before deciding, so
+/// twenty-five reporters pressing withdraw on the same finding at the same
+/// millisecond must resolve to one success and twenty-four conflicts, not
+/// twenty-five successes or a corrupted state. The guarantee is the database
+/// lock, not an application-level check with a window.
+#[tokio::test]
+async fn concurrent_withdraws_leave_exactly_one_winner() {
+    let app = TestApp::spawn().await;
+    let id = a_finding(&app, "race_owner", "A finding withdrawn under a race").await;
+
+    // The shared client is logged in as the owner; clone shares the cookie jar.
+    let url = format!("{}/api/security/reports/{id}/withdraw", app.addr);
+    let mut handles = Vec::new();
+    for _ in 0..25 {
+        let client = app.client.clone();
+        let url = url.clone();
+        handles.push(tokio::spawn(async move {
+            client
+                .post(&url)
+                .json(&json!({}))
+                .send()
+                .await
+                .map(|r| r.status())
+                .ok()
+        }));
+    }
+
+    let mut wins = 0;
+    for h in handles {
+        if let Ok(Some(status)) = h.await
+            && status.is_success()
+        {
+            wins += 1;
+        }
+    }
+    assert_eq!(
+        wins, 1,
+        "expected exactly one successful withdraw, got {wins}"
+    );
+
+    let status: String = sqlx::query_scalar("SELECT status FROM security_findings WHERE id = $1")
+        .bind(id)
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
+    assert_eq!(status, "withdrawn", "the finding is not cleanly withdrawn");
+}

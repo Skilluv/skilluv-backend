@@ -1,0 +1,46 @@
+name: Supply-chain audit (cargo-vet)
+
+# SA-04 / CI-05 -- cargo-vet gates new dependencies. Every crate currently in
+# the tree is either audited by a trusted org (Mozilla, Google, Bytecode
+# Alliance, Embark -- imported in supply-chain/config.toml) or exemption-listed
+# by the baseline `cargo vet init`. A NEW dependency arrives with neither, so
+# `cargo vet` fails until someone audits it or records an exemption with a
+# reason. Resolves the dep graph only (cargo metadata) -- no full compile.
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - "Cargo.lock"
+      - "supply-chain/**"
+      - ".github/workflows/cargo-vet.yml"
+  push:
+    branches: [master]
+    paths:
+      - "Cargo.lock"
+      - "supply-chain/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cargo-vet-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  vet:
+    name: cargo vet
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          persist-credentials: false
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4  # stable
+      - name: Install cargo-vet
+        uses: taiki-e/install-action@ba47c86ac325773530516bb756137ac718732518  # v2
+        with:
+          tool: cargo-vet
+      - name: cargo vet
+        # --locked uses the pinned imports.lock (no network re-fetch).
+        run: cargo vet --locked

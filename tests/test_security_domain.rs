@@ -1384,3 +1384,86 @@ async fn a_proof_key_from_somewhere_else_cannot_be_attached_to_a_report() {
     assert_eq!(status, 400, "{body}");
     assert!(body.to_string().contains("upload"), "{body}");
 }
+
+/// FZ-02 — an expired embargo becomes `partially_disclosed`, never `public`.
+///
+/// The sweep flags a finding for an administrator when its clock runs out;
+/// publication stays a decision somebody signs. The invariant this holds is
+/// that no automatic path ever puts a report on the internet: the sweep writes
+/// `partially_disclosed` and nothing else, and it is idempotent.
+#[tokio::test]
+async fn an_expired_embargo_becomes_partially_disclosed_never_public() {
+    let app = TestApp::spawn().await;
+    let _reporter = a_person(&app, "embargo_reporter").await;
+    let id = a_finding(&app, "embargo_reporter", "A finding whose embargo runs out").await;
+
+    let reviewer = a_person(&app, "embargo_reviewer").await;
+    grant(&app, reviewer, "security_reviewer:red-team").await;
+    app.login("embargo_reviewer").await;
+
+    let (status, body) = transition(&app, id, &json!({ "to": "triaged" })).await;
+    assert_eq!(status, 200, "{body}");
+    let (status, body) = transition(&app, id, &json!({ "to": "confirmed" })).await;
+    assert_eq!(status, 200, "{body}");
+
+    // The embargo is running after confirmation.
+    let stage: Option<String> =
+        sqlx::query_scalar("SELECT disclosure_stage FROM security_findings WHERE id = $1")
+            .bind(id)
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
+    assert_eq!(stage.as_deref(), Some("embargoed"));
+
+    // Run the clock out and sweep.
+    sqlx::query(
+        "UPDATE security_findings SET embargo_ends_at = NOW() - INTERVAL '1 day' WHERE id = $1",
+    )
+    .bind(id)
+    .execute(&app.db)
+    .await
+    .unwrap();
+
+    let sweep = skilluv_backend::services::security_findings::sweep_embargoes(&app.db)
+        .await
+        .expect("sweep");
+    assert!(
+        sweep.expired.contains(&id),
+        "the expired embargo was not swept"
+    );
+
+    let stage: Option<String> =
+        sqlx::query_scalar("SELECT disclosure_stage FROM security_findings WHERE id = $1")
+            .bind(id)
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
+    assert_eq!(
+        stage.as_deref(),
+        Some("partially_disclosed"),
+        "an expired embargo must become partially_disclosed, not {stage:?}"
+    );
+
+    // Idempotent, and it never escalates to public on its own: a second sweep
+    // leaves an already-disclosed finding alone, and no sweep writes 'public'.
+    let sweep2 = skilluv_backend::services::security_findings::sweep_embargoes(&app.db)
+        .await
+        .expect("second sweep");
+    assert!(
+        !sweep2.expired.contains(&id),
+        "a partially_disclosed finding was swept a second time"
+    );
+
+    let stage: Option<String> =
+        sqlx::query_scalar("SELECT disclosure_stage FROM security_findings WHERE id = $1")
+            .bind(id)
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
+    assert_ne!(
+        stage.as_deref(),
+        Some("public"),
+        "the sweep published a finding on its own"
+    );
+    assert_eq!(stage.as_deref(), Some("partially_disclosed"));
+}

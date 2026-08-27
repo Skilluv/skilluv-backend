@@ -317,8 +317,17 @@ async fn issue_attestation(
             )
             .await?;
         }
-        // Game and soft_skills declare no `featured_*` basis, and
-        // silence is the right answer for them: somebody is put forward, the
+        "game" => {
+            crate::services::game_attestations::featured_game_creator(
+                db,
+                user_id,
+                profile_url,
+                &citation,
+            )
+            .await?;
+        }
+        // soft_skills declares no `featured_*` basis, and
+        // silence is the right answer for it: somebody is put forward, the
         // announcement goes out, and there is nothing to attest.
         //
         // A domain that *does* declare one and reaches this arm is a different

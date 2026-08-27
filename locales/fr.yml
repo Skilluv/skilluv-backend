@@ -213,6 +213,11 @@ notification:
       title: "Ta periode d'essai commence"
       body: "{weeks} semaines remunerees. Declare tes heures au fil de l'eau."
       cta: "Voir la periode d'essai"
+  placement:
+    proposed:
+      title: "{company} te propose un placement"
+      body: "Une entreprise propose de t'embaucher sur la duree. A toi de decider."
+      cta: "Voir la proposition"
   reverse_recruitment:
     pitch_received:
       title: "{company} argumente pour toi"

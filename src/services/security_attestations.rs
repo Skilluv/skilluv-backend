@@ -278,6 +278,7 @@ pub async fn issue_for_finding(db: &PgPool, finding_id: Uuid) -> Result<Vec<Stri
             Links {
                 security_finding_id: Some(finding_id),
                 challenge_template_id: None,
+                ..Default::default()
             },
             &SECURITY,
         )
@@ -311,6 +312,7 @@ pub async fn issue_for_finding(db: &PgPool, finding_id: Uuid) -> Result<Vec<Stri
             Links {
                 security_finding_id: Some(finding_id),
                 challenge_template_id: None,
+                ..Default::default()
             },
             &SECURITY,
         )
@@ -357,6 +359,7 @@ pub async fn issue_for_finding(db: &PgPool, finding_id: Uuid) -> Result<Vec<Stri
             Links {
                 security_finding_id: Some(finding_id),
                 challenge_template_id: None,
+                ..Default::default()
             },
             &SECURITY,
         )
@@ -426,6 +429,7 @@ pub async fn issue_for_challenge(
         Links {
             security_finding_id: None,
             challenge_template_id: Some(challenge_id),
+            ..Default::default()
         },
         &SECURITY,
     )

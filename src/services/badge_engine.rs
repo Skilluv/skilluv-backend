@@ -90,6 +90,11 @@ pub const PROOF_TYPES: &[&str] = &[
     "deliverable_featured",
     "deliverable_verified",
     "design_briefs_published",
+    "game_family_reviews",
+    "game_jam_organized",
+    "game_multi_artefact_ship",
+    "game_solo_ship",
+    "game_team_ship",
     "mentee_guided",
     "mentorship_mentees_led",
     "mission_completed",
@@ -101,6 +106,13 @@ pub const PROOF_TYPES: &[&str] = &[
     "tournament_judged",
     "tournament_podium",
 ];
+
+/// How many distinct game artefact subtypes make a shipped project a
+/// "multi-artefact" one — a game built from more than one craft (code and art
+/// and a level, say), which is what the `game_multi_artefact_ship` proof and
+/// its badge in migration 0577 recognise. Kept here beside the engine that
+/// reads it rather than in the migration, which cannot express a HAVING count.
+pub const MULTI_ARTEFACT_MIN: i64 = 3;
 
 /// Every `distinct_over` dimension this engine knows how to count.
 ///
@@ -147,6 +159,12 @@ struct RuleConditions {
     /// them to filter by.
     #[serde(default)]
     attestation_basis: Option<String>,
+    /// Which game review family a reviewing badge counts in — `programming`,
+    /// `design`, `art-animation`, `community`, `web3`. Only meaningful
+    /// alongside the `game_family_reviews` proof type: a family-expert badge
+    /// counts reviews made against that family's grid, not every game review.
+    #[serde(default)]
+    reviewer_group: Option<String>,
     /// Which contest format a win has to be in — `audio_sound_battle`,
     /// `code_golf`. Only meaningful alongside the `contest_won` proof type.
     ///
@@ -251,6 +269,14 @@ async fn count_matching_proofs(
         .proof_types
         .iter()
         .any(|t| t == "slice_merged_upstream");
+    let want_game_family_reviews = conds.proof_types.iter().any(|t| t == "game_family_reviews");
+    let want_game_solo_ship = conds.proof_types.iter().any(|t| t == "game_solo_ship");
+    let want_game_team_ship = conds.proof_types.iter().any(|t| t == "game_team_ship");
+    let want_game_multi_artefact_ship = conds
+        .proof_types
+        .iter()
+        .any(|t| t == "game_multi_artefact_ship");
+    let want_game_jam_organized = conds.proof_types.iter().any(|t| t == "game_jam_organized");
     let want_mission_completed = conds.proof_types.iter().any(|t| t == "mission_completed");
     let want_contest_won = conds.proof_types.iter().any(|t| t == "contest_won");
     let want_mentee_guided = conds.proof_types.iter().any(|t| t == "mentee_guided");
@@ -761,6 +787,207 @@ async fn count_matching_proofs(
         // back-dated and the unique index makes a tie impossible.
         let matched = crate::services::security_practice::first_solve_count(db, user_id).await?;
         total += matched;
+    }
+
+    // ── Game: reviewing within a family (game_family_reviews) ──────────
+    if want_game_family_reviews {
+        // Reviews this person made against a grid of the named family. A
+        // family-expert badge counts the craft they actually reviewed, not
+        // every game review — a strong programming reviewer is not an art
+        // expert. The grid carries the family, so the count reads it.
+        let matched: i64 = sqlx::query_scalar(
+            r#"
+            SELECT count(*)
+              FROM reviews r
+              JOIN review_grid_scores rgs ON rgs.review_id = r.id
+              JOIN review_grids g ON g.id = rgs.grid_id
+             WHERE r.reviewer_user_id = $1
+               AND g.domain = 'game'
+               AND ($2::VARCHAR IS NULL OR g.reviewer_group = $2)
+            "#,
+        )
+        .bind(user_id)
+        .bind(conds.reviewer_group.as_deref())
+        .fetch_one(db)
+        .await?;
+
+        let ids: Vec<Uuid> = sqlx::query_scalar(
+            r#"
+            SELECT r.id
+              FROM reviews r
+              JOIN review_grid_scores rgs ON rgs.review_id = r.id
+              JOIN review_grids g ON g.id = rgs.grid_id
+             WHERE r.reviewer_user_id = $1
+               AND g.domain = 'game'
+               AND ($2::VARCHAR IS NULL OR g.reviewer_group = $2)
+             LIMIT 25
+            "#,
+        )
+        .bind(user_id)
+        .bind(conds.reviewer_group.as_deref())
+        .fetch_all(db)
+        .await?;
+
+        total += matched;
+        sources.extend(ids);
+    }
+
+    // ── Game: shipped solo (game_solo_ship) ────────────────────────────
+    if want_game_solo_ship {
+        // A verified game deliverable on a project this person owns alone. The
+        // rank already counts the deliverable; this proof is about who stood
+        // behind it — one name.
+        let matched: i64 = sqlx::query_scalar(
+            r#"
+            SELECT count(DISTINCT d.id)
+              FROM deliverables d
+              JOIN project_slices ps ON ps.id = d.slice_id
+              JOIN projects p ON p.id = ps.project_id
+             WHERE d.user_id = $1 AND d.verification_status = 'verified'
+               AND d.revoked_at IS NULL
+               AND ps.slice_type = 'game_artifact'
+               AND p.owner_type = 'user' AND p.owner_id = $1
+            "#,
+        )
+        .bind(user_id)
+        .fetch_one(db)
+        .await?;
+
+        let ids: Vec<Uuid> = sqlx::query_scalar(
+            r#"
+            SELECT DISTINCT d.id
+              FROM deliverables d
+              JOIN project_slices ps ON ps.id = d.slice_id
+              JOIN projects p ON p.id = ps.project_id
+             WHERE d.user_id = $1 AND d.verification_status = 'verified'
+               AND d.revoked_at IS NULL
+               AND ps.slice_type = 'game_artifact'
+               AND p.owner_type = 'user' AND p.owner_id = $1
+             LIMIT 25
+            "#,
+        )
+        .bind(user_id)
+        .fetch_all(db)
+        .await?;
+
+        total += matched;
+        sources.extend(ids);
+    }
+
+    // ── Game: shipped with a team (game_team_ship) ─────────────────────
+    if want_game_team_ship {
+        let matched: i64 = sqlx::query_scalar(
+            r#"
+            SELECT count(DISTINCT d.id)
+              FROM deliverables d
+              JOIN project_slices ps ON ps.id = d.slice_id
+              JOIN projects p ON p.id = ps.project_id
+             WHERE d.user_id = $1 AND d.verification_status = 'verified'
+               AND d.revoked_at IS NULL
+               AND ps.slice_type = 'game_artifact'
+               AND p.owner_type = 'guild'
+            "#,
+        )
+        .bind(user_id)
+        .fetch_one(db)
+        .await?;
+
+        let ids: Vec<Uuid> = sqlx::query_scalar(
+            r#"
+            SELECT DISTINCT d.id
+              FROM deliverables d
+              JOIN project_slices ps ON ps.id = d.slice_id
+              JOIN projects p ON p.id = ps.project_id
+             WHERE d.user_id = $1 AND d.verification_status = 'verified'
+               AND d.revoked_at IS NULL
+               AND ps.slice_type = 'game_artifact'
+               AND p.owner_type = 'guild'
+             LIMIT 25
+            "#,
+        )
+        .bind(user_id)
+        .fetch_all(db)
+        .await?;
+
+        total += matched;
+        sources.extend(ids);
+    }
+
+    // ── Game: a full, multi-craft game (game_multi_artefact_ship) ──────
+    if want_game_multi_artefact_ship {
+        // A project where this person shipped verified work across at least
+        // MULTI_ARTEFACT_MIN distinct artefact subtypes — code and art and a
+        // level, not three builds. Counting projects, not deliverables.
+        let matched: i64 = sqlx::query_scalar(
+            r#"
+            SELECT count(*) FROM (
+                SELECT ps.project_id
+                  FROM deliverables d
+                  JOIN project_slices ps ON ps.id = d.slice_id
+                 WHERE d.user_id = $1 AND d.verification_status = 'verified'
+                   AND d.revoked_at IS NULL
+                   AND ps.slice_type = 'game_artifact'
+                   AND ps.game_artifact_subtype IS NOT NULL
+                 GROUP BY ps.project_id
+                HAVING count(DISTINCT ps.game_artifact_subtype) >= $2
+            ) t
+            "#,
+        )
+        .bind(user_id)
+        .bind(MULTI_ARTEFACT_MIN)
+        .fetch_one(db)
+        .await?;
+
+        let ids: Vec<Uuid> = sqlx::query_scalar(
+            r#"
+            SELECT ps.project_id
+              FROM deliverables d
+              JOIN project_slices ps ON ps.id = d.slice_id
+             WHERE d.user_id = $1 AND d.verification_status = 'verified'
+               AND d.revoked_at IS NULL
+               AND ps.slice_type = 'game_artifact'
+               AND ps.game_artifact_subtype IS NOT NULL
+             GROUP BY ps.project_id
+            HAVING count(DISTINCT ps.game_artifact_subtype) >= $2
+             LIMIT 25
+            "#,
+        )
+        .bind(user_id)
+        .bind(MULTI_ARTEFACT_MIN)
+        .fetch_all(db)
+        .await?;
+
+        total += matched;
+        sources.extend(ids);
+    }
+
+    // ── Game: organised a jam (game_jam_organized) ─────────────────────
+    if want_game_jam_organized {
+        let matched: i64 = sqlx::query_scalar(
+            r#"
+            SELECT count(*) FROM tournaments
+             WHERE created_by = $1
+               AND kind IN ('game_jam_48h', 'game_jam_72h', 'game_jam_week')
+            "#,
+        )
+        .bind(user_id)
+        .fetch_one(db)
+        .await?;
+
+        let ids: Vec<Uuid> = sqlx::query_scalar(
+            r#"
+            SELECT id FROM tournaments
+             WHERE created_by = $1
+               AND kind IN ('game_jam_48h', 'game_jam_72h', 'game_jam_week')
+             LIMIT 25
+            "#,
+        )
+        .bind(user_id)
+        .fetch_all(db)
+        .await?;
+
+        total += matched;
+        sources.extend(ids);
     }
 
     Ok((total, sources))

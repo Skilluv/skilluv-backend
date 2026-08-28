@@ -50,7 +50,7 @@ API = "https://discord.com/api/v10"
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SPEC = os.path.join(ROOT, "ops", "discord", "server.toml")
 
-CHANNEL_TEXT, CHANNEL_CATEGORY = 0, 4
+CHANNEL_TEXT, CHANNEL_VOICE, CHANNEL_CATEGORY, CHANNEL_ANNOUNCEMENT = 0, 2, 4, 5
 
 # A Windows console is cp1252 by default, and a server called "Skilluv Café"
 # would take the whole run down on the first print. Best effort: where the
@@ -183,13 +183,29 @@ def main():
 
     existing = call("GET", f"/guilds/{gid}/channels", tok)
     have_cat = {c["name"].upper(): c for c in existing if c["type"] == CHANNEL_CATEGORY}
-    have_txt = {c["name"]: c for c in existing if c["type"] == CHANNEL_TEXT}
+    # Text and announcement channels share a namespace and are interchangeable
+    # by a PATCH, so they are matched together; a voice room may legitimately
+    # carry the same name as a text one.
+    have_txt = {
+        c["name"]: c
+        for c in existing
+        if c["type"] in (CHANNEL_TEXT, CHANNEL_ANNOUNCEMENT)
+    }
+    have_voice = {c["name"]: c for c in existing if c["type"] == CHANNEL_VOICE}
     have_role = {r["name"]: r for r in call("GET", f"/guilds/{gid}/roles", tok)}
 
+    # Announcement channels and forums exist only on a Community server, and
+    # Community is a wizard in Server Settings — no API turns it on. Where it is
+    # off, an announcement channel is created as ordinary text and reported, so
+    # the run succeeds rather than failing on a setting nobody can change from
+    # here.
+    community = "COMMUNITY" in call("GET", f"/guilds/{gid}", tok).get("features", [])
+
     say(f"Server: {guild['name']}  ({gid})")
+    say(f"Community mode: {'on' if community else 'off'}")
     say("")
 
-    created, present, missing, routing = 0, 0, [], []
+    created, present, missing, routing, pending_announce = 0, 0, [], [], []
 
     for cat in cats:
         parent = have_cat.get(cat["name"].upper())
@@ -208,19 +224,52 @@ def main():
                 missing.append(f"category {cat['name']}")
 
         for ch in cat["channels"]:
-            found = have_txt.get(ch["name"])
+            voice = ch.get("kind") == "voice"
+            # An announcement channel needs Community; without it the room is
+            # still wanted, just as ordinary text.
+            wants_announce = bool(ch.get("announcement")) and not voice
+            ctype = (
+                CHANNEL_VOICE
+                if voice
+                else CHANNEL_ANNOUNCEMENT
+                if (wants_announce and community)
+                else CHANNEL_TEXT
+            )
+            pool = have_voice if voice else have_txt
+            found = pool.get(ch["name"])
+
             if found is None and args.create:
-                body = {"name": ch["name"], "type": CHANNEL_TEXT}
+                body = {"name": ch["name"], "type": ctype}
                 if parent:
                     body["parent_id"] = parent["id"]
                 found = call("POST", f"/guilds/{gid}/channels", tok, body)
-                have_txt[ch["name"]] = found
-                say(f"  + channel   #{ch['name']}")
+                pool[ch["name"]] = found
+                mark = "voice " if voice else "annonce" if ctype == CHANNEL_ANNOUNCEMENT else "channel"
+                say(f"  + {mark:9} {'' if voice else '#'}{ch['name']}")
                 created += 1
             elif found is None:
-                missing.append(f"#{ch['name']}")
+                missing.append(("" if voice else "#") + ch["name"] + (" (voice)" if voice else ""))
             else:
                 present += 1
+                # Community may have been switched on since the last run. A
+                # text channel that should be an announcement one is upgraded
+                # in place rather than left behind, which is the whole point of
+                # a command you re-run.
+                if (
+                    args.create
+                    and wants_announce
+                    and community
+                    and found.get("type") == CHANNEL_TEXT
+                ):
+                    call(
+                        "PATCH",
+                        f"/channels/{found['id']}",
+                        tok,
+                        {"type": CHANNEL_ANNOUNCEMENT},
+                    )
+                    say(f"  ^ annonce   #{ch['name']} (upgraded from text)")
+                elif wants_announce and not community:
+                    pending_announce.append(ch["name"])
 
             if found and "purpose" in ch:
                 routing.append((ch["purpose"], cat["domain"], found["id"], ch["name"]))
@@ -283,7 +332,20 @@ def main():
     say("  3. Apply the SQL above, once you have read it.")
     say("")
     manual = [r["name"] for r in roles_wanted if r.get("manual")]
-    say("  4. Hand out every role yourself, for now. Nothing fills")
+    if not community:
+        say("  4. Turn on Community mode if you want real announcement")
+        say("     channels (Server Settings > Enable Community). It is a")
+        say("     wizard, not an API call. These were created as ordinary")
+        say("     text and are upgraded in place the next time you run this:")
+        wanted = sorted(set(pending_announce))
+        for i in range(0, min(len(wanted), 12), 6):
+            say("       " + ", ".join("#" + n for n in wanted[i:i + 6]))
+        if len(wanted) > 12:
+            say(f"       ... and {len(wanted) - 12} more")
+        say("")
+
+    step = "5" if not community else "4"
+    say(f"  {step}. Hand out every role yourself, for now. Nothing fills")
     say("     users.discord_user_id, so the platform cannot tell which")
     say("     Discord member is which account, and a role granted on a guess")
     say("     is an authority nobody earned.")

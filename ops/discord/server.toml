@@ -21,6 +21,19 @@
 # #design-concours. A channel without one is a room for people, not a
 # destination for the platform.
 #
+# ## `kind` and `announcement`
+#
+# `kind = "voice"` makes a voice room; the default is a text channel. Voice
+# rooms live in their own category per domain, so the sidebar does not
+# interleave rooms you read with rooms you speak in.
+#
+# `announcement = true` asks for Discord's announcement type -- a channel the
+# platform writes and people read, which other servers can follow. It needs the
+# server's Community mode, which is a wizard in Server Settings and not
+# something an API can switch on. Where Community is off these are created as
+# ordinary text channels and the run says so; turn Community on, run again, and
+# they are upgraded in place.
+#
 # ## `grants_on`
 #
 # What a role means on the platform. docs/design/DISCORD-STRUCTURE.md sets the
@@ -36,10 +49,17 @@
 name = "ACCUEIL"
 domain = ""
 channels = [
-    { name = "annonces", purpose = "general" },
-    { name = "promotions", purpose = "promotions" },
+    { name = "annonces", purpose = "general", announcement = true },
+    { name = "promotions", purpose = "promotions", announcement = true },
     { name = "presentations" },
     { name = "aide" },
+]
+
+[[categories]]
+name = "ACCUEIL / VOCAL"
+domain = ""
+channels = [
+    { name = "Salon ouvert", kind = "voice" },
 ]
 
 
@@ -56,8 +76,17 @@ channels = [
     { name = "ai-llm" },
     { name = "ai-safety-discussions" },
     { name = "ai-paper-reading" },
-    { name = "ai-competitions", purpose = "contests" },
-    { name = "ai-missions", purpose = "missions" },
+    { name = "ai-competitions", purpose = "contests", announcement = true },
+    { name = "ai-missions", purpose = "missions", announcement = true },
+]
+
+[[categories]]
+name = "IA / VOCAL"
+domain = "ai"
+channels = [
+    { name = "AI Paper Club", kind = "voice" },
+    { name = "Model Feedback Sessions", kind = "voice" },
+    { name = "Prompt Battle Live", kind = "voice" },
 ]
 
 [[roles]]
@@ -101,9 +130,18 @@ channels = [
     { name = "audio-music-implementer" },
     { name = "audio-programmer" },
     { name = "audio-showcase" },
-    { name = "audio-battles", purpose = "contests" },
+    { name = "audio-battles", purpose = "contests", announcement = true },
     { name = "audio-livesessions" },
-    { name = "audio-missions", purpose = "missions" },
+    { name = "audio-missions", purpose = "missions", announcement = true },
+]
+
+[[categories]]
+name = "AUDIO / VOCAL"
+domain = "audio"
+channels = [
+    { name = "Audio Cowork Live", kind = "voice" },
+    { name = "Voice Casting Sessions", kind = "voice" },
+    { name = "Composition Feedback", kind = "voice" },
 ]
 
 [[roles]]
@@ -128,7 +166,7 @@ channels = [
     { name = "code-general", purpose = "general" },
     { name = "code-help" },
     { name = "code-showcase" },
-    { name = "code-newsletter" },
+    { name = "code-newsletter", announcement = true },
     { name = "code-first-issues" },
     { name = "code-review-lounge" },
     { name = "code-web" },
@@ -141,9 +179,9 @@ channels = [
     { name = "code-networking" },
     { name = "code-blockchain" },
     { name = "code-desktop-enterprise" },
-    { name = "code-contests", purpose = "contests" },
+    { name = "code-contests", purpose = "contests", announcement = true },
     { name = "code-oss-marathon" },
-    { name = "code-missions", purpose = "missions" },
+    { name = "code-missions", purpose = "missions", announcement = true },
     { name = "lang-rust" },
     { name = "lang-python" },
     { name = "lang-typescript" },
@@ -155,6 +193,14 @@ channels = [
     { name = "lang-julia" },
     { name = "lang-zig" },
     { name = "lang-other" },
+]
+
+[[categories]]
+name = "CODE / VOCAL"
+domain = "code"
+channels = [
+    { name = "Code Cowork Live", kind = "voice" },
+    { name = "Pair Review Sessions", kind = "voice" },
 ]
 
 [[roles]]
@@ -183,7 +229,15 @@ channels = [
     { name = "comm-content-creator" },
     { name = "comm-translation" },
     { name = "comm-research" },
-    { name = "comm-missions", purpose = "missions" },
+    { name = "comm-missions", purpose = "missions", announcement = true },
+]
+
+[[categories]]
+name = "COMMUNICATION / VOCAL"
+domain = "communication"
+channels = [
+    { name = "Live Coding Streams", kind = "voice" },
+    { name = "Content Feedback Sessions", kind = "voice" },
 ]
 
 [[roles]]
@@ -229,7 +283,15 @@ channels = [
     { name = "design-3d-viz" },
     { name = "design-immersif" },
     { name = "design-service" },
-    { name = "design-concours", purpose = "contests" },
+    { name = "design-concours", purpose = "contests", announcement = true },
+]
+
+[[categories]]
+name = "DESIGN / VOCAL"
+domain = "design"
+channels = [
+    { name = "Design Cowork Room", kind = "voice" },
+    { name = "Critique Live", kind = "voice" },
 ]
 
 [[roles]]
@@ -263,7 +325,15 @@ channels = [
     { name = "edu-curriculum" },
     { name = "edu-teacher" },
     { name = "edu-cohorts" },
-    { name = "edu-missions", purpose = "missions" },
+    { name = "edu-missions", purpose = "missions", announcement = true },
+]
+
+[[categories]]
+name = "EDUCATION / VOCAL"
+domain = "education"
+channels = [
+    { name = "Training Feedback Sessions", kind = "voice" },
+    { name = "Curriculum Review Circles", kind = "voice" },
 ]
 
 [[roles]]
@@ -295,7 +365,7 @@ channels = [
     { name = "game-general", purpose = "general" },
     { name = "game-help" },
     { name = "game-showcase" },
-    { name = "game-newsletter" },
+    { name = "game-newsletter", announcement = true },
     { name = "game-programming" },
     { name = "game-design" },
     { name = "game-art-animation" },
@@ -303,15 +373,23 @@ channels = [
     { name = "game-modding" },
     { name = "game-web3" },
     { name = "game-playtests" },
-    { name = "game-jams", purpose = "contests" },
+    { name = "game-jams", purpose = "contests", announcement = true },
     { name = "game-speedcoding" },
-    { name = "game-winners", purpose = "winners" },
-    { name = "game-missions", purpose = "missions" },
+    { name = "game-winners", purpose = "winners", announcement = true },
+    { name = "game-missions", purpose = "missions", announcement = true },
     { name = "engine-godot" },
     { name = "engine-bevy" },
     { name = "engine-unity" },
     { name = "engine-unreal" },
     { name = "engine-other" },
+]
+
+[[categories]]
+name = "GAME / VOCAL"
+domain = "game"
+channels = [
+    { name = "Game Cowork Live", kind = "voice" },
+    { name = "Playtest Sessions", kind = "voice" },
 ]
 
 [[roles]]
@@ -342,7 +420,16 @@ channels = [
     { name = "lead-community" },
     { name = "lead-mentor" },
     { name = "leadership-cohorts" },
-    { name = "leadership-missions", purpose = "missions" },
+    { name = "leadership-missions", purpose = "missions", announcement = true },
+]
+
+[[categories]]
+name = "LEADERSHIP / VOCAL"
+domain = "leadership"
+channels = [
+    { name = "Leadership AMA", kind = "voice" },
+    { name = "Cohort Sessions", kind = "voice" },
+    { name = "Retro Facilitation Live", kind = "voice" },
 ]
 
 [[roles]]
@@ -376,7 +463,16 @@ channels = [
     { name = "ops-tools" },
     { name = "ops-incident" },
     { name = "ops-incidents-lounge" },
-    { name = "ops-missions", purpose = "missions" },
+    { name = "ops-missions", purpose = "missions", announcement = true },
+]
+
+[[categories]]
+name = "OPS / VOCAL"
+domain = "ops"
+channels = [
+    { name = "Incident Simulation Live", kind = "voice" },
+    { name = "Chaos Engineering Sessions", kind = "voice" },
+    { name = "Runbook Review Circles", kind = "voice" },
 ]
 
 [[roles]]
@@ -420,8 +516,16 @@ channels = [
     { name = "qa-game" },
     { name = "qa-lead" },
     { name = "qa-tools" },
-    { name = "qa-bug-bashes", purpose = "contests" },
-    { name = "qa-missions", purpose = "missions" },
+    { name = "qa-bug-bashes", purpose = "contests", announcement = true },
+    { name = "qa-missions", purpose = "missions", announcement = true },
+]
+
+[[categories]]
+name = "QUALITY / VOCAL"
+domain = "quality"
+channels = [
+    { name = "QA Bug Bash Live", kind = "voice" },
+    { name = "QA Playtest Sessions", kind = "voice" },
 ]
 
 [[roles]]
@@ -453,8 +557,16 @@ channels = [
     { name = "security-ranges" },
     { name = "security-tooling" },
     { name = "security-triage" },
-    { name = "security-writeups" },
-    { name = "security-competitions", purpose = "contests" },
+    { name = "security-writeups", announcement = true },
+    { name = "security-competitions", purpose = "contests", announcement = true },
+]
+
+[[categories]]
+name = "SECURITY / VOCAL"
+domain = "security"
+channels = [
+    { name = "Purple Session", kind = "voice" },
+    { name = "Range Cowork Live", kind = "voice" },
 ]
 
 [[roles]]

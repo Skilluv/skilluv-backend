@@ -91,9 +91,10 @@ echo "• /api/auth/register with empty body (validation active)"
 register_status=$(curl -sS -o /dev/null -w "%{http_code}" \
     -X POST -H "Content-Type: application/json" -d '{}' \
     --max-time 10 "$BASE_URL/api/auth/register" || echo "000")
-# 400 = validation working, 429 = rate-limited (also fine — proves middleware alive)
-if [[ "$register_status" != "400" ]] && [[ "$register_status" != "429" ]]; then
-    echo "  FAIL POST /api/auth/register → HTTP $register_status (expected 400 or 429)" >&2
+# 400/422 = validation working (422 = well-formed JSON, missing fields),
+# 429 = rate-limited (also fine — proves middleware alive)
+if [[ "$register_status" != "400" ]] && [[ "$register_status" != "422" ]] && [[ "$register_status" != "429" ]]; then
+    echo "  FAIL POST /api/auth/register → HTTP $register_status (expected 400, 422, or 429)" >&2
     FAILED=$((FAILED + 1))
 fi
 

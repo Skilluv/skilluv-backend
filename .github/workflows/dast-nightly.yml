@@ -49,6 +49,19 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Wait for Postgres to accept connections
+        # The backend runs its own migrations on startup (sqlx::migrate!), so it
+        # must not launch until Postgres answers — otherwise it dies with
+        # PoolTimedOut before the health check ever passes.
+        run: |
+          for _ in $(seq 1 30); do
+            if docker exec skilluv-postgres pg_isready -U skilluv -d skilluv >/dev/null 2>&1; then
+              echo "postgres ready"; exit 0
+            fi
+            sleep 2
+          done
+          echo "postgres did not become ready"; docker logs skilluv-postgres | tail -20; exit 1
+
       - name: Run the backend against the stack
         # Host network so the container reaches the compose services on
         # localhost (Postgres 5433, Redis 6379, MinIO 9004, Mailpit 1025).

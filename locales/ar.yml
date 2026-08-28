@@ -209,6 +209,11 @@ notification:
       title: "تبدأ فترة التجربة"
       body: "{weeks} أسابيع مدفوعة. سجّل ساعاتك أولًا بأول."
       cta: "عرض فترة التجربة"
+  placement:
+    proposed:
+      title: "{company} تعرض عليك توظيفًا"
+      body: "شركة تريد توظيفك على المدى الطويل. القرار لك."
+      cta: "عرض الاقتراح"
   reverse_recruitment:
     pitch_received:
       title: "{company} تعرض حجّتها"

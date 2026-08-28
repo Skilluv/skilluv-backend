@@ -34,6 +34,9 @@ pub struct Category {
     pub name: String,
     pub description: String,
     pub subject_type: String,
+    /// The family this award belongs to, or `None` for a cross-cutting one
+    /// (migration 0590). Lets a domain page show only its own awards.
+    pub skill_domain: Option<String>,
     pub sort_order: i16,
 }
 
@@ -55,12 +58,18 @@ pub struct Nominee {
     pub weighted_score: bigdecimal::BigDecimal,
 }
 
-pub async fn categories(db: &PgPool) -> Result<Vec<Category>, AppError> {
+/// The active award categories. With `domain`, the family's own categories
+/// plus the cross-cutting ones (`skill_domain IS NULL`) — a design page wants
+/// both its awards and the platform-wide ones. Without it, everything.
+pub async fn categories(db: &PgPool, domain: Option<&str>) -> Result<Vec<Category>, AppError> {
     let rows = sqlx::query_as::<_, Category>(
-        "SELECT slug, name, description, subject_type, sort_order
-           FROM award_categories WHERE is_active = TRUE
+        "SELECT slug, name, description, subject_type, skill_domain, sort_order
+           FROM award_categories
+          WHERE is_active = TRUE
+            AND ($1::VARCHAR IS NULL OR skill_domain = $1 OR skill_domain IS NULL)
           ORDER BY sort_order, slug",
     )
+    .bind(domain)
     .fetch_all(db)
     .await?;
     Ok(rows)

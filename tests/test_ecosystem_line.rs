@@ -518,7 +518,19 @@ async fn a_download_link_expires() {
     let resp = app.get(&url).await;
     assert_eq!(resp.status(), 200, "{}", resp.text().await.unwrap());
     let files: Value = resp.json().await.unwrap();
-    assert_eq!(files["data"]["files"], json!(["items/skeleton.zip"]));
+    // A signed URL a browser can open, named by the file, not the raw storage
+    // key (SKI-330).
+    let list = files["data"]["files"].as_array().unwrap();
+    assert_eq!(list.len(), 1, "{files}");
+    assert_eq!(list[0]["name"], "skeleton.zip", "{files}");
+    assert!(
+        list[0]["url"].as_str().unwrap().starts_with("http"),
+        "a signed URL, not a raw key: {files}"
+    );
+    assert!(
+        list[0]["expires_in_seconds"].as_u64().unwrap() > 0,
+        "{files}"
+    );
 
     // A permanent link posted once is the whole catalogue given away.
     sqlx::query("UPDATE marketplace_purchases SET token_expires_at = NOW() - INTERVAL '1 hour'")

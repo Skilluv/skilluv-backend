@@ -37,14 +37,32 @@ fn build_response(data: Value) -> Value {
     })
 }
 
-/// The award categories and what each one nominates.
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
+pub struct CategoriesQuery {
+    /// Narrow to one family's awards (plus the cross-cutting ones). One of the
+    /// eight domains; omitted returns every category (SKI-314). The pattern
+    /// keeps the schema as strict as the handler, so a contract fuzzer does not
+    /// generate a 31-character "domain" the API then rejects.
+    #[param(pattern = r"^(code|design|game|security|ops|ai|soft_skills|audio)$")]
+    pub domain: Option<String>,
+}
+
+/// The award categories and what each one nominates. `?domain=` scopes to one
+/// family's awards and the platform-wide ones.
 #[utoipa::path(
     get, path = "/api/awards/categories", tag = "awards",
+    params(CategoriesQuery),
     responses((status = 200, body = serde_json::Value)),
     operation_id = "awardsListCategories",
 )]
-pub async fn list_categories(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
-    let categories = awards::categories(&state.db).await?;
+pub async fn list_categories(
+    State(state): State<AppState>,
+    Query(q): Query<CategoriesQuery>,
+) -> Result<Json<Value>, AppError> {
+    crate::validators::check_skill_domain_opt(&q.domain, "domain")?;
+    let categories = awards::categories(&state.db, q.domain.as_deref()).await?;
     Ok(Json(build_response(json!({ "categories": categories }))))
 }
 

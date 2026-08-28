@@ -71,9 +71,17 @@ pub struct PlatformRow {
     pub name: String,
     pub profile_url_pattern: Option<String>,
     /// What `items_count` counts here, in the words a profile page prints.
+    /// Kept for the transition; the client should render `items_label_key`.
     pub items_label: Option<String>,
-    /// What `reach_count` counts here.
+    /// What `reach_count` counts here. Superseded by `reach_label_key`.
     pub reach_label: Option<String>,
+    /// A language-neutral key for `items_label` — `"downloads"`, `"stars"`,
+    /// `"repositories"` (migration 0591). This endpoint is public and serves an
+    /// FR/EN audience, so the label to show is the reader's to translate, not
+    /// the server's to pick (SKI-311).
+    pub items_label_key: Option<String>,
+    /// The same, for `reach_label`.
+    pub reach_label_key: Option<String>,
     /// Whether anything can check a claim automatically. `false` means every
     /// figure for this platform is the person's own word until a human looks.
     pub has_public_api: bool,
@@ -97,7 +105,8 @@ pub async fn list_platforms(
 
     let rows: Vec<PlatformRow> = sqlx::query_as(
         "SELECT slug, skill_domain, name, profile_url_pattern,
-                items_label, reach_label, has_public_api
+                items_label, reach_label, items_label_key, reach_label_key,
+                has_public_api
            FROM portfolio_platforms
           WHERE $1::VARCHAR IS NULL OR skill_domain = $1 OR skill_domain IS NULL
           ORDER BY sort_order",

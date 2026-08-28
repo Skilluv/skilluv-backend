@@ -49,7 +49,7 @@ pub struct Evidence {
 /// A separate argument rather than two more fields on [`Evidence`], so that
 /// the eighteen places that build an `Evidence` literal do not all have to
 /// mention two links that only one domain uses. [`issue`] passes an empty one.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct Links {
     /// The reported vulnerability this rests on. Security only, and needed on
     /// its own rather than through the deliverable because an independent
@@ -60,6 +60,16 @@ pub struct Links {
     /// key the uniqueness rule of 0559 uses, since those produce no
     /// deliverable to be unique per.
     pub challenge_template_id: Option<Uuid>,
+    /// The game jam this rests on (migration 0585). Game only, and needed on
+    /// its own for `game_jam_participant`, which has no deliverable and so
+    /// would otherwise collide across every jam a person entered.
+    pub game_jam_id: Option<Uuid>,
+    /// The registered mod this rests on (migration 0585). Game only.
+    pub game_mod_id: Option<Uuid>,
+    /// The itch / GameJolt / store page a `game_shipped_title` vouches for
+    /// (migration 0585). Game only, and descriptive rather than a uniqueness
+    /// key — the shipped title rests on its deliverable.
+    pub external_publish_url: Option<String>,
 }
 
 /// What came back.
@@ -190,8 +200,9 @@ pub async fn issue_linked(
         INSERT INTO attestations
             (user_id, attestation_type, title, description, basis,
              linked_deliverable_ids, linked_project_ids, linked_skill_node_ids,
-             verification_code, security_finding_id, challenge_template_id)
-        VALUES ($1, 'artefact', $2, $3, $4, $5, $6, $7, $8, $9, $10)
+             verification_code, security_finding_id, challenge_template_id,
+             game_jam_id, game_mod_id, external_publish_url)
+        VALUES ($1, 'artefact', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         ON CONFLICT DO NOTHING
         RETURNING id, verification_code
         "#,
@@ -206,6 +217,9 @@ pub async fn issue_linked(
     .bind(verification_code())
     .bind(links.security_finding_id)
     .bind(links.challenge_template_id)
+    .bind(links.game_jam_id)
+    .bind(links.game_mod_id)
+    .bind(links.external_publish_url.as_deref())
     .fetch_optional(db)
     .await?;
 
@@ -225,6 +239,8 @@ pub async fn issue_linked(
                    AND linked_deliverable_ids = $3
                    AND security_finding_id IS NOT DISTINCT FROM $4
                    AND challenge_template_id IS NOT DISTINCT FROM $5
+                   AND game_jam_id IS NOT DISTINCT FROM $6
+                   AND game_mod_id IS NOT DISTINCT FROM $7
                  LIMIT 1
                 "#,
             )
@@ -233,6 +249,8 @@ pub async fn issue_linked(
             .bind(&deliverables)
             .bind(links.security_finding_id)
             .bind(links.challenge_template_id)
+            .bind(links.game_jam_id)
+            .bind(links.game_mod_id)
             .fetch_optional(db)
             .await?;
 

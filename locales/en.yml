@@ -214,6 +214,11 @@ notification:
       title: "Your trial period starts"
       body: "{weeks} paid weeks. Log your hours as you go."
       cta: "Open the trial"
+  placement:
+    proposed:
+      title: "{company} is offering you a placement"
+      body: "A company wants to hire you for the long term. Your call."
+      cta: "See the offer"
   reverse_recruitment:
     pitch_received:
       title: "{company} is making its case"

@@ -11,19 +11,28 @@ stateless HS256 JWTs signed with it (`AuthService::generate_access_token` /
 `verify_access_token`), so once the secret changes, **every existing access
 token fails verification** — the whole fleet is logged out on the next request.
 
-Refresh tokens are server-side, in Redis (`refresh:<user_id>`). They are *not*
-invalidated by the JWT rotation alone, so a full session kill is two steps:
+Refresh tokens are server-side, hashed in Postgres
+(`user_sessions.refresh_hash`) — an opaque random value checked against the DB
+by `SessionService::rotate`, **not** a JWT. So the JWT rotation alone does not
+invalidate them; a full session kill is two steps:
 
 1. **Rotate the secret.** Set a new 32+ byte random `JWT_SECRET` on the host
-   (Coolify → env), redeploy. New value:
-   `openssl rand -base64 48`.
-2. **Purge refresh tokens.** `redis-cli --scan --pattern 'refresh:*' | xargs redis-cli del`
-   (or `FLUSHDB` on the sessions DB if it is dedicated). Without this, a client
-   holding a refresh token can mint a new access token under the new secret.
+   (Coolify → env), redeploy. New value: `openssl rand -hex 48`.
+2. **Revoke every session in Postgres** — this is what actually kills refresh
+   tokens:
+   ```
+   docker exec <pg-container> psql -U postgres -d skilluv      -c "UPDATE user_sessions SET revoked_at = NOW() WHERE revoked_at IS NULL;"
+   ```
+   Without it, a client holding a refresh token rotates it for a fresh access
+   token under the new secret (verified live on the mirror, 2026-08-28).
+   Note: an older `refresh:<user_id>` **Redis** path in `AuthService` is dead
+   code the refresh flow never reads — purging Redis `refresh:*` does nothing,
+   do not rely on it.
 
 **Expected result:** every user must log in again. Verify on the mirror:
-capture a valid session, rotate + purge, replay the old cookie → 401. Time it;
-it should be under a minute end to end.
+capture a valid session, rotate the secret + revoke sessions, then replay the
+old cookies — access token → 401 (rotation), and `/auth/refresh` → 401 (session
+revoke). Time it; it should be under a minute end to end.
 
 Provider keys (Stripe, Brevo, GitHub OAuth, FedaPay, …) rotate at the provider
 console, then update the host env and redeploy. There is no session equivalent

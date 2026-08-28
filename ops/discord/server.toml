@@ -1,0 +1,476 @@
+# The Discord server Skilluv wants, declared once.
+#
+# ## Why a file and not the backlogs
+#
+# The channel lists come from `skilluv-strategy/pm-backlog-md/*/O-onboarding.md`
+# and `docs/*/DISCORD-STRUCTURE.md`. Those are prose written for people, and a
+# tool that parsed them to decide what to create on a live server would break
+# the first time somebody reworded a bullet. They were read once, by hand, into
+# this file. This file is the statement of record now; the backlogs explain it.
+#
+# ## What reads it
+#
+# `scripts/discord-setup.py`. It compares this to the actual server and creates
+# what is missing. Nothing here is applied without `--create`.
+#
+# ## `purpose`
+#
+# The five values `services::discord_announce::Purpose` routes on: general,
+# contests, winners, missions, promotions. A channel carrying one becomes a row
+# in `discord_channels`, so `contest_opened` in the design domain lands in
+# #design-concours. A channel without one is a room for people, not a
+# destination for the platform.
+#
+# ## `grants_on`
+#
+# What a role means on the platform. docs/design/DISCORD-STRUCTURE.md sets the
+# rule: a Discord role matching nothing on the platform is an authority that
+# does not exist. A role with `grants_on` can one day be granted by a
+# reconciliation loop; `manual = true` marks the ones that are yours to hand
+# out. That loop does not exist yet, and cannot until something fills
+# `users.discord_user_id` -- see the report the script prints.
+
+# -- The rooms that belong to nobody in particular ------------------
+
+[[categories]]
+name = "ACCUEIL"
+domain = ""
+channels = [
+    { name = "annonces", purpose = "general" },
+    { name = "promotions", purpose = "promotions" },
+    { name = "presentations" },
+    { name = "aide" },
+]
+
+
+# -- IA ------------------------------------------------------
+
+[[categories]]
+name = "IA"
+domain = "ai"
+channels = [
+    { name = "ai-general", purpose = "general" },
+    { name = "ai-help" },
+    { name = "ai-data-engineer" },
+    { name = "ai-ml" },
+    { name = "ai-llm" },
+    { name = "ai-safety-discussions" },
+    { name = "ai-paper-reading" },
+    { name = "ai-competitions", purpose = "contests" },
+    { name = "ai-missions", purpose = "missions" },
+]
+
+[[roles]]
+name = "AI Researcher"
+domain = "ai"
+# Anybody who has declared a trade in this domain.
+grants_on = "orientation"
+
+[[roles]]
+name = "AI Reviewer"
+domain = "ai"
+grants_on = "capability"
+capability = "ai_reviewer:*"
+
+[[roles]]
+name = "AI Champion"
+domain = "ai"
+# Nothing on the platform means this yet, so nobody is granted it
+# automatically. Created so you can hand it out.
+manual = true
+
+[[roles]]
+name = "AI Safety Advocate"
+domain = "ai"
+# Nothing on the platform means this yet, so nobody is granted it
+# automatically. Created so you can hand it out.
+manual = true
+
+
+# -- AUDIO ---------------------------------------------------
+
+[[categories]]
+name = "AUDIO"
+domain = "audio"
+channels = [
+    { name = "audio-general", purpose = "general" },
+    { name = "audio-help" },
+    { name = "audio-composer" },
+    { name = "audio-sound-designer" },
+    { name = "audio-voice-actor" },
+    { name = "audio-music-implementer" },
+    { name = "audio-programmer" },
+    { name = "audio-showcase" },
+    { name = "audio-battles", purpose = "contests" },
+    { name = "audio-livesessions" },
+    { name = "audio-missions", purpose = "missions" },
+]
+
+[[roles]]
+name = "Audio Creator"
+domain = "audio"
+# Anybody who has declared a trade in this domain.
+grants_on = "orientation"
+
+[[roles]]
+name = "Audio Reviewer"
+domain = "audio"
+grants_on = "capability"
+capability = "audio_reviewer:*"
+
+
+# -- CODE ----------------------------------------------------
+
+[[categories]]
+name = "CODE"
+domain = "code"
+channels = [
+    { name = "code-general", purpose = "general" },
+    { name = "code-help" },
+    { name = "code-showcase" },
+    { name = "code-newsletter" },
+    { name = "code-first-issues" },
+    { name = "code-review-lounge" },
+    { name = "code-web" },
+    { name = "code-mobile" },
+    { name = "code-systems" },
+    { name = "code-data-distributed" },
+    { name = "code-devtools" },
+    { name = "code-compilers-formal" },
+    { name = "code-scientific" },
+    { name = "code-networking" },
+    { name = "code-blockchain" },
+    { name = "code-desktop-enterprise" },
+    { name = "code-contests", purpose = "contests" },
+    { name = "code-oss-marathon" },
+    { name = "code-missions", purpose = "missions" },
+    { name = "lang-rust" },
+    { name = "lang-python" },
+    { name = "lang-typescript" },
+    { name = "lang-go" },
+    { name = "lang-cpp" },
+    { name = "lang-kotlin" },
+    { name = "lang-swift" },
+    { name = "lang-elixir" },
+    { name = "lang-julia" },
+    { name = "lang-zig" },
+    { name = "lang-other" },
+]
+
+[[roles]]
+name = "Developer"
+domain = "code"
+# Anybody who has declared a trade in this domain.
+grants_on = "orientation"
+
+[[roles]]
+name = "Code Reviewer"
+domain = "code"
+grants_on = "capability"
+capability = "code_reviewer:*"
+
+
+# -- COMMUNICATION -------------------------------------------
+
+[[categories]]
+name = "COMMUNICATION"
+domain = "communication"
+channels = [
+    { name = "comm-general", purpose = "general" },
+    { name = "comm-help" },
+    { name = "comm-tech-writer" },
+    { name = "comm-devrel" },
+    { name = "comm-content-creator" },
+    { name = "comm-translation" },
+    { name = "comm-research" },
+    { name = "comm-missions", purpose = "missions" },
+]
+
+[[roles]]
+name = "Communicator"
+domain = "communication"
+# Anybody who has declared a trade in this domain.
+grants_on = "orientation"
+
+[[roles]]
+name = "Communication Reviewer"
+domain = "communication"
+grants_on = "capability"
+capability = "communication_reviewer:*"
+
+[[roles]]
+name = "Communication Champion"
+domain = "communication"
+# Nothing on the platform means this yet, so nobody is granted it
+# automatically. Created so you can hand it out.
+manual = true
+
+
+# -- DESIGN --------------------------------------------------
+
+[[categories]]
+name = "DESIGN"
+domain = "design"
+channels = [
+    { name = "design-general", purpose = "general" },
+    { name = "design-critique" },
+    { name = "design-veille" },
+    { name = "design-relecteurs" },
+    { name = "design-produit" },
+    { name = "design-web" },
+    { name = "design-mobile" },
+    { name = "design-motion" },
+    { name = "design-brand" },
+    { name = "design-illustration" },
+    { name = "design-dataviz" },
+    { name = "design-ux-writing" },
+    { name = "design-marketing" },
+    { name = "design-game" },
+    { name = "design-3d-viz" },
+    { name = "design-immersif" },
+    { name = "design-service" },
+    { name = "design-concours", purpose = "contests" },
+]
+
+[[roles]]
+name = "Designer"
+domain = "design"
+# Anybody who has declared a trade in this domain.
+grants_on = "orientation"
+
+[[roles]]
+name = "Relecteur design"
+domain = "design"
+grants_on = "capability"
+capability = "design_reviewer:*"
+
+[[roles]]
+name = "Jury"
+domain = "design"
+grants_on = "capability"
+capability = "jury_tournament"
+
+
+# -- EDUCATION -----------------------------------------------
+
+[[categories]]
+name = "EDUCATION"
+domain = "education"
+channels = [
+    { name = "edu-general", purpose = "general" },
+    { name = "edu-help" },
+    { name = "edu-trainer" },
+    { name = "edu-curriculum" },
+    { name = "edu-teacher" },
+    { name = "edu-cohorts" },
+    { name = "edu-missions", purpose = "missions" },
+]
+
+[[roles]]
+name = "Educator"
+domain = "education"
+# Anybody who has declared a trade in this domain.
+grants_on = "orientation"
+
+[[roles]]
+name = "Education Reviewer"
+domain = "education"
+grants_on = "capability"
+capability = "education_reviewer:*"
+
+[[roles]]
+name = "Education Champion"
+domain = "education"
+# Nothing on the platform means this yet, so nobody is granted it
+# automatically. Created so you can hand it out.
+manual = true
+
+
+# -- GAME ----------------------------------------------------
+
+[[categories]]
+name = "GAME"
+domain = "game"
+channels = [
+    { name = "game-general", purpose = "general" },
+    { name = "game-help" },
+    { name = "game-showcase" },
+    { name = "game-newsletter" },
+    { name = "game-programming" },
+    { name = "game-design" },
+    { name = "game-art-animation" },
+    { name = "game-community" },
+    { name = "game-modding" },
+    { name = "game-web3" },
+    { name = "game-playtests" },
+    { name = "game-jams", purpose = "contests" },
+    { name = "game-speedcoding" },
+    { name = "game-winners", purpose = "winners" },
+    { name = "game-missions", purpose = "missions" },
+    { name = "engine-godot" },
+    { name = "engine-bevy" },
+    { name = "engine-unity" },
+    { name = "engine-unreal" },
+    { name = "engine-other" },
+]
+
+[[roles]]
+name = "Game Creator"
+domain = "game"
+# Anybody who has declared a trade in this domain.
+grants_on = "orientation"
+
+[[roles]]
+name = "Game Reviewer"
+domain = "game"
+grants_on = "capability"
+capability = "game_reviewer:*"
+
+
+# -- LEADERSHIP ----------------------------------------------
+
+[[categories]]
+name = "LEADERSHIP"
+domain = "leadership"
+channels = [
+    { name = "leadership-general", purpose = "general" },
+    { name = "leadership-help" },
+    { name = "lead-product" },
+    { name = "lead-tech" },
+    { name = "lead-project" },
+    { name = "lead-people" },
+    { name = "lead-community" },
+    { name = "lead-mentor" },
+    { name = "leadership-cohorts" },
+    { name = "leadership-missions", purpose = "missions" },
+]
+
+[[roles]]
+name = "Lead"
+domain = "leadership"
+# Anybody who has declared a trade in this domain.
+grants_on = "orientation"
+
+[[roles]]
+name = "Leadership Reviewer"
+domain = "leadership"
+grants_on = "capability"
+capability = "leadership_reviewer:*"
+
+
+# -- OPS -----------------------------------------------------
+
+[[categories]]
+name = "OPS"
+domain = "ops"
+channels = [
+    { name = "ops-general", purpose = "general" },
+    { name = "ops-help" },
+    { name = "ops-devops" },
+    { name = "ops-sre" },
+    { name = "ops-cloud" },
+    { name = "ops-platform" },
+    { name = "ops-k8s" },
+    { name = "ops-observability" },
+    { name = "ops-db" },
+    { name = "ops-tools" },
+    { name = "ops-incident" },
+    { name = "ops-incidents-lounge" },
+    { name = "ops-missions", purpose = "missions" },
+]
+
+[[roles]]
+name = "Ops Engineer"
+domain = "ops"
+# Anybody who has declared a trade in this domain.
+grants_on = "orientation"
+
+[[roles]]
+name = "Ops Reviewer"
+domain = "ops"
+grants_on = "capability"
+capability = "ops_reviewer:*"
+
+[[roles]]
+name = "Ops Champion"
+domain = "ops"
+# Nothing on the platform means this yet, so nobody is granted it
+# automatically. Created so you can hand it out.
+manual = true
+
+[[roles]]
+name = "Incident Commander"
+domain = "ops"
+# Nothing on the platform means this yet, so nobody is granted it
+# automatically. Created so you can hand it out.
+manual = true
+
+
+# -- QUALITY -------------------------------------------------
+
+[[categories]]
+name = "QUALITY"
+domain = "quality"
+channels = [
+    { name = "qa-general", purpose = "general" },
+    { name = "qa-help" },
+    { name = "qa-code" },
+    { name = "qa-cyber" },
+    { name = "qa-design" },
+    { name = "qa-game" },
+    { name = "qa-lead" },
+    { name = "qa-tools" },
+    { name = "qa-bug-bashes", purpose = "contests" },
+    { name = "qa-missions", purpose = "missions" },
+]
+
+[[roles]]
+name = "QA Engineer"
+domain = "quality"
+# Anybody who has declared a trade in this domain.
+grants_on = "orientation"
+
+[[roles]]
+name = "Quality Reviewer"
+domain = "quality"
+grants_on = "capability"
+capability = "quality_reviewer:*"
+
+
+# -- SECURITY ------------------------------------------------
+
+[[categories]]
+name = "SECURITY"
+domain = "security"
+channels = [
+    { name = "security-general", purpose = "general" },
+    { name = "security-help" },
+    { name = "security-red" },
+    { name = "security-blue" },
+    { name = "security-purple" },
+    { name = "security-code-audit" },
+    { name = "security-governance" },
+    { name = "security-ranges" },
+    { name = "security-tooling" },
+    { name = "security-triage" },
+    { name = "security-writeups" },
+    { name = "security-competitions", purpose = "contests" },
+]
+
+[[roles]]
+name = "Security Researcher"
+domain = "security"
+# Anybody who has declared a trade in this domain.
+grants_on = "orientation"
+
+[[roles]]
+name = "Security Reviewer"
+domain = "security"
+grants_on = "capability"
+capability = "security_reviewer:*"
+
+[[roles]]
+name = "Security Triager"
+domain = "security"
+grants_on = "capability"
+capability = "security_triager"

@@ -1,39 +1,39 @@
 #!/usr/bin/env python3
-"""Wire a Discord server to `discord_channels`, without copying snowflakes by hand.
+"""Bring a Discord server to the state `ops/discord/server.toml` declares.
 
-Migration 0257 routes every announcement through `discord_channels`, keyed by
-`(purpose, skill_domain)`, and deliberately seeds nothing: every value there is
-a snowflake from one specific server, and inventing one would send real
-announcements into a room that does not exist.
+The same shape as `services::seed`: one command, run as often as you like, that
+compares what should exist to what does and applies the difference. Running it
+twice changes nothing the second time.
 
-So the rows have to come from a real server. Reading them off Discord's own API
-beats right-clicking six channels and pasting ids into a chat window — it is
-faster, it cannot transpose a digit, and the token never leaves this machine.
+## What it can do
 
-## The token
+Categories, channels, roles, and the `discord_channels` routing rows that make
+`contest_opened` land in #design-concours rather than nowhere.
 
-Read from `DISCORD_BOT_TOKEN` in the environment or in `.env`. It is never
-printed, never passed on a command line, and never written to the SQL this
-emits. `.env` is gitignored; keep it that way.
+## What it cannot, and says so instead of pretending
 
-## What it does, and what it refuses to do by default
+Four things depend on you, and the report names them every run:
 
-Creating channels changes a server other people can see, so it is opt-in:
+  * **The bot token.** Yours to create and paste into `.env`. Never printed
+    here, never passed on a command line, never written into the SQL.
+  * **The invite.** A bot that is in no server has nothing to configure.
+  * **Permissions.** Manage Channels to create rooms, Manage Roles to create
+    roles, and for roles the bot must sit *above* them in the server's
+    hierarchy — Discord refuses otherwise and there is no API to promote
+    yourself.
+  * **Granting roles to people.** Not implemented, and not a gap in this
+    script. `users.discord_user_id` exists (migration 0138) and nothing fills
+    it, so the platform cannot tell which Discord member is which account.
+    Until something does, every role is created empty and handed out by you.
 
-    python scripts/discord-setup.py              # look, and report
-    python scripts/discord-setup.py --create     # create what is missing
-    python scripts/discord-setup.py --sql        # emit the INSERT statements
+## Usage
 
-The default run touches nothing. It lists the guilds the bot is in, matches the
-channels it needs by name, and tells you which are missing.
+    python scripts/discord-setup.py                 # look, report, touch nothing
+    python scripts/discord-setup.py --create        # apply what is missing
+    python scripts/discord-setup.py --sql           # emit the routing rows
+    python scripts/discord-setup.py --only design   # one domain at a time
 
-## Applying the SQL
-
-Reviewed by a person before it lands, because these five rows decide where
-real announcements go:
-
-    python scripts/discord-setup.py --sql > /tmp/discord.sql
-    docker exec -i skilluv-postgres psql -U skilluv -d skilluv < /tmp/discord.sql
+`--create` is opt-in because it changes a server other people can see.
 """
 
 import argparse
@@ -41,195 +41,247 @@ import json
 import os
 import re
 import sys
+import time
+import tomllib
 import urllib.error
 import urllib.request
 
 API = "https://discord.com/api/v10"
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SPEC = os.path.join(ROOT, "ops", "discord", "server.toml")
 
-# The five the code routes on, and the channel name each expects. `purpose` is
-# what `services::discord_announce::Purpose` emits; the name is only a default
-# — `--name` overrides one, and an existing channel is matched on it.
-PURPOSES = [
-    ("general", "annonces", "talent_featured — the weekly featuring"),
-    ("contests", "concours", "contest_opened — a contest opens"),
-    ("winners", "palmares", "contest_won — a contest is decided"),
-    ("missions", "missions", "mission_posted — a paid mission is published"),
-    ("promotions", "promotions", "rank_promotion, badge_earned"),
-]
+CHANNEL_TEXT, CHANNEL_CATEGORY = 0, 4
+
+
+def die(msg):
+    sys.exit(msg if msg.endswith("\n") else msg + "\n")
 
 
 def token():
-    """The bot token, from the environment or from `.env`. Never printed."""
+    """The bot token, from the environment or `.env`. Never printed."""
     tok = os.environ.get("DISCORD_BOT_TOKEN")
-    if tok:
-        return tok.strip()
+    if not tok:
+        env = os.path.join(ROOT, ".env")
+        if os.path.isfile(env):
+            for line in open(env, encoding="utf-8", errors="ignore"):
+                m = re.match(r"\s*DISCORD_BOT_TOKEN\s*=\s*(.+?)\s*$", line)
+                if m:
+                    tok = m.group(1).strip().strip("'\"")
+                    break
+    if not tok:
+        die(
+            "DISCORD_BOT_TOKEN is not set.\n\n"
+            "Put it in .env, which is gitignored:\n"
+            "    DISCORD_BOT_TOKEN=...\n\n"
+            "Not on the command line: that lands in your shell history, and\n"
+            "gitleaks runs on this repository."
+        )
+    return tok
 
-    here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    env = os.path.join(here, ".env")
-    if os.path.isfile(env):
-        for line in open(env, encoding="utf-8", errors="ignore"):
-            m = re.match(r"\s*DISCORD_BOT_TOKEN\s*=\s*(.+?)\s*$", line)
-            if m:
-                return m.group(1).strip().strip("'\"")
 
-    sys.exit(
-        "DISCORD_BOT_TOKEN is not set.\n"
-        "Put it in .env (which is gitignored) as:\n"
-        "    DISCORD_BOT_TOKEN=...\n"
-        "or export it for this shell. Do not pass it on the command line — it\n"
-        "would land in your shell history."
-    )
-
-
-def call(method, path, tok, body=None):
-    data = json.dumps(body).encode() if body is not None else None
-    req = urllib.request.Request(
-        API + path,
-        data=data,
-        method=method,
-        headers={
-            "Authorization": f"Bot {tok}",
-            "Content-Type": "application/json",
-            # Discord asks for one, and a real one makes their logs useful to
-            # them when something we do is wrong.
-            "User-Agent": "SkilluvSetup (https://skill-uv.com, 1.0)",
-        },
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=20) as r:
-            return json.loads(r.read() or b"null")
-    except urllib.error.HTTPError as e:
-        detail = e.read().decode(errors="replace")[:400]
-        if e.code == 401:
-            sys.exit("Discord refused the token (401). It may have been reset.")
-        if e.code == 403:
-            sys.exit(
-                f"Discord refused the action (403): {detail}\n"
-                "The bot is in the server but lacks the permission. For --create\n"
-                "it needs Manage Channels; for a read-only run it needs nothing\n"
-                "beyond being a member."
-            )
-        sys.exit(f"Discord returned {e.code} on {method} {path}: {detail}")
+def call(method, path, tok, body=None, retries=5):
+    """One API call, with Discord's rate limit honoured rather than fought."""
+    for attempt in range(retries):
+        data = json.dumps(body).encode() if body is not None else None
+        req = urllib.request.Request(
+            API + path,
+            data=data,
+            method=method,
+            headers={
+                "Authorization": f"Bot {tok}",
+                "Content-Type": "application/json",
+                "User-Agent": "SkilluvSetup (https://skill-uv.com, 1.0)",
+            },
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return json.loads(r.read() or b"null")
+        except urllib.error.HTTPError as e:
+            raw = e.read().decode(errors="replace")
+            # 429 is expected: creating 152 channels is exactly the shape
+            # Discord rate-limits. Wait what it asks and carry on.
+            if e.code == 429 and attempt < retries - 1:
+                try:
+                    wait = float(json.loads(raw).get("retry_after", 1)) + 0.5
+                except Exception:
+                    wait = 2.0
+                time.sleep(wait)
+                continue
+            if e.code == 401:
+                die("Discord refused the token (401). It may have been reset.")
+            if e.code == 403:
+                die(
+                    f"Discord refused the action (403).\n{raw[:300]}\n\n"
+                    "The bot is a member but lacks the permission. Creating\n"
+                    "channels needs Manage Channels; creating roles needs Manage\n"
+                    "Roles AND the bot's own role sitting above them in Server\n"
+                    "Settings > Roles. Neither can be granted from here."
+                )
+            die(f"Discord returned {e.code} on {method} {path}:\n{raw[:400]}")
+    die("Discord kept rate-limiting; try again in a minute.")
 
 
 def pick_guild(tok, wanted):
     guilds = call("GET", "/users/@me/guilds", tok)
     if not guilds:
-        sys.exit(
-            "The bot is not in any server yet. Invite it first:\n"
+        die(
+            "The bot is in no server. Invite it, then run this again:\n\n"
             "  https://discord.com/api/oauth2/authorize"
-            "?client_id=<APP_ID>&permissions=2064&scope=bot%20applications.commands\n"
-            "(2064 = Send Messages + Manage Channels, the latter only needed for --create)"
+            "?client_id=<APP_ID>&permissions=268435472&scope=bot%20applications.commands\n\n"
+            "268435472 = Send Messages + Manage Channels + Manage Roles."
         )
     if wanted:
         for g in guilds:
-            if g["id"] == wanted or g["name"] == wanted:
+            if wanted in (g["id"], g["name"]):
                 return g
-        sys.exit(f"No server called {wanted!r}. The bot is in: " + ", ".join(g["name"] for g in guilds))
+        die(f"No server {wanted!r}. The bot is in: " + ", ".join(g["name"] for g in guilds))
     if len(guilds) > 1:
-        sys.exit(
-            "The bot is in several servers; name the one you mean with --guild:\n  "
+        die(
+            "The bot is in several servers; name one with --guild:\n  "
             + "\n  ".join(f"{g['name']}  ({g['id']})" for g in guilds)
         )
     return guilds[0]
 
 
 def main():
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--guild", help="Server name or id, when the bot is in more than one.")
-    p.add_argument("--create", action="store_true", help="Create the channels that are missing.")
-    p.add_argument("--sql", action="store_true", help="Emit the INSERT statements and nothing else.")
-    p.add_argument(
-        "--domain",
-        default="",
-        help="Scope these rows to one skill domain. Empty (the default) is the "
-        "catch-all row every announcement falls back to.",
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    p.add_argument(
-        "--name",
-        action="append",
-        default=[],
-        metavar="PURPOSE=CHANNEL",
-        help="Override a channel name, e.g. --name winners=hall-of-fame. Repeatable.",
-    )
+    p.add_argument("--guild", help="Server name or id, if the bot is in several.")
+    p.add_argument("--create", action="store_true", help="Apply what is missing.")
+    p.add_argument("--sql", action="store_true", help="Emit the routing rows only.")
+    p.add_argument("--only", metavar="DOMAIN", help="One domain, e.g. design.")
+    p.add_argument("--no-roles", action="store_true", help="Channels only.")
     args = p.parse_args()
 
-    overrides = dict(n.split("=", 1) for n in args.name if "=" in n)
+    if not os.path.isfile(SPEC):
+        die(f"No spec at {SPEC}")
+    spec = tomllib.load(open(SPEC, "rb"))
+
+    cats = spec["categories"]
+    roles_wanted = [] if args.no_roles else spec.get("roles", [])
+    if args.only:
+        cats = [c for c in cats if c["domain"] == args.only]
+        roles_wanted = [r for r in roles_wanted if r.get("domain") == args.only]
+        if not cats:
+            die(f"No domain {args.only!r} in the spec.")
+
     tok = token()
     guild = pick_guild(tok, args.guild)
-    channels = call("GET", f"/guilds/{guild['id']}/channels", tok)
-    # type 0 is a text channel; a voice room cannot receive an announcement.
-    by_name = {c["name"]: c for c in channels if c.get("type") == 0}
+    gid = guild["id"]
+    say = (lambda *a: None) if args.sql else print
 
-    if not args.sql:
-        print(f"Server: {guild['name']}  ({guild['id']})")
-        print()
+    existing = call("GET", f"/guilds/{gid}/channels", tok)
+    have_cat = {c["name"].upper(): c for c in existing if c["type"] == CHANNEL_CATEGORY}
+    have_txt = {c["name"]: c for c in existing if c["type"] == CHANNEL_TEXT}
+    have_role = {r["name"]: r for r in call("GET", f"/guilds/{gid}/roles", tok)}
 
-    resolved, missing = [], []
-    for purpose, default_name, what in PURPOSES:
-        name = overrides.get(purpose, default_name)
-        found = by_name.get(name)
+    say(f"Server: {guild['name']}  ({gid})")
+    say("")
 
-        if found is None and args.create:
-            found = call(
-                "POST",
-                f"/guilds/{guild['id']}/channels",
-                tok,
-                {"name": name, "type": 0, "topic": f"Skilluv — {what}"},
-            )
-            if not args.sql:
-                print(f"  created  #{name}")
+    created, present, missing, routing = 0, 0, [], []
 
-        if found is None:
-            missing.append((purpose, name, what))
+    for cat in cats:
+        parent = have_cat.get(cat["name"].upper())
+        if parent is None:
+            if args.create:
+                parent = call(
+                    "POST",
+                    f"/guilds/{gid}/channels",
+                    tok,
+                    {"name": cat["name"], "type": CHANNEL_CATEGORY},
+                )
+                have_cat[cat["name"].upper()] = parent
+                say(f"  + category  {cat['name']}")
+                created += 1
+            else:
+                missing.append(f"category {cat['name']}")
+
+        for ch in cat["channels"]:
+            found = have_txt.get(ch["name"])
+            if found is None and args.create:
+                body = {"name": ch["name"], "type": CHANNEL_TEXT}
+                if parent:
+                    body["parent_id"] = parent["id"]
+                found = call("POST", f"/guilds/{gid}/channels", tok, body)
+                have_txt[ch["name"]] = found
+                say(f"  + channel   #{ch['name']}")
+                created += 1
+            elif found is None:
+                missing.append(f"#{ch['name']}")
+            else:
+                present += 1
+
+            if found and "purpose" in ch:
+                routing.append((ch["purpose"], cat["domain"], found["id"], ch["name"]))
+
+    for role in roles_wanted:
+        if role["name"] in have_role:
+            present += 1
+            continue
+        if args.create:
+            call("POST", f"/guilds/{gid}/roles", tok, {"name": role["name"], "mentionable": True})
+            say(f"  + role      @{role['name']}")
+            created += 1
         else:
-            resolved.append((purpose, name, found["id"], what))
-            if not args.sql:
-                print(f"  found    #{name:<14} {found['id']}  → {purpose}")
+            missing.append(f"@{role['name']}")
 
-    if missing and not args.sql:
-        print()
-        for purpose, name, what in missing:
-            print(f"  MISSING  #{name:<14} {'':18}  → {purpose}   ({what})")
-        print()
-        print("Create them yourself, or re-run with --create (needs Manage Channels).")
+    say("")
+    say(f"{present} already there, {created} created, {len(missing)} missing.")
+    if missing and not args.create:
+        say("")
+        for m in missing[:40]:
+            say(f"  missing  {m}")
+        if len(missing) > 40:
+            say(f"  ... and {len(missing) - 40} more")
+        say("")
+        say("Re-run with --create to make them.")
 
-    if not resolved:
-        sys.exit(1 if missing else 0)
-
-    if args.sql or not missing:
-        out = sys.stdout if args.sql else sys.stderr
+    # ── The routing rows ────────────────────────────────────────────
+    if routing and (args.sql or args.create or not missing):
         if not args.sql:
-            print()
-            print("Every channel resolved. The rows to apply:")
-            print()
-            out = sys.stdout
-        print("-- Generated by scripts/discord-setup.py.")
-        print(f"-- Server: {guild['name']} ({guild['id']}).")
-        print("-- `skill_domain = ''` is the catch-all: one row per purpose covers")
-        print("-- every domain. Add domain-scoped rows later to split them.")
+            say("")
+            say("Routing rows to apply — review before running them, these five")
+            say("decide where real announcements land:")
+            say("")
+        print("-- Generated by scripts/discord-setup.py from ops/discord/server.toml.")
+        print(f"-- Server: {guild['name']} ({gid}).")
         print("INSERT INTO discord_channels (purpose, skill_domain, channel_id, label) VALUES")
-        rows = [
-            f"    ('{purpose}', '{args.domain}', '{cid}', '#{name}')"
-            for purpose, name, cid, _ in resolved
-        ]
-        print(",\n".join(rows))
+        rows = sorted({(p, d, cid, n) for p, d, cid, n in routing})
+        print(",\n".join(f"    ('{p}', '{d}', '{cid}', '#{n}')" for p, d, cid, n in rows))
         print("ON CONFLICT (purpose, skill_domain) DO UPDATE")
         print("    SET channel_id = EXCLUDED.channel_id,")
         print("        label      = EXCLUDED.label,")
         print("        updated_at = NOW();")
 
-    if not args.sql:
-        print()
-        print("Then, on the deployment:")
-        print(f"    DISCORD_GUILD_ID={guild['id']}")
-        print("    DISCORD_BOT_TOKEN=(the one in your .env, set in Coolify)")
-        print()
-        print("Run `skilluv-discord-bot`, not `skilluv-discord-notifier`: the")
-        print("notifier is the v1 webhook fallback and cannot route these five")
-        print("purposes. It registers the slash commands itself on first connect.")
+    if args.sql:
+        return 0
 
-    return 0
+    # ── What is yours ───────────────────────────────────────────────
+    say("")
+    say("═" * 62)
+    say("  Yours to do — this script cannot")
+    say("═" * 62)
+    say(f"  1. Set DISCORD_GUILD_ID={gid} on the deployment,")
+    say("     alongside the DISCORD_BOT_TOKEN already in your .env.")
+    say("")
+    say("  2. Run `skilluv-discord-bot`, NOT `skilluv-discord-notifier`.")
+    say("     The notifier is the v1 webhook fallback and cannot route the")
+    say("     five purposes above. The bot registers its slash commands on")
+    say("     its first connection — nothing to do for those.")
+    say("")
+    say("  3. Apply the SQL above, once you have read it.")
+    say("")
+    manual = [r["name"] for r in roles_wanted if r.get("manual")]
+    say("  4. Hand out every role yourself, for now. Nothing fills")
+    say("     users.discord_user_id, so the platform cannot tell which")
+    say("     Discord member is which account, and a role granted on a guess")
+    say("     is an authority nobody earned.")
+    if manual:
+        say("     These have no platform meaning at all and are yours for good:")
+        say("       " + ", ".join(f"@{m}" for m in manual))
+    say("═" * 62)
+    return 1 if (missing and not args.create) else 0
 
 
 if __name__ == "__main__":

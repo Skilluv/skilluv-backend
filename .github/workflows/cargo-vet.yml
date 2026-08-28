@@ -40,7 +40,7 @@ jobs:
       - name: Install cargo-vet
         uses: taiki-e/install-action@ba47c86ac325773530516bb756137ac718732518  # v2
         with:
-          tool: cargo-vet
+          tool: cargo-vet@0.10.2
       - name: cargo vet
         # --locked uses the pinned imports.lock (no network re-fetch).
         run: cargo vet --locked

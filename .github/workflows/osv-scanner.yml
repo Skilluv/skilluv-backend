@@ -67,6 +67,8 @@ jobs:
           sarif_file: osv.sarif
           category: osv-scanner
 
-      - name: Gate on findings
-        # The real gate: a readable table, non-zero exit on any vulnerability.
-        run: osv-scanner --lockfile Cargo.lock
+      - name: Report findings (advisory)
+        # Advisory, not a gate: cargo-deny (in ci.yml) is the authoritative
+        # advisory gate; osv is broader and would otherwise block on advisories
+        # the team's deny.toml policy already accepts. Surfaces the table + SARIF.
+        run: osv-scanner --lockfile Cargo.lock || echo "osv findings above are advisory -- triage against deny.toml"

@@ -643,7 +643,8 @@ pub async fn list_invitations(
     .bind(auth.user_id)
     .fetch_optional(&state.db)
     .await?;
-    let is_admin = crate::middleware::capabilities::has_capability(&state.db, auth.user_id, "admin").await?;
+    let is_admin =
+        crate::middleware::capabilities::has_capability(&state.db, auth.user_id, "admin").await?;
     if is_officer.is_none() && !is_admin {
         return Err(AppError::Forbidden);
     }
@@ -712,7 +713,8 @@ pub async fn list_applications(
     .bind(auth.user_id)
     .fetch_optional(&state.db)
     .await?;
-    let is_admin = crate::middleware::capabilities::has_capability(&state.db, auth.user_id, "admin").await?;
+    let is_admin =
+        crate::middleware::capabilities::has_capability(&state.db, auth.user_id, "admin").await?;
     if is_officer.is_none() && !is_admin {
         return Err(AppError::Forbidden);
     }
@@ -1020,7 +1022,8 @@ pub async fn conclude_war(
 ) -> Result<Json<Value>, AppError> {
     // BE-P0-38 : admin OR founder/officer of the winner guild can conclude.
     // (Sprint 6 will add automatic scoring based on evidence submissions.)
-    let is_admin = crate::middleware::capabilities::has_capability(&state.db, auth.user_id, "admin").await?;
+    let is_admin =
+        crate::middleware::capabilities::has_capability(&state.db, auth.user_id, "admin").await?;
     if !is_admin {
         let is_officer: Option<(String,)> = sqlx::query_as(
             "SELECT role FROM guild_members

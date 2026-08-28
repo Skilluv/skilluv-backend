@@ -43,9 +43,17 @@ jobs:
         uses: github/codeql-action/init@4187e74d05793876e9989daffde9c3e66b4acd07  # v3
         with:
           languages: rust
-          # Extend the default suite with security-and-quality (more queries,
-          # slightly more noise but catches more).
-          queries: security-and-quality
+          # security-extended keeps the security queries but drops the noisy
+          # quality ones -- the queries that flagged assert! panic messages,
+          # config values (JUDGE0_URL) and https consts as findings. Triage on
+          # PR #97 showed every prior alert was a false positive.
+          queries: security-extended
+          # Test code uses fixtures (fake usernames/tokens); exclude it so the
+          # sensitive-data queries stop flagging test assertions.
+          config: |
+            paths-ignore:
+              - tests
+              - "**/tests/**"
 
       - name: Autobuild
         uses: github/codeql-action/autobuild@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd  # v3

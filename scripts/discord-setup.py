@@ -52,6 +52,16 @@ SPEC = os.path.join(ROOT, "ops", "discord", "server.toml")
 
 CHANNEL_TEXT, CHANNEL_CATEGORY = 0, 4
 
+# A Windows console is cp1252 by default, and a server called "Skilluv Café"
+# would take the whole run down on the first print. Best effort: where the
+# runtime allows it the stream becomes UTF-8, and the report itself stays ASCII
+# so that even where it does not, nothing crashes.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8")
+    except (AttributeError, ValueError):
+        pass
+
 
 def die(msg):
     sys.exit(msg if msg.endswith("\n") else msg + "\n")
@@ -259,9 +269,9 @@ def main():
 
     # ── What is yours ───────────────────────────────────────────────
     say("")
-    say("═" * 62)
+    say("=" * 62)
     say("  Yours to do — this script cannot")
-    say("═" * 62)
+    say("=" * 62)
     say(f"  1. Set DISCORD_GUILD_ID={gid} on the deployment,")
     say("     alongside the DISCORD_BOT_TOKEN already in your .env.")
     say("")
@@ -280,7 +290,7 @@ def main():
     if manual:
         say("     These have no platform meaning at all and are yours for good:")
         say("       " + ", ".join(f"@{m}" for m in manual))
-    say("═" * 62)
+    say("=" * 62)
     return 1 if (missing and not args.create) else 0
 
 

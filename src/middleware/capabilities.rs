@@ -32,6 +32,22 @@ pub async fn require_capability(
     user_id: Uuid,
     capability: &str,
 ) -> Result<(), AppError> {
+    if !has_capability(db, user_id, capability).await? {
+        return Err(AppError::Forbidden);
+    }
+    Ok(())
+}
+
+/// Boolean variant of [`require_capability`]: returns whether the user holds
+/// the (non-revoked, non-expired) capability, without turning its absence into
+/// an error. Used by endpoints whose gate is a compound condition — e.g. a
+/// guild officer *or* an admin may act — where the admin arm is one branch of
+/// an `||` rather than the whole check.
+pub async fn has_capability(
+    db: &PgPool,
+    user_id: Uuid,
+    capability: &str,
+) -> Result<bool, AppError> {
     let has: bool = sqlx::query_scalar(
         r#"
         SELECT EXISTS (
@@ -47,10 +63,7 @@ pub async fn require_capability(
     .bind(capability)
     .fetch_one(db)
     .await?;
-    if !has {
-        return Err(AppError::Forbidden);
-    }
-    Ok(())
+    Ok(has)
 }
 
 /// P25.3 — Retourne Ok(()) si l'user a AU MOINS UNE des capabilities listées

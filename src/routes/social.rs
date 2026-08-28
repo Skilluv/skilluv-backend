@@ -479,9 +479,7 @@ pub async fn admin_create_tag(
     auth: AuthUser,
     Json(input): Json<social::CreateTagInput>,
 ) -> Result<Json<Value>, AppError> {
-    if auth.role != "admin" {
-        return Err(AppError::Forbidden);
-    }
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     let tag = social::create_tag(&state.db, input).await?;
     Ok(Json(build_response(json!({ "tag": tag }))))
 }

@@ -81,9 +81,7 @@ pub async fn admin_accounting_export(
     auth: AuthUser,
     axum::extract::Query(q): axum::extract::Query<AccountingQuery>,
 ) -> Result<impl IntoResponse, AppError> {
-    if auth.role != "admin" {
-        return Err(AppError::Forbidden);
-    }
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     let year = q.year.unwrap_or_else(|| chrono::Utc::now().year());
     let month = q.month.unwrap_or_else(|| chrono::Utc::now().month() as i32);
     let rows: Vec<sqlx::postgres::PgRow> = sqlx::query(

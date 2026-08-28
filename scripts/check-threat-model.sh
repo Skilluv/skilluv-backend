@@ -69,7 +69,20 @@ if ! grep -rqE 'HttpOnly; Secure; SameSite=Strict' src/routes/auth.rs 2>/dev/nul
   fail=1
 fi
 
+# -- E) Admin authorization goes through the capability, not users.role -----
+# P18 moved "is this user an admin?" onto user_capabilities; a handler that
+# gates on `auth.role == "admin"` reads the legacy column instead, which the
+# modern grant path (admin_grant_capability) never sets — so a capability-only
+# admin is wrongly refused. The whole tree was converted (commit 138556d0);
+# a new `auth.role (==|!=) "admin"` is that exact regression coming back.
+# Doc comments (///) are narration, not code, and are exempt.
+if hits=$(grep -rnE '\bauth\.role\s*(==|!=)\s*"admin"' src/routes/ --include='*.rs' 2>/dev/null | grep -vE ':\s*///'); then
+  note "FAIL — admin gate on the legacy users.role column. Use require_capability(&state.db, auth.user_id, \"admin\") (or has_capability for a compound check)."
+  printf '%s\n' "$hits" | sed 's/^/  /'
+  fail=1
+fi
+
 if [ "$fail" -eq 0 ]; then
-  note "ok — no dynamic SQL, no console prints, auth cookies SameSite=Strict"
+  note "ok — no dynamic SQL, no console prints, auth cookies SameSite=Strict, admin via capability"
 fi
 exit "$fail"

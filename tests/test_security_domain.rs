@@ -1558,3 +1558,638 @@ async fn concurrent_withdraws_leave_exactly_one_winner() {
         .unwrap();
     assert_eq!(status, "withdrawn", "the finding is not cleanly withdrawn");
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// Defensive labs — what a client is served (SKI-332)
+// ═══════════════════════════════════════════════════════════════════
+
+/// A defensive lab, created the only way one can be: by somebody who solved it.
+async fn a_lab(app: &TestApp, admin_username: &str) -> Uuid {
+    app.login(admin_username).await;
+    let resp = app
+        .post(
+            "/api/admin/security/challenges",
+            &json!({
+                "title": "Read the exfiltration out of an hour of proxy logs",
+                "description": "One host talked to somewhere it had no reason to.",
+                "instructions": "Download the capture. Answer from what is in it.",
+                "kind": "defensive_lab",
+                "difficulty": 3,
+                "difficulty_tier": "medium",
+                "reward_fragments": 60,
+                "lab_artifact_key": "blue-lab/exfil-2026-08/capture.zip",
+                "lab_artifact_bytes": 41_943_040_i64,
+                "pass_percent": 80,
+                "max_attempts": 3,
+                "questions": [
+                    {
+                        "id": "q1",
+                        "kind": "text",
+                        "question": "Which internal host initiated the transfer?",
+                        "answer": "10.42.0.17",
+                        "hint": "Sort by bytes sent, not by request count.",
+                    },
+                    {
+                        "id": "q2",
+                        "kind": "choice",
+                        "question": "Over which protocol did it leave?",
+                        "answer": "dns",
+                        "choices": ["http", "dns", "smtp"],
+                        "hint": "Look at what was allowed outbound.",
+                    },
+                ],
+            }),
+        )
+        .await;
+    let status = resp.status();
+    let body: Value = resp.json().await.unwrap();
+    assert_eq!(status, 200, "create said: {body}");
+    let id: Uuid = body["data"]["id"].as_str().unwrap().parse().unwrap();
+
+    sqlx::query("UPDATE challenge_templates SET status = 'published' WHERE id = $1")
+        .bind(id)
+        .execute(&app.db)
+        .await
+        .unwrap();
+    id
+}
+
+#[tokio::test]
+async fn a_lab_serves_its_questions_without_its_answers_or_its_hints() {
+    let app = TestApp::spawn().await;
+    let admin = a_person(&app, "lab_curator").await;
+    grant(&app, admin, "admin").await;
+    let challenge = a_lab(&app, "lab_curator").await;
+
+    // The public detail. A catalogue page is readable by anybody.
+    let resp = app.get(&format!("/api/challenges/{challenge}")).await;
+    assert_eq!(resp.status(), 200);
+    let body: Value = resp.json().await.unwrap();
+    let c = &body["data"]["challenge"];
+
+    // What the page needs to be built at all.
+    let questions = c["security_lab_questions"].as_array().unwrap();
+    assert_eq!(questions.len(), 2, "{body}");
+    assert_eq!(questions[0]["id"], "q1");
+    assert_eq!(
+        questions[0]["question"],
+        "Which internal host initiated the transfer?"
+    );
+    assert_eq!(questions[1]["kind"], "choice");
+    assert_eq!(questions[1]["choices"], json!(["http", "dns", "smtp"]));
+
+    // What the page must announce before somebody starts.
+    assert_eq!(c["security_lab_pass_percent"], 80);
+    assert_eq!(c["security_lab_max_attempts"], 3);
+    assert_eq!(c["security_lab_artifact_bytes"], 41_943_040_i64);
+
+    // And what may never be on the wire. The hash of a short answer is one
+    // wordlist away from the answer.
+    let serialised = body.to_string();
+    assert!(
+        !serialised.contains("expected_answer_hash"),
+        "the answer hashes were served: {serialised}"
+    );
+    assert!(
+        !serialised.contains("Sort by bytes sent"),
+        "the hints were served before the first attempt: {serialised}"
+    );
+    // The bucket key stays on the server — the download endpoint signs it.
+    assert!(
+        !serialised.contains("blue-lab/"),
+        "the artefact key was served: {serialised}"
+    );
+
+    // The same restraint on the list, which is the other place a template is
+    // serialised — the stripping is on the type, not on one handler.
+    let resp = app
+        .get("/api/challenges?domain=security&security_kind=defensive_lab")
+        .await;
+    assert_eq!(resp.status(), 200);
+    let listed: Value = resp.json().await.unwrap();
+    let listed = listed.to_string();
+    assert!(listed.contains("Which internal host"), "{listed}");
+    assert!(!listed.contains("expected_answer_hash"), "{listed}");
+    assert!(!listed.contains("Sort by bytes sent"), "{listed}");
+}
+
+#[tokio::test]
+async fn a_hint_is_what_a_wrong_answer_buys() {
+    let app = TestApp::spawn().await;
+    let admin = a_person(&app, "lab_curator2").await;
+    grant(&app, admin, "admin").await;
+    let challenge = a_lab(&app, "lab_curator2").await;
+
+    a_person(&app, "analyst").await;
+    app.login("analyst").await;
+
+    // Answering with the ids the endpoint actually served — which is the whole
+    // point of serving them.
+    let resp = app
+        .post(
+            &format!("/api/security/challenges/{challenge}/answers"),
+            &json!({ "answers": { "q1": "10.42.0.99", "q2": "http" } }),
+        )
+        .await;
+    assert_eq!(resp.status(), 200);
+    let body: Value = resp.json().await.unwrap();
+    let outcome = &body["data"]["outcome"];
+    assert_eq!(outcome["passed"], false, "{body}");
+    assert_eq!(outcome["correct_count"], 0, "{body}");
+    // Now, and only now, the hints.
+    let hints = outcome["hints"].as_array().unwrap();
+    assert_eq!(hints.len(), 2, "{body}");
+    assert!(
+        hints.iter().any(|h| h
+            .as_str()
+            .unwrap_or_default()
+            .contains("Sort by bytes sent")),
+        "{body}"
+    );
+}
+
+#[tokio::test]
+async fn the_artefact_link_is_signed_expiring_and_only_for_a_lab() {
+    let app = TestApp::spawn().await;
+    let admin = a_person(&app, "lab_curator3").await;
+    grant(&app, admin, "admin").await;
+    let challenge = a_lab(&app, "lab_curator3").await;
+
+    a_person(&app, "analyst2").await;
+    app.login("analyst2").await;
+    let resp = app
+        .get(&format!("/api/security/challenges/{challenge}/artifact"))
+        .await;
+    let status = resp.status();
+    let body: Value = resp.json().await.unwrap();
+    assert_eq!(status, 200, "{body}");
+    let data = &body["data"];
+    assert_eq!(data["expires_in_seconds"], 24 * 3600);
+    assert_eq!(data["size_bytes"], 41_943_040_i64);
+    assert_eq!(data["filename"], "capture.zip");
+    let url = data["url"].as_str().unwrap();
+    assert!(url.contains("X-Amz-Signature"), "not a signed URL: {url}");
+    assert!(url.contains("X-Amz-Expires=86400"), "{url}");
+
+    // A flag challenge has no artefact, and says so rather than signing
+    // whatever happens to be in the column.
+    let flag_challenge = a_flag_challenge(&app, "lab_curator3", "SKILLUV{no_artefact}").await;
+    app.login("analyst2").await;
+    let resp = app
+        .get(&format!(
+            "/api/security/challenges/{flag_challenge}/artifact"
+        ))
+        .await;
+    assert_eq!(resp.status(), 400);
+
+    // And a draft lab is not downloadable while it is being written.
+    sqlx::query("UPDATE challenge_templates SET status = 'draft' WHERE id = $1")
+        .bind(challenge)
+        .execute(&app.db)
+        .await
+        .unwrap();
+    let resp = app
+        .get(&format!("/api/security/challenges/{challenge}/artifact"))
+        .await;
+    assert_eq!(resp.status(), 409);
+}
+
+/// A report with its own endpoint and its own description.
+///
+/// `a_report` is one text, and filing it three times makes every copy a
+/// suspected duplicate of the others -- which is the deduplication scanner
+/// doing its job, and which would make any count of suspected duplicates a
+/// count of the fixture.
+async fn a_distinct_finding(
+    app: &TestApp,
+    username: &str,
+    title: &str,
+    endpoint: &str,
+    what: &str,
+) -> Uuid {
+    app.login(username).await;
+    let mut report = a_report(title);
+    report["affected_endpoint"] = json!(endpoint);
+    report["description_md"] = json!(format!(
+        "On {endpoint}, {what}. A caller who controls that value controls what          the server does with it, and nothing downstream re-checks."
+    ));
+    report["reproduction_steps_md"] = json!(format!(
+        "1. Sign in as any account
+2. Call {endpoint} with the value below
+         3. Observe that {what}"
+    ));
+    let (status, body) = submit(app, &report).await;
+    assert_eq!(status, 200, "submit said: {body}");
+    body["data"]["report"]["id"]
+        .as_str()
+        .expect("an id")
+        .parse()
+        .unwrap()
+}
+
+/// How many notifications one account has, in total.
+async fn notifications_for(app: &TestApp, username: &str) -> i64 {
+    sqlx::query_scalar(
+        "SELECT count(*) FROM notifications n
+           JOIN users u ON u.id = n.user_id
+          WHERE u.username = $1",
+    )
+    .bind(username)
+    .fetch_one(&app.db)
+    .await
+    .unwrap()
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// The admin surface: overview, internal thread, tokens (SKI-338)
+// ═══════════════════════════════════════════════════════════════════
+
+#[tokio::test]
+async fn the_overview_counts_the_queue_and_names_the_sla_it_is_breaching() {
+    let app = TestApp::spawn().await;
+    let admin = a_person(&app, "sec_overview_admin").await;
+    grant(&app, admin, "admin").await;
+
+    a_person(&app, "ov_reporter").await;
+    // Three genuinely different reports. Filing the same text three times
+    // trips the similarity scan, and `suspected_duplicates` would then be
+    // counting the fixture rather than the queue.
+    let fresh = a_distinct_finding(
+        &app,
+        "ov_reporter",
+        "A finding that arrived this morning",
+        "GET /api/users",
+        "the search parameter reaches the query unbound",
+    )
+    .await;
+    let late = a_distinct_finding(
+        &app,
+        "ov_reporter",
+        "A finding nobody has read in a fortnight",
+        "POST /api/auth/reset",
+        "the reset token is compared with a non-constant-time equality",
+    )
+    .await;
+
+    // Back-dated rather than waited for. The SLA is the only figure here that
+    // cannot be derived from the queue, so it is the one worth a fixture.
+    sqlx::query(
+        "UPDATE security_findings SET created_at = NOW() - INTERVAL '14 days' WHERE id = $1",
+    )
+    .bind(late)
+    .execute(&app.db)
+    .await
+    .unwrap();
+
+    // And one that is closed business: it must not be counted as backlog.
+    let withdrawn = a_distinct_finding(
+        &app,
+        "ov_reporter",
+        "A finding its author took back",
+        "GET /api/exports",
+        "the export job accepts a path fragment it then opens",
+    )
+    .await;
+    sqlx::query("UPDATE security_findings SET status = 'withdrawn' WHERE id = $1")
+        .bind(withdrawn)
+        .execute(&app.db)
+        .await
+        .unwrap();
+
+    app.login("sec_overview_admin").await;
+    let resp = app.get("/api/admin/security/overview").await;
+    let status = resp.status();
+    let body: Value = resp.json().await.unwrap();
+    assert_eq!(status, 200, "{body}");
+    let d = &body["data"];
+
+    assert_eq!(d["by_status"]["submitted"], 2, "{body}");
+    assert!(
+        d["by_status"]["withdrawn"].is_null(),
+        "closed business counted as backlog: {body}"
+    );
+    assert_eq!(d["by_severity"]["high"], 2, "{body}");
+
+    // The reason the endpoint exists.
+    assert_eq!(d["breaching_triage_sla"], 1, "{body}");
+    assert_eq!(d["triage_sla_days"], 7, "{body}");
+    let oldest = d["oldest_untriaged_hours"].as_f64().unwrap();
+    assert!((330.0..=350.0).contains(&oldest), "{body}");
+
+    assert_eq!(d["open_rounds"], 0, "{body}");
+    assert_eq!(d["suspected_duplicates"], 0, "{body}");
+    assert_eq!(d["embargoes_overdue"], 0, "{body}");
+    assert!(d["embargoes_expiring_7d"].is_number(), "{body}");
+
+    let _ = fresh;
+
+    // Not a public figure: the backlog says how far behind this platform is.
+    app.login("ov_reporter").await;
+    let resp = app.get("/api/admin/security/overview").await;
+    assert_eq!(resp.status(), 403);
+}
+
+#[tokio::test]
+async fn an_internal_note_never_reaches_the_person_who_reported_it() {
+    let app = TestApp::spawn().await;
+    let triager = a_person(&app, "sec_note_triager").await;
+    grant(&app, triager, "security_triager").await;
+    a_person(&app, "note_reporter").await;
+    let finding = a_finding(&app, "note_reporter", "A finding worth a note or two").await;
+
+    const NOTE: &str = "Could not reproduce on staging, the endpoint moved in \
+                        yesterday's deploy. Picking this back up tomorrow.";
+
+    app.login("sec_note_triager").await;
+    let resp = app
+        .post(
+            &format!("/api/admin/security/findings/{finding}/comments"),
+            &json!({ "body_md": NOTE }),
+        )
+        .await;
+    let status = resp.status();
+    let body: Value = resp.json().await.unwrap();
+    assert_eq!(status, 200, "{body}");
+
+    // Where it is meant to be read.
+    let resp = app
+        .get(&format!("/api/admin/security/findings/{finding}"))
+        .await;
+    let body: Value = resp.json().await.unwrap();
+    let comments = body["data"]["comments"].as_array().unwrap();
+    assert_eq!(comments.len(), 1, "{body}");
+    assert_eq!(comments[0]["body_md"], NOTE);
+    assert_eq!(comments[0]["author"], "sec_note_triager");
+
+    // And the two places it must never be. The reporter's own card first.
+    let resp = app.get(&format!("/api/security/findings/{finding}")).await;
+    let card = resp.text().await.unwrap();
+    assert!(
+        !card.contains("Could not reproduce"),
+        "the internal note reached the public card: {card}"
+    );
+
+    // Then the reporter's notifications. Counted around the write rather than
+    // in total: submitting a report notifies its author, and asserting zero
+    // here would be asserting that the acknowledgement is broken.
+    let before = notifications_for(&app, "note_reporter").await;
+    app.login("sec_note_triager").await;
+    let resp = app
+        .post(
+            &format!("/api/admin/security/findings/{finding}/comments"),
+            &json!({ "body_md": "Second note, to be sure nothing leaves on a write." }),
+        )
+        .await;
+    assert_eq!(resp.status(), 200);
+    assert_eq!(
+        notifications_for(&app, "note_reporter").await,
+        before,
+        "an internal note notified the reporter"
+    );
+    // And nothing that did arrive carries what was written.
+    let leaked: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM notifications n
+           JOIN users u ON u.id = n.user_id
+          WHERE u.username = 'note_reporter'
+            AND (n.body ILIKE '%reproduce%' OR n.title ILIKE '%reproduce%')",
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert_eq!(leaked, 0, "an internal note reached the reporter's inbox");
+
+    // A stranger cannot write one.
+    a_person(&app, "note_stranger").await;
+    app.login("note_stranger").await;
+    let resp = app
+        .post(
+            &format!("/api/admin/security/findings/{finding}/comments"),
+            &json!({ "body_md": "let me in" }),
+        )
+        .await;
+    assert_eq!(resp.status(), 403);
+
+    // And an empty one is refused rather than stored.
+    app.login("sec_note_triager").await;
+    let resp = app
+        .post(
+            &format!("/api/admin/security/findings/{finding}/comments"),
+            &json!({ "body_md": "  " }),
+        )
+        .await;
+    assert_eq!(resp.status(), 400);
+}
+
+#[tokio::test]
+async fn the_token_listing_is_what_makes_revocation_reachable() {
+    let app = TestApp::spawn().await;
+    let admin = a_person(&app, "tok_admin").await;
+    grant(&app, admin, "admin").await;
+    a_person(&app, "tok_researcher").await;
+
+    // Issued the way a researcher issues one.
+    app.login("tok_researcher").await;
+    let resp = app
+        .post(
+            "/api/security/research-token",
+            &json!({ "label": "Burp on the laptop", "days": 30 }),
+        )
+        .await;
+    let status = resp.status();
+    let issued: Value = resp.json().await.unwrap();
+    assert_eq!(status, 200, "{issued}");
+    let plaintext = issued["data"]["token"].as_str().unwrap().to_string();
+
+    app.login("tok_admin").await;
+    let resp = app.get("/api/admin/security/research-tokens").await;
+    let status = resp.status();
+    let body: Value = resp.json().await.unwrap();
+    assert_eq!(status, 200, "{body}");
+    let tokens = body["data"]["tokens"].as_array().unwrap();
+    assert_eq!(tokens.len(), 1, "{body}");
+    let t = &tokens[0];
+    assert_eq!(t["username"], "tok_researcher");
+    assert_eq!(t["label"], "Burp on the laptop");
+    assert_eq!(t["revoked_at"], Value::Null);
+    assert_eq!(t["findings"], 0, "{body}");
+
+    // The one thing a listing of credentials must never carry.
+    let serialised = body.to_string();
+    assert!(
+        !serialised.contains(&plaintext),
+        "the token itself was listed"
+    );
+    // The prefix is there, because it is what matches a log line.
+    assert!(t["token_prefix"].as_str().unwrap().starts_with("srt_"));
+
+    // The id it returns is the one the revoke endpoint takes — which is the
+    // whole point: before this, that id could only come out of psql.
+    let id = t["id"].as_str().unwrap();
+    let resp = app
+        .post(
+            &format!("/api/admin/security/research-tokens/{id}/revoke"),
+            &json!({}),
+        )
+        .await;
+    assert_eq!(resp.status(), 200);
+
+    // And a revoked token drops out of the active filter without disappearing
+    // from the record.
+    let resp = app
+        .get("/api/admin/security/research-tokens?active_only=true")
+        .await;
+    let body: Value = resp.json().await.unwrap();
+    assert_eq!(
+        body["data"]["tokens"].as_array().unwrap().len(),
+        0,
+        "{body}"
+    );
+
+    let resp = app.get("/api/admin/security/research-tokens").await;
+    let body: Value = resp.json().await.unwrap();
+    assert_eq!(body["data"]["tokens"][0]["revoked_reason"], "by_operator");
+
+    // A reader of findings is not automatically a reader of credentials.
+    let triager = a_person(&app, "tok_triager").await;
+    grant(&app, triager, "security_triager").await;
+    app.login("tok_triager").await;
+    let resp = app.get("/api/admin/security/research-tokens").await;
+    assert_eq!(resp.status(), 403);
+}
+
+#[tokio::test]
+async fn a_finding_records_the_token_it_arrived_under() {
+    let app = TestApp::spawn().await;
+    a_person(&app, "tok_hunter").await;
+    app.login("tok_hunter").await;
+
+    let resp = app
+        .post("/api/security/research-token", &json!({ "days": 30 }))
+        .await;
+    let issued: Value = resp.json().await.unwrap();
+    let plaintext = issued["data"]["token"].as_str().unwrap().to_string();
+
+    // Without the header: no token on the row, which is the ordinary case.
+    let (status, body) = submit(&app, &a_report("A finding sent without the token")).await;
+    assert_eq!(status, 200, "{body}");
+
+    // With it.
+    let resp = app
+        .client
+        .post(format!("{}/api/security/reports", app.addr))
+        .header("origin", "http://localhost:5173")
+        .header("X-Security-Research-Token", &plaintext)
+        .json(&a_report("A finding sent under the token"))
+        .send()
+        .await
+        .unwrap();
+    let status = resp.status();
+    let body: Value = resp.json().await.unwrap();
+    assert_eq!(status, 200, "{body}");
+
+    let counted: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM security_findings WHERE research_token_id IS NOT NULL",
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert_eq!(counted, 1, "the token was not recorded on the report");
+
+    // And the listing reports it, which is the number a revocation turns on.
+    let admin = a_person(&app, "tok_admin2").await;
+    grant(&app, admin, "admin").await;
+    app.login("tok_admin2").await;
+    let resp = app.get("/api/admin/security/research-tokens").await;
+    let body: Value = resp.json().await.unwrap();
+    assert_eq!(body["data"]["tokens"][0]["findings"], 1, "{body}");
+    assert_eq!(body["data"]["tokens"][0]["findings_confirmed"], 0, "{body}");
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// What a CTF page needs to exist at all (SKI-339)
+// ═══════════════════════════════════════════════════════════════════
+
+#[tokio::test]
+async fn a_flag_challenge_says_where_its_target_is_and_what_a_flag_looks_like() {
+    let app = TestApp::spawn().await;
+    let admin = a_person(&app, "ctf_curator").await;
+    grant(&app, admin, "admin").await;
+    let challenge = a_flag_challenge(&app, "ctf_curator", "SKILLUV{shape_matters}").await;
+
+    let resp = app.get(&format!("/api/challenges/{challenge}")).await;
+    assert_eq!(resp.status(), 200);
+    let body: Value = resp.json().await.unwrap();
+    let c = &body["data"]["challenge"];
+
+    // Without these two a CTF page says "find the flag" and names neither the
+    // range nor the shape.
+    assert_eq!(c["security_target_url"], "https://ctf.skill-uv.com");
+    assert_eq!(c["security_flag_format"], "SKILLUV{lower_snake_case}");
+
+    // The format in particular is what stops somebody burning their ten
+    // attempts an hour submitting a solved challenge in the wrong shape —
+    // `submit_flag` returns that as a hint on a wrong answer, and announcing
+    // it up front is strictly better than teaching it by refusal.
+    let serialised = body.to_string();
+    assert!(
+        !serialised.contains("shape_matters"),
+        "the flag was served: {serialised}"
+    );
+    assert!(
+        !serialised.contains("security_flag_hash"),
+        "the answer hash was served: {serialised}"
+    );
+
+    // And the same on the listing, which is where a `/ctf` index reads them.
+    let resp = app
+        .get("/api/challenges?domain=security&security_kind=ctf_flag")
+        .await;
+    let listed = resp.json::<Value>().await.unwrap().to_string();
+    assert!(listed.contains("ctf.skill-uv.com"), "{listed}");
+    assert!(!listed.contains("security_flag_hash"), "{listed}");
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// The seeded catalogue, and the two kinds deliberately absent from it
+// ═══════════════════════════════════════════════════════════════════
+
+/// SKI-137 and SKI-145 read as "zero rows seeded", and that is true. This
+/// holds the reason, so the next person to read an empty `/ctf` finds the
+/// decision rather than assuming a bug.
+///
+/// `ctf_flag` and `defensive_lab` are machine-checked, and machine checking
+/// requires this platform to own the secret. Every target in the seeded
+/// catalogue belongs to somebody else — Juice Shop, WebGoat, PortSwigger,
+/// VulnHub — so there is no secret to hold, and a flag hash invented by a
+/// migration author would produce a challenge nobody can ever pass.
+#[tokio::test]
+async fn the_machine_checked_kinds_are_never_seeded_and_the_others_always_are() {
+    let app = TestApp::spawn().await;
+
+    let machine_checked: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM challenge_templates
+          WHERE security_kind IN ('ctf_flag', 'defensive_lab')",
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert_eq!(
+        machine_checked, 0,
+        "a migration seeded a flag or a lab, which means it invented an answer"
+    );
+
+    // The human-reviewed kinds are seeded, and they are what the catalogue is.
+    let reviewed: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM challenge_templates
+          WHERE security_kind IN ('machine_walkthrough', 'training_ground',
+                                  'analysis_exercise', 'audit_exercise')",
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert!(reviewed >= 40, "only {reviewed} security challenges seeded");
+
+    // So the one route to a flag challenge is the admin endpoint, by somebody
+    // who planted the flag. That path is exercised by
+    // `a_flag_is_checked_against_a_hash_and_the_plaintext_is_never_stored`.
+}

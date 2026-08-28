@@ -1,49 +1,86 @@
-# scripts/ — Bootstrap seeds
+# scripts/ — outils, pas des seeds
 
-Scripts SQL de bootstrap **contenu** (pas des migrations schéma). Ne sont pas
-lus par sqlx et n'apparaissent pas dans `_sqlx_migrations`. À runner manuellement
-en dev et via l'UI admin en prod.
+Les seeds de contenu **ne vivent plus ici**. Ils sont dans
+`src/services/seed/`, appliqués automatiquement par le serveur après ses
+migrations, à chaque démarrage.
 
-## Scripts disponibles
+## Pourquoi le déplacement
 
-| Fichier                          | Effet                                                                  |
-|----------------------------------|------------------------------------------------------------------------|
-| `seed_oss_partners.sql`          | Insère 12 partenaires OSS curés en Tier 1 (`skilluv_partnership_level=NULL`) |
-| `seed_flagships.sql`             | Insère 2 flagships Skilluv (`hello-africa`, `wax-icons`)               |
-| `seed_season1_deliverables.sql`  | Crée la Saison 1 "Hello World" + 10 deliverables `challenge_templates` |
+Ce dossier contenait sept scripts SQL à lancer à la main, dans un ordre écrit
+nulle part, et rien n'enregistrait s'ils l'avaient été. Quatre d'entre eux ne
+pouvaient de toute façon pas fonctionner : ils résolvaient leur propriétaire
+avec `WHERE email = 'admin@skilluv.local'` alors que `seed_admin` crée
+`admin@skill-uv.com`. Le CTE était vide, l'`INSERT ... SELECT` n'insérait rien,
+et `psql` sortait 0. Deux autres portaient un UUID de propriétaire en dur, celui
+d'une seule machine de développement.
 
-Tous les scripts sont **idempotents** (`ON CONFLICT DO NOTHING`) : re-runnables
-sans dégât.
+Un seed qui réussit sans rien faire est pire qu'un seed que personne n'a lancé :
+le second se remarque.
 
-## Dev — application locale
+## Ce qui se passe maintenant
 
-Docker Compose lancé, Postgres accessible via `skilluv-postgres` :
+Au démarrage, après les migrations, le serveur applique
+`services::seed::run`. Il lit la table `seed_runs`, saute chaque étape dont la
+version y figure déjà, et applique le reste. Sur une base à jour, c'est un seul
+`SELECT`.
 
-```bash
-docker cp scripts/seed_oss_partners.sql skilluv-postgres:/tmp/s.sql
-docker exec skilluv-postgres psql -U skilluv -d skilluv -v ON_ERROR_STOP=1 -f /tmp/s.sql
+Donc : **première mise en production, base supprimée et recréée, restauration
+d'un dump** — le catalogue se remet en place tout seul.
+
+Les dix étapes, dans l'ordre où les données dépendent les unes des autres :
+
+| Étape | Contenu |
+|---|---|
+| `admin_account` | le compte administrateur que tout le reste possède |
+| `oss_partners` | les douze dépôts partenaires de l'Annexe F |
+| `projects` | nos dépôts, les partenaires, l'écosystème (≈ 50) |
+| `oss_partners_ingestion` | quels labels amont deviennent des tranches |
+| `flagships` | les deux projets que Skilluv porte lui-même |
+| `onboarding_challenges` | un premier défi par starter |
+| `badge_rule_bonjour_skilluv` | le badge de la première PR mergée |
+| `season1_deliverables` | la saison 1 et ses dix livrables |
+| `season2_deliverables` | la saison 2 et ses livrables |
+| `design_canvas` | le travail design sur nos propres surfaces |
+
+## Configuration
+
+Une seule variable est obligatoire, la première fois :
+
+```
+SEED_ADMIN_PASSWORD=...   # 12 caractères minimum
+SEED_ADMIN_EMAIL=...      # défaut : admin@skill-uv.com
 ```
 
-Répéter pour chaque fichier dans l'ordre :
-1. `seed_oss_partners.sql`
-2. `seed_flagships.sql`
-3. `seed_season1_deliverables.sql`
+Sans elle, le serveur démarre quand même, saute les étapes qui ont besoin d'un
+propriétaire, et le dit très fort dans les logs. On pose la variable, on
+redémarre, et le catalogue se rattrape — rien de déjà appliqué n'est refait.
 
-## Prod — via l'admin panel
+`SKILLUV_SEED_ON_BOOT=0` désactive le seed au démarrage : pour une réplique qui
+ne doit pas courir contre la primaire, ou pour une restauration qu'on veut
+inspecter avant de lui faire confiance.
 
-**Ne pas exécuter ces scripts directement en prod.** Ils utilisent
-`admin@skilluv.local` comme owner/steward — un compte fixture dev.
+## À la main
 
-En prod, passer par l'UI admin :
-- `/projects` (skilluv-admin) pour les 14 projets
-- `/challenges` (skilluv-admin) pour les 10 deliverables
+```bash
+cargo run --bin skilluv-seed-all                     # applique ce qui manque
+cargo run --bin skilluv-seed-all -- --list           # les noms d'étapes
+cargo run --bin skilluv-seed-all -- --forget projects  # rejouer une étape
+cargo run --bin skilluv-seed-all -- --forget-all     # rejouer tout
+```
 
-Les scripts servent de source de vérité pour le contenu à saisir (slug, titre,
-description, notes éditoriales), pas comme mécanisme d'insertion.
+Modifier un fichier de seed suffit à le rejouer : la version d'une étape SQL est
+le SHA-256 de son contenu, donc le prochain déploiement la réapplique. Les
+étapes écrites en Rust portent une version que l'auteur incrémente.
 
-## Convention
+## Ce qui reste opt-in, et le restera
 
-- Un script SQL par lot logique de contenu
-- Toujours `ON CONFLICT` sur une contrainte unique existante
-- Toujours un `SELECT` de résumé à la fin pour visibilité
-- Owner en dev = `admin@skilluv.local` — à ré-owner en prod
+| Binaire | Pourquoi il n'est pas dans le catalogue |
+|---|---|
+| `skilluv-seed` | invente des utilisateurs et des soumissions. Un démarrage en production qui le lancerait mettrait des gens imaginaires au classement. |
+| `skilluv-seed-guild` | fixture end-to-end, refuse déjà de tourner ailleurs qu'en local. |
+
+## Le reste de ce dossier
+
+Des outils, pas du contenu : vérification des migrations, capabilités nommées
+dans le code, smoke tests, tests de paiement. Ils se lancent à la main et rien
+ne les appelle au démarrage.

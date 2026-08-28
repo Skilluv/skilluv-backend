@@ -37,6 +37,7 @@ pub fn admin_mission_routes() -> Router<AppState> {
         .route("/admin/missions", get(list))
         .route("/admin/missions/{slug}", get(detail))
         .route("/admin/missions/{slug}/arbitrate", post(arbitrate))
+        .route("/admin/missions/{slug}/status", post(take_down))
 }
 
 /// An admin, the curator of the mission's domain, or an arbiter.
@@ -143,6 +144,20 @@ pub struct AdminMissionRow {
     pub arbitrated: bool,
 }
 
+/// `GET /admin/missions`, in the shape every other admin listing answers.
+///
+/// `{data, pagination, meta}` rather than `ApiResponse<Vec<_>>`: SKI-58 settled
+/// that convention and `tests/test_admin_listing_convention.rs` holds it. This
+/// endpoint was the exception, and the cost was concrete — with no `total`, the
+/// admin pager could only ever offer one more page when the current one came
+/// back full, which is a guess about whether there is anything on it.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AdminMissionListResponse {
+    pub data: Vec<AdminMissionRow>,
+    pub pagination: crate::api_response::Pagination,
+    pub meta: crate::api_response::MetaInfo,
+}
+
 /// Every mission, narrowed.
 #[utoipa::path(
     get,
@@ -151,7 +166,7 @@ pub struct AdminMissionRow {
     tag = "admin",
     params(ListQuery),
     responses(
-        (status = 200, body = ApiResponse<Vec<AdminMissionRow>>),
+        (status = 200, body = AdminMissionListResponse),
         (status = 400, description = "Unknown domain or filter", body = crate::api_response::ErrorResponse),
         (status = 403, description = "Not an admin or a curator", body = crate::api_response::ErrorResponse),
     ),
@@ -161,7 +176,7 @@ pub async fn list(
     State(state): State<AppState>,
     auth: AuthUser,
     Query(q): Query<ListQuery>,
-) -> Result<Json<ApiResponse<Vec<AdminMissionRow>>>, AppError> {
+) -> Result<Json<AdminMissionListResponse>, AppError> {
     if let Some(domain) = &q.skill_domain {
         crate::validators::validate_skill_domain(domain, "skill_domain")?;
     }
@@ -257,7 +272,49 @@ pub async fn list(
     .fetch_all(&state.db)
     .await?;
 
-    Ok(Json(ApiResponse::new(rows)))
+    // The same WHERE, without the window. Written out rather than derived from
+    // the query above because the two differ only in what they select, and a
+    // count that quietly drifts from the list it describes is worse than no
+    // count: the pager would offer pages that are empty.
+    let total: i64 = sqlx::query_scalar(
+        r#"
+        SELECT count(*)
+          FROM missions m
+          JOIN mission_types mt ON mt.id = m.mission_type_id
+          LEFT JOIN mission_arbitrations a ON a.mission_id = m.id
+          LEFT JOIN LATERAL (
+              SELECT min(md.delivered_at) FILTER (WHERE md.decision IS NULL)
+                         AS waiting_since
+                FROM mission_deliveries md
+               WHERE md.mission_id = m.id
+          ) AS d ON TRUE
+         WHERE ($1::TEXT IS NULL OR m.skill_domain = $1)
+           AND ($2::TEXT IS NULL OR mt.slug = $2)
+           AND ($3::TEXT IS NULL OR m.status = $3)
+           AND (NOT $5::BOOLEAN
+                OR (d.waiting_since IS NOT NULL
+                    AND d.waiting_since < NOW() - ($4::INTEGER * INTERVAL '1 day')
+                    AND a.id IS NULL))
+        "#,
+    )
+    .bind(q.skill_domain.as_deref())
+    .bind(q.mission_type.as_deref())
+    .bind(q.status.as_deref())
+    .bind(q.stuck_after_days)
+    .bind(q.stuck_only)
+    .fetch_one(&state.db)
+    .await?;
+
+    Ok(Json(AdminMissionListResponse {
+        data: rows,
+        pagination: crate::api_response::Pagination {
+            page: q.page,
+            per_page: q.per_page,
+            total,
+            total_pages: Some((total + q.per_page - 1) / q.per_page),
+        },
+        meta: crate::api_response::MetaInfo::now(),
+    }))
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -633,4 +690,188 @@ pub async fn arbitrate(
     }
 
     load_detail(&state, mission_id, ip_terms, nda_required).await
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Taking one down
+// ═══════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TakeDownBody {
+    /// Only `cancelled`. The field exists rather than being implied by the
+    /// path so that the request says what it does, and so that the day a
+    /// second platform-level status exists this endpoint does not have to
+    /// change shape.
+    pub status: String,
+    /// Why, read by the enterprise and by whoever was working on it. Twenty
+    /// characters minimum: "spam" is a verdict, not a reason, and the two
+    /// people who receive it have no other account of what happened.
+    #[schema(min_length = 20, max_length = 4000)]
+    pub reason: String,
+}
+
+/// Take a mission off the board.
+///
+/// ## Why an admin needs this at all
+///
+/// Nothing reviews a mission before it is published. That is deliberate — the
+/// control is the KYC an enterprise clears before it can post anything, which
+/// checks *who* may publish once instead of *what* is published every time,
+/// and a per-mission gate would put a person between a paying client and their
+/// advert with nobody to staff the queue.
+///
+/// The price of not reviewing beforehand is being able to act afterwards, and
+/// until now nobody could: `POST /api/missions/{slug}/status` is behind
+/// `require_enterprise` plus an ownership check, so a mission that breached the
+/// terms could only be removed by the account that posted it.
+///
+/// ## Why not `mission_arbiter`
+///
+/// An arbitration decides a case between two parties who both still want
+/// something. This decides that the platform will not carry the listing, which
+/// is not a judgement between them — it is a judgement about them, and it is
+/// answered for by whoever answers for the platform.
+///
+/// ## Why a delivered mission is refused
+///
+/// Cancelling returns the escrow. Doing that to a mission whose work has been
+/// handed in takes money back from somebody who did the work, on one person's
+/// say-so and with no record that the delivery was ever weighed. That case has
+/// an endpoint, and it is `arbitrate`: it writes down the decision, answers
+/// the open round, and lets the outcome be argued with afterwards.
+#[utoipa::path(
+    post,
+    path = "/api/admin/missions/{slug}/status",
+    operation_id = "adminMissionsTakeDown",
+    tag = "admin",
+    params(("slug" = String, Path, description = "Mission slug")),
+    request_body = TakeDownBody,
+    responses(
+        (status = 200, description = "Taken down", body = ApiResponse<AdminMissionDetail>),
+        (status = 400, description = "Not `cancelled`, or a reason too short", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "No such mission", body = crate::api_response::ErrorResponse),
+        (status = 409, description = "Already ended, or delivered and so an arbitration", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn take_down(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    headers: axum::http::HeaderMap,
+    Path(slug): Path<String>,
+    Json(body): Json<TakeDownBody>,
+) -> Result<Json<ApiResponse<AdminMissionDetail>>, AppError> {
+    crate::routes::admin::require_admin(&state, &auth).await?;
+
+    if body.status != "cancelled" {
+        return Err(AppError::Validation(
+            "the only status an administrator sets on somebody else's mission is \
+             cancelled. Moving it forward is the two parties' to do"
+                .into(),
+        ));
+    }
+    let reason = body.reason.trim();
+    if reason.chars().count() < 20 {
+        return Err(AppError::Validation(
+            "say why in at least twenty characters — the enterprise and whoever \
+             was working on it both read this, and it is the only account they get"
+                .into(),
+        ));
+    }
+    crate::validators::check_max_len(reason, "reason", 4000)?;
+
+    #[derive(sqlx::FromRow)]
+    struct Row {
+        id: Uuid,
+        status: String,
+        ip_terms: String,
+        nda_required: bool,
+        enterprise_id: Uuid,
+        assigned_user_id: Option<Uuid>,
+        title: String,
+    }
+
+    let mission: Option<Row> = sqlx::query_as(
+        "SELECT id, status, ip_terms, nda_required, enterprise_id,
+                assigned_user_id, title
+           FROM missions WHERE slug = $1",
+    )
+    .bind(&slug)
+    .fetch_optional(&state.db)
+    .await?;
+    let Some(m) = mission else {
+        return Err(AppError::NotFound("no such mission".into()));
+    };
+    let (mission_id, status, assigned, title) =
+        (m.id, m.status.clone(), m.assigned_user_id, m.title.clone());
+
+    if status == "cancelled" || status == "closed" {
+        return Err(AppError::Conflict(format!(
+            "this mission is already {status}"
+        )));
+    }
+    // The transition table refuses `delivered -> cancelled` for everybody but
+    // an arbiter, and would say so. It is caught here to say *why*, and to
+    // name the endpoint that does handle it — the alternative is an
+    // administrator reading "a delivered mission cannot become cancelled" and
+    // concluding nothing can be done about it.
+    if status == "delivered" {
+        return Err(AppError::Conflict(
+            "the work on this one has been handed in. Cancelling it would take the \
+             escrow back from whoever did it, which is a decision between the two \
+             parties — use the arbitration endpoint, which records it as one"
+                .into(),
+        ));
+    }
+
+    // Through `set_status`, which is what returns the escrow. An UPDATE here
+    // would set the word and leave the money where it was; the arbitration
+    // endpoint above carries the same note and the same scar.
+    crate::services::missions::set_status(&state.db, mission_id, "cancelled", Some(reason)).await?;
+
+    crate::services::audit::record(
+        &state.db,
+        crate::services::audit::AuditEntry {
+            actor_type: crate::services::audit::ActorType::Admin,
+            actor_id: Some(auth.user_id),
+            action: "mission.taken_down",
+            target_type: Some("mission"),
+            target_id: Some(mission_id),
+            metadata: Some(serde_json::json!({
+                "slug": slug,
+                "from_status": status,
+                "reason": reason,
+            })),
+            headers: Some(&headers),
+        },
+    )
+    .await;
+
+    // Both sides, same wording. A takedown explained one way to the client and
+    // another way to the contractor is two decisions.
+    let owner: Option<Uuid> = sqlx::query_scalar("SELECT owner_id FROM enterprises WHERE id = $1")
+        .bind(m.enterprise_id)
+        .fetch_optional(&state.db)
+        .await?;
+    for recipient in [owner, assigned].into_iter().flatten() {
+        let _ = crate::services::notify::send(
+            &state,
+            crate::services::notify::Recipient::User(recipient),
+            "mission.taken_down",
+        )
+        .arg("mission", title.clone())
+        .arg("reason", reason.to_string())
+        .payload(serde_json::json!({
+            "mission_id": mission_id,
+            "mission_slug": slug,
+        }))
+        .execute()
+        .await;
+    }
+
+    metrics::counter!("skilluv_mission_takedowns_total").increment(1);
+
+    load_detail(&state, mission_id, m.ip_terms, m.nda_required).await
 }

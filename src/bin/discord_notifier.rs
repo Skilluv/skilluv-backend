@@ -96,8 +96,28 @@ async fn tick(
             _ => None,
         };
         let Some(url) = webhook_url else {
-            // Silently mark sent when no webhook configured — we don't
-            // want the queue to swell if the operator hasn't wired it.
+            // Two different reasons to have no webhook, and they must not be
+            // treated the same.
+            //
+            // An event type this binary *knows* and whose webhook the operator
+            // has not wired: mark it sent, so the queue does not swell against
+            // a channel that will never exist.
+            //
+            // An event type it does not know — `contest_opened`,
+            // `contest_won`, `talent_featured`, `mission_posted`, added by
+            // migration 0257 — belongs to `skilluv-discord-bot`, which routes
+            // on `target_channel_id`. Marking those sent here silently
+            // destroys them: this binary is the v1 fallback, and a fallback
+            // that eats the successor's messages is worse than one that does
+            // nothing. Left untouched, so whichever consumer can post them
+            // still finds them.
+            if !HANDLED_EVENTS.contains(&row.event_type.as_str()) {
+                tracing::debug!(
+                    event_type = %row.event_type,
+                    "left for skilluv-discord-bot: this binary cannot route it"
+                );
+                continue;
+            }
             let _ =
                 sqlx::query("UPDATE discord_notifications_queue SET sent_at = NOW() WHERE id = $1")
                     .bind(row.id)
@@ -131,6 +151,20 @@ async fn tick(
     }
     Ok(sent)
 }
+
+/// The event types this binary can route, and the only ones it may mark sent.
+///
+/// Anything else is a later addition — migration 0257's contest and mission
+/// announcements — and belongs to `skilluv-discord-bot`, which routes on
+/// `target_channel_id` rather than on two hard-coded webhooks. Both binaries
+/// poll the same queue, so this list is what keeps the v1 fallback from
+/// consuming rows only v2 can deliver.
+const HANDLED_EVENTS: &[&str] = &[
+    "rank_promotion",
+    "badge_earned",
+    "attestation_new",
+    "slice_validated",
+];
 
 async fn post_to_discord(webhook_url: &str, event_type: &str, payload: &Value) -> Result<()> {
     let content = render_message(event_type, payload);

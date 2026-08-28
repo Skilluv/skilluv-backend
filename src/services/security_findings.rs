@@ -392,7 +392,7 @@ pub async fn submit(
             proposed_fix_md, proof_keys,
             cvss_vector, cvss_score,
             severity_reported_tier, severity_tier, cwe_id,
-            status, triage_skipped_reason
+            status, triage_skipped_reason, research_token_id
         ) VALUES (
             $1, $2,
             $3, $4, $5, $6, $7,
@@ -400,7 +400,7 @@ pub async fn submit(
             $12, $13,
             $14, $15,
             $16, $16, $17,
-            'submitted', $18
+            'submitted', $18, $19
         )
         RETURNING id
         "#,
@@ -423,6 +423,12 @@ pub async fn submit(
     .bind(&tier)
     .bind(input.cwe_id.as_deref())
     .bind(skip)
+    // From the request scope, never from the body. A token id a client could
+    // send would let anybody credit somebody else's token with their finding,
+    // and the listing that reads this column is what a revocation decision is
+    // taken from. NULL is the ordinary case: a token raises a rate limit and
+    // reporting has never required one.
+    .bind(crate::middleware::security_research::current().map(|mode| mode.token_id))
     .fetch_one(&mut *tx)
     .await?;
 

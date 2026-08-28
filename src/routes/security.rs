@@ -63,6 +63,7 @@ pub fn security_routes() -> Router<AppState> {
         // Practice.
         .route("/security/challenges/{id}/flag", post(submit_flag))
         .route("/security/challenges/{id}/answers", post(submit_answers))
+        .route("/security/challenges/{id}/artifact", get(lab_artifact))
         // Research mode.
         .route(
             "/security/research-token",
@@ -478,19 +479,62 @@ pub async fn submit_flag(
         .flatten();
 
         if let Some((title, username)) = context {
+            let payload = json!({
+                "challenge_id": id,
+                "challenge_title": title,
+                "username": username,
+            });
+
+            // Twice, on purpose, and the two are not the same message.
+            //
+            // Globally, because a first blood is community news — the only
+            // thing in this domain broadcast rather than kept between a
+            // reporter and a reviewer.
             state
                 .ws
                 .broadcast_all(crate::websocket::WsMessage {
                     event: "security.first_solve".to_string(),
                     room: None,
-                    payload: json!({
-                        "challenge_id": id,
-                        "challenge_title": title,
-                        "username": username,
-                    }),
+                    payload: payload.clone(),
                 })
                 .await;
+
+            // And into the challenge's own room, because a page showing one
+            // CTF cannot filter a global broadcast down to itself without
+            // receiving every other challenge's traffic first. `ctf:{id}`
+            // follows `challenge:{id}` and `leaderboard:{domain}`, which
+            // `routes::challenges` has used since the beginning (SKI-141).
+            let room = format!("ctf:{id}");
+            state
+                .ws
+                .broadcast_to_room(
+                    &room,
+                    crate::websocket::WsMessage {
+                        event: "security.first_solve".to_string(),
+                        room: Some(room.clone()),
+                        payload,
+                    },
+                )
+                .await;
         }
+    }
+
+    // The scoreboard moved, whether or not this was a first blood. Sent to the
+    // room rather than to everybody: a solve is interesting to the people
+    // watching that challenge, and to nobody else.
+    if outcome.correct {
+        let room = format!("ctf:{id}");
+        state
+            .ws
+            .broadcast_to_room(
+                &room,
+                crate::websocket::WsMessage {
+                    event: "security.scoreboard_changed".to_string(),
+                    room: Some(room.clone()),
+                    payload: json!({ "challenge_id": id }),
+                },
+            )
+            .await;
     }
 
     Ok(Json(ApiResponse::new(json!({ "outcome": outcome }))))
@@ -515,6 +559,36 @@ pub async fn submit_answers(
 ) -> Result<Json<ApiResponse<Value>>, AppError> {
     let outcome = security_practice::submit_answers(&state.db, auth.user_id, id, body).await?;
     Ok(Json(ApiResponse::new(json!({ "outcome": outcome }))))
+}
+
+/// A one-day link to the artefact of a defensive lab.
+///
+/// Authenticated, because the link is minted for whoever asked and expires:
+/// the artefact is not secret — it was redacted and published to be analysed —
+/// but a permanent public URL to a capture is a mirror somebody else hosts, and
+/// then a lab this platform cannot revise.
+///
+/// The analysis happens on the reader's own machine, in the reader's own tools.
+/// Nothing is uploaded back; only the answers return, through
+/// `POST /security/challenges/{id}/answers`.
+#[utoipa::path(
+    get, path = "/api/security/challenges/{id}/artifact", tag = "security",
+    params(("id" = Uuid, Path, description = "Challenge")),
+    responses(
+        (status = 200, body = ApiResponse<security_practice::LabArtifact>),
+        (status = 400, description = "Not a lab", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "No such challenge", body = crate::api_response::ErrorResponse),
+        (status = 409, description = "Not published", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn lab_artifact(
+    State(state): State<AppState>,
+    _auth: AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<ApiResponse<security_practice::LabArtifact>>, AppError> {
+    let artifact = security_practice::artifact_link(&state.db, &state.storage, id).await?;
+    Ok(Json(ApiResponse::new(artifact)))
 }
 
 /// Who has solved what.

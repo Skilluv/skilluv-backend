@@ -42,6 +42,7 @@ use crate::services::{
 
 pub fn admin_security_routes() -> Router<AppState> {
     Router::new()
+        .route("/admin/security/overview", get(overview))
         .route("/admin/security/findings", get(queue))
         .route("/admin/security/findings/{id}", get(detail))
         .route("/admin/security/findings/{id}/transition", post(transition))
@@ -65,6 +66,7 @@ pub fn admin_security_routes() -> Router<AppState> {
         )
         .route("/admin/security/findings/{id}/withhold", post(withhold))
         .route("/admin/security/findings/{id}/rescan", post(rescan))
+        .route("/admin/security/findings/{id}/comments", post(add_comment))
         .route("/admin/security/dedup-queue", get(dedup_queue))
         .route("/admin/security/embargo-sweep", post(embargo_sweep))
         .route("/admin/security/challenges", post(create_challenge))
@@ -72,6 +74,7 @@ pub fn admin_security_routes() -> Router<AppState> {
             "/admin/security/external-bounties",
             get(list_bounties).post(curate_bounty),
         )
+        .route("/admin/security/research-tokens", get(list_tokens))
         .route(
             "/admin/security/research-tokens/{id}/revoke",
             post(revoke_token),
@@ -377,11 +380,28 @@ pub async fn detail(
     .fetch_all(&state.db)
     .await?;
 
+    // The internal thread. Joined here and nowhere else: this handler is the
+    // one behind `require_reader`, and keeping the table to a single reader is
+    // what makes "the reporter never sees it" a property rather than a promise.
+    let comments: Vec<Value> = sqlx::query_scalar(
+        "SELECT jsonb_build_object(
+                    'id', c.id, 'body_md', c.body_md, 'at', c.created_at,
+                    'author', u.username, 'author_display_name', u.display_name)
+           FROM security_finding_comments c
+           JOIN users u ON u.id = c.author_user_id
+          WHERE c.finding_id = $1
+          ORDER BY c.created_at",
+    )
+    .bind(id)
+    .fetch_all(&state.db)
+    .await?;
+
     Ok(Json(ApiResponse::new(json!({
         "finding": finding,
         "events": events,
         "rounds": rounds,
         "similar": similar,
+        "comments": comments,
     }))))
 }
 
@@ -1232,4 +1252,286 @@ pub async fn refuse_bounty_claim(
     require_reader(&state, &auth).await?;
     security_external_bounties::refuse(&state.db, auth.user_id, id, &body.reason).await?;
     Ok(Json(ApiResponse::new(json!({ "refused": true }))))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// The morning question
+// ═══════════════════════════════════════════════════════════════════
+
+/// What the queue looks like without reading it.
+///
+/// ## Why one number justifies the endpoint
+///
+/// Everything here except `breaching_triage_sla` can be worked out by pulling
+/// the whole queue and counting, which is what the admin surface was doing.
+/// That one cannot, and it is the one that matters: the safe harbour published
+/// at `GET /api/security/scope` promises a first response within
+/// [`security_findings::TRIAGE_SLA_DAYS`] days, and until now nothing on this
+/// platform could say whether the promise was being kept. An operator who
+/// cannot see that they are late does not catch up.
+///
+/// ## What is deliberately not here
+///
+/// No trend, no sparkline, no month-over-month. Every figure is the state
+/// right now, because every figure is meant to be acted on this morning. A
+/// counter of findings confirmed last quarter is a different endpoint for a
+/// different person, and inventing it before anybody has asked would be
+/// building a dashboard rather than a queue.
+#[utoipa::path(
+    get, path = "/api/admin/security/overview",
+    operation_id = "adminSecurityOverview", tag = "admin",
+    responses(
+        (status = 200, body = ApiResponse<serde_json::Value>),
+        (status = 403, description = "Not a triager, reviewer, curator or admin",
+         body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn overview(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Json<ApiResponse<Value>>, AppError> {
+    require_reader(&state, &auth).await?;
+
+    // One statement rather than seven round trips. The counts are over the
+    // same snapshot, which matters more than it sounds: a status tally and an
+    // SLA count read a second apart can disagree about the same finding, and
+    // the operator has no way to tell that is what happened.
+    let row: Value = sqlx::query_scalar(
+        "WITH live AS (
+             -- Withdrawn and out-of-scope findings are closed business. Counting
+             -- them makes the backlog look like work that is not there.
+             SELECT * FROM security_findings
+              WHERE status NOT IN ('withdrawn', 'not_applicable')
+         ),
+         untriaged AS (
+             -- What the SLA is about: nobody has read it yet. A finding whose
+             -- triage was skipped by rank was answered the moment it arrived.
+             SELECT * FROM live
+              WHERE status = 'submitted'
+                AND triaged_at IS NULL
+                AND triage_skipped_reason IS NULL
+         )
+         SELECT jsonb_build_object(
+             'by_status', COALESCE(
+                 (SELECT jsonb_object_agg(status, n)
+                    FROM (SELECT status, count(*) AS n FROM live GROUP BY status) s),
+                 '{}'::JSONB),
+             'by_severity', COALESCE(
+                 (SELECT jsonb_object_agg(severity_tier, n)
+                    FROM (SELECT severity_tier, count(*) AS n FROM live
+                           GROUP BY severity_tier) v),
+                 '{}'::JSONB),
+             -- NULL, not zero, when there is nothing waiting: zero hours would
+             -- read as 'something just arrived'.
+             'oldest_untriaged_hours',
+                 (SELECT round(EXTRACT(EPOCH FROM (NOW() - min(created_at))) / 3600)
+                    FROM untriaged),
+             'breaching_triage_sla',
+                 (SELECT count(*) FROM untriaged
+                   WHERE created_at < NOW() - ($1::INTEGER * INTERVAL '1 day')),
+             'triage_sla_days', $1::INTEGER,
+             'open_rounds',
+                 (SELECT count(*) FROM security_finding_rounds r
+                    JOIN live f ON f.id = r.finding_id
+                   WHERE r.resolved_at IS NULL),
+             'embargoes_expiring_7d',
+                 (SELECT count(*) FROM live
+                   WHERE disclosure_stage IN ('embargoed', 'extension_requested')
+                     AND embargo_ends_at IS NOT NULL
+                     AND embargo_ends_at <= NOW() + INTERVAL '7 days'),
+             -- Already past, and still embargoed. Separated from the week
+             -- ahead because it is a different sentence: one is a deadline,
+             -- the other is a missed one.
+             'embargoes_overdue',
+                 (SELECT count(*) FROM live
+                   WHERE disclosure_stage IN ('embargoed', 'extension_requested')
+                     AND embargo_ends_at IS NOT NULL
+                     AND embargo_ends_at < NOW()),
+             'suspected_duplicates',
+                 (SELECT count(*) FROM live WHERE dedup_state = 'suspected')
+         )",
+    )
+    .bind(security_findings::TRIAGE_SLA_DAYS as i32)
+    .fetch_one(&state.db)
+    .await?;
+
+    Ok(Json(ApiResponse::new(row)))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// The internal thread
+// ═══════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CommentBody {
+    /// What you want the next person on this finding to know. At least three
+    /// characters after trimming — the floor is the schema's, and it is there
+    /// because "ok" satisfies "not empty".
+    pub body_md: String,
+}
+
+/// Leave an internal note on a finding.
+///
+/// Read by whoever works findings and by nobody else. It is never notified to
+/// the reporter and never returned by `GET /api/security/findings/{id}`, which
+/// is the reporter's own view of their report — the guarantee is that this
+/// table is joined by exactly one handler, the admin detail below.
+///
+/// Append-only, and there is no route to edit or delete one. A note that
+/// decided how a finding was handled is part of how it was handled.
+#[utoipa::path(
+    post, path = "/api/admin/security/findings/{id}/comments",
+    operation_id = "adminSecurityComment", tag = "admin",
+    params(("id" = Uuid, Path, description = "Finding")),
+    request_body = CommentBody,
+    responses(
+        (status = 200, body = ApiResponse<serde_json::Value>),
+        (status = 400, description = "Empty note", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "No such finding", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn add_comment(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<CommentBody>,
+) -> Result<Json<ApiResponse<Value>>, AppError> {
+    require_reader(&state, &auth).await?;
+
+    let text = body.body_md.trim();
+    if text.chars().count() < 3 {
+        return Err(AppError::Validation(
+            "write something the next person can act on".into(),
+        ));
+    }
+    crate::validators::check_max_len(text, "body_md", 10_000)?;
+
+    // Checked before the insert so a bad id answers 404 rather than a foreign
+    // key violation dressed as a server fault.
+    let exists: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM security_findings WHERE id = $1)")
+            .bind(id)
+            .fetch_one(&state.db)
+            .await?;
+    if !exists {
+        return Err(AppError::NotFound("no such finding".into()));
+    }
+
+    let comment_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO security_finding_comments (finding_id, author_user_id, body_md)
+         VALUES ($1, $2, $3) RETURNING id",
+    )
+    .bind(id)
+    .bind(auth.user_id)
+    .bind(text)
+    .fetch_one(&state.db)
+    .await?;
+
+    Ok(Json(ApiResponse::new(json!({ "id": comment_id }))))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Research tokens
+// ═══════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
+pub struct TokenQuery {
+    /// Only the tokens somebody could still use: not revoked, not expired.
+    #[serde(default)]
+    pub active_only: bool,
+    /// Substring of the holder's username or of the token's label.
+    pub q: Option<String>,
+    #[param(minimum = 1, maximum = 200)]
+    pub limit: Option<i64>,
+}
+
+/// Every research token, so the revoke endpoint is reachable.
+///
+/// ## Why this is the missing half rather than a nice listing
+///
+/// Revocation has existed since the tokens did, and nothing listed them — so
+/// the only way to revoke one was with an id somebody pulled out of psql. The
+/// moment you want to revoke is the moment you are looking at traffic and
+/// deciding it is abuse; you have a pattern, not an id. This is the step
+/// before.
+///
+/// ## What comes back, and the one thing that does not
+///
+/// Never the token. `security_research_tokens` stores a SHA-256 and a
+/// twelve-character prefix precisely so that a listing like this one cannot
+/// hand anybody a working credential, and the prefix is what lets an operator
+/// match a row against a log line.
+///
+/// `findings` is the number of reports submitted under the token, from
+/// `security_findings.research_token_id` (migration 0597). It is the figure
+/// the decision turns on: revoking a token behind four confirmed findings is
+/// not the same act as revoking one behind nothing but volume.
+#[utoipa::path(
+    get, path = "/api/admin/security/research-tokens",
+    operation_id = "adminSecurityListTokens", tag = "admin",
+    params(TokenQuery),
+    responses(
+        (status = 200, body = ApiResponse<serde_json::Value>),
+        (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn list_tokens(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Query(q): Query<TokenQuery>,
+) -> Result<Json<ApiResponse<Value>>, AppError> {
+    // The same guard as the revoke it exists to feed. Deliberately narrower
+    // than `require_reader`: a token names a person and how much traffic they
+    // run, which is not part of judging a vulnerability report.
+    require_any_capability(&state.db, auth.user_id, &["admin"]).await?;
+    crate::validators::check_max_len_opt(&q.q, "q", 80)?;
+
+    let tokens: Vec<Value> = sqlx::query_scalar(
+        "SELECT jsonb_build_object(
+                    'id', t.id,
+                    'username', u.username,
+                    'display_name', u.display_name,
+                    'token_prefix', t.token_prefix,
+                    'label', t.label,
+                    'issued_at', t.issued_at,
+                    'expires_at', t.expires_at,
+                    'expired', t.expires_at <= NOW(),
+                    'revoked_at', t.revoked_at,
+                    'revoked_reason', t.revoked_reason,
+                    'last_used_at', t.last_used_at,
+                    'requests_seen', t.requests_seen,
+                    'findings', (SELECT count(*) FROM security_findings f
+                                  WHERE f.research_token_id = t.id),
+                    'findings_confirmed', (
+                        SELECT count(*) FROM security_findings f
+                         WHERE f.research_token_id = t.id
+                           AND f.status IN ('confirmed', 'fixed', 'published')))
+           FROM security_research_tokens t
+           JOIN users u ON u.id = t.user_id
+          WHERE ($1::BOOLEAN IS FALSE
+                 OR (t.revoked_at IS NULL AND t.expires_at > NOW()))
+            AND ($2::TEXT IS NULL
+                 OR u.username ILIKE '%' || $2 || '%'
+                 OR t.label ILIKE '%' || $2 || '%')
+          ORDER BY t.revoked_at IS NOT NULL, t.last_used_at DESC NULLS LAST,
+                   t.issued_at DESC
+          LIMIT $3",
+    )
+    .bind(q.active_only)
+    .bind(q.q.as_deref().map(str::trim).filter(|s| !s.is_empty()))
+    .bind(q.limit.unwrap_or(50).clamp(1, 200))
+    .fetch_all(&state.db)
+    .await?;
+
+    Ok(Json(ApiResponse::new(json!({
+        "tokens": tokens,
+        "note": "The token itself is never returned — only its prefix, which is \
+                 what matches a log line. Revoke with the id.",
+    }))))
 }

@@ -509,6 +509,7 @@ Served to `forum_moderator` or `admin`.
 |--------|------|------|----------|
 | POST | `/security/challenges/{id}/flag` | `{ flag }` | `{ correct, attempts_left_this_hour, first_solve }` — 10 attempts/h/challenge, counted in `security_flag_attempts` so brute force is visible afterwards. Only the hash is ever stored |
 | POST | `/security/challenges/{id}/answers` | `{ answers }` | `{ score, passed, attempts_left }` — a defensive lab; running out closes it for 24 h |
+| GET | `/security/challenges/{id}/artifact` | — | `{ url, expires_in_seconds, size_bytes, filename }` — a signed link to the lab's artefact, minted per request and valid 24 h. The bucket key never leaves the server. Analysis happens on the reader's own machine; only the answers come back |
 
 ### Research mode — authenticated
 
@@ -526,8 +527,10 @@ Served to `forum_moderator` or `admin`.
 
 | Method | Path | Body | Response |
 |--------|------|------|----------|
+| GET | `/admin/security/overview` | — | `{by_status, by_severity, oldest_untriaged_hours, breaching_triage_sla, triage_sla_days, open_rounds, embargoes_expiring_7d, embargoes_overdue, suspected_duplicates}` — the state of the queue now, not a trend. `breaching_triage_sla` is the figure that justifies it: the safe harbour promises a first response and nothing else could say whether it was kept |
+| GET | `/admin/security/research-tokens` | `?active_only=&q=&limit=` | `{tokens: […]}` — what there is to revoke, with findings filed under each. The token itself is never returned, only its prefix |
 | GET | `/admin/security/findings` | `?state=&severity=&overdue=&limit=` | `{ findings, sla }` — ordered by what is closest to breaching the 7-day triage promise |
-| GET | `/admin/security/findings/{id}` | — | `{ finding, events, rounds, proofs, similar }` |
+| GET | `/admin/security/findings/{id}` | — | `{ finding, events, rounds, similar, comments }` |
 | POST | `/admin/security/findings/{id}/transition` | `{ to, reason }` | `{ finding }` — a reason is required for every transition including a refusal |
 | POST | `/admin/security/findings/{id}/severity` | `{ vector, reason }` | `{ finding }` — the reported severity is kept alongside the override, permanently |
 | POST | `/admin/security/findings/{id}/rounds` | `RoundRequest` | `{ round }` — up to five, each with a kind |
@@ -536,6 +539,7 @@ Served to `forum_moderator` or `admin`.
 | POST | `/admin/security/findings/{id}/extension` | `{ days, reason }` | `{ finding }` — asking the reporter, not deciding for them |
 | POST | `/admin/security/findings/{id}/extension/grant` | `{ days, reason }` | `{ finding }` |
 | POST | `/admin/security/findings/{id}/withhold` | `{ reason }` | `{ finding }` — publication withheld, with the reason on the public record |
+| POST | `/admin/security/findings/{id}/comments` | `{ body_md }` | `{ id }` — an internal note between the people working the finding. Returned in the admin detail as `comments`, never on `GET /security/findings/{id}`, never notified. Append-only: no edit and no delete route exists |
 | POST | `/admin/security/findings/{id}/rescan` | — | `{ similar }` — trigram similarity against every other finding |
 | GET | `/admin/security/dedup-queue` | — | `{ pairs: [...] }` — candidates for a human. A similarity score never merges anything: a merge decides who is credited |
 | POST | `/admin/security/embargo-sweep` | — | `{ reminded, expired }` — the same sweep the daily worker runs. An expired embargo is flagged for a person and never published automatically |

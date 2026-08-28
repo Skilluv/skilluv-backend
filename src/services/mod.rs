@@ -171,6 +171,7 @@ pub mod security_practice;
 pub mod security_profile;
 pub mod security_proofs;
 pub mod security_research;
+pub mod seed;
 pub mod series;
 pub mod session;
 pub mod skill_tree;

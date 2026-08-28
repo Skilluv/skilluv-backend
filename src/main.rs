@@ -69,6 +69,43 @@ async fn async_main(config: AppConfig) {
         .await
         .expect("Failed to run database migrations");
 
+    // The catalogue this platform cannot work without: the administrator, the
+    // repositories work is drawn from, the onboarding challenges, the seasons.
+    //
+    // Here rather than in a deployment script because a script is something
+    // somebody has to remember. A database restored from scratch used to come
+    // up with its migrations and an empty catalogue, and the only way to find
+    // out was to open the app and see empty pages.
+    //
+    // Every step is idempotent and the ledger skips the ones already applied,
+    // so on an up-to-date database this is a single SELECT. Set
+    // `SKILLUV_SEED_ON_BOOT=0` to turn it off — for a replica that should not
+    // race the primary, or for a restore being inspected before it is trusted.
+    if std::env::var("SKILLUV_SEED_ON_BOOT").as_deref() != Ok("0") {
+        tracing::info!("Applying seed catalogue...");
+        match skilluv_backend::services::seed::run(&db).await {
+            Ok(report) => {
+                tracing::info!(
+                    applied = report.applied,
+                    skipped = report.skipped,
+                    "seed catalogue up to date"
+                );
+                if report.blocked_on_owner {
+                    // Not fatal: a first deployment that has not been told who
+                    // the administrator is should still come up. It is loud
+                    // because a half-seeded database found later is worse.
+                    tracing::warn!(
+                        "part of the seed catalogue was skipped: this database has no                          administrator. Set SEED_ADMIN_PASSWORD (12+ characters) and restart,                          or run `skilluv-seed-all`."
+                    );
+                }
+            }
+            // Never fatal. A seed that cannot apply is a catalogue problem;
+            // refusing to serve the requests that do work would turn it into
+            // an outage.
+            Err(e) => tracing::error!(error = %e, "seed catalogue failed to apply"),
+        }
+    }
+
     tracing::info!("Seeding leaderboards from database...");
     skilluv_backend::services::LeaderboardService::seed_from_db(&mut redis.clone(), &db)
         .await

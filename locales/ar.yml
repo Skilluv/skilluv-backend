@@ -297,6 +297,10 @@ notification:
       body: "مشاركتك في {contest} مسجّلة على ملفك."
       cta: "اعرض ملفي"
   mission:
+    taken_down:
+      title: "تمت إزالة مهمة {mission}"
+      body: "أزالتها سكيلوف من اللوحة. السبب: {reason}. وأُعيد كل ما كان محجوزًا عليها."
+      cta: "افتح المهمة"
     matching_published:
       title: "مهمة تناسبك"
       body: "مهمة جديدة تطابق المهن التي أعلنت عنها."

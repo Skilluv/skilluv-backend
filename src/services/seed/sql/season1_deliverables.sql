@@ -1,3 +1,11 @@
+-- Rewritten for `services::seed` (SKI-338 follow-up): the owner arrives as
+-- `$1` instead of being looked up by an email nothing creates.
+--
+-- The lookup this replaced was `WHERE email = 'admin@skilluv.local'`, while
+-- `seed_admin` creates `admin@skill-uv.com`. On any database but one developer's
+-- the CTE was empty, the `INSERT ... SELECT` inserted nothing, and the script
+-- exited 0 -- a seed that reported success and did nothing.
+--
 -- Seed Saison 1 "Hello World" + 10 deliverables (challenge_templates).
 -- Idempotent : ON CONFLICT sur slug / title.
 
@@ -33,10 +41,10 @@ ON CONFLICT DO NOTHING;
 
 -- 3. Les 10 deliverables Saison 1
 -- Structure : title en français direct, i18n JSONB avec fr+en, project_id lié.
--- created_by = admin@skilluv.local (dev fixture, à ré-owner en prod)
+-- created_by = the seed owner passed as $1 (dev fixture, à ré-owner en prod)
 -- status='published' → contrainte force project_id NOT NULL, ce qui est le cas ici.
 
-WITH admin_user AS (SELECT id FROM users WHERE email = 'admin@skilluv.local'),
+WITH admin_user AS (SELECT $1::UUID AS id),
 projects_map AS (SELECT slug, id FROM projects)
 
 INSERT INTO challenge_templates (

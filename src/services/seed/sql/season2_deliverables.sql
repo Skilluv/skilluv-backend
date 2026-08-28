@@ -1,3 +1,11 @@
+-- Rewritten for `services::seed` (SKI-338 follow-up): the owner arrives as
+-- `$1` instead of being looked up by an email nothing creates.
+--
+-- The lookup this replaced was `WHERE email = 'admin@skilluv.local'`, while
+-- `seed_admin` creates `admin@skill-uv.com`. On any database but one developer's
+-- the CTE was empty, the `INSERT ... SELECT` inserted nothing, and the script
+-- exited 0 -- a seed that reported success and did nothing.
+--
 -- Seed Saison 2 "Wax" + 10 deliverables.
 -- Theme : Wax = design system africain OSS. Contributions design + code
 -- avec un accent sur le flagship wax-icons + integration dans les partenaires.
@@ -34,7 +42,7 @@ WHERE s.slug = 'saison-2-wax'
 ON CONFLICT DO NOTHING;
 
 -- 3. Les 10 deliverables Saison 2
-WITH admin_user AS (SELECT id FROM users WHERE email = 'admin@skilluv.local'),
+WITH admin_user AS (SELECT $1::UUID AS id),
 projects_map AS (SELECT slug, id FROM projects)
 
 INSERT INTO challenge_templates (

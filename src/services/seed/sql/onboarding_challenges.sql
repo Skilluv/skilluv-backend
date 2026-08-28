@@ -1,3 +1,11 @@
+-- Rewritten for `services::seed` (SKI-338 follow-up): the owner arrives as
+-- `$1` instead of being looked up by an email nothing creates.
+--
+-- The lookup this replaced was `WHERE email = 'admin@skilluv.local'`, while
+-- `seed_admin` creates `admin@skill-uv.com`. On any database but one developer's
+-- the CTE was empty, the `INSERT ... SELECT` inserted nothing, and the script
+-- exited 0 -- a seed that reported success and did nothing.
+--
 -- Priorite haute #3 strategy doc §15 : seed les 15 challenge_templates Bonjour
 -- Skilluv, un par starter template (voir Annexe G du strategy doc).
 --
@@ -14,7 +22,7 @@
 --
 -- Idempotent via WHERE NOT EXISTS sur title exact.
 
-WITH admin_user AS (SELECT id FROM users WHERE email = 'admin@skilluv.local')
+WITH admin_user AS (SELECT $1::UUID AS id)
 
 INSERT INTO challenge_templates (
     title, description, instructions,

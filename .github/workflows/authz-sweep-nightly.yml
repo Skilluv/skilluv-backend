@@ -1,0 +1,112 @@
+name: Nightly authorization sweep
+
+# DA-03 — replays every OpenAPI operation as anon / normal-user / capability-
+# admin against an ephemeral stack and fails on escalation, anon-admin access,
+# or any 5xx. This is the regression net for the whole authorization surface:
+# it regenerates from /api/openapi.json, so a newly-added domain is covered the
+# next night with no extra wiring. Complements the static gate in
+# check-threat-model.sh (which forbids the legacy users.role admin check at the
+# source) and the authz_admin_matrix integration test (which asserts the same
+# negative in-process).
+#
+# Builds nothing: pulls the published backend image and stands it up next to
+# the dev compose dependencies — the same pattern as dast-nightly.yml. Seeds
+# only *@ci.invalid throwaway accounts; grants the admin capability with a psql
+# INSERT between the register and probe phases. Everything is torn down at the
+# end. Never runs against production.
+
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: authz-sweep-nightly
+  cancel-in-progress: true
+
+env:
+  BACKEND_PORT: "3000"
+
+jobs:
+  sweep:
+    name: Authorization sweep on an ephemeral stack
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          persist-credentials: false
+
+      - name: Start dependencies (Postgres, Redis, MinIO, Mailpit)
+        run: docker compose up -d postgres redis minio mailpit
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run the backend against the stack
+        run: |
+          docker run -d --name skilluv-backend --network host \
+            -e DATABASE_URL="postgres://skilluv:skilluv_secret@localhost:5433/skilluv" \
+            -e REDIS_URL="redis://localhost:6379" \
+            -e JWT_SECRET="authz-sweep-secret" \
+            -e PORT="${BACKEND_PORT}" \
+            -e BASE_URL="http://localhost:${BACKEND_PORT}" \
+            -e MINIO_ENDPOINT="http://localhost:9004" \
+            -e MINIO_ACCESS_KEY="skilluv" \
+            -e MINIO_SECRET_KEY="skilluv_secret" \
+            -e MINIO_BUCKET="avatars" \
+            ghcr.io/skilluv/skilluv-backend:master
+
+      - name: Wait for the backend to answer
+        run: |
+          for _ in $(seq 1 60); do
+            if curl -fsS "http://localhost:${BACKEND_PORT}/api/health" >/dev/null 2>&1; then
+              echo "backend up"; exit 0
+            fi
+            sleep 2
+          done
+          echo "backend did not become healthy"; docker logs skilluv-backend || true; exit 1
+
+      - name: Install the harness dependency
+        run: python3 -m pip install --quiet requests
+
+      - name: Register the throwaway CI accounts
+        env:
+          BASE_URL: "http://localhost:${{ env.BACKEND_PORT }}"
+        run: python3 scripts/pentest_authz_sweep.py register
+
+      - name: Grant the admin capability the modern way (capability only)
+        # Deliberately does NOT set users.role — that is the whole point: the
+        # positive control must exercise a capability-provisioned admin, the
+        # path admin_grant_capability actually uses.
+        run: |
+          docker exec skilluv-postgres psql -U skilluv -d skilluv -v ON_ERROR_STOP=1 -c "
+            INSERT INTO user_capabilities (user_id, capability, granted_reason)
+            SELECT u.id, 'admin', 'ci_authz_sweep'
+            FROM users u
+            WHERE u.email = 'authz_admin@ci.invalid'
+              AND NOT EXISTS (
+                SELECT 1 FROM user_capabilities c
+                WHERE c.user_id = u.id AND c.capability = 'admin' AND c.revoked_at IS NULL
+              );"
+
+      - name: Sweep (fails the job on escalation / anon-admin / 5xx)
+        env:
+          BASE_URL: "http://localhost:${{ env.BACKEND_PORT }}"
+        run: python3 scripts/pentest_authz_sweep.py probe
+
+      - name: Tear down
+        if: always()
+        run: |
+          docker rm -f skilluv-backend || true
+          docker compose down -v || true

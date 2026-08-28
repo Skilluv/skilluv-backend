@@ -244,3 +244,9 @@ totp-rs = { version = "5", features = ["gen_secret", "otpauth"] }
 # Mock OIDC IdP for enterprise SSO integration tests.
 rsa = { version = "0.9", features = ["sha2"] }
 rand = "0.10"
+# Property testing — thousands of generated cases against the pure parsers and
+# decision tables (tests/prop_pure_parsers.rs). The locally-runnable half of the
+# FZ/MU backlog: the cargo-fuzz targets in fuzz/ wrap the same functions for the
+# nightly CI amplifier, which needs libFuzzer + nightly and does not run on
+# Windows. proptest runs on the pinned stable toolchain, here.
+proptest = "1"

@@ -307,9 +307,7 @@ pub async fn admin_list_requests(
     auth: AuthUser,
     Query(q): Query<AdminRequestsQuery>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    if auth.role != "admin" {
-        return Err(AppError::Forbidden);
-    }
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     let page = q.page.unwrap_or(1).max(1);
     let per_page = q.per_page.unwrap_or(50).clamp(1, 200);
     let offset = (page - 1) * per_page;
@@ -377,9 +375,7 @@ pub async fn admin_decide_request(
     Path(id): Path<Uuid>,
     Json(body): Json<DecideBody>,
 ) -> Result<Json<ApiResponse<DecideResponse>>, AppError> {
-    if auth.role != "admin" {
-        return Err(AppError::Forbidden);
-    }
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     let new_status = match body.action.as_str() {
         "approve" => "approved",
         "reject" => "rejected",
@@ -424,9 +420,7 @@ pub async fn admin_link_challenge(
     Path(request_id): Path<Uuid>,
     Json(body): Json<LinkChallengeBody>,
 ) -> Result<Json<ApiResponse<LinkChallengeResponse>>, AppError> {
-    if auth.role != "admin" {
-        return Err(AppError::Forbidden);
-    }
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     let req: (Uuid, String) = sqlx::query_as(
         "SELECT enterprise_id, status FROM sponsored_challenge_requests WHERE id = $1",
     )

@@ -249,9 +249,7 @@ pub async fn admin_sync(
     auth: AuthUser,
     Path(user_id): Path<Uuid>,
 ) -> Result<Json<Value>, AppError> {
-    if auth.role != "admin" {
-        return Err(AppError::Forbidden);
-    }
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     let report = github::sync_repos_for(&state.db, &state.config.jwt_secret, user_id).await?;
     Ok(Json(build_response(json!({ "sync": report }))))
 }

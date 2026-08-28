@@ -48,13 +48,14 @@ jobs:
       - name: Run actionlint
         run: actionlint -color
 
-      # actionlint checks each workflow on its own. This checks a property
-      # that lives between two of them: `ci.yml` ignores a set of paths and
-      # `ci-docs-only.yml` claims exactly that set, because branch protection
-      # waits for two checks by name and a pull request triggering neither
-      # workflow waits for ever. Drift is silent in a diff review.
-      - name: The two CI path filters are complements
-        run: python3 scripts/check-ci-path-filters.py
+      # actionlint checks each workflow on its own. This checks a property that
+      # lives between all of them: each required status check must be produced
+      # by exactly one job. Branch protection matches checks by name across
+      # every workflow, so a second workflow re-declaring `Build & Lint` or
+      # `Integration Tests` (the CI-01 stub-workflow bug) would let a trivial
+      # job green a real change. Silent in a diff review; refused here.
+      - name: Each required check name is produced by exactly one job
+        run: python3 scripts/check-required-check-names.py
 
   zizmor:
     name: zizmor (security)

@@ -1,0 +1,105 @@
+name: Nightly DAST (ZAP + nuclei)
+
+# DA-02 + CI-04 — dynamic scan against an ephemeral full stack.
+#
+# Builds nothing: pulls the already-published backend image
+# (ghcr.io/skilluv/skilluv-backend:master), stands it up next to the dev
+# compose dependencies, and points OWASP ZAP and nuclei at it. Advisory —
+# findings are triaged, not gated. Everything is torn down at the end.
+#
+# FIRST-RUN NOTE: the app's listen port and env are set from ci.yml's test
+# job; if the image expects a different PORT/health path, adjust the two marked
+# lines. This workflow has not been executed yet (the dev box cannot run it).
+
+on:
+  schedule:
+    - cron: "53 3 * * 2"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dast-nightly
+  cancel-in-progress: true
+
+env:
+  BACKEND_PORT: "3000"
+
+jobs:
+  dast:
+    name: ZAP + nuclei on an ephemeral stack
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          persist-credentials: false
+
+      - name: Start dependencies (Postgres, Redis, MinIO, Mailpit)
+        run: docker compose up -d postgres redis minio mailpit
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run the backend against the stack
+        # Host network so the container reaches the compose services on
+        # localhost (Postgres 5433, Redis 6379, MinIO 9004, Mailpit 1025).
+        run: |
+          docker run -d --name skilluv-backend --network host \
+            -e DATABASE_URL="postgres://skilluv:skilluv_secret@localhost:5433/skilluv" \
+            -e REDIS_URL="redis://localhost:6379" \
+            -e JWT_SECRET="dast-test-secret" \
+            -e PORT="${BACKEND_PORT}" \
+            -e BASE_URL="http://localhost:${BACKEND_PORT}" \
+            -e MINIO_ENDPOINT="http://localhost:9004" \
+            -e MINIO_ACCESS_KEY="skilluv" \
+            -e MINIO_SECRET_KEY="skilluv_secret" \
+            -e MINIO_BUCKET="avatars" \
+            ghcr.io/skilluv/skilluv-backend:master
+
+      - name: Wait for the backend to answer
+        run: |
+          for _ in $(seq 1 60); do
+            if curl -fsS "http://localhost:${BACKEND_PORT}/api/health" >/dev/null 2>&1; then
+              echo "backend up"; exit 0
+            fi
+            sleep 2
+          done
+          echo "backend did not become healthy"; docker logs skilluv-backend || true; exit 1
+
+      - name: OWASP ZAP baseline scan
+        continue-on-error: true
+        run: |
+          docker run --network host -v "$PWD:/zap/wrk:rw" \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py -t "http://localhost:${BACKEND_PORT}/api" \
+            -r zap-report.html -I
+
+      - name: nuclei scan
+        continue-on-error: true
+        run: |
+          docker run --network host projectdiscovery/nuclei:latest \
+            -u "http://localhost:${BACKEND_PORT}" \
+            -severity medium,high,critical -o /dev/stdout || true
+
+      - name: Upload ZAP report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: zap-report
+          path: zap-report.html
+          if-no-files-found: ignore
+
+      - name: Tear down
+        if: always()
+        run: |
+          docker rm -f skilluv-backend || true
+          docker compose down -v || true

@@ -1478,6 +1478,7 @@ async fn an_expired_embargo_becomes_partially_disclosed_never_public() {
 #[tokio::test]
 async fn a_reporter_cannot_withdraw_another_reporters_finding() {
     let app = TestApp::spawn().await;
+    a_person(&app, "idor_reporter_a").await;
     let a_id = a_finding(&app, "idor_reporter_a", "A's private finding").await;
 
     // A different, unrelated reporter tries to withdraw it by guessing the id.
@@ -1517,6 +1518,7 @@ async fn a_reporter_cannot_withdraw_another_reporters_finding() {
 #[tokio::test]
 async fn concurrent_withdraws_leave_exactly_one_winner() {
     let app = TestApp::spawn().await;
+    a_person(&app, "race_owner").await;
     let id = a_finding(&app, "race_owner", "A finding withdrawn under a race").await;
 
     // The shared client is logged in as the owner; clone shares the cookie jar.

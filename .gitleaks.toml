@@ -12,7 +12,7 @@ description = "Known-safe placeholders and test fixtures"
 paths = [
     '''(?i)\.env\.example''',
     '''(?i)tests/common/mod\.rs''',
-    '''(?i)tests/.*_test\.rs''',
+    '''(?i)tests/.*\.rs''',
     '''(?i)docs/.*''',
     '''(?i)migrations/.*''',
 ]
@@ -31,6 +31,10 @@ regexes = [
     # VAPID public key is *supposed* to be public (RFC 8292). We do not scan
     # for private keys specifically ; those are caught by the ed25519 rule.
     '''VAPID_PUBLIC_KEY=[A-Za-z0-9_-]+''',
+    # CI/test JWT secrets (e.g. schemathesis_test_secret_..., ci-test-secret).
+    '''(?i)test[_-]secret''',
+    # Obvious placeholder research tokens (all-zero srt_).
+    '''srt_0{16,}''',
 ]
 
 # Individual commits to skip — use only for legacy leaks that have been rotated

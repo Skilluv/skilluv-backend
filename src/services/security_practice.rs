@@ -355,6 +355,98 @@ async fn attestation_code_for(db: &PgPool, user_id: Uuid, challenge_id: Uuid) ->
 // Graded labs
 // ═══════════════════════════════════════════════════════════════════
 
+/// How long a link to a lab artefact lives.
+///
+/// A day, against the hour a finding proof gets. The two are not the same
+/// object: a proof is somebody's evidence of an unfixed vulnerability, and a
+/// lab artefact is a redacted capture this platform published on purpose for
+/// several hundred people to analyse. What the expiry buys here is that the
+/// link in a group chat stops working, so the download is attributable to the
+/// account that asked for it — not secrecy, which the artefact does not have.
+pub const LAB_ARTIFACT_URL_SECONDS: u32 = 24 * 3600;
+
+/// What the artefact endpoint answers.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct LabArtifact {
+    /// Signed, expiring, minted per request.
+    pub url: String,
+    pub expires_in_seconds: u32,
+    /// Repeated from the challenge so a caller that jumped straight here still
+    /// has the number to show while the download runs.
+    pub size_bytes: i64,
+    /// The object's own file name, for the browser's save dialog.
+    pub filename: String,
+}
+
+/// A link to the artefact of one defensive lab.
+///
+/// The key never leaves the server: it is read from the challenge and signed
+/// here. A client that held the key could ask for a link to any object in the
+/// private bucket whose path it could guess, and the bucket also holds the
+/// proofs of unfixed vulnerabilities.
+pub async fn artifact_link(
+    db: &PgPool,
+    storage: &crate::services::storage::StorageService,
+    challenge_id: Uuid,
+) -> Result<LabArtifact, AppError> {
+    #[derive(sqlx::FromRow)]
+    struct Row {
+        kind: Option<String>,
+        status: String,
+        artifact_key: Option<String>,
+        artifact_bytes: Option<i64>,
+    }
+
+    let row: Option<Row> = sqlx::query_as(
+        "SELECT security_kind AS kind, status,
+                security_lab_artifact_key AS artifact_key,
+                security_lab_artifact_bytes AS artifact_bytes
+           FROM challenge_templates WHERE id = $1",
+    )
+    .bind(challenge_id)
+    .fetch_optional(db)
+    .await?;
+
+    let Some(row) = row else {
+        return Err(AppError::NotFound("no such challenge".into()));
+    };
+    if row.kind.as_deref() != Some("defensive_lab") {
+        return Err(AppError::Validation(
+            "that challenge has no artefact to analyse".into(),
+        ));
+    }
+    if row.status != "published" {
+        return Err(AppError::Conflict("that challenge is not open".into()));
+    }
+
+    let key = row
+        .artifact_key
+        .ok_or_else(|| AppError::Internal("a lab with no artefact".into()))?;
+    // The same two prefixes the generator writes. Defence in depth against a
+    // key that reached the column by some other route: this function signs
+    // whatever it is given, and the private bucket holds finding proofs too.
+    if (!key.starts_with("security-proofs/") && !key.starts_with("blue-lab/")) || key.contains("..")
+    {
+        return Err(AppError::Internal(
+            "this lab's artefact is not stored where lab artefacts are stored".into(),
+        ));
+    }
+
+    let filename = key.rsplit('/').next().unwrap_or("artifact").to_string();
+    let url = storage
+        .presigned_get_url(&key, LAB_ARTIFACT_URL_SECONDS)
+        .await?;
+
+    metrics::counter!("skilluv_security_lab_artifact_links_total").increment(1);
+
+    Ok(LabArtifact {
+        url,
+        expires_in_seconds: LAB_ARTIFACT_URL_SECONDS,
+        size_bytes: row.artifact_bytes.unwrap_or(0),
+        filename,
+    })
+}
+
 #[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct LabSubmission {

@@ -1384,3 +1384,198 @@ async fn a_proof_key_from_somewhere_else_cannot_be_attached_to_a_report() {
     assert_eq!(status, 400, "{body}");
     assert!(body.to_string().contains("upload"), "{body}");
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// Defensive labs — what a client is served (SKI-332)
+// ═══════════════════════════════════════════════════════════════════
+
+/// A defensive lab, created the only way one can be: by somebody who solved it.
+async fn a_lab(app: &TestApp, admin_username: &str) -> Uuid {
+    app.login(admin_username).await;
+    let resp = app
+        .post(
+            "/api/admin/security/challenges",
+            &json!({
+                "title": "Read the exfiltration out of an hour of proxy logs",
+                "description": "One host talked to somewhere it had no reason to.",
+                "instructions": "Download the capture. Answer from what is in it.",
+                "kind": "defensive_lab",
+                "difficulty": 3,
+                "difficulty_tier": "medium",
+                "reward_fragments": 60,
+                "lab_artifact_key": "blue-lab/exfil-2026-08/capture.zip",
+                "lab_artifact_bytes": 41_943_040_i64,
+                "pass_percent": 80,
+                "max_attempts": 3,
+                "questions": [
+                    {
+                        "id": "q1",
+                        "kind": "text",
+                        "question": "Which internal host initiated the transfer?",
+                        "answer": "10.42.0.17",
+                        "hint": "Sort by bytes sent, not by request count.",
+                    },
+                    {
+                        "id": "q2",
+                        "kind": "choice",
+                        "question": "Over which protocol did it leave?",
+                        "answer": "dns",
+                        "choices": ["http", "dns", "smtp"],
+                        "hint": "Look at what was allowed outbound.",
+                    },
+                ],
+            }),
+        )
+        .await;
+    let status = resp.status();
+    let body: Value = resp.json().await.unwrap();
+    assert_eq!(status, 200, "create said: {body}");
+    let id: Uuid = body["data"]["id"].as_str().unwrap().parse().unwrap();
+
+    sqlx::query("UPDATE challenge_templates SET status = 'published' WHERE id = $1")
+        .bind(id)
+        .execute(&app.db)
+        .await
+        .unwrap();
+    id
+}
+
+#[tokio::test]
+async fn a_lab_serves_its_questions_without_its_answers_or_its_hints() {
+    let app = TestApp::spawn().await;
+    let admin = a_person(&app, "lab_curator").await;
+    grant(&app, admin, "admin").await;
+    let challenge = a_lab(&app, "lab_curator").await;
+
+    // The public detail. A catalogue page is readable by anybody.
+    let resp = app.get(&format!("/api/challenges/{challenge}")).await;
+    assert_eq!(resp.status(), 200);
+    let body: Value = resp.json().await.unwrap();
+    let c = &body["data"]["challenge"];
+
+    // What the page needs to be built at all.
+    let questions = c["security_lab_questions"].as_array().unwrap();
+    assert_eq!(questions.len(), 2, "{body}");
+    assert_eq!(questions[0]["id"], "q1");
+    assert_eq!(
+        questions[0]["question"],
+        "Which internal host initiated the transfer?"
+    );
+    assert_eq!(questions[1]["kind"], "choice");
+    assert_eq!(questions[1]["choices"], json!(["http", "dns", "smtp"]));
+
+    // What the page must announce before somebody starts.
+    assert_eq!(c["security_lab_pass_percent"], 80);
+    assert_eq!(c["security_lab_max_attempts"], 3);
+    assert_eq!(c["security_lab_artifact_bytes"], 41_943_040_i64);
+
+    // And what may never be on the wire. The hash of a short answer is one
+    // wordlist away from the answer.
+    let serialised = body.to_string();
+    assert!(
+        !serialised.contains("expected_answer_hash"),
+        "the answer hashes were served: {serialised}"
+    );
+    assert!(
+        !serialised.contains("Sort by bytes sent"),
+        "the hints were served before the first attempt: {serialised}"
+    );
+    // The bucket key stays on the server — the download endpoint signs it.
+    assert!(
+        !serialised.contains("blue-lab/"),
+        "the artefact key was served: {serialised}"
+    );
+
+    // The same restraint on the list, which is the other place a template is
+    // serialised — the stripping is on the type, not on one handler.
+    let resp = app
+        .get("/api/challenges?domain=security&security_kind=defensive_lab")
+        .await;
+    assert_eq!(resp.status(), 200);
+    let listed: Value = resp.json().await.unwrap();
+    let listed = listed.to_string();
+    assert!(listed.contains("Which internal host"), "{listed}");
+    assert!(!listed.contains("expected_answer_hash"), "{listed}");
+    assert!(!listed.contains("Sort by bytes sent"), "{listed}");
+}
+
+#[tokio::test]
+async fn a_hint_is_what_a_wrong_answer_buys() {
+    let app = TestApp::spawn().await;
+    let admin = a_person(&app, "lab_curator2").await;
+    grant(&app, admin, "admin").await;
+    let challenge = a_lab(&app, "lab_curator2").await;
+
+    a_person(&app, "analyst").await;
+    app.login("analyst").await;
+
+    // Answering with the ids the endpoint actually served — which is the whole
+    // point of serving them.
+    let resp = app
+        .post(
+            &format!("/api/security/challenges/{challenge}/answers"),
+            &json!({ "answers": { "q1": "10.42.0.99", "q2": "http" } }),
+        )
+        .await;
+    assert_eq!(resp.status(), 200);
+    let body: Value = resp.json().await.unwrap();
+    let outcome = &body["data"]["outcome"];
+    assert_eq!(outcome["passed"], false, "{body}");
+    assert_eq!(outcome["correct_count"], 0, "{body}");
+    // Now, and only now, the hints.
+    let hints = outcome["hints"].as_array().unwrap();
+    assert_eq!(hints.len(), 2, "{body}");
+    assert!(
+        hints.iter().any(|h| h
+            .as_str()
+            .unwrap_or_default()
+            .contains("Sort by bytes sent")),
+        "{body}"
+    );
+}
+
+#[tokio::test]
+async fn the_artefact_link_is_signed_expiring_and_only_for_a_lab() {
+    let app = TestApp::spawn().await;
+    let admin = a_person(&app, "lab_curator3").await;
+    grant(&app, admin, "admin").await;
+    let challenge = a_lab(&app, "lab_curator3").await;
+
+    a_person(&app, "analyst2").await;
+    app.login("analyst2").await;
+    let resp = app
+        .get(&format!("/api/security/challenges/{challenge}/artifact"))
+        .await;
+    let status = resp.status();
+    let body: Value = resp.json().await.unwrap();
+    assert_eq!(status, 200, "{body}");
+    let data = &body["data"];
+    assert_eq!(data["expires_in_seconds"], 24 * 3600);
+    assert_eq!(data["size_bytes"], 41_943_040_i64);
+    assert_eq!(data["filename"], "capture.zip");
+    let url = data["url"].as_str().unwrap();
+    assert!(url.contains("X-Amz-Signature"), "not a signed URL: {url}");
+    assert!(url.contains("X-Amz-Expires=86400"), "{url}");
+
+    // A flag challenge has no artefact, and says so rather than signing
+    // whatever happens to be in the column.
+    let flag_challenge = a_flag_challenge(&app, "lab_curator3", "SKILLUV{no_artefact}").await;
+    app.login("analyst2").await;
+    let resp = app
+        .get(&format!(
+            "/api/security/challenges/{flag_challenge}/artifact"
+        ))
+        .await;
+    assert_eq!(resp.status(), 400);
+
+    // And a draft lab is not downloadable while it is being written.
+    sqlx::query("UPDATE challenge_templates SET status = 'draft' WHERE id = $1")
+        .bind(challenge)
+        .execute(&app.db)
+        .await
+        .unwrap();
+    let resp = app
+        .get(&format!("/api/security/challenges/{challenge}/artifact"))
+        .await;
+    assert_eq!(resp.status(), 409);
+}

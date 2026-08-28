@@ -509,6 +509,7 @@ Served to `forum_moderator` or `admin`.
 |--------|------|------|----------|
 | POST | `/security/challenges/{id}/flag` | `{ flag }` | `{ correct, attempts_left_this_hour, first_solve }` — 10 attempts/h/challenge, counted in `security_flag_attempts` so brute force is visible afterwards. Only the hash is ever stored |
 | POST | `/security/challenges/{id}/answers` | `{ answers }` | `{ score, passed, attempts_left }` — a defensive lab; running out closes it for 24 h |
+| GET | `/security/challenges/{id}/artifact` | — | `{ url, expires_in_seconds, size_bytes, filename }` — a signed link to the lab's artefact, minted per request and valid 24 h. The bucket key never leaves the server. Analysis happens on the reader's own machine; only the answers come back |
 
 ### Research mode — authenticated
 

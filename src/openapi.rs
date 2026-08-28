@@ -196,6 +196,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::security::download_proof,
         crate::routes::security::submit_flag,
         crate::routes::security::submit_answers,
+        crate::routes::security::lab_artifact,
         crate::routes::security::scoreboard,
         crate::routes::security::finding_card,
         crate::routes::security::hall_of_fame,
@@ -1860,6 +1861,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
             crate::routes::onboarding::StatusBonjourResponse,
             // challenge tags
             crate::models::ChallengeTemplate,
+            crate::models::PublicLabQuestion,
             crate::routes::challenge_tags::TagWithCount,
             crate::routes::challenge_tags::TagsResponse,
             crate::routes::challenge_tags::CategoryRow,

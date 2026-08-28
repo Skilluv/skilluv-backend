@@ -76,7 +76,7 @@ channels = [
     { name = "ai-llm" },
     { name = "ai-safety-discussions" },
     { name = "ai-paper-reading" },
-    { name = "ai-competitions", purpose = "contests", announcement = true },
+    { name = "ai-competitions", purpose = "contests", announcement = true, also_purpose = "winners" },
     { name = "ai-missions", purpose = "missions", announcement = true },
 ]
 
@@ -130,7 +130,7 @@ channels = [
     { name = "audio-music-implementer" },
     { name = "audio-programmer" },
     { name = "audio-showcase" },
-    { name = "audio-battles", purpose = "contests", announcement = true },
+    { name = "audio-battles", purpose = "contests", announcement = true, also_purpose = "winners" },
     { name = "audio-livesessions" },
     { name = "audio-missions", purpose = "missions", announcement = true },
 ]
@@ -179,7 +179,7 @@ channels = [
     { name = "code-networking" },
     { name = "code-blockchain" },
     { name = "code-desktop-enterprise" },
-    { name = "code-contests", purpose = "contests", announcement = true },
+    { name = "code-contests", purpose = "contests", announcement = true, also_purpose = "winners" },
     { name = "code-oss-marathon" },
     { name = "code-missions", purpose = "missions", announcement = true },
     { name = "lang-rust" },
@@ -283,7 +283,8 @@ channels = [
     { name = "design-3d-viz" },
     { name = "design-immersif" },
     { name = "design-service" },
-    { name = "design-concours", purpose = "contests", announcement = true },
+    { name = "design-concours", purpose = "contests", announcement = true, also_purpose = "winners" },
+    { name = "design-missions", purpose = "missions" },
 ]
 
 [[categories]]
@@ -516,7 +517,7 @@ channels = [
     { name = "qa-game" },
     { name = "qa-lead" },
     { name = "qa-tools" },
-    { name = "qa-bug-bashes", purpose = "contests", announcement = true },
+    { name = "qa-bug-bashes", purpose = "contests", announcement = true, also_purpose = "winners" },
     { name = "qa-missions", purpose = "missions", announcement = true },
 ]
 
@@ -558,7 +559,8 @@ channels = [
     { name = "security-tooling" },
     { name = "security-triage" },
     { name = "security-writeups", announcement = true },
-    { name = "security-competitions", purpose = "contests", announcement = true },
+    { name = "security-competitions", purpose = "contests", announcement = true, also_purpose = "winners" },
+    { name = "security-missions", purpose = "missions" },
 ]
 
 [[categories]]
@@ -586,3 +588,19 @@ name = "Security Triager"
 domain = "security"
 grants_on = "capability"
 capability = "security_triager"
+
+
+# -- OSS -----------------------------------------------------
+
+[[categories]]
+name = "OSS"
+domain = "soft_skills"
+channels = [
+    { name = "oss-maintainers", purpose = "general" },
+]
+
+[[roles]]
+name = "OSS Maintainer"
+domain = "soft_skills"
+# Anybody who has declared a trade in this domain.
+grants_on = "orientation"

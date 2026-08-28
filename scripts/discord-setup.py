@@ -273,6 +273,8 @@ def main():
 
             if found and "purpose" in ch:
                 routing.append((ch["purpose"], cat["domain"], found["id"], ch["name"]))
+            if found and "also_purpose" in ch:
+                routing.append((ch["also_purpose"], cat["domain"], found["id"], ch["name"]))
 
     for role in roles_wanted:
         if role["name"] in have_role:
@@ -307,8 +309,18 @@ def main():
         print(f"-- Server: {guild['name']} ({gid}).")
         print("INSERT INTO discord_channels (purpose, skill_domain, channel_id, label) VALUES")
         rows = sorted({(p, d, cid, n) for p, d, cid, n in routing})
-        print(",\n".join(f"    ('{p}', '{d}', '{cid}', '#{n}')" for p, d, cid, n in rows))
-        print("ON CONFLICT (purpose, skill_domain) DO UPDATE")
+        # NULL, not the empty string: migration 0440 replaced that sentinel
+        # and pointed the column at skill_domains, so '' is now rejected
+        # outright rather than merely never matched.
+        print(
+            ",\n".join(
+                "    ('%s', %s, '%s', '#%s')" % (p, f"'{d}'" if d else "NULL", cid, n)
+                for p, d, cid, n in rows
+            )
+        )
+        # The primary key went with the sentinel; uniqueness is a unique index
+        # over COALESCE, and an ON CONFLICT target must name that expression.
+        print("ON CONFLICT (purpose, COALESCE(skill_domain, '')) DO UPDATE")
         print("    SET channel_id = EXCLUDED.channel_id,")
         print("        label      = EXCLUDED.label,")
         print("        updated_at = NOW();")
@@ -321,8 +333,16 @@ def main():
     say("=" * 62)
     say("  Yours to do — this script cannot")
     say("=" * 62)
-    say(f"  1. Set DISCORD_GUILD_ID={gid} on the deployment,")
-    say("     alongside the DISCORD_BOT_TOKEN already in your .env.")
+    fallback = {n: cid for pp, dd, cid, n in routing if not dd and pp in ("general", "promotions")}
+    say("  1. Set these on the deployment, beside DISCORD_BOT_TOKEN:")
+    say(f"       DISCORD_GUILD_ID={gid}")
+    for _name, _var in (("annonces", "DISCORD_ANNONCES_CHANNEL_ID"),
+                        ("promotions", "DISCORD_PROMOTIONS_CHANNEL_ID")):
+        if _name in fallback:
+            say(f"       {_var}={fallback[_name]}")
+    say("     The bot refuses to start without the last two. They are where an")
+    say("     announcement goes when its domain has no room of its own, and")
+    say("     posting in the default beats dropping it.")
     say("")
     say("  2. Run `skilluv-discord-bot`, NOT `skilluv-discord-notifier`.")
     say("     The notifier is the v1 webhook fallback and cannot route the")

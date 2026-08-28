@@ -2104,3 +2104,92 @@ async fn a_finding_records_the_token_it_arrived_under() {
     assert_eq!(body["data"]["tokens"][0]["findings"], 1, "{body}");
     assert_eq!(body["data"]["tokens"][0]["findings_confirmed"], 0, "{body}");
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// What a CTF page needs to exist at all (SKI-339)
+// ═══════════════════════════════════════════════════════════════════
+
+#[tokio::test]
+async fn a_flag_challenge_says_where_its_target_is_and_what_a_flag_looks_like() {
+    let app = TestApp::spawn().await;
+    let admin = a_person(&app, "ctf_curator").await;
+    grant(&app, admin, "admin").await;
+    let challenge = a_flag_challenge(&app, "ctf_curator", "SKILLUV{shape_matters}").await;
+
+    let resp = app.get(&format!("/api/challenges/{challenge}")).await;
+    assert_eq!(resp.status(), 200);
+    let body: Value = resp.json().await.unwrap();
+    let c = &body["data"]["challenge"];
+
+    // Without these two a CTF page says "find the flag" and names neither the
+    // range nor the shape.
+    assert_eq!(c["security_target_url"], "https://ctf.skill-uv.com");
+    assert_eq!(c["security_flag_format"], "SKILLUV{lower_snake_case}");
+
+    // The format in particular is what stops somebody burning their ten
+    // attempts an hour submitting a solved challenge in the wrong shape —
+    // `submit_flag` returns that as a hint on a wrong answer, and announcing
+    // it up front is strictly better than teaching it by refusal.
+    let serialised = body.to_string();
+    assert!(
+        !serialised.contains("shape_matters"),
+        "the flag was served: {serialised}"
+    );
+    assert!(
+        !serialised.contains("security_flag_hash"),
+        "the answer hash was served: {serialised}"
+    );
+
+    // And the same on the listing, which is where a `/ctf` index reads them.
+    let resp = app
+        .get("/api/challenges?domain=security&security_kind=ctf_flag")
+        .await;
+    let listed = resp.json::<Value>().await.unwrap().to_string();
+    assert!(listed.contains("ctf.skill-uv.com"), "{listed}");
+    assert!(!listed.contains("security_flag_hash"), "{listed}");
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// The seeded catalogue, and the two kinds deliberately absent from it
+// ═══════════════════════════════════════════════════════════════════
+
+/// SKI-137 and SKI-145 read as "zero rows seeded", and that is true. This
+/// holds the reason, so the next person to read an empty `/ctf` finds the
+/// decision rather than assuming a bug.
+///
+/// `ctf_flag` and `defensive_lab` are machine-checked, and machine checking
+/// requires this platform to own the secret. Every target in the seeded
+/// catalogue belongs to somebody else — Juice Shop, WebGoat, PortSwigger,
+/// VulnHub — so there is no secret to hold, and a flag hash invented by a
+/// migration author would produce a challenge nobody can ever pass.
+#[tokio::test]
+async fn the_machine_checked_kinds_are_never_seeded_and_the_others_always_are() {
+    let app = TestApp::spawn().await;
+
+    let machine_checked: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM challenge_templates
+          WHERE security_kind IN ('ctf_flag', 'defensive_lab')",
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert_eq!(
+        machine_checked, 0,
+        "a migration seeded a flag or a lab, which means it invented an answer"
+    );
+
+    // The human-reviewed kinds are seeded, and they are what the catalogue is.
+    let reviewed: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM challenge_templates
+          WHERE security_kind IN ('machine_walkthrough', 'training_ground',
+                                  'analysis_exercise', 'audit_exercise')",
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert!(reviewed >= 40, "only {reviewed} security challenges seeded");
+
+    // So the one route to a flag challenge is the admin endpoint, by somebody
+    // who planted the flag. That path is exercised by
+    // `a_flag_is_checked_against_a_hash_and_the_plaintext_is_never_stored`.
+}

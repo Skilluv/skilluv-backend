@@ -49,6 +49,21 @@ pub struct ChallengeTemplate {
     pub security_kind: Option<String>,
     /// The cyber difficulty tier, alongside `security_kind`. NULL off-domain.
     pub security_difficulty_tier: Option<String>,
+    /// Where a capture-the-flag challenge's target actually lives, and what
+    /// shape its flag has — `SKILLUV{lower_snake_case}`. Both NULL off-domain
+    /// and on every kind but `ctf_flag`.
+    ///
+    /// Serialised because a CTF page without them is a page that says "find
+    /// the flag" and names neither the range nor the format. The format in
+    /// particular is what stops somebody burning their ten attempts an hour on
+    /// a well-solved challenge submitted in the wrong shape — `submit_flag`
+    /// already returns that hint on a wrong answer, and announcing it up front
+    /// is strictly better than teaching it by refusal (SKI-339).
+    ///
+    /// `security_flag_hash` is deliberately absent and must stay absent: it is
+    /// the answer, and a hash of a short flag is a wordlist away from it.
+    pub security_target_url: Option<String>,
+    pub security_flag_format: Option<String>,
     /// The questions of a defensive lab, as a client may see them —
     /// `[{ id, kind, question, choices, case_sensitive }]`, NULL off-lab.
     ///

@@ -466,6 +466,31 @@ pub async fn admin_set_score(
         body.score,
     )
     .await?;
+
+    // A competition page with a live leaderboard has to hear that a score
+    // moved. Into the tournament's own room rather than to everybody, on the
+    // pattern `routes::challenges` set with `challenge:{id}` — a global
+    // broadcast would make every open page filter every competition's traffic
+    // (SKI-141, and what SKI-138 and SKI-149 are waiting on).
+    //
+    // The event carries no score. Whoever is watching re-reads
+    // `GET /tournaments/{slug}/leaderboard`, which is the one place that
+    // knows the ordering rule for this kind — `lower_is_better` means a
+    // smaller number just took the lead, and a payload saying "score: 12"
+    // cannot say whether that is good.
+    let room = format!("tournament:{id}");
+    state
+        .ws
+        .broadcast_to_room(
+            &room,
+            crate::websocket::WsMessage {
+                event: "tournament.leaderboard_changed".to_string(),
+                room: Some(room.clone()),
+                payload: json!({ "tournament_id": id }),
+            },
+        )
+        .await;
+
     Ok(Json(build_response(json!({ "updated": true }))))
 }
 
@@ -516,6 +541,21 @@ pub async fn admin_conclude(
     }
 
     let report = tournament::conclude_tournament(&state.db, id).await?;
+
+    // Ranks were just assigned and prizes distributed, so every open page on
+    // this competition is showing a leaderboard that is now wrong.
+    let room = format!("tournament:{id}");
+    state
+        .ws
+        .broadcast_to_room(
+            &room,
+            crate::websocket::WsMessage {
+                event: "tournament.concluded".to_string(),
+                room: Some(room.clone()),
+                payload: json!({ "tournament_id": id }),
+            },
+        )
+        .await;
 
     // A win has to leave a proof, or the profile of whoever won says nothing
     // happened. No-op outside the domains that define a contest attestation.

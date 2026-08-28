@@ -196,3 +196,60 @@ async fn no_open_domain_is_left_without_an_onboarding_guide() {
          declaring the trade is served an empty page: {bare:?}"
     );
 }
+
+/// SKI-239 — design award categories exist, so `/design/awards` is not an
+/// empty page rendered against a working endpoint.
+///
+/// Migration 0590 gave `award_categories` its `skill_domain` and said the
+/// per-family seeding was a separate ticket. It stayed separate: every other
+/// domain seeded its categories with its practice data, and design got the
+/// column without the rows.
+#[tokio::test]
+async fn design_has_award_categories_and_they_are_scoped_to_design() {
+    let app = TestApp::spawn().await;
+
+    let scoped: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM award_categories WHERE skill_domain = 'design'")
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
+    assert!(scoped >= 6, "only {scoped} design award categories");
+
+    // Work-shaped and person-shaped both present: nominating a deliverable and
+    // nominating somebody for a year of reviewing are different awards, and a
+    // catalogue with only one kind cannot express the other.
+    for subject in ["deliverable", "user"] {
+        let n: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM award_categories
+              WHERE skill_domain = 'design' AND subject_type = $1",
+        )
+        .bind(subject)
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
+        assert!(n > 0, "no design award nominates a {subject}");
+    }
+
+    // The endpoint the front reads, filtered the way `/design/awards` filters
+    // it — the `domain` parameter migration 0590 added the column for.
+    let body: Value = app
+        .get("/api/awards/categories?domain=design")
+        .await
+        .json()
+        .await
+        .unwrap();
+    let listed = body["data"]["categories"].as_array().expect("a list");
+    assert!(
+        !listed.is_empty(),
+        "the categories endpoint serves nothing for design: {body}"
+    );
+    // The filter returns design's own and the cross-cutting ones, never
+    // another family's — an awards page showing code categories is worse than
+    // an empty one.
+    assert!(
+        listed
+            .iter()
+            .all(|c| c["skill_domain"] == "design" || c["skill_domain"].is_null()),
+        "another domain's categories leaked into design: {body}"
+    );
+}

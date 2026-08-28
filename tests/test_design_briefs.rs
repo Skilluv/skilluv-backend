@@ -317,3 +317,59 @@ async fn a_brief_nobody_has_read_can_be_taken_back() {
         .collect();
     assert!(!ids.contains(&id.as_str()), "{queue}");
 }
+
+/// The narrow grant reaches this queue, so the broad one is not the only key.
+///
+/// `community_curator` is cross-domain: it was the only capability that could
+/// publish a design brief, so handing somebody that one job handed them
+/// curation of every domain's community surfaces (SKI-334). `domain_curator:design`
+/// is the capability whose own description is "its challenges, its contests,
+/// its featurings" — a brief becoming a slice is that sentence — and it is
+/// scoped to the one domain.
+///
+/// No `design_curator` capability was created. It would be a second name for
+/// this one, and two names for one role is how a permission model stops being
+/// readable.
+#[tokio::test]
+async fn a_design_curator_decides_design_briefs_without_curating_every_domain() {
+    let app = TestApp::spawn().await;
+    app.register_user("brief_author6").await;
+    app.register_user("brief_design_curator").await;
+    app.register_user("brief_other_domain").await;
+
+    let curator = user_id(&app, "brief_design_curator").await;
+    grant(&app, curator, "domain_curator:design").await;
+    // A curator of another domain is not a curator of this queue.
+    let outsider = user_id(&app, "brief_other_domain").await;
+    grant(&app, outsider, "domain_curator:security").await;
+
+    app.login("brief_author6").await;
+    let created: Value = app
+        .post("/api/design/briefs", &a_brief())
+        .await
+        .json()
+        .await
+        .unwrap();
+    let id = created["data"]["brief"]["id"].as_str().unwrap().to_string();
+
+    app.login("brief_other_domain").await;
+    assert_eq!(
+        app.get("/api/admin/design/briefs").await.status().as_u16(),
+        403
+    );
+
+    app.login("brief_design_curator").await;
+    assert_eq!(
+        app.get("/api/admin/design/briefs").await.status().as_u16(),
+        200
+    );
+    let resp = app
+        .post(
+            &format!("/api/admin/design/briefs/{id}/publish"),
+            &json!({}),
+        )
+        .await;
+    let status = resp.status().as_u16();
+    let body: Value = resp.json().await.unwrap();
+    assert_eq!(status, 200, "{body}");
+}

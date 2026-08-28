@@ -302,6 +302,10 @@ notification:
       body: "Your entry to {contest} is on your profile."
       cta: "See my profile"
   mission:
+    taken_down:
+      title: "The {mission} mission has been taken down"
+      body: "Skilluv removed it from the board. Reason: {reason}. Anything held in escrow against it has been returned."
+      cta: "Open the mission"
     matching_published:
       title: "A mission for you"
       body: "A new mission matches the trades you have declared."

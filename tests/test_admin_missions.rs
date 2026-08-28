@@ -721,3 +721,177 @@ async fn only_an_arbiter_can_end_a_delivered_mission() {
 
     assert_eq!(balance(&app, talent, State::Pending).await, eur("0"));
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// Pagination and takedown (SKI-338)
+// ═══════════════════════════════════════════════════════════════════
+
+#[tokio::test]
+async fn the_listing_says_how_many_there_are() {
+    let app = TestApp::spawn().await;
+    for i in 0..3 {
+        let (client, talent) = a_cast(&app, &format!("am_page{i}")).await;
+        a_stuck_mission(&app, &format!("am-page-{i}"), client, talent).await;
+    }
+
+    app.register_admin("am_page_admin").await;
+    app.login("am_page_admin").await;
+
+    let body: Value = app
+        .get("/api/admin/missions?page=1&per_page=2")
+        .await
+        .json()
+        .await
+        .unwrap();
+
+    // The array is `data` itself, which is the convention SKI-58 settled and
+    // `test_admin_listing_convention.rs` holds for every other admin listing.
+    assert_eq!(body["data"].as_array().unwrap().len(), 2, "{body}");
+    assert_eq!(body["pagination"]["page"], 1);
+    assert_eq!(body["pagination"]["per_page"], 2);
+    assert_eq!(body["pagination"]["total"], 3, "{body}");
+    assert_eq!(body["pagination"]["total_pages"], 2, "{body}");
+    assert!(body["meta"]["request_id"].is_string(), "{body}");
+
+    // The count follows the filters, or the pager offers pages that are empty.
+    let body: Value = app
+        .get("/api/admin/missions?skill_domain=security")
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(body["pagination"]["total"], 0, "{body}");
+}
+
+#[tokio::test]
+async fn an_administrator_can_take_a_mission_off_the_board() {
+    let app = TestApp::spawn().await;
+    let (client, talent) = a_cast(&app, "am_down").await;
+    let mission = a_stuck_mission(&app, "am-down", client, talent).await;
+    escrowed(&app, mission, talent).await;
+
+    app.register_admin("am_down_admin").await;
+    app.login("am_down_admin").await;
+
+    // A verdict is not a reason.
+    let resp = app
+        .post(
+            "/api/admin/missions/am-down/status",
+            &json!({ "status": "cancelled", "reason": "spam" }),
+        )
+        .await;
+    assert_eq!(resp.status(), 400);
+
+    // Nor is any other status an administrator's to set: moving a mission
+    // forward belongs to the two parties.
+    let resp = app
+        .post(
+            "/api/admin/missions/am-down/status",
+            &json!({ "status": "closed",
+                     "reason": "the work looks finished to me from over here" }),
+        )
+        .await;
+    assert_eq!(resp.status(), 400);
+
+    const WHY: &str = "The brief asks for a clone of a trademarked identity, which \
+                       the terms do not allow us to carry.";
+    let resp = app
+        .post(
+            "/api/admin/missions/am-down/status",
+            &json!({ "status": "cancelled", "reason": WHY }),
+        )
+        .await;
+    let status = resp.status();
+    let body: Value = resp.json().await.unwrap();
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["data"]["mission"]["status"], "cancelled", "{body}");
+
+    // Through `set_status`, so the escrow went back rather than sitting behind
+    // a mission that no longer exists on the board.
+    assert_eq!(balance(&app, talent, State::Pending).await, eur("0.00"));
+
+    // Written down as a platform decision, not as a party's.
+    let audited: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM audit_log
+          WHERE action = 'mission.taken_down' AND target_id = $1",
+    )
+    .bind(mission)
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert_eq!(audited, 1);
+
+    // Both sides were told, in the same words.
+    let told: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM notifications
+          WHERE notification_type = 'mission.taken_down' AND user_id = ANY($1)",
+    )
+    .bind(vec![client, talent])
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert_eq!(told, 2, "the takedown reached {told} of the two sides");
+
+    // And it does not happen twice.
+    let resp = app
+        .post(
+            "/api/admin/missions/am-down/status",
+            &json!({ "status": "cancelled", "reason": WHY }),
+        )
+        .await;
+    assert_eq!(resp.status(), 409);
+}
+
+#[tokio::test]
+async fn a_takedown_is_not_an_arbitration_and_says_so() {
+    let app = TestApp::spawn().await;
+    let (client, talent) = a_cast(&app, "am_dlv").await;
+    let mission = a_stuck_mission(&app, "am-dlv", client, talent).await;
+    sqlx::query("UPDATE missions SET status = 'delivered' WHERE id = $1")
+        .bind(mission)
+        .execute(&app.db)
+        .await
+        .unwrap();
+
+    app.register_admin("am_dlv_admin").await;
+    app.login("am_dlv_admin").await;
+
+    // Cancelling here would take the escrow back from somebody who has handed
+    // the work in, on one person's say-so and with nothing recording that the
+    // delivery was ever weighed. That case has an endpoint of its own.
+    let resp = app
+        .post(
+            "/api/admin/missions/am-dlv/status",
+            &json!({ "status": "cancelled",
+                     "reason": "the client says the work was never delivered at all" }),
+        )
+        .await;
+    let status = resp.status();
+    let body: Value = resp.json().await.unwrap();
+    assert_eq!(status, 409, "{body}");
+    assert!(body.to_string().contains("arbitration"), "{body}");
+}
+
+#[tokio::test]
+async fn a_takedown_is_an_administrators_and_not_an_arbiters() {
+    let app = TestApp::spawn().await;
+    let (client, talent) = a_cast(&app, "am_arb_down").await;
+    a_stuck_mission(&app, "am-arb-down", client, talent).await;
+
+    app.register_user("am_the_arbiter").await;
+    let arbiter = user_id(&app, "am_the_arbiter").await;
+    grant(&app, arbiter, "mission_arbiter").await;
+    app.login("am_the_arbiter").await;
+
+    // An arbitration decides between two parties who both still want
+    // something. This decides that the platform will not carry the listing,
+    // which is a different authority.
+    let resp = app
+        .post(
+            "/api/admin/missions/am-arb-down/status",
+            &json!({ "status": "cancelled",
+                     "reason": "this brief breaches the terms in three separate places" }),
+        )
+        .await;
+    assert_eq!(resp.status(), 403);
+}

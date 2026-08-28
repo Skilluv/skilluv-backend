@@ -1579,3 +1579,354 @@ async fn the_artefact_link_is_signed_expiring_and_only_for_a_lab() {
         .await;
     assert_eq!(resp.status(), 409);
 }
+
+/// A report with its own endpoint and its own description.
+///
+/// `a_report` is one text, and filing it three times makes every copy a
+/// suspected duplicate of the others -- which is the deduplication scanner
+/// doing its job, and which would make any count of suspected duplicates a
+/// count of the fixture.
+async fn a_distinct_finding(
+    app: &TestApp,
+    username: &str,
+    title: &str,
+    endpoint: &str,
+    what: &str,
+) -> Uuid {
+    app.login(username).await;
+    let mut report = a_report(title);
+    report["affected_endpoint"] = json!(endpoint);
+    report["description_md"] = json!(format!(
+        "On {endpoint}, {what}. A caller who controls that value controls what          the server does with it, and nothing downstream re-checks."
+    ));
+    report["reproduction_steps_md"] = json!(format!(
+        "1. Sign in as any account
+2. Call {endpoint} with the value below
+         3. Observe that {what}"
+    ));
+    let (status, body) = submit(app, &report).await;
+    assert_eq!(status, 200, "submit said: {body}");
+    body["data"]["report"]["id"]
+        .as_str()
+        .expect("an id")
+        .parse()
+        .unwrap()
+}
+
+/// How many notifications one account has, in total.
+async fn notifications_for(app: &TestApp, username: &str) -> i64 {
+    sqlx::query_scalar(
+        "SELECT count(*) FROM notifications n
+           JOIN users u ON u.id = n.user_id
+          WHERE u.username = $1",
+    )
+    .bind(username)
+    .fetch_one(&app.db)
+    .await
+    .unwrap()
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// The admin surface: overview, internal thread, tokens (SKI-338)
+// ═══════════════════════════════════════════════════════════════════
+
+#[tokio::test]
+async fn the_overview_counts_the_queue_and_names_the_sla_it_is_breaching() {
+    let app = TestApp::spawn().await;
+    let admin = a_person(&app, "sec_overview_admin").await;
+    grant(&app, admin, "admin").await;
+
+    a_person(&app, "ov_reporter").await;
+    // Three genuinely different reports. Filing the same text three times
+    // trips the similarity scan, and `suspected_duplicates` would then be
+    // counting the fixture rather than the queue.
+    let fresh = a_distinct_finding(
+        &app,
+        "ov_reporter",
+        "A finding that arrived this morning",
+        "GET /api/users",
+        "the search parameter reaches the query unbound",
+    )
+    .await;
+    let late = a_distinct_finding(
+        &app,
+        "ov_reporter",
+        "A finding nobody has read in a fortnight",
+        "POST /api/auth/reset",
+        "the reset token is compared with a non-constant-time equality",
+    )
+    .await;
+
+    // Back-dated rather than waited for. The SLA is the only figure here that
+    // cannot be derived from the queue, so it is the one worth a fixture.
+    sqlx::query(
+        "UPDATE security_findings SET created_at = NOW() - INTERVAL '14 days' WHERE id = $1",
+    )
+    .bind(late)
+    .execute(&app.db)
+    .await
+    .unwrap();
+
+    // And one that is closed business: it must not be counted as backlog.
+    let withdrawn = a_distinct_finding(
+        &app,
+        "ov_reporter",
+        "A finding its author took back",
+        "GET /api/exports",
+        "the export job accepts a path fragment it then opens",
+    )
+    .await;
+    sqlx::query("UPDATE security_findings SET status = 'withdrawn' WHERE id = $1")
+        .bind(withdrawn)
+        .execute(&app.db)
+        .await
+        .unwrap();
+
+    app.login("sec_overview_admin").await;
+    let resp = app.get("/api/admin/security/overview").await;
+    let status = resp.status();
+    let body: Value = resp.json().await.unwrap();
+    assert_eq!(status, 200, "{body}");
+    let d = &body["data"];
+
+    assert_eq!(d["by_status"]["submitted"], 2, "{body}");
+    assert!(
+        d["by_status"]["withdrawn"].is_null(),
+        "closed business counted as backlog: {body}"
+    );
+    assert_eq!(d["by_severity"]["high"], 2, "{body}");
+
+    // The reason the endpoint exists.
+    assert_eq!(d["breaching_triage_sla"], 1, "{body}");
+    assert_eq!(d["triage_sla_days"], 7, "{body}");
+    let oldest = d["oldest_untriaged_hours"].as_f64().unwrap();
+    assert!((330.0..=350.0).contains(&oldest), "{body}");
+
+    assert_eq!(d["open_rounds"], 0, "{body}");
+    assert_eq!(d["suspected_duplicates"], 0, "{body}");
+    assert_eq!(d["embargoes_overdue"], 0, "{body}");
+    assert!(d["embargoes_expiring_7d"].is_number(), "{body}");
+
+    let _ = fresh;
+
+    // Not a public figure: the backlog says how far behind this platform is.
+    app.login("ov_reporter").await;
+    let resp = app.get("/api/admin/security/overview").await;
+    assert_eq!(resp.status(), 403);
+}
+
+#[tokio::test]
+async fn an_internal_note_never_reaches_the_person_who_reported_it() {
+    let app = TestApp::spawn().await;
+    let triager = a_person(&app, "sec_note_triager").await;
+    grant(&app, triager, "security_triager").await;
+    a_person(&app, "note_reporter").await;
+    let finding = a_finding(&app, "note_reporter", "A finding worth a note or two").await;
+
+    const NOTE: &str = "Could not reproduce on staging, the endpoint moved in \
+                        yesterday's deploy. Picking this back up tomorrow.";
+
+    app.login("sec_note_triager").await;
+    let resp = app
+        .post(
+            &format!("/api/admin/security/findings/{finding}/comments"),
+            &json!({ "body_md": NOTE }),
+        )
+        .await;
+    let status = resp.status();
+    let body: Value = resp.json().await.unwrap();
+    assert_eq!(status, 200, "{body}");
+
+    // Where it is meant to be read.
+    let resp = app
+        .get(&format!("/api/admin/security/findings/{finding}"))
+        .await;
+    let body: Value = resp.json().await.unwrap();
+    let comments = body["data"]["comments"].as_array().unwrap();
+    assert_eq!(comments.len(), 1, "{body}");
+    assert_eq!(comments[0]["body_md"], NOTE);
+    assert_eq!(comments[0]["author"], "sec_note_triager");
+
+    // And the two places it must never be. The reporter's own card first.
+    let resp = app.get(&format!("/api/security/findings/{finding}")).await;
+    let card = resp.text().await.unwrap();
+    assert!(
+        !card.contains("Could not reproduce"),
+        "the internal note reached the public card: {card}"
+    );
+
+    // Then the reporter's notifications. Counted around the write rather than
+    // in total: submitting a report notifies its author, and asserting zero
+    // here would be asserting that the acknowledgement is broken.
+    let before = notifications_for(&app, "note_reporter").await;
+    app.login("sec_note_triager").await;
+    let resp = app
+        .post(
+            &format!("/api/admin/security/findings/{finding}/comments"),
+            &json!({ "body_md": "Second note, to be sure nothing leaves on a write." }),
+        )
+        .await;
+    assert_eq!(resp.status(), 200);
+    assert_eq!(
+        notifications_for(&app, "note_reporter").await,
+        before,
+        "an internal note notified the reporter"
+    );
+    // And nothing that did arrive carries what was written.
+    let leaked: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM notifications n
+           JOIN users u ON u.id = n.user_id
+          WHERE u.username = 'note_reporter'
+            AND (n.body ILIKE '%reproduce%' OR n.title ILIKE '%reproduce%')",
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert_eq!(leaked, 0, "an internal note reached the reporter's inbox");
+
+    // A stranger cannot write one.
+    a_person(&app, "note_stranger").await;
+    app.login("note_stranger").await;
+    let resp = app
+        .post(
+            &format!("/api/admin/security/findings/{finding}/comments"),
+            &json!({ "body_md": "let me in" }),
+        )
+        .await;
+    assert_eq!(resp.status(), 403);
+
+    // And an empty one is refused rather than stored.
+    app.login("sec_note_triager").await;
+    let resp = app
+        .post(
+            &format!("/api/admin/security/findings/{finding}/comments"),
+            &json!({ "body_md": "  " }),
+        )
+        .await;
+    assert_eq!(resp.status(), 400);
+}
+
+#[tokio::test]
+async fn the_token_listing_is_what_makes_revocation_reachable() {
+    let app = TestApp::spawn().await;
+    let admin = a_person(&app, "tok_admin").await;
+    grant(&app, admin, "admin").await;
+    a_person(&app, "tok_researcher").await;
+
+    // Issued the way a researcher issues one.
+    app.login("tok_researcher").await;
+    let resp = app
+        .post(
+            "/api/security/research-token",
+            &json!({ "label": "Burp on the laptop", "days": 30 }),
+        )
+        .await;
+    let status = resp.status();
+    let issued: Value = resp.json().await.unwrap();
+    assert_eq!(status, 200, "{issued}");
+    let plaintext = issued["data"]["token"].as_str().unwrap().to_string();
+
+    app.login("tok_admin").await;
+    let resp = app.get("/api/admin/security/research-tokens").await;
+    let status = resp.status();
+    let body: Value = resp.json().await.unwrap();
+    assert_eq!(status, 200, "{body}");
+    let tokens = body["data"]["tokens"].as_array().unwrap();
+    assert_eq!(tokens.len(), 1, "{body}");
+    let t = &tokens[0];
+    assert_eq!(t["username"], "tok_researcher");
+    assert_eq!(t["label"], "Burp on the laptop");
+    assert_eq!(t["revoked_at"], Value::Null);
+    assert_eq!(t["findings"], 0, "{body}");
+
+    // The one thing a listing of credentials must never carry.
+    let serialised = body.to_string();
+    assert!(
+        !serialised.contains(&plaintext),
+        "the token itself was listed"
+    );
+    // The prefix is there, because it is what matches a log line.
+    assert!(t["token_prefix"].as_str().unwrap().starts_with("srt_"));
+
+    // The id it returns is the one the revoke endpoint takes — which is the
+    // whole point: before this, that id could only come out of psql.
+    let id = t["id"].as_str().unwrap();
+    let resp = app
+        .post(
+            &format!("/api/admin/security/research-tokens/{id}/revoke"),
+            &json!({}),
+        )
+        .await;
+    assert_eq!(resp.status(), 200);
+
+    // And a revoked token drops out of the active filter without disappearing
+    // from the record.
+    let resp = app
+        .get("/api/admin/security/research-tokens?active_only=true")
+        .await;
+    let body: Value = resp.json().await.unwrap();
+    assert_eq!(
+        body["data"]["tokens"].as_array().unwrap().len(),
+        0,
+        "{body}"
+    );
+
+    let resp = app.get("/api/admin/security/research-tokens").await;
+    let body: Value = resp.json().await.unwrap();
+    assert_eq!(body["data"]["tokens"][0]["revoked_reason"], "by_operator");
+
+    // A reader of findings is not automatically a reader of credentials.
+    let triager = a_person(&app, "tok_triager").await;
+    grant(&app, triager, "security_triager").await;
+    app.login("tok_triager").await;
+    let resp = app.get("/api/admin/security/research-tokens").await;
+    assert_eq!(resp.status(), 403);
+}
+
+#[tokio::test]
+async fn a_finding_records_the_token_it_arrived_under() {
+    let app = TestApp::spawn().await;
+    a_person(&app, "tok_hunter").await;
+    app.login("tok_hunter").await;
+
+    let resp = app
+        .post("/api/security/research-token", &json!({ "days": 30 }))
+        .await;
+    let issued: Value = resp.json().await.unwrap();
+    let plaintext = issued["data"]["token"].as_str().unwrap().to_string();
+
+    // Without the header: no token on the row, which is the ordinary case.
+    let (status, body) = submit(&app, &a_report("A finding sent without the token")).await;
+    assert_eq!(status, 200, "{body}");
+
+    // With it.
+    let resp = app
+        .client
+        .post(format!("{}/api/security/reports", app.addr))
+        .header("origin", "http://localhost:5173")
+        .header("X-Security-Research-Token", &plaintext)
+        .json(&a_report("A finding sent under the token"))
+        .send()
+        .await
+        .unwrap();
+    let status = resp.status();
+    let body: Value = resp.json().await.unwrap();
+    assert_eq!(status, 200, "{body}");
+
+    let counted: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM security_findings WHERE research_token_id IS NOT NULL",
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert_eq!(counted, 1, "the token was not recorded on the report");
+
+    // And the listing reports it, which is the number a revocation turns on.
+    let admin = a_person(&app, "tok_admin2").await;
+    grant(&app, admin, "admin").await;
+    app.login("tok_admin2").await;
+    let resp = app.get("/api/admin/security/research-tokens").await;
+    let body: Value = resp.json().await.unwrap();
+    assert_eq!(body["data"]["tokens"][0]["findings"], 1, "{body}");
+    assert_eq!(body["data"]["tokens"][0]["findings_confirmed"], 0, "{body}");
+}

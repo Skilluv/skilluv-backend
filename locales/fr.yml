@@ -301,6 +301,10 @@ notification:
       body: "Ta proposition a {contest} est inscrite sur ton profil."
       cta: "Voir mon profil"
   mission:
+    taken_down:
+      title: "La mission {mission} a ete retiree"
+      body: "Skilluv l'a retiree du tableau. Motif : {reason}. Ce qui etait sequestre dessus a ete rendu."
+      cta: "Ouvrir la mission"
     matching_published:
       title: "Une mission pour toi"
       body: "Une nouvelle mission correspond aux metiers que tu as declares."

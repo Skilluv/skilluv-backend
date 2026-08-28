@@ -52,11 +52,29 @@ fn wrap(data: serde_json::Value) -> serde_json::Value {
 /// `community_curator` rather than `admin` alone: curation is the thing the
 /// capability was created for, and reserving it to administrators would make
 /// the queue's length a function of how many administrators there are.
+///
+/// `domain_curator:design` alongside it, and this is the narrowing rather than
+/// a widening. `community_curator` is cross-domain by construction: granting
+/// somebody the right to publish a design brief was granting them curation of
+/// every domain's community surfaces at once, which is precisely the
+/// over-grant a per-domain capability exists to avoid (SKI-334). The domain
+/// curator is the capability whose description already says "its challenges,
+/// its contests, its featurings" — a design brief becoming a slice is that
+/// sentence — so this queue is now reachable by the narrow grant as well as
+/// the broad one.
+///
+/// No `design_curator`. It would be a second name for `domain_curator:design`,
+/// and two names for one role is how a permission model stops being readable.
 async fn require_curator(state: &AppState, auth: &AuthUser) -> Result<(), AppError> {
     crate::middleware::capabilities::require_any_capability(
         &state.db,
         auth.user_id,
-        &["admin", "community_curator"],
+        &[
+            "admin",
+            "community_curator",
+            "domain_curator:design",
+            "domain_curator:all",
+        ],
     )
     .await
 }

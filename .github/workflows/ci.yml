@@ -1,28 +1,24 @@
 name: CI
 
 on:
+  # No path filter. A workflow-level `paths-ignore` here is exactly what CI-01
+  # fixed: branch protection requires `Build & Lint` and `Integration Tests`
+  # by name, and a workflow skipped by a path filter never reports them, so a
+  # docs-only pull request either waits forever (paths-ignore too broad) or a
+  # second stub workflow has to answer for it (paths in one file, paths-ignore
+  # in the other) — and those two filters are NOT complements for a pull
+  # request touching Markdown *and* Rust: both fire, two jobs claim the same
+  # required name, and the trivial one can green a real change.
+  #
+  # So this workflow always runs, and the `changes` job below decides whether
+  # the expensive Rust jobs do any work. The required checks always report:
+  # `Build & Lint` skips cleanly on a docs-only change, `Integration Tests`
+  # always runs and reports green unless a real shard failed.
   push:
     branches: [master]
-    # Skip CI entirely when only docs / config / readme change on master.
-    paths-ignore:
-      - "**.md"
-      - "docs/**"
-      - "LICENSE"
-      - ".gitignore"
-      - ".editorconfig"
-      - ".github/ISSUE_TEMPLATE/**"
-      - ".github/FUNDING.yml"
   pull_request:
     branches: [master]
     types: [opened, synchronize, reopened, ready_for_review]
-    paths-ignore:
-      - "**.md"
-      - "docs/**"
-      - "LICENSE"
-      - ".gitignore"
-      - ".editorconfig"
-      - ".github/ISSUE_TEMPLATE/**"
-      - ".github/FUNDING.yml"
 
 # Cancel any in-progress run on the same branch when a new commit arrives.
 # Saves ~30 min of GHA time per force-push during PR iteration.
@@ -43,12 +39,53 @@ permissions:
   contents: read
 
 jobs:
+  # ─── Change detection ──────────────────────────────────────────────
+  # One cheap job (~30s, no build) that answers a single question: does this
+  # ref touch anything other than documentation? Every expensive job below
+  # gates on its `code` output. This replaces the old workflow-level
+  # `paths-ignore` + a second stub workflow (CI-01) with one honest signal.
+  #
+  # A changed file counts as code unless it matches one of the documentation
+  # patterns (see scripts/detect-code-changes.sh). So a pull request that
+  # touches a README *and* a .rs file yields code=true (the .rs file is not a
+  # doc) — the exact mixed case the two-workflow design got wrong. When the
+  # diff range can't be resolved, the script fails safe to code=true.
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          persist-credentials: false
+          # Full history so the diff endpoints (PR base.sha, push before-sha)
+          # are reachable. No third-party action: the classification is a few
+          # lines of git in scripts/detect-code-changes.sh, testable locally,
+          # in the spirit of the gitleaks-CLI-over-action choice elsewhere.
+          fetch-depth: 0
+      - name: Classify the diff — code vs documentation only
+        id: filter
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BEFORE: ${{ github.event.before }}
+        run: bash scripts/detect-code-changes.sh
+
   # ─── Static gates ──────────────────────────────────────────────────
   # Cheap, fail-fast : lint, secret leaks, known CVEs. All three run in
   # parallel and gate the heavier test job.
 
   check:
     name: Build & Lint
+    # Required check. On a docs-only change this skips cleanly — a skipped
+    # required job is reported to branch protection as success, so the check
+    # is satisfied without compiling a line of Rust.
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     # 25 min budget : cold cache full cargo build (release) + clippy + fmt
     # is 12-18 min. sccache accelerates subsequent runs but the FIRST run
@@ -114,6 +151,8 @@ jobs:
 
   audit:
     name: Cargo Audit + Deny (CVE, licenses, banned crates)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -134,6 +173,9 @@ jobs:
 
   secrets:
     name: Secret Scan (gitleaks)
+    # Deliberately NOT gated on `changes.outputs.code`: a secret pasted into a
+    # README or a docs page is still a leaked secret. Cheap enough (~5 min) to
+    # run on every change, documentation included. Do not add a code-only gate.
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -170,9 +212,10 @@ jobs:
     # was found by a foreign key violation in CI rather than here, which is
     # what this job changes.
     name: Migrations Apply And The Schema Holds
+    needs: changes
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: github.event.pull_request.draft == false
+    if: needs.changes.outputs.code == 'true' && github.event.pull_request.draft == false
     services:
       postgres:
         image: postgres:18.4-alpine
@@ -234,9 +277,11 @@ jobs:
     # `migrations` too: a chain that does not apply makes all eight shards red
     # with the same unrelated error, which is eight runners spent to learn one
     # thing that job already said.
-    needs: [check, audit, secrets, migrations]
+    needs: [changes, check, audit, secrets, migrations]
     # Skip drafts to save quota — devs can mark PR ready when they want CI.
-    if: github.event.pull_request.draft == false
+    # Also skip on a docs-only change (code=false): the aggregator below still
+    # reports the required "Integration Tests" check green in that case.
+    if: needs.changes.outputs.code == 'true' && github.event.pull_request.draft == false
     # A timeout should catch a hang, not a slow week — which means it has to
     # be sized for what the job actually does, and shard 1 does more than the
     # rest. It runs the doctests, and it is the single writer for the shared
@@ -482,16 +527,26 @@ jobs:
     # instead of a pending one.
     name: Integration Tests
     runs-on: ubuntu-latest
-    needs: test
+    needs: [changes, test]
+    # always() so this required check always reports a conclusion — never
+    # pending. On a docs-only change the `test` matrix is skipped and this
+    # greens (nothing to run); on a code change it mirrors the matrix result.
     if: always() && github.event.pull_request.draft == false
     steps:
-      - name: Fail if any shard failed or was cancelled
-        if: needs.test.result != 'success'
+      - name: Fail if a real shard failed or was cancelled
+        # Only meaningful when code changed. On docs-only, needs.test.result
+        # is 'skipped' and this step is itself skipped, so the job stays green.
+        if: needs.changes.outputs.code == 'true' && needs.test.result != 'success'
         run: |
           echo "test matrix result: ${{ needs.test.result }}"
           exit 1
+      - name: Docs-only change — no Rust to test
+        if: needs.changes.outputs.code != 'true'
+        run: |
+          echo "Documentation-only change. The suite would run the same code already green on master."
       - name: All shards passed
-        run: echo "All 4 test shards succeeded."
+        if: needs.changes.outputs.code == 'true' && needs.test.result == 'success'
+        run: echo "All 8 test shards succeeded."
 
   publish:
     # Build + push a Docker image to GHCR on every master push so downstream

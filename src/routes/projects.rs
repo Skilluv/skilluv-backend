@@ -364,9 +364,7 @@ pub async fn admin_set_curated(
     Path(slug): Path<String>,
     Json(body): Json<SetCuratedBody>,
 ) -> Result<Json<Value>, AppError> {
-    if auth.role != "admin" {
-        return Err(AppError::Forbidden);
-    }
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     let project = projects::by_slug(&state.db, &slug).await?;
     projects::admin_set_curated(&state.db, project.id, body.curated).await?;
     Ok(Json(build_response(json!({ "curated": body.curated }))))

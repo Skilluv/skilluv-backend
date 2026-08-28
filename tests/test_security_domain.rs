@@ -1384,3 +1384,177 @@ async fn a_proof_key_from_somewhere_else_cannot_be_attached_to_a_report() {
     assert_eq!(status, 400, "{body}");
     assert!(body.to_string().contains("upload"), "{body}");
 }
+
+/// FZ-02 — an expired embargo becomes `partially_disclosed`, never `public`.
+///
+/// The sweep flags a finding for an administrator when its clock runs out;
+/// publication stays a decision somebody signs. The invariant this holds is
+/// that no automatic path ever puts a report on the internet: the sweep writes
+/// `partially_disclosed` and nothing else, and it is idempotent.
+#[tokio::test]
+async fn an_expired_embargo_becomes_partially_disclosed_never_public() {
+    let app = TestApp::spawn().await;
+    let _reporter = a_person(&app, "embargo_reporter").await;
+    let id = a_finding(&app, "embargo_reporter", "A finding whose embargo runs out").await;
+
+    let reviewer = a_person(&app, "embargo_reviewer").await;
+    grant(&app, reviewer, "security_reviewer:red-team").await;
+    app.login("embargo_reviewer").await;
+
+    let (status, body) = transition(&app, id, &json!({ "to": "triaged" })).await;
+    assert_eq!(status, 200, "{body}");
+    let (status, body) = transition(&app, id, &json!({ "to": "confirmed" })).await;
+    assert_eq!(status, 200, "{body}");
+
+    // The embargo is running after confirmation.
+    let stage: Option<String> =
+        sqlx::query_scalar("SELECT disclosure_stage FROM security_findings WHERE id = $1")
+            .bind(id)
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
+    assert_eq!(stage.as_deref(), Some("embargoed"));
+
+    // Run the clock out and sweep.
+    sqlx::query(
+        "UPDATE security_findings SET embargo_ends_at = NOW() - INTERVAL '1 day' WHERE id = $1",
+    )
+    .bind(id)
+    .execute(&app.db)
+    .await
+    .unwrap();
+
+    let sweep = skilluv_backend::services::security_findings::sweep_embargoes(&app.db)
+        .await
+        .expect("sweep");
+    assert!(
+        sweep.expired.contains(&id),
+        "the expired embargo was not swept"
+    );
+
+    let stage: Option<String> =
+        sqlx::query_scalar("SELECT disclosure_stage FROM security_findings WHERE id = $1")
+            .bind(id)
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
+    assert_eq!(
+        stage.as_deref(),
+        Some("partially_disclosed"),
+        "an expired embargo must become partially_disclosed, not {stage:?}"
+    );
+
+    // Idempotent, and it never escalates to public on its own: a second sweep
+    // leaves an already-disclosed finding alone, and no sweep writes 'public'.
+    let sweep2 = skilluv_backend::services::security_findings::sweep_embargoes(&app.db)
+        .await
+        .expect("second sweep");
+    assert!(
+        !sweep2.expired.contains(&id),
+        "a partially_disclosed finding was swept a second time"
+    );
+
+    let stage: Option<String> =
+        sqlx::query_scalar("SELECT disclosure_stage FROM security_findings WHERE id = $1")
+            .bind(id)
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
+    assert_ne!(
+        stage.as_deref(),
+        Some("public"),
+        "the sweep published a finding on its own"
+    );
+    assert_eq!(stage.as_deref(), Some("partially_disclosed"));
+}
+
+/// AZ-02 (IDOR) -- a reporter cannot act on another reporter's finding by id.
+///
+/// withdraw() passes Actor::Reporter unconditionally, so the only thing
+/// standing between reporter B and reporter A's report is the ownership check
+/// inside transition() ("a reporter is only ever the reporter of their own
+/// report"). The security domain is where this matters most: the object behind
+/// the id is somebody else's unpatched vulnerability.
+#[tokio::test]
+async fn a_reporter_cannot_withdraw_another_reporters_finding() {
+    let app = TestApp::spawn().await;
+    a_person(&app, "idor_reporter_a").await;
+    let a_id = a_finding(&app, "idor_reporter_a", "A's private finding").await;
+
+    // A different, unrelated reporter tries to withdraw it by guessing the id.
+    a_person(&app, "idor_reporter_b").await;
+    app.login("idor_reporter_b").await;
+    let resp = app
+        .post(
+            &format!("/api/security/reports/{a_id}/withdraw"),
+            &json!({}),
+        )
+        .await;
+    assert_eq!(
+        resp.status(),
+        reqwest::StatusCode::FORBIDDEN,
+        "reporter B withdrew reporter A's finding (IDOR)"
+    );
+
+    // A's finding is untouched.
+    let status: String = sqlx::query_scalar("SELECT status FROM security_findings WHERE id = $1")
+        .bind(a_id)
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
+    assert_ne!(
+        status, "withdrawn",
+        "A's finding was withdrawn by someone else"
+    );
+}
+
+/// CC-01 -- a race on an indivisible action leaves exactly one winner.
+///
+/// withdraw() -> transition() locks the row `FOR UPDATE` before deciding, so
+/// twenty-five reporters pressing withdraw on the same finding at the same
+/// millisecond must resolve to one success and twenty-four conflicts, not
+/// twenty-five successes or a corrupted state. The guarantee is the database
+/// lock, not an application-level check with a window.
+#[tokio::test]
+async fn concurrent_withdraws_leave_exactly_one_winner() {
+    let app = TestApp::spawn().await;
+    a_person(&app, "race_owner").await;
+    let id = a_finding(&app, "race_owner", "A finding withdrawn under a race").await;
+
+    // The shared client is logged in as the owner; clone shares the cookie jar.
+    let url = format!("{}/api/security/reports/{id}/withdraw", app.addr);
+    let mut handles = Vec::new();
+    for _ in 0..25 {
+        let client = app.client.clone();
+        let url = url.clone();
+        handles.push(tokio::spawn(async move {
+            client
+                .post(&url)
+                .json(&json!({}))
+                .send()
+                .await
+                .map(|r| r.status())
+                .ok()
+        }));
+    }
+
+    let mut wins = 0;
+    for h in handles {
+        if let Ok(Some(status)) = h.await
+            && status.is_success()
+        {
+            wins += 1;
+        }
+    }
+    assert_eq!(
+        wins, 1,
+        "expected exactly one successful withdraw, got {wins}"
+    );
+
+    let status: String = sqlx::query_scalar("SELECT status FROM security_findings WHERE id = $1")
+        .bind(id)
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
+    assert_eq!(status, "withdrawn", "the finding is not cleanly withdrawn");
+}

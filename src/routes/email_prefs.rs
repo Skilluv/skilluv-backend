@@ -564,9 +564,7 @@ pub async fn admin_run_weekly_digest(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<ApiResponse<AdminDigestResponse>>, AppError> {
-    if auth.role != "admin" {
-        return Err(AppError::Forbidden);
-    }
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     let svc = digest::DigestService {
         db: &state.db,
         email: &state.email,

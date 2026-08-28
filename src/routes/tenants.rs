@@ -330,9 +330,7 @@ pub async fn list_tenants(
     auth: AuthUser,
     Query(q): Query<TenantsListQuery>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    if auth.role != "admin" {
-        return Err(AppError::Forbidden);
-    }
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     let page = q.page.unwrap_or(1).max(1);
     let per_page = q.per_page.unwrap_or(50).clamp(1, 200);
     let offset = (page - 1) * per_page;
@@ -399,9 +397,7 @@ pub async fn create_tenant(
     auth: AuthUser,
     Json(body): Json<CreateTenantBody>,
 ) -> Result<Json<ApiResponse<TenantCreatedResponse>>, AppError> {
-    if auth.role != "admin" {
-        return Err(AppError::Forbidden);
-    }
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     let slug = body.slug.trim().to_lowercase();
     if !slug.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') || slug.len() < 2 {
         return Err(AppError::Validation(
@@ -454,9 +450,7 @@ pub async fn get_tenant(
     auth: AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<ApiResponse<AdminTenant>>, AppError> {
-    if auth.role != "admin" {
-        return Err(AppError::Forbidden);
-    }
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     let row = sqlx::query("SELECT * FROM tenants WHERE id = $1")
         .bind(id)
         .fetch_optional(&state.db)
@@ -498,9 +492,7 @@ pub async fn update_tenant(
     Path(id): Path<Uuid>,
     Json(body): Json<UpdateTenantBody>,
 ) -> Result<Json<ApiResponse<TenantUpdatedResponse>>, AppError> {
-    if auth.role != "admin" {
-        return Err(AppError::Forbidden);
-    }
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     sqlx::query(
         r#"
         UPDATE tenants SET
@@ -554,9 +546,7 @@ pub async fn list_members(
     auth: AuthUser,
     Path(tenant_id): Path<Uuid>,
 ) -> Result<Json<ApiResponse<MembersResponse>>, AppError> {
-    if auth.role != "admin" {
-        return Err(AppError::Forbidden);
-    }
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     let rows = sqlx::query(
         r#"
         SELECT m.user_id, m.role, m.joined_at,
@@ -607,9 +597,7 @@ pub async fn add_member(
     Path(tenant_id): Path<Uuid>,
     Json(body): Json<AddMemberBody>,
 ) -> Result<Json<ApiResponse<MemberAddedResponse>>, AppError> {
-    if auth.role != "admin" {
-        return Err(AppError::Forbidden);
-    }
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     let role = body.role.unwrap_or_else(|| "member".into());
     if !matches!(role.as_str(), "member" | "instructor" | "admin" | "owner") {
         return Err(AppError::Validation("invalid role".into()));
@@ -662,9 +650,7 @@ pub async fn list_cohorts(
     auth: AuthUser,
     Path(tenant_id): Path<Uuid>,
 ) -> Result<Json<ApiResponse<CohortsResponse>>, AppError> {
-    if auth.role != "admin" {
-        return Err(AppError::Forbidden);
-    }
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     let rows = sqlx::query(
         r#"
         SELECT c.id, c.name, c.starts_at, c.ends_at, c.active,
@@ -709,9 +695,7 @@ pub async fn create_cohort(
     Path(tenant_id): Path<Uuid>,
     Json(body): Json<CreateCohortBody>,
 ) -> Result<Json<ApiResponse<CohortCreatedResponse>>, AppError> {
-    if auth.role != "admin" {
-        return Err(AppError::Forbidden);
-    }
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     let inserted: (Uuid,) = sqlx::query_as(
         r#"
         INSERT INTO tenant_cohorts (tenant_id, name, starts_at, ends_at)

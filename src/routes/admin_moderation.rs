@@ -510,7 +510,7 @@ pub async fn ban_user(
         return Err(AppError::Validation("User is already banned".to_string()));
     }
 
-    if user.role == "admin" {
+    if crate::middleware::capabilities::has_capability(&state.db, id, "admin").await? {
         return Err(AppError::Validation("Cannot ban an admin".to_string()));
     }
 

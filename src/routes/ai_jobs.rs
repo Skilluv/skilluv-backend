@@ -220,9 +220,7 @@ pub async fn admin_hidden_gems(
     auth: AuthUser,
     Json(body): Json<Value>,
 ) -> Result<Json<ApiResponse<AiJobEnqueuedResponse>>, AppError> {
-    if auth.role != "admin" {
-        return Err(AppError::Forbidden);
-    }
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     let mut redis = state.redis.clone();
     let job_id = crate::services::ai_queue::enqueue_hidden_gems(&mut redis, &body).await?;
     Ok(Json(ApiResponse::new(AiJobEnqueuedResponse { job_id })))
@@ -246,9 +244,7 @@ pub async fn admin_churn(
     auth: AuthUser,
     Json(body): Json<Value>,
 ) -> Result<Json<ApiResponse<AiJobEnqueuedResponse>>, AppError> {
-    if auth.role != "admin" {
-        return Err(AppError::Forbidden);
-    }
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     let mut redis = state.redis.clone();
     let job_id = crate::services::ai_queue::enqueue_churn_analysis(&mut redis, &body).await?;
     Ok(Json(ApiResponse::new(AiJobEnqueuedResponse { job_id })))

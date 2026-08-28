@@ -356,9 +356,7 @@ pub async fn list_audit_log(
     auth: AuthUser,
     axum::extract::Query(q): axum::extract::Query<AuditLogQuery>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    if auth.role != "admin" {
-        return Err(AppError::Forbidden);
-    }
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     let page = q.page.unwrap_or(1).max(1);
     let per_page = q.per_page.unwrap_or(50).clamp(1, 200);
     let offset = (page - 1) * per_page;

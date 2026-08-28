@@ -12,7 +12,7 @@ description = "Known-safe placeholders and test fixtures"
 paths = [
     '''(?i)\.env\.example''',
     '''(?i)tests/common/mod\.rs''',
-    '''(?i)tests/.*_test\.rs''',
+    '''(?i)tests/.*\.rs''',
     '''(?i)docs/.*''',
     '''(?i)migrations/.*''',
 ]
@@ -31,8 +31,49 @@ regexes = [
     # VAPID public key is *supposed* to be public (RFC 8292). We do not scan
     # for private keys specifically ; those are caught by the ed25519 rule.
     '''VAPID_PUBLIC_KEY=[A-Za-z0-9_-]+''',
+    # CI/test JWT secrets (e.g. schemathesis_test_secret_..., ci-test-secret).
+    '''(?i)test[_-]secret''',
+    # Obvious placeholder research tokens (all-zero srt_).
+    '''srt_0{16,}''',
 ]
 
 # Individual commits to skip — use only for legacy leaks that have been rotated
 # and cannot practically be scrubbed from history. Empty for now.
 commits = []
+
+# ── SE-01 — custom rules for OUR provider shapes ────────────────────────────
+# The default ruleset catches generic/AWS/high-entropy secrets. These add the
+# specific forms this project uses, so a real one is caught by shape even when
+# entropy alone would not flag it. Placeholders in .env.example / tests / docs
+# are covered by the [allowlist] above.
+
+[[rules]]
+id = "skilluv-brevo-api-key"
+description = "Brevo (Sendinblue) API key"
+regex = '''xkeysib-[0-9a-f]{64}-[0-9A-Za-z]{16}'''
+keywords = ["xkeysib"]
+
+[[rules]]
+id = "skilluv-stripe-secret-key"
+description = "Stripe secret/live key"
+regex = '''sk_(live|test)_[0-9A-Za-z]{24,}'''
+keywords = ["sk_live", "sk_test"]
+
+[[rules]]
+id = "skilluv-discord-bot-token"
+description = "Discord bot token"
+regex = '''[MNO][A-Za-z0-9_-]{23}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27,}'''
+keywords = ["discord", "Bot "]
+
+[[rules]]
+id = "skilluv-research-token"
+description = "Skilluv security research token (srt_ prefix, 32 bytes hex)"
+regex = '''srt_[0-9a-f]{64}'''
+keywords = ["srt_"]
+
+[[rules]]
+id = "skilluv-jwt-secret-inline"
+description = "A long JWT_SECRET value assigned inline instead of read from env"
+regex = '''(?i)JWT_SECRET\s*[=:]\s*['"]?[A-Za-z0-9+/=_-]{32,}['"]?'''
+keywords = ["JWT_SECRET"]
+

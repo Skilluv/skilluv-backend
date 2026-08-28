@@ -1,0 +1,125 @@
+name: Nightly fuzz & mutation
+
+# The heavy half of the FZ/MU backlog — the part that must not run on every PR.
+# cargo-fuzz needs nightly + libFuzzer (Linux only; it does not build on the
+# Windows dev box), and cargo-mutants reruns the suite hundreds of times. Both
+# run here, on a schedule, against a Linux runner, and report by opening an
+# issue rather than blocking a merge. The panic-freedom of every fuzz target is
+# also checked on the pinned stable toolchain in tests/prop_pure_parsers.rs, so
+# a green PR already carries most of this signal; the nightly run goes deeper.
+
+on:
+  schedule:
+    # 03:17 UTC — off the top of the hour to dodge the scheduler stampede.
+    - cron: "17 3 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fuzz-nightly
+  cancel-in-progress: true
+
+jobs:
+  fuzz:
+    name: cargo-fuzz (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      issues: write   # open an issue when a target crashes
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [cvss_score_vector, verify_signature, allowed_transition]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          persist-credentials: false
+
+      - name: Install nightly toolchain
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4  # master
+        with:
+          toolchain: nightly
+
+      - name: Install cargo-fuzz
+        uses: taiki-e/install-action@ba47c86ac325773530516bb756137ac718732518  # v2
+        with:
+          tool: cargo-fuzz
+
+      # Corpus grows across runs — a fuzzer that starts from what the last run
+      # discovered goes deeper than one that starts cold every night.
+      - name: Restore fuzz corpus
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6
+        with:
+          path: fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+          restore-keys: fuzz-corpus-${{ matrix.target }}-
+
+      - name: Fuzz for 15 minutes
+        run: |
+          cargo +nightly fuzz run ${{ matrix.target }} -- \
+            -max_total_time=900 -timeout=10
+
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: fuzz-crash-${{ matrix.target }}
+          path: fuzz/artifacts/${{ matrix.target }}/
+          if-no-files-found: ignore
+
+      - name: Open an issue on crash
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET: ${{ matrix.target }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="nightly fuzz crash: ${TARGET}"
+          # Don't pile a new issue on top of an unfixed one for the same target.
+          existing=$(gh issue list --state open --search "$title in:title" --json number --jq 'length')
+          if [ "$existing" != "0" ]; then
+            echo "an open issue already tracks $TARGET — not filing another"
+            exit 0
+          fi
+          gh issue create \
+            --title "$title" \
+            --label fuzz \
+            --body "The nightly fuzz target \`${TARGET}\` found a crashing input. Reproducer is in the run's \`fuzz-crash-${TARGET}\` artifact. Run: ${RUN_URL}"
+
+  mutants:
+    name: cargo-mutants (critical modules)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          persist-credentials: false
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4  # stable
+
+      - name: Install cargo-mutants + nextest
+        uses: taiki-e/install-action@ba47c86ac325773530516bb756137ac718732518  # v2
+        with:
+          tool: cargo-mutants,cargo-nextest
+
+      # Runs the mutants listed by mutants.toml (the ten critical modules).
+      # Surviving mutants are lines a test "covers" but does not test. Reported
+      # as an artifact, not a gate — the PR-time gate is the incremental
+      # --in-diff run in ci.yml.
+      - name: Mutation test the critical modules
+        # No --in-place: cargo-mutants isolates each job in its own build dir,
+        # which -j 2 needs. test_tool=nextest comes from .cargo/mutants.toml.
+        # `|| true` — surviving mutants are reported as an artifact, not a gate.
+        run: cargo mutants --no-shuffle -j 2 || true
+
+      - name: Upload mutants report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: mutants-report
+          path: mutants.out/
+          if-no-files-found: ignore

@@ -46,7 +46,7 @@ pub fn tournament_routes() -> Router<AppState> {
 }
 
 /// Trello vx5q6jW4 — les admin routes de seasons/tournaments vivaient dans
-/// `tournament_routes` sans admin_gate (juste un `if auth.role != "admin"`
+/// `tournament_routes` sans admin_gate (juste un `require_capability("admin")`
 /// inline). Split maintenant pour permettre à `lib.rs` de nest ce sous-router
 /// derrière `admin_gate` (ensure_admin_origin + ensure_admin_2fa) comme les
 /// autres surfaces admin.
@@ -106,9 +106,7 @@ pub async fn admin_create_season(
     auth: AuthUser,
     Json(input): Json<tournament::CreateSeasonInput>,
 ) -> Result<Json<Value>, AppError> {
-    if auth.role != "admin" {
-        return Err(AppError::Forbidden);
-    }
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     let s = tournament::create_season(&state.db, input).await?;
     Ok(Json(build_response(json!({ "season": s }))))
 }
@@ -133,9 +131,7 @@ pub async fn admin_set_season_status(
     Path(id): Path<Uuid>,
     Json(body): Json<StatusBody>,
 ) -> Result<Json<Value>, AppError> {
-    if auth.role != "admin" {
-        return Err(AppError::Forbidden);
-    }
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     let s = tournament::set_season_status(&state.db, id, &body.status).await?;
     Ok(Json(build_response(json!({ "season": s }))))
 }
@@ -152,9 +148,7 @@ pub async fn admin_close_season(
     auth: AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Value>, AppError> {
-    if auth.role != "admin" {
-        return Err(AppError::Forbidden);
-    }
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     let report = tournament::close_season(&state.db, id).await?;
     metrics::counter!("skilluv_seasons_closed_total").increment(1);
     Ok(Json(build_response(json!({ "close_report": report }))))
@@ -418,9 +412,7 @@ pub async fn admin_create_tournament(
     auth: AuthUser,
     Json(input): Json<tournament::CreateTournamentInput>,
 ) -> Result<Json<Value>, AppError> {
-    if auth.role != "admin" {
-        return Err(AppError::Forbidden);
-    }
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     let t = tournament::create_tournament(&state.db, auth.user_id, input).await?;
     metrics::counter!("skilluv_tournaments_created_total", "kind" => t.kind.clone()).increment(1);
     Ok(Json(build_response(json!({ "tournament": t }))))
@@ -439,9 +431,7 @@ pub async fn admin_set_tournament_status(
     Path(id): Path<Uuid>,
     Json(body): Json<StatusBody>,
 ) -> Result<Json<Value>, AppError> {
-    if auth.role != "admin" {
-        return Err(AppError::Forbidden);
-    }
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     let t = tournament::set_status(&state.db, id, &body.status).await?;
     Ok(Json(build_response(json!({ "tournament": t }))))
 }
@@ -467,9 +457,7 @@ pub async fn admin_set_score(
     Path(id): Path<Uuid>,
     Json(body): Json<ScoreBody>,
 ) -> Result<Json<Value>, AppError> {
-    if auth.role != "admin" {
-        return Err(AppError::Forbidden);
-    }
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     tournament::set_participant_score(
         &state.db,
         id,
@@ -493,9 +481,7 @@ pub async fn admin_conclude(
     auth: AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Value>, AppError> {
-    if auth.role != "admin" {
-        return Err(AppError::Forbidden);
-    }
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     // Count the marathon one last time before the ranks are fixed: a
     // contribution merged on the final day must count, and the concluding
     // admin should not have to remember to refresh first.
@@ -680,9 +666,7 @@ pub async fn admin_fund_prize(
     Path(id): Path<Uuid>,
     Json(body): Json<FundPrizeBody>,
 ) -> Result<Json<Value>, AppError> {
-    if auth.role != "admin" {
-        return Err(AppError::Forbidden);
-    }
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
 
     let amount: bigdecimal::BigDecimal = body
         .amount
@@ -752,9 +736,7 @@ pub async fn admin_refund_prize(
     Path(id): Path<Uuid>,
     Json(body): Json<RefundPrizeBody>,
 ) -> Result<Json<Value>, AppError> {
-    if auth.role != "admin" {
-        return Err(AppError::Forbidden);
-    }
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     crate::services::contest_prizes::refund(&state.db, id, &body.reason).await?;
 
     crate::services::audit::record(
@@ -788,9 +770,7 @@ pub async fn admin_outstanding_prizes(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
-    if auth.role != "admin" {
-        return Err(AppError::Forbidden);
-    }
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     let rows = crate::services::contest_prizes::outstanding(&state.db).await?;
     let contests: Vec<Value> = rows
         .into_iter()
@@ -885,9 +865,7 @@ pub async fn admin_invite_juror(
     Path(id): Path<Uuid>,
     Json(body): Json<InviteJurorBody>,
 ) -> Result<Json<Value>, AppError> {
-    if auth.role != "admin" {
-        return Err(AppError::Forbidden);
-    }
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     let jury =
         crate::services::contest::invite_juror(&state.db, id, auth.user_id, body.juror_user_id)
             .await?;
@@ -984,9 +962,7 @@ pub async fn admin_vote_bursts(
     Path(id): Path<Uuid>,
     Query(q): Query<BurstQuery>,
 ) -> Result<Json<Value>, AppError> {
-    if auth.role != "admin" {
-        return Err(AppError::Forbidden);
-    }
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     let window = q.window_minutes.unwrap_or(5);
     let threshold = q.threshold.unwrap_or(10);
     let rows =

@@ -225,9 +225,7 @@ pub async fn admin_list(
     auth: AuthUser,
     Query(q): Query<AdminKycListQuery>,
 ) -> Result<Json<Value>, AppError> {
-    if auth.role != "admin" {
-        return Err(AppError::Forbidden);
-    }
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     let page = q.page.unwrap_or(1).max(1);
     let per_page = q.per_page.unwrap_or(50).clamp(1, 200);
     let offset = (page - 1) * per_page;
@@ -311,9 +309,7 @@ pub async fn admin_decide(
     Path(enterprise_id): Path<Uuid>,
     Json(body): Json<DecideBody>,
 ) -> Result<Json<Value>, AppError> {
-    if auth.role != "admin" {
-        return Err(AppError::Forbidden);
-    }
+    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     // BE-F : on clone les champs `level`/`reason` avant `match` pour pouvoir
     // les reprendre dans l'audit log après la mutation.
     let audit_level = body.level.clone();

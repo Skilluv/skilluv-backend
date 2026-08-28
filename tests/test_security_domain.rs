@@ -1559,8 +1559,6 @@ async fn concurrent_withdraws_leave_exactly_one_winner() {
     assert_eq!(status, "withdrawn", "the finding is not cleanly withdrawn");
 }
 
-
-
 // ═══════════════════════════════════════════════════════════════════
 // Defensive labs — what a client is served (SKI-332)
 // ═══════════════════════════════════════════════════════════════════

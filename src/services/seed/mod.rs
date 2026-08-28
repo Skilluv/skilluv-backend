@@ -408,6 +408,25 @@ mod tests {
         }
     }
 
+    /// The statements a step actually runs, with `--` comments removed.
+    ///
+    /// The assertions below are about executable SQL, not about prose. Each of
+    /// these files carries a header explaining what it replaced, and that
+    /// header quotes the old broken lookup verbatim — so a naive `contains`
+    /// matches the explanation and fails on a file that is correct.
+    fn executable_sql(sql: &str) -> String {
+        sql.lines()
+            .map(|line| match line.find("--") {
+                Some(at) => &line[..at],
+                None => line,
+            })
+            .collect::<Vec<_>>()
+            .join(
+                "
+",
+            )
+    }
+
     #[test]
     fn a_sql_step_reads_its_owner_from_the_parameter() {
         // The address the old scripts looked up. Nothing creates it, so any
@@ -415,7 +434,7 @@ mod tests {
         for step in catalogue() {
             if let Body::Sql(sql) = &step.body {
                 assert!(
-                    !sql.contains("email = 'admin@skilluv.local'"),
+                    !executable_sql(sql).contains("email = 'admin@skilluv.local'"),
                     "{} still resolves an owner that is never created",
                     step.name
                 );
@@ -430,7 +449,7 @@ mod tests {
         for step in catalogue() {
             if let Body::Sql(sql) = &step.body {
                 assert!(
-                    !sql.contains("527b047b-32a2-4b7d-a623-3bacdc751578"),
+                    !executable_sql(sql).contains("527b047b-32a2-4b7d-a623-3bacdc751578"),
                     "{} carries a hard-coded owner",
                     step.name
                 );
@@ -444,6 +463,7 @@ mod tests {
             if let Body::Sql(sql) = &step.body {
                 // `oss_partners_ingestion` and the badge rule own nothing:
                 // they update rows other steps created.
+                let sql = executable_sql(sql);
                 let owns_rows = sql.contains("owner_id") || sql.contains("created_by");
                 assert!(
                     !owns_rows || sql.contains("$1"),

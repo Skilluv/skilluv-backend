@@ -11,7 +11,7 @@ mod common;
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use common::TestApp;
-use serde_json::{Value, json};
+use serde_json::json;
 use skilluv_backend::services::AuthService;
 
 const SECRET: &str = "test-secret-key-for-testing"; // matches tests/common/mod.rs

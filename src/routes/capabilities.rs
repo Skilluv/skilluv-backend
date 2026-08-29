@@ -5,6 +5,7 @@
 //!   - `GET /api/users/me/capabilities`            (auth : profil user courant)
 //!   - `POST /api/admin/users/{id}/capabilities`  (require admin capability)
 //!   - `DELETE /api/admin/users/{id}/capabilities/{cap}` (revoke)
+//!   - `GET /api/admin/capabilities`               (the catalogue both validate against)
 
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
@@ -33,6 +34,10 @@ pub fn capability_routes() -> Router<AppState> {
             "/admin/users/{id}/capabilities/{cap}",
             delete(admin_revoke_capability),
         )
+        // The catalogue the two routes above validate against. Beside them
+        // deliberately: a grant endpoint whose vocabulary nothing serves is
+        // how the admin panel ended up holding a stale copy.
+        .route("/admin/capabilities", get(admin_capability_catalogue))
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow, ToSchema)]
@@ -281,4 +286,125 @@ pub async fn admin_revoke_capability(
         user_id: target_id,
         capability: cap,
     })))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// The catalogue itself
+// ═══════════════════════════════════════════════════════════════════
+
+/// The capabilities the engine grants and keeps on its own.
+///
+/// Copied from the `grant_if_missing` calls in `services::capabilities_engine`,
+/// and the only part of this response that is not read out of the database.
+/// It is here rather than in a column because it is a fact about the engine's
+/// code, and a column would be a second place to keep it in step.
+///
+/// What it buys an operator: revoking one of these does not stick. The engine
+/// puts it back on the next recompute, and somebody who does not know that
+/// spends an afternoon wondering why.
+const ENGINE_MANAGED: &[&str] = &[
+    "challenger",
+    "community_curator",
+    "community_moderator",
+    "forum_moderator",
+    "issue_proposer",
+    "mentor",
+    "pr_reviewer",
+    "project_steward",
+    "verified_apprentice",
+];
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CatalogueEntry {
+    /// What goes in `POST /admin/users/{id}/capabilities`.
+    pub capability: String,
+    /// The part before the colon.
+    pub family: String,
+    /// The part after it, absent when there is none.
+    pub scope: Option<String>,
+    /// What holding it lets somebody do. The reason this endpoint exists: an
+    /// operator choosing between `domain_curator:design` and
+    /// `community_curator` with nothing but the slugs picks the wider one.
+    pub description: String,
+    /// True when the orientations trigger of migration 0404 maintains the row.
+    /// Those appear in no migration and change when a trade is added or moves
+    /// family — which is why a client cannot hold this list as a constant.
+    pub is_derived: bool,
+    /// True when `services::capabilities_engine` grants and re-grants it.
+    /// Still grantable by hand; revoking it is what does not stick.
+    pub engine_managed: bool,
+    /// How many people hold it right now — not revoked, not expired. An
+    /// operator about to grant `security_reviewer:red-team` wants to know
+    /// whether anybody already reviews red team work.
+    pub held_by: i64,
+}
+
+/// Every capability that can be granted, as the database has them.
+///
+/// ## Why this could not be a list in the client
+///
+/// Part of the catalogue is generated. Migration 0404 replaced the CHECK that
+/// five migrations had restated with a table, and put a trigger on
+/// `orientations` behind it: adding a trade with a review family makes
+/// `{domain}_reviewer:{family}` grantable in the same statement, and no
+/// migration has to remember. So the set is a function of the trade catalogue,
+/// and any copy of it is correct until somebody adds an orientation — then
+/// wrong, and wrong silently.
+///
+/// The admin panel held such a copy, anchored to a CHECK that no longer
+/// exists, which is why `domain_curator:design`, `mission_arbiter` and
+/// `security_triager` could not be granted at all: they gate three surfaces
+/// shipped this week and nothing could hand them to anybody (SKI-351).
+///
+/// ## On granting something that is not in here
+///
+/// You cannot. `user_capabilities.capability` is a foreign key to this table
+/// since 0404, so an invented string is refused by the database rather than
+/// stored and silently never matched. That was worth checking rather than
+/// assuming — it is the difference between a stale list and an open door.
+#[utoipa::path(
+    get, path = "/api/admin/capabilities",
+    operation_id = "adminCapabilityCatalogue", tag = "admin",
+    responses(
+        (status = 200, body = ApiResponse<Vec<CatalogueEntry>>),
+        (status = 403, description = "Not an admin", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn admin_capability_catalogue(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Json<ApiResponse<Vec<CatalogueEntry>>>, AppError> {
+    require_capability(&state.db, auth.user_id, "admin").await?;
+
+    let rows: Vec<(String, String, Option<String>, String, bool, i64)> = sqlx::query_as(
+        "SELECT c.capability, c.family, c.scope, c.description, c.is_derived,
+                (SELECT count(*) FROM user_capabilities u
+                  WHERE u.capability = c.capability
+                    AND u.revoked_at IS NULL
+                    AND (u.expires_at IS NULL OR u.expires_at > NOW())) AS held_by
+           FROM capability_catalog c
+          -- Family first, then scope, so the reviewer families of one domain
+          -- arrive together: that is how somebody reads a list of forty.
+          ORDER BY c.family, c.scope NULLS FIRST",
+    )
+    .fetch_all(&state.db)
+    .await?;
+
+    let catalogue = rows
+        .into_iter()
+        .map(
+            |(capability, family, scope, description, is_derived, held_by)| CatalogueEntry {
+                engine_managed: ENGINE_MANAGED.contains(&capability.as_str()),
+                capability,
+                family,
+                scope,
+                description,
+                is_derived,
+                held_by,
+            },
+        )
+        .collect();
+
+    Ok(Json(ApiResponse::new(catalogue)))
 }

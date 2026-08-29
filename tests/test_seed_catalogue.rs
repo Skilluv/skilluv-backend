@@ -256,3 +256,97 @@ async fn a_short_password_is_refused_rather_than_accepted_quietly() {
 
     arm_the_admin_password();
 }
+
+/// The Discord routing survives the database being dropped.
+///
+/// It could not before: migration 0257 refuses to seed `discord_channels` —
+/// rightly, since every value is a snowflake from one specific server and a
+/// migration carrying them would post the test suite into somebody's Discord —
+/// so the rows lived only in whatever database somebody had run the SQL
+/// against. Drop it and every announcement silently falls back to the default
+/// room, because a missing row is not an error.
+///
+/// They live in the deployment's configuration now, which is the one place
+/// that outlives its database.
+#[tokio::test]
+async fn the_discord_routing_comes_back_from_configuration() {
+    let _env = ENV.lock().await;
+    arm_the_admin_password();
+    // SAFETY: the lock is held, so nothing else in this binary reads the
+    // environment while the variable this test is about is written.
+    unsafe {
+        std::env::set_var(
+            "SKILLUV_DISCORD_CHANNELS",
+            // `r##`: the labels contain a `#`, and `"#` would close a
+            // single-hash raw string in the middle of the JSON.
+            r##"[{"purpose":"general","domain":null,"channel_id":"111111","label":"#annonces"},
+                 {"purpose":"contests","domain":"design","channel_id":"222222","label":"#design-concours"}]"##,
+        );
+    }
+    let app = TestApp::spawn().await;
+
+    seed::run(&app.db).await.expect("the seed run");
+
+    assert_eq!(
+        count(&app, "SELECT count(*) FROM discord_channels").await,
+        2
+    );
+
+    // The query `services::discord_announce::resolve_channel` actually runs:
+    // a design contest goes to the design room, and a domain with no room of
+    // its own falls back to the one with a NULL domain.
+    let design: String = sqlx::query_scalar(
+        "SELECT channel_id FROM discord_channels
+          WHERE purpose = 'contests' AND (skill_domain = 'design' OR skill_domain IS NULL)
+          ORDER BY (skill_domain IS NOT NULL) DESC LIMIT 1",
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert_eq!(design, "222222");
+
+    let fallback: String = sqlx::query_scalar(
+        "SELECT channel_id FROM discord_channels
+          WHERE purpose = 'general' AND (skill_domain = 'education' OR skill_domain IS NULL)
+          ORDER BY (skill_domain IS NOT NULL) DESC LIMIT 1",
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert_eq!(
+        fallback, "111111",
+        "a domain with no room lost its fallback"
+    );
+
+    // SAFETY: as above. Left clean for whatever runs next.
+    unsafe {
+        std::env::remove_var("SKILLUV_DISCORD_CHANNELS");
+    }
+}
+
+/// A deployment with no Discord server is not a broken deployment.
+#[tokio::test]
+async fn no_discord_configuration_is_not_an_error() {
+    let _env = ENV.lock().await;
+    arm_the_admin_password();
+    // SAFETY: the lock is held.
+    unsafe {
+        std::env::remove_var("SKILLUV_DISCORD_CHANNELS");
+    }
+    let app = TestApp::spawn().await;
+
+    let report = seed::run(&app.db).await.expect("the seed run");
+    assert!(!report.blocked_on_owner, "{:#?}", report.steps);
+    assert_eq!(
+        count(&app, "SELECT count(*) FROM discord_channels").await,
+        0
+    );
+
+    // And it says so in the ledger rather than looking like it worked.
+    let detail: String =
+        sqlx::query_scalar("SELECT detail FROM seed_runs WHERE name = 'discord_channels'")
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
+    assert!(detail.contains("not set"), "{detail}");
+}

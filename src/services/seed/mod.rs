@@ -58,6 +58,7 @@ use crate::errors::AppError;
 
 pub mod admin_account;
 pub mod design_canvas;
+pub mod discord_channels;
 pub mod projects;
 
 /// Where a step's data lives, which decides how its version is computed.
@@ -71,6 +72,14 @@ enum Body {
     Sql(&'static str),
     /// A function, with a version its author maintains.
     Rust { version: &'static str, run: StepFn },
+    /// A function whose version is whatever it reads. Used by the step that
+    /// applies configuration rather than content: edit the variable and the
+    /// ledger no longer matches, so the next boot re-applies it. A declared
+    /// version could not do that without somebody remembering to bump it.
+    Configured {
+        fingerprint: fn() -> String,
+        run: StepFn,
+    },
 }
 
 /// A seed step written in Rust: takes the pool and the owner, reports what it
@@ -154,6 +163,18 @@ fn catalogue() -> Vec<Step> {
             needs_owner: true,
         },
         Step {
+            name: "discord_channels",
+            purpose: "which room each announcement is posted in",
+            body: Body::Configured {
+                // Unset reads as "no Discord", which is a state a deployment
+                // may legitimately be in; the fingerprint is then constant and
+                // the step stops re-running.
+                fingerprint: || discord_channels::declared().unwrap_or_else(|| "unset".into()),
+                run: |db, owner| Box::pin(discord_channels::run(db, owner)),
+            },
+            needs_owner: false,
+        },
+        Step {
             name: "design_canvas",
             purpose: "design work on our own surfaces",
             body: Body::Rust {
@@ -203,6 +224,11 @@ fn version_of(body: &Body) -> String {
         // and a short string would be silently space-padded by Postgres and
         // then never compare equal to what was written.
         Body::Rust { version, .. } => format!("{version:0>64}"),
+        Body::Configured { fingerprint, .. } => {
+            let mut hasher = Sha256::new();
+            hasher.update(fingerprint().as_bytes());
+            hex::encode(hasher.finalize())
+        }
     }
 }
 
@@ -312,7 +338,7 @@ pub async fn run(db: &PgPool) -> Result<Report, AppError> {
                     .rows_affected();
                 format!("{rows} rows on the last statement")
             }
-            Body::Rust { run, .. } => {
+            Body::Configured { run, .. } | Body::Rust { run, .. } => {
                 // `admin_account` is the one step with nothing to own; the
                 // nil id it is handed is never read.
                 run(db, owner_id.unwrap_or_else(Uuid::nil)).await?
@@ -387,14 +413,32 @@ mod tests {
     }
 
     #[test]
-    fn only_the_first_step_may_run_without_an_owner() {
-        // Everything else writes rows owned by somebody. A step that claimed
-        // otherwise would run against an empty database and insert nothing,
-        // which is the failure this module was written to end.
+    fn only_the_steps_that_own_nothing_may_run_without_an_owner() {
+        // Almost every step writes rows owned by somebody, and one that
+        // claimed otherwise would run against an empty database and insert
+        // nothing — the failure this module was written to end.
+        //
+        // Two are genuinely exempt, and they are named rather than counted so
+        // that a third has to be added here deliberately:
+        //
+        //   * `admin_account` creates the owner the others need.
+        //   * `discord_channels` writes a routing table that belongs to the
+        //     deployment, not to a person.
+        const OWNS_NOTHING: &[&str] = &["admin_account", "discord_channels"];
+
         let steps = catalogue();
-        assert!(!steps[0].needs_owner, "{}", steps[0].name);
-        for step in &steps[1..] {
-            assert!(step.needs_owner, "{} must wait for an owner", step.name);
+        assert!(
+            !steps[0].needs_owner && steps[0].name == "admin_account",
+            "the owner has to be created first, not {}",
+            steps[0].name
+        );
+        for step in &steps {
+            let exempt = OWNS_NOTHING.contains(&step.name);
+            assert_eq!(
+                step.needs_owner, !exempt,
+                "{} disagrees with the exemption list",
+                step.name
+            );
         }
     }
 

@@ -544,3 +544,41 @@ discord:
   no_contests: "No contest is open right now."
   no_featured: "Nobody has been featured here yet."
   no_profile: "No public profile called `{username}`."
+  # Slash command descriptions. Registered in both languages at once —
+  # `description_localized("fr", ...)` — so `/skilluv craft` explains itself in
+  # French in the Discord menu without anybody switching a setting.
+  #
+  # Discord's 100-character limit applies to EVERY localisation, not only the
+  # default. French runs 15-20% longer than English, so a translation that fits
+  # in English can still fail the whole registration — and `set_commands`
+  # replaces the entire tree, so one long string takes all of it down. That is
+  # not hypothetical: it happened on this bot two days ago and left it serving
+  # three subcommands out of nine. `every_command_description_fits_discord`
+  # guards both languages.
+  #
+  # No `ar` here: Discord's supported locales for command localisation do not
+  # include Arabic, so a translation would be written and never shown.
+  join_welcome: |-
+    Welcome to Skilluv, **{name}**!
+
+    This is the community around {frontend} — a compagnonnage platform where open source contributions become verifiable attestations.
+
+    Getting started:
+    - Post an intro in the channel of your trade
+    - Try `/skilluv help`
+    - Sign in at {frontend}, declare your trades, then link Discord from **Settings -> Linked accounts**. Your roles and your channels open by themselves.
+
+    See you around!
+  cmd:
+    root: "Skilluv commands"
+    me: "Show your linked Skilluv profile"
+    verify: "Verify a Skilluv attestation by its hash"
+    verify_hash: "The attestation hash (from the /verify URL)"
+    contests: "Open contests you can still enter"
+    featured: "Who is featured this week"
+    portfolio: "Somebody's public Skilluv profile"
+    portfolio_username: "Their Skilluv username"
+    craft: "Your craft score in one domain, and what it is made of"
+    queue: "How much work is waiting on a reviewer in one domain"
+    cohorts: "Cohorts recruiting now"
+    help: "How to use the bot"

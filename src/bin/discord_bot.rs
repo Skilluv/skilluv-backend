@@ -63,115 +63,45 @@ impl EventHandler for Handler {
         // quality, leadership, communication and education did not exist.
         let domain_hint = domain_hint();
 
+        // A `domain` argument, described by the trade list. Same in both
+        // languages — the values are slugs, and `code, design, game…` does not
+        // translate.
+        let domain_arg = |required: bool| {
+            CreateCommandOption::new(CommandOptionType::String, "domain", domain_hint.as_str())
+                .required(required)
+        };
+
         let cmds = vec![
-            CreateCommand::new("skilluv")
-                .description("Skilluv commands")
-                .add_option(CreateCommandOption::new(
-                    CommandOptionType::SubCommand,
-                    "me",
-                    "Show your linked Skilluv profile",
-                ))
+            localised(CreateCommand::new("skilluv"), "discord.cmd.root")
+                .add_option(sub("me", "discord.cmd.me"))
                 .add_option(
-                    CreateCommandOption::new(
-                        CommandOptionType::SubCommand,
-                        "verify",
-                        "Verify a Skilluv attestation by its hash",
-                    )
-                    .add_sub_option(
-                        CreateCommandOption::new(
-                            CommandOptionType::String,
-                            "hash",
-                            "The attestation hash (from the /verify URL)",
+                    sub("verify", "discord.cmd.verify").add_sub_option(
+                        arg(
+                            CreateCommandOption::new(CommandOptionType::String, "hash", ""),
+                            "discord.cmd.verify_hash",
                         )
                         .required(true),
                     ),
                 )
                 .add_option(
-                    CreateCommandOption::new(
-                        CommandOptionType::SubCommand,
-                        "contests",
-                        "Open contests you can still enter",
-                    )
-                    .add_sub_option(CreateCommandOption::new(
-                        CommandOptionType::String,
-                        "domain",
-                        domain_hint.as_str(),
-                    )),
+                    sub("contests", "discord.cmd.contests").add_sub_option(domain_arg(false)),
                 )
                 .add_option(
-                    CreateCommandOption::new(
-                        CommandOptionType::SubCommand,
-                        "featured",
-                        "Who is featured this week",
-                    )
-                    .add_sub_option(CreateCommandOption::new(
-                        CommandOptionType::String,
-                        "domain",
-                        domain_hint.as_str(),
-                    )),
+                    sub("featured", "discord.cmd.featured").add_sub_option(domain_arg(false)),
                 )
                 .add_option(
-                    CreateCommandOption::new(
-                        CommandOptionType::SubCommand,
-                        "portfolio",
-                        "Somebody's public Skilluv profile",
-                    )
-                    .add_sub_option(
-                        CreateCommandOption::new(
-                            CommandOptionType::String,
-                            "username",
-                            "Their Skilluv username",
+                    sub("portfolio", "discord.cmd.portfolio").add_sub_option(
+                        arg(
+                            CreateCommandOption::new(CommandOptionType::String, "username", ""),
+                            "discord.cmd.portfolio_username",
                         )
                         .required(true),
                     ),
                 )
-                .add_option(
-                    CreateCommandOption::new(
-                        CommandOptionType::SubCommand,
-                        "craft",
-                        "Your craft score in one domain, and what it is made of",
-                    )
-                    .add_sub_option(
-                        CreateCommandOption::new(
-                            CommandOptionType::String,
-                            "domain",
-                            domain_hint.as_str(),
-                        )
-                        .required(true),
-                    ),
-                )
-                .add_option(
-                    CreateCommandOption::new(
-                        CommandOptionType::SubCommand,
-                        "queue",
-                        "How much work is waiting on a reviewer in one domain",
-                    )
-                    .add_sub_option(
-                        CreateCommandOption::new(
-                            CommandOptionType::String,
-                            "domain",
-                            domain_hint.as_str(),
-                        )
-                        .required(true),
-                    ),
-                )
-                .add_option(
-                    CreateCommandOption::new(
-                        CommandOptionType::SubCommand,
-                        "cohorts",
-                        "Cohorts recruiting now",
-                    )
-                    .add_sub_option(CreateCommandOption::new(
-                        CommandOptionType::String,
-                        "domain",
-                        domain_hint.as_str(),
-                    )),
-                )
-                .add_option(CreateCommandOption::new(
-                    CommandOptionType::SubCommand,
-                    "help",
-                    "How to use the bot",
-                )),
+                .add_option(sub("craft", "discord.cmd.craft").add_sub_option(domain_arg(true)))
+                .add_option(sub("queue", "discord.cmd.queue").add_sub_option(domain_arg(true)))
+                .add_option(sub("cohorts", "discord.cmd.cohorts").add_sub_option(domain_arg(false)))
+                .add_option(sub("help", "discord.cmd.help")),
         ];
         if let Err(e) = self.guild_id.set_commands(&ctx.http, cmds).await {
             tracing::error!(error = %e, "failed to register slash commands");
@@ -209,19 +139,23 @@ impl EventHandler for Handler {
         if new_member.user.bot {
             return; // don't DM other bots
         }
-        let msg = format!(
-            "Welcome to Skilluv, **{}** !\n\n\
-             This is the community around <{frontend}> — a compagnonnage \
-             platform where open source contributions become verifiable \
-             attestations.\n\n\
-             Getting started:\n\
-             - Post an intro in your favorite channel\n\
-             - Try `/skilluv help` here in DM or on the server\n\
-             - Sign up on <{frontend}> and reply here with your username \
-             if you'd like your Discord tied to your profile\n\n\
-             See you around !",
-            new_member.user.name,
-            frontend = self.frontend_url,
+        // Somebody who has just joined has no linked account, so there is no
+        // stored preference to read. Discord's own locale for the member is
+        // the only signal, and it is the right one: it is the language their
+        // client is in.
+        let locale =
+            skilluv_backend::services::i18n::resolve(None, new_member.user.locale.as_deref());
+        // This carried the same obsolete instruction the `/skilluv me` reply
+        // did — "reply here with your username" — from the months when linking
+        // was a moderator's job. It is a redirect now, and the message says so
+        // in the order that makes it pay: trades first, then the link.
+        let msg = t_with(
+            &locale,
+            "discord.join_welcome",
+            &[
+                ("name", &new_member.user.name),
+                ("frontend", &self.frontend_url),
+            ],
         );
         // Best-effort — a user with DMs disabled just doesn't get one.
         if let Err(e) = new_member
@@ -988,7 +922,43 @@ async fn mark_synced(db: &PgPool, id: Uuid, added: &[String], removed: &[String]
 }
 
 /// Discord's hard limit on a command or option description.
+///
+/// It applies to **every localisation**, not only the default one. That is the
+/// trap worth naming: French runs 15-20% longer than English, so a description
+/// that fits in the default can still fail on its translation — and
+/// `set_commands` replaces the whole command tree, so one long string takes
+/// all of it down and leaves whatever a previous build registered.
 const DESCRIPTION_LIMIT: usize = 100;
+
+/// The locale Discord shows alongside the default.
+///
+/// One, deliberately. The community is francophone and anglophone; the
+/// English is the default description, so a second entry covers the other
+/// half. Arabic is a supported platform locale but not one Discord accepts for
+/// command localisation, so a translation would be written and never shown.
+const COMMAND_LOCALE: &str = "fr";
+
+/// A top-level command described in both languages.
+fn localised(cmd: CreateCommand, key: &str) -> CreateCommand {
+    cmd.description(t("en", key))
+        .description_localized(COMMAND_LOCALE, t(COMMAND_LOCALE, key))
+}
+
+/// A subcommand described in both languages.
+fn sub(name: &str, key: &str) -> CreateCommandOption {
+    CreateCommandOption::new(CommandOptionType::SubCommand, name, t("en", key))
+        .description_localized(COMMAND_LOCALE, t(COMMAND_LOCALE, key))
+}
+
+/// An argument described in both languages.
+///
+/// Takes an already-built option because its type and name are fixed at the
+/// call site; only the description is bilingual.
+fn arg(option: CreateCommandOption, key: &str) -> CreateCommandOption {
+    option
+        .description(t("en", key))
+        .description_localized(COMMAND_LOCALE, t(COMMAND_LOCALE, key))
+}
 
 /// The `domain` option's description: the trades, from the list every
 /// validator reads, capped to what Discord accepts.
@@ -1266,13 +1236,50 @@ mod tests {
         assert!(kept.chars().count() <= DESCRIPTION_LIMIT, "{kept}");
     }
 
-    // There is deliberately no test over the fixed descriptions. One was
-    // written, listing them by hand, and every string in it was subtly wrong
-    // — "Open contests" for "Open contests you can still enter". It passed,
-    // and it asserted nothing about the code. A copy of a literal is not a
-    // check on that literal; it is a second literal that drifts.
-    //
-    // The five options Discord refused were all the generated one, which is
-    // what the tests above hold. A fixed description going over 100
-    // characters would be visible in the diff that wrote it.
+    /// Every description Discord will be sent, in every language it will be
+    /// sent in.
+    ///
+    /// An earlier attempt at this listed the strings by hand and every one of
+    /// them was subtly wrong — "Open contests" for "Open contests you can
+    /// still enter". It passed and asserted nothing, because a copy of a
+    /// literal is not a check on that literal. It was deleted.
+    ///
+    /// This one reads the same catalogue the registration reads, so it cannot
+    /// drift. And it checks **both** languages, which is the half that matters
+    /// now: the limit applies per localisation, French runs longer than
+    /// English, and `set_commands` fails as a whole. A translation four
+    /// characters too long would take the entire command tree down and leave
+    /// the bot serving whatever a previous build registered — exactly what
+    /// happened here two days ago, from the same limit and a different string.
+    #[test]
+    fn every_command_description_fits_discord() {
+        const KEYS: &[&str] = &[
+            "discord.cmd.root",
+            "discord.cmd.me",
+            "discord.cmd.verify",
+            "discord.cmd.verify_hash",
+            "discord.cmd.contests",
+            "discord.cmd.featured",
+            "discord.cmd.portfolio",
+            "discord.cmd.portfolio_username",
+            "discord.cmd.craft",
+            "discord.cmd.queue",
+            "discord.cmd.cohorts",
+            "discord.cmd.help",
+        ];
+        for key in KEYS {
+            for locale in ["en", COMMAND_LOCALE] {
+                let text = t(locale, key);
+                assert_ne!(
+                    text, *key,
+                    "{key} is missing from {locale}.yml; Discord would show the key"
+                );
+                assert!(
+                    text.chars().count() <= DESCRIPTION_LIMIT,
+                    "{locale}/{key} is {} characters: Discord refuses the whole registration",
+                    text.chars().count()
+                );
+            }
+        }
+    }
 }

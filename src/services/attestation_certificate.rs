@@ -20,11 +20,21 @@
 //!
 //! ## Why the layout changes with the basis
 //!
-//! An attestation for a validated deliverable, one for a contest won and one
-//! for an editorial featuring are three different claims. A single template
-//! with a swapped title would make them look interchangeable, which is
-//! exactly what a reader should not conclude — the featuring rests on
-//! somebody's judgement, the other two rest on an artefact.
+//! An attestation for a validated deliverable, one for a contest won, one for
+//! a flag whose hash matched, and one for an editorial featuring are four
+//! different claims. A single template with a swapped title would make them
+//! look interchangeable, which is exactly what a reader should not conclude:
+//! the featuring rests on somebody's judgement, the flag on a string
+//! comparison, and only the first two on work somebody read.
+//!
+//! ## Two levels of detail
+//!
+//! The short sheet is what somebody staples to an application. The full one
+//! adds what the attestation was issued for — the description and the link to
+//! the thing itself — which matters most in security, where the title names
+//! the weakness class and everything a reader wants is in the description.
+//! Nothing is redacted here: redaction happens at issue time, not at print
+//! time.
 
 use std::sync::OnceLock;
 
@@ -67,28 +77,59 @@ const MONO_TTF: &[u8] = include_bytes!("../../assets/fonts/JetBrainsMono-Variabl
 
 /// How an attestation presents itself, decided by what it rests on.
 ///
-/// Three families rather than one template per basis: the differences that
+/// Four families rather than one template per basis: the differences that
 /// matter to a reader are *what kind of claim is this*, not which of the
-/// twenty bases produced it.
+/// sixty-five bases produced it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Presentation {
     /// Rests on a verified artefact somebody can open. The strongest of the
-    /// three, and the one the platform exists to produce.
+    /// four, and the one the platform exists to produce.
     Artefact,
-    /// Rests on a ranking: a contest won, a podium.
+    /// Rests on a ranking: a contest won, a podium, a jam placed in.
     Contest,
+    /// Rests on a fact the platform recorded without any reviewer accepting a
+    /// deliverable: a hash matched, a room somebody was in, a recognition
+    /// granted on another platform.
+    Recorded,
     /// Rests on somebody's judgement, and says so. Never dressed up as the
-    /// other two.
+    /// other three.
     Editorial,
+}
+
+/// Bases whose claim is a placing rather than a deliverable.
+///
+/// Matched by suffix wherever a domain follows a convention, and named
+/// outright for the two cross-domain ones, which predate any convention.
+///
+/// The suffix used to be `_contest_won` alone, which by the time the security
+/// and game domains existed matched exactly one basis out of sixty-five:
+/// `security_competition_won` and `game_jam_winner` were both printing
+/// "TRAVAIL VÉRIFIÉ" on a sheet whose footing claims a reviewer accepted a
+/// deliverable. That is the same staleness the `featured_` prefix was
+/// introduced to end, one family over.
+fn is_ranking(basis: &str) -> bool {
+    basis.ends_with("_contest_won")
+        || basis.ends_with("_competition_won")
+        || basis.ends_with("_jam_winner")
+        || matches!(basis, "contest_finalist" | "contest_hired")
 }
 
 impl Presentation {
     /// Which family a basis belongs to.
     ///
-    /// Unknown bases present as [`Presentation::Artefact`], which is the
-    /// conservative default: almost every basis in the schema requires a
-    /// deliverable, so a new one almost certainly does too. Getting it wrong
-    /// that way understates nothing.
+    /// `requires_deliverable` is the column of the same name on
+    /// `attestation_bases`, passed in by the caller because it is the
+    /// database's own answer to the question this enum is deciding. Migration
+    /// 0546 wrote the rule down: it is TRUE "wherever a human read an artefact
+    /// and accepted it", and FALSE for the ones "graded by comparing hashes"
+    /// and for the ones that rest on something outside the platform. That is
+    /// precisely the line between [`Self::Artefact`] and [`Self::Recorded`],
+    /// so it is read rather than restated.
+    ///
+    /// `None` means the basis is not in the catalogue — an attestation issued
+    /// before its basis row, or a row since removed. Those present as
+    /// [`Self::Artefact`], the conservative default: almost every basis in the
+    /// schema requires a deliverable, so a new one almost certainly does too.
     ///
     /// The editorial ones are matched by prefix rather than listed. They were
     /// listed, and the list went stale twice without anybody noticing:
@@ -100,10 +141,18 @@ impl Presentation {
     ///
     /// Every domain names its editorial basis `featured_*`, and that
     /// convention is now what the code reads.
-    pub fn for_basis(basis: &str) -> Self {
-        match basis {
-            b if b.starts_with("featured_") => Self::Editorial,
-            b if b.ends_with("_contest_won") => Self::Contest,
+    pub fn of(basis: &str, requires_deliverable: Option<bool>) -> Self {
+        // Order matters. A ranking and a featuring both have
+        // `requires_deliverable = FALSE` for some domains, and both say
+        // something more specific than "recorded" — so they are decided first.
+        if basis.starts_with("featured_") {
+            return Self::Editorial;
+        }
+        if is_ranking(basis) {
+            return Self::Contest;
+        }
+        match requires_deliverable {
+            Some(false) => Self::Recorded,
             _ => Self::Artefact,
         }
     }
@@ -114,6 +163,7 @@ impl Presentation {
         match self {
             Self::Artefact => "ATTESTATION — TRAVAIL VÉRIFIÉ",
             Self::Contest => "ATTESTATION — CONCOURS REMPORTÉ",
+            Self::Recorded => "ATTESTATION — FAIT ENREGISTRÉ",
             Self::Editorial => "MISE EN AVANT ÉDITORIALE",
         }
     }
@@ -125,6 +175,7 @@ impl Presentation {
         match self {
             Self::Artefact => "#32b8ab",
             Self::Contest => "#ea8a3d",
+            Self::Recorded => "#6f8fae",
             Self::Editorial => "#c2b195",
         }
     }
@@ -140,6 +191,11 @@ impl Presentation {
             Self::Contest => {
                 "Cette attestation repose sur un classement public, établi sur des \
                  propositions que chacun peut consulter."
+            }
+            Self::Recorded => {
+                "Cette attestation repose sur un fait que la plateforme a enregistré — \
+                 une réponse vérifiée par empreinte, une participation, ou une \
+                 reconnaissance obtenue ailleurs. Aucun relecteur n'a jugé de livrable."
             }
             Self::Editorial => {
                 "Cette mise en avant est un choix éditorial de Skilluv, assumé comme \
@@ -173,6 +229,16 @@ pub struct CertificateData {
     /// the words it was issued with.
     pub title: String,
     pub basis: String,
+    /// `attestation_bases.requires_deliverable` for this basis, or `None` when
+    /// the basis is not in the catalogue. Decides [`Presentation::Recorded`].
+    pub requires_deliverable: Option<bool>,
+    /// The description as issued, with the trailing evidence URL that
+    /// `artefact_attestations` appends already stripped off. Shown only on the
+    /// full sheet.
+    pub description: Option<String>,
+    /// Where the thing this attests can be read: a finding's public card, a
+    /// merged pull request, a credit roll. Shown only on the full sheet.
+    pub evidence_url: Option<String>,
     /// Already formatted for display — this module does no localisation.
     pub issued_on: Option<String>,
     /// The ten characters somebody types into the verification page.
@@ -187,7 +253,53 @@ pub struct CertificateData {
 
 impl CertificateData {
     pub fn presentation(&self) -> Presentation {
-        Presentation::for_basis(&self.basis)
+        Presentation::of(&self.basis, self.requires_deliverable)
+    }
+}
+
+/// How much of the attestation the printed sheet carries.
+///
+/// ## Why there are two and not one
+///
+/// The short sheet is what somebody staples to an application: the claim, the
+/// holder, the code, the QR. One page, nothing to read.
+///
+/// The full sheet adds what the attestation was issued *for* — the description
+/// as written and the link to the thing itself. For most domains the title
+/// carries that already ("Identité complète pour une coopérative…"). For
+/// security it does not: `security_finding_confirmed` is titled by its
+/// weakness class, and the severity, the affected system and the disclosure
+/// state live in the description. A recruiter handed only the short sheet for
+/// a confirmed critical learns that somebody confirmed something.
+///
+/// ## On confidentiality
+///
+/// Nothing is redacted here, because nothing needs to be: redaction happens
+/// when the attestation is issued, not when it is printed. `security_attestations`
+/// says so at the top — an embargoed finding's evidence URL points at a public
+/// card that shows severity, class, date and reporter and withholds the
+/// reproduction, and a confidential mission is issued titled by its type and
+/// its finding counts. The sheet prints what was issued. A sheet that decided
+/// for itself what to hide would be a second policy to keep in step with the
+/// first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SheetDetail {
+    /// The claim and nothing else. One page, unchanged since it shipped.
+    #[default]
+    Short,
+    /// The claim plus the description and the evidence link.
+    Full,
+}
+
+impl SheetDetail {
+    /// Parse the `type` query parameter. Anything unrecognised is
+    /// [`Self::Short`] rather than an error: this is a document somebody is
+    /// trying to print, and a 400 on a typo hands them nothing.
+    pub fn from_param(raw: Option<&str>) -> Self {
+        match raw.map(str::trim) {
+            Some("full") => Self::Full,
+            _ => Self::Short,
+        }
     }
 }
 
@@ -353,7 +465,7 @@ pub fn render_card_png(data: &CertificateData) -> Result<Vec<u8>, AppError> {
 ///
 /// Printed by the browser to PDF. Vector all the way through, so it is
 /// sharper than anything a rasteriser would produce and it needs no service.
-pub fn build_certificate_svg(data: &CertificateData) -> String {
+pub fn build_certificate_svg(data: &CertificateData, detail: SheetDetail) -> String {
     let presentation = data.presentation();
     let accent = presentation.accent();
 
@@ -410,6 +522,19 @@ pub fn build_certificate_svg(data: &CertificateData) -> String {
     // without anybody typing ten characters correctly.
     let qr = qr_svg(&data.verify_url);
 
+    // ── The evidence section, on the full sheet only ──────────────────
+    //
+    // Empty when there is nothing to say. A heading over blank paper reads as
+    // a document that failed to render, which is worse than the short sheet.
+    let evidence = build_evidence_svg(data, detail);
+    // Everything below the footing shifts down to make room for it. The short
+    // sheet keeps the coordinates it shipped with, exactly.
+    let (verify_y, qr_y, closing_y) = if evidence.is_empty() {
+        (820, 800, 1060)
+    } else {
+        (968, 948, 1108)
+    };
+
     let revoked_banner = if data.revoked {
         format!(
             r##"<rect x="60" y="150" width="674" height="52" rx="8" fill="{LUV}"/>
@@ -444,19 +569,87 @@ pub fn build_certificate_svg(data: &CertificateData) -> String {
 
     <line x1="80" y1="664" x2="714" y2="664" stroke="{RULE}" stroke-width="1"/>
     {footing_svg}
+    {evidence}
 
-    <g transform="translate(80, 820)">
+    <g transform="translate(80, {verify_y})">
       <text x="0" y="0" font-size="16" font-weight="600" fill="{INK}">Vérifier cette attestation</text>
       <text x="0" y="26" font-size="13" font-family="{MONO}" fill="{INK_MUTED}">{verify_url}</text>
       <text x="0" y="52" font-size="13" fill="{INK_MUTED}">ou saisir le code {code} sur skill-uv.com</text>
     </g>
 
-    <g transform="translate(574, 800)">{qr}</g>
+    <g transform="translate(574, {qr_y})">{qr}</g>
 
-    <text x="80" y="1060" font-size="12" fill="{INK_MUTED}">Une attestation Skilluv nomme un travail qu'un inconnu peut ouvrir et juger. Elle ne remplace pas un diplôme : elle dit ce qui a été fait.</text>
+    <text x="80" y="{closing_y}" font-size="12" fill="{INK_MUTED}">Une attestation Skilluv nomme un travail qu'un inconnu peut ouvrir et juger. Elle ne remplace pas un diplôme : elle dit ce qui a été fait.</text>
   </g>
 </svg>"##,
         kicker = presentation.kicker()
+    )
+}
+
+/// The block the full sheet adds: what the attestation was issued for, and
+/// where to read it.
+///
+/// Returns an empty string — and so leaves the short sheet's coordinates
+/// untouched — for [`SheetDetail::Short`], and for a full sheet on an
+/// attestation that carries neither a description nor an evidence link.
+fn build_evidence_svg(data: &CertificateData, detail: SheetDetail) -> String {
+    if detail != SheetDetail::Full {
+        return String::new();
+    }
+
+    let description = data
+        .description
+        .as_deref()
+        .map(str::trim)
+        .filter(|d| !d.is_empty());
+    let evidence_url = data
+        .evidence_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|u| !u.is_empty());
+
+    if description.is_none() && evidence_url.is_none() {
+        return String::new();
+    }
+
+    // Four lines at 68 characters. Descriptions are a paragraph, not an essay,
+    // and anything past that is cut with an ellipsis rather than allowed to
+    // run into the verification block.
+    let description_svg: String = description
+        .map(|text| {
+            wrap(text, 68, 4)
+                .iter()
+                .enumerate()
+                .map(|(i, line)| {
+                    format!(
+                        r#"<text x="80" y="{y}" font-size="14" fill="{INK}">{line}</text>"#,
+                        y = 826 + i * 21,
+                        line = escape(line)
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n    ")
+        })
+        .unwrap_or_default();
+
+    // Printed rather than linked, because the sheet's whole point is that it
+    // survives being printed. A URL nobody can click is still a URL somebody
+    // can type.
+    let evidence_svg = evidence_url
+        .map(|url| {
+            format!(
+                r#"<text x="80" y="918" font-size="13" fill="{INK_MUTED}">La preuve elle-même</text>
+    <text x="80" y="938" font-size="12" font-family="{MONO}" fill="{INK}">{url}</text>"#,
+                url = escape(&truncate(url, 78))
+            )
+        })
+        .unwrap_or_default();
+
+    format!(
+        r#"<line x1="80" y1="772" x2="714" y2="772" stroke="{RULE}" stroke-width="1"/>
+    <text x="80" y="800" font-size="16" font-weight="600" fill="{INK}">Ce sur quoi elle repose</text>
+    {description_svg}
+    {evidence_svg}"#
     )
 }
 
@@ -491,6 +684,9 @@ mod tests {
             username: "aicha".into(),
             title: "Identité complète pour une coopérative de transformation d'anacarde".into(),
             basis: "design_deliverable_validated".into(),
+            requires_deliverable: Some(true),
+            description: None,
+            evidence_url: None,
             issued_on: Some("14/03/2027".into()),
             verification_code: "K4M2P9XZQ7".into(),
             verify_url: "https://skill-uv.com/attestations/verify/K4M2P9XZQ7".into(),
@@ -505,15 +701,15 @@ mod tests {
         // them look interchangeable, which is what a reader must not
         // conclude.
         assert_eq!(
-            Presentation::for_basis("featured_designer"),
+            Presentation::of("featured_designer", Some(false)),
             Presentation::Editorial
         );
         assert_eq!(
-            Presentation::for_basis("design_deliverable_validated"),
+            Presentation::of("design_deliverable_validated", Some(true)),
             Presentation::Artefact
         );
         assert_eq!(
-            Presentation::for_basis("design_contest_won"),
+            Presentation::of("design_contest_won", Some(true)),
             Presentation::Contest
         );
 
@@ -538,11 +734,97 @@ mod tests {
             "featured_audio_creator",
             "featured_communicator",
             "featured_educator",
+            "featured_game_creator",
+            "featured_security_researcher",
         ] {
             assert_eq!(
-                Presentation::for_basis(basis),
+                // Even told the basis requires a deliverable, which no
+                // featuring does: the prefix decides, and nothing overrides it.
+                Presentation::of(basis, Some(true)),
                 Presentation::Editorial,
                 "{basis} presented as something stronger than a choice"
+            );
+        }
+    }
+
+    #[test]
+    fn every_ranking_basis_reads_as_a_ranking() {
+        // The suffix used to be `_contest_won` alone. By the time the security
+        // and game domains existed that matched one basis out of sixty-five,
+        // and the other three printed "TRAVAIL VÉRIFIÉ" over a footing
+        // claiming a reviewer accepted a deliverable.
+        for basis in [
+            "design_contest_won",
+            "security_competition_won",
+            "game_jam_winner",
+            "contest_finalist",
+            "contest_hired",
+        ] {
+            assert_eq!(
+                Presentation::of(basis, Some(true)),
+                Presentation::Contest,
+                "{basis} does not read as the placing it is"
+            );
+            // And the deliverable flag does not change it: `contest_finalist`
+            // carries FALSE and is still a placing.
+            assert_eq!(Presentation::of(basis, Some(false)), Presentation::Contest);
+        }
+    }
+
+    #[test]
+    fn a_machine_graded_claim_does_not_say_a_reviewer_verified_it() {
+        // Migration 0546 is explicit that a captured flag and a passed lab are
+        // "graded by comparing hashes", and that this is "a deliberate refusal
+        // rather than an omission". Printing "vérifié par un relecteur
+        // compétent" over one of those is a false statement on a document
+        // somebody hands to an employer.
+        for basis in [
+            "security_ctf_solved",
+            "security_blue_lab_completed",
+            "security_finding_co_credit",
+            "security_external_bounty_confirmed",
+            "security_purple_exercise_facilitated",
+            "game_jam_participant",
+        ] {
+            let p = Presentation::of(basis, Some(false));
+            assert_eq!(p, Presentation::Recorded, "{basis}");
+            assert!(
+                !p.footing().contains("relecteur compétent"),
+                "{basis} claims a reviewer that never existed"
+            );
+        }
+
+        // And the four families are four, not three wearing the same coat.
+        let accents = [
+            Presentation::Artefact.accent(),
+            Presentation::Contest.accent(),
+            Presentation::Recorded.accent(),
+            Presentation::Editorial.accent(),
+        ];
+        for (i, a) in accents.iter().enumerate() {
+            for b in &accents[i + 1..] {
+                assert_ne!(a, b, "two families share an accent");
+            }
+        }
+    }
+
+    #[test]
+    fn the_security_bases_that_do_rest_on_a_reviewed_artefact_still_say_so() {
+        // The other direction of the same guard: seventeen security bases and
+        // only some are machine graded. Understating the reviewed ones would
+        // be its own quiet damage.
+        for basis in [
+            "security_finding_confirmed",
+            "security_finding_published",
+            "security_code_audit_delivered",
+            "security_threat_model_validated",
+            "security_mission_delivered",
+            "security_machine_walkthrough_validated",
+        ] {
+            assert_eq!(
+                Presentation::of(basis, Some(true)),
+                Presentation::Artefact,
+                "{basis}"
             );
         }
     }
@@ -561,10 +843,12 @@ mod tests {
 
     #[test]
     fn an_unknown_basis_presents_as_an_artefact() {
-        // Every basis in the schema except the three editorial ones requires
-        // a deliverable, so a new one almost certainly does too.
+        // `None` is a basis with no catalogue row — issued before the row
+        // existed, or after it was removed. Most bases require a deliverable,
+        // so a new one almost certainly does too, and guessing that way
+        // understates nothing.
         assert_eq!(
-            Presentation::for_basis("something_invented_next_year"),
+            Presentation::of("something_invented_next_year", None),
             Presentation::Artefact
         );
     }
@@ -612,7 +896,7 @@ mod tests {
         let card = build_card_svg(&data);
         assert!(card.contains("RÉVOQUÉE"), "{card}");
 
-        let sheet = build_certificate_svg(&data);
+        let sheet = build_certificate_svg(&data, SheetDetail::Short);
         assert!(sheet.contains("A ÉTÉ RÉVOQUÉE"), "{sheet}");
     }
 
@@ -621,10 +905,120 @@ mod tests {
         let data = a_certificate();
         assert!(render_card_png(&data).is_ok());
 
-        let sheet = build_certificate_svg(&data);
-        assert!(usvg::Tree::from_str(&sheet, options()).is_ok(), "{sheet}");
-        // The code is printed as well as encoded, so a sheet photocopied
-        // badly enough to lose the QR is still checkable by hand.
-        assert!(sheet.contains("K4M2P9XZQ7"));
+        for detail in [SheetDetail::Short, SheetDetail::Full] {
+            let sheet = build_certificate_svg(&data, detail);
+            assert!(usvg::Tree::from_str(&sheet, options()).is_ok(), "{sheet}");
+            // The code is printed as well as encoded, so a sheet photocopied
+            // badly enough to lose the QR is still checkable by hand.
+            assert!(sheet.contains("K4M2P9XZQ7"));
+        }
+    }
+
+    /// The security case the whole `full` sheet exists for.
+    fn a_confirmed_finding() -> CertificateData {
+        CertificateData {
+            display_name: "Kofi Mensah".into(),
+            username: "kofi".into(),
+            title: "Injection SQL authentifiée sur l'export des candidatures".into(),
+            basis: "security_finding_confirmed".into(),
+            requires_deliverable: Some(true),
+            description: Some(
+                "Sévérité critique (CVSS 9.1). Le paramètre de tri de l'export \
+                 est concaténé dans la requête, ce qui permet à un compte \
+                 recruteur de lire toute la table des candidatures. Reproduit \
+                 par un second relecteur, corrigé en quatre jours."
+                    .into(),
+            ),
+            evidence_url: Some("https://skill-uv.com/security/findings/SKI-F-204".into()),
+            issued_on: Some("02/09/2027".into()),
+            verification_code: "R7T3W1NB4S".into(),
+            verify_url: "https://skill-uv.com/attestations/verify/R7T3W1NB4S".into(),
+            revoked: false,
+        }
+    }
+
+    #[test]
+    fn the_full_sheet_carries_what_the_short_one_cannot() {
+        // The title names the weakness class. Everything a reader of a
+        // security attestation actually wants — the severity, the affected
+        // system, the disclosure state — is in the description, and the short
+        // sheet has never shown it.
+        let data = a_confirmed_finding();
+
+        let short = build_certificate_svg(&data, SheetDetail::Short);
+        assert!(!short.contains("Ce sur quoi elle repose"));
+        assert!(!short.contains("CVSS 9.1"));
+        assert!(!short.contains("SKI-F-204"));
+
+        let full = build_certificate_svg(&data, SheetDetail::Full);
+        assert!(full.contains("Ce sur quoi elle repose"), "{full}");
+        assert!(full.contains("CVSS 9.1"), "{full}");
+        assert!(full.contains("SKI-F-204"), "{full}");
+        assert!(usvg::Tree::from_str(&full, options()).is_ok(), "{full}");
+    }
+
+    #[test]
+    fn the_full_sheet_moves_the_blocks_it_would_otherwise_print_over() {
+        // The evidence section occupies the band the verification block used
+        // to sit in. Rendering both at their old coordinates would overlap
+        // them, which SVG will happily do without complaining.
+        let data = a_confirmed_finding();
+        let short = build_certificate_svg(&data, SheetDetail::Short);
+        let full = build_certificate_svg(&data, SheetDetail::Full);
+
+        assert!(short.contains("translate(80, 820)"), "{short}");
+        assert!(!full.contains("translate(80, 820)"), "{full}");
+        assert!(full.contains("translate(80, 968)"), "{full}");
+
+        // Everything still lands on the page.
+        for y in [968 + 52, 1108] {
+            assert!(y < SHEET_HEIGHT as usize, "{y} runs off an A4 sheet");
+        }
+    }
+
+    #[test]
+    fn a_full_sheet_with_nothing_extra_to_say_is_the_short_sheet() {
+        // A heading over blank paper reads as a document that failed to
+        // render. Several bases carry neither a description worth printing nor
+        // an evidence link.
+        let mut data = a_confirmed_finding();
+        data.description = None;
+        data.evidence_url = None;
+
+        assert_eq!(
+            build_certificate_svg(&data, SheetDetail::Full),
+            build_certificate_svg(&data, SheetDetail::Short)
+        );
+
+        // Whitespace is not content either.
+        data.description = Some("   \n  ".into());
+        data.evidence_url = Some("".into());
+        assert_eq!(
+            build_certificate_svg(&data, SheetDetail::Full),
+            build_certificate_svg(&data, SheetDetail::Short)
+        );
+    }
+
+    #[test]
+    fn an_evidence_url_cannot_rewrite_the_document_either() {
+        // It is checked against `^https?://` on write, which leaves plenty of
+        // room for a quote and an angle bracket after the scheme.
+        let mut data = a_confirmed_finding();
+        data.evidence_url = Some("https://x/\"><script>alert(1)</script>".into());
+        let full = build_certificate_svg(&data, SheetDetail::Full);
+        assert!(!full.contains("<script>"), "{full}");
+        assert!(usvg::Tree::from_str(&full, options()).is_ok());
+    }
+
+    #[test]
+    fn an_unreadable_type_parameter_prints_the_short_sheet() {
+        // This is a document somebody is trying to print. A 400 on a typo
+        // hands them nothing.
+        assert_eq!(SheetDetail::from_param(Some("full")), SheetDetail::Full);
+        assert_eq!(SheetDetail::from_param(Some(" full ")), SheetDetail::Full);
+        assert_eq!(SheetDetail::from_param(Some("short")), SheetDetail::Short);
+        assert_eq!(SheetDetail::from_param(Some("FULL")), SheetDetail::Short);
+        assert_eq!(SheetDetail::from_param(Some("complet")), SheetDetail::Short);
+        assert_eq!(SheetDetail::from_param(None), SheetDetail::Short);
     }
 }

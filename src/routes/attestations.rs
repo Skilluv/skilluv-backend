@@ -8,7 +8,7 @@
 //!
 //! Voir docs/challenges-target-model-and-roadmap.md sections B.12, G.3, 6.3-6.5.
 
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -286,21 +286,49 @@ pub async fn revoke_attestation(
 type CertificateRow = (
     String,                                // title
     String,                                // basis
+    Option<bool>,                          // attestation_bases.requires_deliverable
+    String,                                // description
+    Option<String>,                        // evidence_url
+    Option<String>,                        // external_publish_url
     chrono::DateTime<chrono::Utc>,         // issued_at
     Option<chrono::DateTime<chrono::Utc>>, // revoked_at
     Option<String>,                        // username
     Option<String>,                        // display_name
 );
 
+/// The description as issued, minus the evidence URL `artefact_attestations`
+/// appends to it.
+///
+/// That generator writes `format!("{description}\n\n{url}")`, so printing the
+/// description verbatim under a heading and then printing the URL again two
+/// lines below would show it twice. The URL is what gets its own line; the
+/// prose is what goes under the heading.
+fn description_without_trailing_url(description: &str) -> Option<String> {
+    let trimmed = description.trim();
+    let prose = match trimmed.rsplit_once("\n\n") {
+        Some((head, tail)) if tail.trim().starts_with("http") => head,
+        _ => trimmed,
+    };
+    let prose = prose.trim();
+    (!prose.is_empty()).then(|| prose.to_string())
+}
+
 async fn load_certificate(
     state: &AppState,
     code: &str,
 ) -> Result<Option<crate::services::attestation_certificate::CertificateData>, AppError> {
+    // LEFT JOIN on the basis catalogue rather than an inner one: an
+    // attestation whose basis row was never added, or has since been removed,
+    // still has to render. `requires_deliverable` comes back NULL there, and
+    // the presentation falls back to the conservative default.
     let row: Option<CertificateRow> = sqlx::query_as(
         r#"
-        SELECT a.title, a.basis, a.issued_at, a.revoked_at, u.username, u.display_name
+        SELECT a.title, a.basis, b.requires_deliverable,
+               a.description, a.evidence_url, a.external_publish_url,
+               a.issued_at, a.revoked_at, u.username, u.display_name
           FROM attestations a
           LEFT JOIN users u ON u.id = a.user_id
+          LEFT JOIN attestation_bases b ON b.basis = a.basis
          WHERE a.verification_code = $1
         "#,
     )
@@ -308,7 +336,19 @@ async fn load_certificate(
     .fetch_optional(&state.db)
     .await?;
 
-    let Some((title, basis, issued_at, revoked_at, username, display_name)) = row else {
+    let Some((
+        title,
+        basis,
+        requires_deliverable,
+        description,
+        evidence_url,
+        external_publish_url,
+        issued_at,
+        revoked_at,
+        username,
+        display_name,
+    )) = row
+    else {
         return Ok(None);
     };
 
@@ -319,6 +359,13 @@ async fn load_certificate(
             username,
             title,
             basis,
+            requires_deliverable,
+            description: description_without_trailing_url(&description),
+            // `evidence_url` is where the recognition appears (migration 0420);
+            // `external_publish_url` is where the work itself was published.
+            // Either answers "where do I read this", and the first is the more
+            // specific of the two.
+            evidence_url: evidence_url.or(external_publish_url),
             issued_on: Some(issued_at.format("%d/%m/%Y").to_string()),
             verification_code: code.to_string(),
             verify_url: format!(
@@ -387,11 +434,28 @@ pub async fn verify_card(
 /// A revoked attestation still renders, and says so across the top: somebody
 /// holding an old copy has to be able to find out that it no longer holds,
 /// and a 404 would leave them believing it.
+///
+/// `?type=full` adds what the attestation was issued for — the description as
+/// written and the link to the thing itself. It matters most in security,
+/// where the title carries the weakness class and the severity, the affected
+/// system and the disclosure state live in the description; a recruiter handed
+/// only the short sheet for a confirmed critical learns that somebody
+/// confirmed something. Nothing is redacted at print time: redaction happens
+/// when the attestation is issued.
+#[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
+pub struct CertificateQuery {
+    /// `short` (the default) or `full`. Anything else is read as `short` —
+    /// this is a document somebody is trying to print, and a 400 on a typo
+    /// hands them nothing.
+    #[serde(default)]
+    pub r#type: Option<String>,
+}
+
 #[utoipa::path(
     get,
     path = "/api/attestations/verify/{code}/certificate.svg",
     tag = "profile",
-    params(("code" = String, Path, description = "Verification code")),
+    params(("code" = String, Path, description = "Verification code"), CertificateQuery),
     responses(
         (status = 200, description = "A4 certificate, printable to PDF", content_type = "image/svg+xml"),
         (status = 404, description = "No such attestation", body = crate::api_response::ErrorResponse),
@@ -401,12 +465,15 @@ pub async fn verify_card(
 pub async fn verify_certificate(
     State(state): State<AppState>,
     Path(code): Path<String>,
+    Query(query): Query<CertificateQuery>,
 ) -> Result<axum::response::Response, AppError> {
     let data = load_certificate(&state, &code)
         .await?
         .ok_or_else(|| AppError::NotFound("unknown verification code".into()))?;
 
-    let svg = crate::services::attestation_certificate::build_certificate_svg(&data);
+    let detail =
+        crate::services::attestation_certificate::SheetDetail::from_param(query.r#type.as_deref());
+    let svg = crate::services::attestation_certificate::build_certificate_svg(&data, detail);
 
     let mut headers = axum::http::HeaderMap::new();
     headers.insert(

@@ -232,3 +232,175 @@ async fn a_card_is_not_cached_for_a_year() {
     assert!(!cache.contains("immutable"), "{cache}");
     assert!(cache.contains("max-age=3600"), "{cache}");
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// The four families, and the full sheet (SKI-168)
+// ═══════════════════════════════════════════════════════════════════
+
+/// Like `an_attestation`, but it asks the catalogue whether the basis needs a
+/// deliverable instead of guessing from the name — which is the same question
+/// the sheet now asks, and the reason these rows can be written at all.
+async fn an_attestation_of(
+    app: &TestApp,
+    username: &str,
+    basis: &str,
+    code: &str,
+    description: &str,
+    evidence_url: Option<&str>,
+) -> Uuid {
+    let user_id: Uuid = sqlx::query_scalar("SELECT id FROM users WHERE username = $1")
+        .bind(username)
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
+
+    let requires: bool =
+        sqlx::query_scalar("SELECT requires_deliverable FROM attestation_bases WHERE basis = $1")
+            .bind(basis)
+            .fetch_one(&app.db)
+            .await
+            .unwrap_or_else(|e| panic!("{basis} is not in attestation_bases: {e}"));
+
+    let linked: Vec<Uuid> = if requires {
+        vec![Uuid::new_v4()]
+    } else {
+        vec![]
+    };
+
+    sqlx::query_scalar(
+        r#"
+        INSERT INTO attestations
+            (user_id, attestation_type, title, description, basis,
+             verification_code, linked_deliverable_ids, evidence_url)
+        VALUES ($1, 'artefact', 'Injection SQL sur l''export des candidatures',
+                $2, $3, $4, $5, $6)
+        RETURNING id
+        "#,
+    )
+    .bind(user_id)
+    .bind(description)
+    .bind(basis)
+    .bind(code)
+    .bind(&linked)
+    .bind(evidence_url)
+    .fetch_one(&app.db)
+    .await
+    .expect("attestation")
+}
+
+async fn sheet(app: &TestApp, code: &str, query: &str) -> String {
+    let resp = reqwest::Client::new()
+        .get(format!(
+            "{}/api/attestations/verify/{code}/certificate.svg{query}",
+            app.addr
+        ))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status().as_u16(), 200, "{code}{query}");
+    resp.text().await.unwrap()
+}
+
+/// The defect SKI-168 was filed for, checked through the database rather than
+/// through the enum: `requires_deliverable` is read off `attestation_bases`,
+/// so this only passes if the join in `load_certificate` works.
+#[tokio::test]
+async fn a_machine_graded_security_attestation_does_not_claim_a_reviewer() {
+    let app = TestApp::spawn().await;
+    app.register_user("cert_ctf").await;
+    an_attestation_of(
+        &app,
+        "cert_ctf",
+        "security_ctf_solved",
+        "FFFF666677",
+        "Flag capturé sur la cible hébergée, vérifié par empreinte.",
+        None,
+    )
+    .await;
+
+    let svg = sheet(&app, "FFFF666677", "").await;
+
+    // Migration 0546: a captured flag is "graded by comparing hashes", and no
+    // human read anything. Printing "vérifié par un relecteur compétent" on a
+    // sheet somebody hands an employer is a false statement.
+    assert!(svg.contains("FAIT ENREGISTRÉ"), "{svg}");
+    assert!(!svg.contains("TRAVAIL VÉRIFIÉ"), "{svg}");
+    assert!(!svg.contains("relecteur compétent"), "{svg}");
+}
+
+/// The other half: a security basis that *is* a reviewed artefact must not be
+/// understated by the same change.
+#[tokio::test]
+async fn a_confirmed_finding_still_reads_as_verified_work() {
+    let app = TestApp::spawn().await;
+    app.register_user("cert_finding").await;
+    an_attestation_of(
+        &app,
+        "cert_finding",
+        "security_finding_confirmed",
+        "GGGG777788",
+        "Sévérité critique (CVSS 9.1), reproduite par un second relecteur.",
+        Some("https://skill-uv.com/security/findings/demo-204"),
+    )
+    .await;
+
+    let svg = sheet(&app, "GGGG777788", "").await;
+    assert!(svg.contains("TRAVAIL VÉRIFIÉ"), "{svg}");
+}
+
+/// A placing is a placing in every domain. Before SKI-168 the suffix matched
+/// `design_contest_won` and nothing else, so a won security competition
+/// printed as verified work.
+#[tokio::test]
+async fn a_won_security_competition_reads_as_a_ranking() {
+    let app = TestApp::spawn().await;
+    app.register_user("cert_comp").await;
+    an_attestation_of(
+        &app,
+        "cert_comp",
+        "security_competition_won",
+        "HHHH888899",
+        "Deuxième place, bug bash de mars.",
+        None,
+    )
+    .await;
+
+    let svg = sheet(&app, "HHHH888899", "").await;
+    assert!(svg.contains("CONCOURS REMPORTÉ"), "{svg}");
+    assert!(svg.contains("classement public"), "{svg}");
+}
+
+#[tokio::test]
+async fn the_full_sheet_carries_the_evidence_and_the_short_one_does_not() {
+    let app = TestApp::spawn().await;
+    app.register_user("cert_full").await;
+    an_attestation_of(
+        &app,
+        "cert_full",
+        "security_finding_confirmed",
+        "JJJJ999911",
+        "Sévérité critique (CVSS 9.1). Le paramètre de tri est concaténé dans \
+         la requête, ce qui laisse un compte recruteur lire toute la table.",
+        Some("https://skill-uv.com/security/findings/demo-311"),
+    )
+    .await;
+
+    let short = sheet(&app, "JJJJ999911", "").await;
+    assert!(!short.contains("CVSS 9.1"), "{short}");
+    assert!(!short.contains("demo-311"), "{short}");
+
+    // A recruiter handed only the short sheet for a confirmed critical learns
+    // that somebody confirmed something.
+    let full = sheet(&app, "JJJJ999911", "?type=full").await;
+    assert!(full.contains("Ce sur quoi elle repose"), "{full}");
+    assert!(full.contains("CVSS 9.1"), "{full}");
+    assert!(full.contains("demo-311"), "{full}");
+
+    // Still A4: it is a document somebody prints.
+    assert!(full.contains(r#"width="794""#));
+    assert!(full.contains(r#"height="1123""#));
+
+    // An unreadable value prints the short sheet rather than a 400 — this is a
+    // document somebody is trying to print.
+    assert_eq!(sheet(&app, "JJJJ999911", "?type=complet").await, short);
+}

@@ -26,6 +26,8 @@ use serenity::all::{
     Interaction, Member, Ready,
 };
 use serenity::async_trait;
+use skilluv_backend::services::discord_roles;
+use skilluv_backend::services::i18n::{t, t_with};
 use sqlx::PgPool;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -61,115 +63,45 @@ impl EventHandler for Handler {
         // quality, leadership, communication and education did not exist.
         let domain_hint = domain_hint();
 
+        // A `domain` argument, described by the trade list. Same in both
+        // languages — the values are slugs, and `code, design, game…` does not
+        // translate.
+        let domain_arg = |required: bool| {
+            CreateCommandOption::new(CommandOptionType::String, "domain", domain_hint.as_str())
+                .required(required)
+        };
+
         let cmds = vec![
-            CreateCommand::new("skilluv")
-                .description("Skilluv commands")
-                .add_option(CreateCommandOption::new(
-                    CommandOptionType::SubCommand,
-                    "me",
-                    "Show your linked Skilluv profile",
-                ))
+            localised(CreateCommand::new("skilluv"), "discord.cmd.root")
+                .add_option(sub("me", "discord.cmd.me"))
                 .add_option(
-                    CreateCommandOption::new(
-                        CommandOptionType::SubCommand,
-                        "verify",
-                        "Verify a Skilluv attestation by its hash",
-                    )
-                    .add_sub_option(
-                        CreateCommandOption::new(
-                            CommandOptionType::String,
-                            "hash",
-                            "The attestation hash (from the /verify URL)",
+                    sub("verify", "discord.cmd.verify").add_sub_option(
+                        arg(
+                            CreateCommandOption::new(CommandOptionType::String, "hash", ""),
+                            "discord.cmd.verify_hash",
                         )
                         .required(true),
                     ),
                 )
                 .add_option(
-                    CreateCommandOption::new(
-                        CommandOptionType::SubCommand,
-                        "contests",
-                        "Open contests you can still enter",
-                    )
-                    .add_sub_option(CreateCommandOption::new(
-                        CommandOptionType::String,
-                        "domain",
-                        domain_hint.as_str(),
-                    )),
+                    sub("contests", "discord.cmd.contests").add_sub_option(domain_arg(false)),
                 )
                 .add_option(
-                    CreateCommandOption::new(
-                        CommandOptionType::SubCommand,
-                        "featured",
-                        "Who is featured this week",
-                    )
-                    .add_sub_option(CreateCommandOption::new(
-                        CommandOptionType::String,
-                        "domain",
-                        domain_hint.as_str(),
-                    )),
+                    sub("featured", "discord.cmd.featured").add_sub_option(domain_arg(false)),
                 )
                 .add_option(
-                    CreateCommandOption::new(
-                        CommandOptionType::SubCommand,
-                        "portfolio",
-                        "Somebody's public Skilluv profile",
-                    )
-                    .add_sub_option(
-                        CreateCommandOption::new(
-                            CommandOptionType::String,
-                            "username",
-                            "Their Skilluv username",
+                    sub("portfolio", "discord.cmd.portfolio").add_sub_option(
+                        arg(
+                            CreateCommandOption::new(CommandOptionType::String, "username", ""),
+                            "discord.cmd.portfolio_username",
                         )
                         .required(true),
                     ),
                 )
-                .add_option(
-                    CreateCommandOption::new(
-                        CommandOptionType::SubCommand,
-                        "craft",
-                        "Your craft score in one domain, and what it is made of",
-                    )
-                    .add_sub_option(
-                        CreateCommandOption::new(
-                            CommandOptionType::String,
-                            "domain",
-                            domain_hint.as_str(),
-                        )
-                        .required(true),
-                    ),
-                )
-                .add_option(
-                    CreateCommandOption::new(
-                        CommandOptionType::SubCommand,
-                        "queue",
-                        "How much work is waiting on a reviewer in one domain",
-                    )
-                    .add_sub_option(
-                        CreateCommandOption::new(
-                            CommandOptionType::String,
-                            "domain",
-                            domain_hint.as_str(),
-                        )
-                        .required(true),
-                    ),
-                )
-                .add_option(
-                    CreateCommandOption::new(
-                        CommandOptionType::SubCommand,
-                        "cohorts",
-                        "Cohorts recruiting now",
-                    )
-                    .add_sub_option(CreateCommandOption::new(
-                        CommandOptionType::String,
-                        "domain",
-                        domain_hint.as_str(),
-                    )),
-                )
-                .add_option(CreateCommandOption::new(
-                    CommandOptionType::SubCommand,
-                    "help",
-                    "How to use the bot",
-                )),
+                .add_option(sub("craft", "discord.cmd.craft").add_sub_option(domain_arg(true)))
+                .add_option(sub("queue", "discord.cmd.queue").add_sub_option(domain_arg(true)))
+                .add_option(sub("cohorts", "discord.cmd.cohorts").add_sub_option(domain_arg(false)))
+                .add_option(sub("help", "discord.cmd.help")),
         ];
         if let Err(e) = self.guild_id.set_commands(&ctx.http, cmds).await {
             tracing::error!(error = %e, "failed to register slash commands");
@@ -188,25 +120,42 @@ impl EventHandler for Handler {
         tokio::spawn(async move {
             queue_poll_loop(http, db, promotions, annonces, frontend).await;
         });
+
+        // Second poller: the Discord half of the role loop.
+        //
+        // Separate from the notification tick because the two fail
+        // independently and at different rates — a rate-limited role write
+        // must not stop an announcement from going out, and vice versa.
+        let http2 = ctx.http.clone();
+        let db2 = self.db.clone();
+        let guild = self.guild_id;
+        let frontend2 = self.frontend_url.clone();
+        tokio::spawn(async move {
+            role_sync_loop(http2, db2, guild, frontend2).await;
+        });
     }
 
     async fn guild_member_addition(&self, ctx: Context, new_member: Member) {
         if new_member.user.bot {
             return; // don't DM other bots
         }
-        let msg = format!(
-            "Welcome to Skilluv, **{}** !\n\n\
-             This is the community around <{frontend}> — a compagnonnage \
-             platform where open source contributions become verifiable \
-             attestations.\n\n\
-             Getting started:\n\
-             - Post an intro in your favorite channel\n\
-             - Try `/skilluv help` here in DM or on the server\n\
-             - Sign up on <{frontend}> and reply here with your username \
-             if you'd like your Discord tied to your profile\n\n\
-             See you around !",
-            new_member.user.name,
-            frontend = self.frontend_url,
+        // Somebody who has just joined has no linked account, so there is no
+        // stored preference to read. Discord's own locale for the member is
+        // the only signal, and it is the right one: it is the language their
+        // client is in.
+        let locale =
+            skilluv_backend::services::i18n::resolve(None, new_member.user.locale.as_deref());
+        // This carried the same obsolete instruction the `/skilluv me` reply
+        // did — "reply here with your username" — from the months when linking
+        // was a moderator's job. It is a redirect now, and the message says so
+        // in the order that makes it pay: trades first, then the link.
+        let msg = t_with(
+            &locale,
+            "discord.join_welcome",
+            &[
+                ("name", &new_member.user.name),
+                ("frontend", &self.frontend_url),
+            ],
         );
         // Best-effort — a user with DMs disabled just doesn't get one.
         if let Err(e) = new_member
@@ -248,6 +197,9 @@ impl Handler {
         }
         // The single top-level `skilluv` command has subcommands.
         let sub = cmd.data.options.first().context("no subcommand provided")?;
+        // Resolved once per interaction rather than per handler: it costs a
+        // query, and every branch below answers the same person.
+        let locale = self.locale_for(cmd).await;
         let content = match sub.name.as_str() {
             "me" => self.handle_me(cmd).await?,
             "verify" => {
@@ -255,16 +207,16 @@ impl Handler {
                 self.handle_verify(&hash).await?
             }
             "contests" => {
-                self.handle_contests(extract_string(sub, "domain").as_deref())
+                self.handle_contests(extract_string(sub, "domain").as_deref(), &locale)
                     .await?
             }
             "featured" => {
-                self.handle_featured(extract_string(sub, "domain").as_deref())
+                self.handle_featured(extract_string(sub, "domain").as_deref(), &locale)
                     .await?
             }
             "portfolio" => {
                 let username = extract_string(sub, "username").context("missing username arg")?;
-                self.handle_portfolio(&username).await?
+                self.handle_portfolio(&username, &locale).await?
             }
             "craft" => {
                 let domain = extract_string(sub, "domain").context("missing domain arg")?;
@@ -488,10 +440,35 @@ impl Handler {
         Ok(format!("Cohorts recruiting:\n{}", lines.join("\n")))
     }
 
+    /// Which language to answer this person in.
+    ///
+    /// The community is francophone and anglophone both, so "the bot's
+    /// language" is not a thing that exists — only this person's.
+    ///
+    /// Their stored `preferred_language` first, because somebody who set
+    /// French on the platform meant it. Discord's interaction locale second:
+    /// it is the browser or client language, which is a good guess and the
+    /// only signal available before an account is linked. `i18n::resolve`
+    /// falls back on its own from there, and `i18n::t` falls back again per
+    /// key, so a missing translation degrades to another language rather than
+    /// to a raw key.
+    async fn locale_for(&self, cmd: &CommandInteraction) -> String {
+        let stored: Option<String> =
+            sqlx::query_scalar("SELECT preferred_language FROM users WHERE discord_user_id = $1")
+                .bind(cmd.user.id.to_string())
+                .fetch_optional(&self.db)
+                .await
+                .ok()
+                .flatten()
+                .flatten();
+        skilluv_backend::services::i18n::resolve(stored.as_deref(), Some(&cmd.locale))
+    }
+
     /// `/skilluv me` — look up the caller by discord_user_id, echo the
     /// public profile URL if linked, otherwise instruct how to link.
     async fn handle_me(&self, cmd: &CommandInteraction) -> Result<String> {
         let discord_id = cmd.user.id.to_string();
+        let locale = self.locale_for(cmd).await;
         let row: Option<(Uuid, String)> =
             sqlx::query_as("SELECT id, username FROM users WHERE discord_user_id = $1")
                 .bind(&discord_id)
@@ -502,18 +479,27 @@ impl Handler {
             Some((id, username)) => {
                 // The trades and the scores, because "you are linked" is not
                 // worth a round trip on its own.
-                let profile = self.profile_lines(id).await;
-                format!(
-                    "You are linked to **{username}** — {frontend}/@{username}{profile}",
-                    frontend = self.frontend_url,
+                let profile = self.profile_lines(id, &locale).await;
+                t_with(
+                    &locale,
+                    "discord.linked",
+                    &[
+                        ("display_name", &username),
+                        ("username", &username),
+                        ("frontend", &self.frontend_url),
+                        ("profile", &profile),
+                    ],
                 )
             }
-            None => format!(
-                "Your Discord account is not linked to a Skilluv profile yet.\n\
-                 Sign up or log in at {frontend}, then reply here with your \
-                 username so a moderator can link it (a self-serve OAuth flow \
-                 will land in a follow-up).",
-                frontend = self.frontend_url,
+            // This used to send people to a moderator, because linking was
+            // manual and `users.discord_user_id` had no writer. It has one
+            // now, so the instruction changed with it — a message telling
+            // somebody to queue for a human when a button exists is worse
+            // than no message.
+            None => t_with(
+                &locale,
+                "discord.not_linked",
+                &[("frontend", &self.frontend_url)],
             ),
         })
     }
@@ -573,7 +559,7 @@ impl Handler {
     ///
     /// Empty when there is nothing to say. A profile that prints "0 points,
     /// no trade" for a new member reads as a verdict rather than as a start.
-    async fn profile_lines(&self, user_id: Uuid) -> String {
+    async fn profile_lines(&self, user_id: Uuid, locale: &str) -> String {
         let trades: Vec<String> = sqlx::query_scalar(
             r#"
             SELECT o.name
@@ -601,7 +587,10 @@ impl Handler {
 
         let mut out = String::new();
         if !trades.is_empty() {
-            out.push_str(&format!("\nMétiers : {}", trades.join(", ")));
+            out.push_str(&format!(
+                "\n{}",
+                t_with(locale, "discord.trades", &[("list", &trades.join(", "))])
+            ));
         }
         if !scores.is_empty() {
             let rendered: Vec<String> = scores
@@ -618,7 +607,7 @@ impl Handler {
     /// Cross-domain contests are always included, whichever domain was asked
     /// for: those are the events that want the widest field, and filtering
     /// them out would hide exactly the ones worth announcing.
-    async fn handle_contests(&self, domain: Option<&str>) -> Result<String> {
+    async fn handle_contests(&self, domain: Option<&str>, locale: &str) -> Result<String> {
         let rows: Vec<(String, String, Option<chrono::DateTime<chrono::Utc>>)> = sqlx::query_as(
             r#"
             SELECT name, slug, ends_at
@@ -635,7 +624,7 @@ impl Handler {
         .context("db query failed")?;
 
         if rows.is_empty() {
-            return Ok("Aucun concours ouvert en ce moment.".into());
+            return Ok(t(locale, "discord.no_contests"));
         }
         let lines: Vec<String> = rows
             .iter()
@@ -653,7 +642,7 @@ impl Handler {
     }
 
     /// `/skilluv featured [domain]` — the week's editorial pick.
-    async fn handle_featured(&self, domain: Option<&str>) -> Result<String> {
+    async fn handle_featured(&self, domain: Option<&str>, locale: &str) -> Result<String> {
         let row: Option<(String, String, String, chrono::NaiveDate)> = sqlx::query_as(
             r#"
             SELECT u.username, u.display_name, ft.reason_md, ft.week_of
@@ -674,7 +663,7 @@ impl Handler {
                 "**{display_name}** ({}/@{username}) — semaine du {week}\n{reason}",
                 self.frontend_url
             ),
-            None => "Personne n'a encore été mis en avant ici.".into(),
+            None => t(locale, "discord.no_featured"),
         })
     }
 
@@ -683,7 +672,7 @@ impl Handler {
     /// Public rows only. A hidden or banned profile answers as unknown rather
     /// than as hidden: confirming that an account exists is itself a leak on
     /// a surface anybody can query.
-    async fn handle_portfolio(&self, username: &str) -> Result<String> {
+    async fn handle_portfolio(&self, username: &str, locale: &str) -> Result<String> {
         let trimmed = username.trim().trim_start_matches('@');
         let row: Option<(Uuid, String, String)> = sqlx::query_as(
             "SELECT id, username, display_name FROM users
@@ -697,19 +686,279 @@ impl Handler {
 
         Ok(match row {
             Some((id, username, display_name)) => {
-                let profile = self.profile_lines(id).await;
+                let profile = self.profile_lines(id, locale).await;
                 format!(
                     "**{display_name}** — {frontend}/@{username}{profile}",
                     frontend = self.frontend_url,
                 )
             }
-            None => format!("Aucun profil public au nom de `{trimmed}`."),
+            None => t_with(locale, "discord.no_profile", &[("username", trimmed)]),
         })
     }
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// The Discord half of the role loop
+// ═══════════════════════════════════════════════════════════════════
+
+const ROLE_SYNC_POLL_SECONDS: u64 = 20;
+
+/// Drain `discord_role_sync_queue` and make the server match the platform.
+///
+/// Separate from the notification poller because the two fail independently: a
+/// rate-limited role write must not stop an announcement going out.
+async fn role_sync_loop(http: Arc<Http>, db: PgPool, guild: GuildId, frontend: String) {
+    tracing::info!("role sync poller started, tick every {ROLE_SYNC_POLL_SECONDS}s");
+    loop {
+        match role_sync_tick(&http, &db, guild, &frontend).await {
+            Ok(n) if n > 0 => tracing::info!(synced = n, "role sync tick applied"),
+            Ok(_) => {}
+            Err(e) => tracing::warn!(error = %e, "role sync tick failed"),
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(ROLE_SYNC_POLL_SECONDS)).await;
+    }
+}
+
+#[derive(sqlx::FromRow)]
+struct SyncRow {
+    id: Uuid,
+    user_id: Uuid,
+    reason: String,
+    discord_user_id: Option<String>,
+    username: Option<String>,
+    preferred_language: Option<String>,
+}
+
+async fn role_sync_tick(http: &Http, db: &PgPool, guild: GuildId, frontend: &str) -> Result<usize> {
+    // Oldest first, capped. A nightly sweep can queue every member at once and
+    // Discord rate-limits role writes per guild; batching keeps a promotion
+    // from thirty seconds ago out from behind a thousand routine rows.
+    let rows: Vec<SyncRow> = sqlx::query_as(
+        "SELECT q.id, q.user_id, q.reason, u.discord_user_id, u.username,
+                u.preferred_language
+           FROM discord_role_sync_queue q
+           JOIN users u ON u.id = q.user_id
+          WHERE q.applied_at IS NULL AND q.failed_count < $1
+          ORDER BY q.requested_at
+          LIMIT 20",
+    )
+    .bind(MAX_FAILED_ATTEMPTS)
+    .fetch_all(db)
+    .await
+    .context("claim role sync rows")?;
+
+    if rows.is_empty() {
+        return Ok(0);
+    }
+
+    // Read once per tick, not per row: the declaration is embedded in the
+    // binary and the guild's roles change about never.
+    let rules = discord_roles::rules().map_err(|e| anyhow::anyhow!("{e}"))?;
+    let by_name: std::collections::HashMap<String, serenity::all::RoleId> = guild
+        .roles(http)
+        .await
+        .context("list guild roles")?
+        .iter()
+        .map(|(id, r)| (r.name.clone(), *id))
+        .collect();
+
+    let mut done = 0usize;
+    for row in &rows {
+        match apply_one(http, db, guild, row, &rules, &by_name, frontend).await {
+            Ok(true) => done += 1,
+            Ok(false) => {}
+            Err(e) => {
+                tracing::warn!(user = %row.user_id, reason = %row.reason, error = %e,
+                    "role sync failed for one member");
+                let _ = sqlx::query(
+                    "UPDATE discord_role_sync_queue
+                        SET failed_count = failed_count + 1, last_error = $2
+                      WHERE id = $1",
+                )
+                .bind(row.id)
+                // Truncated: a transport error can carry a whole response body
+                // and this column is read by a human in a terminal.
+                .bind(e.to_string().chars().take(500).collect::<String>())
+                .execute(db)
+                .await;
+            }
+        }
+    }
+    Ok(done)
+}
+
+/// Reconcile one member. Returns whether anything actually changed.
+async fn apply_one(
+    http: &Http,
+    db: &PgPool,
+    guild: GuildId,
+    row: &SyncRow,
+    rules: &[discord_roles::RoleRule],
+    by_name: &std::collections::HashMap<String, serenity::all::RoleId>,
+    frontend: &str,
+) -> Result<bool> {
+    let Some(snowflake) = row.discord_user_id.as_deref().filter(|s| !s.is_empty()) else {
+        // Unlinked between the request and now: no Discord identity to
+        // reconcile. Finished, rather than retried ten times.
+        mark_synced(db, row.id, &[], &[]).await;
+        return Ok(false);
+    };
+    let discord_id: serenity::all::UserId = snowflake
+        .parse::<u64>()
+        .with_context(|| format!("discord_user_id {snowflake:?} is not a snowflake"))?
+        .into();
+
+    let standing = discord_roles::standing(db, row.user_id)
+        .await
+        .map_err(|e| anyhow::anyhow!("standing: {e}"))?;
+    let desired = discord_roles::desired(rules, &standing);
+    let managed = discord_roles::managed(rules);
+
+    let Ok(member) = guild.member(http, discord_id).await else {
+        // Linked the account but never joined the server, or has left it.
+        // Neither is an error worth ten retries — there is nobody there to
+        // give a role to.
+        mark_synced(db, row.id, &[], &[]).await;
+        return Ok(false);
+    };
+
+    // Held roles by name. Roles the guild has that this repository never
+    // declared resolve to names too, which is exactly what `diff` needs in
+    // order to leave them alone.
+    let held: Vec<String> = member
+        .roles
+        .iter()
+        .filter_map(|rid| {
+            by_name
+                .iter()
+                .find(|(_, id)| *id == rid)
+                .map(|(name, _)| name.clone())
+        })
+        .collect();
+
+    let d = discord_roles::diff(&desired, &held, &managed);
+    if d.is_empty() {
+        mark_synced(db, row.id, &[], &[]).await;
+        return Ok(false);
+    }
+
+    for name in &d.add {
+        match by_name.get(name) {
+            Some(rid) => member
+                .add_role(http, *rid)
+                .await
+                .with_context(|| format!("add role {name}"))?,
+            // Declared in server.toml but absent from the guild. Not fatal for
+            // the other roles, and naming it is how somebody learns to run
+            // `discord-setup.py --create`.
+            None => tracing::warn!(role = %name, "declared role missing from the guild"),
+        }
+    }
+    for name in &d.remove {
+        if let Some(rid) = by_name.get(name) {
+            member
+                .remove_role(http, *rid)
+                .await
+                .with_context(|| format!("remove role {name}"))?;
+        }
+    }
+
+    // The welcome, sent once: on the sync that follows a link, and only when
+    // roles were actually granted. Somebody who links and receives nothing has
+    // no trades and no rank yet, and congratulating them on an empty set would
+    // be worse than silence.
+    if row.reason == "linked" && !d.add.is_empty() {
+        let who = row.username.as_deref().unwrap_or_default();
+        let granted = d
+            .add
+            .iter()
+            .map(|r| format!("**{r}**"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        // No interaction to read a locale from — nobody typed anything, this
+        // follows a browser redirect minutes ago. So the account's own
+        // preference is the only signal, and `i18n::resolve` falls back for
+        // the accounts that never set one.
+        let locale =
+            skilluv_backend::services::i18n::resolve(row.preferred_language.as_deref(), None);
+        let msg = t_with(
+            &locale,
+            "discord.welcome",
+            &[
+                ("username", who),
+                ("roles", &granted),
+                ("frontend", frontend),
+            ],
+        );
+        // Best effort, and one call rather than two. A closed DM must not fail
+        // a sync that already succeeded on the server.
+        match discord_id.create_dm_channel(http).await {
+            Ok(channel) => {
+                let _ = channel
+                    .id
+                    .send_message(http, CreateMessage::new().content(msg))
+                    .await;
+            }
+            Err(e) => tracing::debug!(error = %e, "no DM channel; skipping welcome"),
+        }
+    }
+
+    mark_synced(db, row.id, &d.add, &d.remove).await;
+    Ok(true)
+}
+
+/// Record what was done, so "why did I lose @Relecteur" has an answer.
+async fn mark_synced(db: &PgPool, id: Uuid, added: &[String], removed: &[String]) {
+    let _ = sqlx::query(
+        "UPDATE discord_role_sync_queue
+            SET applied_at = NOW(), roles_added = $2, roles_removed = $3
+          WHERE id = $1",
+    )
+    .bind(id)
+    .bind(added)
+    .bind(removed)
+    .execute(db)
+    .await;
+}
+
 /// Discord's hard limit on a command or option description.
+///
+/// It applies to **every localisation**, not only the default one. That is the
+/// trap worth naming: French runs 15-20% longer than English, so a description
+/// that fits in the default can still fail on its translation — and
+/// `set_commands` replaces the whole command tree, so one long string takes
+/// all of it down and leaves whatever a previous build registered.
 const DESCRIPTION_LIMIT: usize = 100;
+
+/// The locale Discord shows alongside the default.
+///
+/// One, deliberately. The community is francophone and anglophone; the
+/// English is the default description, so a second entry covers the other
+/// half. Arabic is a supported platform locale but not one Discord accepts for
+/// command localisation, so a translation would be written and never shown.
+const COMMAND_LOCALE: &str = "fr";
+
+/// A top-level command described in both languages.
+fn localised(cmd: CreateCommand, key: &str) -> CreateCommand {
+    cmd.description(t("en", key))
+        .description_localized(COMMAND_LOCALE, t(COMMAND_LOCALE, key))
+}
+
+/// A subcommand described in both languages.
+fn sub(name: &str, key: &str) -> CreateCommandOption {
+    CreateCommandOption::new(CommandOptionType::SubCommand, name, t("en", key))
+        .description_localized(COMMAND_LOCALE, t(COMMAND_LOCALE, key))
+}
+
+/// An argument described in both languages.
+///
+/// Takes an already-built option because its type and name are fixed at the
+/// call site; only the description is bilingual.
+fn arg(option: CreateCommandOption, key: &str) -> CreateCommandOption {
+    option
+        .description(t("en", key))
+        .description_localized(COMMAND_LOCALE, t(COMMAND_LOCALE, key))
+}
 
 /// The `domain` option's description: the trades, from the list every
 /// validator reads, capped to what Discord accepts.
@@ -987,13 +1236,50 @@ mod tests {
         assert!(kept.chars().count() <= DESCRIPTION_LIMIT, "{kept}");
     }
 
-    // There is deliberately no test over the fixed descriptions. One was
-    // written, listing them by hand, and every string in it was subtly wrong
-    // — "Open contests" for "Open contests you can still enter". It passed,
-    // and it asserted nothing about the code. A copy of a literal is not a
-    // check on that literal; it is a second literal that drifts.
-    //
-    // The five options Discord refused were all the generated one, which is
-    // what the tests above hold. A fixed description going over 100
-    // characters would be visible in the diff that wrote it.
+    /// Every description Discord will be sent, in every language it will be
+    /// sent in.
+    ///
+    /// An earlier attempt at this listed the strings by hand and every one of
+    /// them was subtly wrong — "Open contests" for "Open contests you can
+    /// still enter". It passed and asserted nothing, because a copy of a
+    /// literal is not a check on that literal. It was deleted.
+    ///
+    /// This one reads the same catalogue the registration reads, so it cannot
+    /// drift. And it checks **both** languages, which is the half that matters
+    /// now: the limit applies per localisation, French runs longer than
+    /// English, and `set_commands` fails as a whole. A translation four
+    /// characters too long would take the entire command tree down and leave
+    /// the bot serving whatever a previous build registered — exactly what
+    /// happened here two days ago, from the same limit and a different string.
+    #[test]
+    fn every_command_description_fits_discord() {
+        const KEYS: &[&str] = &[
+            "discord.cmd.root",
+            "discord.cmd.me",
+            "discord.cmd.verify",
+            "discord.cmd.verify_hash",
+            "discord.cmd.contests",
+            "discord.cmd.featured",
+            "discord.cmd.portfolio",
+            "discord.cmd.portfolio_username",
+            "discord.cmd.craft",
+            "discord.cmd.queue",
+            "discord.cmd.cohorts",
+            "discord.cmd.help",
+        ];
+        for key in KEYS {
+            for locale in ["en", COMMAND_LOCALE] {
+                let text = t(locale, key);
+                assert_ne!(
+                    text, *key,
+                    "{key} is missing from {locale}.yml; Discord would show the key"
+                );
+                assert!(
+                    text.chars().count() <= DESCRIPTION_LIMIT,
+                    "{locale}/{key} is {} characters: Discord refuses the whole registration",
+                    text.chars().count()
+                );
+            }
+        }
+    }
 }

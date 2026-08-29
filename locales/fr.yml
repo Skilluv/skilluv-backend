@@ -515,3 +515,51 @@ digest:
     challenges: "contributions"
     fragments: "fragments"
     streak: "jours d'affilee"
+
+# Le bot Discord (skilluv-discord-bot). Voir la note dans en.yml.
+discord:
+  not_linked: |-
+    Ton compte Discord n'est pas encore lié à un profil Skilluv.
+
+    Connecte-toi sur {frontend}, puis va dans **Paramètres -> Comptes liés -> Discord**. Tes rôles arrivent dans la minute, et ils suivront ton profil ensuite.
+
+    Astuce : déclare d'abord tes métiers. C'est ce qui ouvre les salons de ton domaine — sans eux, il n'y a pas grand-chose à te donner.
+  linked: "**{display_name}** — {frontend}/@{username}{profile}"
+  trades: "Métiers : {list}"
+  welcome: |-
+    Ton compte Discord est lié à **{username}**.
+
+    Tu viens de recevoir : {roles}
+
+    Ces rôles suivent ton profil : ils changent quand tes métiers, ton rang ou tes habilitations changent, et tu n'as rien à demander.
+
+    Ton profil : {frontend}/@{username}
+  no_contests: "Aucun concours ouvert en ce moment."
+  no_featured: "Personne n'a encore été mis en avant ici."
+  no_profile: "Aucun profil public au nom de `{username}`."
+  # Descriptions des commandes. Voir la note dans en.yml : la limite de 100
+  # caracteres de Discord s'applique aussi a ces traductions.
+  join_welcome: |-
+    Bienvenue sur Skilluv, **{name}** !
+
+    Ici c'est la communaute autour de {frontend} — une plateforme de compagnonnage ou les contributions open source deviennent des attestations verifiables.
+
+    Pour commencer :
+    - Presente-toi dans le salon de ton metier
+    - Essaie `/skilluv help`
+    - Connecte-toi sur {frontend}, declare tes metiers, puis lie Discord depuis **Parametres -> Comptes lies**. Tes roles et tes salons s'ouvrent tout seuls.
+
+    A bientot !
+  cmd:
+    root: "Commandes Skilluv"
+    me: "Afficher ton profil Skilluv lie"
+    verify: "Verifier une attestation Skilluv par son empreinte"
+    verify_hash: "L'empreinte de l'attestation (depuis l'URL /verify)"
+    contests: "Les concours ouverts auxquels tu peux encore participer"
+    featured: "Qui est mis en avant cette semaine"
+    portfolio: "Le profil public Skilluv de quelqu'un"
+    portfolio_username: "Son nom d'utilisateur Skilluv"
+    craft: "Ton score d'artisanat dans un metier, et ce qui le compose"
+    queue: "Ce qui attend un relecteur dans un domaine"
+    cohorts: "Les cohortes qui recrutent en ce moment"
+    help: "Comment utiliser le bot"

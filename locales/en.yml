@@ -516,3 +516,69 @@ digest:
     challenges: "contributions"
     fragments: "fragments"
     streak: "day streak"
+
+# The Discord bot (skilluv-discord-bot).
+#
+# The community is francophone and anglophone both, and the bot used to be
+# neither on purpose: mostly English with four French strings that had drifted
+# in. Every message it sends now goes through here, resolved per person —
+# their stored `preferred_language` when the account is linked, otherwise the
+# locale Discord attaches to the interaction.
+discord:
+  not_linked: |-
+    Your Discord account is not linked to a Skilluv profile yet.
+
+    Sign in at {frontend}, then go to **Settings -> Linked accounts -> Discord**. Your roles arrive within the minute, and they follow your profile from then on.
+
+    Tip: declare your trades first. They are what open your domain's channels — without them there is not much to give you.
+  linked: "**{display_name}** — {frontend}/@{username}{profile}"
+  trades: "Trades: {list}"
+  welcome: |-
+    Your Discord account is linked to **{username}**.
+
+    You have just received: {roles}
+
+    These roles follow your profile: they change when your trades, your rank or your capabilities change, and you never have to ask.
+
+    Your profile: {frontend}/@{username}
+  no_contests: "No contest is open right now."
+  no_featured: "Nobody has been featured here yet."
+  no_profile: "No public profile called `{username}`."
+  # Slash command descriptions. Registered in both languages at once —
+  # `description_localized("fr", ...)` — so `/skilluv craft` explains itself in
+  # French in the Discord menu without anybody switching a setting.
+  #
+  # Discord's 100-character limit applies to EVERY localisation, not only the
+  # default. French runs 15-20% longer than English, so a translation that fits
+  # in English can still fail the whole registration — and `set_commands`
+  # replaces the entire tree, so one long string takes all of it down. That is
+  # not hypothetical: it happened on this bot two days ago and left it serving
+  # three subcommands out of nine. `every_command_description_fits_discord`
+  # guards both languages.
+  #
+  # No `ar` here: Discord's supported locales for command localisation do not
+  # include Arabic, so a translation would be written and never shown.
+  join_welcome: |-
+    Welcome to Skilluv, **{name}**!
+
+    This is the community around {frontend} — a compagnonnage platform where open source contributions become verifiable attestations.
+
+    Getting started:
+    - Post an intro in the channel of your trade
+    - Try `/skilluv help`
+    - Sign in at {frontend}, declare your trades, then link Discord from **Settings -> Linked accounts**. Your roles and your channels open by themselves.
+
+    See you around!
+  cmd:
+    root: "Skilluv commands"
+    me: "Show your linked Skilluv profile"
+    verify: "Verify a Skilluv attestation by its hash"
+    verify_hash: "The attestation hash (from the /verify URL)"
+    contests: "Open contests you can still enter"
+    featured: "Who is featured this week"
+    portfolio: "Somebody's public Skilluv profile"
+    portfolio_username: "Their Skilluv username"
+    craft: "Your craft score in one domain, and what it is made of"
+    queue: "How much work is waiting on a reviewer in one domain"
+    cohorts: "Cohorts recruiting now"
+    help: "How to use the bot"

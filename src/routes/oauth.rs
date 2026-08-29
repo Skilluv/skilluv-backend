@@ -17,7 +17,9 @@ use crate::AppState;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
 use crate::routes::enterprise::attach_recruiter_to_enterprise;
-use crate::services::oauth::{self, OAuthProfile, OAuthState, google as gp, linkedin as lp};
+use crate::services::oauth::{
+    self, OAuthProfile, OAuthState, discord as dp, google as gp, linkedin as lp,
+};
 use crate::services::{AuthService, SessionService};
 
 #[derive(Deserialize, Default, utoipa::IntoParams)]
@@ -38,6 +40,11 @@ pub fn oauth_routes() -> Router<AppState> {
             "/auth/me/oauth-providers/{provider}",
             axum::routing::delete(unlink_provider),
         )
+        // Discord — link only. There is deliberately no `/start`: Discord is
+        // not a sign-up route here (see `services::oauth::discord`), it is how
+        // an existing account claims its Discord identity.
+        .route("/auth/discord/link", get(discord_link_start))
+        .route("/auth/discord/callback", get(discord_callback))
         // Google
         .route("/auth/google/start", get(google_start))
         .route("/auth/google/link", get(google_link_start))
@@ -160,6 +167,55 @@ pub async fn google_callback(
         "google",
         &q.state,
         |code| async move { gp::fetch_profile(&cfg, &code).await },
+        q.code,
+    )
+    .await
+}
+
+// ─── Discord ─────────────────────────────────────────────────────
+
+/// Link Discord to the signed-in account (redirects to Discord).
+///
+/// Link only, and that is the whole design. Discord is not a way to sign up
+/// here: somebody who has never had a Skilluv account has nothing for a role
+/// to be derived from, and creating one from a Discord identity would produce
+/// an account with no trades, no rank and no proof — which is precisely the
+/// account the community cannot place.
+#[utoipa::path(
+    get, path = "/api/auth/discord/link", tag = "auth",
+    responses(
+        (status = 302, description = "Redirect to Discord"),
+        (status = 404, description = "Discord OAuth not configured", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn discord_link_start(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Redirect, AppError> {
+    start_flow(&state, "discord", Some(auth.user_id), None).await
+}
+
+/// Discord OAuth callback.
+#[utoipa::path(
+    get, path = "/api/auth/discord/callback", tag = "auth",
+    params(CallbackQuery),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 400, body = crate::api_response::ErrorResponse),
+    ),
+)]
+pub async fn discord_callback(
+    State(state): State<AppState>,
+    Query(q): Query<CallbackQuery>,
+) -> Result<impl IntoResponse, AppError> {
+    let cfg = dp::Config::from_env()
+        .ok_or_else(|| AppError::NotFound("Discord OAuth not enabled on this deployment".into()))?;
+    handle_callback(
+        &state,
+        "discord",
+        &q.state,
+        |code| async move { dp::fetch_profile(&cfg, &code).await },
         q.code,
     )
     .await
@@ -323,6 +379,12 @@ async fn start_flow(
                 AppError::NotFound("LinkedIn OAuth not enabled on this deployment".into())
             })?;
             lp::authorize_url(&cfg, &token)
+        }
+        "discord" => {
+            let cfg = dp::Config::from_env().ok_or_else(|| {
+                AppError::NotFound("Discord OAuth not enabled on this deployment".into())
+            })?;
+            dp::authorize_url(&cfg, &token)
         }
         _ => return Err(AppError::Validation("unsupported provider".into())),
     };

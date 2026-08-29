@@ -305,6 +305,30 @@ async fn recompute_inner(
         report.errors.push(format!("notifications: {e}"));
     }
 
+    // The Discord roles follow the standing that was just recomputed.
+    //
+    // Hooked here rather than at each of the three call sites that change a
+    // capability, a badge or a rank, because this function is where all three
+    // already converge — and because `sweep_active_users` calls it, which
+    // gives the nightly drift-catcher for free rather than as a second loop to
+    // write and keep in step.
+    //
+    // Only when something actually moved. Recomputing is idempotent and most
+    // passes change nothing; queueing every one would have the bot recompute
+    // and re-diff the whole active population on every sweep, for nothing.
+    let standing_moved = report.rank_promoted
+        || !report.capabilities_granted.is_empty()
+        || !report.badges_awarded.is_empty()
+        || !report.badges_revoked.is_empty();
+    if standing_moved {
+        let reason = if report.rank_promoted {
+            "rank_changed"
+        } else {
+            "capabilities_changed"
+        };
+        crate::services::discord_roles::request_sync_best_effort(db, user_id, reason).await;
+    }
+
     Ok(report)
 }
 

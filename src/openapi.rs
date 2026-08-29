@@ -1168,6 +1168,8 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::oauth::unlink_provider,
         crate::routes::oauth::google_start,
         crate::routes::oauth::google_link_start,
+        crate::routes::oauth::discord_link_start,
+        crate::routes::oauth::discord_callback,
         crate::routes::oauth::google_callback,
         crate::routes::oauth::linkedin_start,
         crate::routes::oauth::linkedin_link_start,

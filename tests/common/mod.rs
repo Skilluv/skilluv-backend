@@ -886,9 +886,21 @@ pub fn totp_now(secret_base32: &str) -> String {
 impl Drop for TestApp {
     fn drop(&mut self) {
         let db_name = self.db_name.clone();
-        // Spawn a blocking task to drop the test DB
-        // This is best-effort cleanup
-        std::thread::spawn(move || {
+        // Spawn a blocking task to drop the test DB, and **wait for it**.
+        //
+        // It used to be fire-and-forget, which is fine on a laptop and is not
+        // fine in CI. `--test-threads=1` means one database at a time in
+        // principle; in practice the detached thread had not finished dropping
+        // before the next test created the next one, so they accumulated for
+        // the length of a shard. Postgres then answered
+        // `53100 disk_full — could not write` and every remaining test in that
+        // shard failed at `TestApp::spawn`, which reads as a broken test suite
+        // rather than as a full disk.
+        //
+        // Joining costs a few milliseconds per test and bounds the disk to one
+        // test database at a time, which is what `--test-threads=1` was meant
+        // to buy in the first place.
+        let cleanup = std::thread::spawn(move || {
             let rt = tokio::runtime::Runtime::new().unwrap();
             rt.block_on(async {
                 let pool = PgPoolOptions::new()
@@ -911,6 +923,11 @@ impl Drop for TestApp {
                 }
             });
         });
+        // A failed join means the cleanup thread panicked — the database is
+        // then left behind, which is a wasted gigabyte and not a broken test,
+        // so it is ignored rather than turned into a second failure on top of
+        // whatever the test itself reported.
+        let _ = cleanup.join();
     }
 }
 

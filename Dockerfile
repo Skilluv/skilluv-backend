@@ -21,8 +21,15 @@ WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
 
 # Dummy src so cargo builds only the deps ; discarded before the real build.
+#
+# `--features discord-bot` here as well as in the real build below, and that
+# is the whole point of the layer. A feature set is part of what Cargo
+# fingerprints, so warming the cache without it warmed a build nothing ever
+# asked for: the real build then recompiled the entire dependency graph, four
+# hundred crates from `proc-macro2` onward, on every image. The layer said
+# CACHED and bought nothing.
 RUN mkdir src && echo "fn main() {}" > src/main.rs && echo "" > src/lib.rs
-RUN cargo build --release 2>/dev/null || true
+RUN cargo build --release --features discord-bot 2>/dev/null || true
 RUN rm -rf src
 
 COPY src/ src/

@@ -28,10 +28,10 @@ Four things depend on you, and the report names them every run:
 
 ## Usage
 
-    python scripts/discord-setup.py                 # look, report, touch nothing
-    python scripts/discord-setup.py --create        # apply what is missing
-    python scripts/discord-setup.py --sql           # emit the routing rows
-    python scripts/discord-setup.py --only design   # one domain at a time
+    python3 scripts/discord-setup.py                 # look, report, touch nothing
+    python3 scripts/discord-setup.py --create        # apply what is missing
+    python3 scripts/discord-setup.py --sql           # emit the routing rows
+    python3 scripts/discord-setup.py --only design   # one domain at a time
 
 `--create` is opt-in because it changes a server other people can see.
 """
@@ -372,7 +372,7 @@ def main():
     say("     its first connection — nothing to do for those.")
     say("")
     say("  3. Set SKILLUV_DISCORD_CHANNELS on the deployment, from")
-    say("       python scripts/discord-setup.py --env")
+    say("       python3 scripts/discord-setup.py --env")
     say("     That is the durable form: the seed catalogue re-applies it at")
     say("     every boot, so a dropped database restores its own routing. The")
     say("     SQL above does the same thing once, to the database you are")

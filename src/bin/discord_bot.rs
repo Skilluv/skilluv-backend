@@ -523,10 +523,18 @@ impl Handler {
                 )
             }
             None => format!(
-                "Your Discord account is not linked to a Skilluv profile yet.\n\
-                 Sign up or log in at {frontend}, then reply here with your \
-                 username so a moderator can link it (a self-serve OAuth flow \
-                 will land in a follow-up).",
+                // This used to send people to a moderator, because linking was
+                // manual and `users.discord_user_id` had no writer. It has one
+                // now, so the instruction changed with it — a message telling
+                // somebody to queue for a human when a button exists is worse
+                // than no message.
+                "Ton compte Discord n'est pas encore lié à un profil Skilluv.\n\n\
+                 Connecte-toi sur {frontend}, puis va dans **Paramètres → \
+                 Comptes liés → Discord**. Tes rôles arrivent dans la minute, \
+                 et ils suivront ton profil ensuite.\n\n\
+                 Astuce : déclare d'abord tes métiers. C'est ce qui ouvre les \
+                 salons de ton domaine — sans eux, il n'y a pas grand-chose à \
+                 te donner.",
                 frontend = self.frontend_url,
             ),
         })

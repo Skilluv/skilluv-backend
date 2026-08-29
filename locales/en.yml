@@ -516,3 +516,31 @@ digest:
     challenges: "contributions"
     fragments: "fragments"
     streak: "day streak"
+
+# The Discord bot (skilluv-discord-bot).
+#
+# The community is francophone and anglophone both, and the bot used to be
+# neither on purpose: mostly English with four French strings that had drifted
+# in. Every message it sends now goes through here, resolved per person —
+# their stored `preferred_language` when the account is linked, otherwise the
+# locale Discord attaches to the interaction.
+discord:
+  not_linked: |-
+    Your Discord account is not linked to a Skilluv profile yet.
+
+    Sign in at {frontend}, then go to **Settings -> Linked accounts -> Discord**. Your roles arrive within the minute, and they follow your profile from then on.
+
+    Tip: declare your trades first. They are what open your domain's channels — without them there is not much to give you.
+  linked: "**{display_name}** — {frontend}/@{username}{profile}"
+  trades: "Trades: {list}"
+  welcome: |-
+    Your Discord account is linked to **{username}**.
+
+    You have just received: {roles}
+
+    These roles follow your profile: they change when your trades, your rank or your capabilities change, and you never have to ask.
+
+    Your profile: {frontend}/@{username}
+  no_contests: "No contest is open right now."
+  no_featured: "Nobody has been featured here yet."
+  no_profile: "No public profile called `{username}`."

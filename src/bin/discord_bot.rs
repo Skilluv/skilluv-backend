@@ -27,6 +27,7 @@ use serenity::all::{
 };
 use serenity::async_trait;
 use skilluv_backend::services::discord_roles;
+use skilluv_backend::services::i18n::{t, t_with};
 use sqlx::PgPool;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -262,6 +263,9 @@ impl Handler {
         }
         // The single top-level `skilluv` command has subcommands.
         let sub = cmd.data.options.first().context("no subcommand provided")?;
+        // Resolved once per interaction rather than per handler: it costs a
+        // query, and every branch below answers the same person.
+        let locale = self.locale_for(cmd).await;
         let content = match sub.name.as_str() {
             "me" => self.handle_me(cmd).await?,
             "verify" => {
@@ -269,16 +273,16 @@ impl Handler {
                 self.handle_verify(&hash).await?
             }
             "contests" => {
-                self.handle_contests(extract_string(sub, "domain").as_deref())
+                self.handle_contests(extract_string(sub, "domain").as_deref(), &locale)
                     .await?
             }
             "featured" => {
-                self.handle_featured(extract_string(sub, "domain").as_deref())
+                self.handle_featured(extract_string(sub, "domain").as_deref(), &locale)
                     .await?
             }
             "portfolio" => {
                 let username = extract_string(sub, "username").context("missing username arg")?;
-                self.handle_portfolio(&username).await?
+                self.handle_portfolio(&username, &locale).await?
             }
             "craft" => {
                 let domain = extract_string(sub, "domain").context("missing domain arg")?;
@@ -502,10 +506,35 @@ impl Handler {
         Ok(format!("Cohorts recruiting:\n{}", lines.join("\n")))
     }
 
+    /// Which language to answer this person in.
+    ///
+    /// The community is francophone and anglophone both, so "the bot's
+    /// language" is not a thing that exists — only this person's.
+    ///
+    /// Their stored `preferred_language` first, because somebody who set
+    /// French on the platform meant it. Discord's interaction locale second:
+    /// it is the browser or client language, which is a good guess and the
+    /// only signal available before an account is linked. `i18n::resolve`
+    /// falls back on its own from there, and `i18n::t` falls back again per
+    /// key, so a missing translation degrades to another language rather than
+    /// to a raw key.
+    async fn locale_for(&self, cmd: &CommandInteraction) -> String {
+        let stored: Option<String> =
+            sqlx::query_scalar("SELECT preferred_language FROM users WHERE discord_user_id = $1")
+                .bind(cmd.user.id.to_string())
+                .fetch_optional(&self.db)
+                .await
+                .ok()
+                .flatten()
+                .flatten();
+        skilluv_backend::services::i18n::resolve(stored.as_deref(), Some(&cmd.locale))
+    }
+
     /// `/skilluv me` — look up the caller by discord_user_id, echo the
     /// public profile URL if linked, otherwise instruct how to link.
     async fn handle_me(&self, cmd: &CommandInteraction) -> Result<String> {
         let discord_id = cmd.user.id.to_string();
+        let locale = self.locale_for(cmd).await;
         let row: Option<(Uuid, String)> =
             sqlx::query_as("SELECT id, username FROM users WHERE discord_user_id = $1")
                 .bind(&discord_id)
@@ -516,26 +545,27 @@ impl Handler {
             Some((id, username)) => {
                 // The trades and the scores, because "you are linked" is not
                 // worth a round trip on its own.
-                let profile = self.profile_lines(id).await;
-                format!(
-                    "You are linked to **{username}** — {frontend}/@{username}{profile}",
-                    frontend = self.frontend_url,
+                let profile = self.profile_lines(id, &locale).await;
+                t_with(
+                    &locale,
+                    "discord.linked",
+                    &[
+                        ("display_name", &username),
+                        ("username", &username),
+                        ("frontend", &self.frontend_url),
+                        ("profile", &profile),
+                    ],
                 )
             }
-            None => format!(
-                // This used to send people to a moderator, because linking was
-                // manual and `users.discord_user_id` had no writer. It has one
-                // now, so the instruction changed with it — a message telling
-                // somebody to queue for a human when a button exists is worse
-                // than no message.
-                "Ton compte Discord n'est pas encore lié à un profil Skilluv.\n\n\
-                 Connecte-toi sur {frontend}, puis va dans **Paramètres → \
-                 Comptes liés → Discord**. Tes rôles arrivent dans la minute, \
-                 et ils suivront ton profil ensuite.\n\n\
-                 Astuce : déclare d'abord tes métiers. C'est ce qui ouvre les \
-                 salons de ton domaine — sans eux, il n'y a pas grand-chose à \
-                 te donner.",
-                frontend = self.frontend_url,
+            // This used to send people to a moderator, because linking was
+            // manual and `users.discord_user_id` had no writer. It has one
+            // now, so the instruction changed with it — a message telling
+            // somebody to queue for a human when a button exists is worse
+            // than no message.
+            None => t_with(
+                &locale,
+                "discord.not_linked",
+                &[("frontend", &self.frontend_url)],
             ),
         })
     }
@@ -595,7 +625,7 @@ impl Handler {
     ///
     /// Empty when there is nothing to say. A profile that prints "0 points,
     /// no trade" for a new member reads as a verdict rather than as a start.
-    async fn profile_lines(&self, user_id: Uuid) -> String {
+    async fn profile_lines(&self, user_id: Uuid, locale: &str) -> String {
         let trades: Vec<String> = sqlx::query_scalar(
             r#"
             SELECT o.name
@@ -623,7 +653,10 @@ impl Handler {
 
         let mut out = String::new();
         if !trades.is_empty() {
-            out.push_str(&format!("\nMétiers : {}", trades.join(", ")));
+            out.push_str(&format!(
+                "\n{}",
+                t_with(locale, "discord.trades", &[("list", &trades.join(", "))])
+            ));
         }
         if !scores.is_empty() {
             let rendered: Vec<String> = scores
@@ -640,7 +673,7 @@ impl Handler {
     /// Cross-domain contests are always included, whichever domain was asked
     /// for: those are the events that want the widest field, and filtering
     /// them out would hide exactly the ones worth announcing.
-    async fn handle_contests(&self, domain: Option<&str>) -> Result<String> {
+    async fn handle_contests(&self, domain: Option<&str>, locale: &str) -> Result<String> {
         let rows: Vec<(String, String, Option<chrono::DateTime<chrono::Utc>>)> = sqlx::query_as(
             r#"
             SELECT name, slug, ends_at
@@ -657,7 +690,7 @@ impl Handler {
         .context("db query failed")?;
 
         if rows.is_empty() {
-            return Ok("Aucun concours ouvert en ce moment.".into());
+            return Ok(t(locale, "discord.no_contests"));
         }
         let lines: Vec<String> = rows
             .iter()
@@ -675,7 +708,7 @@ impl Handler {
     }
 
     /// `/skilluv featured [domain]` — the week's editorial pick.
-    async fn handle_featured(&self, domain: Option<&str>) -> Result<String> {
+    async fn handle_featured(&self, domain: Option<&str>, locale: &str) -> Result<String> {
         let row: Option<(String, String, String, chrono::NaiveDate)> = sqlx::query_as(
             r#"
             SELECT u.username, u.display_name, ft.reason_md, ft.week_of
@@ -696,7 +729,7 @@ impl Handler {
                 "**{display_name}** ({}/@{username}) — semaine du {week}\n{reason}",
                 self.frontend_url
             ),
-            None => "Personne n'a encore été mis en avant ici.".into(),
+            None => t(locale, "discord.no_featured"),
         })
     }
 
@@ -705,7 +738,7 @@ impl Handler {
     /// Public rows only. A hidden or banned profile answers as unknown rather
     /// than as hidden: confirming that an account exists is itself a leak on
     /// a surface anybody can query.
-    async fn handle_portfolio(&self, username: &str) -> Result<String> {
+    async fn handle_portfolio(&self, username: &str, locale: &str) -> Result<String> {
         let trimmed = username.trim().trim_start_matches('@');
         let row: Option<(Uuid, String, String)> = sqlx::query_as(
             "SELECT id, username, display_name FROM users
@@ -719,13 +752,13 @@ impl Handler {
 
         Ok(match row {
             Some((id, username, display_name)) => {
-                let profile = self.profile_lines(id).await;
+                let profile = self.profile_lines(id, locale).await;
                 format!(
                     "**{display_name}** — {frontend}/@{username}{profile}",
                     frontend = self.frontend_url,
                 )
             }
-            None => format!("Aucun profil public au nom de `{trimmed}`."),
+            None => t_with(locale, "discord.no_profile", &[("username", trimmed)]),
         })
     }
 }
@@ -759,6 +792,7 @@ struct SyncRow {
     reason: String,
     discord_user_id: Option<String>,
     username: Option<String>,
+    preferred_language: Option<String>,
 }
 
 async fn role_sync_tick(http: &Http, db: &PgPool, guild: GuildId, frontend: &str) -> Result<usize> {
@@ -766,7 +800,8 @@ async fn role_sync_tick(http: &Http, db: &PgPool, guild: GuildId, frontend: &str
     // Discord rate-limits role writes per guild; batching keeps a promotion
     // from thirty seconds ago out from behind a thousand routine rows.
     let rows: Vec<SyncRow> = sqlx::query_as(
-        "SELECT q.id, q.user_id, q.reason, u.discord_user_id, u.username
+        "SELECT q.id, q.user_id, q.reason, u.discord_user_id, u.username,
+                u.preferred_language
            FROM discord_role_sync_queue q
            JOIN users u ON u.id = q.user_id
           WHERE q.applied_at IS NULL AND q.failed_count < $1
@@ -899,19 +934,27 @@ async fn apply_one(
     // no trades and no rank yet, and congratulating them on an empty set would
     // be worse than silence.
     if row.reason == "linked" && !d.add.is_empty() {
-        let who = row.username.as_deref().unwrap_or("ton compte");
+        let who = row.username.as_deref().unwrap_or_default();
         let granted = d
             .add
             .iter()
             .map(|r| format!("**{r}**"))
             .collect::<Vec<_>>()
             .join(", ");
-        let msg = format!(
-            "Ton compte Discord est lié à **{who}**.\n\n\
-             Tu viens de recevoir : {granted}\n\n\
-             Ces rôles suivent ton profil : ils changent quand tes métiers, ton \
-             rang ou tes habilitations changent, et tu n'as rien à demander.\n\n\
-             Ton profil : {frontend}/@{who}"
+        // No interaction to read a locale from — nobody typed anything, this
+        // follows a browser redirect minutes ago. So the account's own
+        // preference is the only signal, and `i18n::resolve` falls back for
+        // the accounts that never set one.
+        let locale =
+            skilluv_backend::services::i18n::resolve(row.preferred_language.as_deref(), None);
+        let msg = t_with(
+            &locale,
+            "discord.welcome",
+            &[
+                ("username", who),
+                ("roles", &granted),
+                ("frontend", frontend),
+            ],
         );
         // Best effort, and one call rather than two. A closed DM must not fail
         // a sync that already succeeded on the server.

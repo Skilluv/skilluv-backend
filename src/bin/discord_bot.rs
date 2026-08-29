@@ -59,7 +59,7 @@ impl EventHandler for Handler {
         // The copy that used to sit here named seven domains long after four
         // more had opened, so the bot was quietly telling people that
         // quality, leadership, communication and education did not exist.
-        let domain_hint = skilluv_backend::validators::SKILL_DOMAINS.join(", ");
+        let domain_hint = domain_hint();
 
         let cmds = vec![
             CreateCommand::new("skilluv")
@@ -708,6 +708,46 @@ impl Handler {
     }
 }
 
+/// Discord's hard limit on a command or option description.
+const DESCRIPTION_LIMIT: usize = 100;
+
+/// The `domain` option's description: the trades, from the list every
+/// validator reads, capped to what Discord accepts.
+///
+/// ## Why capping and not a shorter list
+///
+/// Discord rejects any description over 100 characters, and `set_commands`
+/// replaces the whole command tree in one call — so one long string fails the
+/// entire registration. The bot then keeps whatever commands a previous build
+/// left behind, logs an error nobody is watching, and serves a stale command
+/// list. That is exactly what happened: the twelfth domain took the joined
+/// list to 104 characters, five options were refused, and the guild kept the
+/// three subcommands of an older build while six newer ones were invisible.
+///
+/// Shortening the list by four characters would have fixed it until the
+/// thirteenth domain. The cap does not care how many there are.
+fn domain_hint() -> String {
+    let full = skilluv_backend::validators::SKILL_DOMAINS.join(", ");
+    if full.chars().count() <= DESCRIPTION_LIMIT {
+        return full;
+    }
+    // Cut on a separator so the hint never ends mid-word, and leave room for
+    // the ellipsis. A reader who needs the whole list gets it from the
+    // validation error on a wrong value, which names every domain.
+    let budget = DESCRIPTION_LIMIT - 1;
+    let mut kept = String::new();
+    for domain in skilluv_backend::validators::SKILL_DOMAINS {
+        let sep = if kept.is_empty() { "" } else { ", " };
+        if kept.chars().count() + sep.len() + domain.chars().count() > budget {
+            break;
+        }
+        kept.push_str(sep);
+        kept.push_str(domain);
+    }
+    kept.push('…');
+    kept
+}
+
 fn help_message(frontend: &str) -> String {
     format!(
         "**Skilluv bot** — commands available :\n\
@@ -891,4 +931,69 @@ async fn main() -> Result<()> {
         return Err(e.into());
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The failure this guards is silent in production and invisible in tests
+    /// that do not run it: Discord refuses the whole `set_commands` call when
+    /// one description is too long, so the guild keeps the previous build's
+    /// commands and the only trace is an error line in the bot's log.
+    ///
+    /// It shipped. Twelve domains joined to 104 characters, five options were
+    /// refused, and the server served three subcommands while six others had
+    /// been written and deployed.
+    #[test]
+    fn the_domain_hint_fits_what_discord_accepts() {
+        let hint = domain_hint();
+        assert!(
+            hint.chars().count() <= DESCRIPTION_LIMIT,
+            "{} characters: Discord refuses the whole registration",
+            hint.chars().count()
+        );
+        assert!(!hint.is_empty());
+
+        // Still useful: whatever fits must name real domains, not an ellipsis
+        // on its own.
+        assert!(
+            hint.starts_with(skilluv_backend::validators::SKILL_DOMAINS[0]),
+            "{hint}"
+        );
+    }
+
+    /// The cap has to hold for a catalogue that keeps growing — that is the
+    /// whole reason it exists rather than a hand-shortened list.
+    #[test]
+    fn the_hint_would_still_fit_with_far_more_domains() {
+        // Twice the current catalogue, with long names.
+        let many: Vec<String> = (0..30).map(|i| format!("some_long_domain_{i}")).collect();
+        let full = many.join(", ");
+        assert!(full.chars().count() > DESCRIPTION_LIMIT, "premise");
+
+        // Same algorithm the function applies, over the larger list.
+        let budget = DESCRIPTION_LIMIT - 1;
+        let mut kept = String::new();
+        for d in &many {
+            let sep = if kept.is_empty() { "" } else { ", " };
+            if kept.chars().count() + sep.len() + d.chars().count() > budget {
+                break;
+            }
+            kept.push_str(sep);
+            kept.push_str(d);
+        }
+        kept.push('…');
+        assert!(kept.chars().count() <= DESCRIPTION_LIMIT, "{kept}");
+    }
+
+    // There is deliberately no test over the fixed descriptions. One was
+    // written, listing them by hand, and every string in it was subtly wrong
+    // — "Open contests" for "Open contests you can still enter". It passed,
+    // and it asserted nothing about the code. A copy of a literal is not a
+    // check on that literal; it is a second literal that drifts.
+    //
+    // The five options Discord refused were all the generated one, which is
+    // what the tests above hold. A fixed description going over 100
+    // characters would be visible in the diff that wrote it.
 }

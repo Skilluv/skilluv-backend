@@ -397,6 +397,20 @@ jobs:
       # Halving it costs wall-clock on a cold cache and nothing on a warm
       # one, which is every run after the first.
       CARGO_BUILD_JOBS: "2"
+      # No debug info in CI artifacts.
+      #
+      # `zstd: No space left on device` and
+      # `ld terminated with signal 7 [Bus error]` in the same log are one
+      # failure, not two: the disk fills, and a linker writing through a
+      # memory-mapped file that can no longer grow gets SIGBUS rather than
+      # ENOSPC. `[profile.test] debug = "line-tables-only"` in Cargo.toml is
+      # already a reduction; forty-six test binaries make even that too much.
+      #
+      # The cost is line numbers in CI panic messages. Worth paying: the file
+      # and the assertion still print, and a suite that cannot run tells you
+      # nothing at all. Local runs keep their line numbers.
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      CARGO_PROFILE_DEV_DEBUG: "0"
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
@@ -412,7 +426,12 @@ jobs:
       - name: Reclaim runner disk
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
-                      /usr/local/share/boost "$AGENT_TOOLSDIRECTORY"
+                      /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" \
+                      /usr/local/lib/node_modules /usr/share/swift \
+                      /usr/local/.ghcup /opt/hostedtoolcache
+          # The pre-pulled images are worth ~4 GB and this job starts the
+          # one container it needs itself.
+          docker image prune -af || true
           df -h /
 
       - name: Install lld

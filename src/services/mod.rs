@@ -58,6 +58,7 @@ pub mod design_reviews;
 pub mod design_uploads;
 pub mod digest;
 pub mod discord_announce;
+pub mod discord_roles;
 pub mod disputes;
 pub mod dm;
 pub mod drip;

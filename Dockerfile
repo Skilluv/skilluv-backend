@@ -42,6 +42,12 @@ COPY migrations/ migrations/
 COPY locales/ locales/
 COPY assets/ assets/
 
+# `services::discord_roles` embeds `ops/discord/server.toml` with include_str!,
+# so the declaration of the Discord server has to exist in the builder. Without
+# it the build fails at compile time rather than at run time, which is the
+# right end of the pipeline for a missing file.
+COPY ops/ ops/
+
 # Touch to force cargo to rebuild the (now real) sources.
 # --features discord-bot pulls serenity in so the discord_bot binary
 # is included in the image (feature-gated to keep test builds lean).

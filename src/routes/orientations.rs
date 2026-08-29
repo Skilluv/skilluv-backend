@@ -505,6 +505,21 @@ pub async fn register_orientation(
     .await?;
     tx.commit().await?;
 
+    // A trade is one of the three terms a Discord role is derived from, and
+    // the only one no proof hook watches: declaring one moves nothing that
+    // `recompute_all_for_user` recomputes. Without this line, somebody who
+    // takes up design keeps waiting for a role until their next promotion.
+    //
+    // After the commit, never inside it: the bot reads the row the moment it
+    // is visible, and queueing inside the transaction would let it look before
+    // the orientation exists.
+    crate::services::discord_roles::request_sync_best_effort(
+        &state.db,
+        auth.user_id,
+        "orientations_changed",
+    )
+    .await;
+
     Ok((
         StatusCode::CREATED,
         Json(ApiResponse::new(RegisterOrientationResponse {
@@ -659,6 +674,14 @@ pub async fn end_orientation(
             "active orientation '{slug}' not found"
         )));
     }
+    // Dropping a trade takes its role back — the other half of the same rule.
+    crate::services::discord_roles::request_sync_best_effort(
+        &state.db,
+        auth.user_id,
+        "orientations_changed",
+    )
+    .await;
+
     Ok(Json(ApiResponse::new(EndOrientationResponse {
         ended: true,
         slug,

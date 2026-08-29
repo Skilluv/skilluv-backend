@@ -148,6 +148,7 @@ pub async fn set_consent(
         // cannot be unshipped.
         "note": "Le retrait s'applique à tout ce qui n'a pas encore été produit. \
                  Un jeu de données déjà livré ne peut pas être rappelé.",
+        "note_code": "withdrawal_is_not_retroactive",
     }))))
 }
 

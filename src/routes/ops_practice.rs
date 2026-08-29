@@ -372,6 +372,7 @@ pub async fn record_cost_work(
             ops_practice::reduction_percent(&work.monthly_before, &work.monthly_after),
         "note": "La réduction n'est attestée qu'une fois vérifié que le service tient \
                  toujours son objectif.",
+        "note_code": "saving_attested_after_service_check",
     }))))
 }
 

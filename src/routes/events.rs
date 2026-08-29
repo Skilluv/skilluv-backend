@@ -83,6 +83,21 @@ pub struct MyEventRow {
     pub joined_at: chrono::DateTime<chrono::Utc>,
     /// URL of the PR / repo / contribution counted for this event.
     pub contribution_ref: Option<String>,
+    /// Whether this event's stamp is on the caller's profile.
+    ///
+    /// The front declared this field long before anything served it, and
+    /// rendered a "stamp earned" badge on a value that was permanently
+    /// undefined (SKI-352). It is served now, and it is honest about three
+    /// distinct states rather than collapsing them:
+    ///
+    ///   * `None` — this event awards no stamp. Most do not, and that is not
+    ///     a failure to report.
+    ///   * `Some(false)` — it awards one and the caller has not got it.
+    ///   * `Some(true)` — it is on their profile.
+    ///
+    /// Distinct from `contribution_ref`: "something was counted" is not "a
+    /// stamp was issued", and until migration 0604 nothing joined the two.
+    pub stamp_earned: Option<bool>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -291,7 +306,16 @@ pub async fn my_events(
 ) -> Result<Json<ApiResponse<MyEventsResponse>>, AppError> {
     let rows: Vec<MyEventRow> = sqlx::query_as(
         "SELECT e.slug AS event_slug, e.name AS event_name, uep.role,
-                uep.joined_at, uep.contribution_ref
+                uep.joined_at, uep.contribution_ref,
+                -- NULL when the event awards no stamp, so the front can tell
+                -- \"none to earn\" from \"not earned yet\".
+                CASE WHEN e.stamp_badge_slug IS NULL THEN NULL ELSE EXISTS (
+                    SELECT 1 FROM user_badges ub
+                      JOIN badges b ON b.id = ub.badge_id
+                     WHERE ub.user_id = uep.user_id
+                       AND b.slug = e.stamp_badge_slug
+                       AND ub.revoked_at IS NULL
+                ) END AS stamp_earned
          FROM user_event_participation uep
          JOIN events e ON e.id = uep.event_id
          WHERE uep.user_id = $1

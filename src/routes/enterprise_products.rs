@@ -33,6 +33,7 @@ pub fn admin_enterprise_product_routes() -> Router<AppState> {
         )
         .route("/admin/enterprise-products/{id}/status", post(set_status))
         .route("/admin/enterprise-products/renewals", get(renewals))
+        .route("/admin/enterprise-products", get(registry))
 }
 
 fn build_response(data: Value) -> Value {
@@ -395,4 +396,187 @@ pub async fn renewals(
         "renewals": renewals,
         "within_days": q.within_days,
     }))))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// The registry — one route for twenty buttons
+// ═══════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct RegistryQuery {
+    /// `engagement`, `sponsorship`, `consultation`, … as declared in
+    /// `enterprise_product_types`.
+    pub product_type: Option<String>,
+    pub status: Option<String>,
+    pub enterprise_id: Option<Uuid>,
+    /// Substring of the company name or the product label.
+    pub q: Option<String>,
+    pub page: Option<i64>,
+    pub per_page: Option<i64>,
+}
+
+#[derive(sqlx::FromRow)]
+struct RegistryRow {
+    id: Uuid,
+    enterprise_id: Uuid,
+    company_name: String,
+    product_type: String,
+    product_label: String,
+    revenue_stream: Option<String>,
+    status: String,
+    contract_value: Option<BigDecimal>,
+    currency: Option<String>,
+    renews_at: Option<chrono::DateTime<chrono::Utc>>,
+    source_table: Option<String>,
+    source_id: Option<Uuid>,
+    created_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Every product any enterprise holds, with the id of the row it came from.
+///
+/// ## The failure this ends
+///
+/// Twenty-one admin write routes carry an `{id}` that nothing let an
+/// administrator obtain. `POST /admin/engagements/{id}/start`,
+/// `/sponsorships/{id}/sign`, `/consultations/{id}/deliver`,
+/// `/placements/{id}/end` — the buttons existed, the lists did not.
+///
+/// The cause was one thing repeated twelve times: everything an enterprise
+/// buys is listed only under `/api/enterprise/*`, behind `require_enterprise`,
+/// which resolves the **caller's** company and filters on it. Skilluv staff,
+/// who have to service those contracts, are nobody's enterprise. So they had
+/// the verbs and no nouns, and the only way to reach one was an id pasted out
+/// of psql — which SKI-337 already described as the problem, not the fix.
+///
+/// ## Why this is one route and not twenty
+///
+/// Because the table was built for it. `enterprise_products` carries a row for
+/// every product any module sells, and `sales_pipeline.rs` says so in its own
+/// comment: *"every product registers itself in `enterprise_products` — which
+/// is the reason that table exists."* Ten modules insert into it, each with
+/// `source_table` and `source_id`, and a CHECK guarantees the pair travels
+/// together.
+///
+/// `source_id` **is** the id those twenty routes want. It was already in the
+/// table; nothing served it.
+///
+/// ## Why not just widen `renewals`
+///
+/// That one exists to answer a different question — what is about to lapse —
+/// and it filters `status = 'active' AND renews_at IS NOT NULL` to answer it.
+/// A registry that inherited those filters would hide precisely the rows an
+/// administrator is looking for: a `pending` product waiting to be activated
+/// is neither active nor renewing.
+#[utoipa::path(
+    get, path = "/api/admin/enterprise-products", tag = "admin",
+    params(RegistryQuery),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 403, description = "Not an administrator", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+    operation_id = "enterpriseProductsRegistry",
+)]
+pub async fn registry(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Query(q): Query<RegistryQuery>,
+) -> Result<Json<Value>, AppError> {
+    crate::routes::admin::require_admin(&state, &auth).await?;
+
+    let page = q.page.unwrap_or(1).max(1);
+    let per_page = q.per_page.unwrap_or(20).clamp(1, 100);
+    let offset = (page - 1) * per_page;
+
+    // The predicates are written out twice rather than built once and
+    // interpolated. `format!` into a query is refused at compile time here —
+    // the SQL-injection lint the threat-model gate rests on — and it is right
+    // to refuse: the day somebody interpolates a sort column instead of a
+    // constant, nothing would have complained. Two literals that must be kept
+    // in step is the cheaper problem, and the count disagreeing with the page
+    // is visible immediately.
+    let total: i64 = sqlx::query_scalar(
+        "SELECT count(*)
+           FROM enterprise_products p
+           JOIN enterprises e ON e.id = p.enterprise_id
+           JOIN enterprise_product_types t ON t.slug = p.product_type
+          WHERE ($1::VARCHAR IS NULL OR p.product_type = $1)
+            AND ($2::VARCHAR IS NULL OR p.status = $2)
+            AND ($3::UUID IS NULL OR p.enterprise_id = $3)
+            AND ($4::VARCHAR IS NULL
+                 OR e.company_name ILIKE '%' || $4 || '%'
+                 OR t.label ILIKE '%' || $4 || '%')",
+    )
+    .bind(q.product_type.as_deref())
+    .bind(q.status.as_deref())
+    .bind(q.enterprise_id)
+    .bind(q.q.as_deref())
+    .fetch_one(&state.db)
+    .await?;
+
+    let rows = sqlx::query_as::<_, RegistryRow>(
+        "SELECT p.id, p.enterprise_id, e.company_name, p.product_type,
+                t.label AS product_label, t.revenue_stream, p.status,
+                p.contract_value, p.currency, p.renews_at,
+                p.source_table, p.source_id, p.created_at
+           FROM enterprise_products p
+           JOIN enterprises e ON e.id = p.enterprise_id
+           JOIN enterprise_product_types t ON t.slug = p.product_type
+          WHERE ($1::VARCHAR IS NULL OR p.product_type = $1)
+            AND ($2::VARCHAR IS NULL OR p.status = $2)
+            AND ($3::UUID IS NULL OR p.enterprise_id = $3)
+            AND ($4::VARCHAR IS NULL
+                 OR e.company_name ILIKE '%' || $4 || '%'
+                 OR t.label ILIKE '%' || $4 || '%')
+          -- Newest first: the thing somebody just sold is the thing they are
+          -- most likely to be looking for.
+          ORDER BY p.created_at DESC
+          LIMIT $5 OFFSET $6",
+    )
+    .bind(q.product_type.as_deref())
+    .bind(q.status.as_deref())
+    .bind(q.enterprise_id)
+    .bind(q.q.as_deref())
+    .bind(per_page)
+    .bind(offset)
+    .fetch_all(&state.db)
+    .await?;
+
+    let data: Vec<Value> = rows
+        .into_iter()
+        .map(|r| {
+            json!({
+                "id": r.id,
+                "enterprise_id": r.enterprise_id,
+                "company_name": r.company_name,
+                "product_type": r.product_type,
+                "product_label": r.product_label,
+                "revenue_stream": r.revenue_stream,
+                "status": r.status,
+                "contract_value": r.contract_value,
+                "currency": r.currency,
+                "renews_at": r.renews_at,
+                // The pair the write routes need. `source_table` says which
+                // module owns the row, `source_id` is the `{id}` its verbs take.
+                "source_table": r.source_table,
+                "source_id": r.source_id,
+                "created_at": r.created_at,
+            })
+        })
+        .collect();
+
+    Ok(Json(json!({
+        "data": data,
+        "pagination": {
+            "page": page,
+            "per_page": per_page,
+            "total": total,
+            "total_pages": (total + per_page - 1) / per_page,
+        },
+        "meta": {
+            "request_id": Uuid::new_v4().to_string(),
+            "timestamp": chrono::Utc::now().to_rfc3339(),
+        }
+    })))
 }

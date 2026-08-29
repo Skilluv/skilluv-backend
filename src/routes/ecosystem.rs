@@ -98,6 +98,7 @@ pub async fn request_certification(
         // assumes the other way round.
         "note": "Le paiement ne certifie pas. L'audit décide, et un échec laisse \
                  les frais engagés sans label.",
+        "note_code": "payment_does_not_certify",
     }))))
 }
 

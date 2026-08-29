@@ -88,6 +88,7 @@ pub const PROOF_TYPES: &[&str] = &[
     "attestation_received",
     "contest_won",
     "deliverable_featured",
+    "event_participated",
     "deliverable_verified",
     "design_briefs_published",
     "game_family_reviews",
@@ -257,6 +258,7 @@ async fn count_matching_proofs(
         .any(|t| t == "onboarding_bonjour_completed");
     let want_tournament_podium = conds.proof_types.iter().any(|t| t == "tournament_podium");
     let want_tournament_judged = conds.proof_types.iter().any(|t| t == "tournament_judged");
+    let want_event_participated = conds.proof_types.iter().any(|t| t == "event_participated");
     let want_mentees_led = conds
         .proof_types
         .iter()
@@ -693,6 +695,42 @@ async fn count_matching_proofs(
                     WHERE s.tournament_id = j.tournament_id
                       AND s.judged_by = j.juror_user_id
                )
+            "#,
+        )
+        .bind(user_id)
+        .bind(conds.skill_domain.as_deref())
+        .fetch_one(db)
+        .await?;
+        total += matched;
+    }
+
+    if want_event_participated {
+        // The proof migration 0093 promised and nobody wrote.
+        //
+        // That migration says, in its own words, that the stamp is awarded by
+        // `badge_engine` consuming `user_event_participation` as proof of an
+        // `output_type = 'event_stamp'`. The table shipped, the badge category
+        // shipped, and the proof type never did — so no event stamp has ever
+        // been awarded, and `stamp_earned` on `/users/me/events` could only
+        // ever have answered "no".
+        //
+        // Counted per event, not per row: somebody who is both a participant
+        // and a juror at one hackathon attended one hackathon.
+        //
+        // `contribution_ref IS NOT NULL` is the whole rule. A stamp is for
+        // having done something at the event, and joining is not doing
+        // something — a hackathon anybody can collect by clicking Join is a
+        // hackathon whose stamp says nothing.
+        let matched: i64 = sqlx::query_scalar(
+            r#"
+            SELECT count(DISTINCT uep.event_id)
+              FROM user_event_participation uep
+              JOIN events e ON e.id = uep.event_id
+             WHERE uep.user_id = $1
+               AND uep.contribution_ref IS NOT NULL
+               -- `domain_focus` is an array: an event can serve several
+               -- trades, and a stamp scoped to one of them still counts.
+               AND ($2::VARCHAR IS NULL OR $2 = ANY(e.domain_focus))
             "#,
         )
         .bind(user_id)

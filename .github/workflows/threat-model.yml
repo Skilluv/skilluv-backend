@@ -37,3 +37,9 @@ jobs:
         run: bash scripts/check-config-secrets.sh
       - name: .env.example documents every env var (SE-03)
         run: bash scripts/check-env-example.sh
+      # The sentences that tell somebody what they have just committed to are
+      # written in French, in Rust, on responses any member reads. Each one
+      # carries a code the front translates from; this refuses the next one
+      # that does not (SKI-353).
+      - name: Member-facing notes carry a translatable code (SKI-353)
+        run: python3 scripts/check-note-codes.py

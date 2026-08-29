@@ -12,7 +12,7 @@
 //!   * the one thing an individual can buy is a replay, because talents do
 //!     not pay to be seen.
 
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use bigdecimal::BigDecimal;
@@ -83,7 +83,10 @@ pub fn admin_brand_routes() -> Router<AppState> {
         .route("/admin/sponsorships/{id}/sign", post(sign_sponsorship))
         .route("/admin/sponsorships/{id}/honour", post(honour_sponsorship))
         .route("/admin/sponsorships/{id}/cancel", post(cancel_sponsorship))
-        .route("/admin/sponsored-content", post(commission_content))
+        .route(
+            "/admin/sponsored-content",
+            post(commission_content).get(list_sponsored_content),
+        )
         .route(
             "/admin/sponsored-content/{id}/publish",
             post(publish_content),
@@ -958,4 +961,99 @@ pub struct Money {
     #[schema(value_type = String)]
     pub amount: BigDecimal,
     pub currency: String,
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Commissioned content — the list that was nowhere
+// ═══════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct SponsoredContentQuery {
+    pub status: Option<String>,
+}
+
+type SponsoredRow = (
+    Uuid,
+    Option<Uuid>,
+    Option<String>,
+    String,
+    String,
+    Option<String>,
+    Option<BigDecimal>,
+    Option<String>,
+    String,
+    Option<chrono::DateTime<chrono::Utc>>,
+    chrono::DateTime<chrono::Utc>,
+);
+
+/// Every commissioned piece, drafts included.
+///
+/// The only one of the twelve product lines listed **nowhere** — not under
+/// admin, not under enterprise, not publicly. `POST /admin/sponsored-content`
+/// returns the id, so publishing straight after creating works; coming back
+/// the next day did not.
+///
+/// Unpublished first, because publishing is the action this list exists to
+/// enable and a published piece is finished business.
+#[utoipa::path(
+    get, path = "/api/admin/sponsored-content", tag = "admin",
+    params(SponsoredContentQuery),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 403, description = "Not an administrator", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+    operation_id = "adminSponsoredContentList",
+)]
+pub async fn list_sponsored_content(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Query(q): Query<SponsoredContentQuery>,
+) -> Result<Json<Value>, AppError> {
+    crate::routes::admin::require_admin(&state, &auth).await?;
+    let rows: Vec<Value> = sqlx::query_as::<_, SponsoredRow>(
+        "SELECT c.id, c.sponsor_enterprise_id, e.company_name, c.content_type,
+                c.title, c.content_url, c.fee, c.currency, c.status,
+                c.published_at, c.created_at
+           FROM event_sponsored_content c
+           LEFT JOIN enterprises e ON e.id = c.sponsor_enterprise_id
+          WHERE ($1::VARCHAR IS NULL OR c.status = $1)
+          ORDER BY (c.published_at IS NULL) DESC, c.created_at DESC",
+    )
+    .bind(q.status.as_deref())
+    .fetch_all(&state.db)
+    .await?
+    .into_iter()
+    .map(
+        |(
+            id,
+            sponsor_enterprise_id,
+            company_name,
+            content_type,
+            title,
+            content_url,
+            fee,
+            currency,
+            status,
+            published_at,
+            created_at,
+        )| {
+            json!({
+                "id": id,
+                "sponsor_enterprise_id": sponsor_enterprise_id,
+                "company_name": company_name,
+                "content_type": content_type,
+                "title": title,
+                "content_url": content_url,
+                "fee": fee,
+                "currency": currency,
+                "status": status,
+                "published_at": published_at,
+                "created_at": created_at,
+            })
+        },
+    )
+    .collect();
+    Ok(Json(build_response(json!({ "content": rows }))))
 }

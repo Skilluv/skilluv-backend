@@ -109,6 +109,7 @@ pub async fn propose(
         "placement": placement,
         "note": "Le placement démarre quand la personne accepte. La garantie porte sur \
                  le service rendu, pas sur elle : rien ici ne l'oblige à rester.",
+        "note_code": "placement_starts_on_acceptance",
     }))))
 }
 

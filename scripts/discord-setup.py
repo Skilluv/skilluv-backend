@@ -160,6 +160,12 @@ def main():
     p.add_argument("--guild", help="Server name or id, if the bot is in several.")
     p.add_argument("--create", action="store_true", help="Apply what is missing.")
     p.add_argument("--sql", action="store_true", help="Emit the routing rows only.")
+    p.add_argument(
+        "--env",
+        action="store_true",
+        help="Emit SKILLUV_DISCORD_CHANNELS, which the seed catalogue re-applies "
+        "at every boot. Survives a dropped database; the SQL does not.",
+    )
     p.add_argument("--only", metavar="DOMAIN", help="One domain, e.g. design.")
     p.add_argument("--no-roles", action="store_true", help="Channels only.")
     args = p.parse_args()
@@ -179,7 +185,7 @@ def main():
     tok = token()
     guild = pick_guild(tok, args.guild)
     gid = guild["id"]
-    say = (lambda *a: None) if args.sql else print
+    say = (lambda *a: None) if (args.sql or args.env) else print
 
     existing = call("GET", f"/guilds/{gid}/channels", tok)
     have_cat = {c["name"].upper(): c for c in existing if c["type"] == CHANNEL_CATEGORY}
@@ -298,6 +304,22 @@ def main():
         say("")
         say("Re-run with --create to make them.")
 
+    # The environment variable, which is the durable form. The SQL applies the
+    # routing to the database you are pointing at now; this survives that
+    # database being dropped, because `services::seed` re-applies it on the
+    # next boot from the deployment's own configuration.
+    if args.env and routing:
+        rows = sorted({(p, d, cid, n) for p, d, cid, n in routing})
+        payload = json.dumps(
+            [
+                {"purpose": p, "domain": d or None, "channel_id": cid, "label": "#" + n}
+                for p, d, cid, n in rows
+            ],
+            separators=(",", ":"),
+        )
+        print("SKILLUV_DISCORD_CHANNELS=" + payload)
+        return 0
+
     # ── The routing rows ────────────────────────────────────────────
     if routing and (args.sql or args.create or not missing):
         if not args.sql:
@@ -349,7 +371,12 @@ def main():
     say("     five purposes above. The bot registers its slash commands on")
     say("     its first connection — nothing to do for those.")
     say("")
-    say("  3. Apply the SQL above, once you have read it.")
+    say("  3. Set SKILLUV_DISCORD_CHANNELS on the deployment, from")
+    say("       python scripts/discord-setup.py --env")
+    say("     That is the durable form: the seed catalogue re-applies it at")
+    say("     every boot, so a dropped database restores its own routing. The")
+    say("     SQL above does the same thing once, to the database you are")
+    say("     pointing at now — useful when the server is already running.")
     say("")
     manual = [r["name"] for r in roles_wanted if r.get("manual")]
     if not community:

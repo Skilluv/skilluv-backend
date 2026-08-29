@@ -3,13 +3,11 @@ name: Nightly DAST (ZAP + nuclei)
 # DA-02 + CI-04 — dynamic scan against an ephemeral full stack.
 #
 # Builds nothing: pulls the already-published backend image
-# (ghcr.io/skilluv/skilluv-backend:master), stands it up next to the dev
-# compose dependencies, and points OWASP ZAP and nuclei at it. Advisory —
-# findings are triaged, not gated. Everything is torn down at the end.
-#
-# FIRST-RUN NOTE: the app's listen port and env are set from ci.yml's test
-# job; if the image expects a different PORT/health path, adjust the two marked
-# lines. This workflow has not been executed yet (the dev box cannot run it).
+# (ghcr.io/skilluv/skilluv-backend:master), stands it up next to GitHub-service
+# dependencies (the same postgres/redis/mailpit setup ci.yml's integration job
+# uses — health-checked, no volume, so the postgres:18 data layout is a
+# non-issue), and points OWASP ZAP and nuclei at it. Advisory — findings are
+# triaged, not gated. Everything is torn down at the end.
 
 on:
   schedule:
@@ -34,13 +32,55 @@ jobs:
     permissions:
       contents: read
       packages: read
+
+    # Health-checked service containers (no volume mount → postgres:18 starts
+    # clean). MinIO is NOT a service — the image needs a `server /data` command,
+    # which GHA services cannot pass — so it is a docker-run step below.
+    services:
+      postgres:
+        image: postgres:18.4-alpine
+        env:
+          POSTGRES_USER: skilluv
+          POSTGRES_PASSWORD: skilluv_secret
+          POSTGRES_DB: skilluv
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U skilluv"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:8.8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+      mailpit:
+        image: axllent/mailpit:v1.20.7
+        ports:
+          - 1025:1025
+          - 8025:8025
+        options: >-
+          --health-cmd "wget -q --spider http://localhost:8025 || exit 1"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           persist-credentials: false
 
-      - name: Start dependencies (Postgres, Redis, MinIO, Mailpit)
-        run: docker compose up -d postgres redis minio mailpit
+      - name: Start MinIO container
+        run: |
+          docker run -d --name minio -p 9004:9000 \
+            -e MINIO_ROOT_USER=skilluv \
+            -e MINIO_ROOT_PASSWORD=skilluv_secret \
+            minio/minio:RELEASE.2025-09-07T16-13-09Z server /data
 
       - name: Log in to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4.6.0
@@ -50,8 +90,9 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run the backend against the stack
-        # Host network so the container reaches the compose services on
-        # localhost (Postgres 5433, Redis 6379, MinIO 9004, Mailpit 1025).
+        # Host network so the container reaches the service ports on localhost
+        # (Postgres 5433, Redis 6379, MinIO 9004). The backend runs its own
+        # migrations on startup; the services are health-checked before steps run.
         run: |
           docker run -d --name skilluv-backend --network host \
             -e DATABASE_URL="postgres://skilluv:skilluv_secret@localhost:5433/skilluv" \
@@ -101,5 +142,4 @@ jobs:
       - name: Tear down
         if: always()
         run: |
-          docker rm -f skilluv-backend || true
-          docker compose down -v || true
+          docker rm -f skilluv-backend minio || true

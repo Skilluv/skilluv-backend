@@ -387,6 +387,16 @@ jobs:
       # lld uses a fraction of that and links several times faster. Nothing
       # about the produced binary changes for a test run.
       RUSTFLAGS: "-C link-arg=-fuse-ld=lld"
+      # Two rustc processes, not four.
+      #
+      # lld fixed the link step and six shards still died, which says the
+      # pressure is the compile as much as the link: a cold cache builds the
+      # whole crate, cargo runs one rustc per core, and this crate is large
+      # enough that four at once do not fit in 16 GB.
+      #
+      # Halving it costs wall-clock on a cold cache and nothing on a warm
+      # one, which is every run after the first.
+      CARGO_BUILD_JOBS: "2"
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7

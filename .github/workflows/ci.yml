@@ -376,6 +376,17 @@ jobs:
       # tests/common/mod.rs::init_test_tracing). Verbose here to surface any
       # 500 root causes in the CI logs.
       RUST_LOG: info,skilluv_backend=debug,sqlx=warn
+      # Link with lld rather than GNU ld.
+      #
+      # Every one of the eight shards died at
+      # `collect2: fatal error: ld terminated with signal 7 [Bus error]`, with
+      # 107 GB of disk free — so this was never the disk the comment below
+      # talks about. It is memory: the runner has 16 GB and GNU ld holds the
+      # whole of each of these binaries in it, several at a time.
+      #
+      # lld uses a fraction of that and links several times faster. Nothing
+      # about the produced binary changes for a test run.
+      RUSTFLAGS: "-C link-arg=-fuse-ld=lld"
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
@@ -393,6 +404,9 @@ jobs:
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
                       /usr/local/share/boost "$AGENT_TOOLSDIRECTORY"
           df -h /
+
+      - name: Install lld
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends lld
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4  # stable

@@ -586,8 +586,12 @@ capability = "security_reviewer:*"
 [[roles]]
 name = "Security Triager"
 domain = "security"
-grants_on = "capability"
-capability = "security_triager"
+# Deliberately NOT granted by the loop: `security_triager` is on
+# `NEVER_PUBLISHED` in services::discord_roles. A Discord role is visible to
+# every member, and a public list of who triages security reports is a list of
+# people worth pressuring. The role exists so you can hand it out if you judge
+# that worthwhile on a given server; nothing automatic will fill it.
+manual = true
 
 
 # -- OSS -----------------------------------------------------
@@ -604,3 +608,83 @@ name = "OSS Maintainer"
 domain = "soft_skills"
 # Anybody who has declared a trade in this domain.
 grants_on = "orientation"
+
+# -- Les rangs ---------------------------------------------------
+#
+# Exclusifs : on n'est pas a la fois apprenti et doyen. La boucle de
+# reconciliation le sait par `grants_on = "rank"` et retire l'ancien en
+# posant le nouveau — une boucle purement additive laisserait quelqu'un
+# promu artisan avec son role ranger colle dessus, definitivement.
+#
+# C'est le seul axe qui merite d'etre colore et remonte en haut de la
+# liste des membres : il se merite, et il est derive des preuves.
+
+[[roles]]
+name = "Apprenti"
+grants_on = "rank"
+rank = "apprenti"
+
+[[roles]]
+name = "Ranger"
+grants_on = "rank"
+rank = "ranger"
+
+[[roles]]
+name = "Artisan"
+grants_on = "rank"
+rank = "artisan"
+
+[[roles]]
+name = "Maitre"
+grants_on = "rank"
+rank = "maitre"
+
+[[roles]]
+name = "Doyen"
+grants_on = "rank"
+rank = "doyen"
+
+# -- Les autorites transverses -----------------------------------
+#
+# Ce qu'un membre veut savoir, c'est a qui demander. Ces cinq-la ne
+# dependent d'aucun domaine : elles disent ce que quelqu'un fait sur la
+# plateforme, pas dans quel metier.
+#
+# Les ~100 capabilities scopees s'effondrent deja en un role par famille
+# via le `*`. Celles-ci n'ont pas de scope : une seule capability, un seul
+# role.
+
+[[roles]]
+name = "Mentor"
+grants_on = "capability"
+capability = "mentor"
+
+[[roles]]
+name = "Steward"
+grants_on = "capability"
+capability = "project_steward"
+
+[[roles]]
+name = "Moderateur"
+grants_on = "capability"
+capability = "community_moderator"
+
+[[roles]]
+name = "Arbitre"
+grants_on = "capability"
+capability = "mission_arbiter"
+
+# -- Qui vous etes -----------------------------------------------
+#
+# L'axe qui ouvre des salons : une entreprise n'a rien a faire dans
+# #code-first-issues, et reciproquement.
+
+[[roles]]
+name = "Challenger"
+grants_on = "capability"
+capability = "challenger"
+
+[[roles]]
+name = "Recruteur"
+grants_on = "capability"
+capability = "enterprise_recruiter"

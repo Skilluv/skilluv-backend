@@ -26,6 +26,7 @@ use serenity::all::{
     Interaction, Member, Ready,
 };
 use serenity::async_trait;
+use skilluv_backend::services::discord_roles;
 use sqlx::PgPool;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -187,6 +188,19 @@ impl EventHandler for Handler {
         let frontend = self.frontend_url.clone();
         tokio::spawn(async move {
             queue_poll_loop(http, db, promotions, annonces, frontend).await;
+        });
+
+        // Second poller: the Discord half of the role loop.
+        //
+        // Separate from the notification tick because the two fail
+        // independently and at different rates — a rate-limited role write
+        // must not stop an announcement from going out, and vice versa.
+        let http2 = ctx.http.clone();
+        let db2 = self.db.clone();
+        let guild = self.guild_id;
+        let frontend2 = self.frontend_url.clone();
+        tokio::spawn(async move {
+            role_sync_loop(http2, db2, guild, frontend2).await;
         });
     }
 
@@ -706,6 +720,220 @@ impl Handler {
             None => format!("Aucun profil public au nom de `{trimmed}`."),
         })
     }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// The Discord half of the role loop
+// ═══════════════════════════════════════════════════════════════════
+
+const ROLE_SYNC_POLL_SECONDS: u64 = 20;
+
+/// Drain `discord_role_sync_queue` and make the server match the platform.
+///
+/// Separate from the notification poller because the two fail independently: a
+/// rate-limited role write must not stop an announcement going out.
+async fn role_sync_loop(http: Arc<Http>, db: PgPool, guild: GuildId, frontend: String) {
+    tracing::info!("role sync poller started, tick every {ROLE_SYNC_POLL_SECONDS}s");
+    loop {
+        match role_sync_tick(&http, &db, guild, &frontend).await {
+            Ok(n) if n > 0 => tracing::info!(synced = n, "role sync tick applied"),
+            Ok(_) => {}
+            Err(e) => tracing::warn!(error = %e, "role sync tick failed"),
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(ROLE_SYNC_POLL_SECONDS)).await;
+    }
+}
+
+#[derive(sqlx::FromRow)]
+struct SyncRow {
+    id: Uuid,
+    user_id: Uuid,
+    reason: String,
+    discord_user_id: Option<String>,
+    username: Option<String>,
+}
+
+async fn role_sync_tick(http: &Http, db: &PgPool, guild: GuildId, frontend: &str) -> Result<usize> {
+    // Oldest first, capped. A nightly sweep can queue every member at once and
+    // Discord rate-limits role writes per guild; batching keeps a promotion
+    // from thirty seconds ago out from behind a thousand routine rows.
+    let rows: Vec<SyncRow> = sqlx::query_as(
+        "SELECT q.id, q.user_id, q.reason, u.discord_user_id, u.username
+           FROM discord_role_sync_queue q
+           JOIN users u ON u.id = q.user_id
+          WHERE q.applied_at IS NULL AND q.failed_count < $1
+          ORDER BY q.requested_at
+          LIMIT 20",
+    )
+    .bind(MAX_FAILED_ATTEMPTS)
+    .fetch_all(db)
+    .await
+    .context("claim role sync rows")?;
+
+    if rows.is_empty() {
+        return Ok(0);
+    }
+
+    // Read once per tick, not per row: the declaration is embedded in the
+    // binary and the guild's roles change about never.
+    let rules = discord_roles::rules().map_err(|e| anyhow::anyhow!("{e}"))?;
+    let by_name: std::collections::HashMap<String, serenity::all::RoleId> = guild
+        .roles(http)
+        .await
+        .context("list guild roles")?
+        .iter()
+        .map(|(id, r)| (r.name.clone(), *id))
+        .collect();
+
+    let mut done = 0usize;
+    for row in &rows {
+        match apply_one(http, db, guild, row, &rules, &by_name, frontend).await {
+            Ok(true) => done += 1,
+            Ok(false) => {}
+            Err(e) => {
+                tracing::warn!(user = %row.user_id, reason = %row.reason, error = %e,
+                    "role sync failed for one member");
+                let _ = sqlx::query(
+                    "UPDATE discord_role_sync_queue
+                        SET failed_count = failed_count + 1, last_error = $2
+                      WHERE id = $1",
+                )
+                .bind(row.id)
+                // Truncated: a transport error can carry a whole response body
+                // and this column is read by a human in a terminal.
+                .bind(e.to_string().chars().take(500).collect::<String>())
+                .execute(db)
+                .await;
+            }
+        }
+    }
+    Ok(done)
+}
+
+/// Reconcile one member. Returns whether anything actually changed.
+async fn apply_one(
+    http: &Http,
+    db: &PgPool,
+    guild: GuildId,
+    row: &SyncRow,
+    rules: &[discord_roles::RoleRule],
+    by_name: &std::collections::HashMap<String, serenity::all::RoleId>,
+    frontend: &str,
+) -> Result<bool> {
+    let Some(snowflake) = row.discord_user_id.as_deref().filter(|s| !s.is_empty()) else {
+        // Unlinked between the request and now: no Discord identity to
+        // reconcile. Finished, rather than retried ten times.
+        mark_synced(db, row.id, &[], &[]).await;
+        return Ok(false);
+    };
+    let discord_id: serenity::all::UserId = snowflake
+        .parse::<u64>()
+        .with_context(|| format!("discord_user_id {snowflake:?} is not a snowflake"))?
+        .into();
+
+    let standing = discord_roles::standing(db, row.user_id)
+        .await
+        .map_err(|e| anyhow::anyhow!("standing: {e}"))?;
+    let desired = discord_roles::desired(rules, &standing);
+    let managed = discord_roles::managed(rules);
+
+    let Ok(member) = guild.member(http, discord_id).await else {
+        // Linked the account but never joined the server, or has left it.
+        // Neither is an error worth ten retries — there is nobody there to
+        // give a role to.
+        mark_synced(db, row.id, &[], &[]).await;
+        return Ok(false);
+    };
+
+    // Held roles by name. Roles the guild has that this repository never
+    // declared resolve to names too, which is exactly what `diff` needs in
+    // order to leave them alone.
+    let held: Vec<String> = member
+        .roles
+        .iter()
+        .filter_map(|rid| {
+            by_name
+                .iter()
+                .find(|(_, id)| *id == rid)
+                .map(|(name, _)| name.clone())
+        })
+        .collect();
+
+    let d = discord_roles::diff(&desired, &held, &managed);
+    if d.is_empty() {
+        mark_synced(db, row.id, &[], &[]).await;
+        return Ok(false);
+    }
+
+    for name in &d.add {
+        match by_name.get(name) {
+            Some(rid) => member
+                .add_role(http, *rid)
+                .await
+                .with_context(|| format!("add role {name}"))?,
+            // Declared in server.toml but absent from the guild. Not fatal for
+            // the other roles, and naming it is how somebody learns to run
+            // `discord-setup.py --create`.
+            None => tracing::warn!(role = %name, "declared role missing from the guild"),
+        }
+    }
+    for name in &d.remove {
+        if let Some(rid) = by_name.get(name) {
+            member
+                .remove_role(http, *rid)
+                .await
+                .with_context(|| format!("remove role {name}"))?;
+        }
+    }
+
+    // The welcome, sent once: on the sync that follows a link, and only when
+    // roles were actually granted. Somebody who links and receives nothing has
+    // no trades and no rank yet, and congratulating them on an empty set would
+    // be worse than silence.
+    if row.reason == "linked" && !d.add.is_empty() {
+        let who = row.username.as_deref().unwrap_or("ton compte");
+        let granted = d
+            .add
+            .iter()
+            .map(|r| format!("**{r}**"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let msg = format!(
+            "Ton compte Discord est lié à **{who}**.\n\n\
+             Tu viens de recevoir : {granted}\n\n\
+             Ces rôles suivent ton profil : ils changent quand tes métiers, ton \
+             rang ou tes habilitations changent, et tu n'as rien à demander.\n\n\
+             Ton profil : {frontend}/@{who}"
+        );
+        // Best effort, and one call rather than two. A closed DM must not fail
+        // a sync that already succeeded on the server.
+        match discord_id.create_dm_channel(http).await {
+            Ok(channel) => {
+                let _ = channel
+                    .id
+                    .send_message(http, CreateMessage::new().content(msg))
+                    .await;
+            }
+            Err(e) => tracing::debug!(error = %e, "no DM channel; skipping welcome"),
+        }
+    }
+
+    mark_synced(db, row.id, &d.add, &d.remove).await;
+    Ok(true)
+}
+
+/// Record what was done, so "why did I lose @Relecteur" has an answer.
+async fn mark_synced(db: &PgPool, id: Uuid, added: &[String], removed: &[String]) {
+    let _ = sqlx::query(
+        "UPDATE discord_role_sync_queue
+            SET applied_at = NOW(), roles_added = $2, roles_removed = $3
+          WHERE id = $1",
+    )
+    .bind(id)
+    .bind(added)
+    .bind(removed)
+    .execute(db)
+    .await;
 }
 
 /// Discord's hard limit on a command or option description.

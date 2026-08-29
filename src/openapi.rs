@@ -140,6 +140,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::capabilities::user_capabilities_public,
         crate::routes::capabilities::my_capabilities,
         crate::routes::capabilities::admin_grant_capability,
+        crate::routes::capabilities::admin_capability_catalogue,
         crate::routes::capabilities::admin_revoke_capability,
         // ─── portfolio ────────────────────────────────────────────
         crate::routes::portfolio::portfolio_json,
@@ -1545,6 +1546,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
             crate::routes::reports::CreateReportResponse,
             crate::routes::reports::MyReportsResponse,
             crate::routes::capabilities::CapabilityRow,
+            crate::routes::capabilities::CatalogueEntry,
             crate::routes::capabilities::UserCapabilitiesResponse,
             crate::routes::capabilities::GrantBody,
             crate::routes::capabilities::CapabilityGrantResponse,

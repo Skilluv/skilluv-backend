@@ -18,7 +18,7 @@
 //! property that was missing, and it keeps the snowflakes out of the repository
 //! where 0257 did not want them.
 //!
-//! `scripts/discord-setup.py --env` prints the value, read off the live server.
+//! `python3 scripts/discord-setup.py --env` prints the value, read off the live server.
 //!
 //! ## The shape
 //!
@@ -72,7 +72,7 @@ pub async fn run(db: &PgPool, _owner: Uuid) -> Result<String, AppError> {
         // this module exists to end.
         AppError::Internal(format!(
             "{ENV_VAR} is not the JSON array this expects ({e}). \
-             Regenerate it with `scripts/discord-setup.py --env`."
+             Regenerate it with `python3 scripts/discord-setup.py --env`."
         ))
     })?;
 

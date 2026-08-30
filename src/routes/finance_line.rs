@@ -29,7 +29,6 @@ pub fn finance_routes() -> Router<AppState> {
 
 pub fn admin_finance_routes() -> Router<AppState> {
     Router::new()
-        .route("/admin/finance/partnerships", post(open_partnership))
         .route(
             "/admin/finance/partnerships/{id}/activate",
             post(activate_partnership),
@@ -41,7 +40,18 @@ pub fn admin_finance_routes() -> Router<AppState> {
         .route("/admin/finance/advances/{id}/disburse", post(disburse))
         .route("/admin/finance/advances/{id}/repaid", post(mark_repaid))
         .route("/admin/finance/advances/{id}/write-off", post(write_off))
-        .route("/admin/finance/guarantee-claims", post(honour_guarantee))
+        .route(
+            "/admin/finance/guarantee-claims",
+            post(honour_guarantee).get(list_guarantee_claims),
+        )
+        // The lists. Every route above carries an `{id}` or acts on a queue,
+        // and until these existed nothing let an administrator obtain one.
+        .route("/admin/finance/advances", get(list_advances))
+        .route("/admin/finance/referrals", get(list_referrals))
+        .route(
+            "/admin/finance/partnerships",
+            post(open_partnership).get(list_partnerships),
+        )
 }
 
 fn build_response(data: Value) -> Value {
@@ -382,4 +392,251 @@ pub async fn honour_guarantee(
     )
     .await?;
     Ok(Json(build_response(json!({ "paid": paid }))))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// The finance queues — what the write routes act on
+// ═══════════════════════════════════════════════════════════════════
+//
+// Seven admin write routes above carry an `{id}` that nothing let an
+// administrator obtain, and `enterprise_products` does not cover them: an
+// advance and a referral belong to a **contributor**, not to a company, so
+// they are listed here rather than in the product registry.
+//
+// The default order is the same everywhere and is the point of these lists:
+// **what is waiting on a decision comes first**. An advance requested three
+// weeks ago is the row somebody most needs to see, and a list sorted by date
+// alone buries it under everything already settled.
+
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct FinanceQueueQuery {
+    /// Filter on one status. Omitted, every row comes back with the pending
+    /// ones first.
+    pub status: Option<String>,
+}
+
+type AdvanceRow = (
+    Uuid,
+    Uuid,
+    Option<String>,
+    BigDecimal,
+    BigDecimal,
+    Option<String>,
+    String,
+    Option<chrono::DateTime<chrono::Utc>>,
+    chrono::DateTime<chrono::Utc>,
+);
+
+/// Advances, pending disbursement first.
+#[utoipa::path(
+    get, path = "/api/admin/finance/advances", tag = "admin",
+    params(FinanceQueueQuery),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 403, description = "Not an administrator", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+    operation_id = "adminFinanceAdvances",
+)]
+pub async fn list_advances(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Query(q): Query<FinanceQueueQuery>,
+) -> Result<Json<Value>, AppError> {
+    crate::routes::admin::require_admin(&state, &auth).await?;
+    let rows: Vec<Value> = sqlx::query_as::<_, AdvanceRow>(
+        "SELECT a.id, a.user_id, u.username, a.advance_amount, a.fee_amount,
+                a.currency, a.status, a.disbursed_at, a.created_at
+           FROM advance_pay_requests a
+           LEFT JOIN users u ON u.id = a.user_id
+          WHERE ($1::VARCHAR IS NULL OR a.status = $1)
+          -- Approved-but-not-yet-disbursed is the state a human owes an
+          -- action on, so it sorts above everything already settled.
+          ORDER BY (a.status = 'approved') DESC, a.created_at ASC",
+    )
+    .bind(q.status.as_deref())
+    .fetch_all(&state.db)
+    .await?
+    .into_iter()
+    .map(
+        |(id, user_id, username, amount, fee, currency, status, disbursed_at, created_at)| {
+            json!({
+                "id": id, "user_id": user_id, "username": username,
+                "advance_amount": amount, "fee_amount": fee, "currency": currency,
+                "status": status, "disbursed_at": disbursed_at, "created_at": created_at,
+            })
+        },
+    )
+    .collect();
+    Ok(Json(build_response(json!({ "advances": rows }))))
+}
+
+type ReferralRow = (
+    Uuid,
+    Uuid,
+    Option<String>,
+    Option<String>,
+    String,
+    Option<BigDecimal>,
+    Option<String>,
+    Option<String>,
+    chrono::DateTime<chrono::Utc>,
+);
+
+/// Referrals to a financial partner, undecided first.
+#[utoipa::path(
+    get, path = "/api/admin/finance/referrals", tag = "admin",
+    params(FinanceQueueQuery),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 403, description = "Not an administrator", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+    operation_id = "adminFinanceReferrals",
+)]
+pub async fn list_referrals(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Query(q): Query<FinanceQueueQuery>,
+) -> Result<Json<Value>, AppError> {
+    crate::routes::admin::require_admin(&state, &auth).await?;
+    let rows: Vec<Value> = sqlx::query_as::<_, ReferralRow>(
+        "SELECT r.id, r.user_id, u.username, p.partner_org, r.purpose,
+                r.amount_requested, r.currency, r.decision, r.created_at
+           FROM partnership_referrals r
+           LEFT JOIN users u ON u.id = r.user_id
+           LEFT JOIN financial_partnerships p ON p.id = r.partnership_id
+          WHERE ($1::VARCHAR IS NULL OR r.decision = $1)
+          -- No decision yet, oldest first. Somebody is waiting on this one.
+          ORDER BY (r.decision IS NULL) DESC, r.created_at ASC",
+    )
+    .bind(q.status.as_deref())
+    .fetch_all(&state.db)
+    .await?
+    .into_iter()
+    .map(
+        |(id, user_id, username, partner_org, purpose, amount, currency, decision, created_at)| {
+            json!({
+                "id": id, "user_id": user_id, "username": username,
+                "partner_org": partner_org, "purpose": purpose,
+                "amount_requested": amount, "currency": currency,
+                "decision": decision, "created_at": created_at,
+            })
+        },
+    )
+    .collect();
+    Ok(Json(build_response(json!({ "referrals": rows }))))
+}
+
+type ClaimRow = (
+    Uuid,
+    Uuid,
+    Option<String>,
+    BigDecimal,
+    Option<String>,
+    String,
+    Option<chrono::DateTime<chrono::Utc>>,
+    chrono::DateTime<chrono::Utc>,
+);
+
+/// Guarantee claims, unpaid first.
+#[utoipa::path(
+    get, path = "/api/admin/finance/guarantee-claims", tag = "admin",
+    params(FinanceQueueQuery),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 403, description = "Not an administrator", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+    operation_id = "adminFinanceGuaranteeClaims",
+)]
+pub async fn list_guarantee_claims(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Query(q): Query<FinanceQueueQuery>,
+) -> Result<Json<Value>, AppError> {
+    crate::routes::admin::require_admin(&state, &auth).await?;
+    let rows: Vec<Value> = sqlx::query_as::<_, ClaimRow>(
+        "SELECT c.id, c.user_id, u.username, c.amount, c.currency,
+                c.status, c.paid_at, c.created_at
+           FROM payment_guarantee_claims c
+           LEFT JOIN users u ON u.id = c.user_id
+          WHERE ($1::VARCHAR IS NULL OR c.status = $1)
+          ORDER BY (c.paid_at IS NULL) DESC, c.created_at ASC",
+    )
+    .bind(q.status.as_deref())
+    .fetch_all(&state.db)
+    .await?
+    .into_iter()
+    .map(
+        |(id, user_id, username, amount, currency, status, paid_at, created_at)| {
+            json!({
+                "id": id, "user_id": user_id, "username": username,
+                "amount": amount, "currency": currency, "status": status,
+                "paid_at": paid_at, "created_at": created_at,
+            })
+        },
+    )
+    .collect();
+    Ok(Json(build_response(json!({ "claims": rows }))))
+}
+
+type PartnershipRow = (
+    Uuid,
+    String,
+    String,
+    Vec<String>,
+    Option<BigDecimal>,
+    String,
+    Option<String>,
+    chrono::DateTime<chrono::Utc>,
+);
+
+/// Financial partnerships, **including drafts**.
+///
+/// The public `GET /finance/partners` returns only active ones, which made
+/// `POST /admin/finance/partnerships/{id}/activate` unreachable: the row you
+/// have to activate is exactly the row that list hides.
+#[utoipa::path(
+    get, path = "/api/admin/finance/partnerships", tag = "admin",
+    params(FinanceQueueQuery),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 403, description = "Not an administrator", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+    operation_id = "adminFinancePartnerships",
+)]
+pub async fn list_partnerships(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Query(q): Query<FinanceQueueQuery>,
+) -> Result<Json<Value>, AppError> {
+    crate::routes::admin::require_admin(&state, &auth).await?;
+    let rows: Vec<Value> = sqlx::query_as::<_, PartnershipRow>(
+        "SELECT id, partner_org, kind, countries, commission_percent,
+                status, registry_url, created_at
+           FROM financial_partnerships
+          WHERE ($1::VARCHAR IS NULL OR status = $1)
+          -- Drafts first: they are what an administrator came here to act on,
+          -- and the only rows the public list cannot show.
+          ORDER BY (status <> 'active') DESC, created_at DESC",
+    )
+    .bind(q.status.as_deref())
+    .fetch_all(&state.db)
+    .await?
+    .into_iter()
+    .map(
+        |(id, partner_org, kind, countries, commission, status, registry_url, created_at)| {
+            json!({
+                "id": id, "partner_org": partner_org, "kind": kind,
+                "countries": countries, "commission_percent": commission,
+                "status": status, "registry_url": registry_url,
+                "created_at": created_at,
+            })
+        },
+    )
+    .collect();
+    Ok(Json(build_response(json!({ "partnerships": rows }))))
 }

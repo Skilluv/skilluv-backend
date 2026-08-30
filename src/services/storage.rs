@@ -42,17 +42,39 @@ const PRESIGN_MAX_TTL_SECONDS: u32 = 7 * 24 * 3600;
 /// `rust-s3` crate we use (0.35) has no `put_bucket_policy` helper, so this
 /// policy step remains manual / IaC.
 ///
-/// The `private_bucket` also needs a CORS rule that exposes the `ETag`, or
-/// browser multipart uploads (`design_uploads`) fail at the last step — the
-/// browser cannot read the per-part ETag `complete` requires (SKI-309). Once
-/// per private bucket, alongside the download policy above:
+/// ## Browser multipart uploads need the `ETag` exposed (SKI-309)
 ///
-/// ```sh
-/// # cors.json: {"CORSRules":[{"AllowedOrigins":["https://skill-uv.com"],
-/// #   "AllowedMethods":["PUT","GET"],"AllowedHeaders":["*"],
-/// #   "ExposeHeaders":["ETag"]}]}
-/// docker exec skilluv-minio mc cors set local/"$MINIO_BUCKET_PRIVATE" cors.json
+/// `POST /design/uploads/{id}/complete` wants the `ETag` the object store
+/// returned for each part. The PUT goes from a browser straight to the store,
+/// so it is cross-origin, and a browser cannot read a response header that the
+/// server has not named in `Access-Control-Expose-Headers`. Without it every
+/// part uploads fine and `complete` can never be called — a failure at the end
+/// of a five-gigabyte upload, on a file that has nothing wrong with it.
+///
+/// **On MinIO this needs no configuration.** MinIO answers every CORS request
+/// with a fixed expose list that already contains `Etag` (plus a `*`), and it
+/// does so globally rather than per bucket. Verified against the deployment:
+///
+/// ```text
+/// $ curl -sI https://s3.skill-uv.com/documents/ -H 'Origin: https://skill-uv.com'
+/// Access-Control-Expose-Headers: Date, Etag, Server, …, X-Amz*, *
 /// ```
+///
+/// An earlier version of this comment gave a `mc cors set … cors.json` command
+/// for it. That command is wrong twice: MinIO rejects it — *"A header you
+/// provided implies functionality that is not implemented"*, because it does
+/// not serve the per-bucket CORS S3 API — and the rule it tried to add was
+/// already true. Somebody following it would have concluded their store was
+/// broken while it was working.
+///
+/// **On real S3 it is required**, and this is the paragraph to come back to on
+/// the day this moves off MinIO: S3 exposes nothing by default, so the bucket
+/// needs a CORS rule carrying `ExposeHeaders: ["ETag"]` before any browser
+/// upload can complete.
+///
+/// `etag_is_exposed_to_browsers` in `tests/test_storage_cors.rs` asserts the
+/// live store's behaviour rather than the configuration, so it holds through
+/// that move.
 impl StorageService {
     pub async fn new(config: &AppConfig) -> Self {
         let region = || Region::Custom {

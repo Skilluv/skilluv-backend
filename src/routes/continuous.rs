@@ -86,6 +86,7 @@ pub async fn propose_onboarding(
         // later has already told the new hire it is happening.
         "note": "L'accompagnement démarre quand la personne accepte. Elle peut refuser, \
                  et rien n'est alors facturé.",
+        "note_code": "onboarding_starts_on_acceptance",
     }))))
 }
 
@@ -265,6 +266,7 @@ pub async fn join_lab(
         "joined": true,
         // Joining a lab means seeing something unreleased. Said once, plainly.
         "note": "Vous accédez à un produit non publié : ce qui s'y dit y reste.",
+        "note_code": "lab_content_is_unreleased",
     }))))
 }
 

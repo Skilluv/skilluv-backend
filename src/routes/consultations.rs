@@ -250,6 +250,7 @@ pub async fn respond(
         "expected_share": expected,
         "note": "La part réelle se répartit entre les personnes qui rendent \
                  effectivement un avis.",
+        "note_code": "share_splits_between_actual_reviewers",
     }))))
 }
 
@@ -348,6 +349,7 @@ pub async fn open_audit(
         "note": "Chaque personne évaluée est informée avant l'évaluation et reçoit ce \
                  qui a été écrit sur elle. L'audit ne peut pas être livré tant que ce \
                  n'est pas le cas.",
+        "note_code": "assessed_people_are_informed_first",
     }))))
 }
 

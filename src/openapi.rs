@@ -458,6 +458,11 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::sales_pipeline::record_activity,
         crate::routes::sales_pipeline::overdue,
         crate::routes::sales_pipeline::renewals,
+        crate::routes::finance_line::list_advances,
+        crate::routes::finance_line::list_referrals,
+        crate::routes::finance_line::list_guarantee_claims,
+        crate::routes::finance_line::list_partnerships,
+        crate::routes::brand::list_sponsored_content,
         crate::routes::sales_pipeline::enterprise_file,
         // ─── long placements, learning seats, open calls ──────────
         crate::routes::additional_products::propose,
@@ -751,6 +756,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::engagements::close_program,
         // ─── enterprise products ──────────────────────────────────
         crate::routes::enterprise_products::list_types,
+        crate::routes::enterprise_products::registry,
         crate::routes::enterprise_products::my_products,
         crate::routes::enterprise_products::products_of,
         crate::routes::enterprise_products::record_product,

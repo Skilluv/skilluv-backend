@@ -132,11 +132,26 @@ async fn join_cohort(app: &TestApp, cohort: Uuid, user: Uuid) {
 }
 
 fn a_retro_body() -> Value {
+    // Held a week ago, computed rather than written down.
+    //
+    // This was `"2026-06-01"`, and the suite went red on 2026-08-30 with
+    // "resolving the actions did not produce the attestation" — ninety days
+    // later to the day. `leadership_retrospective_followthrough` only counts an
+    // action as followed through when `done_at <= held_on + INTERVAL '90 days'`,
+    // so a fixed date does not fail when the code changes: it fails when the
+    // calendar reaches it, on a commit that touched nothing nearby, and it
+    // reads as a broken feature rather than as an expired fixture.
+    //
+    // Every date in a test that feeds a window has this shape. A week is far
+    // enough inside ninety days that nothing here is borderline.
+    let held_on = (chrono::Utc::now() - chrono::Duration::days(7))
+        .format("%Y-%m-%d")
+        .to_string();
     json!({
         "title": "The release that slipped twice",
         "format": "timeline",
         "participants_count": 6,
-        "held_on": "2026-06-01",
+        "held_on": held_on,
         "insights_md": "The team agreed that the second slip was visible three weeks \
     before it was announced, and that nobody felt able to say so because the date had \
     already been repeated to the client. The estimate itself was not the problem: the \

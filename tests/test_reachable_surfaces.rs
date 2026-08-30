@@ -75,7 +75,10 @@ async fn a_return_path_cannot_address_another_origin() {
         );
         // If a redirect happened at all it went to Discord, never to the
         // attacker: the value is dropped, not honoured.
-        if let Some(location) = response.headers().get("location").and_then(|v| v.to_str().ok())
+        if let Some(location) = response
+            .headers()
+            .get("location")
+            .and_then(|v| v.to_str().ok())
         {
             assert!(
                 !location.contains("evil.example"),
@@ -232,9 +235,14 @@ async fn a_lab_contribution_can_be_found_before_it_is_judged() {
         rows[0]["accepted"].is_null(),
         "a judged contribution was put above one still waiting"
     );
-    assert_eq!(rows[0]["contributor_user_id"].as_str().unwrap(), member.to_string());
+    assert_eq!(
+        rows[0]["contributor_user_id"].as_str().unwrap(),
+        member.to_string()
+    );
     assert!(
-        rows[0]["summary_md"].as_str().is_some_and(|s| !s.is_empty()),
+        rows[0]["summary_md"]
+            .as_str()
+            .is_some_and(|s| !s.is_empty()),
         "the row does not say what the contribution brings, so it cannot be judged from the list"
     );
 
@@ -263,26 +271,38 @@ async fn contributions_can_be_narrowed_to_what_is_waiting() {
     let (lab_id, _member) = seed_a_lab_with_contributions(&app, "lab_admin_filter").await;
 
     let pending: serde_json::Value = app
-        .get(&format!("/api/admin/labs/{lab_id}/contributions?status=pending"))
+        .get(&format!(
+            "/api/admin/labs/{lab_id}/contributions?status=pending"
+        ))
         .await
         .json()
         .await
         .unwrap();
-    assert_eq!(pending["data"]["contributions"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        pending["data"]["contributions"].as_array().unwrap().len(),
+        1
+    );
 
     let accepted: serde_json::Value = app
-        .get(&format!("/api/admin/labs/{lab_id}/contributions?status=accepted"))
+        .get(&format!(
+            "/api/admin/labs/{lab_id}/contributions?status=accepted"
+        ))
         .await
         .json()
         .await
         .unwrap();
-    assert_eq!(accepted["data"]["contributions"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        accepted["data"]["contributions"].as_array().unwrap().len(),
+        1
+    );
 
     assert_eq!(
-        app.get(&format!("/api/admin/labs/{lab_id}/contributions?status=nonsense"))
-            .await
-            .status()
-            .as_u16(),
+        app.get(&format!(
+            "/api/admin/labs/{lab_id}/contributions?status=nonsense"
+        ))
+        .await
+        .status()
+        .as_u16(),
         400
     );
 }
@@ -318,7 +338,10 @@ async fn seed_a_lab_with_contributions(app: &TestApp, username: &str) -> (Uuid, 
          VALUES ($1, 'A client', $2, '11-50') RETURNING id",
     )
     .bind(member)
-    .bind(format!("lab-client-{}", &Uuid::new_v4().simple().to_string()[..8]))
+    .bind(format!(
+        "lab-client-{}",
+        &Uuid::new_v4().simple().to_string()[..8]
+    ))
     .fetch_one(&app.db)
     .await
     .unwrap();
@@ -345,9 +368,10 @@ async fn seed_a_lab_with_contributions(app: &TestApp, username: &str) -> (Uuid, 
     .await
     .unwrap();
 
-    for (summary, accepted) in
-        [("Still waiting on a judge", None), ("Already judged", Some(true))]
-    {
+    for (summary, accepted) in [
+        ("Still waiting on a judge", None),
+        ("Already judged", Some(true)),
+    ] {
         sqlx::query(
             "INSERT INTO living_lab_contributions
                  (lab_id, user_id, activity_type, summary_md, counts_for_month, accepted)
@@ -447,5 +471,8 @@ async fn only_one_season_is_ever_active() {
         .fetch_one(&app.db)
         .await
         .unwrap();
-    assert_eq!(active, 1, "two seasons are active and nothing says which counts");
+    assert_eq!(
+        active, 1,
+        "two seasons are active and nothing says which counts"
+    );
 }

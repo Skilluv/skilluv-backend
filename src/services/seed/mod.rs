@@ -59,6 +59,7 @@ use crate::errors::AppError;
 pub mod admin_account;
 pub mod design_canvas;
 pub mod discord_channels;
+pub mod juice_shop_ctf;
 pub mod projects;
 
 /// Where a step's data lives, which decides how its version is computed.
@@ -160,6 +161,19 @@ fn catalogue() -> Vec<Step> {
             name: "season2_deliverables",
             purpose: "season two and its deliverables",
             body: Body::Sql(include_str!("sql/season2_deliverables.sql")),
+            needs_owner: true,
+        },
+        Step {
+            name: "juice_shop_ctf",
+            purpose: "the twenty capture-the-flag challenges, derived from the instance key",
+            body: Body::Configured {
+                // The key's fingerprint, so a rotated key re-derives every
+                // flag on the next boot. A declared version could not: it
+                // would need somebody to remember to bump it, on the one
+                // change whose whole danger is that it is silent.
+                fingerprint: || juice_shop_ctf::declared().unwrap_or_else(|| "unset".into()),
+                run: |db, owner| Box::pin(juice_shop_ctf::run(db, owner)),
+            },
             needs_owner: true,
         },
         Step {
@@ -425,6 +439,8 @@ mod tests {
         //   * `discord_channels` writes a routing table that belongs to the
         //     deployment, not to a person.
         const OWNS_NOTHING: &[&str] = &["admin_account", "discord_channels"];
+        // `juice_shop_ctf` is deliberately not here: a derived challenge is
+        // still authored by somebody, and `created_by` has to name them.
 
         let steps = catalogue();
         assert!(

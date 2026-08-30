@@ -29,6 +29,18 @@ const MAX_ACTIVE_ORIENTATIONS: i64 = 3;
 pub fn orientation_routes() -> Router<AppState> {
     Router::new()
         .route("/orientations", get(list_orientations))
+        // Opening a trade's catalogue, one trade at a time. Mounted here
+        // rather than in `admin.rs` because the guard is per domain: a design
+        // curator opens design trades, and nobody has to be a global admin to
+        // open their own.
+        .route(
+            "/admin/orientations/{slug}/challenges",
+            get(orientation_challenges),
+        )
+        .route(
+            "/admin/orientations/{slug}/challenges/publish",
+            axum::routing::post(publish_orientation_challenges),
+        )
         .route("/orientations/{slug}", get(get_orientation))
         .route(
             "/users/me/orientations",
@@ -760,4 +772,250 @@ pub async fn public_user_orientations(
     Ok(Json(ApiResponse::new(PublicUserOrientationsResponse {
         orientations,
     })))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Publishing a trade's catalogue, one trade at a time
+// ═══════════════════════════════════════════════════════════════════
+//
+// Migration 0239 seeded 130 design challenges as drafts and said why: the
+// title and the intent came from a backlog, and the brief — the constraints,
+// the references, what is out of scope — needs an author who knows the trade.
+// A challenge nobody has read must not be handed to somebody who is learning.
+//
+// That decision stands. What was missing is everything around it: 0239 knew
+// each challenge's orientation while inserting and had nowhere to record it
+// (migration 0606), so nothing could list a trade's five, and there was no
+// moment at which a trade became publishable.
+//
+// These two routes are that moment. One says what is missing; the other
+// publishes the set and refuses while anything still is.
+
+/// How ready one trade's catalogue is.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct TradeReadiness {
+    pub orientation_slug: String,
+    pub orientation_name: String,
+    /// The review family. `None` for a trade that has none, which is itself a
+    /// reason not to publish — see `blockers`.
+    pub reviewer_group: Option<String>,
+    pub total: i64,
+    pub published: i64,
+    /// Drafts whose brief is still the seeded stub.
+    pub unwritten: i64,
+    /// How many people could review a submission to this trade today.
+    pub reviewers: i64,
+    /// Empty when `POST .../publish` would succeed. Each entry is a sentence
+    /// naming one thing to fix, in the order somebody would fix them.
+    pub blockers: Vec<String>,
+    pub challenges: Vec<DraftChallenge>,
+}
+
+#[derive(Debug, Serialize, sqlx::FromRow, ToSchema)]
+pub struct DraftChallenge {
+    pub id: Uuid,
+    pub title: String,
+    pub description: String,
+    pub instructions: String,
+    pub difficulty: i16,
+    pub status: String,
+    /// False while the brief is still what the migration seeded.
+    pub written: bool,
+}
+
+/// The length below which an instruction block is still a stub.
+///
+/// The seeded briefs are around 600 characters of shared boilerplate — the
+/// same three sections for all 130. A real brief carries this trade's
+/// constraints, its references and its out-of-scope, and does not fit in that.
+/// The number is a floor, not a standard: it catches "nobody touched this",
+/// not "this is thin".
+const WRITTEN_MIN_CHARS: i64 = 900;
+
+/// What is still in the way of publishing one trade.
+#[utoipa::path(
+    get, path = "/api/admin/orientations/{slug}/challenges", tag = "admin",
+    params(("slug" = String, Path, description = "Orientation slug")),
+    responses(
+        (status = 200, body = ApiResponse<TradeReadiness>),
+        (status = 403, description = "Not allowed to curate this domain", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "No such orientation", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+    operation_id = "adminOrientationChallenges",
+)]
+pub async fn orientation_challenges(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(slug): Path<String>,
+) -> Result<Json<ApiResponse<TradeReadiness>>, AppError> {
+    let readiness = readiness_for(&state, &auth, &slug).await?;
+    Ok(Json(ApiResponse::new(readiness)))
+}
+
+/// Publish a trade's catalogue, or say what is missing.
+///
+/// All of it or none of it. Publishing three of five leaves a trade whose
+/// catalogue looks thin rather than unopened, and somebody arriving cannot
+/// tell the difference — which is the state the front already asked us not to
+/// produce.
+#[utoipa::path(
+    post, path = "/api/admin/orientations/{slug}/challenges/publish", tag = "admin",
+    params(("slug" = String, Path, description = "Orientation slug")),
+    responses(
+        (status = 200, body = ApiResponse<TradeReadiness>),
+        (status = 400, description = "Something is still missing; the answer names it", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Not allowed to curate this domain", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+    operation_id = "adminOrientationChallengesPublish",
+)]
+pub async fn publish_orientation_challenges(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(slug): Path<String>,
+) -> Result<Json<ApiResponse<TradeReadiness>>, AppError> {
+    let before = readiness_for(&state, &auth, &slug).await?;
+
+    if !before.blockers.is_empty() {
+        return Err(AppError::Validation(format!(
+            "this trade is not ready to open: {}",
+            before.blockers.join(" ")
+        )));
+    }
+
+    sqlx::query(
+        "UPDATE challenge_templates ct
+            SET status = 'published'
+           FROM orientations o
+          WHERE o.id = ct.orientation_id
+            AND o.slug = $1
+            AND ct.status = 'draft'",
+    )
+    .bind(&slug)
+    .execute(&state.db)
+    .await?;
+
+    Ok(Json(ApiResponse::new(
+        readiness_for(&state, &auth, &slug).await?,
+    )))
+}
+
+/// One reading of a trade, used by both routes so the check and the publish
+/// can never disagree about what "ready" means.
+async fn readiness_for(
+    state: &AppState,
+    auth: &AuthUser,
+    slug: &str,
+) -> Result<TradeReadiness, AppError> {
+    let trade: Option<(Uuid, String, String, Option<String>)> =
+        sqlx::query_as("SELECT id, slug, name, reviewer_group FROM orientations WHERE slug = $1")
+            .bind(slug)
+            .fetch_optional(&state.db)
+            .await?;
+    let (orientation_id, orientation_slug, orientation_name, reviewer_group) =
+        trade.ok_or_else(|| AppError::NotFound(format!("no orientation '{slug}'")))?;
+
+    let domain: String =
+        sqlx::query_scalar("SELECT primary_domain FROM orientations WHERE id = $1")
+            .bind(orientation_id)
+            .fetch_one(&state.db)
+            .await?;
+
+    // Curating one domain is enough; nobody has to be a global admin to open
+    // their own trade. `domain_curator:all` and `admin` cover the rest.
+    crate::middleware::capabilities::require_any_capability(
+        &state.db,
+        auth.user_id,
+        &[
+            "admin",
+            &format!("domain_curator:{domain}"),
+            "domain_curator:all",
+        ],
+    )
+    .await?;
+
+    let challenges: Vec<DraftChallenge> = sqlx::query_as(
+        "SELECT id, title, description, instructions, difficulty, status,
+                length(instructions) >= $2 AS written
+           FROM challenge_templates
+          WHERE orientation_id = $1
+          ORDER BY difficulty, title",
+    )
+    .bind(orientation_id)
+    .bind(WRITTEN_MIN_CHARS)
+    .fetch_all(&state.db)
+    .await?;
+
+    let total = challenges.len() as i64;
+    let published = challenges
+        .iter()
+        .filter(|c| c.status == "published")
+        .count() as i64;
+    let unwritten = challenges
+        .iter()
+        .filter(|c| c.status == "draft" && !c.written)
+        .count() as i64;
+
+    // Who could review a submission here. `design_reviewer:{group}` is
+    // generated from `orientations.reviewer_group` by the trigger of 0404, and
+    // `:all` covers the whole domain.
+    let reviewers: i64 = match &reviewer_group {
+        Some(group) => sqlx::query_scalar(
+            "SELECT count(DISTINCT user_id) FROM user_capabilities
+              WHERE capability IN ($1, $2)
+                AND revoked_at IS NULL
+                AND (expires_at IS NULL OR expires_at > NOW())",
+        )
+        .bind(format!("{domain}_reviewer:{group}"))
+        .bind(format!("{domain}_reviewer:all"))
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or(0),
+        None => 0,
+    };
+
+    let mut blockers = Vec::new();
+    if total == 0 {
+        blockers.push("This trade has no challenges at all.".into());
+    }
+    if unwritten > 0 {
+        blockers.push(format!(
+            "{unwritten} of {total} briefs are still the seeded stub — they \
+             need this trade's constraints, references and out-of-scope, not \
+             just a title."
+        ));
+    }
+    if reviewer_group.is_none() {
+        blockers.push(
+            "This trade names no review family, so nothing decides who may \
+             judge a submission."
+                .into(),
+        );
+    } else if reviewers == 0 {
+        // The rule the ticket asks for, and the one worth enforcing rather
+        // than trusting: a challenge somebody can submit and nobody can
+        // validate is worse than a challenge that is not there.
+        blockers.push(format!(
+            "Nobody holds {domain}_reviewer:{} — a submission here could be \
+             made and never judged.",
+            reviewer_group.as_deref().unwrap_or("?")
+        ));
+    }
+    if total > 0 && published == total {
+        blockers.clear();
+        blockers.push("Already open.".into());
+    }
+
+    Ok(TradeReadiness {
+        orientation_slug,
+        orientation_name,
+        reviewer_group,
+        total,
+        published,
+        unwritten,
+        reviewers,
+        blockers,
+        challenges,
+    })
 }

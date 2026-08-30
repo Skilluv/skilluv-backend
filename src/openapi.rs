@@ -491,6 +491,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::continuous::open_labs,
         crate::routes::continuous::join_lab,
         crate::routes::continuous::contribute,
+        crate::routes::continuous::list_lab_contributions,
         crate::routes::continuous::judge_contribution,
         crate::routes::continuous::settle_month,
         crate::routes::continuous::draft_proposal,

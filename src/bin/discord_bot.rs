@@ -35,6 +35,19 @@ use uuid::Uuid;
 const QUEUE_POLL_SECONDS: u64 = 15;
 const MAX_FAILED_ATTEMPTS: i16 = 10;
 
+/// A cohort as the listing reads it: name, slug, start, members, cap.
+///
+/// Named rather than written inline because clippy's `type_complexity` is
+/// right about a five-element tuple — and because the first thing anybody
+/// asks of that row is which element is the count and which is the cap.
+type CohortRow = (
+    String,
+    String,
+    Option<chrono::DateTime<chrono::Utc>>,
+    i64,
+    Option<i32>,
+);
+
 struct Handler {
     db: PgPool,
     guild_id: GuildId,
@@ -557,13 +570,7 @@ impl Handler {
     /// here: they are reached by invitation, and listing them in a public
     /// channel would defeat what makes them private.
     async fn handle_cohorts(&self, domain: Option<&str>) -> Result<String> {
-        let rows: Vec<(
-            String,
-            String,
-            Option<chrono::DateTime<chrono::Utc>>,
-            i64,
-            Option<i32>,
-        )> = sqlx::query_as(
+        let rows: Vec<CohortRow> = sqlx::query_as(
             r#"
             SELECT c.name, c.slug, c.starts_at,
                    (SELECT count(*) FROM cohort_members m

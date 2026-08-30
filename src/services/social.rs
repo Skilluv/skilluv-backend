@@ -130,20 +130,72 @@ pub async fn create_comment(
     Ok(comment)
 }
 
+/// A comment with everything needed to draw it.
+///
+/// `Comment` is the row; this is the row plus the three things a thread shows
+/// next to every message and that the row cannot know on its own: who wrote it,
+/// whether it is the accepted answer, and how it was voted.
+///
+/// They are joined here rather than fetched per comment because the alternative
+/// is what the front had to do without them -- one request for the list, then
+/// one per comment for the author and one per comment for the reactions. A
+/// fifty-message thread became a hundred and one round trips to render a page
+/// the database can answer in one.
+#[derive(Debug, Serialize, sqlx::FromRow, utoipa::ToSchema)]
+pub struct CommentWithContext {
+    pub id: Uuid,
+    pub target_type: String,
+    pub target_id: Uuid,
+    pub author_id: Uuid,
+    pub body: String,
+    pub parent_id: Option<Uuid>,
+    pub edited: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    /// The author's handle. `None` only if the account was hard-deleted out
+    /// from under the comment, which the schema allows and the UI must draw.
+    pub author_username: Option<String>,
+    pub author_display_name: Option<String>,
+    /// True when the parent question points at this comment as its answer.
+    /// Always false off a question, where the notion does not apply.
+    pub accepted: bool,
+    pub reaction_up: i64,
+    pub reaction_down: i64,
+}
+
 pub async fn list_comments(
     db: &PgPool,
     target_type: &str,
     target_id: Uuid,
     limit: i64,
     offset: i64,
-) -> Result<Vec<Comment>, AppError> {
+) -> Result<Vec<CommentWithContext>, AppError> {
     validate_target_type(target_type)?;
-    let rows: Vec<Comment> = sqlx::query_as(
+    // One statement, three joins. `accepted` is read from the parent post
+    // rather than stored on the comment: `posts.accepted_answer_id` is the
+    // single writer of that fact, and duplicating it onto the row is how the
+    // two come to disagree.
+    let rows: Vec<CommentWithContext> = sqlx::query_as(
         r#"
-        SELECT * FROM comments
-        WHERE target_type = $1 AND target_id = $2 AND deleted_at IS NULL
-        ORDER BY created_at ASC
-        LIMIT $3 OFFSET $4
+        SELECT c.id, c.target_type, c.target_id, c.author_id, c.body,
+               c.parent_id, c.edited, c.created_at, c.updated_at,
+               u.username        AS author_username,
+               u.display_name    AS author_display_name,
+               (p.accepted_answer_id = c.id) IS TRUE AS accepted,
+               COALESCE(r.up, 0)   AS reaction_up,
+               COALESCE(r.down, 0) AS reaction_down
+          FROM comments c
+          LEFT JOIN users u ON u.id = c.author_id
+          LEFT JOIN posts p ON p.id = c.target_id AND c.target_type = 'post'
+          LEFT JOIN LATERAL (
+              SELECT count(*) FILTER (WHERE kind = 'upvote')   AS up,
+                     count(*) FILTER (WHERE kind = 'downvote') AS down
+                FROM reactions
+               WHERE target_type = 'comment' AND target_id = c.id
+          ) r ON TRUE
+         WHERE c.target_type = $1 AND c.target_id = $2 AND c.deleted_at IS NULL
+         ORDER BY c.created_at ASC
+         LIMIT $3 OFFSET $4
         "#,
     )
     .bind(target_type)

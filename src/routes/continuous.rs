@@ -1,16 +1,19 @@
 //! Onboarding as a service, living labs, and proposals that start with the
 //! team rather than the client.
 
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use bigdecimal::BigDecimal;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
+use chrono::{DateTime, Utc};
+
 use crate::AppState;
+use crate::api_response::ApiResponse;
 use crate::errors::AppError;
 use crate::middleware::{AuthUser, OptionalAuth};
 use crate::services::continuous;
@@ -41,6 +44,10 @@ pub fn admin_continuous_routes() -> Router<AppState> {
         .route(
             "/admin/lab-contributions/{id}/judge",
             post(judge_contribution),
+        )
+        .route(
+            "/admin/labs/{id}/contributions",
+            get(list_lab_contributions),
         )
         .route("/admin/labs/{id}/settle", post(settle_month))
         .route("/admin/proposals/{id}/signed", post(record_signature))
@@ -546,4 +553,129 @@ pub async fn record_signature(
     let fee = continuous::record_signature(&state.db, id, body.enterprise_id, body.contract_value)
         .await?;
     Ok(Json(build_response(json!({ "facilitation_fee": fee }))))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// The list behind the judge button
+// ═══════════════════════════════════════════════════════════════════
+//
+// `POST /admin/lab-contributions/{id}/judge` takes the id of one
+// contribution, and until now no route served those ids: submission is
+// write-only, `GET /labs` lists labs rather than their contributions, and
+// `settle` closes a whole month without ever naming one. It was the last
+// unreachable staff verb of the 308 — a button with no list, the same shape
+// as SKI-337 and SKI-354.
+
+/// One contribution, with enough context to judge it without opening
+/// anything else.
+#[derive(Debug, Serialize, sqlx::FromRow, ToSchema)]
+pub struct LabContributionRow {
+    pub id: Uuid,
+    pub lab_id: Uuid,
+    pub contributor_user_id: Uuid,
+    pub contributor_username: Option<String>,
+    /// What the contribution brings, in the contributor's own words.
+    pub summary_md: String,
+    pub activity_type: String,
+    pub counts_for_month: chrono::NaiveDate,
+    pub submitted_at: DateTime<Utc>,
+    /// `None` while nobody has judged it — which is the whole point of the
+    /// screen this feeds, so it is what the default ordering sorts on.
+    pub accepted: Option<bool>,
+    pub rejection_reason: Option<String>,
+    #[schema(value_type = Option<String>, example = "125.00")]
+    pub reward: Option<BigDecimal>,
+    pub paid_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct LabContributionsQuery {
+    /// `pending`, `accepted` or `rejected`. Omitted means all of them.
+    #[param(max_length = 16)]
+    pub status: Option<String>,
+    /// Any day in the month to filter on; the first of it is what is used.
+    pub month: Option<chrono::NaiveDate>,
+    pub page: Option<i64>,
+    pub per_page: Option<i64>,
+}
+
+/// List a lab's contributions so that one of them can be judged.
+#[utoipa::path(
+    get, path = "/api/admin/labs/{id}/contributions", tag = "admin",
+    params(("id" = Uuid, Path, description = "Lab id"), LabContributionsQuery),
+    responses(
+        (status = 200, body = ApiResponse<Vec<LabContributionRow>>),
+        (status = 400, description = "Unknown status filter", body = crate::api_response::ErrorResponse),
+        (status = 403, description = "Not staff", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+    operation_id = "adminLabContributions",
+)]
+pub async fn list_lab_contributions(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(lab_id): Path<Uuid>,
+    Query(q): Query<LabContributionsQuery>,
+) -> Result<Json<Value>, AppError> {
+    // Guarded like `settle`, which pays these same rows out.
+    crate::routes::admin::require_admin(&state, &auth).await?;
+
+    crate::validators::check_range_opt(q.page, "page", 1, 100_000)?;
+    crate::validators::check_range_opt(q.per_page, "per_page", 1, 200)?;
+    let per_page = q.per_page.unwrap_or(50).clamp(1, 200);
+    let offset = (q.page.unwrap_or(1).max(1) - 1) * per_page;
+
+    // `accepted` is a nullable boolean, so "pending" is a third state rather
+    // than a value — spelled out here instead of left to the caller to encode.
+    let status = q.status.as_deref();
+    if let Some(s) = status {
+        if !matches!(s, "pending" | "accepted" | "rejected") {
+            return Err(AppError::Validation(
+                "status must be pending, accepted or rejected".into(),
+            ));
+        }
+    }
+
+    let rows: Vec<LabContributionRow> = sqlx::query_as(
+        r#"
+        SELECT c.id, c.lab_id,
+               c.user_id AS contributor_user_id,
+               u.username AS contributor_username,
+               c.summary_md, c.activity_type, c.counts_for_month,
+               c.created_at AS submitted_at,
+               c.accepted, c.rejection_reason, c.reward, c.paid_at
+          FROM living_lab_contributions c
+          LEFT JOIN users u ON u.id = c.user_id
+         WHERE c.lab_id = $1
+           AND ($2::TEXT IS NULL
+                OR ($2 = 'pending'  AND c.accepted IS NULL)
+                OR ($2 = 'accepted' AND c.accepted IS TRUE)
+                OR ($2 = 'rejected' AND c.accepted IS FALSE))
+           AND ($3::DATE IS NULL
+                OR c.counts_for_month = date_trunc('month', $3::DATE)::DATE)
+         ORDER BY (c.accepted IS NOT NULL), c.created_at ASC
+         LIMIT $4 OFFSET $5
+        "#,
+    )
+    .bind(lab_id)
+    .bind(status)
+    .bind(q.month)
+    .bind(per_page)
+    .bind(offset)
+    .fetch_all(&state.db)
+    .await?;
+
+    let total: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM living_lab_contributions WHERE lab_id = $1")
+            .bind(lab_id)
+            .fetch_one(&state.db)
+            .await?;
+
+    Ok(Json(build_response(json!({
+        "contributions": rows,
+        "page": q.page.unwrap_or(1).max(1),
+        "per_page": per_page,
+        "total": total,
+    }))))
 }

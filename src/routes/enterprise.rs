@@ -537,7 +537,7 @@ pub async fn register_enterprise(
         7 * 24 * 60 * 60
     );
     let csrf = generate_csrf_token();
-    let csrf_cookie = build_csrf_cookie(&csrf, "/api", 15 * 60);
+    let csrf_cookie = build_csrf_cookie(&csrf, "/", 15 * 60);
 
     // Observability parity with the candidate register.
     if analytics_consent(&headers) {
@@ -1097,7 +1097,7 @@ pub async fn invite_register_and_accept(
         7 * 24 * 60 * 60
     );
     let csrf = generate_csrf_token();
-    let csrf_cookie = build_csrf_cookie(&csrf, "/api", 15 * 60);
+    let csrf_cookie = build_csrf_cookie(&csrf, "/", 15 * 60);
 
     if analytics_consent(&headers) {
         state.analytics.track(

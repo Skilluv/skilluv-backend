@@ -10,9 +10,24 @@
 //!   `X-CSRF-Token` header. Values must match (constant-time compare).
 //! - GET/HEAD/OPTIONS bypass the check.
 //!
-//! Wire in as `.layer(axum::middleware::from_fn(require_csrf))` on the router branch you want
-//! to protect. It is intentionally NOT applied globally to keep backward compatibility with
-//! existing clients — flip it on once the frontend is updated to send the header.
+//! ## Mounted, and off by default
+//!
+//! This layer is mounted on the API router. Whether it *rejects* is read from
+//! `CSRF_ENFORCE` at startup, and the default is no.
+//!
+//! That split exists because the two dangerous mistakes here are opposite.
+//! Leaving the check unmounted -- where it sat for months, written and tested
+//! and wired to nothing -- means it protects nothing and no one notices.
+//! Mounting it enforcing, before every client is known to send the header,
+//! 403s every write in production: a total outage, from a defence that was
+//! not needed that day, because `SameSite=Strict` on the auth cookies already
+//! blocks the classic attack path.
+//!
+//! So it runs on every request and, while `CSRF_ENFORCE` is off, records what
+//! it *would* have refused as `skilluv_csrf_would_reject_total` and lets the
+//! request through. Watch that counter; when it sits at zero across a real
+//! week, set `CSRF_ENFORCE=true`. That is an environment change, not a
+//! deploy, so turning it back off is immediate if it was premature.
 
 use axum::extract::Request;
 use axum::http::{HeaderMap, Method};
@@ -24,10 +39,45 @@ use crate::errors::AppError;
 pub const CSRF_COOKIE_NAME: &str = "csrf_token";
 pub const ADMIN_CSRF_COOKIE_NAME: &str = "admin_csrf_token";
 
+/// The `Domain` attribute the CSRF cookie needs, or `None` on a single-origin
+/// deployment.
+///
+/// This cookie is the one cookie in the system a browser script has to *read*.
+/// Issued host-only from `api.skill-uv.com`, `document.cookie` on
+/// `skill-uv.com` cannot see it, so the frontend could never echo a value it
+/// was never able to learn -- the check would have refused every write from
+/// the app it was written to protect.
+///
+/// Read from the environment rather than derived from `base_url`, because the
+/// right value is a deployment fact: `skill-uv.com` covers both origins in
+/// production, and localhost has no dot-domain to share, where the attribute
+/// must simply be absent.
+fn csrf_cookie_domain() -> Option<String> {
+    std::env::var("CSRF_COOKIE_DOMAIN")
+        .ok()
+        .map(|d| d.trim().to_string())
+        .filter(|d| !d.is_empty())
+}
+
+/// Whether a failed check refuses the request. See the module docs.
+pub fn csrf_is_enforced() -> bool {
+    matches!(
+        std::env::var("CSRF_ENFORCE").ok().as_deref(),
+        Some("1") | Some("true") | Some("TRUE")
+    )
+}
+
+fn domain_attr() -> String {
+    csrf_cookie_domain()
+        .map(|d| format!(" Domain={d};"))
+        .unwrap_or_default()
+}
+
 pub fn build_csrf_cookie(value: &str, path: &str, max_age_secs: i64) -> String {
     // NOT httpOnly: the SPA reads it from JS to echo in the request header.
     format!(
-        "{CSRF_COOKIE_NAME}={value}; Secure; SameSite=Strict; Path={path}; Max-Age={max_age_secs}"
+        "{CSRF_COOKIE_NAME}={value}; Secure; SameSite=Strict;{} Path={path}; Max-Age={max_age_secs}",
+        domain_attr()
     )
 }
 
@@ -42,7 +92,8 @@ pub fn build_csrf_cookie_with_prefix(
     max_age_secs: i64,
 ) -> String {
     format!(
-        "{prefix}{CSRF_COOKIE_NAME}={value}; Secure; SameSite=Strict; Path={path}; Max-Age={max_age_secs}"
+        "{prefix}{CSRF_COOKIE_NAME}={value}; Secure; SameSite=Strict;{} Path={path}; Max-Age={max_age_secs}",
+        domain_attr()
     )
 }
 
@@ -84,13 +135,27 @@ pub async fn require_csrf(req: Request, next: Next) -> Result<Response, AppError
         Method::GET | Method::HEAD | Method::OPTIONS => Ok(next.run(req).await),
         _ => {
             let headers = req.headers();
-            let cookie_val = extract_csrf_cookie(headers).ok_or(AppError::Forbidden)?;
-            let header_val = headers
-                .get("x-csrf-token")
-                .and_then(|v| v.to_str().ok())
-                .ok_or(AppError::Forbidden)?;
-            if !constant_time_eq(&cookie_val, header_val) {
-                return Err(AppError::Forbidden);
+            let verdict = match (
+                extract_csrf_cookie(headers),
+                headers.get("x-csrf-token").and_then(|v| v.to_str().ok()),
+            ) {
+                (None, _) => Some("no_cookie"),
+                (Some(_), None) => Some("no_header"),
+                (Some(cookie), Some(header)) if !constant_time_eq(&cookie, header) => {
+                    Some("mismatch")
+                }
+                _ => None,
+            };
+
+            if let Some(reason) = verdict {
+                if csrf_is_enforced() {
+                    return Err(AppError::Forbidden);
+                }
+                // Off by default. Counting rather than refusing is what turns
+                // "we think every client sends the header" into something a
+                // person can read off a dashboard before flipping the switch.
+                metrics::counter!("skilluv_csrf_would_reject_total", "reason" => reason)
+                    .increment(1);
             }
             Ok(next.run(req).await)
         }

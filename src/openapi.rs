@@ -1046,8 +1046,6 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::moderation::forum_moderate_post,
         crate::routes::moderation::forum_mute_user,
         // ─── tournament ───────────────────────────────────────────
-        crate::routes::tournament::admin_create_season,
-        crate::routes::tournament::admin_set_season_status,
         crate::routes::tournament::admin_close_season,
         crate::routes::tournament::list_tournaments,
         crate::routes::tournament::get_tournament,

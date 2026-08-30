@@ -305,7 +305,11 @@ jobs:
     # So shard 1 gets the room its extra work needs and the rest keep 45. A
     # single number for jobs doing different work is how one of them silently
     # runs out of it.
-    timeout-minutes: ${{ matrix.shard == 1 && 75 || 45 }}
+    # Raised from 75/45. Seven shards finished inside forty-five and the eighth
+    # was cancelled at it — a suite that grows a few tests per branch will keep
+    # brushing a limit set that close, and a cancellation reads as a failure
+    # nobody can diagnose from the log, because the log stops mid-run.
+    timeout-minutes: ${{ matrix.shard == 1 && 90 || 60 }}
     permissions:
       contents: read
       # sccache-action needs the GHA cache API (mozilla-actions/sccache-action).
@@ -387,16 +391,16 @@ jobs:
       # lld uses a fraction of that and links several times faster. Nothing
       # about the produced binary changes for a test run.
       RUSTFLAGS: "-C link-arg=-fuse-ld=lld"
-      # Two rustc processes, not four.
+      # `CARGO_BUILD_JOBS: "2"` stood here and has been removed.
       #
-      # lld fixed the link step and six shards still died, which says the
-      # pressure is the compile as much as the link: a cold cache builds the
-      # whole crate, cargo runs one rustc per core, and this crate is large
-      # enough that four at once do not fit in 16 GB.
+      # It was aimed at a memory theory, and the logs disproved it: the shard
+      # that died printed `zstd: No space left on device` before the linker's
+      # SIGBUS. The disk was the cause, `CARGO_PROFILE_TEST_DEBUG=0` and the
+      # wider reclaim below are the fix, and halving the build only bought a
+      # shard that ran past its forty-five minutes and was cancelled.
       #
-      # Halving it costs wall-clock on a cold cache and nothing on a warm
-      # one, which is every run after the first.
-      CARGO_BUILD_JOBS: "2"
+      # Keeping a slowdown that fixed nothing would have made every run pay for
+      # a wrong guess.
       # No debug info in CI artifacts.
       #
       # `zstd: No space left on device` and

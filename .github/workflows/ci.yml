@@ -90,7 +90,10 @@ jobs:
     # 25 min budget : cold cache full cargo build (release) + clippy + fmt
     # is 12-18 min. sccache accelerates subsequent runs but the FIRST run
     # after a Cargo.lock change is cold.
-    timeout-minutes: 25
+    # Raised from 25 with `--features discord-bot`: the job now compiles
+    # serenity and the bot binary too, which the Docker image job does in
+    # about sixteen minutes from cold.
+    timeout-minutes: 40
     permissions:
       contents: read
       # sccache-action needs the GHA cache API (mozilla-actions/sccache-action).
@@ -132,11 +135,33 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
 
+      # `--features discord-bot` because without it this job does not compile
+      # the Discord bot at all, and neither does the test job. The only thing
+      # that built `src/bin/discord_bot.rs` was the Docker image job, sixteen
+      # minutes downstream -- so a broken bot passed fmt, build, clippy and
+      # eight test shards before anything noticed.
+      #
+      # The feature is what the shipped image uses (`Dockerfile`, `cargo build
+      # --release --features discord-bot`), so building it here is building
+      # what we deploy rather than a subset of it.
       - name: Build
-        run: cargo build --release
+        run: cargo build --release --features discord-bot
 
       - name: Clippy lint
-        run: cargo clippy -- -D warnings -A dead_code -A unused_imports
+        run: cargo clippy --features discord-bot -- -D warnings -A dead_code -A unused_imports
+
+      # The bot's own unit tests. `cargo nextest run` in the test job carries
+      # no features, so `#[cfg(test)] mod tests` in the bot has never compiled
+      # there and never run -- including
+      # `every_command_description_fits_discord`, which exists *because* one
+      # over-long description made Discord refuse the whole command tree and
+      # left the bot serving three subcommands out of nine. A guard against a
+      # failure that already happened, that had never executed once.
+      #
+      # Run here rather than in the shards: the feature changes the cfg, so
+      # adding it there would recompile the library in all eight.
+      - name: Discord bot unit tests
+        run: cargo test --features discord-bot --bin skilluv-discord-bot
 
       - name: Install cargo-machete
         uses: taiki-e/install-action@ba47c86ac325773530516bb756137ac718732518  # v2

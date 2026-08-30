@@ -550,6 +550,18 @@ discord:
     - Connecte-toi sur {frontend}, declare tes metiers, puis lie Discord depuis **Parametres -> Comptes lies**. Tes roles et tes salons s'ouvrent tout seuls.
 
     A bientot !
+  leaderboard_head: "**{domain}** — classement craft"
+  leaderboard_you: "Toi : **#{rank}** avec {score} ({username})"
+  leaderboard_empty: "Personne n'a encore de score craft en `{domain}`. Il se calcule sur du travail validé."
+  findings_head: |-
+    **Hall of fame sécurité**
+
+    {confirmed} confirmées, {published} publiées.
+  findings_recent: "Dernières publiées :"
+  findings_empty: |-
+    Aucune faille confirmée pour l'instant.
+
+    Le programme est ouvert : {frontend}/security dit ce qui est dans le périmètre et comment signaler.
   cmd:
     root: "Commandes Skilluv"
     me: "Afficher ton profil Skilluv lie"
@@ -562,4 +574,6 @@ discord:
     craft: "Ton score d'artisanat dans un metier, et ce qui le compose"
     queue: "Ce qui attend un relecteur dans un domaine"
     cohorts: "Les cohortes qui recrutent en ce moment"
+    leaderboard: "Le classement craft d'un domaine, et ta place dedans"
+    findings: "Le hall of fame sécurité : failles confirmées et qui les a signalées"
     help: "Comment utiliser le bot"

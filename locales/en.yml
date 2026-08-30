@@ -569,6 +569,18 @@ discord:
     - Sign in at {frontend}, declare your trades, then link Discord from **Settings -> Linked accounts**. Your roles and your channels open by themselves.
 
     See you around!
+  leaderboard_head: "**{domain}** — craft leaderboard"
+  leaderboard_you: "You: **#{rank}** with {score} ({username})"
+  leaderboard_empty: "Nobody has a craft score in `{domain}` yet. It is computed from validated work."
+  findings_head: |-
+    **Security hall of fame**
+
+    {confirmed} confirmed, {published} published.
+  findings_recent: "Latest published:"
+  findings_empty: |-
+    No finding has been confirmed yet.
+
+    The programme is open: {frontend}/security says what is in scope and how to report.
   cmd:
     root: "Skilluv commands"
     me: "Show your linked Skilluv profile"
@@ -581,4 +593,6 @@ discord:
     craft: "Your craft score in one domain, and what it is made of"
     queue: "How much work is waiting on a reviewer in one domain"
     cohorts: "Cohorts recruiting now"
+    leaderboard: "The craft leaderboard in one domain, and where you stand"
+    findings: "The security hall of fame: confirmed findings and who reported them"
     help: "How to use the bot"

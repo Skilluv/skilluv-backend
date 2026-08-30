@@ -323,6 +323,13 @@ pub fn build_router(state: AppState) -> Router {
         //      TRACE en 403 (defense en profondeur) avant qu'axum ne puisse
         //      repondre 405. Retourner 405 uniformement respecte l'attente
         //      schemathesis unsupported_methods sans desactiver l'admin_gate.
+        // Double-submit CSRF. Mounted on every request; whether it refuses
+        // is `CSRF_ENFORCE`, off by default. It sat written, tested and wired
+        // to nothing for months -- a defence nobody had turned on -- and the
+        // reason not to simply turn it on is that its cookie was unreadable
+        // by the frontend expected to echo it, so enforcing would have 403'd
+        // every write. Both halves are fixed here; see `middleware::csrf`.
+        .layer(axum::middleware::from_fn(middleware::require_csrf))
         .layer(axum::middleware::from_fn(reject_deprecated_methods))
         // A NUL in a JSON string is a 400, not the 500 PostgreSQL would
         // otherwise turn it into. Above the routes so no handler has to

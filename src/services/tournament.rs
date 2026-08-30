@@ -38,38 +38,6 @@ pub struct Season {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct CreateSeasonInput {
-    pub slug: String,
-    pub name: String,
-    pub description: Option<String>,
-    pub starts_at: DateTime<Utc>,
-    pub ends_at: DateTime<Utc>,
-}
-
-pub async fn create_season(db: &PgPool, input: CreateSeasonInput) -> Result<Season, AppError> {
-    if input.ends_at <= input.starts_at {
-        return Err(AppError::Validation(
-            "ends_at must be after starts_at".into(),
-        ));
-    }
-    let row: Season = sqlx::query_as(
-        r#"
-        INSERT INTO seasons (slug, name, description, starts_at, ends_at)
-        VALUES ($1, $2, $3, $4, $5)
-        RETURNING *
-        "#,
-    )
-    .bind(input.slug.trim().to_lowercase())
-    .bind(input.name.trim())
-    .bind(input.description.as_deref().map(str::trim))
-    .bind(input.starts_at)
-    .bind(input.ends_at)
-    .fetch_one(db)
-    .await?;
-    Ok(row)
-}
-
 pub async fn list_seasons(db: &PgPool) -> Result<Vec<Season>, AppError> {
     let rows = sqlx::query_as("SELECT * FROM seasons ORDER BY starts_at DESC LIMIT 50")
         .fetch_all(db)
@@ -86,24 +54,6 @@ pub async fn current_season(db: &PgPool) -> Result<Option<Season>, AppError> {
     Ok(row)
 }
 
-pub async fn set_season_status(
-    db: &PgPool,
-    season_id: Uuid,
-    status: &str,
-) -> Result<Season, AppError> {
-    if !matches!(status, "upcoming" | "active" | "ended") {
-        return Err(AppError::Validation("invalid season status".into()));
-    }
-    let row: Season = sqlx::query_as(
-        "UPDATE seasons SET status = $1, closed_at = CASE WHEN $1 = 'ended' THEN NOW() ELSE NULL END WHERE id = $2 RETURNING *",
-    )
-    .bind(status)
-    .bind(season_id)
-    .fetch_one(db)
-    .await?;
-    Ok(row)
-}
-
 /// End-of-season housekeeping: reset gp_season for every guild + recompute division ladder.
 /// Top 20% bumped one rank, bottom 20% dropped one rank.
 pub async fn close_season(db: &PgPool, season_id: Uuid) -> Result<SeasonCloseReport, AppError> {
@@ -113,7 +63,13 @@ pub async fn close_season(db: &PgPool, season_id: Uuid) -> Result<SeasonCloseRep
         .fetch_optional(&mut *tx)
         .await?
         .ok_or(AppError::NotFound("season not found".into()))?;
-    if season.status == "ended" {
+    // Both words mean closed. `activate` in `services::seasons` writes
+    // `completed` when it demotes the outgoing season; this module wrote
+    // `ended`. Reading only one of them let a season already closed one way be
+    // closed again the other -- and closing is not idempotent: it snapshots
+    // standings and applies promotions and relegations, so the second pass
+    // moved every guild a second time on a ladder that had already moved.
+    if matches!(season.status.as_str(), "ended" | "completed" | "archived") {
         return Err(AppError::Validation("season already ended".into()));
     }
 

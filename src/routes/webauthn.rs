@@ -532,7 +532,7 @@ pub async fn login_finish(
         SessionService::create_with_method(&state.db, user.id, Some(&ip), ua, "webauthn").await?;
 
     let csrf = generate_csrf_token();
-    let csrf_cookie = build_csrf_cookie(&csrf, "/api", 15 * 60);
+    let csrf_cookie = build_csrf_cookie(&csrf, "/", 15 * 60);
 
     let user_private: UserPrivate = user.into();
 

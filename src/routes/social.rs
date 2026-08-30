@@ -17,11 +17,12 @@ use axum::extract::{Path, Query, State};
 use axum::http::HeaderMap;
 use axum::routing::{delete, get, post, put};
 use axum::{Json, Router};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use uuid::Uuid;
 
 use crate::AppState;
+use crate::api_response::ApiResponse;
 use crate::errors::AppError;
 use crate::middleware::{AuthUser, AuthUserComplete, OptionalAuth};
 use crate::routes::analytics_consent;
@@ -235,6 +236,20 @@ pub struct ListCommentsQuery {
     pub per_page: Option<i64>,
 }
 
+/// The shape `GET /social/comments/{target_type}/{target_id}` returns.
+///
+/// Declared as a type rather than left as `serde_json::Value`, because the
+/// untyped version is what let the two sides drift: the front wrote its own
+/// `SocialComment` with `target_type: 'forum_post'` and `kind: 'up'`, neither
+/// of which this service has ever accepted, and every list, create and reaction
+/// on the forum was rejected before reaching the database. A schema that says
+/// what comes back makes that divergence a compile-time mismatch instead of a
+/// silently inert page.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct CommentsPage {
+    pub comments: Vec<crate::services::social::CommentWithContext>,
+}
+
 /// List comments on a target (paginated).
 #[utoipa::path(
     get, path = "/api/social/comments/{target_type}/{target_id}", tag = "social",
@@ -243,7 +258,7 @@ pub struct ListCommentsQuery {
         ("target_id" = Uuid, Path),
         ListCommentsQuery,
     ),
-    responses((status = 200, body = serde_json::Value)),
+    responses((status = 200, body = ApiResponse<CommentsPage>)),
 )]
 pub async fn list_comments(
     State(state): State<AppState>,

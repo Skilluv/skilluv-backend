@@ -904,7 +904,7 @@ pub async fn register(
     let access_cookie = build_cookie("access_token", &access_token, 15 * 60, "/");
     let refresh_cookie = build_refresh_cookie(session_id, &refresh_token);
     let csrf = generate_csrf_token();
-    let csrf_cookie = build_csrf_cookie(&csrf, "/api", 15 * 60);
+    let csrf_cookie = build_csrf_cookie(&csrf, "/", 15 * 60);
 
     Ok((
         StatusCode::CREATED,
@@ -1173,7 +1173,7 @@ pub async fn login(
     );
     let refresh_cookie = build_refresh_cookie_with_prefix(prefix, session_id, &refresh_token);
     let csrf = generate_csrf_token();
-    let csrf_cookie = build_csrf_cookie_with_prefix(prefix, &csrf, "/api", 15 * 60);
+    let csrf_cookie = build_csrf_cookie_with_prefix(prefix, &csrf, "/", 15 * 60);
 
     Ok((
         AppendHeaders([
@@ -1275,7 +1275,7 @@ pub async fn email_2fa_verify(
     let access_cookie = build_cookie("access_token", &access_token, 15 * 60, "/");
     let refresh_cookie = build_refresh_cookie(session_id, &refresh_token);
     let csrf = generate_csrf_token();
-    let csrf_cookie = build_csrf_cookie(&csrf, "/api", 15 * 60);
+    let csrf_cookie = build_csrf_cookie(&csrf, "/", 15 * 60);
 
     Ok((
         AppendHeaders([
@@ -1354,7 +1354,7 @@ pub async fn refresh(
     );
     let refresh_cookie = build_refresh_cookie_with_prefix(prefix, session_id, &new_refresh_token);
     let csrf = generate_csrf_token();
-    let csrf_cookie = build_csrf_cookie_with_prefix(prefix, &csrf, "/api", 15 * 60);
+    let csrf_cookie = build_csrf_cookie_with_prefix(prefix, &csrf, "/", 15 * 60);
 
     Ok((
         AppendHeaders([

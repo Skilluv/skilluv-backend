@@ -122,21 +122,65 @@ pub async fn google_start(
     State(state): State<AppState>,
     Query(q): Query<StartQuery>,
 ) -> Result<Redirect, AppError> {
-    start_flow(&state, "google", None, q.invite_token).await
+    start_flow(&state, "google", None, q.invite_token, None).await
 }
 
 /// Link Google to an existing account (redirects to Google).
 #[utoipa::path(
     get, path = "/api/auth/google/link", tag = "auth",
-    params(StartQuery),
+    params(LinkQuery),
     responses((status = 302, description = "Redirect to Google")),
     security(("cookie_auth" = [])),
 )]
 pub async fn google_link_start(
     State(state): State<AppState>,
     auth: AuthUser,
+    Query(q): Query<LinkQuery>,
 ) -> Result<Redirect, AppError> {
-    start_flow(&state, "google", Some(auth.user_id), None).await
+    start_flow(&state, "google", Some(auth.user_id), None, q.return_to).await
+}
+
+/// Where to send the browser once the account is linked.
+#[derive(Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+struct LinkQuery {
+    /// Path on the Skilluv frontend to return to, e.g. `/settings/connections`.
+    ///
+    /// A **path**, never a URL. The flow appends it to the deployment's own
+    /// frontend origin, so no other destination is expressible — which is what
+    /// makes this safe to accept from a query string. Anything that is not a
+    /// plain absolute path is ignored rather than rejected: a malformed return
+    /// path is not a reason to fail a link the user has already consented to.
+    #[param(max_length = 512)]
+    return_to: Option<String>,
+}
+
+/// Keep only what can address this deployment's own frontend.
+///
+/// The value reaches us in a query string and is used to redirect a browser
+/// immediately after a consent screen, which is the single most valuable place
+/// an open redirect can sit: the user has just been told they are on a page
+/// they trust. So the check is not a filter on known-bad shapes, it is a
+/// whitelist of one shape -- an absolute path on our own origin.
+///
+/// Rejected, and why each matters:
+///   - `//evil.example` and `/\evil.example` -- browsers read both as
+///     protocol-relative URLs, so they leave the origin while looking local;
+///   - anything not starting with `/` -- `https://evil.example` reaches another
+///     origin outright, and a bare `evil.example` becomes one once joined;
+///   - control characters -- a `\r` or `\n` splits the `Location` header.
+fn sanitise_return_path(raw: &str) -> Option<String> {
+    let path = raw.trim();
+    if path.len() > 512 || !path.starts_with('/') {
+        return None;
+    }
+    if path.starts_with("//") || path.starts_with("/\\") {
+        return None;
+    }
+    if path.chars().any(|c| c.is_control()) {
+        return None;
+    }
+    Some(path.to_string())
 }
 
 #[derive(Deserialize, utoipa::IntoParams)]
@@ -183,6 +227,7 @@ pub async fn google_callback(
 /// account the community cannot place.
 #[utoipa::path(
     get, path = "/api/auth/discord/link", tag = "auth",
+    params(LinkQuery),
     responses(
         (status = 302, description = "Redirect to Discord"),
         (status = 404, description = "Discord OAuth not configured", body = crate::api_response::ErrorResponse),
@@ -192,8 +237,9 @@ pub async fn google_callback(
 pub async fn discord_link_start(
     State(state): State<AppState>,
     auth: AuthUser,
+    Query(q): Query<LinkQuery>,
 ) -> Result<Redirect, AppError> {
-    start_flow(&state, "discord", Some(auth.user_id), None).await
+    start_flow(&state, "discord", Some(auth.user_id), None, q.return_to).await
 }
 
 /// Discord OAuth callback.
@@ -233,21 +279,22 @@ pub async fn linkedin_start(
     State(state): State<AppState>,
     Query(q): Query<StartQuery>,
 ) -> Result<Redirect, AppError> {
-    start_flow(&state, "linkedin", None, q.invite_token).await
+    start_flow(&state, "linkedin", None, q.invite_token, None).await
 }
 
 /// Link LinkedIn to an existing account.
 #[utoipa::path(
     get, path = "/api/auth/linkedin/link", tag = "auth",
-    params(StartQuery),
+    params(LinkQuery),
     responses((status = 302, description = "Redirect to LinkedIn")),
     security(("cookie_auth" = [])),
 )]
 pub async fn linkedin_link_start(
     State(state): State<AppState>,
     auth: AuthUser,
+    Query(q): Query<LinkQuery>,
 ) -> Result<Redirect, AppError> {
-    start_flow(&state, "linkedin", Some(auth.user_id), None).await
+    start_flow(&state, "linkedin", Some(auth.user_id), None, q.return_to).await
 }
 
 /// LinkedIn OAuth callback.
@@ -350,6 +397,7 @@ async fn start_flow(
     provider: &str,
     linking_user: Option<Uuid>,
     invite_token: Option<String>,
+    return_to: Option<String>,
 ) -> Result<Redirect, AppError> {
     let mut redis = state.redis.clone();
     let token = oauth::store_state(
@@ -362,7 +410,7 @@ async fn start_flow(
             } else {
                 "signup_login".into()
             },
-            redirect_after: None,
+            redirect_after: return_to.as_deref().and_then(sanitise_return_path),
             invite_token,
         },
     )
@@ -427,6 +475,27 @@ async fn finalise_login_or_link(
                 "provider" => profile.provider.to_string()
             )
             .increment(1);
+            // Send the browser back where it started, when the caller said
+            // where that is. Without this the flow ends on raw JSON served by
+            // the API origin: the account is linked, and the person is looking
+            // at `{"linked":true}` on a domain they never chose to visit, with
+            // the back button as their only way home.
+            //
+            // The JSON stays when no return path was given, so a programmatic
+            // caller reading the body is unaffected.
+            if let Some(path) = oauth_state
+                .redirect_after
+                .as_deref()
+                .and_then(sanitise_return_path)
+            {
+                let target = format!(
+                    "{}{}",
+                    state.config.frontend_url.trim_end_matches('/'),
+                    path
+                );
+                return Ok(Redirect::to(&target).into_response());
+            }
+
             Ok(Json(build_response(json!({
                 "linked": true,
                 "provider": profile.provider,

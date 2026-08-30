@@ -267,10 +267,16 @@ name = "DESIGN"
 domain = "design"
 channels = [
     { name = "design-general", purpose = "general" },
+    { name = "design-help" },
+    { name = "design-showcase" },
+    { name = "design-newsletter", announcement = true },
     { name = "design-critique" },
     { name = "design-veille" },
     { name = "design-relecteurs" },
     { name = "design-produit" },
+    # One of the 26 trades, and one of the four in the first batch to open
+    # (SKI-349). It was the only family with no room to be discussed in.
+    { name = "design-system" },
     { name = "design-web" },
     { name = "design-mobile" },
     { name = "design-motion" },
@@ -559,6 +565,9 @@ channels = [
     { name = "security-tooling" },
     { name = "security-triage" },
     { name = "security-writeups", announcement = true },
+    # Backed by `GET /api/security/hall-of-fame`, which is public and already
+    # serves the same rows to the website.
+    { name = "security-hall-of-fame", announcement = true },
     { name = "security-competitions", purpose = "contests", announcement = true, also_purpose = "winners" },
     { name = "security-missions", purpose = "missions" },
 ]

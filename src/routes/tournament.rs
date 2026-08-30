@@ -54,8 +54,6 @@ pub fn admin_tournament_routes() -> Router<AppState> {
     Router::new()
         // Seasons admin (les GET /seasons + /seasons/current publics vivent
         // dans seasons.rs Phase P6). Endpoints admin propres au workflow tournois.
-        .route("/admin/seasons", post(admin_create_season))
-        .route("/admin/seasons/{id}/status", post(admin_set_season_status))
         .route("/admin/seasons/{id}/close", post(admin_close_season))
         // Tournaments admin.
         .route("/admin/tournaments", post(admin_create_tournament))
@@ -94,23 +92,6 @@ fn build_response(data: Value) -> Value {
 // ─── Seasons admin ───────────────────────────────────────────────
 // GET /seasons + /seasons/current publics : voir routes/seasons.rs (P6).
 
-/// Admin: create a season (workflow tournois).
-#[utoipa::path(
-    post, path = "/api/admin/seasons", tag = "admin",
-    request_body(content = serde_json::Value, description = "CreateSeasonInput"),
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
-    security(("cookie_auth" = [])),
-)]
-pub async fn admin_create_season(
-    State(state): State<AppState>,
-    auth: AuthUser,
-    Json(input): Json<tournament::CreateSeasonInput>,
-) -> Result<Json<Value>, AppError> {
-    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
-    let s = tournament::create_season(&state.db, input).await?;
-    Ok(Json(build_response(json!({ "season": s }))))
-}
-
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
 #[schema(as = TournamentStatusBody)]
 pub struct StatusBody {
@@ -118,23 +99,27 @@ pub struct StatusBody {
     pub status: String,
 }
 
-/// Admin: change season status.
-#[utoipa::path(
-    post, path = "/api/admin/seasons/{id}/status", tag = "admin",
-    params(("id" = Uuid, Path)), request_body = StatusBody,
-    responses((status = 200, body = serde_json::Value), (status = 403, body = crate::api_response::ErrorResponse)),
-    security(("cookie_auth" = [])),
-)]
-pub async fn admin_set_season_status(
-    State(state): State<AppState>,
-    auth: AuthUser,
-    Path(id): Path<Uuid>,
-    Json(body): Json<StatusBody>,
-) -> Result<Json<Value>, AppError> {
-    crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
-    let s = tournament::set_season_status(&state.db, id, &body.status).await?;
-    Ok(Json(build_response(json!({ "season": s }))))
-}
+// Creating and activating a season live in `routes/seasons.rs` (P6), and only
+// there. Two admin routes used to do it here as well, and both were broken by
+// the schema moving under them:
+//
+//   POST /admin/seasons             inserted without `theme`, which migration
+//                                   0069 made NOT NULL with no default. Every
+//                                   call had returned 500 since. No test
+//                                   touched the route, so nobody found out.
+//
+//   POST /admin/seasons/{id}/status set `active` without demoting the season
+//                                   already holding it, leaving two rows
+//                                   active. `current_season_id()` takes the
+//                                   most recent of them and says nothing --
+//                                   the platform picks a season and no one is
+//                                   told which. It also refused `completed`
+//                                   and `archived`, the two states 0069 added.
+//
+// `POST /api/seasons` and `POST /api/seasons/{slug}/activate` do both jobs
+// correctly, activation transactionally. Closing a season stays here: it is
+// not a duplicate of anything, it snapshots guild standings and works out
+// promotions and relegations.
 
 /// Admin: close a season and distribute final rewards.
 #[utoipa::path(

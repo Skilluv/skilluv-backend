@@ -491,6 +491,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::continuous::open_labs,
         crate::routes::continuous::join_lab,
         crate::routes::continuous::contribute,
+        crate::routes::continuous::list_lab_contributions,
         crate::routes::continuous::judge_contribution,
         crate::routes::continuous::settle_month,
         crate::routes::continuous::draft_proposal,
@@ -1046,8 +1047,6 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::moderation::forum_moderate_post,
         crate::routes::moderation::forum_mute_user,
         // ─── tournament ───────────────────────────────────────────
-        crate::routes::tournament::admin_create_season,
-        crate::routes::tournament::admin_set_season_status,
         crate::routes::tournament::admin_close_season,
         crate::routes::tournament::list_tournaments,
         crate::routes::tournament::get_tournament,

@@ -629,12 +629,12 @@ pub async fn list_lab_contributions(
     // `accepted` is a nullable boolean, so "pending" is a third state rather
     // than a value — spelled out here instead of left to the caller to encode.
     let status = q.status.as_deref();
-    if let Some(s) = status {
-        if !matches!(s, "pending" | "accepted" | "rejected") {
-            return Err(AppError::Validation(
-                "status must be pending, accepted or rejected".into(),
-            ));
-        }
+    if let Some(s) = status
+        && !matches!(s, "pending" | "accepted" | "rejected")
+    {
+        return Err(AppError::Validation(
+            "status must be pending, accepted or rejected".into(),
+        ));
     }
 
     let rows: Vec<LabContributionRow> = sqlx::query_as(

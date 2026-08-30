@@ -101,6 +101,10 @@ impl EventHandler for Handler {
                 .add_option(sub("craft", "discord.cmd.craft").add_sub_option(domain_arg(true)))
                 .add_option(sub("queue", "discord.cmd.queue").add_sub_option(domain_arg(true)))
                 .add_option(sub("cohorts", "discord.cmd.cohorts").add_sub_option(domain_arg(false)))
+                .add_option(
+                    sub("leaderboard", "discord.cmd.leaderboard").add_sub_option(domain_arg(true)),
+                )
+                .add_option(sub("findings", "discord.cmd.findings"))
                 .add_option(sub("help", "discord.cmd.help")),
         ];
         if let Err(e) = self.guild_id.set_commands(&ctx.http, cmds).await {
@@ -222,6 +226,11 @@ impl Handler {
                 let domain = extract_string(sub, "domain").context("missing domain arg")?;
                 self.handle_craft(cmd, &domain).await?
             }
+            "leaderboard" => {
+                let domain = extract_string(sub, "domain").context("missing domain arg")?;
+                self.handle_leaderboard(cmd, &domain, &locale).await?
+            }
+            "findings" => self.handle_findings(&locale).await?,
             "queue" => {
                 let domain = extract_string(sub, "domain").context("missing domain arg")?;
                 self.handle_queue(&domain).await?
@@ -251,6 +260,167 @@ impl Handler {
     /// Discord structure documents for leadership and quality each described
     /// a `my-stats` of their own, and neither existed; writing them as two
     /// would have made the next domain a third.
+    /// Who is ahead in one domain, and where the caller stands in it.
+    ///
+    /// SKI-180 asked for `/skilluv leaderboard cyber` and `/skilluv cyber-me`.
+    /// Both are here, as one command over any domain -- because a `cyber`
+    /// subcommand would be the twelfth-domain bug again, in a new place: this
+    /// bot has already served a stale command tree once for holding its own
+    /// copy of the domain list, and `security` is what the domain is called
+    /// everywhere else in this codebase.
+    ///
+    /// Read from `craft_scores` rather than the Redis board the API serves.
+    /// It is the same data -- the board is built from this table -- and the
+    /// bot has no Redis connection. Computing it means the answer cannot be
+    /// stale in a way the website is not.
+    async fn handle_leaderboard(
+        &self,
+        cmd: &CommandInteraction,
+        domain: &str,
+        locale: &str,
+    ) -> Result<String> {
+        if !skilluv_backend::validators::SKILL_DOMAINS.contains(&domain) {
+            return Ok(format!(
+                "`{domain}` is not a domain. One of: {}",
+                skilluv_backend::validators::SKILL_DOMAINS.join(", ")
+            ));
+        }
+
+        let top: Vec<(String, i32, Option<String>)> = sqlx::query_as(
+            "SELECT u.username, c.score, c.tier_slug
+               FROM craft_scores c
+               JOIN users u ON u.id = c.user_id
+              WHERE c.skill_domain = $1 AND c.score > 0
+              ORDER BY c.score DESC, u.username ASC
+              LIMIT 10",
+        )
+        .bind(domain)
+        .fetch_all(&self.db)
+        .await
+        .context("db query failed")?;
+
+        if top.is_empty() {
+            return Ok(t_with(
+                locale,
+                "discord.leaderboard_empty",
+                &[("domain", domain)],
+            ));
+        }
+
+        let mut out = t_with(locale, "discord.leaderboard_head", &[("domain", domain)]);
+        for (i, (username, score, tier)) in top.iter().enumerate() {
+            out.push_str(&format!(
+                "\n`{:>2}.` **{username}** — {score}{}",
+                i + 1,
+                tier.as_deref()
+                    .map(|s| format!(" ({s})"))
+                    .unwrap_or_default()
+            ));
+        }
+
+        // And where the person asking stands, which is the half of this that
+        // `cyber-me` was for. Silent when they have not linked an account:
+        // a command about a public board should still answer to a stranger.
+        let discord_id = cmd.user.id.to_string();
+        let mine: Option<(String, i32, i64)> = sqlx::query_as(
+            "SELECT u.username, c.score,
+                    (SELECT count(*) + 1 FROM craft_scores c2
+                      WHERE c2.skill_domain = c.skill_domain AND c2.score > c.score)
+               FROM craft_scores c
+               JOIN users u ON u.id = c.user_id
+              WHERE u.discord_user_id = $1 AND c.skill_domain = $2",
+        )
+        .bind(&discord_id)
+        .bind(domain)
+        .fetch_optional(&self.db)
+        .await
+        .context("db query failed")?;
+
+        if let Some((username, score, rank)) = mine {
+            out.push('\n');
+            out.push_str(&t_with(
+                locale,
+                "discord.leaderboard_you",
+                &[
+                    ("rank", &rank.to_string()),
+                    ("score", &score.to_string()),
+                    ("username", &username),
+                ],
+            ));
+        }
+
+        Ok(out)
+    }
+
+    /// The security hall of fame: what the disclosure programme has to show.
+    ///
+    /// SKI-180 asked for `/skilluv cyber`. This is what that command has to
+    /// say -- the same rows `GET /api/security/hall-of-fame` serves the
+    /// website, so a figure quoted in a channel cannot disagree with the one
+    /// on the page.
+    ///
+    /// Anonymous reporters stay anonymous here exactly as they do there. That
+    /// is not a detail: somebody who reported a vulnerability under an alias
+    /// chose that, and a bot that helpfully expands it in a public channel has
+    /// broken the promise the disclosure policy makes.
+    async fn handle_findings(&self, locale: &str) -> Result<String> {
+        let board = skilluv_backend::services::security_findings::hall_of_fame(&self.db)
+            .await
+            .context("hall of fame query failed")?;
+
+        let stats = &board["stats"];
+        let confirmed = stats["confirmed"].as_i64().unwrap_or(0);
+        let published = stats["published"].as_i64().unwrap_or(0);
+
+        if confirmed == 0 && published == 0 {
+            return Ok(t_with(
+                locale,
+                "discord.findings_empty",
+                &[("frontend", &self.frontend_url)],
+            ));
+        }
+
+        let mut out = t_with(
+            locale,
+            "discord.findings_head",
+            &[
+                ("confirmed", &confirmed.to_string()),
+                ("published", &published.to_string()),
+            ],
+        );
+
+        if let Some(people) = board["contributors"].as_array() {
+            for (i, c) in people.iter().take(5).enumerate() {
+                let who = c["reporter"]["username"]
+                    .as_str()
+                    .or_else(|| c["reporter"]["alias"].as_str())
+                    .unwrap_or("—");
+                out.push_str(&format!(
+                    "\n`{:>2}.` **{who}** — {} finding(s)",
+                    i + 1,
+                    c["findings"].as_i64().unwrap_or(0)
+                ));
+            }
+        }
+
+        if let Some(recent) = board["recent"].as_array().filter(|r| !r.is_empty()) {
+            out.push('\n');
+            out.push_str(&t(locale, "discord.findings_recent"));
+            for f in recent.iter().take(3) {
+                let title = f["title"].as_str().unwrap_or("—");
+                let sev = f["severity_tier"].as_str().unwrap_or("—");
+                out.push_str(&format!("\n- **{title}** ({sev})"));
+                if let Some(url) = f["writeup_url"].as_str() {
+                    let sep = if url.starts_with("http") { "" } else { "/" };
+                    out.push_str(&format!(" — {}{sep}{url}", self.frontend_url));
+                }
+            }
+        }
+
+        out.push_str(&format!("\n\n{}/security", self.frontend_url));
+        Ok(out)
+    }
+
     async fn handle_craft(&self, cmd: &CommandInteraction, domain: &str) -> Result<String> {
         if !skilluv_backend::validators::SKILL_DOMAINS.contains(&domain) {
             return Ok(format!(
@@ -1265,6 +1435,8 @@ mod tests {
             "discord.cmd.craft",
             "discord.cmd.queue",
             "discord.cmd.cohorts",
+            "discord.cmd.leaderboard",
+            "discord.cmd.findings",
             "discord.cmd.help",
         ];
         for key in KEYS {

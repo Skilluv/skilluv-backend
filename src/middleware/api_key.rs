@@ -30,19 +30,32 @@ impl FromRequestParts<AppState> for ApiKeyAuth {
 
         let prefix = &raw_key[..12];
 
-        // Find matching key by prefix
-        let key_row: Option<(Uuid, Uuid, String, serde_json::Value, bool)> = sqlx::query_as(
-            "SELECT id, user_id, key_hash, permissions, active FROM api_keys WHERE key_prefix = $1",
+        // Find matching key by prefix.
+        //
+        // `revoked_at` as well as `active`, and the asymmetry is worth naming.
+        // Migration 0359 added `revoked_at` and `revoked_reason` to this table
+        // *and* an index keyed on `revoked_at IS NULL` — which states, in the
+        // schema, that a NULL there is what makes a key live. This
+        // authenticator only ever read `active`.
+        //
+        // Nothing wrote `revoked_at`, so nothing was broken. But two
+        // revocation mechanisms existed, one of them was the obvious one to
+        // reach for, and reaching for it would have revoked a key that kept
+        // authenticating. That is the shape of a bug nobody finds until it
+        // matters.
+        let key_row: Option<(Uuid, Uuid, String, serde_json::Value, bool, bool)> = sqlx::query_as(
+            "SELECT id, user_id, key_hash, permissions, active, revoked_at IS NOT NULL
+               FROM api_keys WHERE key_prefix = $1",
         )
         .bind(prefix)
         .fetch_optional(&state.db)
         .await
         .map_err(|_| AppError::Unauthorized)?;
 
-        let (key_id, user_id, key_hash, permissions, active) =
+        let (key_id, user_id, key_hash, permissions, active, revoked) =
             key_row.ok_or(AppError::Unauthorized)?;
 
-        if !active {
+        if !active || revoked {
             return Err(AppError::Unauthorized);
         }
 

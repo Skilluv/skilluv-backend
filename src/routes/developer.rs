@@ -208,11 +208,25 @@ pub async fn revoke_key(
     auth: AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let result = sqlx::query("UPDATE api_keys SET active = FALSE WHERE id = $1 AND user_id = $2")
-        .bind(id)
-        .bind(auth.user_id)
-        .execute(&state.db)
-        .await?;
+    // Both columns, not just `active`.
+    //
+    // `revoked_at` and `revoked_reason` arrived with migration 0359, along
+    // with an index that treats `revoked_at IS NULL` as the test for a live
+    // key. Writing only `active` left the two disagreeing: a revoked key was
+    // still NULL there, so anything reading the column — or the index built on
+    // it — counted it as live. Writing both keeps every reader on the same
+    // answer, whichever one it happens to consult.
+    let result = sqlx::query(
+        "UPDATE api_keys
+            SET active = FALSE,
+                revoked_at = COALESCE(revoked_at, NOW()),
+                revoked_reason = COALESCE(revoked_reason, 'revoked by its owner')
+          WHERE id = $1 AND user_id = $2",
+    )
+    .bind(id)
+    .bind(auth.user_id)
+    .execute(&state.db)
+    .await?;
 
     if result.rows_affected() == 0 {
         return Err(AppError::NotFound("API key not found".to_string()));

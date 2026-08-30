@@ -874,6 +874,8 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::guides::get_guide,
         // ─── orientations ─────────────────────────────────────────
         crate::routes::orientations::list_orientations,
+        crate::routes::orientations::orientation_challenges,
+        crate::routes::orientations::publish_orientation_challenges,
         crate::routes::orientations::get_orientation,
         crate::routes::orientations::my_orientations,
         crate::routes::orientations::register_orientation,

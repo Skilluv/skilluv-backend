@@ -33,7 +33,7 @@ use uuid::Uuid;
 use crate::AppState;
 use crate::api_response::ApiResponse;
 use crate::errors::AppError;
-use crate::middleware::{AuthUser, RateLimiter};
+use crate::middleware::{AuthUser, Caller, RateLimiter};
 use crate::services::{
     security_external_bounties, security_findings, security_practice, security_profile,
     security_proofs, security_research,
@@ -196,9 +196,19 @@ pub async fn scope() -> Json<ApiResponse<Value>> {
 )]
 pub async fn submit_report(
     State(state): State<AppState>,
-    auth: AuthUser,
+    // A session **or** an API key carrying `security:report`.
+    //
+    // A cookie is a browser thing. An editor extension, a CLI or a CI job has
+    // none, so this route — the one a researcher most wants to call from where
+    // they found the defect — was unreachable by anything but a browser.
+    // That, and not the extension itself, was the missing half of SKI-172.
+    //
+    // The rate limit below is keyed on the person either way, so a key does
+    // not buy a second allowance.
+    caller: Caller,
     Json(input): Json<security_findings::SubmitInput>,
 ) -> Result<Json<ApiResponse<Value>>, AppError> {
+    let auth = &caller;
     // Five an hour. Enough for somebody having a very good afternoon, and the
     // ceiling a declared research token multiplies.
     let mut redis = state.redis.clone();

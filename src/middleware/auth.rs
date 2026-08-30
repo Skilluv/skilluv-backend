@@ -203,3 +203,93 @@ fn extract_auth(parts: &Parts, state: &AppState) -> Option<AuthUser> {
         active_enterprise_id: parse_active_enterprise(cookie_header),
     })
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// A caller who may be a browser or a program
+// ═══════════════════════════════════════════════════════════════════
+
+/// Somebody acting on their own behalf, whether from a session or a key.
+///
+/// ## Why this exists
+///
+/// `AuthUser` reads a session cookie. A cookie is a browser thing: an editor
+/// extension, a CLI, a CI job or a GitHub Action has no session to present, so
+/// every route guarded by `AuthUser` alone is a route a program cannot reach.
+///
+/// That is the gap behind SKI-172. The ticket asked for a VS Code extension
+/// that submits security findings from the editor; the extension was never the
+/// hard part. `POST /api/security/reports` takes `AuthUser`, so nothing
+/// without a browser could call it, whatever the client was written in.
+///
+/// ## Why an extractor and not a second route
+///
+/// A `/api/v1/security/reports` twin would be two handlers to keep in step on
+/// rate limits, validation and the shape of the answer — and the day they
+/// diverge, one of them is the lenient one. One handler, two ways in.
+///
+/// ## The scope is not optional
+///
+/// A key reaches this only if it carries the named permission. `permissions`
+/// on `api_keys` already means "what the holder may do on their own behalf",
+/// which is exactly the question here, and `has_permission` already honours a
+/// `*`. A key minted for reading a profile cannot file a vulnerability report.
+pub struct Caller {
+    pub user_id: Uuid,
+    /// `None` for a session. `Some(id)` names the key, so a route that wants
+    /// to log or rate-limit per key can, and so an audit can answer "which
+    /// key filed this".
+    pub api_key_id: Option<Uuid>,
+}
+
+impl Caller {
+    /// Read a caller, accepting a session cookie or a key carrying `scope`.
+    ///
+    /// The session is tried first: it is the common case, it costs no query
+    /// beyond what `AuthUser` already does, and a person in a browser should
+    /// never be refused because a key would have needed a scope.
+    pub async fn with_scope(
+        parts: &mut Parts,
+        state: &AppState,
+        scope: &str,
+    ) -> Result<Self, AppError> {
+        if let Ok(auth) = AuthUser::from_request_parts(parts, state).await {
+            return Ok(Self {
+                user_id: auth.user_id,
+                api_key_id: None,
+            });
+        }
+
+        let key = crate::middleware::api_key::ApiKeyAuth::from_request_parts(parts, state).await?;
+        // `require_permission` answers 403, not 401, and that distinction is
+        // the whole message: the key is valid and it is not allowed to do
+        // this. Answering 401 would send somebody looking for a bad token.
+        key.require_permission(scope)?;
+        Ok(Self {
+            user_id: key.user_id,
+            api_key_id: Some(key.key_id),
+        })
+    }
+}
+
+/// The scope a key needs to file a vulnerability report.
+///
+/// Named here rather than spelled at the call site so that the string a person
+/// pastes into a key and the string the route checks are the same one.
+pub const SCOPE_SECURITY_REPORT: &str = "security:report";
+
+impl FromRequestParts<AppState> for Caller {
+    type Rejection = AppError;
+
+    /// The default scope is the security one, because that is the only route
+    /// wired to `Caller` today and a default that silently allowed *any* scope
+    /// would be the wrong kind of convenient.
+    ///
+    /// A second route wanting a different scope should call
+    /// [`Caller::with_scope`] from its own extractor rather than widen this.
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        Caller::with_scope(parts, state, SCOPE_SECURITY_REPORT).await
+    }
+}

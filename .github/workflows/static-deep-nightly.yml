@@ -44,7 +44,7 @@ jobs:
       # attack surface.
       - name: Install cargo-geiger
         continue-on-error: true
-        uses: taiki-e/install-action@ba47c86ac325773530516bb756137ac718732518  # v2
+        uses: taiki-e/install-action@37f7c5781271959fb65b6b35224e28652ff2b63d  # v2
         with:
           tool: cargo-geiger
       - name: cargo-geiger (unsafe surface, advisory)
@@ -54,7 +54,7 @@ jobs:
       # SA-05 — typos in code and docs.
       - name: Install typos
         continue-on-error: true
-        uses: taiki-e/install-action@ba47c86ac325773530516bb756137ac718732518  # v2
+        uses: taiki-e/install-action@37f7c5781271959fb65b6b35224e28652ff2b63d  # v2
         with:
           tool: typos-cli
       - name: typos (advisory)

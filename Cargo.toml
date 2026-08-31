@@ -74,7 +74,7 @@ thiserror = "2"
 # Reads `ops/discord/server.toml`, the declaration of the Discord server, which
 # `services::discord_roles` embeds at build time so the role mapping has one
 # source of truth rather than a copy in a table.
-toml = "0.8"
+toml = "1.1"
 
 # HTTP client (Judge0)
 reqwest = { version = "0.13", features = ["json", "form"] }

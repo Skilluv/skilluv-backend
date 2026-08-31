@@ -38,7 +38,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4  # stable
       - name: Install cargo-vet
-        uses: taiki-e/install-action@ba47c86ac325773530516bb756137ac718732518  # v2
+        uses: taiki-e/install-action@37f7c5781271959fb65b6b35224e28652ff2b63d  # v2
         with:
           tool: cargo-vet@0.10.2
       - name: cargo vet

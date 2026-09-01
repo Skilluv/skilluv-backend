@@ -73,6 +73,48 @@ async fn the_code_rite_is_the_same_challenge_twice() {
     );
 }
 
+/// No rite carries a countdown.
+///
+/// `start_challenge` turns `duration_minutes` into an `expires_at`, and
+/// `submit_challenge` marks anything arriving after it `failure`. Sixty
+/// minutes — what migration 0607 first wrote — is impossible on the code rite,
+/// whose gesture is a fork and a pull request, and arbitrary on the other
+/// eleven, which are gestures somebody fits into their week (0610).
+#[tokio::test]
+async fn no_rite_puts_a_clock_on_the_first_gesture() {
+    let app = common::TestApp::spawn().await;
+    app.register_user("unhurried").await;
+    app.login("unhurried").await;
+
+    let timed: Vec<String> = sqlx::query_scalar(
+        "SELECT skill_domain FROM challenge_templates
+         WHERE is_domain_rite AND duration_minutes IS NOT NULL",
+    )
+    .fetch_all(&app.db)
+    .await
+    .unwrap();
+    assert!(timed.is_empty(), "these rites are on a clock: {timed:?}");
+
+    // And the attempt it opens carries no deadline either.
+    let challenge: serde_json::Value = app
+        .get("/api/challenges/onboarding?domain=design")
+        .await
+        .json()
+        .await
+        .unwrap();
+    let challenge_id = challenge["data"]["challenge"]["id"].as_str().unwrap();
+    let start: serde_json::Value = app
+        .post(&format!("/api/challenges/{challenge_id}/start"), &json!({}))
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert!(
+        start["data"]["submission"]["expires_at"].is_null(),
+        "the attempt was opened with a deadline: {start}"
+    );
+}
+
 /// A domain nothing recognises is refused, rather than answered "no challenge
 /// found" — which reads as "that trade does not exist here".
 #[tokio::test]

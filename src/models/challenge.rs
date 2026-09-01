@@ -94,6 +94,13 @@ pub struct ChallengeTemplate {
     /// 'sas' = review humaine du process ; 'free' = mode libre réservé
     /// aux verified_apprentice (voir migration 0118 + gate submit_challenge).
     pub beginner_stage: Option<String>,
+    /// TRUE on the one template that is this domain's Bonjour Skilluv rite —
+    /// the first gesture asked of a new account (migration 0607). Broader than
+    /// it looks next to `is_onboarding`, which also marks the fifteen
+    /// per-starter variants of the code fork gesture; this one is unique per
+    /// published domain, which is what makes the rite a fixed thing rather
+    /// than whichever of fifteen rows `LIMIT 1` returned.
+    pub is_domain_rite: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

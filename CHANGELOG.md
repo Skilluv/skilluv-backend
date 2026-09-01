@@ -94,12 +94,52 @@ and the project will follow semantic versioning once 1.0 is reached.
   The moderation hold is its own column: `active` is the author's own pause
   switch, and a hold placed there would be undone by their next PATCH. The row
   survives, because a dispute is instructed against what was published.
+* **onboarding:** one Bonjour Skilluv rite per domain, twelve gestures. `code`
+  still forks a starter and opens a pull request; the other eleven hand in an
+  artifact in the shape of their trade — a screen, a playtest verdict, a
+  finding, an SLO reading, a defect report, a workspace step, a review, twenty
+  seconds of sound, a retro, a translation, an explanation — and land in the
+  human review queue. `POST /onboarding/bonjour-skilluv/start` no longer loads
+  a GitHub token before doing anything else, `GET /onboarding/rites` serves the
+  whole catalogue for the signup screen, and the status endpoint describes the
+  caller's gesture before they have started it. Migrations 0607 and 0609.
+* **orientations:** `GET /orientations` carries the number of rows its filter
+  matches, and `GET /orientations/counts` answers "how many specialities per
+  class" in one call. The catalogue is ~255 curated rows against a `limit` that
+  caps at 200 and defaults to 50, so a client with no parameters received a
+  fifth of the trades with nothing saying so.
+
 * **admin:** `GET /admin/assistant/stats` and
   `GET /admin/users/{id}/assistant-interactions`. Two facts were
   unrecoverable — a cache hit could not be told from a call, and a refusal
   recorded nothing at all.
 
 ### Fixed
+
+* **challenges:** a non-code submission of a hundred characters is no longer a
+  pass. `evaluate_basic` returned `success` and its fragments for any
+  submission of a hundred characters in every domain but `code`, and returned
+  an unconditional `success` for a code challenge declaring no expected output.
+  On a public profile that mark was indistinguishable from one a reviewer gave,
+  in the one thing this platform asks anybody to trust it about. A submission
+  nothing can score is now `pending_review`: its deliverable is queued for a
+  person, and the fragments follow their verdict rather than its length.
+  Migration 0608.
+* **challenges:** every declarable domain has a published onboarding challenge.
+  Eight of the twelve answered `GET /challenges/onboarding` with "No onboarding
+  challenge found", so the first screen after signing up was an error for two
+  thirds of the platform. The four 2024 seeds it did have asked, in French, for
+  "minimum 100 mots" — written against the character count above — and are
+  retired. The lookup is also deterministic now: `code` carries fifteen
+  onboarding templates, one per starter, and `LIMIT 1` returned an arbitrary
+  one of them.
+* **openapi:** `skill_domain` lists the twelve domains the server accepts,
+  everywhere a request carries one. `RegisterRequest` documented four, so a
+  generated client refused seven valid domains and the contract fuzzer never
+  sent `audio` or `leadership`. The list had been transcribed eight times
+  across request bodies and query parameters; every copy now emits
+  `validators::SKILL_DOMAINS`, and a test walks the built document and fails on
+  the next copy.
 
 * **profiles:** `GET /profile/{username}` returns `id`. Four public endpoints
   are addressed by UUID and this was the only place a visitor could resolve a

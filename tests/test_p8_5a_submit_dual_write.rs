@@ -120,6 +120,8 @@ async fn create_from_submission_produces_verified_deliverable() {
             language: Some("python"),
             stdout: Some("Hello, Skilluv!\n"),
             stderr: None,
+            skill_domain: "code",
+            awaiting_review: false,
         },
     )
     .await
@@ -197,6 +199,8 @@ async fn same_submission_code_is_idempotent() {
             language: None,
             stdout: None,
             stderr: None,
+            skill_domain: "code",
+            awaiting_review: false,
         },
     )
     .await
@@ -213,6 +217,8 @@ async fn same_submission_code_is_idempotent() {
             language: None,
             stdout: None,
             stderr: None,
+            skill_domain: "code",
+            awaiting_review: false,
         },
     )
     .await
@@ -254,6 +260,8 @@ async fn different_code_creates_distinct_deliverables() {
             language: None,
             stdout: None,
             stderr: None,
+            skill_domain: "code",
+            awaiting_review: false,
         },
     )
     .await
@@ -270,6 +278,8 @@ async fn different_code_creates_distinct_deliverables() {
             language: None,
             stdout: None,
             stderr: None,
+            skill_domain: "code",
+            awaiting_review: false,
         },
     )
     .await
@@ -314,6 +324,8 @@ async fn artifact_hash_is_deterministic() {
             language: None,
             stdout: None,
             stderr: None,
+            skill_domain: "code",
+            awaiting_review: false,
         },
     )
     .await
@@ -330,6 +342,8 @@ async fn artifact_hash_is_deterministic() {
             language: None,
             stdout: None,
             stderr: None,
+            skill_domain: "code",
+            awaiting_review: false,
         },
     )
     .await
@@ -376,6 +390,8 @@ async fn artifact_metadata_captures_code_stdout_stderr() {
             language: Some("python"),
             stdout: Some("42\n"),
             stderr: Some(""),
+            skill_domain: "code",
+            awaiting_review: false,
         },
     )
     .await
@@ -418,6 +434,8 @@ async fn artifact_metadata_omits_optional_when_none() {
             language: None,
             stdout: None,
             stderr: None,
+            skill_domain: "code",
+            awaiting_review: false,
         },
     )
     .await

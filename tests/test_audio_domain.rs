@@ -415,9 +415,9 @@ async fn every_audio_challenge_says_what_will_be_looked_at() {
             .fetch_one(&app.db)
             .await
             .unwrap();
-    // Twenty-four per trade (0417) plus the ten the platform commissions for
-    // its own games (0423).
-    assert_eq!(total, 34);
+    // Twenty-four per trade (0417), plus the ten the platform commissions for
+    // its own games (0423), plus the domain's Bonjour Skilluv rite (0607).
+    assert_eq!(total, 35);
 
     let without_rubric: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM challenge_templates

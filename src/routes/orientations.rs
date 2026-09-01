@@ -29,6 +29,9 @@ const MAX_ACTIVE_ORIENTATIONS: i64 = 3;
 pub fn orientation_routes() -> Router<AppState> {
     Router::new()
         .route("/orientations", get(list_orientations))
+        // Before `/orientations/{slug}` in this list for readability only —
+        // the router matches a literal segment ahead of a parameter either way.
+        .route("/orientations/counts", get(orientation_counts))
         // Opening a trade's catalogue, one trade at a time. Mounted here
         // rather than in `admin.rs` because the guard is per domain: a design
         // curator opens design trades, and nobody has to be a global admin to
@@ -103,6 +106,17 @@ fn default_limit() -> i64 {
     50
 }
 
+/// The counts endpoint takes only the one filter that changes what counts as
+/// part of the catalogue. A domain or tag filter would make it a count of one
+/// row, which is what `GET /api/orientations` already answers.
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
+pub struct CountsQuery {
+    #[serde(default)]
+    pub include_archived: bool,
+}
+
 #[derive(Debug, Serialize, sqlx::FromRow, ToSchema)]
 pub struct OrientationRow {
     pub id: Uuid,
@@ -127,6 +141,28 @@ pub struct CatalogPagination {
 pub struct OrientationsCatalogResponse {
     pub orientations: Vec<OrientationRow>,
     pub pagination: CatalogPagination,
+    /// How many orientations match the filter, not how many this page holds.
+    ///
+    /// The catalogue is ~255 rows and `limit` caps at 200, so the whole of it
+    /// never fit in one response and the default page of 50 handed a client a
+    /// fifth of the trades with nothing saying so — the signup screen offered
+    /// 50 of 255 and looked complete (SKI-364).
+    pub total: i64,
+}
+
+/// One domain and how many curated orientations it holds.
+#[derive(Debug, Serialize, sqlx::FromRow, ToSchema)]
+pub struct OrientationDomainCount {
+    pub domain: String,
+    pub total: i64,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct OrientationCountsResponse {
+    /// Every domain that has at least one curated orientation, most first.
+    pub domains: Vec<OrientationDomainCount>,
+    /// The sum across domains — the size of the catalogue under this filter.
+    pub total: i64,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -296,12 +332,77 @@ pub async fn list_orientations(
     .fetch_all(&state.db)
     .await?;
 
+    // Counted under the same filter as the page, so a client that received
+    // `limit` rows can tell a full page from the end of the catalogue.
+    let total: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+        FROM orientations o
+        WHERE o.is_curated = TRUE
+          AND ($1::BOOLEAN OR o.is_archived = FALSE)
+          AND ($2::VARCHAR IS NULL OR o.primary_domain = $2)
+          AND ($3::VARCHAR IS NULL OR $3 = ANY(o.tags))
+        "#,
+    )
+    .bind(q.include_archived)
+    .bind(q.domain.as_deref())
+    .bind(q.tag.as_deref())
+    .fetch_one(&state.db)
+    .await?;
+
     Ok(Json(ApiResponse::new(OrientationsCatalogResponse {
         orientations: rows,
         pagination: CatalogPagination {
             limit,
             offset: q.offset.max(0),
         },
+        total,
+    })))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// GET /orientations/counts — combien de métiers par domaine
+// ═══════════════════════════════════════════════════════════════════
+
+/// How many curated orientations each domain holds.
+///
+/// The class-picking screen shows the eleven domains with "73 specialties"
+/// under each name. Without this it costs eleven requests, or one capped
+/// request that cannot answer the question at all — so the count was hardcoded
+/// in the front from a count of the migrations, and went wrong on the next
+/// orientation added (SKI-364).
+#[utoipa::path(
+    get,
+    path = "/api/orientations/counts",
+    tag = "profile",
+    params(CountsQuery),
+    responses(
+        (status = 200, description = "Curated orientations per domain", body = ApiResponse<OrientationCountsResponse>),
+    ),
+    operation_id = "orientationsCounts",
+)]
+pub async fn orientation_counts(
+    State(state): State<AppState>,
+    Query(q): Query<CountsQuery>,
+) -> Result<Json<ApiResponse<OrientationCountsResponse>>, AppError> {
+    let domains = sqlx::query_as::<_, OrientationDomainCount>(
+        r#"
+        SELECT o.primary_domain AS domain, COUNT(*) AS total
+        FROM orientations o
+        WHERE o.is_curated = TRUE
+          AND ($1::BOOLEAN OR o.is_archived = FALSE)
+        GROUP BY o.primary_domain
+        ORDER BY COUNT(*) DESC, o.primary_domain
+        "#,
+    )
+    .bind(q.include_archived)
+    .fetch_all(&state.db)
+    .await?;
+
+    let total = domains.iter().map(|d| d.total).sum();
+    Ok(Json(ApiResponse::new(OrientationCountsResponse {
+        domains,
+        total,
     })))
 }
 

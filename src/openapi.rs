@@ -875,6 +875,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::guides::get_guide,
         // ─── orientations ─────────────────────────────────────────
         crate::routes::orientations::list_orientations,
+        crate::routes::orientations::orientation_counts,
         crate::routes::orientations::orientation_challenges,
         crate::routes::orientations::publish_orientation_challenges,
         crate::routes::orientations::get_orientation,
@@ -908,6 +909,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         // ─── onboarding (Bonjour Skilluv) ─────────────────────────
         crate::routes::onboarding::start_bonjour_skilluv,
         crate::routes::onboarding::get_bonjour_skilluv_status,
+        crate::routes::onboarding::list_rites,
         // ─── challenge tags + featured ────────────────────────────
         crate::routes::challenge_tags::list_tags,
         crate::routes::challenge_tags::list_categories,
@@ -1834,6 +1836,8 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
             crate::routes::orientations::OrientationRow,
             crate::routes::orientations::CatalogPagination,
             crate::routes::orientations::OrientationsCatalogResponse,
+            crate::routes::orientations::OrientationDomainCount,
+            crate::routes::orientations::OrientationCountsResponse,
             crate::routes::orientations::OrientationSkillEntry,
             crate::routes::orientations::OrientationDetailResponse,
             crate::routes::orientations::UserOrientationRow,
@@ -1877,6 +1881,9 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
             crate::routes::onboarding::StartNextSteps,
             crate::routes::onboarding::StartBonjourResponse,
             crate::routes::onboarding::StatusBonjourResponse,
+            crate::routes::onboarding::RiteDescriptor,
+            crate::routes::onboarding::RitesCatalogueResponse,
+            crate::services::onboarding_rite::RiteForm,
             // challenge tags
             crate::models::ChallengeTemplate,
             crate::models::PublicLabQuestion,

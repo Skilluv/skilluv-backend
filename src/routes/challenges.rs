@@ -61,6 +61,11 @@ struct SubmitRequest {
     language: Option<String>,
 }
 
+/// The status of a submission nothing on this side can judge: received,
+/// queued for a human, not yet worth anything. Named because it is compared
+/// in five places and a typo would silently award nothing forever.
+const PENDING_REVIEW: &str = "pending_review";
+
 fn build_response(data: serde_json::Value) -> serde_json::Value {
     json!({
         "data": data,
@@ -95,8 +100,15 @@ pub async fn get_onboarding(
         ));
     }
 
+    crate::validators::check_skill_domain(&query.domain, "domain")?;
+
+    // `is_domain_rite` first, then `is_onboarding`: the code domain carries
+    // fifteen onboarding templates, one per starter, so `LIMIT 1` on the flag
+    // alone returned an arbitrary one of them and the brief changed between two
+    // page loads. Migration 0607 marks the one rite of each domain and a
+    // partial unique index keeps it to one (SKI-360).
     let challenge: ChallengeTemplate = sqlx::query_as(
-        "SELECT * FROM challenge_templates WHERE is_onboarding = TRUE AND skill_domain = $1 AND status = 'published' LIMIT 1",
+        "SELECT * FROM challenge_templates          WHERE is_onboarding = TRUE AND skill_domain = $1 AND status = 'published'          ORDER BY is_domain_rite DESC, created_at ASC          LIMIT 1",
     )
     .bind(&query.domain)
     .fetch_optional(&state.db)
@@ -532,18 +544,42 @@ pub async fn submit_challenge(
     .fetch_one(&state.db)
     .await?;
 
+    let awaiting_review = eval_status == PENDING_REVIEW;
+
+    // The other end of `POST /onboarding/bonjour-skilluv/start` for the eleven
+    // domains whose rite is a submission rather than a fork: handing in the
+    // domain's brief is what the webhook is for the code rite (SKI-362). Scoped
+    // to `started` so a second attempt on the same brief does not rewind a rite
+    // that a reviewer has already passed.
+    if challenge.is_domain_rite {
+        sqlx::query(
+            "UPDATE onboarding_bonjour_skilluv \
+             SET status = 'submitted', submission_id = $1 \
+             WHERE user_id = $2 AND rite_form = 'submission' AND status = 'started'",
+        )
+        .bind(updated_submission.id)
+        .bind(auth.user_id)
+        .execute(&state.db)
+        .await?;
+    }
+
     if eval_status == "success" {
         metrics::counter!(
             "skilluv_challenges_completed_total",
             "domain" => challenge.skill_domain.clone()
         )
         .increment(1);
+    }
 
-        // P8.5a : dual-write vers la nouvelle table `deliverables`. Best-effort :
-        // si l'INSERT échoue (ex: contrainte, DB blip), on log et on continue —
-        // le pipeline legacy reste la source de vérité pour l'instant. En P8.7
-        // le legacy sera droppé et deliverables deviendra unique source.
-        match crate::services::DeliverablesService::create_from_challenge_submission(
+    // A judged success and a submission waiting on a person both produce a
+    // deliverable; only the verification status differs. The waiting one is
+    // NOT best-effort: it is the only record that the work was ever handed in,
+    // and losing it loses the submission, so its failure fails the request.
+    if eval_status == "success" || awaiting_review {
+        // P8.5a : dual-write vers la nouvelle table `deliverables`. Best-effort
+        // côté succès : si l'INSERT échoue (ex: contrainte, DB blip), on log et
+        // on continue — le pipeline legacy reste la source de vérité.
+        let deliverable = crate::services::DeliverablesService::create_from_challenge_submission(
             &state.db,
             crate::services::deliverables::ChallengeSubmissionInput {
                 user_id: auth.user_id,
@@ -554,16 +590,22 @@ pub async fn submit_challenge(
                 language: body.language.as_deref(),
                 stdout: exec_stdout.as_deref(),
                 stderr: exec_stderr.as_deref(),
+                skill_domain: &challenge.skill_domain,
+                awaiting_review,
             },
         )
-        .await
-        {
+        .await;
+
+        match deliverable {
             Ok(_deliverable_id) => {
                 metrics::counter!(
                     "skilluv_challenge_deliverables_created_total",
                     "domain" => challenge.skill_domain.clone()
                 )
                 .increment(1);
+            }
+            Err(e) if awaiting_review => {
+                return Err(e);
             }
             Err(e) => {
                 tracing::warn!(
@@ -575,6 +617,14 @@ pub async fn submit_challenge(
                 );
             }
         }
+    }
+
+    if awaiting_review {
+        metrics::counter!(
+            "skilluv_challenge_submissions_pending_review_total",
+            "domain" => challenge.skill_domain.clone()
+        )
+        .increment(1);
     }
     metrics::counter!(
         "skilluv_fragments_awarded_total",
@@ -735,6 +785,14 @@ pub async fn submit_challenge(
             "profile_active": user.profile_active,
         },
     });
+
+    if awaiting_review {
+        // Said plainly, because the alternative reading of a response that
+        // awards nothing is "it failed" — and it did not.
+        response["message"] = json!(
+            "Received. Nothing here can score this one, so a reviewer will read              it; fragments are awarded on their verdict."
+        );
+    }
 
     if profile_just_activated {
         response["profile_activated"] = json!(true);
@@ -909,7 +967,17 @@ async fn evaluate_submission(
     }
 }
 
-/// Fallback when Judge0 is unavailable or for non-code domains
+/// Fallback when Judge0 is unavailable or for non-code domains.
+///
+/// Everything this function can actually check, it checks. Everything it
+/// cannot, it hands to a person — it never invents a pass.
+///
+/// It used to invent two. A non-code submission of a hundred characters
+/// returned `success` and its fragments, whatever the hundred characters were;
+/// and a code challenge that declares no `expected_output` fell through to an
+/// unconditional `success`. Both produced, on a public profile, a mark
+/// indistinguishable from one a reviewer gave — in the one thing this platform
+/// asks anybody to trust it about (SKI-361).
 fn evaluate_basic(
     challenge: &ChallengeTemplate,
     code: &str,
@@ -931,24 +999,9 @@ fn evaluate_basic(
         ));
     }
 
-    if challenge.skill_domain != "code" {
-        if code.len() >= 100 {
-            return Ok((
-                "success".to_string(),
-                challenge.reward_fragments,
-                None,
-                None,
-            ));
-        }
-        return Ok((
-            "failure".to_string(),
-            failure_fragments(challenge),
-            None,
-            None,
-        ));
-    }
-
-    if let Some(ref expected) = challenge.expected_output {
+    if challenge.skill_domain == "code"
+        && let Some(ref expected) = challenge.expected_output
+    {
         if code.contains(expected.trim()) {
             return Ok((
                 "success".to_string(),
@@ -965,12 +1018,11 @@ fn evaluate_basic(
         ));
     }
 
-    Ok((
-        "success".to_string(),
-        challenge.reward_fragments,
-        None,
-        None,
-    ))
+    // Nothing here can judge this one. Not a failure — the work may be good and
+    // nothing has read it — and not a pass either. `submit_challenge` puts the
+    // deliverable in the review queue the platform already runs, and fragments
+    // follow the reviewer's verdict.
+    Ok((PENDING_REVIEW.to_string(), 0, None, None))
 }
 
 fn failure_fragments(challenge: &ChallengeTemplate) -> i32 {

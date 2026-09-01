@@ -122,6 +122,7 @@ pub mod notify;
 pub mod oauth;
 pub mod og_card;
 pub mod onboarding_recommendation;
+pub mod onboarding_rite;
 pub mod ops_mentorship;
 pub mod ops_onboarding;
 pub mod ops_practice;

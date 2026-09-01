@@ -27,9 +27,12 @@ async fn every_seed_is_a_draft() {
     // The intent comes from the backlog; the full brief needs an author who
     // knows the trade. A challenge nobody reviewed must not be offered to
     // somebody learning.
+    // Past the domain's rite, which is published on purpose and was reviewed
+    // (migration 0607): the catalogue seeded here is what must stay in draft.
     let published: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM challenge_templates
-          WHERE skill_domain = 'ai' AND is_training = TRUE AND status <> 'draft'",
+          WHERE skill_domain = 'ai' AND is_training = TRUE
+            AND is_onboarding = FALSE AND status <> 'draft'",
     )
     .fetch_one(&app.db)
     .await
@@ -47,6 +50,7 @@ async fn every_seed_carries_a_rubric() {
     let rubricless: Vec<String> = sqlx::query_scalar(
         "SELECT title FROM challenge_templates
           WHERE skill_domain = 'ai' AND is_training = TRUE
+            AND is_onboarding = FALSE
             AND (evaluation_rubric IS NULL
                  OR jsonb_array_length(evaluation_rubric) = 0)",
     )
@@ -64,6 +68,7 @@ async fn every_seed_says_what_is_expected_of_it() {
     let thin: Vec<String> = sqlx::query_scalar(
         "SELECT title FROM challenge_templates
           WHERE skill_domain = 'ai' AND is_training = TRUE
+            AND is_onboarding = FALSE
             AND (instructions NOT LIKE '%Ce qui est attendu%'
                  OR length(instructions) < 300)",
     )
@@ -83,6 +88,7 @@ async fn the_two_non_negotiables_are_in_every_brief() {
     let missing: Vec<String> = sqlx::query_scalar(
         "SELECT title FROM challenge_templates
           WHERE skill_domain = 'ai' AND is_training = TRUE
+            AND is_onboarding = FALSE
             AND (instructions NOT LIKE '%que le modèle n''a pas vues%'
                  OR instructions NOT LIKE '%graines, versions et données figées%')",
     )
@@ -102,6 +108,7 @@ async fn the_families_get_their_own_criteria_not_the_default() {
     let has_disclosure: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM challenge_templates
           WHERE skill_domain = 'ai' AND is_training = TRUE
+            AND is_onboarding = FALSE
             AND evaluation_rubric::TEXT LIKE '%ivulgation%'",
     )
     .fetch_one(&app.db)

@@ -124,6 +124,11 @@ impl ReviewsService {
         let mut tx = db.begin().await?;
 
         // 1. Vérifier que le deliverable est bien en attente de review
+        // `challenge_templates.reward_fragments` is the second source of a
+        // reward here, and it is not a fallback for tidiness: since SKI-361 a
+        // submission in a domain nothing can score reaches a reviewer through
+        // this path, carrying no slice. Read only from the slice, every one of
+        // those verdicts would have awarded zero — approved, and worth nothing.
         let (verification_status, slice_id, deliverable_user_id, fragments_reward): (
             String,
             Option<Uuid>,
@@ -134,9 +139,10 @@ impl ReviewsService {
             SELECT d.verification_status,
                    d.slice_id,
                    d.user_id,
-                   COALESCE(ps.fragments_reward, 0)
+                   COALESCE(ps.fragments_reward, ct.reward_fragments, 0)
             FROM deliverables d
             LEFT JOIN project_slices ps ON ps.id = d.slice_id
+            LEFT JOIN challenge_templates ct ON ct.id = d.challenge_id
             WHERE d.id = $1
             "#,
         )
@@ -207,6 +213,13 @@ impl ReviewsService {
                 &mut tx,
                 params.deliverable_id,
                 slice_id,
+                deliverable_user_id,
+                fragments_reward,
+            )
+            .await?;
+            Self::settle_pending_challenge_submission(
+                &mut tx,
+                params.deliverable_id,
                 deliverable_user_id,
                 fragments_reward,
             )
@@ -302,6 +315,74 @@ impl ReviewsService {
                  WHERE id = $1 AND status IN ('in_review', 'claimed')",
             )
             .bind(sid)
+            .execute(&mut **tx)
+            .await?;
+        }
+
+        Ok(())
+    }
+
+    /// Close the challenge submission an approved deliverable came from.
+    ///
+    /// Since SKI-361, a submission in a domain no evaluator covers is written
+    /// `pending_review` with zero fragments and its deliverable is queued for a
+    /// person. This is the other end of that: an `approve` verdict is what
+    /// turns it into a `success`, records what it earned, and — for somebody
+    /// whose very first act on the platform was that submission — activates
+    /// the profile that `submit_challenge` could not activate at the time.
+    ///
+    /// A no-op for every deliverable that did not come from a submission, and
+    /// for a submission already settled: the `status = 'pending_review'`
+    /// predicate makes a second verdict on the same deliverable idempotent.
+    ///
+    /// The user's total is not touched here — `apply_verified_side_effects`
+    /// has already added `fragments_reward` to it, and adding it twice is the
+    /// obvious way to get this wrong.
+    async fn settle_pending_challenge_submission(
+        tx: &mut Transaction<'_, Postgres>,
+        deliverable_id: Uuid,
+        user_id: Uuid,
+        fragments_reward: i32,
+    ) -> Result<(), AppError> {
+        // The submission id travels in the deliverable's metadata rather than
+        // in a column: `create_from_challenge_submission` writes it there, and
+        // `deliverables` has a `challenge_id` but no `submission_id`.
+        let settled: Option<Uuid> = sqlx::query_scalar(
+            r#"
+            UPDATE challenge_submissions cs
+            SET status = 'success',
+                fragments_earned = $1,
+                evaluated_at = NOW()
+            FROM deliverables d
+            WHERE d.id = $2
+              AND cs.id = (d.artifact_metadata ->> 'submission_id')::UUID
+              AND cs.status = 'pending_review'
+            RETURNING cs.id
+            "#,
+        )
+        .bind(fragments_reward)
+        .bind(deliverable_id)
+        .fetch_optional(&mut **tx)
+        .await?;
+
+        if let Some(submission_id) = settled {
+            sqlx::query(
+                "UPDATE users SET profile_active = TRUE, updated_at = NOW()
+                 WHERE id = $1 AND profile_active = FALSE",
+            )
+            .bind(user_id)
+            .execute(&mut **tx)
+            .await?;
+
+            // If that submission was the user's Bonjour Skilluv rite, this
+            // verdict is what finishes it — the equivalent of the webhook
+            // closing the code rite (SKI-362).
+            sqlx::query(
+                "UPDATE onboarding_bonjour_skilluv
+                 SET status = 'completed', completed_at = NOW()
+                 WHERE submission_id = $1 AND status = 'submitted'",
+            )
+            .bind(submission_id)
             .execute(&mut **tx)
             .await?;
         }

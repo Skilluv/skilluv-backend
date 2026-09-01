@@ -420,13 +420,15 @@ async fn seeded_challenges_are_drafts_and_carry_their_grid() {
     // Drafts, because the full brief needs an author who knows the trade and
     // an unreviewed challenge must not reach somebody learning.
     //
-    // Scoped past the onboarding challenge, which is published on purpose:
-    // "Premier pas" exists to be somebody's first, and it was reviewed. The
-    // catalogue seeded here is what must stay in draft.
+    // Scoped past the onboarding challenge, which is published on purpose: the
+    // domain's rite exists to be somebody's first, and it was reviewed. And
+    // past archived rows — migration 0607 retired the 2024 "Premier pas" seed
+    // and an archived row reaches nobody, which is the whole point of the
+    // status. The catalogue seeded here is what must stay in draft.
     let published_seeds: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM challenge_templates
           WHERE skill_domain = 'design' AND is_training = TRUE
-            AND is_onboarding = FALSE AND status <> 'draft'",
+            AND is_onboarding = FALSE AND status NOT IN ('draft', 'archived')",
     )
     .fetch_one(&app.db)
     .await
@@ -438,7 +440,7 @@ async fn seeded_challenges_are_drafts_and_carry_their_grid() {
     let without_rubric: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM challenge_templates
           WHERE skill_domain = 'design' AND is_training = TRUE
-            AND is_onboarding = FALSE
+            AND is_onboarding = FALSE AND status <> 'archived'
             AND (evaluation_rubric IS NULL
                  OR jsonb_array_length(evaluation_rubric) = 0)",
     )

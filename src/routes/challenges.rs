@@ -37,7 +37,7 @@ struct ListQuery {
     /// `validators::SKILL_DOMAINS`; this pattern is the same list, and it had
     /// gone stale — a contract that understates what it accepts sends a caller
     /// looking for an endpoint that does not exist.
-    #[param(pattern = r"^(code|design|game|security|ops|ai|soft_skills|audio)$")]
+    #[param(value_type = Option<crate::validators::SkillDomain>)]
     domain: Option<String>,
     #[param(minimum = 1, maximum = 5)]
     difficulty: Option<i16>,

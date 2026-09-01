@@ -45,7 +45,7 @@ pub struct CategoriesQuery {
     /// eight domains; omitted returns every category (SKI-314). The pattern
     /// keeps the schema as strict as the handler, so a contract fuzzer does not
     /// generate a 31-character "domain" the API then rejects.
-    #[param(pattern = r"^(code|design|game|security|ops|ai|soft_skills|audio)$")]
+    #[param(value_type = Option<crate::validators::SkillDomain>)]
     pub domain: Option<String>,
 }
 

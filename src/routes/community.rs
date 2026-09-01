@@ -40,6 +40,7 @@ pub struct CreateCommunityChallenge {
     title: String,
     description: String,
     instructions: String,
+    #[schema(schema_with = crate::validators::skill_domain_schema)]
     skill_domain: String,
     difficulty: i16,
     language: Option<String>,

@@ -21,9 +21,42 @@ pub fn leaderboard_routes() -> Router<AppState> {
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct LeaderboardMeta {
-    /// `global`, `code`, `design`, `game`, `security`.
+    /// `global`, or any of `validators::SKILL_DOMAINS`.
     pub domain: &'static str,
     pub periods: &'static [&'static str],
+}
+
+/// The `{domain}` path segment of every leaderboard route.
+///
+/// A struct rather than the tuple form of `params(...)` because the tuple form
+/// takes a literal pattern, and a literal is how this document came to name
+/// four domains while `LeaderboardService::validate_domain` accepted thirteen:
+/// every `ops`, `ai` or `audio` leaderboard was reachable and undocumented.
+/// `schema_with` emits the list the guard actually applies.
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Path)]
+pub struct LeaderboardDomainPath {
+    /// `global`, or any of the platform skill domains.
+    #[param(schema_with = leaderboard_domain_schema)]
+    pub domain: String,
+}
+
+/// `{ type: string, enum: ["global", ...SKILL_DOMAINS] }` — the exact set
+/// `is_valid_domain` accepts, emitted rather than transcribed.
+pub fn leaderboard_domain_schema() -> utoipa::openapi::schema::Object {
+    use utoipa::openapi::schema::{ObjectBuilder, Type};
+    let values = std::iter::once(serde_json::json!("global"))
+        .chain(
+            crate::validators::SKILL_DOMAINS
+                .iter()
+                .map(|d| serde_json::json!(d)),
+        )
+        .collect::<Vec<_>>();
+    ObjectBuilder::new()
+        .schema_type(utoipa::openapi::schema::SchemaType::Type(Type::String))
+        .enum_values(Some(values))
+        .description(Some("Leaderboard domain — `global` or a skill domain."))
+        .build()
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -99,7 +132,7 @@ pub struct LeaderboardPageResponse {
     path = "/api/leaderboards/{domain}",
     tag = "profile",
     params(
-        ("domain" = String, Path, pattern = r"^(global|code|design|game|security)$", description = "Leaderboard domain"),
+        LeaderboardDomainPath,
         LeaderboardQuery,
     ),
     responses(
@@ -215,7 +248,7 @@ pub struct MyRankResponse {
     path = "/api/leaderboards/{domain}/me",
     tag = "profile",
     params(
-        ("domain" = String, Path, pattern = r"^(global|code|design|game|security)$", description = "Leaderboard domain"),
+        LeaderboardDomainPath,
         MyRankQuery,
     ),
     responses(

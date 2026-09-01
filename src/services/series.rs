@@ -54,6 +54,7 @@ pub struct CreateSeries {
     pub description: Option<String>,
     pub kind: String,
     #[serde(default)]
+    #[schema(schema_with = crate::validators::optional_skill_domain_schema)]
     pub skill_domain: Option<String>,
     pub starts_at: chrono::DateTime<chrono::Utc>,
     pub ends_at: chrono::DateTime<chrono::Utc>,

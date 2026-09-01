@@ -305,8 +305,9 @@ pub struct RegisterRequest {
     pub first_name: String,
     #[schema(min_length = 1, max_length = 50)]
     pub last_name: String,
-    /// One of `code`, `design`, `game`, `security`.
-    #[schema(pattern = r"^(code|design|game|security)$")]
+    /// One of the platform skill domains — the document lists them from
+    /// `validators::SKILL_DOMAINS`, which is what the handler checks.
+    #[schema(schema_with = crate::validators::skill_domain_schema)]
     pub skill_domain: String,
     /// ISO 3166-1 alpha-2 country code (e.g. `SN`).
     #[schema(pattern = r"^[A-Z]{2}$")]
@@ -429,8 +430,9 @@ pub struct ChangeEmailRequest {
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct CompleteProfileRequest {
-    /// One of `code`, `design`, `game`, `security`.
-    #[schema(pattern = r"^(code|design|game|security)$", example = "code")]
+    /// One of the platform skill domains — same list, same source, as
+    /// `RegisterRequest::skill_domain`.
+    #[schema(schema_with = crate::validators::skill_domain_schema)]
     pub skill_domain: String,
     /// Must be `true` — user acknowledges ToS + Privacy Policy. Voir
     /// `deserialize_true_bool` + `terms_accepted_schema` sur RegisterRequest

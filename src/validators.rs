@@ -67,6 +67,54 @@ pub enum SkillDomain {
     Education,
 }
 
+/// `{ type: string, enum: [...SKILL_DOMAINS] }`, for a request body field that
+/// carries a domain as a plain `String` rather than as [`SkillDomain`].
+///
+/// A body field cannot borrow the enum's schema the way a query parameter
+/// does: the handler reads the value as a `String` and hands it to
+/// [`validate_skill_domain`], so the type stays `String` and only the document
+/// needs the list. Written by hand it was a fourth copy — and it had gone
+/// stale at the original four domains, so the published contract refused
+/// `audio`, `leadership` and five others the server accepts. Emitting the
+/// values from the constant is what stops the fifth copy from existing.
+///
+/// `every_documented_skill_domain_field_lists_the_whole_guard`, in
+/// `openapi.rs`, walks the built document and fails when a `skill_domain`
+/// field somewhere describes anything but this list.
+pub fn skill_domain_schema() -> utoipa::openapi::schema::Object {
+    use utoipa::openapi::schema::{ObjectBuilder, Type};
+    ObjectBuilder::new()
+        .schema_type(utoipa::openapi::schema::SchemaType::Type(Type::String))
+        .enum_values(Some(
+            SKILL_DOMAINS
+                .iter()
+                .map(|d| serde_json::json!(d))
+                .collect::<Vec<_>>(),
+        ))
+        .description(Some("One of the platform skill domains."))
+        .build()
+}
+
+/// The same list, for a field that may legitimately be absent.
+///
+/// `{ type: ["string", "null"], enum: [...] }` rather than a `$ref` to
+/// [`SkillDomain`], because a `$ref` alongside `nullable` is the one shape
+/// utoipa 5 and JSON Schema disagree about, and a generated client then
+/// refuses `null` on a field the handler defaults.
+pub fn optional_skill_domain_schema() -> utoipa::openapi::schema::Object {
+    use utoipa::openapi::schema::{ObjectBuilder, SchemaType, Type};
+    let mut values: Vec<serde_json::Value> =
+        SKILL_DOMAINS.iter().map(|d| serde_json::json!(d)).collect();
+    values.push(serde_json::Value::Null);
+    ObjectBuilder::new()
+        .schema_type(SchemaType::Array(vec![Type::String, Type::Null]))
+        .enum_values(Some(values))
+        .description(Some(
+            "One of the platform skill domains, or null for every domain.",
+        ))
+        .build()
+}
+
 /// Refuse a domain nothing knows, naming what was allowed.
 ///
 /// An unknown domain is never passed through: downstream it becomes a filter

@@ -2237,6 +2237,128 @@ mod tests {
         );
     }
 
+    /// Every `skill_domain` a request *carries in* lists the whole guard
+    /// (SKI-363).
+    ///
+    /// `RegisterRequest` documented four domains while `validate_skill_domain`
+    /// accepted twelve, so a generated client refused seven domains the server
+    /// takes, and schemathesis never once sent `audio` or `leadership`. The
+    /// list had been transcribed four times. This walks the document from
+    /// every operation's request body and parameters rather than the four call
+    /// sites, so a fifth copy fails here the day it is written.
+    ///
+    /// Response fields are deliberately out of scope: a domain the server
+    /// *emits* cannot be refused by a client's validator, so an enum there
+    /// buys documentation, not correctness, and the failure this test exists
+    /// to catch is a rejected valid request.
+    #[test]
+    fn every_skill_domain_a_request_carries_lists_the_whole_guard() {
+        let doc = serde_json::to_value(ApiDoc::openapi()).unwrap();
+        let expected: Vec<serde_json::Value> = crate::validators::SKILL_DOMAINS
+            .iter()
+            .map(|d| serde_json::json!(d))
+            .collect();
+
+        let mut checked = 0usize;
+        let mut wrong: Vec<String> = Vec::new();
+        let mut inspect = |owner: &str, schema: &serde_json::Value| {
+            for_each_skill_domain(&doc, schema, &mut |field| {
+                checked += 1;
+                // A field that may be absent lists `null` alongside the
+                // domains; what has to match is the set of domains.
+                let listed: Vec<serde_json::Value> = field
+                    .get("enum")
+                    .and_then(|v| v.as_array())
+                    .map(|values| values.iter().filter(|v| !v.is_null()).cloned().collect())
+                    .unwrap_or_default();
+                if listed != expected {
+                    wrong.push(format!("{owner} documents skill_domain as {field}"));
+                }
+            });
+        };
+
+        for (path, item) in doc["paths"].as_object().expect("a paths map") {
+            for (method, op) in item.as_object().expect("an operation map") {
+                let owner = format!("{method} {path}");
+                if let Some(body) = op.pointer("/requestBody/content") {
+                    for media in body.as_object().into_iter().flatten().map(|(_, m)| m) {
+                        if let Some(schema) = media.get("schema") {
+                            inspect(&owner, schema);
+                        }
+                    }
+                }
+                for param in op
+                    .get("parameters")
+                    .and_then(|p| p.as_array())
+                    .into_iter()
+                    .flatten()
+                {
+                    if param.get("name").and_then(|n| n.as_str()) == Some("skill_domain")
+                        && let Some(schema) = param.get("schema")
+                    {
+                        inspect(&owner, schema);
+                    }
+                }
+            }
+        }
+
+        assert!(
+            checked >= 4,
+            "only {checked} incoming `skill_domain` fields read — the document is not being walked"
+        );
+        assert!(
+            wrong.is_empty(),
+            "a `skill_domain` a request carries has drifted from validators::SKILL_DOMAINS: {wrong:#?}"
+        );
+    }
+
+    /// Call `visit` on every `skill_domain` property reachable from `schema`,
+    /// following `$ref` into `components/schemas` and stopping on a cycle.
+    fn for_each_skill_domain(
+        doc: &serde_json::Value,
+        schema: &serde_json::Value,
+        visit: &mut impl FnMut(&serde_json::Value),
+    ) {
+        fn recurse(
+            doc: &serde_json::Value,
+            node: &serde_json::Value,
+            seen: &mut std::collections::HashSet<String>,
+            visit: &mut impl FnMut(&serde_json::Value),
+        ) {
+            match node {
+                serde_json::Value::Object(map) => {
+                    if let Some(reference) = map.get("$ref").and_then(|r| r.as_str()) {
+                        let name = reference.trim_start_matches("#/components/schemas/");
+                        if seen.insert(name.to_string())
+                            && let Some(target) = doc.pointer(&format!(
+                                "/components/schemas/{}",
+                                name.replace('~', "~0").replace('/', "~1")
+                            ))
+                        {
+                            recurse(doc, target, seen, visit);
+                        }
+                        return;
+                    }
+                    if let Some(props) = map.get("properties").and_then(|p| p.as_object())
+                        && let Some(field) = props.get("skill_domain")
+                    {
+                        visit(field);
+                    }
+                    for child in map.values() {
+                        recurse(doc, child, seen, visit);
+                    }
+                }
+                serde_json::Value::Array(items) => {
+                    for item in items {
+                        recurse(doc, item, seen, visit);
+                    }
+                }
+                _ => {}
+            }
+        }
+        recurse(doc, schema, &mut std::collections::HashSet::new(), visit);
+    }
+
     /// The same defect on the schema side is invisible from the document
     /// alone — the loser of a collision is simply absent. What is checkable is
     /// that every component another part of the document points at exists.

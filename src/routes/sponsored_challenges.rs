@@ -58,8 +58,7 @@ pub struct RequestBody {
     /// At least 30 chars — enforced server-side.
     #[schema(max_length = 10000)]
     pub brief: String,
-    /// `code`, `design`, `game`, `security`.
-    #[schema(max_length = 10000)]
+    #[schema(schema_with = crate::validators::skill_domain_schema)]
     pub skill_domain: String,
     pub difficulty: i16,
     pub duration_days: i32,

@@ -177,6 +177,7 @@ pub async fn list_opportunities(
 pub struct CreateOpportunityBody {
     pub slug: String,
     pub kind: String,
+    #[schema(schema_with = crate::validators::skill_domain_schema)]
     pub skill_domain: String,
     pub title: String,
     pub organisation: String,

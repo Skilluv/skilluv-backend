@@ -176,11 +176,90 @@ fn row_to_progress(row: &OnboardingRow) -> OnboardingProgress {
     }
 }
 
-/// Public wrapper : resolve a starter slug from the user's primary
-/// orientation, falling back to `DEFAULT_STARTER_SLUG` if no explicit
-/// mapping exists.
-fn starter_for_orientation(orientation_slug: &str) -> &'static str {
-    explicit_starter_for_orientation(orientation_slug).unwrap_or(DEFAULT_STARTER_SLUG)
+/// The starter a trade forks, or `None` when nothing here knows the trade.
+///
+/// Three sources, in order. A per-slug exception wins, because a handful of
+/// trades want something their family does not. Otherwise the trade's
+/// `reviewer_group` decides — a family of trades shares a terrain, and 150
+/// orientations against 15 starters was never going to be a per-slug list.
+/// `None` is the honest answer for a trade neither knows, and it is what
+/// `every_curated_orientation_resolves_to_a_starter` fails on.
+///
+/// It used to be a per-slug match and nothing else. That list was written when
+/// there were 32 orientations; migration 0173 and the domain catalogues after
+/// it brought the table to 150, and the other 118 silently forked
+/// `starter-fullstack-node`. A `compiler-language-developer` was handed a Node
+/// fullstack app on the strength of a trade they had just declared.
+pub fn resolve_starter(
+    orientation_slug: &str,
+    reviewer_group: Option<&str>,
+    primary_domain: &str,
+) -> Option<&'static str> {
+    if let Some(explicit) = explicit_starter_for_orientation(orientation_slug) {
+        return Some(explicit);
+    }
+    starter_for_family(primary_domain, reviewer_group?)
+}
+
+/// The terrain a family of trades works on.
+///
+/// Written by family rather than by trade because that is the grain the data
+/// already has: `orientations.reviewer_group` is what decides a trade's review
+/// grid, and a shared grid and a shared starter are the same statement about
+/// what the work looks like. Every pair below is a judgement a domain curator
+/// may overrule; none of them is worse than the Node fullstack app all 118 of
+/// them used to get.
+fn starter_for_family(primary_domain: &str, reviewer_group: &str) -> Option<&'static str> {
+    Some(match (primary_domain, reviewer_group) {
+        // ── code
+        // Rust for the families whose work is a binary, a compiler or a tool:
+        // the starter is the only one shipping a real build and test loop for
+        // that shape.
+        ("code", "systems" | "compilers" | "devtools-media") => "starter-fullstack-rust",
+        ("code", "data" | "scientific") => "starter-data-python",
+        ("code", "mobile") => "starter-mobile-react-native",
+        // Node for web and for blockchain, and for the same reason in both:
+        // the mainstream toolchain of each lives there (Express/Nest;
+        // Hardhat/Foundry).
+        ("code", "web" | "blockchain") => "starter-fullstack-node",
+
+        // ── design
+        // Svelte is the Skilluv-signature UI environment, and its
+        // docs/getting-started is the first terrain a designer can contribute
+        // to — assets, animation, motion tokens.
+        ("design", "game" | "immersive") => "starter-game-godot",
+        ("design", "mobile") => "starter-mobile-react-native",
+        ("design", _) => "starter-frontend-svelte",
+
+        // ── game : every family works on a game, including the one that works
+        // on its community.
+        ("game", _) => "starter-game-godot",
+
+        // ── ai : the whole domain is Python, families included.
+        ("ai", _) => "starter-data-python",
+
+        // ── ops
+        ("ops", _) => "starter-devops",
+
+        // ── security : the Node fullstack app exposes the classic web attack
+        // surface these families learn to audit — JWT, upload, session.
+        ("security", _) => "starter-fullstack-node",
+
+        // ── quality : the thing under test is a web app, except for the
+        // family whose thing under test is a game.
+        ("quality", "playtest") => "starter-game-godot",
+        ("quality", _) => "starter-fullstack-node",
+
+        // ── audio : the audio canvas of migration 0423 is the platform's own
+        // games, which is where this work lands.
+        ("audio", _) => "starter-game-godot",
+
+        // ── communication, education, leadership : the writing terrain. HTMX
+        // is the starter whose contribution surface is its documentation.
+        ("communication" | "education" | "leadership", _) => "starter-frontend-htmx",
+
+        _ => return None,
+    })
 }
 
 /// Resolve a starter slug from the user's primary orientation, returning
@@ -445,10 +524,11 @@ async fn start_fork_rite(
         validate_starter_slug(&explicit)?;
         explicit
     } else {
-        // Look up user's primary (first) orientation
-        let orientation_slug: Option<String> = sqlx::query_scalar(
+        // The trade, its family and its domain — the family is what resolves
+        // the starter for all but the two dozen legacy slugs.
+        let orientation: Option<(String, Option<String>, String)> = sqlx::query_as(
             r#"
-            SELECT o.slug
+            SELECT o.slug, o.reviewer_group, o.primary_domain
             FROM user_orientations uo
             JOIN orientations o ON o.id = uo.orientation_id
             WHERE uo.user_id = $1 AND uo.is_primary = TRUE AND uo.mode = 'active'
@@ -459,8 +539,12 @@ async fn start_fork_rite(
         .fetch_optional(&state.db)
         .await?;
 
-        match orientation_slug {
-            Some(slug) => starter_for_orientation(&slug).to_string(),
+        match orientation {
+            Some((slug, group, domain)) => resolve_starter(&slug, group.as_deref(), &domain)
+                .unwrap_or(DEFAULT_STARTER_SLUG)
+                .to_string(),
+            // No trade declared: nothing to derive a terrain from, so the
+            // broad-appeal default is the honest answer rather than a guess.
             None => DEFAULT_STARTER_SLUG.to_string(),
         }
     };
@@ -958,134 +1042,105 @@ mod tests {
     #[test]
     fn orientation_maps_to_expected_starter() {
         assert_eq!(
-            starter_for_orientation("dev-fullstack"),
+            resolve_starter("dev-fullstack", None, "code").unwrap(),
             "starter-fullstack-rust"
         );
         assert_eq!(
-            starter_for_orientation("dev-frontend"),
+            resolve_starter("dev-frontend", None, "code").unwrap(),
             "starter-frontend-svelte"
         );
         assert_eq!(
-            starter_for_orientation("mobile-android"),
+            resolve_starter("mobile-android", None, "code").unwrap(),
             "starter-mobile-kotlin"
         );
         assert_eq!(
-            starter_for_orientation("dev-embarque-iot"),
+            resolve_starter("dev-embarque-iot", None, "code").unwrap(),
             "starter-iot-esp32"
         );
         assert_eq!(
-            starter_for_orientation("game-programmer"),
+            resolve_starter("game-programmer", None, "code").unwrap(),
             "starter-game-godot"
         );
         assert_eq!(
-            starter_for_orientation("ml-engineer"),
+            resolve_starter("ml-engineer", None, "code").unwrap(),
             "starter-data-python"
         );
-        assert_eq!(starter_for_orientation("devops-engineer"), "starter-devops");
         assert_eq!(
-            starter_for_orientation("tech-writer"),
+            resolve_starter("devops-engineer", None, "code").unwrap(),
+            "starter-devops"
+        );
+        assert_eq!(
+            resolve_starter("tech-writer", None, "code").unwrap(),
             "starter-frontend-htmx"
         );
         // Design roles
         assert_eq!(
-            starter_for_orientation("illustrator"),
+            resolve_starter("illustrator", None, "code").unwrap(),
             "starter-frontend-svelte"
         );
         assert_eq!(
-            starter_for_orientation("motion-designer"),
+            resolve_starter("motion-designer", None, "code").unwrap(),
             "starter-frontend-svelte"
         );
         assert_eq!(
-            starter_for_orientation("mobile-designer"),
+            resolve_starter("mobile-designer", None, "code").unwrap(),
             "starter-mobile-react-native"
         );
-        assert_eq!(starter_for_orientation("3d-artist"), "starter-game-godot");
+        assert_eq!(
+            resolve_starter("3d-artist", None, "code").unwrap(),
+            "starter-game-godot"
+        );
         // Security roles
         assert_eq!(
-            starter_for_orientation("pentester-web"),
+            resolve_starter("pentester-web", None, "code").unwrap(),
             "starter-fullstack-node"
         );
         assert_eq!(
-            starter_for_orientation("security-engineer"),
+            resolve_starter("security-engineer", None, "code").unwrap(),
             "starter-fullstack-node"
         );
         assert_eq!(
-            starter_for_orientation("soc-analyst"),
+            resolve_starter("soc-analyst", None, "code").unwrap(),
             "starter-fullstack-node"
         );
         assert_eq!(
-            starter_for_orientation("pentester-mobile"),
+            resolve_starter("pentester-mobile", None, "code").unwrap(),
             "starter-mobile-react-native"
         );
         // Blockchain
         assert_eq!(
-            starter_for_orientation("smart-contract-dev"),
+            resolve_starter("smart-contract-dev", None, "code").unwrap(),
             "starter-fullstack-node"
         );
-        // Unknown orientation → default
-        assert_eq!(
-            starter_for_orientation("unknown-slug"),
-            DEFAULT_STARTER_SLUG
-        );
+        // An unknown trade is `None`, not the default. The default is the
+        // caller's decision and is applied once, at the call site, so that
+        // "nothing knows this trade" stays visible to a test instead of being
+        // laundered into a plausible-looking answer here.
+        assert_eq!(resolve_starter("unknown-slug", None, "code"), None);
     }
 
-    /// Regression guard : chaque slug d'orientation dans la DB doit avoir un
-    /// mapping *explicite* dans `starter_for_orientation`, jamais tomber au
-    /// `DEFAULT_STARTER_SLUG`. Le test lit la liste des 32 slugs (migrations
-    /// 0002 + 0105 + 0106) et vérifie que chaque appel retourne un starter
-    /// != du DEFAULT. Si on ajoute une orientation future, ce test échoue
-    /// tant qu'on n'a pas ajouté un cas dédié dans le match.
-    ///
-    /// Note : la liste est hard-codée ici plutôt que lue de la DB pour que le
-    /// test soit unitaire pur (pas de connexion Postgres requise en CI).
+    /// The mapping used to be checked against a constant of 32 slugs commented
+    /// "snapshot au 2026-07-22", chosen so the test needed no Postgres. It was
+    /// a snapshot of what the mapping already covered, so it compared the list
+    /// to itself and could not fail; it stayed green through 118 further
+    /// orientations. Replaced by
+    /// `every_curated_orientation_resolves_to_a_starter` in
+    /// `tests/test_onboarding_rites.rs`, which reads `orientations`.
     #[test]
-    fn every_db_orientation_maps_to_a_known_starter() {
-        // Source : SELECT slug FROM orientations ORDER BY slug — snapshot au
-        // 2026-07-22, 32 slugs (24 initial + 6 game + 1 IoT + 1 smart-contract).
-        const ALL_ORIENTATION_SLUGS: &[&str] = &[
-            "3d-artist",
-            "cloud-architect",
-            "data-analyst",
-            "data-engineer",
-            "dev-backend",
-            "dev-embarque-iot",
-            "dev-frontend",
-            "dev-fullstack",
-            "devops-engineer",
-            "game-artist-2d",
-            "game-artist-3d",
-            "game-designer",
-            "game-programmer",
-            "game-sound-engineer",
-            "illustrator",
-            "ml-engineer",
-            "mobile-android",
-            "mobile-cross",
-            "mobile-designer",
-            "mobile-ios",
-            "motion-designer",
-            "open-source-maintainer",
-            "pentester-mobile",
-            "pentester-web",
-            "prompt-engineer",
-            "security-engineer",
-            "smart-contract-dev",
-            "soc-analyst",
-            "sre",
-            "systems-programmer",
-            "tech-writer",
-            "web-designer",
-        ];
-
-        let unmapped: Vec<_> = ALL_ORIENTATION_SLUGS
-            .iter()
-            .filter(|slug| explicit_starter_for_orientation(slug).is_none())
-            .copied()
-            .collect();
-        assert!(
-            unmapped.is_empty(),
-            "Orientations sans mapping explicite (fallback DEFAULT) : {unmapped:?}. Ajoute un cas dédié dans explicit_starter_for_orientation()."
+    fn a_family_answers_for_a_trade_the_list_never_heard_of() {
+        // The exact case that was broken: a code trade added by migration
+        // 0173, absent from every per-slug arm, resolved by its family.
+        assert_eq!(
+            resolve_starter("compiler-language-developer", Some("compilers"), "code"),
+            Some("starter-fullstack-rust")
         );
+        // A per-slug exception still wins over its family.
+        assert_eq!(
+            resolve_starter("web-designer", None, "design"),
+            Some("starter-frontend-svelte")
+        );
+        // And a trade with neither is `None` rather than a silent default.
+        assert_eq!(resolve_starter("nobody-knows-me", None, "code"), None);
     }
 
     #[test]

@@ -116,6 +116,18 @@ and the project will follow semantic versioning once 1.0 is reached.
 
 ### Fixed
 
+* **onboarding:** the starter a trade forks is resolved from its family, not
+  from a list of slugs written when there were 32 orientations. The table holds
+  150, so 118 of them silently forked `starter-fullstack-node` — a
+  `compiler-language-developer` was handed a Node fullstack app on the strength
+  of the trade they had just declared, and 32 of the 41 code trades were in
+  that group. Resolution now goes per-slug exception, then
+  `orientations.reviewer_group`, then `None`; the caller applies the default
+  once, so "nothing knows this trade" stays visible. The check that should have
+  caught this looped over a constant of 32 slugs commented "snapshot au
+  2026-07-22" — a snapshot of what the mapping already covered, comparing the
+  list to itself. It reads `orientations` now, and is an integration test.
+
 * **challenges:** every seeded challenge names the trade it belongs to.
   Migration 0606 backfilled `orientation_id` for the 130 design seeds and left
   524 drafts across the other ten domains at NULL — and

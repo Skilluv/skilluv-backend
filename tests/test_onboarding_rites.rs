@@ -1056,3 +1056,99 @@ async fn every_seeded_challenge_names_its_trade() {
         &orphans[..orphans.len().min(8)]
     );
 }
+
+// ════════════════════════════════════════════════════════════════════
+// Which starter a trade forks
+// ════════════════════════════════════════════════════════════════════
+
+/// Every curated trade resolves to a starter, read from the table.
+///
+/// The check this replaces lived in `onboarding.rs` and looped over a constant
+/// of 32 slugs commented "snapshot au 2026-07-22" — a snapshot of what the
+/// mapping already covered, so it compared the list to itself and could not
+/// fail. It stayed green while the table grew to 150 and the other 118
+/// orientations silently forked `starter-fullstack-node`, handing a
+/// `compiler-language-developer` a Node fullstack app.
+///
+/// It is an integration test now, and that is the point: a unit test that
+/// cannot fail is not worth the Postgres connection it saves.
+#[tokio::test]
+async fn every_curated_orientation_resolves_to_a_starter() {
+    use skilluv_backend::routes::onboarding::resolve_starter;
+
+    let app = common::TestApp::spawn().await;
+
+    let trades: Vec<(String, Option<String>, String)> = sqlx::query_as(
+        "SELECT slug, reviewer_group, primary_domain
+           FROM orientations WHERE is_curated AND NOT is_archived
+          ORDER BY primary_domain, slug",
+    )
+    .fetch_all(&app.db)
+    .await
+    .unwrap();
+
+    assert!(
+        trades.len() > 100,
+        "only {} trades read — the catalogue is not being walked",
+        trades.len()
+    );
+
+    let unresolved: Vec<&str> = trades
+        .iter()
+        .filter(|(slug, group, domain)| resolve_starter(slug, group.as_deref(), domain).is_none())
+        .map(|(slug, _, _)| slug.as_str())
+        .collect();
+
+    assert!(
+        unresolved.is_empty(),
+        "{} trades would fork the blind default: {:?}",
+        unresolved.len(),
+        &unresolved[..unresolved.len().min(10)]
+    );
+}
+
+/// A starter that is named must be one that exists.
+///
+/// The resolver hands its answer to `gh::fork_repo` as
+/// `skilluv-community/<slug>`, so a typo is a 404 at GitHub on somebody's
+/// first gesture, discovered by them rather than by us.
+#[tokio::test]
+async fn every_starter_named_is_one_of_the_fifteen() {
+    use skilluv_backend::routes::onboarding::resolve_starter;
+
+    const STARTERS: &[&str] = &[
+        "starter-data-python",
+        "starter-devops",
+        "starter-frontend-htmx",
+        "starter-frontend-react",
+        "starter-frontend-svelte",
+        "starter-fullstack-go",
+        "starter-fullstack-node",
+        "starter-fullstack-python",
+        "starter-fullstack-rust",
+        "starter-game-bevy",
+        "starter-game-godot",
+        "starter-iot-esp32",
+        "starter-mobile-flutter",
+        "starter-mobile-kotlin",
+        "starter-mobile-react-native",
+    ];
+
+    let app = common::TestApp::spawn().await;
+    let trades: Vec<(String, Option<String>, String)> = sqlx::query_as(
+        "SELECT slug, reviewer_group, primary_domain
+           FROM orientations WHERE is_curated AND NOT is_archived",
+    )
+    .fetch_all(&app.db)
+    .await
+    .unwrap();
+
+    for (slug, group, domain) in &trades {
+        if let Some(starter) = resolve_starter(slug, group.as_deref(), domain) {
+            assert!(
+                STARTERS.contains(&starter),
+                "{slug} would fork '{starter}', which is not a starter repository"
+            );
+        }
+    }
+}

@@ -1018,3 +1018,41 @@ async fn the_catalogue_names_where_the_trade_continues() {
         );
     }
 }
+
+// ════════════════════════════════════════════════════════════════════
+// What there is to do once the rite is passed
+// ════════════════════════════════════════════════════════════════════
+
+/// Every seeded challenge names the trade it belongs to.
+///
+/// `POST /admin/orientations/{slug}/challenges/publish` — the one surface that
+/// opens a catalogue, one trade at a time — selects on `orientation_id`. Only
+/// the 130 design seeds carried one, so it published nothing for eleven
+/// domains of twelve, and a person who finished their first gesture met an
+/// empty `GET /api/challenges` (migration 0612).
+///
+/// The rites themselves are deliberately excluded: a rite belongs to its
+/// domain, not to one trade.
+#[tokio::test]
+async fn every_seeded_challenge_names_its_trade() {
+    let app = common::TestApp::spawn().await;
+
+    let orphans: Vec<(String, String)> = sqlx::query_as(
+        "SELECT skill_domain, title FROM challenge_templates
+          WHERE orientation_id IS NULL
+            AND NOT is_domain_rite
+            AND NOT is_onboarding
+            AND status <> 'archived'
+          ORDER BY skill_domain, title",
+    )
+    .fetch_all(&app.db)
+    .await
+    .unwrap();
+
+    assert!(
+        orphans.is_empty(),
+        "{} challenges no curator can open: {:?}",
+        orphans.len(),
+        &orphans[..orphans.len().min(8)]
+    );
+}

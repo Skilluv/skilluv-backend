@@ -116,6 +116,18 @@ and the project will follow semantic versioning once 1.0 is reached.
 
 ### Fixed
 
+* **challenges:** every seeded challenge names the trade it belongs to.
+  Migration 0606 backfilled `orientation_id` for the 130 design seeds and left
+  524 drafts across the other ten domains at NULL — and
+  `POST /admin/orientations/{slug}/challenges/publish`, the one surface that
+  opens a catalogue one trade at a time, selects on exactly that column. It
+  published nothing for eleven domains of twelve, which is why the platform
+  stood at 654 drafts and zero reachable published challenges: somebody
+  finished their first gesture and `GET /api/challenges` handed them an empty
+  list. The pairs are read back out of the seed migrations, which all grouped
+  their VALUES by trade to pick a review grid and then discarded it.
+  Migration 0612.
+
 * **challenges:** a submission hands in its artifact, and the reviewer can open
   it. `POST /challenges/{id}/submit` takes `attachments` — `design_upload:<uuid>`
   or `audio_file:<uuid>`, each checked to belong to the caller. References

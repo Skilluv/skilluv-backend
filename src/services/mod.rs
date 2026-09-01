@@ -188,6 +188,7 @@ pub mod stewards;
 pub mod storage;
 pub mod streak_reminder;
 pub mod stripe;
+pub mod submission_attachments;
 pub mod subscriptions;
 pub mod talent_offers;
 pub mod talent_wallet;

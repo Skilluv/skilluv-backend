@@ -45,9 +45,19 @@ pub struct Rite {
     pub gesture: &'static str,
     /// What is handed in — what the front builds an input for.
     pub expected_artifact: &'static str,
-    /// Which existing loop reads it. Named so the front can say who is
-    /// waiting, and so nobody re-invents a queue that already runs.
-    pub review_loop: &'static str,
+    /// The loop this trade *continues* into once the rite is passed — the
+    /// design critique, the playtest verdicts, the disclosure programme.
+    ///
+    /// Not where the rite itself is read. Every rite, all twelve, is read in
+    /// the generic human review queue (`review_tasks` + `reviews`), and this
+    /// field used to be called `review_loop`, which said otherwise. It named a
+    /// routing that does not exist and would have had a front announcing
+    /// "three design reviewers are looking at this" when one task was sitting
+    /// in one queue.
+    ///
+    /// It stays because it is worth telling somebody where their trade goes
+    /// next. It is documentation, and now it is named like documentation.
+    pub continues_in: &'static str,
 }
 
 /// The twelve. Order is `SKILL_DOMAINS`' order, and
@@ -58,84 +68,84 @@ pub const RITES: &[Rite] = &[
         form: RiteForm::Fork,
         gesture: "Fork a Skilluv starter, introduce yourself in HELLO.md, and open the pull request.",
         expected_artifact: "A pull request from `main` to `showcase` on your own fork, touching HELLO.md.",
-        review_loop: "github_webhook",
+        continues_in: "github_webhook",
     },
     Rite {
         domain: "design",
         form: RiteForm::Submission,
         gesture: "Design one screen against the entry brief of your trade, and say what each choice serves.",
         expected_artifact: "One screen, uploaded, with two or three sentences of rationale.",
-        review_loop: "design_critique",
+        continues_in: "design_critique",
     },
     Rite {
         domain: "game",
         form: RiteForm::Submission,
         gesture: "Play one published slice start to finish and return a playtest verdict.",
         expected_artifact: "A written verdict: what it taught without telling, where you stuck, the first change.",
-        review_loop: "playtest_verdicts",
+        continues_in: "playtest_verdicts",
     },
     Rite {
         domain: "security",
         form: RiteForm::Submission,
         gesture: "Read the published scope, test only inside it, and report one finding.",
         expected_artifact: "One reproducible finding: what you did, what happened, why it matters.",
-        review_loop: "disclosure_programme",
+        continues_in: "disclosure_programme",
     },
     Rite {
         domain: "ops",
         form: RiteForm::Submission,
         gesture: "Read one SLO of the Skilluv ops ground and propose one improvement with its cost.",
         expected_artifact: "A written proposal naming the SLO, what it misses, and the trade-off.",
-        review_loop: "ops_ground",
+        continues_in: "ops_ground",
     },
     Rite {
         domain: "ai",
         form: RiteForm::Submission,
         gesture: "Take the first workspace step of an entry mission, and show what you checked.",
         expected_artifact: "The step, plus what you ran, what came back, and what you rejected.",
-        review_loop: "missions",
+        continues_in: "missions",
     },
     Rite {
         domain: "soft_skills",
         form: RiteForm::Submission,
         gesture: "Review one public deliverable: what holds, what to change, and why.",
         expected_artifact: "A review naming what to keep before what to change, with an order.",
-        review_loop: "review_queue",
+        continues_in: "review_queue",
     },
     Rite {
         domain: "audio",
         form: RiteForm::Submission,
         gesture: "Make a twenty-second signature and declare every source.",
         expected_artifact: "Twenty seconds of audio, with a source list including licences.",
-        review_loop: "audio_castings",
+        continues_in: "audio_castings",
     },
     Rite {
         domain: "quality",
         form: RiteForm::Submission,
         gesture: "File one defect report on the Skilluv canvas that needs no follow-up question.",
         expected_artifact: "Steps, expected, actual, where — and how sure you are.",
-        review_loop: "defect_reports",
+        continues_in: "defect_reports",
     },
     Rite {
         domain: "leadership",
         form: RiteForm::Submission,
         gesture: "Write a retro on a public Skilluv incident, and propose one change with an owner.",
         expected_artifact: "A retro naming causes rather than people, ending on a measurable change.",
-        review_loop: "retros",
+        continues_in: "retros",
     },
     Rite {
         domain: "communication",
         form: RiteForm::Submission,
         gesture: "Translate one paragraph of a guide, and defend the choices that are not literal.",
         expected_artifact: "The translation, plus notes on the two or three departures.",
-        review_loop: "translation_reviews",
+        continues_in: "translation_reviews",
     },
     Rite {
         domain: "education",
         form: RiteForm::Submission,
         gesture: "Explain one skill node in three beats, to somebody who does not have it yet.",
         expected_artifact: "Problem solved, smallest example, first mistake — in that order.",
-        review_loop: "cohorts",
+        continues_in: "cohorts",
     },
 ];
 
@@ -202,8 +212,8 @@ mod tests {
                 rite.domain
             );
             assert!(
-                !rite.review_loop.is_empty(),
-                "{}: nobody reads it",
+                !rite.continues_in.is_empty(),
+                "{}: the trade goes nowhere after the rite",
                 rite.domain
             );
         }

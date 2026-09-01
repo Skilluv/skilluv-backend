@@ -844,3 +844,177 @@ async fn an_approved_pull_request_is_what_completes_the_code_rite() {
     assert_eq!(fragments, reward);
     assert!(active, "an approved first gesture activates the profile");
 }
+
+// ════════════════════════════════════════════════════════════════════
+// What a submission hands in besides its text
+// ════════════════════════════════════════════════════════════════════
+
+/// An upload somebody does not own cannot be attached to their submission.
+///
+/// The whole reason attachments are references rather than URLs: without the
+/// ownership check, a reference is a URL with extra steps and anybody could be
+/// reviewed on another candidate's screen.
+#[tokio::test]
+async fn a_submission_cannot_attach_what_it_does_not_own() {
+    let app = common::TestApp::spawn().await;
+
+    // One designer uploads.
+    app.register_user("owner").await;
+    app.login("owner").await;
+    let owner_id: uuid::Uuid = sqlx::query_scalar("SELECT id FROM users WHERE username = 'owner'")
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
+    let upload_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO design_upload_sessions
+            (user_id, design_subtype, filename, content_type, declared_bytes,
+             stored_bytes, part_size, part_count, storage_key, s3_upload_id,
+             status, completed_at, expires_at)
+         VALUES ($1, 'screen', 'screen.png', 'image/png', 4096, 4096,
+                 5242880, 1, 'uploads/owner/screen.png', 's3-1',
+                 'completed', NOW(), NOW() + INTERVAL '1 day')
+         RETURNING id",
+    )
+    .bind(owner_id)
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+
+    // Somebody else tries to hand it in as their own.
+    app.register_user("borrower").await;
+    app.login("borrower").await;
+    let challenge: serde_json::Value = app
+        .get("/api/challenges/onboarding?domain=design")
+        .await
+        .json()
+        .await
+        .unwrap();
+    let challenge_id = challenge["data"]["challenge"]["id"].as_str().unwrap();
+    app.post(&format!("/api/challenges/{challenge_id}/start"), &json!({}))
+        .await;
+
+    let resp = app
+        .post(
+            &format!("/api/challenges/{challenge_id}/submit"),
+            &json!({
+                "code": "A sign-in screen: one field, one button, one way back.",
+                "attachments": [format!("design_upload:{upload_id}")],
+            }),
+        )
+        .await;
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+
+    // And nothing was written: the refusal comes before the evaluation.
+    let submissions: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM challenge_submissions cs JOIN users u ON u.id = cs.user_id
+         WHERE u.username = 'borrower' AND cs.status <> 'in_progress'",
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert_eq!(submissions, 0);
+}
+
+/// An owned upload rides along, and the reviewer can open it.
+///
+/// Both halves matter. Attaching it was impossible before; and `design_uploads`
+/// is owner-scoped, so even attached, the reviewer got a 404 on the only thing
+/// they were being asked to judge.
+#[tokio::test]
+async fn an_owned_attachment_reaches_the_reviewer() {
+    let app = common::TestApp::spawn().await;
+    app.register_user("screenhand").await;
+    app.login("screenhand").await;
+
+    let user_id: uuid::Uuid =
+        sqlx::query_scalar("SELECT id FROM users WHERE username = 'screenhand'")
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
+    let upload_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO design_upload_sessions
+            (user_id, design_subtype, filename, content_type, declared_bytes,
+             stored_bytes, part_size, part_count, storage_key, s3_upload_id,
+             status, completed_at, expires_at)
+         VALUES ($1, 'screen', 'signin.png', 'image/png', 4096, 4096,
+                 5242880, 1, 'uploads/screenhand/signin.png', 's3-2',
+                 'completed', NOW(), NOW() + INTERVAL '1 day')
+         RETURNING id",
+    )
+    .bind(user_id)
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+
+    let challenge: serde_json::Value = app
+        .get("/api/challenges/onboarding?domain=design")
+        .await
+        .json()
+        .await
+        .unwrap();
+    let challenge_id = challenge["data"]["challenge"]["id"].as_str().unwrap();
+    app.post(&format!("/api/challenges/{challenge_id}/start"), &json!({}))
+        .await;
+    let submitted = app
+        .post(
+            &format!("/api/challenges/{challenge_id}/submit"),
+            &json!({
+                "code": "A sign-in screen: one field, one button, one way back.",
+                "attachments": [format!("design_upload:{upload_id}")],
+            }),
+        )
+        .await;
+    assert_eq!(submitted.status(), StatusCode::OK);
+
+    // The deliverable the reviewer opens names the artifact.
+    let attachments: serde_json::Value = sqlx::query_scalar(
+        "SELECT artifact_metadata -> 'attachments' FROM deliverables WHERE user_id = $1",
+    )
+    .bind(user_id)
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert_eq!(attachments, json!([format!("design_upload:{upload_id}")]));
+
+    // A stranger still cannot open it.
+    app.register_user("nosy").await;
+    app.login("nosy").await;
+    let refused = app
+        .get(&format!("/api/design/uploads/{upload_id}/download-url"))
+        .await;
+    assert_eq!(refused.status(), StatusCode::NOT_FOUND);
+
+    // The reviewer can, because a task on it is open and they hold the
+    // capability a verdict needs.
+    app.register_user("screenreviewer").await;
+    make_reviewer(&app, "screenreviewer").await;
+    app.login("screenreviewer").await;
+    let allowed = app
+        .get(&format!("/api/design/uploads/{upload_id}/download-url"))
+        .await;
+    assert_eq!(
+        allowed.status(),
+        StatusCode::OK,
+        "the reviewer cannot open what they are asked to judge"
+    );
+}
+
+/// The rite catalogue says where a trade goes next, and does not pretend the
+/// rite is routed there.
+#[tokio::test]
+async fn the_catalogue_names_where_the_trade_continues() {
+    let app = common::TestApp::spawn().await;
+
+    let body: serde_json::Value = app.get("/api/onboarding/rites").await.json().await.unwrap();
+    for rite in body["data"]["rites"].as_array().unwrap() {
+        assert!(
+            rite["continues_in"].as_str().is_some_and(|v| !v.is_empty()),
+            "{} says nothing about what comes next",
+            rite["domain"]
+        );
+        assert!(
+            rite.get("review_loop").is_none(),
+            "review_loop claimed a routing that does not exist and is gone"
+        );
+    }
+}

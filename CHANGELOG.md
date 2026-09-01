@@ -116,6 +116,15 @@ and the project will follow semantic versioning once 1.0 is reached.
 
 ### Fixed
 
+* **challenges:** a submission hands in its artifact, and the reviewer can open
+  it. `POST /challenges/{id}/submit` takes `attachments` — `design_upload:<uuid>`
+  or `audio_file:<uuid>`, each checked to belong to the caller. References
+  rather than URLs, because a free-text URL lets somebody be reviewed on
+  another candidate's screen. And `design_uploads` was owner-scoped, so even
+  attached, the reviewer got a 404 on the only thing they were asked to judge;
+  a reviewer holding an open task on a deliverable that references the upload
+  can now read it, and stops being able to once the verdict is in.
+
 * **reviews:** nobody signs off their own work, and a verdict is a competence
   rather than a login. `POST /deliverables/{id}/reviews` accepted any
   authenticated account — including the deliverable's own author, who could

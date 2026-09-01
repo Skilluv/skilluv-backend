@@ -59,6 +59,15 @@ struct ListQuery {
 struct SubmitRequest {
     code: String,
     language: Option<String>,
+    /// What was uploaded alongside the text, as `design_upload:<uuid>` or
+    /// `audio_file:<uuid>`.
+    ///
+    /// References rather than URLs, and every one of them is checked to belong
+    /// to the caller — see `services::submission_attachments`. Without this a
+    /// design or audio rite had nowhere to put its artifact: the reviewer got
+    /// whatever link the person had thought to paste into a paragraph.
+    #[serde(default)]
+    attachments: Option<Vec<String>>,
 }
 
 /// The status of a submission nothing on this side can judge: received,
@@ -504,6 +513,16 @@ pub async fn submit_challenge(
         ));
     }
 
+    // Refused before anything is evaluated or written: an attachment somebody
+    // does not own is the one failure here that must never reach a reviewer.
+    let attachments = match body.attachments.as_deref() {
+        Some(raw) => {
+            crate::services::submission_attachments::validate_owned(&state.db, auth.user_id, raw)
+                .await?
+        }
+        None => Vec::new(),
+    };
+
     // Evaluate submission
     let (eval_status, fragments_earned, exec_stdout, exec_stderr) =
         evaluate_submission(&state, &challenge, &body.code, body.language.as_deref()).await?;
@@ -592,6 +611,7 @@ pub async fn submit_challenge(
                 stderr: exec_stderr.as_deref(),
                 skill_domain: &challenge.skill_domain,
                 awaiting_review,
+                attachments: &attachments,
             },
         )
         .await;

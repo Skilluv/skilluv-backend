@@ -90,6 +90,10 @@ pub struct ChallengeSubmissionInput<'a> {
     /// The domain the challenge belongs to, so a deliverable that needs a
     /// human lands in front of reviewers of the right trade.
     pub skill_domain: &'a str,
+    /// Validated references to what was uploaded alongside the text, already
+    /// checked to belong to this user. Empty for a submission that is only
+    /// text, which is most of them.
+    pub attachments: &'a [String],
     /// `true` when nothing scored this submission and a person has to.
     ///
     /// The deliverable is then written `pending` rather than `verified`, and a
@@ -634,6 +638,7 @@ impl DeliverablesService {
             stderr,
             skill_domain,
             awaiting_review,
+            attachments,
         } = params;
 
         let mut hasher = Sha256::new();
@@ -663,6 +668,11 @@ impl DeliverablesService {
         }
         if let (Some(obj), Some(s)) = (metadata.as_object_mut(), stderr) {
             obj.insert("stderr".into(), serde_json::Value::String(s.to_string()));
+        }
+        // Always written, even empty, so a reader never has to tell "no
+        // attachments" from "written before attachments existed".
+        if let Some(obj) = metadata.as_object_mut() {
+            obj.insert("attachments".into(), serde_json::json!(attachments));
         }
 
         let (verifiable_by, verification_status) = if awaiting_review {

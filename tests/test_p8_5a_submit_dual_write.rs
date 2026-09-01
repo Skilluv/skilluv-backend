@@ -122,6 +122,7 @@ async fn create_from_submission_produces_verified_deliverable() {
             stderr: None,
             skill_domain: "code",
             awaiting_review: false,
+            attachments: &[],
         },
     )
     .await
@@ -201,6 +202,7 @@ async fn same_submission_code_is_idempotent() {
             stderr: None,
             skill_domain: "code",
             awaiting_review: false,
+            attachments: &[],
         },
     )
     .await
@@ -219,6 +221,7 @@ async fn same_submission_code_is_idempotent() {
             stderr: None,
             skill_domain: "code",
             awaiting_review: false,
+            attachments: &[],
         },
     )
     .await
@@ -262,6 +265,7 @@ async fn different_code_creates_distinct_deliverables() {
             stderr: None,
             skill_domain: "code",
             awaiting_review: false,
+            attachments: &[],
         },
     )
     .await
@@ -280,6 +284,7 @@ async fn different_code_creates_distinct_deliverables() {
             stderr: None,
             skill_domain: "code",
             awaiting_review: false,
+            attachments: &[],
         },
     )
     .await
@@ -326,6 +331,7 @@ async fn artifact_hash_is_deterministic() {
             stderr: None,
             skill_domain: "code",
             awaiting_review: false,
+            attachments: &[],
         },
     )
     .await
@@ -344,6 +350,7 @@ async fn artifact_hash_is_deterministic() {
             stderr: None,
             skill_domain: "code",
             awaiting_review: false,
+            attachments: &[],
         },
     )
     .await
@@ -392,6 +399,7 @@ async fn artifact_metadata_captures_code_stdout_stderr() {
             stderr: Some(""),
             skill_domain: "code",
             awaiting_review: false,
+            attachments: &[],
         },
     )
     .await
@@ -436,6 +444,7 @@ async fn artifact_metadata_omits_optional_when_none() {
             stderr: None,
             skill_domain: "code",
             awaiting_review: false,
+            attachments: &[],
         },
     )
     .await

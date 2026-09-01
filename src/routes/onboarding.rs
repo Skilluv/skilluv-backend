@@ -103,9 +103,13 @@ pub struct RiteDescriptor {
     /// One line: what the person does.
     pub gesture: String,
     pub expected_artifact: String,
-    /// Which loop reads the artifact — `github_webhook`, `design_critique`,
-    /// `playtest_verdicts`, and so on.
-    pub review_loop: String,
+    /// Where this trade continues once the rite is passed — the design
+    /// critique, the playtest verdicts, the disclosure programme.
+    ///
+    /// The rite itself is read in the generic review queue whatever the
+    /// domain. This was called `review_loop`, which read as a routing and was
+    /// not one.
+    pub continues_in: String,
     /// Whether starting this rite needs a connected GitHub account. True for
     /// exactly one of the twelve.
     pub requires_github: bool,
@@ -583,7 +587,7 @@ pub async fn list_rites(
                 form: r.form,
                 gesture: r.gesture.to_string(),
                 expected_artifact: r.expected_artifact.to_string(),
-                review_loop: r.review_loop.to_string(),
+                continues_in: r.continues_in.to_string(),
                 requires_github: onboarding_rite::requires_github(r.domain),
                 challenge_id: brief.map(|(_, id, _)| *id),
                 challenge_title: brief.map(|(_, _, t)| t.clone()),
@@ -614,7 +618,7 @@ async fn describe_rite(
         form: rite.form,
         gesture: rite.gesture.to_string(),
         expected_artifact: rite.expected_artifact.to_string(),
-        review_loop: rite.review_loop.to_string(),
+        continues_in: rite.continues_in.to_string(),
         requires_github: onboarding_rite::requires_github(rite.domain),
         challenge_id: brief.as_ref().map(|(id, _)| *id),
         challenge_title: brief.map(|(_, t)| t),

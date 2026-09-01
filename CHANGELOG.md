@@ -116,6 +116,23 @@ and the project will follow semantic versioning once 1.0 is reached.
 
 ### Fixed
 
+* **reviews:** nobody signs off their own work, and a verdict is a competence
+  rather than a login. `POST /deliverables/{id}/reviews` accepted any
+  authenticated account — including the deliverable's own author, who could
+  approve themselves the fragments, the settled submission and the active
+  profile that an `approve` now carries. Self-review is refused outright; a
+  verdict requires `admin`, `mentor`, or `domain_curator` for that
+  deliverable's domain. The design critique loop has enforced both from the
+  start; this is the same rule on the generic queue, which P2.2 had left open
+  for the cold start.
+* **onboarding:** an approved pull request completes the code rite. The webhook
+  took it to `pr_opened` and nothing moved it further, while
+  `badge_rules.bonjour_skilluv` fires on `completed_at IS NOT NULL` — so the
+  founding badge was unreachable on the one path that had shipped. The pull
+  request now becomes a deliverable in the same review queue as the other
+  eleven rites, and the verdict closes it. Opening a pull request proves
+  somebody pushed a branch, not that a person read what is on it.
+
 * **challenges:** a non-code submission of a hundred characters is no longer a
   pass. `evaluate_basic` returned `success` and its fragments for any
   submission of a hundred characters in every domain but `code`, and returned

@@ -160,6 +160,42 @@ impl ReviewsService {
             )));
         }
 
+        // Nobody signs off their own work.
+        //
+        // Sharper since SKI-361 than it was when this endpoint was written:
+        // `approve` is now what awards the fragments, settles the submission
+        // and activates the profile, so an unguarded self-review is a person
+        // handing themselves the proof the platform exists to vouch for. The
+        // design critique loop has refused this from the start
+        // (`design_reviews::review`); this is the same rule on the generic
+        // queue.
+        if params.reviewer_user_id == deliverable_user_id {
+            return Err(AppError::Forbidden);
+        }
+
+        // And a verdict is a competence, not a login.
+        //
+        // P2.2 opened this to every authenticated user for the cold start and
+        // said so in the module header, deferring the gate to P3. It stops
+        // being acceptable the moment a verdict is worth something, which is
+        // now. `mentor` is the platform's cross-domain reviewer capability,
+        // `domain_curator:*` runs a domain, and `admin` covers the rest —
+        // between them, the stewards who actually review today all hold one.
+        let domain =
+            ReviewQueueService::resolve_deliverable_domain(&mut tx, params.deliverable_id).await?;
+        let allowed = [
+            "admin".to_string(),
+            "mentor".to_string(),
+            "domain_curator:all".to_string(),
+            format!("domain_curator:{domain}"),
+        ];
+        let held =
+            crate::middleware::capabilities::list_active_capabilities(db, params.reviewer_user_id)
+                .await?;
+        if !held.iter().any(|c| allowed.contains(c)) {
+            return Err(AppError::Forbidden);
+        }
+
         // 2. INSERT dans reviews (UNIQUE constraint empêche la double review)
         let reviewer_fragments = params.verdict.reviewer_fragments();
         let review_id: Uuid = sqlx::query_scalar(
@@ -322,7 +358,8 @@ impl ReviewsService {
         Ok(())
     }
 
-    /// Close the challenge submission an approved deliverable came from.
+    /// Close whatever an approved deliverable was the end of — a challenge
+    /// submission, a Bonjour Skilluv rite, or both.
     ///
     /// Since SKI-361, a submission in a domain no evaluator covers is written
     /// `pending_review` with zero fragments and its deliverable is queued for a
@@ -366,23 +403,43 @@ impl ReviewsService {
         .await?;
 
         if let Some(submission_id) = settled {
-            sqlx::query(
-                "UPDATE users SET profile_active = TRUE, updated_at = NOW()
-                 WHERE id = $1 AND profile_active = FALSE",
-            )
-            .bind(user_id)
-            .execute(&mut **tx)
-            .await?;
-
             // If that submission was the user's Bonjour Skilluv rite, this
-            // verdict is what finishes it — the equivalent of the webhook
-            // closing the code rite (SKI-362).
+            // verdict is what finishes it.
             sqlx::query(
                 "UPDATE onboarding_bonjour_skilluv
                  SET status = 'completed', completed_at = NOW()
                  WHERE submission_id = $1 AND status = 'submitted'",
             )
             .bind(submission_id)
+            .execute(&mut **tx)
+            .await?;
+        }
+
+        // The fork rite has no `challenge_submissions` row — its artifact is a
+        // pull request, and the webhook attaches the deliverable directly. So
+        // it is keyed on the deliverable rather than on a submission, and this
+        // is the only thing that ever moves it past `pr_opened`.
+        //
+        // Nothing did, before: the code rite stopped at `pr_opened` for good,
+        // and `badge_rules.bonjour_skilluv` fires on `completed_at IS NOT
+        // NULL`, so the platform's founding badge was unreachable on the one
+        // path that had shipped.
+        let fork_rite_completed: Option<Uuid> = sqlx::query_scalar(
+            "UPDATE onboarding_bonjour_skilluv
+             SET status = 'completed', completed_at = NOW()
+             WHERE deliverable_id = $1 AND status = 'pr_opened'
+             RETURNING user_id",
+        )
+        .bind(deliverable_id)
+        .fetch_optional(&mut **tx)
+        .await?;
+
+        if settled.is_some() || fork_rite_completed.is_some() {
+            sqlx::query(
+                "UPDATE users SET profile_active = TRUE, updated_at = NOW()
+                 WHERE id = $1 AND profile_active = FALSE",
+            )
+            .bind(user_id)
             .execute(&mut **tx)
             .await?;
         }

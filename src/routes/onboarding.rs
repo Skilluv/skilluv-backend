@@ -718,14 +718,15 @@ pub async fn handle_bonjour_skilluv_pr_event(
     }
 
     // Load the onboarding row by fork_full_name.
-    let onboarding: Option<(Uuid, String)> = sqlx::query_as(
-        "SELECT user_id, status FROM onboarding_bonjour_skilluv WHERE fork_full_name = $1",
+    let onboarding: Option<(Uuid, String, String, Option<Uuid>)> = sqlx::query_as(
+        "SELECT user_id, status, skill_domain, challenge_id
+         FROM onboarding_bonjour_skilluv WHERE fork_full_name = $1",
     )
     .bind(fork_full_name)
     .fetch_optional(&state.db)
     .await?;
 
-    let Some((user_id, current_status)) = onboarding else {
+    let Some((user_id, current_status, skill_domain, tracked_challenge)) = onboarding else {
         // Not a tracked Bonjour Skilluv fork — nothing to do.
         return Ok(());
     };
@@ -855,6 +856,83 @@ pub async fn handle_bonjour_skilluv_pr_event(
     .execute(&mut *tx)
     .await?;
 
+    // The pull request is the artifact, so it becomes a deliverable and lands
+    // in the same review queue as the other eleven rites (SKI-362).
+    //
+    // Until this, the code rite stopped at `pr_opened` and nothing moved it on
+    // — while `badge_rules.bonjour_skilluv` fires on `completed_at IS NOT
+    // NULL`. The founding badge was unreachable on the one path that shipped.
+    // Opening a pull request is a real gesture but it is not a verdict: it
+    // proves somebody pushed a branch, not that a person read what is on it,
+    // and after SKI-361 no other rite is allowed to pass without being read.
+    //
+    // Rows written before migration 0609 carry no `challenge_id`; the domain's
+    // published rite is the same answer, looked up.
+    let challenge_id: Option<Uuid> = match tracked_challenge {
+        Some(id) => Some(id),
+        None => {
+            sqlx::query_scalar(
+                "SELECT id FROM challenge_templates
+                 WHERE is_domain_rite AND skill_domain = $1 AND status = 'published'
+                 LIMIT 1",
+            )
+            .bind(&skill_domain)
+            .fetch_optional(&mut *tx)
+            .await?
+        }
+    };
+
+    // `hello_hash` is already the SHA-256 of the HELLO.md content, which is
+    // what `deliverables` deduplicates on — so a redelivered webhook finds the
+    // row rather than writing a second one.
+    let deliverable_id: Option<Uuid> = sqlx::query_scalar(
+        r#"
+        INSERT INTO deliverables (
+            challenge_id, user_id,
+            artifact_type, artifact_url, artifact_hash, artifact_metadata,
+            verifiable_by, verification_status,
+            fragments_awarded, public, submitted_at, created_at
+        )
+        VALUES (
+            $1, $2,
+            'other', $3, $4, $5,
+            'human_review', 'pending',
+            0, TRUE, NOW(), NOW()
+        )
+        ON CONFLICT (user_id, artifact_hash) WHERE artifact_hash IS NOT NULL DO NOTHING
+        RETURNING id
+        "#,
+    )
+    .bind(challenge_id)
+    .bind(user_id)
+    .bind(&pr_url)
+    .bind(&hello_hash)
+    .bind(serde_json::json!({
+        "source": "bonjour_skilluv_pull_request",
+        "fork_full_name": fork_full_name,
+        "pr_number": pr_number,
+        "hello_markdown": hello_content,
+    }))
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    if let Some(id) = deliverable_id {
+        sqlx::query("UPDATE onboarding_bonjour_skilluv SET deliverable_id = $1 WHERE user_id = $2")
+            .bind(id)
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;
+
+        crate::services::ReviewQueueService::create_task_for_deliverable(
+            &mut tx,
+            id,
+            &skill_domain,
+            3,
+            "any",
+        )
+        .await?;
+    }
+
     tx.commit().await?;
 
     tracing::info!(
@@ -862,7 +940,8 @@ pub async fn handle_bonjour_skilluv_pr_event(
         pr_number,
         fork_full_name,
         hello_hash = %hello_hash,
-        "Bonjour Skilluv completion detected — status transitioned to pr_opened, Hello Wall entry created"
+        deliverable_id = ?deliverable_id,
+        "Bonjour Skilluv pull request detected — status pr_opened, Hello Wall entry created, queued for review"
     );
 
     Ok(())

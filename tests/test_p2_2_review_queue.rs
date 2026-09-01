@@ -20,6 +20,35 @@ use skilluv_backend::services::{
     ReviewSubmitParams, ReviewsService, SeniorityLevel, Verdict,
 };
 
+/// Somebody who may hand down a verdict on this deliverable: a third party,
+/// holding the capability.
+///
+/// Both halves matter since the gate on `submit_verdict`. These fixtures used
+/// to review with `claimed_by` — the person the deliverable belongs to — which
+/// is now refused outright, and any authenticated account used to be enough,
+/// which it no longer is. `mentor` is the platform's cross-domain reviewer
+/// capability.
+async fn fresh_reviewer(db: &sqlx::PgPool) -> Uuid {
+    let reviewer = Uuid::new_v4();
+    insert_test_user(db, reviewer).await;
+    grant_reviewer(db, reviewer).await;
+    reviewer
+}
+
+/// `mentor`, granted straight into the table because the promotion engine that
+/// normally awards it is not what these tests are about.
+async fn grant_reviewer(db: &sqlx::PgPool, user_id: Uuid) {
+    sqlx::query(
+        "INSERT INTO user_capabilities (user_id, capability, granted_reason)
+         VALUES ($1, 'mentor', 'test fixture')
+         ON CONFLICT DO NOTHING",
+    )
+    .bind(user_id)
+    .execute(db)
+    .await
+    .expect("grant mentor");
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // Helpers de setup (identiques aux tests précédents, factorisés)
 // ═══════════════════════════════════════════════════════════════════
@@ -374,7 +403,7 @@ async fn claim_task_sets_expiration_two_hours_out() {
 #[tokio::test]
 async fn approve_verdict_finalizes_deliverable_with_full_side_effects() {
     let (db, db_name) = setup_test_db().await;
-    let (claimed_by, project_id, slice_id, deliverable_user, skills, _gh) =
+    let (_claimed_by, project_id, slice_id, deliverable_user, skills, _gh) =
         setup_project_and_slice_with_skills(&db).await;
 
     // Un autre user fait la PR (mismatch)
@@ -406,8 +435,9 @@ async fn approve_verdict_finalizes_deliverable_with_full_side_effects() {
         _ => panic!("expected pending_manual_review"),
     };
 
-    // Le claimed_by (owner) revoit et approuve
-    let reviewer = claimed_by;
+    // Un tiers relit : depuis le garde-fou, l'auteur du deliverable ne peut
+    // pas signer son propre travail.
+    let reviewer = fresh_reviewer(&db).await;
     let submit = ReviewSubmitParams {
         deliverable_id,
         reviewer_user_id: reviewer,
@@ -439,10 +469,17 @@ async fn approve_verdict_finalizes_deliverable_with_full_side_effects() {
         .fetch_one(&db)
         .await
         .expect("fetch total");
-    assert_eq!(
-        total, 70,
-        "60 (fragments slice) + 10 (bonus reviewer si claimed_by = deliverable_user)"
-    );
+    // 60 : les fragments de la slice, et rien d'autre. C'était 70 tant que la
+    // même personne pouvait relire son propre livrable et encaisser les deux
+    // parts ; le garde-fou d'auto-revue les sépare, ce qui est le but.
+    assert_eq!(total, 60, "les fragments de la slice vont à l'auteur");
+
+    let reviewer_total: i32 = sqlx::query_scalar("SELECT total_fragments FROM users WHERE id = $1")
+        .bind(reviewer)
+        .fetch_one(&db)
+        .await
+        .expect("fetch reviewer total");
+    assert_eq!(reviewer_total, 10, "le bonus de relecture va au relecteur");
 
     // Skills propagés
     for skill_id in &skills {
@@ -502,7 +539,7 @@ async fn approve_verdict_finalizes_deliverable_with_full_side_effects() {
 #[tokio::test]
 async fn reject_verdict_marks_deliverable_rejected() {
     let (db, db_name) = setup_test_db().await;
-    let (claimed_by, project_id, _slice_id, _owner, _skills, _gh) =
+    let (_claimed_by, project_id, _slice_id, _owner, _skills, _gh) =
         setup_project_and_slice_with_skills(&db).await;
 
     // Mismatch author → pending_manual_review
@@ -534,9 +571,10 @@ async fn reject_verdict_marks_deliverable_rejected() {
         _ => panic!("expected pending"),
     };
 
+    let fresh_reviewer_id = fresh_reviewer(&db).await;
     let submit = ReviewSubmitParams {
         deliverable_id,
-        reviewer_user_id: claimed_by,
+        reviewer_user_id: fresh_reviewer_id,
         verdict: Verdict::Reject,
         body: "Ce n'est pas ce que la slice demandait".to_string(),
         time_spent_seconds: None,
@@ -555,7 +593,7 @@ async fn reject_verdict_marks_deliverable_rejected() {
 #[tokio::test]
 async fn request_changes_keeps_deliverable_pending() {
     let (db, db_name) = setup_test_db().await;
-    let (claimed_by, project_id, _slice_id, _owner, _skills, _gh) =
+    let (_claimed_by, project_id, _slice_id, _owner, _skills, _gh) =
         setup_project_and_slice_with_skills(&db).await;
 
     let other_user = Uuid::new_v4();
@@ -586,9 +624,10 @@ async fn request_changes_keeps_deliverable_pending() {
         _ => panic!("expected pending"),
     };
 
+    let fresh_reviewer_id = fresh_reviewer(&db).await;
     let submit = ReviewSubmitParams {
         deliverable_id,
-        reviewer_user_id: claimed_by,
+        reviewer_user_id: fresh_reviewer_id,
         verdict: Verdict::RequestChanges,
         body: "Fais X et Y avant que je puisse approuver".to_string(),
         time_spent_seconds: None,
@@ -610,7 +649,7 @@ async fn request_changes_keeps_deliverable_pending() {
 #[tokio::test]
 async fn same_reviewer_cannot_review_twice() {
     let (db, db_name) = setup_test_db().await;
-    let (claimed_by, project_id, _slice_id, _owner, _skills, _gh) =
+    let (_claimed_by, project_id, _slice_id, _owner, _skills, _gh) =
         setup_project_and_slice_with_skills(&db).await;
 
     let other_user = Uuid::new_v4();
@@ -641,9 +680,10 @@ async fn same_reviewer_cannot_review_twice() {
         _ => panic!("expected pending"),
     };
 
+    let fresh_reviewer_id = fresh_reviewer(&db).await;
     let submit = ReviewSubmitParams {
         deliverable_id,
-        reviewer_user_id: claimed_by,
+        reviewer_user_id: fresh_reviewer_id,
         verdict: Verdict::RequestChanges,
         body: "First review".to_string(),
         time_spent_seconds: None,
@@ -655,7 +695,7 @@ async fn same_reviewer_cannot_review_twice() {
     // Second review by same reviewer must fail (UNIQUE deliverable_id + reviewer)
     let submit2 = ReviewSubmitParams {
         deliverable_id,
-        reviewer_user_id: claimed_by,
+        reviewer_user_id: fresh_reviewer_id,
         verdict: Verdict::Approve,
         body: "Second review".to_string(),
         time_spent_seconds: None,

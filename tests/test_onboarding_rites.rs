@@ -12,6 +12,22 @@ use reqwest::StatusCode;
 use serde_json::json;
 use skilluv_backend::validators::SKILL_DOMAINS;
 
+/// Give somebody the capability a verdict needs.
+///
+/// Since the gate below, `mentor` is the platform's cross-domain reviewer
+/// capability. Granted straight into `user_capabilities` because the promotion
+/// engine that normally awards it is not what these tests are about.
+async fn make_reviewer(app: &common::TestApp, username: &str) {
+    sqlx::query(
+        "INSERT INTO user_capabilities (user_id, capability, granted_reason)
+         SELECT id, 'mentor', 'test fixture' FROM users WHERE username = $1",
+    )
+    .bind(username)
+    .execute(&app.db)
+    .await
+    .expect("grant mentor");
+}
+
 /// Every domain a person may declare has a rite, with no exclusion list.
 ///
 /// The loop is over `SKILL_DOMAINS` on purpose: SKI-360 asks for eleven and
@@ -275,6 +291,7 @@ async fn an_approved_review_is_what_awards_the_fragments() {
     .unwrap();
 
     app.register_user("audioreviewer").await;
+    make_reviewer(&app, "audioreviewer").await;
     app.login("audioreviewer").await;
     let verdict = app
         .post(
@@ -489,6 +506,7 @@ async fn handing_in_the_brief_advances_then_completes_the_rite() {
     .unwrap();
 
     app.register_user("leadreviewer").await;
+    make_reviewer(&app, "leadreviewer").await;
     app.login("leadreviewer").await;
     app.post(
         &format!("/api/deliverables/{deliverable_id}/reviews"),
@@ -618,4 +636,211 @@ async fn counts_is_not_read_as_an_orientation_slug() {
         .await
         .unwrap();
     assert!(body["data"]["domains"].is_array());
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Who may hand down a verdict
+// ════════════════════════════════════════════════════════════════════
+
+/// Nobody signs off their own rite.
+///
+/// Sharper since `approve` became what awards the fragments, settles the
+/// submission and activates the profile: an unguarded self-review is a person
+/// handing themselves the proof the platform exists to vouch for.
+#[tokio::test]
+async fn nobody_signs_off_their_own_rite() {
+    let app = common::TestApp::spawn().await;
+    app.register_user("selfjudge").await;
+    make_reviewer(&app, "selfjudge").await;
+    app.login("selfjudge").await;
+
+    let challenge: serde_json::Value = app
+        .get("/api/challenges/onboarding?domain=quality")
+        .await
+        .json()
+        .await
+        .unwrap();
+    let challenge_id = challenge["data"]["challenge"]["id"].as_str().unwrap();
+    app.post(&format!("/api/challenges/{challenge_id}/start"), &json!({}))
+        .await;
+    app.post(
+        &format!("/api/challenges/{challenge_id}/submit"),
+        &json!({ "code": "Steps: open the page, press save twice. Expected one row, got two." }),
+    )
+    .await;
+
+    let deliverable_id: uuid::Uuid = sqlx::query_scalar(
+        "SELECT id FROM deliverables
+         WHERE user_id = (SELECT id FROM users WHERE username = 'selfjudge')",
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+
+    let resp = app
+        .post(
+            &format!("/api/deliverables/{deliverable_id}/reviews"),
+            &json!({ "verdict": "approve", "body": "Looks good to me, obviously." }),
+        )
+        .await;
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+
+    let (status, fragments, active): (String, i32, bool) = sqlx::query_as(
+        "SELECT cs.status, u.total_fragments, u.profile_active
+         FROM challenge_submissions cs JOIN users u ON u.id = cs.user_id
+         WHERE u.username = 'selfjudge'",
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert_eq!(status, "pending_review");
+    assert_eq!(fragments, 0);
+    assert!(!active);
+}
+
+/// A verdict is a competence, not a login.
+///
+/// P2.2 opened this to every authenticated user for the cold start and
+/// deferred the gate. It stops being acceptable the moment a verdict is worth
+/// something.
+#[tokio::test]
+async fn a_verdict_needs_more_than_an_account() {
+    let app = common::TestApp::spawn().await;
+    app.register_user("opshand").await;
+    app.login("opshand").await;
+
+    let challenge: serde_json::Value = app
+        .get("/api/challenges/onboarding?domain=ops")
+        .await
+        .json()
+        .await
+        .unwrap();
+    let challenge_id = challenge["data"]["challenge"]["id"].as_str().unwrap();
+    app.post(&format!("/api/challenges/{challenge_id}/start"), &json!({}))
+        .await;
+    app.post(
+        &format!("/api/challenges/{challenge_id}/submit"),
+        &json!({ "code": "The availability SLO says nothing about how stale the data is." }),
+    )
+    .await;
+
+    let deliverable_id: uuid::Uuid = sqlx::query_scalar(
+        "SELECT id FROM deliverables
+         WHERE user_id = (SELECT id FROM users WHERE username = 'opshand')",
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+
+    // A stranger with nothing but an account.
+    app.register_user("passerby").await;
+    app.login("passerby").await;
+    let refused = app
+        .post(
+            &format!("/api/deliverables/{deliverable_id}/reviews"),
+            &json!({ "verdict": "approve", "body": "Sure." }),
+        )
+        .await;
+    assert_eq!(refused.status(), StatusCode::FORBIDDEN);
+
+    // The same person, once they hold the capability.
+    make_reviewer(&app, "passerby").await;
+    let accepted = app
+        .post(
+            &format!("/api/deliverables/{deliverable_id}/reviews"),
+            &json!({ "verdict": "approve", "body": "Names what the SLO misses, and what it costs." }),
+        )
+        .await;
+    assert_eq!(accepted.status(), StatusCode::OK);
+}
+
+/// An approved pull request is what completes the code rite.
+///
+/// The webhook takes it to `pr_opened` and attaches the deliverable; nothing
+/// used to move it further, so `badge_rules.bonjour_skilluv` — which fires on
+/// `completed_at IS NOT NULL` — was unreachable on the only path that had
+/// shipped. This exercises the settlement, not the webhook itself: the webhook
+/// reads HELLO.md off GitHub, so the rows it writes are written here directly.
+#[tokio::test]
+async fn an_approved_pull_request_is_what_completes_the_code_rite() {
+    let app = common::TestApp::spawn().await;
+    app.register_user("forkhand").await;
+    app.login("forkhand").await;
+
+    let user_id: uuid::Uuid =
+        sqlx::query_scalar("SELECT id FROM users WHERE username = 'forkhand'")
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
+    let (challenge_id, reward): (uuid::Uuid, i32) = sqlx::query_as(
+        "SELECT id, reward_fragments FROM challenge_templates
+         WHERE is_domain_rite AND skill_domain = 'code' AND status = 'published'",
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+
+    let deliverable_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO deliverables
+            (challenge_id, user_id, artifact_type, artifact_url, artifact_hash,
+             verifiable_by, verification_status, fragments_awarded, public,
+             submitted_at, created_at)
+         VALUES ($1, $2, 'other', 'https://github.com/forkhand/starter-fullstack-rust/pull/1',
+                 'deadbeef', 'human_review', 'pending', 0, TRUE, NOW(), NOW())
+         RETURNING id",
+    )
+    .bind(challenge_id)
+    .bind(user_id)
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+
+    sqlx::query(
+        "INSERT INTO onboarding_bonjour_skilluv
+            (user_id, skill_domain, rite_form, challenge_id, deliverable_id,
+             starter_slug, fork_full_name, fork_html_url, github_fork_id,
+             status, pr_number, pr_url, pr_opened_at)
+         VALUES ($1, 'code', 'fork', $2, $3,
+                 'starter-fullstack-rust', 'forkhand/starter-fullstack-rust',
+                 'https://github.com/forkhand/starter-fullstack-rust', 987654,
+                 'pr_opened', 1,
+                 'https://github.com/forkhand/starter-fullstack-rust/pull/1', NOW())",
+    )
+    .bind(user_id)
+    .bind(challenge_id)
+    .bind(deliverable_id)
+    .execute(&app.db)
+    .await
+    .expect("the fork rite row must be writable in its own shape");
+
+    app.register_user("codereviewer").await;
+    make_reviewer(&app, "codereviewer").await;
+    app.login("codereviewer").await;
+    let verdict = app
+        .post(
+            &format!("/api/deliverables/{deliverable_id}/reviews"),
+            &json!({ "verdict": "approve",
+                     "body": "The HELLO.md says what they came to build, and the PR is on the right branch." }),
+        )
+        .await;
+    assert_eq!(verdict.status(), StatusCode::OK);
+
+    let (status, completed_at, fragments, active): (
+        String,
+        Option<chrono::DateTime<chrono::Utc>>,
+        i32,
+        bool,
+    ) = sqlx::query_as(
+        "SELECT o.status, o.completed_at, u.total_fragments, u.profile_active
+         FROM onboarding_bonjour_skilluv o JOIN users u ON u.id = o.user_id
+         WHERE u.username = 'forkhand'",
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+
+    assert_eq!(status, "completed");
+    assert!(completed_at.is_some(), "the badge rule reads completed_at");
+    assert_eq!(fragments, reward);
+    assert!(active, "an approved first gesture activates the profile");
 }

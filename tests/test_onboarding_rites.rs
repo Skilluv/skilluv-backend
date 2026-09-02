@@ -28,7 +28,6 @@ async fn make_reviewer(app: &common::TestApp, username: &str) {
     .expect("grant mentor");
 }
 
-
 /// Choose a trade in `domain`, the way the signup screen does.
 ///
 /// The rite refuses to start without one since the trade gate: it is what
@@ -52,7 +51,11 @@ async fn choose_trade_in(app: &common::TestApp, domain: &str) {
             &json!({ "slug": slug, "mode": "active", "is_primary": true }),
         )
         .await;
-    assert_eq!(resp.status(), StatusCode::CREATED, "could not choose {slug}");
+    assert_eq!(
+        resp.status(),
+        StatusCode::CREATED,
+        "could not choose {slug}"
+    );
 }
 
 /// Every domain a person may declare has a rite, with no exclusion list.

@@ -517,3 +517,66 @@ async fn an_exercise_is_handed_in_read_and_rewarded() {
     assert_eq!(status, "success");
     assert_eq!(fragments, reward);
 }
+
+/// The first brief anybody reads carries guidance too.
+///
+/// `GET /api/challenges/onboarding` returned the rite and nothing around it —
+/// so the one brief where being stranded means never starting was the one with
+/// no reading, nowhere to ask, and no count of who asked before.
+#[tokio::test]
+async fn the_rite_says_where_to_start_reading() {
+    let app = common::TestApp::spawn().await;
+    app.register_user("firstbrief").await;
+    app.login("firstbrief").await;
+
+    let body: serde_json::Value = app
+        .get("/api/challenges/onboarding?domain=code")
+        .await
+        .json()
+        .await
+        .unwrap();
+
+    let guidance = &body["data"]["guidance"];
+    assert!(
+        !guidance["help"].as_array().unwrap().is_empty(),
+        "the first brief must say where to ask: {body}"
+    );
+    let resources = guidance["resources"].as_array().unwrap();
+    assert!(
+        !resources.is_empty(),
+        "the code rite asks for a fork and a pull request and says where neither is documented"
+    );
+    assert!(
+        resources.iter().any(|r| r["language"] == "fr"),
+        "a French reader gets something they can read"
+    );
+}
+
+/// No resource points at a host this repository invented.
+///
+/// Migration 0615 attached a Discord invite that exists nowhere — written
+/// because a community link belonged there, not because that one was real. A
+/// dead link in the first list a beginner is handed teaches them the guidance
+/// is decorative.
+#[tokio::test]
+async fn no_resource_points_at_an_invented_link() {
+    let app = common::TestApp::spawn().await;
+
+    let invented: Vec<String> = sqlx::query_scalar(
+        "SELECT url FROM challenge_resources
+          WHERE url LIKE '%discord.gg%' OR url LIKE '%example.com%'",
+    )
+    .fetch_all(&app.db)
+    .await
+    .unwrap();
+    assert!(invented.is_empty(), "invented links: {invented:?}");
+
+    // And every one is a link somebody else hosts, not a copy.
+    let bad_scheme: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM challenge_resources WHERE url NOT LIKE 'https://%'",
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert_eq!(bad_scheme, 0);
+}

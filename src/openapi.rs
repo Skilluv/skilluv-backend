@@ -1638,6 +1638,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
             // leaderboard
             crate::routes::leaderboard::LeaderboardMeta,
             crate::routes::leaderboard::LeaderboardsIndexResponse,
+            crate::routes::leaderboard::LeaderboardDomain,
             crate::routes::leaderboard::LeaderboardEntry,
             crate::routes::leaderboard::LeaderboardPage,
             crate::routes::leaderboard::LeaderboardPageResponse,

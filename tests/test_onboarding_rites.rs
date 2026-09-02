@@ -624,7 +624,7 @@ async fn the_counts_endpoint_answers_the_whole_catalogue_in_one_call() {
     let app = common::TestApp::spawn().await;
 
     let body: serde_json::Value = app
-        .get("/api/orientations/counts")
+        .get("/api/orientation-counts")
         .await
         .json()
         .await
@@ -658,18 +658,29 @@ async fn the_counts_endpoint_answers_the_whole_catalogue_in_one_call() {
     assert_eq!(body["data"]["total"], catalogue["data"]["total"]);
 }
 
-/// `/counts` sits in front of `/{slug}` in the router; without this, a route
-/// ordering change turns it into a lookup for an orientation called "counts".
+/// The counts live off the `{slug}` namespace, so no orientation slug can ever
+/// shadow them or be shadowed by them.
+///
+/// It was `/api/orientations/counts`, which reached this handler for the slug
+/// spelled `counts` and handed the caller a payload the detail operation never
+/// described. `/challenges/onboarding` has the same shape safely, because its
+/// sibling parameter is a UUID; a slug is a free string.
 #[tokio::test]
-async fn counts_is_not_read_as_an_orientation_slug() {
+async fn the_counts_do_not_shadow_a_slug() {
     let app = common::TestApp::spawn().await;
-    let body: serde_json::Value = app
-        .get("/api/orientations/counts")
+
+    let counts: serde_json::Value = app
+        .get("/api/orientation-counts")
         .await
         .json()
         .await
         .unwrap();
-    assert!(body["data"]["domains"].is_array());
+    assert!(counts["data"]["domains"].is_array());
+
+    // And the detail route answers for the word that used to collide, the way
+    // it answers for any slug nobody registered.
+    let shadowed = app.get("/api/orientations/counts").await;
+    assert_eq!(shadowed.status(), StatusCode::NOT_FOUND);
 }
 
 // ════════════════════════════════════════════════════════════════════

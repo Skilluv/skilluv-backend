@@ -29,9 +29,17 @@ const MAX_ACTIVE_ORIENTATIONS: i64 = 3;
 pub fn orientation_routes() -> Router<AppState> {
     Router::new()
         .route("/orientations", get(list_orientations))
-        // Before `/orientations/{slug}` in this list for readability only —
-        // the router matches a literal segment ahead of a parameter either way.
-        .route("/orientations/counts", get(orientation_counts))
+        // Deliberately not `/orientations/counts`.
+        //
+        // That would shadow `/orientations/{slug}` for the one slug spelled
+        // `counts`, and a slug is a free string — so the contract fuzzer
+        // generates it, reaches this handler instead of the detail one, and is
+        // handed a payload the detail operation never described. The platform
+        // has the same shape at `/challenges/onboarding` and it is safe there
+        // only because `{id}` is a UUID, which no generator spells as a word.
+        //
+        // Nothing here is worth making a slug ambiguous for.
+        .route("/orientation-counts", get(orientation_counts))
         // Opening a trade's catalogue, one trade at a time. Mounted here
         // rather than in `admin.rs` because the guard is per domain: a design
         // curator opens design trades, and nobody has to be a global admin to
@@ -373,7 +381,7 @@ pub async fn list_orientations(
 /// orientation added (SKI-364).
 #[utoipa::path(
     get,
-    path = "/api/orientations/counts",
+    path = "/api/orientation-counts",
     tag = "profile",
     params(CountsQuery),
     responses(

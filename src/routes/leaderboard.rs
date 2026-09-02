@@ -26,37 +26,35 @@ pub struct LeaderboardMeta {
     pub periods: &'static [&'static str],
 }
 
-/// The `{domain}` path segment of every leaderboard route.
+/// `global`, or any of the twelve skill domains.
 ///
-/// A struct rather than the tuple form of `params(...)` because the tuple form
-/// takes a literal pattern, and a literal is how this document came to name
-/// four domains while `LeaderboardService::validate_domain` accepted thirteen:
-/// every `ops`, `ai` or `audio` leaderboard was reachable and undocumented.
-/// `schema_with` emits the list the guard actually applies.
-#[derive(Debug, Deserialize, IntoParams)]
-#[into_params(parameter_in = Path)]
-pub struct LeaderboardDomainPath {
-    /// `global`, or any of the platform skill domains.
-    #[param(schema_with = leaderboard_domain_schema)]
-    pub domain: String,
-}
-
-/// `{ type: string, enum: ["global", ...SKILL_DOMAINS] }` — the exact set
-/// `is_valid_domain` accepts, emitted rather than transcribed.
-pub fn leaderboard_domain_schema() -> utoipa::openapi::schema::Object {
-    use utoipa::openapi::schema::{ObjectBuilder, Type};
-    let values = std::iter::once(serde_json::json!("global"))
-        .chain(
-            crate::validators::SKILL_DOMAINS
-                .iter()
-                .map(|d| serde_json::json!(d)),
-        )
-        .collect::<Vec<_>>();
-    ObjectBuilder::new()
-        .schema_type(utoipa::openapi::schema::SchemaType::Type(Type::String))
-        .enum_values(Some(values))
-        .description(Some("Leaderboard domain — `global` or a skill domain."))
-        .build()
+/// An enum and not a `schema_with` on an `IntoParams` struct: that produced a
+/// *second* `domain` path parameter in the document — utoipa derives one from
+/// the handler's `Path<String>` as well — and schemathesis read the looser of
+/// the pair, so `/api/leaderboards/0` counted as compliant and the endpoint's
+/// correct 400 read as a contract violation. The tuple form takes a type, and
+/// a type is unambiguous.
+///
+/// The list is transcribed, which is the thing this file spent a commit
+/// removing elsewhere. `a_leaderboard_domain_is_global_or_a_skill_domain`
+/// compares it to `validators::SKILL_DOMAINS` so the copy cannot drift
+/// silently — the same contract `SkillDomain` carries.
+#[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum LeaderboardDomain {
+    Global,
+    Code,
+    Design,
+    Game,
+    Security,
+    Ops,
+    Ai,
+    SoftSkills,
+    Audio,
+    Quality,
+    Leadership,
+    Communication,
+    Education,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -132,7 +130,7 @@ pub struct LeaderboardPageResponse {
     path = "/api/leaderboards/{domain}",
     tag = "profile",
     params(
-        LeaderboardDomainPath,
+        ("domain" = LeaderboardDomain, Path, description = "Leaderboard domain"),
         LeaderboardQuery,
     ),
     responses(
@@ -248,7 +246,7 @@ pub struct MyRankResponse {
     path = "/api/leaderboards/{domain}/me",
     tag = "profile",
     params(
-        LeaderboardDomainPath,
+        ("domain" = LeaderboardDomain, Path, description = "Leaderboard domain"),
         MyRankQuery,
     ),
     responses(
@@ -281,4 +279,50 @@ pub async fn my_rank(
         score: score.map(|s| s as i64),
         total_participants: total,
     })))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The path parameter lists exactly what `LeaderboardService::validate_domain`
+    /// accepts: `global` plus every skill domain.
+    ///
+    /// The enum is a transcription and this is what stops it drifting. The
+    /// previous document froze at four domains while the guard took thirteen,
+    /// and every `ops`, `ai` or `audio` leaderboard was reachable and
+    /// undocumented.
+    #[test]
+    fn a_leaderboard_domain_is_global_or_a_skill_domain() {
+        let schema =
+            serde_json::to_value(<LeaderboardDomain as utoipa::PartialSchema>::schema()).unwrap();
+        let documented: Vec<String> = schema["enum"]
+            .as_array()
+            .expect("a unit enum documents its values under `enum`")
+            .iter()
+            .map(|v| v.as_str().expect("each value is a string").to_string())
+            .collect();
+
+        let expected: Vec<String> = std::iter::once("global".to_string())
+            .chain(
+                crate::validators::SKILL_DOMAINS
+                    .iter()
+                    .map(|d| (*d).to_string()),
+            )
+            .collect();
+
+        assert_eq!(
+            documented, expected,
+            "the documented leaderboard domains and the guard have drifted"
+        );
+
+        // And each one really is accepted, which is the claim a reader of the
+        // document makes when they build a URL from it.
+        for domain in &documented {
+            assert!(
+                crate::services::LeaderboardService::validate_domain(domain).is_ok(),
+                "{domain} is documented and refused"
+            );
+        }
+    }
 }

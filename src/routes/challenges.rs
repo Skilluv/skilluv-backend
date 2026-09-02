@@ -142,12 +142,25 @@ pub async fn get_onboarding(
     )))?;
 
     let mut challenge = challenge;
-    challenge.localise(&locale_of(&headers));
+    let locale = locale_of(&headers);
+    challenge.localise(&locale);
     let locales = challenge.locales();
 
-    Ok(Json(build_response(
-        json!({ "challenge": challenge, "available_locales": locales }),
-    )))
+    // The rite is the one brief where being stranded means never starting, so
+    // it carries the same guidance every other challenge does.
+    let guidance = crate::services::guidance::for_challenge(
+        &state.db,
+        challenge.id,
+        Some(auth.user_id),
+        &locale,
+    )
+    .await?;
+
+    Ok(Json(build_response(json!({
+        "challenge": challenge,
+        "available_locales": locales,
+        "guidance": guidance,
+    }))))
 }
 
 // GET /api/challenges (public — optional auth for locked/unlocked status)

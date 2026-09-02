@@ -80,7 +80,7 @@ jobs:
     # Official SLSA generator reusable workflow — audited, does not need
     # custom code. Attestation is pushed to the same registry alongside the
     # image with `.att` suffix.
-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.0.0
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.1.0
     with:
       image: ${{ needs.resolve-digest.outputs.image }}
       digest: ${{ needs.resolve-digest.outputs.digest }}

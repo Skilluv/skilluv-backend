@@ -114,16 +114,22 @@ fn default_limit() -> i64 {
     50
 }
 
-/// The counts endpoint takes only the one filter that changes what counts as
-/// part of the catalogue. A domain or tag filter would make it a count of one
-/// row, which is what `GET /api/orientations` already answers.
+/// The counts take no parameters at all.
+///
+/// Archived trades are never counted. This exists for one screen — the eleven
+/// classes with the number of trades under each — and showing a beginner "26
+/// specialities" where three of them are retired tells them something false.
+/// There is no correct `true` for that flag here. Any other filtered count is
+/// what `GET /api/orientations` already answers with its `total`.
+///
+/// An empty struct rather than no extractor: without one, axum ignores the
+/// query string and `?anything=1` returns 200, while the document says this
+/// operation takes no parameters. `deny_unknown_fields` is what makes the two
+/// agree — and disagreeing is what the contract fuzzer caught.
 #[derive(Debug, Deserialize, IntoParams)]
 #[into_params(parameter_in = Query)]
 #[serde(deny_unknown_fields)]
-pub struct CountsQuery {
-    #[serde(default)]
-    pub include_archived: bool,
-}
+pub struct CountsQuery {}
 
 #[derive(Debug, Serialize, sqlx::FromRow, ToSchema)]
 pub struct OrientationRow {
@@ -391,19 +397,20 @@ pub async fn list_orientations(
 )]
 pub async fn orientation_counts(
     State(state): State<AppState>,
-    Query(q): Query<CountsQuery>,
+    // Bound and unused: the extractor is here to refuse a query parameter this
+    // operation does not take, not to carry one.
+    Query(_no_parameters): Query<CountsQuery>,
 ) -> Result<Json<ApiResponse<OrientationCountsResponse>>, AppError> {
     let domains = sqlx::query_as::<_, OrientationDomainCount>(
         r#"
         SELECT o.primary_domain AS domain, COUNT(*) AS total
         FROM orientations o
         WHERE o.is_curated = TRUE
-          AND ($1::BOOLEAN OR o.is_archived = FALSE)
+          AND o.is_archived = FALSE
         GROUP BY o.primary_domain
         ORDER BY COUNT(*) DESC, o.primary_domain
         "#,
     )
-    .bind(q.include_archived)
     .fetch_all(&state.db)
     .await?;
 

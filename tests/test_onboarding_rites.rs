@@ -683,6 +683,49 @@ async fn the_counts_do_not_shadow_a_slug() {
     assert_eq!(shadowed.status(), StatusCode::NOT_FOUND);
 }
 
+/// The counts take no query parameter, and refuse one.
+///
+/// Archived trades are never counted — the screen this serves shows a beginner
+/// how many trades each class holds, and including retired ones tells them
+/// something false. So there is no flag, and the endpoint says so rather than
+/// ignoring what it is handed: the contract fuzzer reads a parameter the
+/// document does not declare as a violation, and an endpoint that accepts one
+/// anyway is an endpoint whose document is a guess.
+#[tokio::test]
+async fn the_counts_refuse_a_parameter_they_do_not_take() {
+    let app = common::TestApp::spawn().await;
+
+    assert_eq!(
+        app.get("/api/orientation-counts").await.status(),
+        StatusCode::OK
+    );
+    assert_eq!(
+        app.get("/api/orientation-counts?include_archived=false")
+            .await
+            .status(),
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
+        app.get("/api/orientation-counts?anything=1").await.status(),
+        StatusCode::BAD_REQUEST
+    );
+
+    // Archived trades are out of the count, whatever anybody asks for.
+    let body: serde_json::Value = app
+        .get("/api/orientation-counts")
+        .await
+        .json()
+        .await
+        .unwrap();
+    let live: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM orientations WHERE is_curated AND NOT is_archived",
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert_eq!(body["data"]["total"], live);
+}
+
 // ════════════════════════════════════════════════════════════════════
 // Who may hand down a verdict
 // ════════════════════════════════════════════════════════════════════

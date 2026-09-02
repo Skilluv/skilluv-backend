@@ -28,6 +28,33 @@ async fn make_reviewer(app: &common::TestApp, username: &str) {
     .expect("grant mentor");
 }
 
+
+/// Choose a trade in `domain`, the way the signup screen does.
+///
+/// The rite refuses to start without one since the trade gate: it is what
+/// picks the starter, feeds the recommendations, and matches a reviewer.
+/// Resolved from the catalogue rather than hardcoded so a renamed slug does
+/// not silently turn these into tests of the gate.
+async fn choose_trade_in(app: &common::TestApp, domain: &str) {
+    let slug: String = sqlx::query_scalar(
+        "SELECT slug FROM orientations
+          WHERE primary_domain = $1 AND is_curated AND NOT is_archived
+          ORDER BY slug LIMIT 1",
+    )
+    .bind(domain)
+    .fetch_one(&app.db)
+    .await
+    .expect("the domain has a trade");
+
+    let resp = app
+        .post(
+            "/api/users/me/orientations",
+            &json!({ "slug": slug, "mode": "active", "is_primary": true }),
+        )
+        .await;
+    assert_eq!(resp.status(), StatusCode::CREATED, "could not choose {slug}");
+}
+
 /// Every domain a person may declare has a rite, with no exclusion list.
 ///
 /// The loop is over `SKILL_DOMAINS` on purpose: SKI-360 asks for eleven and
@@ -361,6 +388,7 @@ async fn a_designer_starts_the_rite_without_a_github_account() {
     let app = common::TestApp::spawn().await;
     app.register_user("designernogh").await;
     app.login("designernogh").await;
+    choose_trade_in(&app, "design").await;
 
     let resp = app
         .post(
@@ -387,6 +415,7 @@ async fn the_code_rite_still_asks_for_github() {
     let app = common::TestApp::spawn().await;
     app.register_user("codernogh").await;
     app.login("codernogh").await;
+    choose_trade_in(&app, "code").await;
 
     let resp = app
         .post(
@@ -408,6 +437,7 @@ async fn starting_a_submission_rite_is_idempotent() {
     let app = common::TestApp::spawn().await;
     app.register_user("twicehand").await;
     app.login("twicehand").await;
+    choose_trade_in(&app, "quality").await;
 
     app.post(
         "/api/onboarding/bonjour-skilluv/start?domain=quality",
@@ -465,6 +495,7 @@ async fn handing_in_the_brief_advances_then_completes_the_rite() {
     let app = common::TestApp::spawn().await;
     app.register_user("leadhand").await;
     app.login("leadhand").await;
+    choose_trade_in(&app, "leadership").await;
 
     let start: serde_json::Value = app
         .post(

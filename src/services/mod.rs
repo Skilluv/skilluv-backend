@@ -92,6 +92,7 @@ pub mod game_profile;
 pub mod geo;
 pub mod github;
 pub mod goals;
+pub mod guidance;
 pub mod guild;
 pub mod hello_wall_mirror;
 pub mod i18n;

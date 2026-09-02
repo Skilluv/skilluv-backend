@@ -50,6 +50,15 @@ pub enum Format {
     Individual,
     /// A brief many people answer, ranked at the end.
     Contest,
+    /// A trade exercise: a published `challenge_templates` brief, handed in
+    /// and read by a person.
+    ///
+    /// The engine could not see these at all. `open_challenges` is named for
+    /// challenges and reads `project_slices`, so the entire published
+    /// challenge catalogue was invisible to the one surface whose job is to
+    /// answer "what do I do next" — which is why finishing the entry rite led
+    /// nowhere even once a catalogue existed.
+    Exercise,
 }
 
 impl Format {
@@ -57,6 +66,7 @@ impl Format {
         match self {
             Self::Individual => "individual",
             Self::Contest => "contest",
+            Self::Exercise => "exercise",
         }
     }
 
@@ -68,6 +78,7 @@ impl Format {
         match self {
             Self::Individual => "slice",
             Self::Contest => "tournament",
+            Self::Exercise => "challenge",
         }
     }
 }
@@ -149,6 +160,7 @@ pub async fn suggest(
 
     let mut candidates = open_challenges(db, user_id, domain).await?;
     candidates.extend(open_contests(db, user_id, domain).await?);
+    candidates.extend(open_exercises(db, user_id, domain).await?);
 
     for candidate in &mut candidates {
         score(candidate, &profile);
@@ -369,6 +381,81 @@ async fn open_challenges(
                 title,
                 format: Format::Individual,
                 target_kind: Format::Individual.target_kind().to_string(),
+                orientation_slug,
+                family,
+                difficulty: Some(difficulty),
+                estimated_hours,
+                closes_at: None,
+                score: 0,
+                reasons: Vec::new(),
+            },
+        )
+        .collect())
+}
+
+/// Published trade exercises somebody has not passed yet and is eligible for.
+///
+/// Eligibility is the same statement `TracksService::check_eligibility` makes
+/// on `/start` — every required prerequisite has a verified deliverable — so
+/// the list cannot suggest something the next click would refuse. Recommended
+/// prerequisites do not block, there as here.
+///
+/// The rites are excluded: a rite is not a suggestion, it is the way in, and
+/// somebody reading this list has already done theirs.
+async fn open_exercises(
+    db: &PgPool,
+    user_id: Uuid,
+    domain: &str,
+) -> Result<Vec<Suggestion>, AppError> {
+    let rows: Vec<OpenChallengeRow> = sqlx::query_as(
+        r#"
+        SELECT ct.id, ct.title, o.slug, o.reviewer_group, ct.difficulty,
+               CASE WHEN ct.duration_minutes IS NULL THEN NULL
+                    ELSE GREATEST(1, ct.duration_minutes / 60) END
+          FROM challenge_templates ct
+          LEFT JOIN orientations o ON o.id = ct.orientation_id
+         WHERE ct.status = 'published'
+           AND ct.skill_domain = $2
+           AND NOT ct.is_onboarding
+           AND NOT ct.is_domain_rite
+           -- Not one they have already passed.
+           AND NOT EXISTS (
+                 SELECT 1 FROM challenge_submissions cs
+                  WHERE cs.challenge_id = ct.id
+                    AND cs.user_id = $1
+                    AND cs.status IN ('success', 'pending_review')
+             )
+           -- Every required prerequisite proved.
+           AND NOT EXISTS (
+                 SELECT 1 FROM challenge_prerequisites p
+                  WHERE p.challenge_id = ct.id
+                    AND p.required
+                    AND NOT EXISTS (
+                          SELECT 1 FROM deliverables d
+                           WHERE d.user_id = $1
+                             AND d.challenge_id = p.depends_on_challenge_id
+                             AND d.verification_status = 'verified'
+                             AND d.revoked_at IS NULL
+                      )
+             )
+         ORDER BY ct.difficulty, ct.created_at
+         LIMIT 100
+        "#,
+    )
+    .bind(user_id)
+    .bind(domain)
+    .fetch_all(db)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(
+            |(id, title, orientation_slug, family, difficulty, estimated_hours)| Suggestion {
+                id,
+                slug: None,
+                title,
+                format: Format::Exercise,
+                target_kind: Format::Exercise.target_kind().to_string(),
                 orientation_slug,
                 family,
                 difficulty: Some(difficulty),

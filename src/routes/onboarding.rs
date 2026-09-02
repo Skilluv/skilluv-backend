@@ -439,6 +439,34 @@ pub async fn start_bonjour_skilluv(
         }
     };
 
+    // ── 3. A trade is chosen before the first gesture.
+    //
+    // Not bureaucracy: the trade is what picks the starter to fork, what the
+    // playlist and the recommendations read, and what a reviewer is matched
+    // on. Starting the rite without one meant forking the broad-appeal default
+    // and then being recommended nothing in particular — the platform meeting
+    // somebody for the first time and having nothing specific to say to them.
+    //
+    // One is required, three are allowed (`MAX_ACTIVE_ORIENTATIONS`). One is
+    // enough for every mechanism above, and asking a person who has just
+    // arrived to name three trades from a catalogue of 150 is asking them to
+    // decide before they can.
+    let has_trade: bool = sqlx::query_scalar(
+        "SELECT EXISTS (
+           SELECT 1 FROM user_orientations
+            WHERE user_id = $1 AND ended_at IS NULL AND mode = 'active')",
+    )
+    .bind(auth.user_id)
+    .fetch_one(&state.db)
+    .await?;
+    if !has_trade {
+        return Err(AppError::Validation(
+            "Choose a trade first: GET /api/orientations?domain=<yours> then \
+             POST /api/users/me/orientations. One is enough; three are allowed."
+                .into(),
+        ));
+    }
+
     // `check_skill_domain` passed, and the rite catalogue is tested against the
     // same constant, so this cannot be `None` on a shipped build.
     let rite = onboarding_rite::for_domain(&domain).ok_or_else(|| {

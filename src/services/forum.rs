@@ -51,6 +51,8 @@ pub struct Post {
     pub title: String,
     pub body: String,
     pub bounty_fragments: i32,
+    /// The challenge this thread is about, when it is about one.
+    pub challenge_id: Option<Uuid>,
     pub accepted_answer_id: Option<Uuid>,
     pub pinned: bool,
     pub locked: bool,
@@ -106,6 +108,8 @@ pub struct CreatePostInput {
     pub title: String,
     pub body: String,
     pub bounty_fragments: i32,
+    /// The challenge this thread is about, when it is about one.
+    pub challenge_id: Option<Uuid>,
 }
 
 pub async fn create_post(
@@ -169,8 +173,9 @@ pub async fn create_post(
 
     let post: Post = sqlx::query_as(
         r#"
-        INSERT INTO posts (category_id, author_id, kind, title, body, bounty_fragments)
-        VALUES ($1, $2, $3, $4, $5, $6)
+        INSERT INTO posts (category_id, author_id, kind, title, body,
+                           bounty_fragments, challenge_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
         RETURNING *
         "#,
     )
@@ -180,6 +185,7 @@ pub async fn create_post(
     .bind(title)
     .bind(body)
     .bind(input.bounty_fragments)
+    .bind(input.challenge_id)
     .fetch_one(db)
     .await?;
 

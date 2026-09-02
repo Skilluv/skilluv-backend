@@ -47,6 +47,7 @@ async fn post_with_body(app: &TestApp, category_id: Uuid, author: Uuid, body: &s
             title: "A post that mentions someone".to_string(),
             body: body.to_string(),
             bounty_fragments: 0,
+            challenge_id: None,
         },
         "user",
     )

@@ -70,6 +70,19 @@ struct SubmitRequest {
     attachments: Option<Vec<String>>,
 }
 
+/// The language this caller reads challenges in.
+///
+/// `Accept-Language`, resolved against the three locales the platform serves.
+/// A challenge carries every language it has been written in and the reader
+/// decides which one comes back — the header is the only thing that knows.
+fn locale_of(headers: &axum::http::HeaderMap) -> String {
+    crate::routes::resolve_from_accept_language(
+        headers
+            .get(axum::http::header::ACCEPT_LANGUAGE)
+            .and_then(|value| value.to_str().ok()),
+    )
+}
+
 /// The status of a submission nothing on this side can judge: received,
 /// queued for a human, not yet worth anything. Named because it is compared
 /// in five places and a typo would silently award nothing forever.
@@ -95,6 +108,7 @@ fn build_response(data: serde_json::Value) -> serde_json::Value {
 pub async fn get_onboarding(
     State(state): State<AppState>,
     auth: AuthUser,
+    headers: axum::http::HeaderMap,
     Query(query): Query<OnboardingQuery>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     // Check if user already completed onboarding
@@ -127,7 +141,13 @@ pub async fn get_onboarding(
         query.domain
     )))?;
 
-    Ok(Json(build_response(json!({ "challenge": challenge }))))
+    let mut challenge = challenge;
+    challenge.localise(&locale_of(&headers));
+    let locales = challenge.locales();
+
+    Ok(Json(build_response(
+        json!({ "challenge": challenge, "available_locales": locales }),
+    )))
 }
 
 // GET /api/challenges (public — optional auth for locked/unlocked status)
@@ -140,6 +160,7 @@ pub async fn list_challenges(
     State(state): State<AppState>,
     OptionalAuth(auth): OptionalAuth,
     tenant: crate::middleware::TenantContext,
+    headers: axum::http::HeaderMap,
     Query(query): Query<ListQuery>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     // Against `validators::SKILL_DOMAINS`, not a fourth hand-written copy of
@@ -263,7 +284,11 @@ pub async fn list_challenges(
         count_query = count_query.bind(kind);
     }
 
-    let challenges: Vec<ChallengeTemplate> = challenges_query.fetch_all(&state.db).await?;
+    let mut challenges: Vec<ChallengeTemplate> = challenges_query.fetch_all(&state.db).await?;
+    let locale = locale_of(&headers);
+    for challenge in &mut challenges {
+        challenge.localise(&locale);
+    }
     let total: i64 = count_query.fetch_one(&state.db).await?;
 
     // P8.3 : le flag `locked` est retiré du listing. La progression suit
@@ -300,16 +325,32 @@ pub async fn list_challenges(
 )]
 pub async fn get_challenge(
     State(state): State<AppState>,
+    OptionalAuth(auth): OptionalAuth,
+    headers: axum::http::HeaderMap,
     Path(id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let challenge: ChallengeTemplate =
+    let mut challenge: ChallengeTemplate =
         sqlx::query_as("SELECT * FROM challenge_templates WHERE id = $1 AND status = 'published'")
             .bind(id)
             .fetch_optional(&state.db)
             .await?
             .ok_or(AppError::NotFound("Challenge not found".to_string()))?;
 
-    Ok(Json(build_response(json!({ "challenge": challenge }))))
+    let locale = locale_of(&headers);
+    challenge.localise(&locale);
+    let locales = challenge.locales();
+
+    // What somebody needs around the brief to not be stranded on it: where it
+    // is documented, where to ask, what comes next. Sized to who is asking.
+    let guidance =
+        crate::services::guidance::for_challenge(&state.db, id, auth.map(|a| a.user_id), &locale)
+            .await?;
+
+    Ok(Json(build_response(json!({
+        "challenge": challenge,
+        "available_locales": locales,
+        "guidance": guidance,
+    }))))
 }
 
 // POST /api/challenges/:id/start

@@ -116,6 +116,36 @@ and the project will follow semantic versioning once 1.0 is reached.
 
 ### Fixed
 
+* **challenges:** a challenge is served in the language the reader asked for.
+  Migration 0104 added `title_i18n` / `description_i18n` / `instructions_i18n`
+  and nothing ever read them — not a route, not even the struct — while the
+  catalogue quietly stopped being French: 404 rows are French, 254 English, in
+  the same column with no marker. A bilingual front could not know what it was
+  about to display. The API resolves `Accept-Language` now, says which
+  languages a challenge exists in, and falls back to the base text rather than
+  to an empty string. Migration 0613.
+* **challenges:** a brief says where to start reading. `challenge_resources`
+  attaches documentation, courses, articles, videos, communities and the
+  repository the work lands in — links to material somebody else hosts, never
+  copies, each with the language it is in and what it costs to reach it. The
+  guidance narrows as a rank climbs and stops entirely at `doyen`: handing a
+  fifteen-year practitioner a link to the official docs is noise, and noise on
+  every page teaches people to stop reading the page. Migration 0614.
+* **forum:** a thread can name the challenge it is about. `posts.challenge_id`
+  is what makes a question asked once readable by everybody who starts that
+  challenge afterwards — the most valuable teaching material the platform will
+  produce, and the one that writes itself. Migration 0614.
+* **challenges:** six published code exercises, in both languages, in order.
+  Each says what is out of scope, names the repository it lands in, and has a
+  next one — `challenge_prerequisites` was empty across the whole platform, so
+  no challenge had a successor and "what do I do now" had no answer that was
+  not a search box. Migration 0615.
+* **onboarding:** a trade is chosen before the first gesture. The trade picks
+  the starter to fork, feeds the playlist and the recommendations, and is what
+  a reviewer is matched on; starting without one meant forking the broad-appeal
+  default and then being recommended nothing in particular. One is required,
+  three are allowed.
+
 * **onboarding:** the starter a trade forks is resolved from its family, not
   from a list of slugs written when there were 32 orientations. The table holds
   150, so 118 of them silently forked `starter-fullstack-node` — a

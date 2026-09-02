@@ -101,8 +101,67 @@ pub struct ChallengeTemplate {
     /// published domain, which is what makes the rite a fixed thing rather
     /// than whichever of fifteen rows `LIMIT 1` returned.
     pub is_domain_rite: bool,
+    /// The title, description and instructions in every language they have
+    /// been written in, as `{locale: text}` (migration 0104, filed correctly
+    /// by 0613).
+    ///
+    /// The plain `title` / `description` / `instructions` above stay as the
+    /// base text: `localise` overwrites them from these when the caller's
+    /// locale is present, and leaves them alone when it is not, so an
+    /// untranslated challenge falls back to something readable rather than to
+    /// an empty string.
+    pub title_i18n: serde_json::Value,
+    pub description_i18n: serde_json::Value,
+    pub instructions_i18n: serde_json::Value,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+impl ChallengeTemplate {
+    /// Rewrite the visible text into `locale`, where a translation exists.
+    ///
+    /// Called on the way out, on every route a person reads a challenge
+    /// through. Not a database concern: the row holds every language, and
+    /// which one to serve depends on who is asking.
+    ///
+    /// A missing translation leaves the base text in place. That is the whole
+    /// fallback: 404 of the catalogue is French-only and 254 English-only, so
+    /// half of any bilingual reader's requests land on a language they did not
+    /// ask for — and reading it is better than reading nothing while somebody
+    /// translates 658 challenges.
+    pub fn localise(&mut self, locale: &str) {
+        fn pick(field: &serde_json::Value, locale: &str) -> Option<String> {
+            field
+                .get(locale)
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|v| !v.is_empty())
+                .map(str::to_string)
+        }
+        if let Some(v) = pick(&self.title_i18n, locale) {
+            self.title = v;
+        }
+        if let Some(v) = pick(&self.description_i18n, locale) {
+            self.description = v;
+        }
+        if let Some(v) = pick(&self.instructions_i18n, locale) {
+            self.instructions = v;
+        }
+    }
+
+    /// Which languages this challenge has actually been written in.
+    ///
+    /// Served so a bilingual front can say "only available in French" instead
+    /// of silently showing French to somebody reading English.
+    pub fn locales(&self) -> Vec<String> {
+        let mut out: Vec<String> = self
+            .title_i18n
+            .as_object()
+            .map(|o| o.keys().cloned().collect())
+            .unwrap_or_default();
+        out.sort();
+        out
+    }
 }
 
 /// One question of a defensive lab, as a client is served it.

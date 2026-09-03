@@ -60,7 +60,7 @@ async fn set_timezone(app: &TestApp, user: Uuid, tz: &str) {
 
 async fn become_mentor(app: &TestApp, user: Uuid, headline: &str) {
     sqlx::query(
-        "INSERT INTO mentor_profiles (user_id, headline, bio, hourly_rate_eur_cents)
+        "INSERT INTO mentor_profiles (user_id, headline, bio, hourly_rate_cents)
          VALUES ($1, $2, 'Bio.', 0)
          ON CONFLICT (user_id) DO UPDATE SET headline = EXCLUDED.headline, active = TRUE",
     )

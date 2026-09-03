@@ -435,7 +435,7 @@ async fn an_ai_mentor_is_suggested_with_the_reasoning_attached() {
         common::delivered_in(&app, mentor, "ai", family).await;
         sqlx::query(
             "INSERT INTO mentor_profiles
-                (user_id, headline, bio, hourly_rate_eur_cents, active)
+                (user_id, headline, bio, hourly_rate_cents, active)
              VALUES ($1, 'Je relis des entraînements',
                      'Je relis des entraînements et des évaluations.', 0, TRUE)",
         )

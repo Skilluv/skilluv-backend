@@ -33,8 +33,8 @@ async fn a_mentor(app: &TestApp, username: &str, mode: &str, monthly_cents: Opti
     let id = a_talent(app, username).await;
     sqlx::query(
         "INSERT INTO mentor_profiles
-            (user_id, headline, bio, hourly_rate_eur_cents, mode,
-             monthly_subscription_eur_cents)
+            (user_id, headline, bio, hourly_rate_cents, mode,
+             monthly_subscription_cents)
          VALUES ($1, 'Mentor', 'Bio', 5000, $2, $3)",
     )
     .bind(id)
@@ -111,7 +111,7 @@ async fn a_monthly_price_is_frozen_at_subscription() {
         .await;
 
     sqlx::query(
-        "UPDATE mentor_profiles SET monthly_subscription_eur_cents = 50000
+        "UPDATE mentor_profiles SET monthly_subscription_cents = 50000
           WHERE user_id = $1",
     )
     .bind(mentor)

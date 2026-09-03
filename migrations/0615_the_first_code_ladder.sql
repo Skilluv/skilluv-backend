@@ -249,26 +249,46 @@ ON CONFLICT (challenge_id, url) DO NOTHING;
 -- 4. The ladder is whole
 -- ═══════════════════════════════════════════════════════════════════
 
+-- Scoped to the six rows this migration is responsible for, and to nothing
+-- else.
+--
+-- It first asked whether *every* published code exercise had resources, which
+-- aborted the whole chain on any database where somebody had already opened a
+-- trade through POST /admin/orientations/{slug}/challenges/publish — a
+-- documented workflow that legitimately publishes briefs with no reading list
+-- yet. Staging had eleven such rows, the migration raised, the container could
+-- not start, and the deploy rolled back.
+--
+-- A migration may assert what it wrote. Asserting a property of rows other
+-- people created is how a data check becomes an outage.
 DO $$
 DECLARE
-    published BIGINT;
+    mine CONSTANT TEXT[] := ARRAY[
+        'Read a query and say what it costs',
+        'A test that fails for the right reason',
+        'A page that holds without JavaScript',
+        'The form that refuses to be submitted twice',
+        'An error somebody can act on',
+        'Your first pull request on Skilluv'
+    ];
+    present BIGINT;
     unresourced BIGINT;
 BEGIN
-    SELECT count(*) INTO published
+    SELECT count(*) INTO present
       FROM challenge_templates
-     WHERE skill_domain = 'code' AND status = 'published'
-       AND NOT is_onboarding AND NOT is_domain_rite;
-    IF published < 6 THEN
-        RAISE EXCEPTION 'expected six published code exercises, found %', published;
+     WHERE title = ANY(mine) AND skill_domain = 'code' AND status = 'published';
+    IF present <> 6 THEN
+        RAISE EXCEPTION
+            'expected the six exercises of this migration, found %', present;
     END IF;
 
     SELECT count(*) INTO unresourced
       FROM challenge_templates ct
-     WHERE ct.skill_domain = 'code' AND ct.status = 'published'
-       AND NOT ct.is_onboarding AND NOT ct.is_domain_rite
+     WHERE ct.title = ANY(mine)
        AND NOT EXISTS (SELECT 1 FROM challenge_resources r WHERE r.challenge_id = ct.id);
     IF unresourced > 0 THEN
         RAISE EXCEPTION
-            '% published exercise(s) have nowhere to start reading', unresourced;
+            '% of this migration''s exercises have nowhere to start reading',
+            unresourced;
     END IF;
 END $$;

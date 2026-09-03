@@ -375,7 +375,7 @@ pub async fn list_orientations(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// GET /orientations/counts — combien de métiers par domaine
+// GET /orientation-counts — combien de métiers par domaine
 // ═══════════════════════════════════════════════════════════════════
 
 /// How many curated orientations each domain holds.

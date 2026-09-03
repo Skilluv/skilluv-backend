@@ -79,17 +79,35 @@ pub async fn list_mentors(
     let offset = (page - 1) * per_page;
     let rows = sqlx::query(
         r#"
-        SELECT m.user_id, m.headline, m.expertise_areas, m.languages_spoken,
-               m.hourly_rate_eur_cents, m.avg_rating, m.total_sessions,
-               u.username, u.display_name, u.country_iso2
-        FROM mentor_profiles m
-        JOIN users u ON u.id = m.user_id
-        WHERE m.active = TRUE
-          AND ($1::TEXT IS NULL OR $1 = ANY(m.expertise_areas))
-          AND ($2::TEXT IS NULL OR $2 = ANY(m.languages_spoken))
-          AND ($3::BIGINT IS NULL OR m.hourly_rate_eur_cents <= $3)
-        ORDER BY m.avg_rating DESC NULLS LAST, m.total_sessions DESC
-        LIMIT $4 OFFSET $5
+        WITH priced AS (
+            SELECT m.user_id, m.headline, m.expertise_areas, m.languages_spoken,
+                   m.hourly_rate_cents, m.currency, m.avg_rating, m.total_sessions,
+                   u.username, u.display_name, u.country_iso2,
+                   -- The same rate expressed in euro cents, for a ceiling
+                   -- given in euros and for an indicative display. NULL when
+                   -- the feed holds no rate for that currency: the row is then
+                   -- shown unfiltered rather than dropped, because hiding a
+                   -- mentor because our FX feed is stale serves nobody.
+                   CASE
+                     WHEN m.currency = 'EUR' THEN m.hourly_rate_cents
+                     ELSE (
+                       SELECT (m.hourly_rate_cents * 100)::NUMERIC / f.rate
+                         FROM fx_rates f
+                        WHERE f.base_currency = 'EUR' AND f.quote_currency = m.currency
+                     )
+                   END AS approx_eur_cents
+              FROM mentor_profiles m
+              JOIN users u ON u.id = m.user_id
+             WHERE m.active = TRUE
+               AND ($1::TEXT IS NULL OR $1 = ANY(m.expertise_areas))
+               AND ($2::TEXT IS NULL OR $2 = ANY(m.languages_spoken))
+        )
+        SELECT * FROM priced
+         WHERE ($3::BIGINT IS NULL
+                OR approx_eur_cents IS NULL
+                OR approx_eur_cents <= $3)
+         ORDER BY avg_rating DESC NULLS LAST, total_sessions DESC
+         LIMIT $4 OFFSET $5
         "#,
     )
     .bind(&q.expertise)
@@ -111,7 +129,15 @@ pub async fn list_mentors(
                 "headline": r.get::<String, _>("headline"),
                 "expertise_areas": r.get::<Vec<String>, _>("expertise_areas"),
                 "languages_spoken": r.get::<Vec<String>, _>("languages_spoken"),
-                "hourly_rate_eur_cents": r.get::<i64, _>("hourly_rate_eur_cents"),
+                // Minor units of `currency`: cents for EUR, francs for XOF,
+                // which has no minor unit. A client that divides by 100
+                // unconditionally shows a CFA price a hundred times too low.
+                "hourly_rate_cents": r.get::<i64, _>("hourly_rate_cents"),
+                "currency": r.get::<String, _>("currency"),
+                // Indicative only, from the ECB reference feed. What is billed
+                // is `hourly_rate_cents` in `currency`, never this.
+                "approx_eur_cents": r.get::<Option<BigDecimal>, _>("approx_eur_cents")
+                    .map(|d| d.round(0).to_string()),
                 "avg_rating": r.get::<Option<BigDecimal>, _>("avg_rating").map(|d| d.to_string()),
                 "total_sessions": r.get::<i32, _>("total_sessions"),
             })
@@ -152,7 +178,8 @@ pub async fn get_mentor_profile(
         "bio": row.get::<String, _>("bio"),
         "expertise_areas": row.get::<Vec<String>, _>("expertise_areas"),
         "languages_spoken": row.get::<Vec<String>, _>("languages_spoken"),
-        "hourly_rate_eur_cents": row.get::<i64, _>("hourly_rate_eur_cents"),
+        "hourly_rate_cents": row.get::<i64, _>("hourly_rate_cents"),
+        "currency": row.get::<String, _>("currency"),
         "min_session_minutes": row.get::<i32, _>("min_session_minutes"),
         "avg_rating": row.get::<Option<BigDecimal>, _>("avg_rating").map(|d| d.to_string()),
         "total_sessions": row.get::<i32, _>("total_sessions"),
@@ -165,7 +192,12 @@ struct UpsertMentorBody {
     bio: String,
     expertise_areas: Vec<String>,
     languages_spoken: Vec<String>,
-    hourly_rate_eur_cents: i64,
+    /// Minor units of `currency`. 2500 in EUR is 25,00 € ; 15000 in XOF is
+    /// 15 000 F CFA, because the franc has no minor unit.
+    hourly_rate_cents: i64,
+    /// What this mentor charges and is paid in. `EUR` when omitted, which is
+    /// what every profile written before migration 0617 meant.
+    currency: Option<String>,
     min_session_minutes: Option<i32>,
     active: Option<bool>,
 }
@@ -182,21 +214,32 @@ pub async fn upsert_my_mentor_profile(
     auth: AuthUser,
     Json(body): Json<UpsertMentorBody>,
 ) -> Result<Json<Value>, AppError> {
-    if body.hourly_rate_eur_cents < 0 || body.hourly_rate_eur_cents > 10_000_000 {
+    if body.hourly_rate_cents < 0 || body.hourly_rate_cents > 10_000_000 {
         return Err(AppError::Validation("hourly_rate out of range".into()));
+    }
+    // Refused here as well as by the CHECK, so the message names what is
+    // settleable rather than surfacing a constraint violation. Adding a third
+    // currency means teaching `ledger::Currency` and the payout adapters about
+    // it first.
+    let currency = body.currency.as_deref().unwrap_or("EUR").to_uppercase();
+    if !matches!(currency.as_str(), "EUR" | "XOF") {
+        return Err(AppError::Validation(
+            "currency must be EUR or XOF — the two the ledger settles".into(),
+        ));
     }
     sqlx::query(
         r#"
         INSERT INTO mentor_profiles
             (user_id, headline, bio, expertise_areas, languages_spoken,
-             hourly_rate_eur_cents, min_session_minutes, active)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+             hourly_rate_cents, currency, min_session_minutes, active)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         ON CONFLICT (user_id) DO UPDATE SET
             headline = EXCLUDED.headline,
             bio = EXCLUDED.bio,
             expertise_areas = EXCLUDED.expertise_areas,
             languages_spoken = EXCLUDED.languages_spoken,
-            hourly_rate_eur_cents = EXCLUDED.hourly_rate_eur_cents,
+            hourly_rate_cents = EXCLUDED.hourly_rate_cents,
+            currency = EXCLUDED.currency,
             min_session_minutes = EXCLUDED.min_session_minutes,
             active = EXCLUDED.active,
             updated_at = NOW()
@@ -207,7 +250,8 @@ pub async fn upsert_my_mentor_profile(
     .bind(&body.bio)
     .bind(&body.expertise_areas)
     .bind(&body.languages_spoken)
-    .bind(body.hourly_rate_eur_cents)
+    .bind(body.hourly_rate_cents)
+    .bind(&currency)
     .bind(body.min_session_minutes.unwrap_or(30))
     .bind(body.active.unwrap_or(true))
     .execute(&state.db)
@@ -238,7 +282,8 @@ pub async fn get_my_mentor_profile(
             "bio": r.get::<String, _>("bio"),
             "expertise_areas": r.get::<Vec<String>, _>("expertise_areas"),
             "languages_spoken": r.get::<Vec<String>, _>("languages_spoken"),
-            "hourly_rate_eur_cents": r.get::<i64, _>("hourly_rate_eur_cents"),
+            "hourly_rate_cents": r.get::<i64, _>("hourly_rate_cents"),
+            "currency": r.get::<String, _>("currency"),
             "min_session_minutes": r.get::<i32, _>("min_session_minutes"),
             "active": r.get::<bool, _>("active"),
         }
@@ -329,7 +374,8 @@ pub async fn book_session(
         ));
     }
     let mentor = sqlx::query(
-        "SELECT hourly_rate_eur_cents, min_session_minutes, active FROM mentor_profiles WHERE user_id = $1",
+        "SELECT hourly_rate_cents, currency, min_session_minutes, active \
+         FROM mentor_profiles WHERE user_id = $1",
     )
     .bind(body.mentor_user_id)
     .fetch_optional(&state.db)
@@ -338,7 +384,8 @@ pub async fn book_session(
     if !mentor.get::<bool, _>("active") {
         return Err(AppError::Validation("mentor not active".into()));
     }
-    let rate: i64 = mentor.get("hourly_rate_eur_cents");
+    let rate: i64 = mentor.get("hourly_rate_cents");
+    let mentor_currency: String = mentor.get("currency");
     let min_min: i32 = mentor.get("min_session_minutes");
     if body.duration_minutes < min_min {
         return Err(AppError::Validation(format!(
@@ -374,30 +421,15 @@ pub async fn book_session(
         ));
     }
 
-    let inserted: (Uuid,) = sqlx::query_as(
-        r#"
-        INSERT INTO mentorship_sessions
-            (mentor_user_id, mentee_user_id, scheduled_at, duration_minutes,
-             price_total_cents, price_mentor_cents, price_platform_cents,
-             currency, status, mentee_notes)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, 'EUR', 'pending', $8)
-        RETURNING id
-        "#,
-    )
-    .bind(body.mentor_user_id)
-    .bind(auth.user_id)
-    .bind(body.scheduled_at)
-    .bind(body.duration_minutes)
-    .bind(total)
-    .bind(mentor_cut)
-    .bind(platform_cut)
-    .bind(&body.mentee_notes)
-    .fetch_one(&state.db)
-    .await?;
-
-    // Which way of taking money reaches this payer. A card through Stripe;
-    // Mobile Money through FedaPay for the franc zone, which Stripe cannot
-    // serve at all — and which is how most people in Benin hold money.
+    // Which way of taking money reaches this payer, decided before anything is
+    // written down. The session used to be inserted first and routed after, so
+    // a corridor we hold no credentials for left a `pending` row behind — and
+    // `pending` is one of the statuses the collision check above refuses to
+    // book over. A payment we never took would quietly hold the mentor's hour.
+    //
+    // A card goes through Stripe; Mobile Money through FedaPay for the franc
+    // zone, which Stripe cannot serve at all — and which is how most people in
+    // Benin hold money.
     //
     // This used to build a fake `Pack` with a `Box::leak`ed slug, to squeeze
     // a session through a helper shaped for credit packs. It leaked a
@@ -413,10 +445,11 @@ pub async fn book_session(
     .await?;
     let (email, display_name, country, phone) = payer;
 
-    // Sessions are priced in EUR today. When they are not, the currency
-    // comes from the row above and the rest of this needs no change — which
-    // is the point of routing on it rather than on a provider name.
-    let currency = crate::services::ledger::Currency::Eur;
+    // The mentor's own currency, which is what they announced and what they
+    // will be paid. Everything below routes on it: XOF plus a phone number
+    // reaches Mobile Money, EUR reaches a card — which is the point of routing
+    // on the currency rather than on a provider name.
+    let currency: crate::services::ledger::Currency = mentor_currency.parse()?;
     let method = if currency == crate::services::ledger::Currency::Xof && phone.is_some() {
         crate::services::collect::Method::MobileMoney
     } else {
@@ -428,7 +461,33 @@ pub async fn book_session(
         .resolve(&state.db, country.as_deref(), currency, method)
         .await?;
 
-    let amount = bigdecimal::BigDecimal::from(total) / bigdecimal::BigDecimal::from(100);
+    let inserted: (Uuid,) = sqlx::query_as(
+        r#"
+        INSERT INTO mentorship_sessions
+            (mentor_user_id, mentee_user_id, scheduled_at, duration_minutes,
+             price_total_cents, price_mentor_cents, price_platform_cents,
+             currency, status, mentee_notes)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9)
+        RETURNING id
+        "#,
+    )
+    .bind(body.mentor_user_id)
+    .bind(auth.user_id)
+    .bind(body.scheduled_at)
+    .bind(body.duration_minutes)
+    .bind(total)
+    .bind(mentor_cut)
+    .bind(platform_cut)
+    // The mentor's own, not a hardcoded 'EUR'. Routing already reads the
+    // mentor's currency, so a franc session was being charged in francs and
+    // recorded in euros — the same number meaning 12 000 F to the provider and
+    // 120,00 € to every report that reads the row afterwards.
+    .bind(currency.as_str())
+    .bind(&body.mentee_notes)
+    .fetch_one(&state.db)
+    .await?;
+
+    let amount = major_units(currency, total);
     let base = state.config.frontend_url.trim_end_matches('/').to_string();
     let success_url = format!("{base}/mentorship/sessions/{}?paid=1", inserted.0);
     let cancel_url = format!("{base}/mentorship/sessions/{}?canceled=1", inserted.0);
@@ -741,6 +800,21 @@ pub async fn connect_status(
 /// meaningless for XOF — the franc CFA has no subdivision. Dividing an XOF
 /// price by a hundred would pay a mentor one percent of what they earned, so
 /// the conversion is explicit per currency rather than a blanket `/ 100`.
+/// A price in the smallest unit of `currency`, as the amount a payment provider
+/// is handed.
+///
+/// `price_*_cents` is a hundredth of the currency, which is right for EUR and
+/// meaningless for XOF — the franc CFA has no subdivision. A blanket `/ 100`
+/// billed a Beninese mentee one percent of the price and paid the mentor one
+/// percent of their fee.
+fn major_units(currency: crate::services::ledger::Currency, minor: i64) -> BigDecimal {
+    match currency {
+        crate::services::ledger::Currency::Eur => BigDecimal::from(minor) / BigDecimal::from(100),
+        // Already whole francs: the column name is a misnomer here.
+        crate::services::ledger::Currency::Xof => BigDecimal::from(minor),
+    }
+}
+
 async fn capture_session_funds(
     state: &AppState,
     session_id: Uuid,
@@ -756,13 +830,7 @@ async fn capture_session_funds(
     use crate::services::release;
 
     let currency: Currency = currency_str.parse()?;
-    let to_amount = |minor: i64| -> BigDecimal {
-        match currency {
-            Currency::Eur => BigDecimal::from(minor) / BigDecimal::from(100),
-            // Already whole francs: the column name is a misnomer here.
-            Currency::Xof => BigDecimal::from(minor),
-        }
-    };
+    let to_amount = |minor: i64| major_units(currency, minor);
 
     let mentor_share = to_amount(mentor_cents);
     let platform_share = to_amount(platform_cents);

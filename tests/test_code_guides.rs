@@ -629,7 +629,7 @@ async fn a_mentor_is_suggested_with_the_reasoning_attached() {
         .await
         .unwrap();
         sqlx::query(
-            "INSERT INTO mentor_profiles (user_id, headline, bio, hourly_rate_eur_cents)
+            "INSERT INTO mentor_profiles (user_id, headline, bio, hourly_rate_cents)
              VALUES ($1, 'Systèmes et noyau', 'x', 5000)",
         )
         .bind(mentor)

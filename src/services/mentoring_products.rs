@@ -136,7 +136,7 @@ pub async fn subscribe(
     }
 
     let profile: Option<(String, Option<i64>, bool)> = sqlx::query_as(
-        "SELECT mode, monthly_subscription_eur_cents, active
+        "SELECT mode, monthly_subscription_cents, active
            FROM mentor_profiles WHERE user_id = $1",
     )
     .bind(mentor_user_id)

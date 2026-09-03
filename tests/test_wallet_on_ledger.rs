@@ -369,9 +369,18 @@ async fn a_talent_sees_only_their_own_movements() {
         .unwrap();
     assert!(!movements.is_empty());
     let csv = talent_wallet::statement_csv(&app.db, mine).await.unwrap();
+    // The amount column, not the whole file. Searching the text for "999"
+    // also searched `created_at.to_rfc3339()`, whose fractional seconds carry
+    // those three digits about once in three hundred rows — a test that failed
+    // on the clock rather than on a leak.
+    let amounts: Vec<&str> = csv
+        .lines()
+        .skip(1)
+        .filter_map(|line| line.split(',').nth(3))
+        .collect();
     assert!(
-        !csv.contains("999"),
-        "the platform's float and other people's money are not theirs to see"
+        !amounts.iter().any(|a| a.starts_with("999")),
+        "the platform's float and other people's money are not theirs to see: {amounts:?}"
     );
 }
 

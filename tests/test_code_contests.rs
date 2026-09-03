@@ -48,6 +48,26 @@ async fn enter(app: &TestApp, contest: Uuid, user: Uuid) {
     .execute(&app.db)
     .await
     .unwrap();
+
+    // Every entry in this file points at `github.com/x/…`, and an entry has to
+    // be the entrant's own work since the ownership check. So an entrant here
+    // is `x` on GitHub — which is what these fixtures always meant and never
+    // said.
+    sqlx::query(
+        "INSERT INTO github_connections
+            (user_id, github_user_id, github_login, access_token_encrypted, access_token_nonce)
+         VALUES ($1, $2, 'x', $3, $4)
+         ON CONFLICT (user_id) DO NOTHING",
+    )
+    .bind(user)
+    .bind(rand::random::<i32>() as i64)
+    // Bound rather than written inline: a `\x00` escape inside a Rust string
+    // is a NUL byte, not the bytea escape Postgres reads it as.
+    .bind(vec![0u8; 12])
+    .bind(vec![0u8; 12])
+    .execute(&app.db)
+    .await
+    .unwrap();
 }
 
 async fn grant(app: &TestApp, user: Uuid, capability: &str) {
@@ -844,4 +864,161 @@ async fn eight_jurors_are_not_drowned_by_four_thousand_votes() {
     // 0.6 * 70 = 42 against 0.4 * 70 + 1.0 * 30 = 58. The jury decides,
     // which is what a 30% weight is supposed to mean.
     assert_eq!(scores[0].0, nominees[1]);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Whose work is this
+// ═══════════════════════════════════════════════════════════════════
+
+/// An entry pointing at somebody else's GitHub is refused.
+///
+/// `artifact_url` was free text checked only for being https, so an entrant
+/// could hand in a well-known project or a rival's entry and win a prize pool
+/// with it. Nobody looked.
+#[tokio::test]
+async fn an_entry_cannot_point_at_somebody_elses_repository() {
+    let app = TestApp::spawn().await;
+    let contest = a_contest(
+        &app,
+        "golf-borrowed",
+        "code_golf",
+        json!({"language": "python", "problem_url": "https://x.test/p"}),
+    )
+    .await;
+    app.register_user("borrower").await;
+    let id = user_id(&app, "borrower").await;
+    enter(&app, contest, id).await; // connects them as `x` on GitHub
+    app.login("borrower").await;
+
+    let resp = app
+        .post(
+            "/api/tournaments/golf-borrowed/submissions",
+            &json!({
+                "artifact_url": "https://github.com/torvalds/linux",
+                "artifact_type": "repository",
+                "summary": "not mine",
+                "language": "python",
+                "measured_value": 12,
+            }),
+        )
+        .await;
+    assert_eq!(resp.status(), 400);
+    let body: Value = resp.json().await.unwrap();
+    let text = body.to_string();
+    assert!(
+        text.contains("torvalds") && text.contains("your own work"),
+        "the refusal should name both logins: {text}"
+    );
+}
+
+/// Their own repository passes, and the entry records that somebody checked.
+#[tokio::test]
+async fn an_entry_on_your_own_repository_is_marked_verified() {
+    let app = TestApp::spawn().await;
+    let contest = a_contest(
+        &app,
+        "golf-owned",
+        "code_golf",
+        json!({"language": "python", "problem_url": "https://x.test/p"}),
+    )
+    .await;
+    app.register_user("owner_entrant").await;
+    let id = user_id(&app, "owner_entrant").await;
+    enter(&app, contest, id).await;
+    app.login("owner_entrant").await;
+
+    let resp = app
+        .post("/api/tournaments/golf-owned/submissions", &a_golf_entry(42))
+        .await;
+    assert_eq!(resp.status(), 200, "{}", resp.text().await.unwrap());
+
+    let verified: bool = sqlx::query_scalar(
+        "SELECT artifact_verified FROM tournament_submissions WHERE participant_id = $1",
+    )
+    .bind(id)
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert!(verified, "a github URL that is theirs is a checked entry");
+}
+
+/// A host nobody can attribute is accepted and recorded as unchecked.
+///
+/// Refusing it would forbid whole domains from entering — a deployed site, a
+/// hosted design file, a video — for a property only a GitHub URL can have.
+/// The ranking carries the distinction instead of the rules pretending it does
+/// not exist.
+#[tokio::test]
+async fn an_unattributable_host_is_accepted_and_marked_unchecked() {
+    let app = TestApp::spawn().await;
+    let contest = a_contest(
+        &app,
+        "golf-elsewhere",
+        "code_golf",
+        json!({"language": "python", "problem_url": "https://x.test/p"}),
+    )
+    .await;
+    app.register_user("demo_entrant").await;
+    let id = user_id(&app, "demo_entrant").await;
+    enter(&app, contest, id).await;
+    app.login("demo_entrant").await;
+
+    let resp = app
+        .post(
+            "/api/tournaments/golf-elsewhere/submissions",
+            &json!({
+                "artifact_url": "https://my-entry.example.test/index.html",
+                "artifact_type": "demo",
+                "summary": "deployed, and nobody can prove it is mine from the URL",
+                "language": "python",
+                "measured_value": 30,
+            }),
+        )
+        .await;
+    assert_eq!(resp.status(), 200, "{}", resp.text().await.unwrap());
+
+    let verified: bool = sqlx::query_scalar(
+        "SELECT artifact_verified FROM tournament_submissions WHERE participant_id = $1",
+    )
+    .bind(id)
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert!(
+        !verified,
+        "unchecked, and the row says so rather than claiming otherwise"
+    );
+}
+
+/// The second link is checked too: a github URL anywhere in an entry has to be
+/// the entrant's, whatever the entry calls it.
+#[tokio::test]
+async fn the_second_link_is_checked_as_well() {
+    let app = TestApp::spawn().await;
+    let contest = a_contest(
+        &app,
+        "golf-secondary",
+        "code_golf",
+        json!({"language": "python", "problem_url": "https://x.test/p"}),
+    )
+    .await;
+    app.register_user("two_links").await;
+    let id = user_id(&app, "two_links").await;
+    enter(&app, contest, id).await;
+    app.login("two_links").await;
+
+    let resp = app
+        .post(
+            "/api/tournaments/golf-secondary/submissions",
+            &json!({
+                "artifact_url": "https://gist.github.com/x/1",
+                "secondary_url": "https://github.com/someone-else/proof",
+                "artifact_type": "gist",
+                "summary": "the gist is mine, the second link is not",
+                "language": "python",
+                "measured_value": 20,
+            }),
+        )
+        .await;
+    assert_eq!(resp.status(), 400);
 }

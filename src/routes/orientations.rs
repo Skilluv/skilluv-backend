@@ -29,6 +29,17 @@ const MAX_ACTIVE_ORIENTATIONS: i64 = 3;
 pub fn orientation_routes() -> Router<AppState> {
     Router::new()
         .route("/orientations", get(list_orientations))
+        // Deliberately not `/orientations/counts`.
+        //
+        // That would shadow `/orientations/{slug}` for the one slug spelled
+        // `counts`, and a slug is a free string — so the contract fuzzer
+        // generates it, reaches this handler instead of the detail one, and is
+        // handed a payload the detail operation never described. The platform
+        // has the same shape at `/challenges/onboarding` and it is safe there
+        // only because `{id}` is a UUID, which no generator spells as a word.
+        //
+        // Nothing here is worth making a slug ambiguous for.
+        .route("/orientation-counts", get(orientation_counts))
         // Opening a trade's catalogue, one trade at a time. Mounted here
         // rather than in `admin.rs` because the guard is per domain: a design
         // curator opens design trades, and nobody has to be a global admin to
@@ -103,6 +114,23 @@ fn default_limit() -> i64 {
     50
 }
 
+/// The counts take no parameters at all.
+///
+/// Archived trades are never counted. This exists for one screen — the eleven
+/// classes with the number of trades under each — and showing a beginner "26
+/// specialities" where three of them are retired tells them something false.
+/// There is no correct `true` for that flag here. Any other filtered count is
+/// what `GET /api/orientations` already answers with its `total`.
+///
+/// An empty struct rather than no extractor: without one, axum ignores the
+/// query string and `?anything=1` returns 200, while the document says this
+/// operation takes no parameters. `deny_unknown_fields` is what makes the two
+/// agree — and disagreeing is what the contract fuzzer caught.
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
+pub struct CountsQuery {}
+
 #[derive(Debug, Serialize, sqlx::FromRow, ToSchema)]
 pub struct OrientationRow {
     pub id: Uuid,
@@ -127,6 +155,28 @@ pub struct CatalogPagination {
 pub struct OrientationsCatalogResponse {
     pub orientations: Vec<OrientationRow>,
     pub pagination: CatalogPagination,
+    /// How many orientations match the filter, not how many this page holds.
+    ///
+    /// The catalogue is ~255 rows and `limit` caps at 200, so the whole of it
+    /// never fit in one response and the default page of 50 handed a client a
+    /// fifth of the trades with nothing saying so — the signup screen offered
+    /// 50 of 255 and looked complete (SKI-364).
+    pub total: i64,
+}
+
+/// One domain and how many curated orientations it holds.
+#[derive(Debug, Serialize, sqlx::FromRow, ToSchema)]
+pub struct OrientationDomainCount {
+    pub domain: String,
+    pub total: i64,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct OrientationCountsResponse {
+    /// Every domain that has at least one curated orientation, most first.
+    pub domains: Vec<OrientationDomainCount>,
+    /// The sum across domains — the size of the catalogue under this filter.
+    pub total: i64,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -296,12 +346,78 @@ pub async fn list_orientations(
     .fetch_all(&state.db)
     .await?;
 
+    // Counted under the same filter as the page, so a client that received
+    // `limit` rows can tell a full page from the end of the catalogue.
+    let total: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+        FROM orientations o
+        WHERE o.is_curated = TRUE
+          AND ($1::BOOLEAN OR o.is_archived = FALSE)
+          AND ($2::VARCHAR IS NULL OR o.primary_domain = $2)
+          AND ($3::VARCHAR IS NULL OR $3 = ANY(o.tags))
+        "#,
+    )
+    .bind(q.include_archived)
+    .bind(q.domain.as_deref())
+    .bind(q.tag.as_deref())
+    .fetch_one(&state.db)
+    .await?;
+
     Ok(Json(ApiResponse::new(OrientationsCatalogResponse {
         orientations: rows,
         pagination: CatalogPagination {
             limit,
             offset: q.offset.max(0),
         },
+        total,
+    })))
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// GET /orientations/counts — combien de métiers par domaine
+// ═══════════════════════════════════════════════════════════════════
+
+/// How many curated orientations each domain holds.
+///
+/// The class-picking screen shows the eleven domains with "73 specialties"
+/// under each name. Without this it costs eleven requests, or one capped
+/// request that cannot answer the question at all — so the count was hardcoded
+/// in the front from a count of the migrations, and went wrong on the next
+/// orientation added (SKI-364).
+#[utoipa::path(
+    get,
+    path = "/api/orientation-counts",
+    tag = "profile",
+    params(CountsQuery),
+    responses(
+        (status = 200, description = "Curated orientations per domain", body = ApiResponse<OrientationCountsResponse>),
+    ),
+    operation_id = "orientationsCounts",
+)]
+pub async fn orientation_counts(
+    State(state): State<AppState>,
+    // Bound and unused: the extractor is here to refuse a query parameter this
+    // operation does not take, not to carry one.
+    Query(_no_parameters): Query<CountsQuery>,
+) -> Result<Json<ApiResponse<OrientationCountsResponse>>, AppError> {
+    let domains = sqlx::query_as::<_, OrientationDomainCount>(
+        r#"
+        SELECT o.primary_domain AS domain, COUNT(*) AS total
+        FROM orientations o
+        WHERE o.is_curated = TRUE
+          AND o.is_archived = FALSE
+        GROUP BY o.primary_domain
+        ORDER BY COUNT(*) DESC, o.primary_domain
+        "#,
+    )
+    .fetch_all(&state.db)
+    .await?;
+
+    let total = domains.iter().map(|d| d.total).sum();
+    Ok(Json(ApiResponse::new(OrientationCountsResponse {
+        domains,
+        total,
     })))
 }
 

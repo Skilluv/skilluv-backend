@@ -37,7 +37,7 @@ struct ListQuery {
     /// `validators::SKILL_DOMAINS`; this pattern is the same list, and it had
     /// gone stale — a contract that understates what it accepts sends a caller
     /// looking for an endpoint that does not exist.
-    #[param(pattern = r"^(code|design|game|security|ops|ai|soft_skills|audio)$")]
+    #[param(value_type = Option<crate::validators::SkillDomain>)]
     domain: Option<String>,
     #[param(minimum = 1, maximum = 5)]
     difficulty: Option<i16>,
@@ -59,7 +59,34 @@ struct ListQuery {
 struct SubmitRequest {
     code: String,
     language: Option<String>,
+    /// What was uploaded alongside the text, as `design_upload:<uuid>` or
+    /// `audio_file:<uuid>`.
+    ///
+    /// References rather than URLs, and every one of them is checked to belong
+    /// to the caller — see `services::submission_attachments`. Without this a
+    /// design or audio rite had nowhere to put its artifact: the reviewer got
+    /// whatever link the person had thought to paste into a paragraph.
+    #[serde(default)]
+    attachments: Option<Vec<String>>,
 }
+
+/// The language this caller reads challenges in.
+///
+/// `Accept-Language`, resolved against the three locales the platform serves.
+/// A challenge carries every language it has been written in and the reader
+/// decides which one comes back — the header is the only thing that knows.
+fn locale_of(headers: &axum::http::HeaderMap) -> String {
+    crate::routes::resolve_from_accept_language(
+        headers
+            .get(axum::http::header::ACCEPT_LANGUAGE)
+            .and_then(|value| value.to_str().ok()),
+    )
+}
+
+/// The status of a submission nothing on this side can judge: received,
+/// queued for a human, not yet worth anything. Named because it is compared
+/// in five places and a typo would silently award nothing forever.
+const PENDING_REVIEW: &str = "pending_review";
 
 fn build_response(data: serde_json::Value) -> serde_json::Value {
     json!({
@@ -81,6 +108,7 @@ fn build_response(data: serde_json::Value) -> serde_json::Value {
 pub async fn get_onboarding(
     State(state): State<AppState>,
     auth: AuthUser,
+    headers: axum::http::HeaderMap,
     Query(query): Query<OnboardingQuery>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     // Check if user already completed onboarding
@@ -95,8 +123,15 @@ pub async fn get_onboarding(
         ));
     }
 
+    crate::validators::check_skill_domain(&query.domain, "domain")?;
+
+    // `is_domain_rite` first, then `is_onboarding`: the code domain carries
+    // fifteen onboarding templates, one per starter, so `LIMIT 1` on the flag
+    // alone returned an arbitrary one of them and the brief changed between two
+    // page loads. Migration 0607 marks the one rite of each domain and a
+    // partial unique index keeps it to one (SKI-360).
     let challenge: ChallengeTemplate = sqlx::query_as(
-        "SELECT * FROM challenge_templates WHERE is_onboarding = TRUE AND skill_domain = $1 AND status = 'published' LIMIT 1",
+        "SELECT * FROM challenge_templates          WHERE is_onboarding = TRUE AND skill_domain = $1 AND status = 'published'          ORDER BY is_domain_rite DESC, created_at ASC          LIMIT 1",
     )
     .bind(&query.domain)
     .fetch_optional(&state.db)
@@ -106,7 +141,26 @@ pub async fn get_onboarding(
         query.domain
     )))?;
 
-    Ok(Json(build_response(json!({ "challenge": challenge }))))
+    let mut challenge = challenge;
+    let locale = locale_of(&headers);
+    challenge.localise(&locale);
+    let locales = challenge.locales();
+
+    // The rite is the one brief where being stranded means never starting, so
+    // it carries the same guidance every other challenge does.
+    let guidance = crate::services::guidance::for_challenge(
+        &state.db,
+        challenge.id,
+        Some(auth.user_id),
+        &locale,
+    )
+    .await?;
+
+    Ok(Json(build_response(json!({
+        "challenge": challenge,
+        "available_locales": locales,
+        "guidance": guidance,
+    }))))
 }
 
 // GET /api/challenges (public — optional auth for locked/unlocked status)
@@ -119,6 +173,7 @@ pub async fn list_challenges(
     State(state): State<AppState>,
     OptionalAuth(auth): OptionalAuth,
     tenant: crate::middleware::TenantContext,
+    headers: axum::http::HeaderMap,
     Query(query): Query<ListQuery>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     // Against `validators::SKILL_DOMAINS`, not a fourth hand-written copy of
@@ -242,7 +297,11 @@ pub async fn list_challenges(
         count_query = count_query.bind(kind);
     }
 
-    let challenges: Vec<ChallengeTemplate> = challenges_query.fetch_all(&state.db).await?;
+    let mut challenges: Vec<ChallengeTemplate> = challenges_query.fetch_all(&state.db).await?;
+    let locale = locale_of(&headers);
+    for challenge in &mut challenges {
+        challenge.localise(&locale);
+    }
     let total: i64 = count_query.fetch_one(&state.db).await?;
 
     // P8.3 : le flag `locked` est retiré du listing. La progression suit
@@ -279,16 +338,32 @@ pub async fn list_challenges(
 )]
 pub async fn get_challenge(
     State(state): State<AppState>,
+    OptionalAuth(auth): OptionalAuth,
+    headers: axum::http::HeaderMap,
     Path(id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let challenge: ChallengeTemplate =
+    let mut challenge: ChallengeTemplate =
         sqlx::query_as("SELECT * FROM challenge_templates WHERE id = $1 AND status = 'published'")
             .bind(id)
             .fetch_optional(&state.db)
             .await?
             .ok_or(AppError::NotFound("Challenge not found".to_string()))?;
 
-    Ok(Json(build_response(json!({ "challenge": challenge }))))
+    let locale = locale_of(&headers);
+    challenge.localise(&locale);
+    let locales = challenge.locales();
+
+    // What somebody needs around the brief to not be stranded on it: where it
+    // is documented, where to ask, what comes next. Sized to who is asking.
+    let guidance =
+        crate::services::guidance::for_challenge(&state.db, id, auth.map(|a| a.user_id), &locale)
+            .await?;
+
+    Ok(Json(build_response(json!({
+        "challenge": challenge,
+        "available_locales": locales,
+        "guidance": guidance,
+    }))))
 }
 
 // POST /api/challenges/:id/start
@@ -492,6 +567,16 @@ pub async fn submit_challenge(
         ));
     }
 
+    // Refused before anything is evaluated or written: an attachment somebody
+    // does not own is the one failure here that must never reach a reviewer.
+    let attachments = match body.attachments.as_deref() {
+        Some(raw) => {
+            crate::services::submission_attachments::validate_owned(&state.db, auth.user_id, raw)
+                .await?
+        }
+        None => Vec::new(),
+    };
+
     // Evaluate submission
     let (eval_status, fragments_earned, exec_stdout, exec_stderr) =
         evaluate_submission(&state, &challenge, &body.code, body.language.as_deref()).await?;
@@ -532,18 +617,42 @@ pub async fn submit_challenge(
     .fetch_one(&state.db)
     .await?;
 
+    let awaiting_review = eval_status == PENDING_REVIEW;
+
+    // The other end of `POST /onboarding/bonjour-skilluv/start` for the eleven
+    // domains whose rite is a submission rather than a fork: handing in the
+    // domain's brief is what the webhook is for the code rite (SKI-362). Scoped
+    // to `started` so a second attempt on the same brief does not rewind a rite
+    // that a reviewer has already passed.
+    if challenge.is_domain_rite {
+        sqlx::query(
+            "UPDATE onboarding_bonjour_skilluv \
+             SET status = 'submitted', submission_id = $1 \
+             WHERE user_id = $2 AND rite_form = 'submission' AND status = 'started'",
+        )
+        .bind(updated_submission.id)
+        .bind(auth.user_id)
+        .execute(&state.db)
+        .await?;
+    }
+
     if eval_status == "success" {
         metrics::counter!(
             "skilluv_challenges_completed_total",
             "domain" => challenge.skill_domain.clone()
         )
         .increment(1);
+    }
 
-        // P8.5a : dual-write vers la nouvelle table `deliverables`. Best-effort :
-        // si l'INSERT échoue (ex: contrainte, DB blip), on log et on continue —
-        // le pipeline legacy reste la source de vérité pour l'instant. En P8.7
-        // le legacy sera droppé et deliverables deviendra unique source.
-        match crate::services::DeliverablesService::create_from_challenge_submission(
+    // A judged success and a submission waiting on a person both produce a
+    // deliverable; only the verification status differs. The waiting one is
+    // NOT best-effort: it is the only record that the work was ever handed in,
+    // and losing it loses the submission, so its failure fails the request.
+    if eval_status == "success" || awaiting_review {
+        // P8.5a : dual-write vers la nouvelle table `deliverables`. Best-effort
+        // côté succès : si l'INSERT échoue (ex: contrainte, DB blip), on log et
+        // on continue — le pipeline legacy reste la source de vérité.
+        let deliverable = crate::services::DeliverablesService::create_from_challenge_submission(
             &state.db,
             crate::services::deliverables::ChallengeSubmissionInput {
                 user_id: auth.user_id,
@@ -554,16 +663,23 @@ pub async fn submit_challenge(
                 language: body.language.as_deref(),
                 stdout: exec_stdout.as_deref(),
                 stderr: exec_stderr.as_deref(),
+                skill_domain: &challenge.skill_domain,
+                awaiting_review,
+                attachments: &attachments,
             },
         )
-        .await
-        {
+        .await;
+
+        match deliverable {
             Ok(_deliverable_id) => {
                 metrics::counter!(
                     "skilluv_challenge_deliverables_created_total",
                     "domain" => challenge.skill_domain.clone()
                 )
                 .increment(1);
+            }
+            Err(e) if awaiting_review => {
+                return Err(e);
             }
             Err(e) => {
                 tracing::warn!(
@@ -575,6 +691,14 @@ pub async fn submit_challenge(
                 );
             }
         }
+    }
+
+    if awaiting_review {
+        metrics::counter!(
+            "skilluv_challenge_submissions_pending_review_total",
+            "domain" => challenge.skill_domain.clone()
+        )
+        .increment(1);
     }
     metrics::counter!(
         "skilluv_fragments_awarded_total",
@@ -735,6 +859,14 @@ pub async fn submit_challenge(
             "profile_active": user.profile_active,
         },
     });
+
+    if awaiting_review {
+        // Said plainly, because the alternative reading of a response that
+        // awards nothing is "it failed" — and it did not.
+        response["message"] = json!(
+            "Received. Nothing here can score this one, so a reviewer will read              it; fragments are awarded on their verdict."
+        );
+    }
 
     if profile_just_activated {
         response["profile_activated"] = json!(true);
@@ -909,7 +1041,17 @@ async fn evaluate_submission(
     }
 }
 
-/// Fallback when Judge0 is unavailable or for non-code domains
+/// Fallback when Judge0 is unavailable or for non-code domains.
+///
+/// Everything this function can actually check, it checks. Everything it
+/// cannot, it hands to a person — it never invents a pass.
+///
+/// It used to invent two. A non-code submission of a hundred characters
+/// returned `success` and its fragments, whatever the hundred characters were;
+/// and a code challenge that declares no `expected_output` fell through to an
+/// unconditional `success`. Both produced, on a public profile, a mark
+/// indistinguishable from one a reviewer gave — in the one thing this platform
+/// asks anybody to trust it about (SKI-361).
 fn evaluate_basic(
     challenge: &ChallengeTemplate,
     code: &str,
@@ -931,24 +1073,9 @@ fn evaluate_basic(
         ));
     }
 
-    if challenge.skill_domain != "code" {
-        if code.len() >= 100 {
-            return Ok((
-                "success".to_string(),
-                challenge.reward_fragments,
-                None,
-                None,
-            ));
-        }
-        return Ok((
-            "failure".to_string(),
-            failure_fragments(challenge),
-            None,
-            None,
-        ));
-    }
-
-    if let Some(ref expected) = challenge.expected_output {
+    if challenge.skill_domain == "code"
+        && let Some(ref expected) = challenge.expected_output
+    {
         if code.contains(expected.trim()) {
             return Ok((
                 "success".to_string(),
@@ -965,12 +1092,11 @@ fn evaluate_basic(
         ));
     }
 
-    Ok((
-        "success".to_string(),
-        challenge.reward_fragments,
-        None,
-        None,
-    ))
+    // Nothing here can judge this one. Not a failure — the work may be good and
+    // nothing has read it — and not a pass either. `submit_challenge` puts the
+    // deliverable in the review queue the platform already runs, and fragments
+    // follow the reviewer's verdict.
+    Ok((PENDING_REVIEW.to_string(), 0, None, None))
 }
 
 fn failure_fragments(challenge: &ChallengeTemplate) -> i32 {

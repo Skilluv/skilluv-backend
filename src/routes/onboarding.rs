@@ -27,6 +27,7 @@ use crate::api_response::ApiResponse;
 use crate::errors::AppError;
 use crate::middleware::AuthUser;
 use crate::services::github as gh;
+use crate::services::onboarding_rite::{self, RiteForm};
 
 /// The GitHub organization hosting the `starter-*` template repositories.
 const STARTER_ORG: &str = "skilluv-community";
@@ -45,17 +46,32 @@ pub fn onboarding_routes() -> Router<AppState> {
             "/onboarding/bonjour-skilluv/status",
             get(get_bonjour_skilluv_status),
         )
+        .route("/onboarding/rites", get(list_rites))
 }
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct OnboardingProgress {
-    pub starter_slug: String,
-    pub fork_full_name: String,
-    pub fork_html_url: String,
-    /// `forked`, `pr_opened`, `completed`.
+    /// The domain whose rite this is, and therefore which of the twelve
+    /// gestures the other fields describe.
+    pub skill_domain: String,
+    /// `fork` or `submission`. Every field below that is `None` for one form
+    /// is `None` because of this one.
+    pub rite_form: RiteForm,
+    /// The `is_domain_rite` template the gesture is against — the brief a
+    /// person reads, and for a `submission` rite the challenge to submit to.
+    pub challenge_id: Option<Uuid>,
+    /// `None` on every rite that is not a fork.
+    pub starter_slug: Option<String>,
+    pub fork_full_name: Option<String>,
+    pub fork_html_url: Option<String>,
+    /// fork: `forked`, `hello_committed`, `pr_opened`, `completed`.
+    /// submission: `started`, `submitted`, `completed`.
     pub status: String,
     pub pr_number: Option<i32>,
     pub pr_url: Option<String>,
+    /// The submission that carries the artifact, on a `submission` rite that
+    /// has been handed in.
+    pub submission_id: Option<Uuid>,
     /// RFC 3339 timestamp.
     pub started_at: String,
     pub pr_opened_at: Option<String>,
@@ -65,10 +81,48 @@ pub struct OnboardingProgress {
 #[derive(Debug, Serialize, ToSchema)]
 pub struct StartNextSteps {
     /// `git@github.com:owner/repo.git` — hand it to the user for cloning.
-    pub clone_url: String,
+    /// `None` on every rite that is not a fork.
+    pub clone_url: Option<String>,
+    /// What to hand in, in the words of the trade. Straight from the rite
+    /// catalogue, so the front renders one contract rather than eleven
+    /// hardcoded strings (SKI-362).
+    pub expected_artifact: String,
+    /// Where to hand it in, for a `submission` rite: `POST
+    /// /api/challenges/{id}/start` then `/submit`.
+    pub challenge_id: Option<Uuid>,
     /// i18n key the front resolves to render the step-by-step
     /// instructions in the caller's locale.
     pub instructions_key: String,
+}
+
+/// A domain's rite, as the front is served it.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct RiteDescriptor {
+    pub domain: String,
+    pub form: RiteForm,
+    /// One line: what the person does.
+    pub gesture: String,
+    pub expected_artifact: String,
+    /// Where this trade continues once the rite is passed — the design
+    /// critique, the playtest verdicts, the disclosure programme.
+    ///
+    /// The rite itself is read in the generic review queue whatever the
+    /// domain. This was called `review_loop`, which read as a routing and was
+    /// not one.
+    pub continues_in: String,
+    /// Whether starting this rite needs a connected GitHub account. True for
+    /// exactly one of the twelve.
+    pub requires_github: bool,
+    /// The published `is_domain_rite` template, when the domain has one.
+    /// `None` means the brief has not been published for that domain — the
+    /// front should not offer the gesture.
+    pub challenge_id: Option<Uuid>,
+    pub challenge_title: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct RitesCatalogueResponse {
+    pub rites: Vec<RiteDescriptor>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -84,31 +138,128 @@ pub struct StartBonjourResponse {
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct StatusBonjourResponse {
-    /// True when a fork exists for this user.
+    /// True when this user has started their rite, in whichever form.
     pub started: bool,
     /// `None` when `started == false`.
     pub onboarding: Option<OnboardingProgress>,
+    /// What the rite asks of this caller: the gesture, what to hand in, who
+    /// reads it. Present whether or not they have started — it is what the
+    /// "first gesture" screen renders, and answering it only after the fact
+    /// is what forced the front to hardcode eleven shapes (SKI-362).
+    ///
+    /// `None` only when the caller has no domain yet and named none.
+    pub rite: Option<RiteDescriptor>,
 }
 
 fn row_to_progress(row: &OnboardingRow) -> OnboardingProgress {
     OnboardingProgress {
+        skill_domain: row.skill_domain.clone(),
+        // The column is a string and the enum is the contract; a row whose
+        // form is neither is impossible (CHECK), so `fork` is a fallback that
+        // never runs rather than a decision.
+        rite_form: if row.rite_form == "submission" {
+            RiteForm::Submission
+        } else {
+            RiteForm::Fork
+        },
+        challenge_id: row.challenge_id,
         starter_slug: row.starter_slug.clone(),
         fork_full_name: row.fork_full_name.clone(),
         fork_html_url: row.fork_html_url.clone(),
         status: row.status.clone(),
         pr_number: row.pr_number,
         pr_url: row.pr_url.clone(),
+        submission_id: row.submission_id,
         started_at: row.started_at.to_rfc3339(),
         pr_opened_at: row.pr_opened_at.map(|d| d.to_rfc3339()),
         completed_at: row.completed_at.map(|d| d.to_rfc3339()),
     }
 }
 
-/// Public wrapper : resolve a starter slug from the user's primary
-/// orientation, falling back to `DEFAULT_STARTER_SLUG` if no explicit
-/// mapping exists.
-fn starter_for_orientation(orientation_slug: &str) -> &'static str {
-    explicit_starter_for_orientation(orientation_slug).unwrap_or(DEFAULT_STARTER_SLUG)
+/// The starter a trade forks, or `None` when nothing here knows the trade.
+///
+/// Three sources, in order. A per-slug exception wins, because a handful of
+/// trades want something their family does not. Otherwise the trade's
+/// `reviewer_group` decides — a family of trades shares a terrain, and 150
+/// orientations against 15 starters was never going to be a per-slug list.
+/// `None` is the honest answer for a trade neither knows, and it is what
+/// `every_curated_orientation_resolves_to_a_starter` fails on.
+///
+/// It used to be a per-slug match and nothing else. That list was written when
+/// there were 32 orientations; migration 0173 and the domain catalogues after
+/// it brought the table to 150, and the other 118 silently forked
+/// `starter-fullstack-node`. A `compiler-language-developer` was handed a Node
+/// fullstack app on the strength of a trade they had just declared.
+pub fn resolve_starter(
+    orientation_slug: &str,
+    reviewer_group: Option<&str>,
+    primary_domain: &str,
+) -> Option<&'static str> {
+    if let Some(explicit) = explicit_starter_for_orientation(orientation_slug) {
+        return Some(explicit);
+    }
+    starter_for_family(primary_domain, reviewer_group?)
+}
+
+/// The terrain a family of trades works on.
+///
+/// Written by family rather than by trade because that is the grain the data
+/// already has: `orientations.reviewer_group` is what decides a trade's review
+/// grid, and a shared grid and a shared starter are the same statement about
+/// what the work looks like. Every pair below is a judgement a domain curator
+/// may overrule; none of them is worse than the Node fullstack app all 118 of
+/// them used to get.
+fn starter_for_family(primary_domain: &str, reviewer_group: &str) -> Option<&'static str> {
+    Some(match (primary_domain, reviewer_group) {
+        // ── code
+        // Rust for the families whose work is a binary, a compiler or a tool:
+        // the starter is the only one shipping a real build and test loop for
+        // that shape.
+        ("code", "systems" | "compilers" | "devtools-media") => "starter-fullstack-rust",
+        ("code", "data" | "scientific") => "starter-data-python",
+        ("code", "mobile") => "starter-mobile-react-native",
+        // Node for web and for blockchain, and for the same reason in both:
+        // the mainstream toolchain of each lives there (Express/Nest;
+        // Hardhat/Foundry).
+        ("code", "web" | "blockchain") => "starter-fullstack-node",
+
+        // ── design
+        // Svelte is the Skilluv-signature UI environment, and its
+        // docs/getting-started is the first terrain a designer can contribute
+        // to — assets, animation, motion tokens.
+        ("design", "game" | "immersive") => "starter-game-godot",
+        ("design", "mobile") => "starter-mobile-react-native",
+        ("design", _) => "starter-frontend-svelte",
+
+        // ── game : every family works on a game, including the one that works
+        // on its community.
+        ("game", _) => "starter-game-godot",
+
+        // ── ai : the whole domain is Python, families included.
+        ("ai", _) => "starter-data-python",
+
+        // ── ops
+        ("ops", _) => "starter-devops",
+
+        // ── security : the Node fullstack app exposes the classic web attack
+        // surface these families learn to audit — JWT, upload, session.
+        ("security", _) => "starter-fullstack-node",
+
+        // ── quality : the thing under test is a web app, except for the
+        // family whose thing under test is a game.
+        ("quality", "playtest") => "starter-game-godot",
+        ("quality", _) => "starter-fullstack-node",
+
+        // ── audio : the audio canvas of migration 0423 is the platform's own
+        // games, which is where this work lands.
+        ("audio", _) => "starter-game-godot",
+
+        // ── communication, education, leadership : the writing terrain. HTMX
+        // is the starter whose contribution surface is its documentation.
+        ("communication" | "education" | "leadership", _) => "starter-frontend-htmx",
+
+        _ => return None,
+    })
 }
 
 /// Resolve a starter slug from the user's primary orientation, returning
@@ -198,18 +349,29 @@ fn explicit_starter_for_orientation(orientation_slug: &str) -> Option<&'static s
 #[derive(Debug, Deserialize, IntoParams)]
 pub struct StartQuery {
     /// Optional override for the starter slug. If omitted, we auto-select from
-    /// the user's primary orientation.
+    /// the user's primary orientation. Meaningful only on the `code` rite —
+    /// it is the only one that forks anything.
     #[serde(default)]
     pub starter: Option<String>,
+    /// Which domain's rite to start. Defaults to the caller's own
+    /// `skill_domain`, which is what the signup flow sets; passing it is for
+    /// somebody who has not completed a profile yet.
+    #[param(value_type = Option<crate::validators::SkillDomain>)]
+    #[serde(default)]
+    pub domain: Option<String>,
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
 struct OnboardingRow {
     user_id: Uuid,
-    starter_slug: String,
-    fork_full_name: String,
-    fork_html_url: String,
-    github_fork_id: i64,
+    skill_domain: String,
+    rite_form: String,
+    challenge_id: Option<Uuid>,
+    submission_id: Option<Uuid>,
+    starter_slug: Option<String>,
+    fork_full_name: Option<String>,
+    fork_html_url: Option<String>,
+    github_fork_id: Option<i64>,
     status: String,
     pr_number: Option<i32>,
     pr_url: Option<String>,
@@ -218,19 +380,26 @@ struct OnboardingRow {
     completed_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-/// Kick off the Bonjour Skilluv onboarding flow: auto-selects a starter
-/// template from the user's primary orientation, forks it on the user's
-/// GitHub account, and persists a tracking row. Idempotent — calling
-/// twice returns the existing fork.
+/// Kick off the Bonjour Skilluv rite for the caller's domain.
+///
+/// Twelve gestures, one moment. `code` forks a starter on GitHub and waits for
+/// a pull request; the other eleven open a submission against the domain's
+/// published rite template, and never touch GitHub. Which is which comes from
+/// `services::onboarding_rite`, so the endpoint has no per-domain branch
+/// beyond the two forms.
+///
+/// Idempotent — calling twice returns what already exists, whichever form it
+/// took.
 #[utoipa::path(
     post,
     path = "/api/onboarding/bonjour-skilluv/start",
     tag = "profile",
     params(StartQuery),
     responses(
-        (status = 200, description = "Forked (or already forked)", body = ApiResponse<StartBonjourResponse>),
-        (status = 400, description = "GitHub not connected or invalid starter slug", body = crate::api_response::ErrorResponse),
+        (status = 200, description = "Started (or already started)", body = ApiResponse<StartBonjourResponse>),
+        (status = 400, description = "Unknown domain, no domain to infer, invalid starter slug, or — on the code rite only — GitHub not connected", body = crate::api_response::ErrorResponse),
         (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "The domain has no published rite template", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
 )]
@@ -239,7 +408,7 @@ pub async fn start_bonjour_skilluv(
     auth: AuthUser,
     Query(q): Query<StartQuery>,
 ) -> Result<Json<ApiResponse<StartBonjourResponse>>, AppError> {
-    // ── 1. Idempotence: existing row = return it, no fork call
+    // ── 1. Idempotence: existing row = return it, no side effect
     if let Some(existing) = load_row(&state.db, auth.user_id).await? {
         return Ok(Json(ApiResponse::new(StartBonjourResponse {
             already_started: true,
@@ -248,8 +417,130 @@ pub async fn start_bonjour_skilluv(
         })));
     }
 
-    // ── 2. Ensure user has connected GitHub
-    let access_token = gh::load_token(&state.db, &state.config.jwt_secret, auth.user_id)
+    // ── 2. Which rite. The caller's own domain unless they name one.
+    let domain = match q.domain {
+        Some(explicit) => {
+            crate::validators::check_skill_domain(&explicit, "domain")?;
+            explicit
+        }
+        None => {
+            let own: Option<String> =
+                sqlx::query_scalar("SELECT skill_domain FROM users WHERE id = $1")
+                    .bind(auth.user_id)
+                    .fetch_one(&state.db)
+                    .await?;
+            own.ok_or_else(|| {
+                AppError::Validation(
+                    "No skill_domain on this account yet. Complete the profile \
+                     (POST /api/auth/complete-profile) or pass ?domain="
+                        .into(),
+                )
+            })?
+        }
+    };
+
+    // ── 3. A trade is chosen before the first gesture.
+    //
+    // Not bureaucracy: the trade is what picks the starter to fork, what the
+    // playlist and the recommendations read, and what a reviewer is matched
+    // on. Starting the rite without one meant forking the broad-appeal default
+    // and then being recommended nothing in particular — the platform meeting
+    // somebody for the first time and having nothing specific to say to them.
+    //
+    // One is required, three are allowed (`MAX_ACTIVE_ORIENTATIONS`). One is
+    // enough for every mechanism above, and asking a person who has just
+    // arrived to name three trades from a catalogue of 150 is asking them to
+    // decide before they can.
+    let has_trade: bool = sqlx::query_scalar(
+        "SELECT EXISTS (
+           SELECT 1 FROM user_orientations
+            WHERE user_id = $1 AND ended_at IS NULL AND mode = 'active')",
+    )
+    .bind(auth.user_id)
+    .fetch_one(&state.db)
+    .await?;
+    if !has_trade {
+        return Err(AppError::Validation(
+            "Choose a trade first: GET /api/orientations?domain=<yours> then \
+             POST /api/users/me/orientations. One is enough; three are allowed."
+                .into(),
+        ));
+    }
+
+    // `check_skill_domain` passed, and the rite catalogue is tested against the
+    // same constant, so this cannot be `None` on a shipped build.
+    let rite = onboarding_rite::for_domain(&domain).ok_or_else(|| {
+        AppError::Validation(format!(
+            "No Bonjour Skilluv rite declared for domain: {domain}"
+        ))
+    })?;
+
+    // The brief. Migration 0607 publishes twelve, one per domain; a rite whose
+    // brief is unpublished is one the front must not offer, so this is a 404
+    // rather than a tracking row pointing at nothing.
+    let challenge_id: Uuid = sqlx::query_scalar(
+        "SELECT id FROM challenge_templates \
+         WHERE is_domain_rite = TRUE AND skill_domain = $1 AND status = 'published' \
+         LIMIT 1",
+    )
+    .bind(&domain)
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or_else(|| {
+        AppError::NotFound(format!(
+            "No published Bonjour Skilluv template for domain: {domain}"
+        ))
+    })?;
+
+    match rite.form {
+        RiteForm::Fork => {
+            start_fork_rite(&state, auth.user_id, &domain, challenge_id, q.starter, rite).await
+        }
+        RiteForm::Submission => {
+            let row: OnboardingRow = sqlx::query_as(
+                r#"
+                INSERT INTO onboarding_bonjour_skilluv
+                    (user_id, skill_domain, rite_form, challenge_id, status)
+                VALUES ($1, $2, 'submission', $3, 'started')
+                RETURNING user_id, skill_domain, rite_form, challenge_id, submission_id,
+                          starter_slug, fork_full_name, fork_html_url, github_fork_id,
+                          status, pr_number, pr_url, started_at, pr_opened_at, completed_at
+                "#,
+            )
+            .bind(auth.user_id)
+            .bind(&domain)
+            .bind(challenge_id)
+            .fetch_one(&state.db)
+            .await?;
+
+            Ok(Json(ApiResponse::new(StartBonjourResponse {
+                already_started: false,
+                onboarding: row_to_progress(&row),
+                next_steps: Some(StartNextSteps {
+                    clone_url: None,
+                    expected_artifact: rite.expected_artifact.to_string(),
+                    challenge_id: Some(challenge_id),
+                    instructions_key: "onboarding.bonjour_skilluv.instructions".to_string(),
+                }),
+            })))
+        }
+    }
+}
+
+/// The `code` gesture: fork a starter on the caller's GitHub account.
+///
+/// The only path that needs a GitHub token, and the reason it is a function
+/// rather than a branch left inline: what used to be the endpoint's first act
+/// — and therefore every domain's first wall — is now one of twelve leaves.
+async fn start_fork_rite(
+    state: &AppState,
+    user_id: Uuid,
+    domain: &str,
+    challenge_id: Uuid,
+    starter: Option<String>,
+    rite: &onboarding_rite::Rite,
+) -> Result<Json<ApiResponse<StartBonjourResponse>>, AppError> {
+    let access_token = gh::load_token(&state.db, &state.config.jwt_secret, user_id)
         .await?
         .ok_or_else(|| {
             AppError::Validation(
@@ -257,47 +548,52 @@ pub async fn start_bonjour_skilluv(
             )
         })?;
 
-    // ── 3. Resolve starter slug
-    let starter_slug = if let Some(explicit) = q.starter {
+    let starter_slug = if let Some(explicit) = starter {
         validate_starter_slug(&explicit)?;
         explicit
     } else {
-        // Look up user's primary (first) orientation
-        let orientation_slug: Option<String> = sqlx::query_scalar(
+        // The trade, its family and its domain — the family is what resolves
+        // the starter for all but the two dozen legacy slugs.
+        let orientation: Option<(String, Option<String>, String)> = sqlx::query_as(
             r#"
-            SELECT o.slug
+            SELECT o.slug, o.reviewer_group, o.primary_domain
             FROM user_orientations uo
             JOIN orientations o ON o.id = uo.orientation_id
             WHERE uo.user_id = $1 AND uo.is_primary = TRUE AND uo.mode = 'active'
             LIMIT 1
             "#,
         )
-        .bind(auth.user_id)
+        .bind(user_id)
         .fetch_optional(&state.db)
         .await?;
 
-        match orientation_slug {
-            Some(slug) => starter_for_orientation(&slug).to_string(),
+        match orientation {
+            Some((slug, group, domain)) => resolve_starter(&slug, group.as_deref(), &domain)
+                .unwrap_or(DEFAULT_STARTER_SLUG)
+                .to_string(),
+            // No trade declared: nothing to derive a terrain from, so the
+            // broad-appeal default is the honest answer rather than a guess.
             None => DEFAULT_STARTER_SLUG.to_string(),
         }
     };
 
     let source_full_name = format!("{STARTER_ORG}/{starter_slug}");
-
-    // ── 4. Fork the template via GitHub API
     let fork = gh::fork_repo(&access_token, &source_full_name).await?;
 
-    // ── 5. Persist tracking row
     let row: OnboardingRow = sqlx::query_as(
         r#"
         INSERT INTO onboarding_bonjour_skilluv
-            (user_id, starter_slug, fork_full_name, fork_html_url, github_fork_id, status)
-        VALUES ($1, $2, $3, $4, $5, 'forked')
-        RETURNING user_id, starter_slug, fork_full_name, fork_html_url, github_fork_id,
+            (user_id, skill_domain, rite_form, challenge_id,
+             starter_slug, fork_full_name, fork_html_url, github_fork_id, status)
+        VALUES ($1, $2, 'fork', $3, $4, $5, $6, $7, 'forked')
+        RETURNING user_id, skill_domain, rite_form, challenge_id, submission_id,
+                  starter_slug, fork_full_name, fork_html_url, github_fork_id,
                   status, pr_number, pr_url, started_at, pr_opened_at, completed_at
         "#,
     )
-    .bind(auth.user_id)
+    .bind(user_id)
+    .bind(domain)
+    .bind(challenge_id)
     .bind(&starter_slug)
     .bind(&fork.full_name)
     .bind(&fork.html_url)
@@ -309,7 +605,9 @@ pub async fn start_bonjour_skilluv(
         already_started: false,
         onboarding: row_to_progress(&row),
         next_steps: Some(StartNextSteps {
-            clone_url: format!("git@github.com:{}.git", fork.full_name),
+            clone_url: Some(format!("git@github.com:{}.git", fork.full_name)),
+            expected_artifact: rite.expected_artifact.to_string(),
+            challenge_id: Some(challenge_id),
             instructions_key: "onboarding.bonjour_skilluv.instructions".to_string(),
         }),
     })))
@@ -335,16 +633,108 @@ pub async fn get_bonjour_skilluv_status(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<ApiResponse<StatusBonjourResponse>>, AppError> {
-    match load_row(&state.db, auth.user_id).await? {
-        Some(row) => Ok(Json(ApiResponse::new(StatusBonjourResponse {
-            started: true,
-            onboarding: Some(row_to_progress(&row)),
-        }))),
-        None => Ok(Json(ApiResponse::new(StatusBonjourResponse {
-            started: false,
-            onboarding: None,
-        }))),
-    }
+    let row = load_row(&state.db, auth.user_id).await?;
+
+    // The row's own domain once there is one — a caller who started their rite
+    // under `design` must keep being told about `design` even if they later
+    // change their declared domain.
+    let domain: Option<String> = match &row {
+        Some(r) => Some(r.skill_domain.clone()),
+        None => {
+            sqlx::query_scalar("SELECT skill_domain FROM users WHERE id = $1")
+                .bind(auth.user_id)
+                .fetch_one(&state.db)
+                .await?
+        }
+    };
+
+    let rite = match domain {
+        Some(d) => describe_rite(&state.db, &d).await?,
+        None => None,
+    };
+
+    Ok(Json(ApiResponse::new(StatusBonjourResponse {
+        started: row.is_some(),
+        onboarding: row.as_ref().map(row_to_progress),
+        rite,
+    })))
+}
+
+// ════════════════════════════════════════════════════════════════════
+// GET /api/onboarding/rites
+// ════════════════════════════════════════════════════════════════════
+
+/// The twelve gestures, with the brief each one is against.
+///
+/// The signup flow shows the domains before an account has one, so it needs
+/// the whole catalogue in a single call rather than the caller's own rite. A
+/// domain whose `challenge_id` is `None` has no published brief and must not
+/// be offered.
+#[utoipa::path(
+    get,
+    path = "/api/onboarding/rites",
+    tag = "profile",
+    responses(
+        (status = 200, description = "Every domain's first gesture", body = ApiResponse<RitesCatalogueResponse>),
+    ),
+    operation_id = "onboardingListRites",
+)]
+pub async fn list_rites(
+    State(state): State<AppState>,
+) -> Result<Json<ApiResponse<RitesCatalogueResponse>>, AppError> {
+    // One query for the twelve briefs rather than twelve, because this is on
+    // the signup path.
+    let briefs: Vec<(String, Uuid, String)> = sqlx::query_as(
+        "SELECT skill_domain, id, title FROM challenge_templates          WHERE is_domain_rite = TRUE AND status = 'published'",
+    )
+    .fetch_all(&state.db)
+    .await?;
+
+    let rites = onboarding_rite::RITES
+        .iter()
+        .map(|r| {
+            let brief = briefs.iter().find(|(d, _, _)| d == r.domain);
+            RiteDescriptor {
+                domain: r.domain.to_string(),
+                form: r.form,
+                gesture: r.gesture.to_string(),
+                expected_artifact: r.expected_artifact.to_string(),
+                continues_in: r.continues_in.to_string(),
+                requires_github: onboarding_rite::requires_github(r.domain),
+                challenge_id: brief.map(|(_, id, _)| *id),
+                challenge_title: brief.map(|(_, _, t)| t.clone()),
+            }
+        })
+        .collect();
+
+    Ok(Json(ApiResponse::new(RitesCatalogueResponse { rites })))
+}
+
+/// One domain's rite, with its published brief attached when there is one.
+async fn describe_rite(
+    db: &sqlx::PgPool,
+    domain: &str,
+) -> Result<Option<RiteDescriptor>, AppError> {
+    let Some(rite) = onboarding_rite::for_domain(domain) else {
+        return Ok(None);
+    };
+    let brief: Option<(Uuid, String)> = sqlx::query_as(
+        "SELECT id, title FROM challenge_templates          WHERE is_domain_rite = TRUE AND skill_domain = $1 AND status = 'published'          LIMIT 1",
+    )
+    .bind(domain)
+    .fetch_optional(db)
+    .await?;
+
+    Ok(Some(RiteDescriptor {
+        domain: rite.domain.to_string(),
+        form: rite.form,
+        gesture: rite.gesture.to_string(),
+        expected_artifact: rite.expected_artifact.to_string(),
+        continues_in: rite.continues_in.to_string(),
+        requires_github: onboarding_rite::requires_github(rite.domain),
+        challenge_id: brief.as_ref().map(|(id, _)| *id),
+        challenge_title: brief.map(|(_, t)| t),
+    }))
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -354,7 +744,8 @@ pub async fn get_bonjour_skilluv_status(
 async fn load_row(db: &sqlx::PgPool, user_id: Uuid) -> Result<Option<OnboardingRow>, AppError> {
     let row: Option<OnboardingRow> = sqlx::query_as(
         r#"
-        SELECT user_id, starter_slug, fork_full_name, fork_html_url, github_fork_id,
+        SELECT user_id, skill_domain, rite_form, challenge_id, submission_id,
+               starter_slug, fork_full_name, fork_html_url, github_fork_id,
                status, pr_number, pr_url, started_at, pr_opened_at, completed_at
         FROM onboarding_bonjour_skilluv
         WHERE user_id = $1
@@ -443,14 +834,15 @@ pub async fn handle_bonjour_skilluv_pr_event(
     }
 
     // Load the onboarding row by fork_full_name.
-    let onboarding: Option<(Uuid, String)> = sqlx::query_as(
-        "SELECT user_id, status FROM onboarding_bonjour_skilluv WHERE fork_full_name = $1",
+    let onboarding: Option<(Uuid, String, String, Option<Uuid>)> = sqlx::query_as(
+        "SELECT user_id, status, skill_domain, challenge_id
+         FROM onboarding_bonjour_skilluv WHERE fork_full_name = $1",
     )
     .bind(fork_full_name)
     .fetch_optional(&state.db)
     .await?;
 
-    let Some((user_id, current_status)) = onboarding else {
+    let Some((user_id, current_status, skill_domain, tracked_challenge)) = onboarding else {
         // Not a tracked Bonjour Skilluv fork — nothing to do.
         return Ok(());
     };
@@ -580,6 +972,83 @@ pub async fn handle_bonjour_skilluv_pr_event(
     .execute(&mut *tx)
     .await?;
 
+    // The pull request is the artifact, so it becomes a deliverable and lands
+    // in the same review queue as the other eleven rites (SKI-362).
+    //
+    // Until this, the code rite stopped at `pr_opened` and nothing moved it on
+    // — while `badge_rules.bonjour_skilluv` fires on `completed_at IS NOT
+    // NULL`. The founding badge was unreachable on the one path that shipped.
+    // Opening a pull request is a real gesture but it is not a verdict: it
+    // proves somebody pushed a branch, not that a person read what is on it,
+    // and after SKI-361 no other rite is allowed to pass without being read.
+    //
+    // Rows written before migration 0609 carry no `challenge_id`; the domain's
+    // published rite is the same answer, looked up.
+    let challenge_id: Option<Uuid> = match tracked_challenge {
+        Some(id) => Some(id),
+        None => {
+            sqlx::query_scalar(
+                "SELECT id FROM challenge_templates
+                 WHERE is_domain_rite AND skill_domain = $1 AND status = 'published'
+                 LIMIT 1",
+            )
+            .bind(&skill_domain)
+            .fetch_optional(&mut *tx)
+            .await?
+        }
+    };
+
+    // `hello_hash` is already the SHA-256 of the HELLO.md content, which is
+    // what `deliverables` deduplicates on — so a redelivered webhook finds the
+    // row rather than writing a second one.
+    let deliverable_id: Option<Uuid> = sqlx::query_scalar(
+        r#"
+        INSERT INTO deliverables (
+            challenge_id, user_id,
+            artifact_type, artifact_url, artifact_hash, artifact_metadata,
+            verifiable_by, verification_status,
+            fragments_awarded, public, submitted_at, created_at
+        )
+        VALUES (
+            $1, $2,
+            'other', $3, $4, $5,
+            'human_review', 'pending',
+            0, TRUE, NOW(), NOW()
+        )
+        ON CONFLICT (user_id, artifact_hash) WHERE artifact_hash IS NOT NULL DO NOTHING
+        RETURNING id
+        "#,
+    )
+    .bind(challenge_id)
+    .bind(user_id)
+    .bind(&pr_url)
+    .bind(&hello_hash)
+    .bind(serde_json::json!({
+        "source": "bonjour_skilluv_pull_request",
+        "fork_full_name": fork_full_name,
+        "pr_number": pr_number,
+        "hello_markdown": hello_content,
+    }))
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    if let Some(id) = deliverable_id {
+        sqlx::query("UPDATE onboarding_bonjour_skilluv SET deliverable_id = $1 WHERE user_id = $2")
+            .bind(id)
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;
+
+        crate::services::ReviewQueueService::create_task_for_deliverable(
+            &mut tx,
+            id,
+            &skill_domain,
+            3,
+            "any",
+        )
+        .await?;
+    }
+
     tx.commit().await?;
 
     tracing::info!(
@@ -587,7 +1056,8 @@ pub async fn handle_bonjour_skilluv_pr_event(
         pr_number,
         fork_full_name,
         hello_hash = %hello_hash,
-        "Bonjour Skilluv completion detected — status transitioned to pr_opened, Hello Wall entry created"
+        deliverable_id = ?deliverable_id,
+        "Bonjour Skilluv pull request detected — status pr_opened, Hello Wall entry created, queued for review"
     );
 
     Ok(())
@@ -600,134 +1070,105 @@ mod tests {
     #[test]
     fn orientation_maps_to_expected_starter() {
         assert_eq!(
-            starter_for_orientation("dev-fullstack"),
+            resolve_starter("dev-fullstack", None, "code").unwrap(),
             "starter-fullstack-rust"
         );
         assert_eq!(
-            starter_for_orientation("dev-frontend"),
+            resolve_starter("dev-frontend", None, "code").unwrap(),
             "starter-frontend-svelte"
         );
         assert_eq!(
-            starter_for_orientation("mobile-android"),
+            resolve_starter("mobile-android", None, "code").unwrap(),
             "starter-mobile-kotlin"
         );
         assert_eq!(
-            starter_for_orientation("dev-embarque-iot"),
+            resolve_starter("dev-embarque-iot", None, "code").unwrap(),
             "starter-iot-esp32"
         );
         assert_eq!(
-            starter_for_orientation("game-programmer"),
+            resolve_starter("game-programmer", None, "code").unwrap(),
             "starter-game-godot"
         );
         assert_eq!(
-            starter_for_orientation("ml-engineer"),
+            resolve_starter("ml-engineer", None, "code").unwrap(),
             "starter-data-python"
         );
-        assert_eq!(starter_for_orientation("devops-engineer"), "starter-devops");
         assert_eq!(
-            starter_for_orientation("tech-writer"),
+            resolve_starter("devops-engineer", None, "code").unwrap(),
+            "starter-devops"
+        );
+        assert_eq!(
+            resolve_starter("tech-writer", None, "code").unwrap(),
             "starter-frontend-htmx"
         );
         // Design roles
         assert_eq!(
-            starter_for_orientation("illustrator"),
+            resolve_starter("illustrator", None, "code").unwrap(),
             "starter-frontend-svelte"
         );
         assert_eq!(
-            starter_for_orientation("motion-designer"),
+            resolve_starter("motion-designer", None, "code").unwrap(),
             "starter-frontend-svelte"
         );
         assert_eq!(
-            starter_for_orientation("mobile-designer"),
+            resolve_starter("mobile-designer", None, "code").unwrap(),
             "starter-mobile-react-native"
         );
-        assert_eq!(starter_for_orientation("3d-artist"), "starter-game-godot");
+        assert_eq!(
+            resolve_starter("3d-artist", None, "code").unwrap(),
+            "starter-game-godot"
+        );
         // Security roles
         assert_eq!(
-            starter_for_orientation("pentester-web"),
+            resolve_starter("pentester-web", None, "code").unwrap(),
             "starter-fullstack-node"
         );
         assert_eq!(
-            starter_for_orientation("security-engineer"),
+            resolve_starter("security-engineer", None, "code").unwrap(),
             "starter-fullstack-node"
         );
         assert_eq!(
-            starter_for_orientation("soc-analyst"),
+            resolve_starter("soc-analyst", None, "code").unwrap(),
             "starter-fullstack-node"
         );
         assert_eq!(
-            starter_for_orientation("pentester-mobile"),
+            resolve_starter("pentester-mobile", None, "code").unwrap(),
             "starter-mobile-react-native"
         );
         // Blockchain
         assert_eq!(
-            starter_for_orientation("smart-contract-dev"),
+            resolve_starter("smart-contract-dev", None, "code").unwrap(),
             "starter-fullstack-node"
         );
-        // Unknown orientation → default
-        assert_eq!(
-            starter_for_orientation("unknown-slug"),
-            DEFAULT_STARTER_SLUG
-        );
+        // An unknown trade is `None`, not the default. The default is the
+        // caller's decision and is applied once, at the call site, so that
+        // "nothing knows this trade" stays visible to a test instead of being
+        // laundered into a plausible-looking answer here.
+        assert_eq!(resolve_starter("unknown-slug", None, "code"), None);
     }
 
-    /// Regression guard : chaque slug d'orientation dans la DB doit avoir un
-    /// mapping *explicite* dans `starter_for_orientation`, jamais tomber au
-    /// `DEFAULT_STARTER_SLUG`. Le test lit la liste des 32 slugs (migrations
-    /// 0002 + 0105 + 0106) et vérifie que chaque appel retourne un starter
-    /// != du DEFAULT. Si on ajoute une orientation future, ce test échoue
-    /// tant qu'on n'a pas ajouté un cas dédié dans le match.
-    ///
-    /// Note : la liste est hard-codée ici plutôt que lue de la DB pour que le
-    /// test soit unitaire pur (pas de connexion Postgres requise en CI).
+    /// The mapping used to be checked against a constant of 32 slugs commented
+    /// "snapshot au 2026-07-22", chosen so the test needed no Postgres. It was
+    /// a snapshot of what the mapping already covered, so it compared the list
+    /// to itself and could not fail; it stayed green through 118 further
+    /// orientations. Replaced by
+    /// `every_curated_orientation_resolves_to_a_starter` in
+    /// `tests/test_onboarding_rites.rs`, which reads `orientations`.
     #[test]
-    fn every_db_orientation_maps_to_a_known_starter() {
-        // Source : SELECT slug FROM orientations ORDER BY slug — snapshot au
-        // 2026-07-22, 32 slugs (24 initial + 6 game + 1 IoT + 1 smart-contract).
-        const ALL_ORIENTATION_SLUGS: &[&str] = &[
-            "3d-artist",
-            "cloud-architect",
-            "data-analyst",
-            "data-engineer",
-            "dev-backend",
-            "dev-embarque-iot",
-            "dev-frontend",
-            "dev-fullstack",
-            "devops-engineer",
-            "game-artist-2d",
-            "game-artist-3d",
-            "game-designer",
-            "game-programmer",
-            "game-sound-engineer",
-            "illustrator",
-            "ml-engineer",
-            "mobile-android",
-            "mobile-cross",
-            "mobile-designer",
-            "mobile-ios",
-            "motion-designer",
-            "open-source-maintainer",
-            "pentester-mobile",
-            "pentester-web",
-            "prompt-engineer",
-            "security-engineer",
-            "smart-contract-dev",
-            "soc-analyst",
-            "sre",
-            "systems-programmer",
-            "tech-writer",
-            "web-designer",
-        ];
-
-        let unmapped: Vec<_> = ALL_ORIENTATION_SLUGS
-            .iter()
-            .filter(|slug| explicit_starter_for_orientation(slug).is_none())
-            .copied()
-            .collect();
-        assert!(
-            unmapped.is_empty(),
-            "Orientations sans mapping explicite (fallback DEFAULT) : {unmapped:?}. Ajoute un cas dédié dans explicit_starter_for_orientation()."
+    fn a_family_answers_for_a_trade_the_list_never_heard_of() {
+        // The exact case that was broken: a code trade added by migration
+        // 0173, absent from every per-slug arm, resolved by its family.
+        assert_eq!(
+            resolve_starter("compiler-language-developer", Some("compilers"), "code"),
+            Some("starter-fullstack-rust")
         );
+        // A per-slug exception still wins over its family.
+        assert_eq!(
+            resolve_starter("web-designer", None, "design"),
+            Some("starter-frontend-svelte")
+        );
+        // And a trade with neither is `None` rather than a silent default.
+        assert_eq!(resolve_starter("nobody-knows-me", None, "code"), None);
     }
 
     #[test]

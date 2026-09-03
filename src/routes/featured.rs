@@ -130,6 +130,7 @@ pub async fn recent(
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct FeatureBody {
+    #[schema(schema_with = crate::validators::skill_domain_schema)]
     pub skill_domain: String,
     /// The Monday of the week being awarded. Refused if it is not a Monday,
     /// rather than silently rounded: rounding somebody's intent is how a

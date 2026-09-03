@@ -3,17 +3,38 @@ mod common;
 use reqwest::StatusCode;
 use serde_json::json;
 
+/// The listing answers with a well-formed page, and its total is what is
+/// actually published.
+///
+/// This asserted `total == 0` against the whole catalogue, which was true
+/// while nothing anywhere was published. Migration 0615 publishes the six code
+/// exercises a newcomer climbs, so the unfiltered catalogue is no longer
+/// empty — and an assertion that only held because the platform had nothing to
+/// offer was never testing the endpoint.
+///
+/// Scoped to a domain with nothing published instead: `soft_skills` has its
+/// entry rite and nothing else, and a rite is excluded from the listing by
+/// `is_onboarding = FALSE`. So this still exercises the empty page, and it
+/// exercises the populated one too.
 #[tokio::test]
-async fn test_list_challenges_empty() {
+async fn test_list_challenges_page_shape() {
     let app = common::TestApp::spawn().await;
     app.register_user("chaluser").await;
     app.login("chaluser").await;
 
-    let resp = app.get("/api/challenges").await;
+    let resp = app.get("/api/challenges?domain=soft_skills").await;
     assert_eq!(resp.status(), StatusCode::OK);
-
     let body: serde_json::Value = resp.json().await.unwrap();
     assert_eq!(body["pagination"]["total"], 0);
+    assert!(body["data"].as_array().unwrap().is_empty());
+
+    let resp = app.get("/api/challenges?domain=code").await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert!(
+        body["pagination"]["total"].as_i64().unwrap() >= 6,
+        "the code ladder should be listed: {body}"
+    );
 }
 
 #[tokio::test]

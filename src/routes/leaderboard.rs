@@ -21,9 +21,40 @@ pub fn leaderboard_routes() -> Router<AppState> {
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct LeaderboardMeta {
-    /// `global`, `code`, `design`, `game`, `security`.
+    /// `global`, or any of `validators::SKILL_DOMAINS`.
     pub domain: &'static str,
     pub periods: &'static [&'static str],
+}
+
+/// `global`, or any of the twelve skill domains.
+///
+/// An enum and not a `schema_with` on an `IntoParams` struct: that produced a
+/// *second* `domain` path parameter in the document — utoipa derives one from
+/// the handler's `Path<String>` as well — and schemathesis read the looser of
+/// the pair, so `/api/leaderboards/0` counted as compliant and the endpoint's
+/// correct 400 read as a contract violation. The tuple form takes a type, and
+/// a type is unambiguous.
+///
+/// The list is transcribed, which is the thing this file spent a commit
+/// removing elsewhere. `a_leaderboard_domain_is_global_or_a_skill_domain`
+/// compares it to `validators::SKILL_DOMAINS` so the copy cannot drift
+/// silently — the same contract `SkillDomain` carries.
+#[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum LeaderboardDomain {
+    Global,
+    Code,
+    Design,
+    Game,
+    Security,
+    Ops,
+    Ai,
+    SoftSkills,
+    Audio,
+    Quality,
+    Leadership,
+    Communication,
+    Education,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -99,7 +130,7 @@ pub struct LeaderboardPageResponse {
     path = "/api/leaderboards/{domain}",
     tag = "profile",
     params(
-        ("domain" = String, Path, pattern = r"^(global|code|design|game|security)$", description = "Leaderboard domain"),
+        ("domain" = LeaderboardDomain, Path, description = "Leaderboard domain"),
         LeaderboardQuery,
     ),
     responses(
@@ -215,7 +246,7 @@ pub struct MyRankResponse {
     path = "/api/leaderboards/{domain}/me",
     tag = "profile",
     params(
-        ("domain" = String, Path, pattern = r"^(global|code|design|game|security)$", description = "Leaderboard domain"),
+        ("domain" = LeaderboardDomain, Path, description = "Leaderboard domain"),
         MyRankQuery,
     ),
     responses(
@@ -248,4 +279,50 @@ pub async fn my_rank(
         score: score.map(|s| s as i64),
         total_participants: total,
     })))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The path parameter lists exactly what `LeaderboardService::validate_domain`
+    /// accepts: `global` plus every skill domain.
+    ///
+    /// The enum is a transcription and this is what stops it drifting. The
+    /// previous document froze at four domains while the guard took thirteen,
+    /// and every `ops`, `ai` or `audio` leaderboard was reachable and
+    /// undocumented.
+    #[test]
+    fn a_leaderboard_domain_is_global_or_a_skill_domain() {
+        let schema =
+            serde_json::to_value(<LeaderboardDomain as utoipa::PartialSchema>::schema()).unwrap();
+        let documented: Vec<String> = schema["enum"]
+            .as_array()
+            .expect("a unit enum documents its values under `enum`")
+            .iter()
+            .map(|v| v.as_str().expect("each value is a string").to_string())
+            .collect();
+
+        let expected: Vec<String> = std::iter::once("global".to_string())
+            .chain(
+                crate::validators::SKILL_DOMAINS
+                    .iter()
+                    .map(|d| (*d).to_string()),
+            )
+            .collect();
+
+        assert_eq!(
+            documented, expected,
+            "the documented leaderboard domains and the guard have drifted"
+        );
+
+        // And each one really is accepted, which is the claim a reader of the
+        // document makes when they build a URL from it.
+        for domain in &documented {
+            assert!(
+                crate::services::LeaderboardService::validate_domain(domain).is_ok(),
+                "{domain} is documented and refused"
+            );
+        }
+    }
 }

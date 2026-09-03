@@ -111,6 +111,16 @@ async fn approve_verdict_triggers_recompute_capabilities_and_rank() {
     let (db, name) = setup_test_db().await;
     let author = create_user(&db).await;
     let reviewer = create_user(&db).await;
+    // A verdict needs a reviewer capability since the gate on
+    // `submit_verdict`; `mentor` is the cross-domain one.
+    sqlx::query(
+        "INSERT INTO user_capabilities (user_id, capability, granted_reason)
+         VALUES ($1, 'mentor', 'test fixture')",
+    )
+    .bind(reviewer)
+    .execute(&db)
+    .await
+    .unwrap();
 
     // 4 deliverables pending (seuils ranger : 4 verified)
     let mut deliverables = Vec::new();

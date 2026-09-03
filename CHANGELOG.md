@@ -94,12 +94,132 @@ and the project will follow semantic versioning once 1.0 is reached.
   The moderation hold is its own column: `active` is the author's own pause
   switch, and a hold placed there would be undone by their next PATCH. The row
   survives, because a dispute is instructed against what was published.
+* **onboarding:** one Bonjour Skilluv rite per domain, twelve gestures. `code`
+  still forks a starter and opens a pull request; the other eleven hand in an
+  artifact in the shape of their trade — a screen, a playtest verdict, a
+  finding, an SLO reading, a defect report, a workspace step, a review, twenty
+  seconds of sound, a retro, a translation, an explanation — and land in the
+  human review queue. `POST /onboarding/bonjour-skilluv/start` no longer loads
+  a GitHub token before doing anything else, `GET /onboarding/rites` serves the
+  whole catalogue for the signup screen, and the status endpoint describes the
+  caller's gesture before they have started it. Migrations 0607 and 0609.
+* **orientations:** `GET /orientations` carries the number of rows its filter
+  matches, and `GET /orientations/counts` answers "how many specialities per
+  class" in one call. The catalogue is ~255 curated rows against a `limit` that
+  caps at 200 and defaults to 50, so a client with no parameters received a
+  fifth of the trades with nothing saying so.
+
 * **admin:** `GET /admin/assistant/stats` and
   `GET /admin/users/{id}/assistant-interactions`. Two facts were
   unrecoverable — a cache hit could not be told from a call, and a refusal
   recorded nothing at all.
 
 ### Fixed
+
+* **challenges:** a challenge is served in the language the reader asked for.
+  Migration 0104 added `title_i18n` / `description_i18n` / `instructions_i18n`
+  and nothing ever read them — not a route, not even the struct — while the
+  catalogue quietly stopped being French: 404 rows are French, 254 English, in
+  the same column with no marker. A bilingual front could not know what it was
+  about to display. The API resolves `Accept-Language` now, says which
+  languages a challenge exists in, and falls back to the base text rather than
+  to an empty string. Migration 0613.
+* **challenges:** a brief says where to start reading. `challenge_resources`
+  attaches documentation, courses, articles, videos, communities and the
+  repository the work lands in — links to material somebody else hosts, never
+  copies, each with the language it is in and what it costs to reach it. The
+  guidance narrows as a rank climbs and stops entirely at `doyen`: handing a
+  fifteen-year practitioner a link to the official docs is noise, and noise on
+  every page teaches people to stop reading the page. Migration 0614.
+* **forum:** a thread can name the challenge it is about. `posts.challenge_id`
+  is what makes a question asked once readable by everybody who starts that
+  challenge afterwards — the most valuable teaching material the platform will
+  produce, and the one that writes itself. Migration 0614.
+* **challenges:** six published code exercises, in both languages, in order.
+  Each says what is out of scope, names the repository it lands in, and has a
+  next one — `challenge_prerequisites` was empty across the whole platform, so
+  no challenge had a successor and "what do I do now" had no answer that was
+  not a search box. Migration 0615.
+* **onboarding:** a trade is chosen before the first gesture. The trade picks
+  the starter to fork, feeds the playlist and the recommendations, and is what
+  a reviewer is matched on; starting without one meant forking the broad-appeal
+  default and then being recommended nothing in particular. One is required,
+  three are allowed.
+
+* **onboarding:** the starter a trade forks is resolved from its family, not
+  from a list of slugs written when there were 32 orientations. The table holds
+  150, so 118 of them silently forked `starter-fullstack-node` — a
+  `compiler-language-developer` was handed a Node fullstack app on the strength
+  of the trade they had just declared, and 32 of the 41 code trades were in
+  that group. Resolution now goes per-slug exception, then
+  `orientations.reviewer_group`, then `None`; the caller applies the default
+  once, so "nothing knows this trade" stays visible. The check that should have
+  caught this looped over a constant of 32 slugs commented "snapshot au
+  2026-07-22" — a snapshot of what the mapping already covered, comparing the
+  list to itself. It reads `orientations` now, and is an integration test.
+
+* **challenges:** every seeded challenge names the trade it belongs to.
+  Migration 0606 backfilled `orientation_id` for the 130 design seeds and left
+  524 drafts across the other ten domains at NULL — and
+  `POST /admin/orientations/{slug}/challenges/publish`, the one surface that
+  opens a catalogue one trade at a time, selects on exactly that column. It
+  published nothing for eleven domains of twelve, which is why the platform
+  stood at 654 drafts and zero reachable published challenges: somebody
+  finished their first gesture and `GET /api/challenges` handed them an empty
+  list. The pairs are read back out of the seed migrations, which all grouped
+  their VALUES by trade to pick a review grid and then discarded it.
+  Migration 0612.
+
+* **challenges:** a submission hands in its artifact, and the reviewer can open
+  it. `POST /challenges/{id}/submit` takes `attachments` — `design_upload:<uuid>`
+  or `audio_file:<uuid>`, each checked to belong to the caller. References
+  rather than URLs, because a free-text URL lets somebody be reviewed on
+  another candidate's screen. And `design_uploads` was owner-scoped, so even
+  attached, the reviewer got a 404 on the only thing they were asked to judge;
+  a reviewer holding an open task on a deliverable that references the upload
+  can now read it, and stops being able to once the verdict is in.
+
+* **reviews:** nobody signs off their own work, and a verdict is a competence
+  rather than a login. `POST /deliverables/{id}/reviews` accepted any
+  authenticated account — including the deliverable's own author, who could
+  approve themselves the fragments, the settled submission and the active
+  profile that an `approve` now carries. Self-review is refused outright; a
+  verdict requires `admin`, `mentor`, or `domain_curator` for that
+  deliverable's domain. The design critique loop has enforced both from the
+  start; this is the same rule on the generic queue, which P2.2 had left open
+  for the cold start.
+* **onboarding:** an approved pull request completes the code rite. The webhook
+  took it to `pr_opened` and nothing moved it further, while
+  `badge_rules.bonjour_skilluv` fires on `completed_at IS NOT NULL` — so the
+  founding badge was unreachable on the one path that had shipped. The pull
+  request now becomes a deliverable in the same review queue as the other
+  eleven rites, and the verdict closes it. Opening a pull request proves
+  somebody pushed a branch, not that a person read what is on it.
+
+* **challenges:** a non-code submission of a hundred characters is no longer a
+  pass. `evaluate_basic` returned `success` and its fragments for any
+  submission of a hundred characters in every domain but `code`, and returned
+  an unconditional `success` for a code challenge declaring no expected output.
+  On a public profile that mark was indistinguishable from one a reviewer gave,
+  in the one thing this platform asks anybody to trust it about. A submission
+  nothing can score is now `pending_review`: its deliverable is queued for a
+  person, and the fragments follow their verdict rather than its length.
+  Migration 0608.
+* **challenges:** every declarable domain has a published onboarding challenge.
+  Eight of the twelve answered `GET /challenges/onboarding` with "No onboarding
+  challenge found", so the first screen after signing up was an error for two
+  thirds of the platform. The four 2024 seeds it did have asked, in French, for
+  "minimum 100 mots" — written against the character count above — and are
+  retired. The lookup is also deterministic now: `code` carries fifteen
+  onboarding templates, one per starter, and `LIMIT 1` returned an arbitrary
+  one of them.
+* **openapi:** `skill_domain` lists the twelve domains the server accepts,
+  everywhere a request carries one. `RegisterRequest` documented four, so a
+  generated client refused seven valid domains and the contract fuzzer never
+  sent `audio` or `leadership`. The list had been transcribed eight times
+  across request bodies and query parameters; every copy now emits
+  `validators::SKILL_DOMAINS`, and a test walks the built document and fails on
+  the next copy.
 
 * **profiles:** `GET /profile/{username}` returns `id`. Four public endpoints
   are addressed by UUID and this was the only place a visitor could resolve a

@@ -512,6 +512,12 @@ pub async fn preview_upload_url(
 }
 
 /// A link somebody can open, for a limited time.
+///
+/// Readable by the person who uploaded it, and by a reviewer who has been
+/// handed it. The second half is not a loosening for its own sake: a design or
+/// audio rite attaches an upload to its submission, the deliverable goes into
+/// the review queue, and until this the reviewer got a 404 on the only thing
+/// they were being asked to judge.
 pub async fn download_url(
     db: &PgPool,
     storage: &StorageService,
@@ -519,7 +525,7 @@ pub async fn download_url(
     session_id: Uuid,
     ttl_seconds: u32,
 ) -> Result<String, AppError> {
-    let session = load(db, user_id, session_id).await?;
+    let session = load_for_reader(db, user_id, session_id).await?;
     if session.status != "completed" {
         return Err(AppError::Conflict(
             "this upload is not finished, so there is nothing to download".into(),
@@ -528,6 +534,76 @@ pub async fn download_url(
     storage
         .presigned_get_url(&session.storage_key, ttl_seconds)
         .await
+}
+
+/// The upload, for somebody entitled to read it.
+///
+/// Its owner, or a reviewer of a deliverable that references it. "Reviewer"
+/// means the same thing here as it does on a verdict — `admin`, `mentor`, or
+/// `domain_curator` for the task's domain — because a link handed to anybody
+/// who can name a UUID is not a gate, and because the whole reason to widen
+/// this is the review queue.
+///
+/// Deliberately not "anybody who can see the queue": the task has to exist and
+/// still be open or claimed, so an upload stops being readable once the
+/// verdict is in.
+async fn load_for_reader(
+    db: &PgPool,
+    reader_id: Uuid,
+    session_id: Uuid,
+) -> Result<Session, AppError> {
+    if let Ok(session) = load(db, reader_id, session_id).await {
+        return Ok(session);
+    }
+
+    let reference = format!("design_upload:{session_id}");
+    let task_domain: Option<String> = sqlx::query_scalar(
+        r#"
+        SELECT rt.primary_domain
+          FROM review_tasks rt
+          JOIN deliverables d ON d.id = rt.deliverable_id
+         WHERE rt.status IN ('open', 'claimed')
+           AND d.artifact_metadata -> 'attachments' @> to_jsonb($1::TEXT)
+         LIMIT 1
+        "#,
+    )
+    .bind(&reference)
+    .fetch_optional(db)
+    .await?;
+
+    let Some(domain) = task_domain else {
+        return Err(AppError::NotFound("no such upload".into()));
+    };
+
+    let held = crate::middleware::capabilities::list_active_capabilities(db, reader_id).await?;
+    let allowed = [
+        "admin".to_string(),
+        "mentor".to_string(),
+        "domain_curator:all".to_string(),
+        format!("domain_curator:{domain}"),
+    ];
+    if !held.iter().any(|c| allowed.contains(c)) {
+        return Err(AppError::NotFound("no such upload".into()));
+    }
+
+    load_any_owner(db, session_id).await
+}
+
+/// The row itself, once the caller's right to it has been settled above.
+async fn load_any_owner(db: &PgPool, session_id: Uuid) -> Result<Session, AppError> {
+    sqlx::query_as::<_, Session>(
+        r#"
+        SELECT id, user_id, slice_id, design_subtype, filename, content_type,
+               declared_bytes, stored_bytes, part_size, part_count, storage_key,
+               preview_key, status, created_at, completed_at, expires_at
+          FROM design_upload_sessions
+         WHERE id = $1
+        "#,
+    )
+    .bind(session_id)
+    .fetch_optional(db)
+    .await?
+    .ok_or_else(|| AppError::NotFound("no such upload".into()))
 }
 
 async fn load(db: &PgPool, user_id: Uuid, session_id: Uuid) -> Result<Session, AppError> {

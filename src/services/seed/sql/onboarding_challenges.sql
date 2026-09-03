@@ -15,8 +15,11 @@
 -- specifique).
 --
 -- Difficulty = 1 (safe zone garantie).
--- Skill domain = code (majorite) ou design (frontend-svelte et frontend-react
--- servent aussi les web-designers).
+-- Skill domain = code, sauf les deux starters de jeu qui portent 'game' :
+-- ils etaient filed sous 'code' comme les treize autres, si bien que le
+-- domaine pour lequel ils ont ete ecrits n'avait aucun rite (SKI-360).
+-- Ces quinze lignes sont les variantes par starter du geste 'fork' ; le rite
+-- canonique d'un domaine est la ligne is_domain_rite de la migration 0607.
 -- reward_fragments = 10 (unlock badge Bonjour Skilluv qui vaut deja beaucoup
 -- en soi, pas de sur-recompense).
 --
@@ -143,7 +146,7 @@ CROSS JOIN (VALUES
         '{"fr":"Bonjour Skilluv — Game Godot","en":"Hello Skilluv — Game Godot"}'::jsonb,
         '{"fr":"Ton premier commit sur Godot 4.x + GDScript + tilemap 2D.","en":"Your first commit on Godot 4.x + GDScript + 2D tilemap."}'::jsonb,
         '{"fr":"Fork starter-game-godot. HELLO.md. PR main->showcase.","en":"Fork starter-game-godot. HELLO.md. PR main->showcase."}'::jsonb,
-        'code'
+        'game'
     ),
     (
         'Bonjour Skilluv — Game Bevy',
@@ -152,7 +155,7 @@ CROSS JOIN (VALUES
         '{"fr":"Bonjour Skilluv — Game Bevy","en":"Hello Skilluv — Game Bevy"}'::jsonb,
         '{"fr":"Ton premier commit sur Bevy + Rust + WebGL.","en":"Your first commit on Bevy + Rust + WebGL."}'::jsonb,
         '{"fr":"Fork starter-game-bevy. HELLO.md. PR main->showcase.","en":"Fork starter-game-bevy. HELLO.md. PR main->showcase."}'::jsonb,
-        'code'
+        'game'
     ),
 
     -- ── Data / IA (1)

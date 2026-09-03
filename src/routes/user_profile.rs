@@ -60,7 +60,7 @@ pub struct UpdateDisplayNameRequest {
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct UpdateSkillDomainRequest {
-    #[schema(max_length = 10000)]
+    #[schema(schema_with = crate::validators::skill_domain_schema)]
     pub skill_domain: String,
 }
 

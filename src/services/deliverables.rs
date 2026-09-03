@@ -87,6 +87,20 @@ pub struct ChallengeSubmissionInput<'a> {
     pub language: Option<&'a str>,
     pub stdout: Option<&'a str>,
     pub stderr: Option<&'a str>,
+    /// The domain the challenge belongs to, so a deliverable that needs a
+    /// human lands in front of reviewers of the right trade.
+    pub skill_domain: &'a str,
+    /// Validated references to what was uploaded alongside the text, already
+    /// checked to belong to this user. Empty for a submission that is only
+    /// text, which is most of them.
+    pub attachments: &'a [String],
+    /// `true` when nothing scored this submission and a person has to.
+    ///
+    /// The deliverable is then written `pending` rather than `verified`, and a
+    /// `verify_deliverable` task is queued alongside it. Fragments are not
+    /// awarded here in that case — `ReviewsService::apply_verified_side_effects`
+    /// awards them if and when the verdict is `approve` (SKI-361).
+    pub awaiting_review: bool,
 }
 
 impl DeliverablesService {
@@ -591,12 +605,19 @@ impl DeliverablesService {
 
     // (struct ChallengeSubmissionInput défini au niveau module — voir plus bas)
 
-    /// Crée un deliverable "verified" à partir d'un `challenge_submissions.status='success'`.
+    /// Crée le deliverable d'une `challenge_submissions` finalisée.
     ///
-    /// Appelé depuis `routes/challenges.rs::submit_challenge` en best-effort après
-    /// que la submission legacy soit finalisée avec succès. Le deliverable pointe
-    /// vers le challenge (pas de slice) et marque `verifiable_by='automated_diff'`
-    /// pour tracer l'origine du pipeline legacy Judge0.
+    /// Appelé depuis `routes/challenges.rs::submit_challenge` en best-effort. Le
+    /// deliverable pointe vers le challenge (pas de slice).
+    ///
+    /// Deux formes selon `awaiting_review` :
+    ///   - `false` — Judge0 (ou l'attendu déclaré) a tranché : `verified`,
+    ///     `verifiable_by='automated_diff'`, fragments déjà attribués.
+    ///   - `true` — rien n'a su trancher : `pending`,
+    ///     `verifiable_by='human_review'`, zéro fragment, et une task
+    ///     `verify_deliverable` posée dans la même transaction. C'est le seul
+    ///     chemin pour un domaine sans évaluateur depuis SKI-361 ; avant, cent
+    ///     caractères suffisaient à écrire `verified` ici.
     ///
     /// Idempotent via UNIQUE (user_id, artifact_hash). Si le même hash de
     /// submission a déjà produit un deliverable, retourne l'existant.
@@ -615,6 +636,9 @@ impl DeliverablesService {
             language,
             stdout,
             stderr,
+            skill_domain,
+            awaiting_review,
+            attachments,
         } = params;
 
         let mut hasher = Sha256::new();
@@ -645,7 +669,22 @@ impl DeliverablesService {
         if let (Some(obj), Some(s)) = (metadata.as_object_mut(), stderr) {
             obj.insert("stderr".into(), serde_json::Value::String(s.to_string()));
         }
+        // Always written, even empty, so a reader never has to tell "no
+        // attachments" from "written before attachments existed".
+        if let Some(obj) = metadata.as_object_mut() {
+            obj.insert("attachments".into(), serde_json::json!(attachments));
+        }
 
+        let (verifiable_by, verification_status) = if awaiting_review {
+            ("human_review", "pending")
+        } else {
+            ("automated_diff", "verified")
+        };
+
+        // One transaction so a deliverable that needs a reviewer never exists
+        // without the task that puts it in front of one — the failure mode
+        // being a submission that waits forever in a queue nobody can see.
+        let mut tx = db.begin().await?;
         let inserted: Option<Uuid> = sqlx::query_scalar(
             r#"
             INSERT INTO deliverables (
@@ -657,7 +696,8 @@ impl DeliverablesService {
             VALUES (
                 $1, $2,
                 'other', $3, $4, $5,
-                'automated_diff', 'verified', NOW(), $6,
+                $8, $9,
+                CASE WHEN $9 = 'verified' THEN NOW() END, $6,
                 $7, TRUE, NOW(), NOW()
             )
             ON CONFLICT (user_id, artifact_hash) WHERE artifact_hash IS NOT NULL DO NOTHING
@@ -670,12 +710,30 @@ impl DeliverablesService {
         .bind(&artifact_hash)
         .bind(&metadata)
         .bind(serde_json::json!({
-            "source": "legacy_submit_pipeline",
+            "source": if awaiting_review {
+                "challenge_submission_awaiting_review"
+            } else {
+                "legacy_submit_pipeline"
+            },
             "submission_id": submission_id.to_string(),
         }))
         .bind(fragments_awarded)
-        .fetch_optional(db)
+        .bind(verifiable_by)
+        .bind(verification_status)
+        .fetch_optional(&mut *tx)
         .await?;
+
+        if awaiting_review && let Some(id) = inserted {
+            crate::services::ReviewQueueService::create_task_for_deliverable(
+                &mut tx,
+                id,
+                skill_domain,
+                3,
+                "any",
+            )
+            .await?;
+        }
+        tx.commit().await?;
 
         if let Some(id) = inserted {
             // SKI-44 — attach any undisclosed AI companion interactions from

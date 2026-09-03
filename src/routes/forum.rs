@@ -132,6 +132,14 @@ pub struct CreatePostBody {
     pub body: String,
     /// Bounty fragments for a question (0 = no bounty).
     pub bounty_fragments: Option<i32>,
+    /// The challenge this thread is about, when it is about one.
+    ///
+    /// What makes a question asked once readable by everybody who starts that
+    /// challenge afterwards — the guidance block on the challenge counts these
+    /// and the front lists them. Refused if it names no published challenge,
+    /// because a thread attached to nothing is worse than one attached to
+    /// nowhere: it looks answered.
+    pub challenge_id: Option<uuid::Uuid>,
 }
 
 /// Create a forum post. Question kind is rate-limited by user tier.
@@ -174,6 +182,21 @@ pub async fn create_post(
         }
     }
 
+    if let Some(challenge_id) = body.challenge_id {
+        let exists: bool = sqlx::query_scalar(
+            "SELECT EXISTS (SELECT 1 FROM challenge_templates
+                             WHERE id = $1 AND status = 'published')",
+        )
+        .bind(challenge_id)
+        .fetch_one(&state.db)
+        .await?;
+        if !exists {
+            return Err(AppError::NotFound(format!(
+                "no published challenge {challenge_id} to attach this thread to"
+            )));
+        }
+    }
+
     let post = forum::create_post(
         &state.db,
         forum::CreatePostInput {
@@ -183,6 +206,7 @@ pub async fn create_post(
             title: body.title,
             body: body.body,
             bounty_fragments: body.bounty_fragments.unwrap_or(0),
+            challenge_id: body.challenge_id,
         },
         &auth.role,
     )

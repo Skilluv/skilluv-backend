@@ -224,6 +224,17 @@ jobs:
       RUSTFLAGS: "-C link-arg=-fuse-ld=lld"
       CARGO_PROFILE_TEST_DEBUG: "0"
       CARGO_PROFILE_DEV_DEBUG: "0"
+      # 253 test binaries with their symbol tables came to 6.9 GB, which the
+      # artifact service refused to finalize (403) and which would then have
+      # been pulled down twelve times. Stripping is what makes the archive a
+      # thing you can hand around.
+      #
+      # It costs symbol names in backtraces. That is already the trade this
+      # workflow made with `CARGO_PROFILE_TEST_DEBUG: 0`, and it costs nothing
+      # a failing test actually prints: `panic!` carries its own file and line,
+      # so assertions still say where they failed.
+      CARGO_PROFILE_TEST_STRIP: "symbols"
+      CARGO_PROFILE_DEV_STRIP: "symbols"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
@@ -274,6 +285,13 @@ jobs:
           cargo nextest archive \
             --archive-file "${RUNNER_TEMP}/nextest-archive.tar.zst"
           ls -lh "${RUNNER_TEMP}/nextest-archive.tar.zst"
+          # Fail here rather than 400 seconds later in a 403 from the artifact
+          # service, which says nothing about what went wrong.
+          size=$(stat -c %s "${RUNNER_TEMP}/nextest-archive.tar.zst")
+          if [ "$size" -gt 4000000000 ]; then
+            echo "archive is $((size / 1000000)) MB — too large to hand to twelve runners" >&2
+            exit 1
+          fi
 
       - name: Upload the archive
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2

@@ -14,10 +14,24 @@ use common::TestApp;
 use std::process::Command;
 use uuid::Uuid;
 
+/// Where the seed binary actually is.
+///
+/// `env!("CARGO_BIN_EXE_...")` is baked in at compile time and points at the
+/// machine that compiled it. CI now builds the suite once into a nextest
+/// archive and runs it on twelve other runners, where that path does not
+/// exist. nextest ships non-test binaries inside the archive and publishes
+/// their relocated path in `NEXTEST_BIN_EXE_<name>` — hyphens become
+/// underscores. The compile-time path stays as the fallback, which is what a
+/// plain `cargo test` on a developer machine uses.
+fn seed_binary() -> String {
+    std::env::var("NEXTEST_BIN_EXE_skilluv_seed_guild")
+        .unwrap_or_else(|_| env!("CARGO_BIN_EXE_skilluv-seed-guild").to_string())
+}
+
 /// Runs the seed binary against this test app's database.
 /// Returns `(success, stdout, stderr)`.
 fn run_seed(app: &TestApp, args: &[&str]) -> (bool, String, String) {
-    let out = Command::new(env!("CARGO_BIN_EXE_skilluv-seed-guild"))
+    let out = Command::new(seed_binary())
         .args(args)
         .env("DATABASE_URL", app.database_url())
         // The binary refuses a non-local URL unless this is set. The test
@@ -139,7 +153,7 @@ async fn it_refuses_an_unknown_founder_email() {
 
 #[tokio::test]
 async fn it_refuses_a_remote_database_unless_told_otherwise() {
-    let out = Command::new(env!("CARGO_BIN_EXE_skilluv-seed-guild"))
+    let out = Command::new(seed_binary())
         .args(["--email", "whoever@seed.test"])
         .env(
             "DATABASE_URL",

@@ -56,8 +56,11 @@ jobs:
     timeout-minutes: 3
     permissions:
       contents: read
+      # Reading past runs, to answer whether this tree was already tested.
+      actions: read
     outputs:
       code: ${{ steps.filter.outputs.code }}
+      already-tested: ${{ steps.tested.outputs.hit }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
@@ -74,6 +77,16 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           BEFORE: ${{ github.event.before }}
         run: bash scripts/detect-code-changes.sh
+
+      - name: Has this exact tree already passed the suite?
+        id: tested
+        # Pull requests always run: the tree is what is being proposed and
+        # nothing has tested it yet. This is only ever about the second run of
+        # an already-tested tree, which is what a merge into master produces.
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/tree-already-tested.sh
 
   # ─── Static gates ──────────────────────────────────────────────────
   # Cheap, fail-fast : lint, secret leaks, known CVEs. All three run in
@@ -174,6 +187,105 @@ jobs:
         # references features flags to reduce false positives.
         run: cargo machete --with-metadata
 
+  build-tests:
+    # Compile the integration suite once, for everybody.
+    #
+    # Every shard used to run `cargo nextest run --partition`, which compiles
+    # the WHOLE suite and then executes a slice of it. Measured on the master
+    # run of 2026-09-03: 8 min 44 s of compilation and 6 min 54 s of cargo
+    # cache restore in each of eight shards, to run twenty minutes of tests.
+    # Two hours of the run were the same compilation done eight times, and the
+    # cache only existed to serve that compilation.
+    #
+    # `cargo nextest archive` writes the test binaries and the metadata needed
+    # to run them into one tarball. A shard downloads it and executes; it never
+    # opens a source file, needs no `target/`, and no cargo cache. That is what
+    # makes raising the shard count cheap below — the fixed cost this job pays
+    # once no longer multiplies by the number of runners.
+    #
+    # Runs in parallel with `Build & Lint`, so it adds nothing to the critical
+    # path: the shards wait for the later of the two, not for their sum.
+    name: Build Test Binaries
+    needs: changes
+    if: needs.changes.outputs.code == 'true' && github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      actions: write
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: sccache
+      # The settings the shards used to compile under, moved here with the
+      # compilation. Without them the archive is built differently from what
+      # eight shards were building — lld is what keeps linking ~240 test
+      # binaries tolerable, and debug symbols off is what keeps the archive
+      # small enough to hand to twelve runners.
+      RUSTFLAGS: "-C link-arg=-fuse-ld=lld"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          persist-credentials: false
+
+      - name: Install lld
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends lld
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4  # stable
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba  # v0.0.11
+
+      # Registry only. `target/` is deliberately absent for the same reason as
+      # in `check`: sccache caches compile units, and a ~9 GB round trip costs
+      # more than it saves.
+      - name: Cache cargo registry & git
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-registry-
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@37f7c5781271959fb65b6b35224e28652ff2b63d  # v2
+        with:
+          tool: cargo-nextest
+
+      - name: Reclaim runner disk
+        # Linking the test binaries needs the room for the same reason the
+        # shards used to.
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android \
+                      /usr/local/.ghcup /opt/hostedtoolcache
+          df -h /
+
+      - name: Archive the test binaries
+        run: |
+          cargo nextest archive \
+            --archive-file "${RUNNER_TEMP}/nextest-archive.tar.zst"
+          ls -lh "${RUNNER_TEMP}/nextest-archive.tar.zst"
+
+      - name: Upload the archive
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: nextest-archive
+          path: ${{ runner.temp }}/nextest-archive.tar.zst
+          # Three, not one. GitHub's "re-run failed jobs" reuses the
+          # successful `build-tests` rather than rebuilding, so a shard
+          # re-run the next morning would look for an artifact that had
+          # already expired and fail on something that is not the code.
+          retention-days: 3
+          compression-level: 0  # already zstd
+
+      - name: Run doctests
+        # Moved off shard 1, which no longer has a compiler or a `target/`.
+        # They are cheap here, where everything is already built.
+        run: cargo test --doc
+
   audit:
     name: Cargo Audit + Deny (CVE, licenses, banned crates)
     needs: changes
@@ -229,7 +341,7 @@ jobs:
     # invariants the schema is supposed to hold.
     #
     # It exists because the integration suite is the wrong instrument for this.
-    # A migration that fails leaves all eight shards red with the same
+    # A migration that fails leaves every shard red with the same
     # unrelated error, forty-five minutes later; this says which migration and
     # which line in about two. Every vocabulary this repo has lost -- six
     # CHECK-to-table conversions that each dropped another branch's values,
@@ -284,32 +396,39 @@ jobs:
     # information was simply lost. Debugging on a quarter of the evidence is
     # what made the last few rounds slow.
     #
-    # What sharding actually buys, measured on the 4-shard runs: a shard is
-    # ~12 min of checkout, services and compilation, plus ~16 min of tests.
-    # Only the second half divides — `cargo nextest --partition` compiles the
-    # whole suite in every shard and then runs a slice of it. So 8 shards is
-    # ~12 + ~8 = ~20 min, not half of 28. Past this the fixed compile cost
-    # dominates and more runners buy almost nothing; the next real win is
-    # compile time, not more parallelism.
+    # 8 → 12, which only became worth doing once compiling stopped being
+    # per-shard. The old arithmetic was: a shard is ~12 min of checkout,
+    # services and compilation plus ~16 min of tests, and only the second half
+    # divides — so more runners bought almost nothing and the note here said
+    # the next real win was compile time, not parallelism.
+    #
+    # `build-tests` took that win. A shard is now ~3 min of fixed cost and a
+    # slice of the tests, so the slice is what dominates and dividing it
+    # further actually pays. Twelve keeps every shard inside GitHub's
+    # concurrency allowance alongside the other jobs.
     #
     # It finds no additional failures. The same suite runs either way — what
     # changes is that its results survive to be read.
     #
     # fail-fast: false ensures we see all shard failures at once instead of
     # the first one aborting the rest — critical for debugging.
-    name: Integration Tests (shard ${{ matrix.shard }}/8)
+    name: Integration Tests (shard ${{ matrix.shard }}/12)
     runs-on: ubuntu-latest
-    # `migrations` too: a chain that does not apply makes all eight shards red
-    # with the same unrelated error, which is eight runners spent to learn one
-    # thing that job already said.
-    needs: [changes, check, audit, secrets, migrations]
+    # `migrations` too: a chain that does not apply makes every shard red with
+    # the same unrelated error, which is twelve runners spent to learn one thing
+    # that job already said.
+    needs: [changes, check, audit, secrets, migrations, build-tests]
     # Skip drafts to save quota — devs can mark PR ready when they want CI.
     # Also skip on a docs-only change (code=false): the aggregator below still
     # reports the required "Integration Tests" check green in that case.
+    # The third clause is the merge-day saving. `already-tested` is only ever
+    # true for a push whose tree a previous run already carried through every
+    # shard — see scripts/tree-already-tested.sh for why that is sound and
+    # where it refuses to be.
     if: needs.changes.outputs.code == 'true' && github.event.pull_request.draft == false
+      && needs.changes.outputs.already-tested != 'true' 
     # A timeout should catch a hang, not a slow week — which means it has to
-    # be sized for what the job actually does, and shard 1 does more than the
-    # rest. It runs the doctests, and it is the single writer for the shared
+    # be sized for what the job actually does.
     # build cache, so on a cache miss it pays an upload the other seven skip.
     #
     # Measured on the master run right after the eight-branch merge, where the
@@ -334,15 +453,18 @@ jobs:
     # was cancelled at it — a suite that grows a few tests per branch will keep
     # brushing a limit set that close, and a cancellation reads as a failure
     # nobody can diagnose from the log, because the log stops mid-run.
-    timeout-minutes: ${{ matrix.shard == 1 && 90 || 60 }}
+    # Uniform again. Shard 1 used to carry the cache upload and the doctests
+    # and needed ninety minutes for them; both now live in `build-tests`, and
+    # no shard does anything the others do not.
+    timeout-minutes: 45
     permissions:
+      # Read-only: a shard that only executes prebuilt binaries has nothing
+      # to write. sccache and its `actions: write` moved to `build-tests`.
       contents: read
-      # sccache-action needs the GHA cache API (mozilla-actions/sccache-action).
-      actions: write
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
 
     services:
       postgres:
@@ -389,9 +511,9 @@ jobs:
       # (voir "Start MinIO container" plus bas).
 
     env:
-      # sccache installed via sccache-action below (matches check job pattern).
-      SCCACHE_GHA_ENABLED: "true"
-      RUSTC_WRAPPER: sccache
+      # Runtime settings only. Everything that governed compilation — sccache,
+      # RUSTFLAGS, the debug-symbol switches — moved to `build-tests` with the
+      # compiling itself.
       DATABASE_URL: postgres://skilluv:skilluv_secret@localhost:5433/skilluv
       REDIS_URL: redis://localhost:6379
       JWT_SECRET: ci-test-secret
@@ -405,17 +527,6 @@ jobs:
       # tests/common/mod.rs::init_test_tracing). Verbose here to surface any
       # 500 root causes in the CI logs.
       RUST_LOG: info,skilluv_backend=debug,sqlx=warn
-      # Link with lld rather than GNU ld.
-      #
-      # Every one of the eight shards died at
-      # `collect2: fatal error: ld terminated with signal 7 [Bus error]`, with
-      # 107 GB of disk free — so this was never the disk the comment below
-      # talks about. It is memory: the runner has 16 GB and GNU ld holds the
-      # whole of each of these binaries in it, several at a time.
-      #
-      # lld uses a fraction of that and links several times faster. Nothing
-      # about the produced binary changes for a test run.
-      RUSTFLAGS: "-C link-arg=-fuse-ld=lld"
       # `CARGO_BUILD_JOBS: "2"` stood here and has been removed.
       #
       # It was aimed at a memory theory, and the logs disproved it: the shard
@@ -438,8 +549,6 @@ jobs:
       # The cost is line numbers in CI panic messages. Worth paying: the file
       # and the assertion still print, and a suite that cannot run tells you
       # nothing at all. Local runs keep their line numbers.
-      CARGO_PROFILE_TEST_DEBUG: "0"
-      CARGO_PROFILE_DEV_DEBUG: "0"
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
@@ -463,14 +572,8 @@ jobs:
           docker image prune -af || true
           df -h /
 
-      - name: Install lld
-        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends lld
-
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4  # stable
-
-      - name: Setup sccache
-        uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba  # v0.0.11
 
       - name: Start MinIO container
         run: |
@@ -513,43 +616,22 @@ jobs:
           curl -fsSL https://download.geonames.org/export/dump/countryInfo.txt -o data/countryInfo.txt
           ls -lh data/
 
-      # Restore on every shard, save from shard 1 only.
-      #
-      # The four shards share one cache key, so on a cold key all four try
-      # to upload the same ~9 GB `target/` at once. Only one upload can win;
-      # the others compress and transfer for minutes before losing the race.
-      # That is what cancelled shard 2 on 1d12b2e8 — its tests had already
-      # passed, and the job hit its budget inside the cache save.
-      #
-      # Cache entries are branch-scoped, so the first run on master after a
-      # merge always starts from a partial restore no matter how warm the
-      # pull request was. This is therefore a merge-day failure, not a rare
-      # one.
-      #
-      # `target/` stays in the cache here, unlike the check job, which
-      # dropped it (see its own comment). That job builds one binary; this
-      # one links ~65 test binaries, and sccache caches compile units but
-      # not linking, so dropping `target/` would trade upload time for link
-      # time on every shard.
-      - name: Restore cargo registry & build cache
-        id: cargo-cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6
+      - name: Download the test binaries
+        # Built once by `build-tests`. No compiler, no `target/`, no cargo
+        # cache: this shard only executes.
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-test-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-test-
+          name: nextest-archive
+          path: ${{ runner.temp }}
 
       - name: Install cargo-nextest
         uses: taiki-e/install-action@37f7c5781271959fb65b6b35224e28652ff2b63d  # v2
         with:
           tool: cargo-nextest
 
-      - name: Run integration tests (shard ${{ matrix.shard }}/8)
-        # `--partition count:N/8` — nextest hash-partitions the suite
-        # across 8 shards. `--test-threads=1` kept within each shard
+      - name: Run integration tests (shard ${{ matrix.shard }}/12)
+        # `--partition count:N/12` — nextest hash-partitions the suite
+        # across 12 shards, running from the archive rather than building. `--test-threads=1` kept within each shard
         # because a few tests still touch shared Postgres server-side
         # state (RLS GUC, metrics counters).
         #
@@ -560,31 +642,13 @@ jobs:
         # nothing over stopping early.
         run: |
           cargo nextest run \
+            --archive-file "${RUNNER_TEMP}/nextest-archive.tar.zst" \
+            --workspace-remap . \
             --test-threads=1 \
             --no-fail-fast \
-            --partition count:${{ matrix.shard }}/8 \
+            --partition count:${{ matrix.shard }}/12 \
             --failure-output=immediate \
             --success-output=never
-
-      - name: Run doctests (shard 1 only)
-        # Doctests are cheap and not sharded ; run them once on shard 1 to
-        # avoid duplicating the same run across 4 jobs.
-        if: matrix.shard == 1
-        run: cargo test --doc
-
-      # One writer for the shared key. Runs even when the tests fail —
-      # a populated `target/` is worth caching either way, and paying the
-      # upload only to discard it on red would make every failing run
-      # slower for nothing.
-      - name: Save cargo registry & build cache
-        if: always() && matrix.shard == 1 && steps.cargo-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-test-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Cleanup MinIO container
         if: always()
@@ -608,7 +672,9 @@ jobs:
       - name: Fail if a real shard failed or was cancelled
         # Only meaningful when code changed. On docs-only, needs.test.result
         # is 'skipped' and this step is itself skipped, so the job stays green.
-        if: needs.changes.outputs.code == 'true' && needs.test.result != 'success'
+        if: needs.changes.outputs.code == 'true'
+          && needs.changes.outputs.already-tested != 'true'
+          && needs.test.result != 'success'
         run: |
           echo "test matrix result: ${{ needs.test.result }}"
           exit 1
@@ -616,9 +682,16 @@ jobs:
         if: needs.changes.outputs.code != 'true'
         run: |
           echo "Documentation-only change. The suite would run the same code already green on master."
+      - name: Already green on this exact tree
+        # The suite ran over these same bytes on the pull request. Reporting
+        # this check green is not a shortcut around it — it is the same
+        # verdict, on the same content, not recomputed.
+        if: needs.changes.outputs.already-tested == 'true'
+        run: echo "This tree already passed every shard. See scripts/tree-already-tested.sh."
+
       - name: All shards passed
         if: needs.changes.outputs.code == 'true' && needs.test.result == 'success'
-        run: echo "All 8 test shards succeeded."
+        run: echo "All 12 test shards succeeded."
 
   publish:
     # Build + push a Docker image to GHCR on every master push so downstream
@@ -627,8 +700,19 @@ jobs:
     # so `:master` is always a green build. `:master-<sha>` gives traceability.
     name: Publish Docker image to GHCR
     runs-on: ubuntu-latest
-    needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    # `always()` because the matrix is now legitimately skipped when this
+    # tree already passed on the pull request. Without it a skipped `needs`
+    # skips this job too, and a merge would stop producing the image the
+    # deployment pulls. The result is still gated: a failure or a
+    # cancellation publishes nothing.
+    needs: [changes, test]
+    if: >-
+      always()
+      && github.event_name == 'push'
+      && github.ref == 'refs/heads/master'
+      && needs.changes.outputs.code == 'true'
+      && needs.test.result != 'failure'
+      && needs.test.result != 'cancelled'
 
     permissions:
       contents: read

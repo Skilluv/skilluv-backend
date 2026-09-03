@@ -79,6 +79,12 @@ pub async fn playlist_for(
         FROM challenge_templates ct
         WHERE ct.is_training = TRUE
           AND ct.status = 'published'
+          -- Never the entry rite. It is `is_training` and published like any
+          -- exercise, but it is the way in rather than something to be
+          -- suggested — and anybody reading a playlist has already done
+          -- theirs. Before the twelve rites existed this filter had nothing to
+          -- exclude, which is why it was not here.
+          AND ct.is_onboarding = FALSE
           AND ct.skill_domain = ANY($1::TEXT[])
           AND NOT EXISTS (
               SELECT 1 FROM deliverables d

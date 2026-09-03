@@ -57,6 +57,15 @@ pub async fn refresh_from_ecb(db: &PgPool) -> Result<(), AppError> {
         .await
         .map_err(|e| AppError::Internal(format!("ecb decode: {e}")))?;
     let rates = parse_ecb_xml(&text);
+    // A feed we could fetch but not read is a failure. This used to log
+    // `rates: 0` at info and return Ok, which is how a parser that never
+    // worked survived: the only trace it left announced a success.
+    if rates.is_empty() {
+        return Err(AppError::Internal(format!(
+            "ECB feed parsed to zero rates ({} bytes) — the feed's shape changed              or the parser no longer matches it",
+            text.len()
+        )));
+    }
     let mut upserted = 0usize;
     for (currency, rate) in &rates {
         let dec = BigDecimal::from_str(&format!("{rate:.8}"))
@@ -79,7 +88,21 @@ pub async fn refresh_from_ecb(db: &PgPool) -> Result<(), AppError> {
     Ok(())
 }
 
-/// Very small XML parser tailored to the ECB feed. Looks for `<Cube currency="XXX" rate="Y.YYYY"/>`.
+/// Very small XML parser tailored to the ECB feed. Looks for
+/// `<Cube currency='XXX' rate='Y.YYYY'/>`.
+///
+/// It looked for double quotes, and the ECB has always sent single ones:
+///
+///     <Cube currency='USD' rate='1.1615'/>
+///
+/// So `extract_attr` returned `None` on every line and this function returned
+/// an empty vector on every environment since it was written. Nothing said so,
+/// because zero parsed rates was reported as a successful refresh — see
+/// `refresh_from_ecb` — and because the unit test below rewrote a realistic
+/// sample into the shape the broken parser expected.
+///
+/// Both quote styles are accepted now, so a feed that changes its mind is not
+/// another silent outage.
 fn parse_ecb_xml(xml: &str) -> Vec<(String, f64)> {
     let mut out = Vec::new();
     for line in xml.lines() {
@@ -87,8 +110,8 @@ fn parse_ecb_xml(xml: &str) -> Vec<(String, f64)> {
         if !l.starts_with("<Cube currency=") {
             continue;
         }
-        let currency = extract_attr(l, "currency=\"");
-        let rate = extract_attr(l, "rate=\"");
+        let currency = extract_attr(l, "currency");
+        let rate = extract_attr(l, "rate");
         if let (Some(c), Some(r)) = (currency, rate)
             && let Ok(f) = r.parse::<f64>()
         {
@@ -98,10 +121,14 @@ fn parse_ecb_xml(xml: &str) -> Vec<(String, f64)> {
     out
 }
 
-fn extract_attr(line: &str, needle: &str) -> Option<String> {
-    let start = line.find(needle)? + needle.len();
-    let rest = &line[start..];
-    let end = rest.find('"')?;
+/// The value of `name=` in an XML attribute, quoted either way.
+fn extract_attr(line: &str, name: &str) -> Option<String> {
+    let at = line.find(name)? + name.len();
+    let rest = line[at..].trim_start();
+    let rest = rest.strip_prefix('=')?.trim_start();
+    let quote = rest.chars().next().filter(|c| matches!(c, '"' | '\''))?;
+    let rest = &rest[quote.len_utf8()..];
+    let end = rest.find(quote)?;
     Some(rest[..end].to_string())
 }
 
@@ -226,10 +253,13 @@ mod tests {
 </Cube>
 </Cube>
 </gesmes:Envelope>"#;
-        // Attribute quotes in the ECB feed are double; adjust our test-parser check.
-        let sample_dq = sample.replace('\'', "\"");
-        let rates = parse_ecb_xml(&sample_dq);
-        assert_eq!(rates.len(), 3);
+        // The sample above is the real shape of the feed. A line stood here
+        // that rewrote it into double quotes, under a comment asserting the
+        // ECB sends them. It does not. The sample was bent to fit the parser
+        // instead of the parser being fixed to read the sample, and the test
+        // went green over a function that returned nothing in production.
+        let rates = parse_ecb_xml(sample);
+        assert_eq!(rates.len(), 3, "the feed as the ECB actually sends it");
         assert_eq!(rates[0].0, "USD");
         assert!((rates[0].1 - 1.0850).abs() < 1e-6);
     }

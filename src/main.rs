@@ -8,7 +8,7 @@ use skilluv_backend::config::{AppConfig, DatabaseConfig, RedisConfig};
 use skilluv_backend::grpc::AiClient;
 use skilluv_backend::observability;
 use skilluv_backend::services::{
-    AnalyticsService, EmailService, GeoService, QueueService, SandboxService, StorageService,
+    AnalyticsService, EmailService, GeoService, QueueService, StorageService,
 };
 use skilluv_backend::websocket::WsManager;
 use skilluv_backend::{AppState, AppStateConfig, build_router};
@@ -57,9 +57,6 @@ async fn async_main(config: AppConfig) {
     let db = DatabaseConfig::connect(&config.database_url).await;
     skilluv_backend::routes::start_business_gauges(db.clone());
     skilluv_backend::services::credits::start_interest_timeout_refunder(db.clone());
-    // Phase 4.4 — FX rate refresher (ECB reference every 6h)
-    skilluv_backend::services::fx::start_fx_refresher(db.clone());
-
     tracing::info!("Connecting to Redis...");
     let redis = RedisConfig::connect(&config.redis_url).await;
 
@@ -68,6 +65,14 @@ async fn async_main(config: AppConfig) {
         .run(&db)
         .await
         .expect("Failed to run database migrations");
+
+    // Phase 4.4 — FX rate refresher (ECB reference every 6h).
+    //
+    // After the migrations, not before them. It reads and writes `fx_rates`,
+    // and on a database being built from scratch that table does not exist
+    // until the chain has run — the first refresh failed on every fresh
+    // deployment, quietly, because the failure is only a warning.
+    skilluv_backend::services::fx::start_fx_refresher(db.clone());
 
     // The catalogue this platform cannot work without: the administrator, the
     // repositories work is drawn from, the onboarding challenges, the seasons.
@@ -110,8 +115,6 @@ async fn async_main(config: AppConfig) {
     skilluv_backend::services::LeaderboardService::seed_from_db(&mut redis.clone(), &db)
         .await
         .expect("Failed to seed leaderboards");
-
-    let sandbox = Arc::new(SandboxService::new(&config.judge0_url));
 
     tracing::info!("Initializing storage service...");
     let storage = Arc::new(StorageService::new(&config).await);
@@ -240,7 +243,6 @@ async fn async_main(config: AppConfig) {
             sso_encryption_key: config.sso_encryption_key,
             pdf_renderer_url: config.pdf_renderer_url,
         },
-        sandbox,
         storage,
         email,
         ai,

@@ -992,6 +992,22 @@ pub async fn public_pricing(
         .unwrap_or_else(|| "unavailable".to_string());
     let mut redis = state.redis.clone();
 
+    // Can this currency actually be quoted? `convert_from_eur` needs a row in
+    // `fx_rates`, and the ECB feed carries none for NGN, KES, UGX, EGP or GHS
+    // — the CFA peg is seeded, the rest are majors or nothing.
+    //
+    // A failed conversion used to fall back to the euro *amount* while the
+    // response went on saying ZAR. A South African visitor was quoted "39" and
+    // told it was rands: about two euros, for a pack that costs thirty-nine.
+    // The label has to follow the number. If we cannot convert, we quote in
+    // euros and we say euros — an unconverted price is a limitation, a
+    // mislabelled one is a lie.
+    let currency =
+        match crate::services::fx::convert_from_eur(&state.db, &mut redis, &currency, 100).await {
+            Ok(_) => currency,
+            Err(_) => "EUR".to_string(),
+        };
+
     let mut packs_out: Vec<Value> = Vec::with_capacity(packs.len());
     for p in &packs {
         let conv = crate::services::fx::convert_from_eur(

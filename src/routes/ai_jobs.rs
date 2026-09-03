@@ -37,7 +37,7 @@ pub fn ai_job_routes() -> Router<AppState> {
 pub struct CodeReviewBody {
     pub submission_id: Uuid,
     pub challenge_id: Uuid,
-    /// Judge0 language slug (`rust`, `python`, …).
+    /// Language slug (`rust`, `python`, …).
     #[schema(max_length = 10000)]
     pub language: String,
     /// Optional caller-provided level hint. Defaults to `intermediate`.

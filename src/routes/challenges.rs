@@ -581,22 +581,11 @@ pub async fn submit_challenge(
     let (eval_status, fragments_earned, exec_stdout, exec_stderr) =
         evaluate_submission(&state, &challenge, &body.code, body.language.as_deref()).await?;
 
-    // Count previous failures for perseverance bonus
-    let prev_failures: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM challenge_submissions WHERE user_id = $1 AND challenge_id = $2 AND status = 'failure'",
-    )
-    .bind(auth.user_id)
-    .bind(challenge_id)
-    .fetch_one(&state.db)
-    .await?;
-
-    let perseverance_bonus = if eval_status == "success" && prev_failures > 0 {
-        (prev_failures as i32 * 2).min(challenge.reward_fragments / 2)
-    } else {
-        0
-    };
-
-    let total_fragments = fragments_earned + perseverance_bonus;
+    // The perseverance bonus stood here: a COUNT of past failures, paid out on
+    // top of a machine-graded success. Nothing is machine-graded any more, so
+    // it could never pay, and it cost a round trip on every submission to
+    // decide that. Rewarding persistence is the reviewer's to give now.
+    let total_fragments = fragments_earned;
 
     // P9.1 : code/stdout/stderr sont désormais persistés dans le deliverable
     // (artifact_metadata) via create_from_challenge_submission ci-dessous.
@@ -850,7 +839,10 @@ pub async fn submit_challenge(
     let mut response = json!({
         "submission": updated_submission,
         "fragments_earned": total_fragments,
-        "perseverance_bonus": perseverance_bonus,
+        // Always zero, and kept rather than dropped: this response is a
+        // published contract with a Sunset date, and removing a key is a
+        // breaking change the successor endpoint should make, not this one.
+        "perseverance_bonus": 0,
         "user": {
             "total_fragments": user.total_fragments,
             "title": user.title,
@@ -965,142 +957,49 @@ pub async fn my_submissions(
     Ok(Json(build_response(json!({ "submissions": submissions }))))
 }
 
-// ─── Evaluation engine ───────────────────────────────────────────
+// ─── Evaluation engine ───────────────────────────────
 
 /// Returns (status, fragments_earned, stdout, stderr)
+///
+/// Nothing is graded by machine any more.
+///
+/// This used to run code-domain submissions through Judge0 and compare the
+/// output to `expected_output`, with a fallback for when Judge0 was
+/// unreachable that asked whether the *source code* contained the expected
+/// output as a substring. Judge0 has been unreachable in production, so that
+/// fallback was the live grader: pasting the expected output into a comment
+/// passed the challenge.
+///
+/// It is gone rather than repaired, because the platform no longer asks that
+/// question. A challenge is a fork, a pull request and a deliverable somebody
+/// reads — `RiteForm::Fork` for the rites, the review queue for everything
+/// else. A grader that decides whether stdout matches has nothing left to
+/// decide, and keeping it would have meant keeping Judge0 running to protect
+/// a path no challenge uses.
+///
+/// So every submission with something in it goes to the review queue, which
+/// is where the other eleven domains already send theirs. Fragments follow the
+/// reviewer's verdict, not a string comparison.
 async fn evaluate_submission(
-    state: &AppState,
-    challenge: &ChallengeTemplate,
+    _state: &AppState,
+    _challenge: &ChallengeTemplate,
     code: &str,
-    language: Option<&str>,
+    _language: Option<&str>,
 ) -> Result<(String, i32, Option<String>, Option<String>), AppError> {
     if code.trim().is_empty() {
+        // The one verdict that needs no reader.
         return Ok((
             "failure".to_string(),
-            failure_fragments(challenge),
+            0,
             None,
             Some("Empty submission".to_string()),
         ));
     }
 
-    // For code domain: use Judge0 for real execution
-    if challenge.skill_domain == "code" {
-        let lang = language.unwrap_or("python");
-
-        let result = state
-            .sandbox
-            .execute(
-                code,
-                lang,
-                None,
-                challenge.expected_output.as_deref(),
-                None,
-                None,
-            )
-            .await;
-
-        match result {
-            Ok(exec) => {
-                let stdout = exec.stdout.clone();
-                let stderr = exec.stderr.clone().or(exec.compile_output.clone());
-
-                // Judge0 status 3 = Accepted
-                if exec.status.id == 3 {
-                    return Ok((
-                        "success".to_string(),
-                        challenge.reward_fragments,
-                        stdout,
-                        stderr,
-                    ));
-                }
-
-                // For onboarding: also check stdout content
-                if challenge.is_onboarding
-                    && let Some(ref out) = stdout
-                    && out.trim().contains("Hello, Skilluv!")
-                {
-                    return Ok((
-                        "success".to_string(),
-                        challenge.reward_fragments,
-                        stdout,
-                        stderr,
-                    ));
-                }
-
-                Ok((
-                    "failure".to_string(),
-                    failure_fragments(challenge),
-                    stdout,
-                    stderr,
-                ))
-            }
-            Err(_) => evaluate_basic(challenge, code),
-        }
-    } else {
-        evaluate_basic(challenge, code)
-    }
-}
-
-/// Fallback when Judge0 is unavailable or for non-code domains.
-///
-/// Everything this function can actually check, it checks. Everything it
-/// cannot, it hands to a person — it never invents a pass.
-///
-/// It used to invent two. A non-code submission of a hundred characters
-/// returned `success` and its fragments, whatever the hundred characters were;
-/// and a code challenge that declares no `expected_output` fell through to an
-/// unconditional `success`. Both produced, on a public profile, a mark
-/// indistinguishable from one a reviewer gave — in the one thing this platform
-/// asks anybody to trust it about (SKI-361).
-fn evaluate_basic(
-    challenge: &ChallengeTemplate,
-    code: &str,
-) -> Result<(String, i32, Option<String>, Option<String>), AppError> {
-    if challenge.is_onboarding && challenge.skill_domain == "code" {
-        if code.contains("Hello, Skilluv!") {
-            return Ok((
-                "success".to_string(),
-                challenge.reward_fragments,
-                None,
-                None,
-            ));
-        }
-        return Ok((
-            "failure".to_string(),
-            failure_fragments(challenge),
-            None,
-            None,
-        ));
-    }
-
-    if challenge.skill_domain == "code"
-        && let Some(ref expected) = challenge.expected_output
-    {
-        if code.contains(expected.trim()) {
-            return Ok((
-                "success".to_string(),
-                challenge.reward_fragments,
-                None,
-                None,
-            ));
-        }
-        return Ok((
-            "failure".to_string(),
-            failure_fragments(challenge),
-            None,
-            None,
-        ));
-    }
-
-    // Nothing here can judge this one. Not a failure — the work may be good and
-    // nothing has read it — and not a pass either. `submit_challenge` puts the
-    // deliverable in the review queue the platform already runs, and fragments
-    // follow the reviewer's verdict.
+    // Not a failure — the work may be good and nothing has read it — and not a
+    // pass either. `submit_challenge` puts the deliverable in the review queue
+    // the platform already runs.
     Ok((PENDING_REVIEW.to_string(), 0, None, None))
-}
-
-fn failure_fragments(challenge: &ChallengeTemplate) -> i32 {
-    (challenge.reward_fragments / 5).max(1)
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────

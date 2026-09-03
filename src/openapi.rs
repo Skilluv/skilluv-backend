@@ -914,11 +914,6 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::challenge_tags::list_tags,
         crate::routes::challenge_tags::list_categories,
         crate::routes::challenge_tags::featured_challenges,
-        // ─── sandbox (Judge0) ─────────────────────────────────────
-        crate::routes::sandbox::execute,
-        crate::routes::sandbox::execute_async,
-        crate::routes::sandbox::get_result,
-        crate::routes::sandbox::list_languages,
         // ─── admin content ops ────────────────────────────────────
         crate::routes::admin_content_ops::hello_wall_mirror_run,
         crate::routes::admin_content_ops::profile_readme_sync_run,
@@ -1896,15 +1891,6 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
             crate::routes::challenge_tags::CategoryRow,
             crate::routes::challenge_tags::CategoriesResponse,
             crate::routes::challenge_tags::FeaturedChallengesResponse,
-            // sandbox
-            crate::services::sandbox::LanguageInfo,
-            crate::services::sandbox::ExecutionResult,
-            crate::services::sandbox::ExecutionStatus,
-            crate::routes::sandbox::ExecuteRequest,
-            crate::routes::sandbox::ExecuteResponse,
-            crate::routes::sandbox::AsyncExecuteResponse,
-            crate::routes::sandbox::AsyncResultResponse,
-            crate::routes::sandbox::LanguagesResponse,
             // admin content ops
             crate::routes::admin_content_ops::MirrorFailedDetail,
             crate::routes::admin_content_ops::HelloWallMirrorReport,

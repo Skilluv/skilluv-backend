@@ -33,8 +33,7 @@ use tower_http::trace::TraceLayer;
 
 use grpc::AiClient;
 use services::{
-    AnalyticsService, EmailService, GeoService, QueueService, SandboxService, StorageService,
-    WebauthnService,
+    AnalyticsService, EmailService, GeoService, QueueService, StorageService, WebauthnService,
 };
 use websocket::WsManager;
 
@@ -43,7 +42,6 @@ pub struct AppState {
     pub db: PgPool,
     pub redis: ConnectionManager,
     pub config: AppStateConfig,
-    pub sandbox: Arc<SandboxService>,
     pub storage: Arc<StorageService>,
     pub email: Arc<EmailService>,
     pub ai: Option<Arc<AiClient>>,
@@ -91,7 +89,6 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::email_prefs_routes())
         .nest("/api", routes::notification_preferences_routes())
         .nest("/api", routes::challenge_routes())
-        .nest("/api", routes::sandbox_routes())
         .nest("/api", routes::slice_routes())
         .nest("/api", routes::slice_validation_routes())
         .nest("/api", routes::slice_diary_routes())

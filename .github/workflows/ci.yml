@@ -518,7 +518,6 @@ jobs:
       REDIS_URL: redis://localhost:6379
       JWT_SECRET: ci-test-secret
       BASE_URL: http://localhost:3001
-      JUDGE0_URL: http://localhost:2358
       MINIO_ENDPOINT: http://localhost:9004
       MINIO_ACCESS_KEY: skilluv
       MINIO_SECRET_KEY: skilluv_secret

@@ -611,7 +611,7 @@ impl DeliverablesService {
     /// deliverable pointe vers le challenge (pas de slice).
     ///
     /// Deux formes selon `awaiting_review` :
-    ///   - `false` — Judge0 (ou l'attendu déclaré) a tranché : `verified`,
+    ///   - `false` — un évaluateur automatique avait tranché : `verified`,
     ///     `verifiable_by='automated_diff'`, fragments déjà attribués.
     ///   - `true` — rien n'a su trancher : `pending`,
     ///     `verifiable_by='human_review'`, zéro fragment, et une task

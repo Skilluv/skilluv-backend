@@ -315,10 +315,6 @@ impl TestApp {
             .await
             .ok();
 
-        let sandbox = Arc::new(skilluv_backend::services::SandboxService::new(
-            "http://localhost:2358",
-        ));
-
         // Storage — create a minimal config for tests
         let storage_config = skilluv_backend::config::AppConfig {
             host: "0.0.0.0".to_string(),
@@ -328,7 +324,6 @@ impl TestApp {
             redis_url: redis_url.clone(),
             base_url: "http://localhost:3001".to_string(),
             frontend_url: "http://localhost:5173".to_string(),
-            judge0_url: "http://localhost:2358".to_string(),
             minio_endpoint: "http://localhost:9004".to_string(),
             minio_access_key: "skilluv".to_string(),
             minio_secret_key: "skilluv_secret".to_string(),
@@ -392,7 +387,6 @@ impl TestApp {
                 sso_encryption_key: Some([42u8; 32]),
                 pdf_renderer_url: None,
             },
-            sandbox,
             storage,
             email: Arc::new(skilluv_backend::services::EmailService::new(
                 None, // No Brevo in tests — dev mode (logging only)

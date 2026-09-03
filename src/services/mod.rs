@@ -163,7 +163,6 @@ pub mod review_queue;
 pub mod reviews;
 pub mod rls;
 pub mod sales_pipeline;
-pub mod sandbox;
 pub mod saved_items;
 pub mod scim;
 pub mod seasons;
@@ -222,7 +221,6 @@ pub use reviews::{
     ReviewsService, SubmitOutcome as ReviewSubmitOutcome, SubmitParams as ReviewSubmitParams,
     Verdict,
 };
-pub use sandbox::SandboxService;
 pub use seasons::{CreateSeasonParams, Season, SeasonsService};
 pub use session::SessionService;
 pub use skills::{

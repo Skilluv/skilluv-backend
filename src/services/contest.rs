@@ -183,6 +183,14 @@ pub struct Submission {
     pub summary: String,
     pub language: Option<String>,
     pub measured_value: Option<i32>,
+    /// Whether the platform checked the artifact belongs to the entrant.
+    ///
+    /// Only a github.com URL can be checked — its owner segment against the
+    /// entrant's connected login — so this is FALSE for a deployed demo, a
+    /// hosted design file or a video, which nobody can attribute from a URL.
+    /// FALSE means unchecked, never rejected: a juror reads it as "take this
+    /// one on trust".
+    pub artifact_verified: bool,
     pub status: String,
     pub judge_score: Option<i16>,
     pub judged_by: Option<Uuid>,
@@ -249,6 +257,7 @@ pub async fn submit(
     if let Some(url) = &input.secondary_url {
         check_url(url, "secondary_url")?;
     }
+
     if input.summary.trim().is_empty() {
         return Err(AppError::Validation(
             "summary must say what was built and how".into(),
@@ -310,13 +319,54 @@ pub async fn submit(
         }
     }
 
+    // Registration first: somebody who is not in this contest should be told
+    // that, not told their artifact is wrong. Until now nothing said it until
+    // the INSERT tripped a foreign key, which is too late to order the
+    // messages by what the reader most needs to hear.
+    let entered: bool = sqlx::query_scalar(
+        "SELECT EXISTS (
+           SELECT 1 FROM tournament_participants
+            WHERE tournament_id = $1
+              AND participant_type = $2
+              AND participant_id = $3)",
+    )
+    .bind(tournament_id)
+    .bind(participant_type)
+    .bind(participant_id)
+    .fetch_one(db)
+    .await?;
+    if !entered {
+        return Err(AppError::Validation(
+            "register for this contest before submitting to it".into(),
+        ));
+    }
+
+    // Whose work is this. `artifact_url` was free text checked only for being
+    // https, so an entrant could hand in a well-known project or a rival's
+    // entry and win a prize pool with it.
+    //
+    // Both URLs, not only the declared artifact: a github.com link anywhere in
+    // an entry has to be the entrant's, whatever the entry calls it. What is
+    // hosted elsewhere cannot be attributed from a URL and is recorded as
+    // unchecked rather than pretended over.
+    //
+    // Checked against `submitter` and not `participant_id`: a guild entry is
+    // handed in by a person, and it is that person's account we can attribute
+    // a GitHub URL to.
+    let mut urls: Vec<&str> = vec![input.artifact_url.trim()];
+    if let Some(url) = input.secondary_url.as_deref() {
+        urls.push(url.trim());
+    }
+    let artifact_verified =
+        crate::services::artifact_ownership::verify_entry_urls(db, submitter, &urls).await?;
+
     let submission: Submission = sqlx::query_as(
         r#"
         INSERT INTO tournament_submissions
             (tournament_id, participant_type, participant_id, submitted_by,
              artifact_url, artifact_type, secondary_url, summary, language,
-             measured_value)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+             measured_value, artifact_verified)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
         ON CONFLICT (tournament_id, participant_type, participant_id) DO UPDATE
             SET submitted_by = EXCLUDED.submitted_by,
                 artifact_url = EXCLUDED.artifact_url,
@@ -325,6 +375,7 @@ pub async fn submit(
                 summary = EXCLUDED.summary,
                 language = EXCLUDED.language,
                 measured_value = EXCLUDED.measured_value,
+                artifact_verified = EXCLUDED.artifact_verified,
                 -- A judgement belongs to the artifact it was given for.
                 status = 'submitted',
                 judge_score = NULL,
@@ -344,6 +395,7 @@ pub async fn submit(
     .bind(input.summary.trim())
     .bind(input.language.as_deref())
     .bind(input.measured_value)
+    .bind(artifact_verified)
     .fetch_one(db)
     .await
     .map_err(registration_error)?;

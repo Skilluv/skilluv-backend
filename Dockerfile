@@ -125,7 +125,17 @@ ENTRYPOINT ["/usr/bin/tini", "--", "/bin/sh", "-c", "exec /usr/local/bin/${SKILL
 # skilluv-github-ingest as a long-running worker) has no HTTP surface.
 # `pgrep` returns 0 as long as the target process is running, which is
 # what we actually want to know for a non-HTTP container.
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+# `start-period` is five minutes because that is what booting actually costs.
+# `main` runs 467 migrations and then seeds the catalogue BEFORE it binds the
+# listener, so `/api/health` cannot answer until all of it is done. Ten seconds
+# of grace then three checks thirty seconds apart declared the container
+# unhealthy about a hundred seconds in — and an orchestrator that believes a
+# booting container is a dead one restarts it, into the same boot, forever.
+#
+# Failures still count normally once the app is up: after the grace period this
+# catches a hang within a minute and a half. What changed is that we stopped
+# calling a slow start a failure.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=300s --retries=3 \
     CMD if [ "$SKILLUV_BINARY" = "skilluv-backend" ]; then \
             curl -fsS http://127.0.0.1:3001/api/health || exit 1 ; \
         else \

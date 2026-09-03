@@ -200,10 +200,17 @@ async fn a_mentor_is_not_hidden_by_a_missing_rate() {
     );
 }
 
-/// Booking prices the session in the mentor's currency, which is what routes
-/// the payment to Mobile Money rather than to a card.
+/// Booking prices the session in the mentor's currency — and a booking that
+/// cannot be routed holds nothing.
+///
+/// This test cannot complete an XOF checkout: taking francs needs FedaPay, and
+/// neither CI nor a developer's machine holds those credentials. What it can
+/// assert is the part that broke twice. The session used to be inserted before
+/// the payment was routed, so a missing corridor left a `pending` row — and
+/// `pending` blocks the overlap check, meaning a payment nobody ever took
+/// silently held an hour of the mentor's calendar.
 #[tokio::test]
-async fn a_session_is_priced_in_the_mentors_currency() {
+async fn a_franc_booking_that_cannot_be_routed_holds_no_slot() {
     let app = TestApp::spawn().await;
     app.register_user("xofcoach").await;
     app.login("xofcoach").await;
@@ -228,25 +235,32 @@ async fn a_session_is_priced_in_the_mentors_currency() {
             }),
         )
         .await;
-    assert!(
-        resp.status().is_success(),
-        "booking refused: {}",
-        resp.text().await.unwrap()
-    );
+    let booked = resp.status().is_success();
 
-    let (currency, total): (String, i64) = sqlx::query_as(
+    let row: Option<(String, i64)> = sqlx::query_as(
         "SELECT currency, price_total_cents FROM mentorship_sessions
           WHERE mentor_user_id = $1",
     )
     .bind(mentor_id)
-    .fetch_one(&app.db)
+    .fetch_optional(&app.db)
     .await
     .unwrap();
 
-    assert_eq!(
-        currency.trim(),
-        "XOF",
-        "the session inherits the mentor's money"
-    );
-    assert_eq!(total, 12_000, "one hour at 12 000 F CFA is 12 000 F CFA");
+    match (booked, row) {
+        // Wherever francs can actually be collected, the row says so.
+        (true, Some((currency, total))) => {
+            assert_eq!(
+                currency.trim(),
+                "XOF",
+                "the session inherits the mentor's money, not a hardcoded EUR"
+            );
+            assert_eq!(total, 12_000, "one hour at 12 000 F CFA is 12 000 F CFA");
+        }
+        // And where they cannot, the refusal costs the mentor nothing.
+        (false, None) => {}
+        (true, None) => panic!("a successful booking left no session"),
+        (false, Some(_)) => {
+            panic!("a booking that was refused still holds the mentor's hour")
+        }
+    }
 }

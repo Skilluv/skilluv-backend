@@ -421,30 +421,15 @@ pub async fn book_session(
         ));
     }
 
-    let inserted: (Uuid,) = sqlx::query_as(
-        r#"
-        INSERT INTO mentorship_sessions
-            (mentor_user_id, mentee_user_id, scheduled_at, duration_minutes,
-             price_total_cents, price_mentor_cents, price_platform_cents,
-             currency, status, mentee_notes)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, 'EUR', 'pending', $8)
-        RETURNING id
-        "#,
-    )
-    .bind(body.mentor_user_id)
-    .bind(auth.user_id)
-    .bind(body.scheduled_at)
-    .bind(body.duration_minutes)
-    .bind(total)
-    .bind(mentor_cut)
-    .bind(platform_cut)
-    .bind(&body.mentee_notes)
-    .fetch_one(&state.db)
-    .await?;
-
-    // Which way of taking money reaches this payer. A card through Stripe;
-    // Mobile Money through FedaPay for the franc zone, which Stripe cannot
-    // serve at all — and which is how most people in Benin hold money.
+    // Which way of taking money reaches this payer, decided before anything is
+    // written down. The session used to be inserted first and routed after, so
+    // a corridor we hold no credentials for left a `pending` row behind — and
+    // `pending` is one of the statuses the collision check above refuses to
+    // book over. A payment we never took would quietly hold the mentor's hour.
+    //
+    // A card goes through Stripe; Mobile Money through FedaPay for the franc
+    // zone, which Stripe cannot serve at all — and which is how most people in
+    // Benin hold money.
     //
     // This used to build a fake `Pack` with a `Box::leak`ed slug, to squeeze
     // a session through a helper shaped for credit packs. It leaked a
@@ -476,7 +461,33 @@ pub async fn book_session(
         .resolve(&state.db, country.as_deref(), currency, method)
         .await?;
 
-    let amount = bigdecimal::BigDecimal::from(total) / bigdecimal::BigDecimal::from(100);
+    let inserted: (Uuid,) = sqlx::query_as(
+        r#"
+        INSERT INTO mentorship_sessions
+            (mentor_user_id, mentee_user_id, scheduled_at, duration_minutes,
+             price_total_cents, price_mentor_cents, price_platform_cents,
+             currency, status, mentee_notes)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9)
+        RETURNING id
+        "#,
+    )
+    .bind(body.mentor_user_id)
+    .bind(auth.user_id)
+    .bind(body.scheduled_at)
+    .bind(body.duration_minutes)
+    .bind(total)
+    .bind(mentor_cut)
+    .bind(platform_cut)
+    // The mentor's own, not a hardcoded 'EUR'. Routing already reads the
+    // mentor's currency, so a franc session was being charged in francs and
+    // recorded in euros — the same number meaning 12 000 F to the provider and
+    // 120,00 € to every report that reads the row afterwards.
+    .bind(currency.as_str())
+    .bind(&body.mentee_notes)
+    .fetch_one(&state.db)
+    .await?;
+
+    let amount = major_units(currency, total);
     let base = state.config.frontend_url.trim_end_matches('/').to_string();
     let success_url = format!("{base}/mentorship/sessions/{}?paid=1", inserted.0);
     let cancel_url = format!("{base}/mentorship/sessions/{}?canceled=1", inserted.0);
@@ -789,6 +800,21 @@ pub async fn connect_status(
 /// meaningless for XOF — the franc CFA has no subdivision. Dividing an XOF
 /// price by a hundred would pay a mentor one percent of what they earned, so
 /// the conversion is explicit per currency rather than a blanket `/ 100`.
+/// A price in the smallest unit of `currency`, as the amount a payment provider
+/// is handed.
+///
+/// `price_*_cents` is a hundredth of the currency, which is right for EUR and
+/// meaningless for XOF — the franc CFA has no subdivision. A blanket `/ 100`
+/// billed a Beninese mentee one percent of the price and paid the mentor one
+/// percent of their fee.
+fn major_units(currency: crate::services::ledger::Currency, minor: i64) -> BigDecimal {
+    match currency {
+        crate::services::ledger::Currency::Eur => BigDecimal::from(minor) / BigDecimal::from(100),
+        // Already whole francs: the column name is a misnomer here.
+        crate::services::ledger::Currency::Xof => BigDecimal::from(minor),
+    }
+}
+
 async fn capture_session_funds(
     state: &AppState,
     session_id: Uuid,
@@ -804,13 +830,7 @@ async fn capture_session_funds(
     use crate::services::release;
 
     let currency: Currency = currency_str.parse()?;
-    let to_amount = |minor: i64| -> BigDecimal {
-        match currency {
-            Currency::Eur => BigDecimal::from(minor) / BigDecimal::from(100),
-            // Already whole francs: the column name is a misnomer here.
-            Currency::Xof => BigDecimal::from(minor),
-        }
-    };
+    let to_amount = |minor: i64| major_units(currency, minor);
 
     let mentor_share = to_amount(mentor_cents);
     let platform_share = to_amount(platform_cents);

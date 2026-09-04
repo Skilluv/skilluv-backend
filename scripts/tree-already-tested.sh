@@ -14,10 +14,12 @@
 #
 # Two guards keep this from becoming a hole:
 #
-#   1. The prior run must have CONCLUDED success, and its first test shard must
-#      have concluded success too — not skipped. A documentation-only run
-#      greens with the shards skipped, and its tree must never license a skip
-#      for a tree nobody tested.
+#   1. The prior run must have CONCLUDED success, and every job we are about to
+#      skip must have concluded success in it — not skipped. A
+#      documentation-only run greens with those jobs skipped, and its tree must
+#      never license a skip for a tree nobody tested. This is also what stops a
+#      licence being passed down a chain of runs that each skipped their way to
+#      green.
 #   2. Anything that is not an exact tree match falls through to running the
 #      suite. Absence of evidence is never read as evidence here.
 #
@@ -39,17 +41,29 @@ while read -r run_id head_sha; do
   other="$(gh api "repos/${repo}/commits/${head_sha}" --jq '.commit.tree.sha' 2>/dev/null || true)"
   [ "${other}" = "${tree}" ] || continue
 
-  # Guard 1: the shards must have actually run in that run.
-  shard="$(gh api "repos/${repo}/actions/runs/${run_id}/jobs?per_page=100" \
-             --jq '[.jobs[] | select(.name | startswith("Integration Tests (shard"))
-                   | .conclusion] | if length == 0 then "none"
-                   elif all(. == "success") then "success" else "mixed" end' 2>/dev/null || echo none)"
-  if [ "${shard}" = "success" ]; then
-    echo "tree ${tree} already passed every shard in run ${run_id} (${head_sha})"
+  # Guard 1: the work we would skip must have actually run in that run —
+  # every test shard, and the lint job that the shards and the image build
+  # queue behind.
+  #
+  # Through `gh api --jq`, which uses gh's embedded jq. Piping to a `jq`
+  # binary reads as the same thing and is not: the runner has one, a
+  # developer machine may not, and the fallback below then answers for a
+  # query that never ran.
+  verdict="$(gh api "repos/${repo}/actions/runs/${run_id}/jobs?per_page=100" \
+    --jq 'def state(f): [.jobs[] | select(f) | .conclusion]
+                        | if length == 0 then "none"
+                          elif all(. == "success") then "success"
+                          else "mixed" end;
+          [ state(.name | startswith("Integration Tests (shard")),
+            state(.name == "Build & Lint") ]
+          | if all(. == "success") then "success" else join("/") end' \
+    2>/dev/null || echo unreadable)"
+  if [ "${verdict}" = "success" ]; then
+    echo "tree ${tree} already passed lint and every shard in run ${run_id} (${head_sha})"
     hit=true
     break
   fi
-  echo "run ${run_id} matches the tree but its shards were '${shard}' — not a licence to skip"
+  echo "run ${run_id} matches the tree but its shards/lint were '${verdict}' — not a licence to skip"
 done <<< "${runs}"
 
 echo "hit=${hit}" >> "${GITHUB_OUTPUT}"

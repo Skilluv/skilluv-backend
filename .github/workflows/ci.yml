@@ -97,8 +97,20 @@ jobs:
     # Required check. On a docs-only change this skips cleanly — a skipped
     # required job is reported to branch protection as success, so the check
     # is satisfied without compiling a line of Rust.
+    #
+    # It skips on an already-tested tree for the same reason the shards do,
+    # and this is where the rest of the merge-day saving was. rustfmt and
+    # clippy are pure functions of the source: run twice over a tree whose
+    # hash has not moved, they cannot reach a different verdict. Skipping the
+    # shards alone still left master waiting twenty-nine minutes here, because
+    # `publish` needs `test` and `test` needs this job — so the image build
+    # queued behind a lint that had already passed on the pull request.
+    #
+    # Branch protection is unaffected: it gates pull requests, where the tree
+    # is new and this always runs.
     needs: changes
     if: needs.changes.outputs.code == 'true'
+      && needs.changes.outputs.already-tested != 'true'
     runs-on: ubuntu-latest
     # 25 min budget : cold cache full cargo build (release) + clippy + fmt
     # is 12-18 min. sccache accelerates subsequent runs but the FIRST run

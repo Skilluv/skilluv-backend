@@ -62,7 +62,7 @@ pub async fn refresh_from_ecb(db: &PgPool) -> Result<(), AppError> {
     // worked survived: the only trace it left announced a success.
     if rates.is_empty() {
         return Err(AppError::Internal(format!(
-            "ECB feed parsed to zero rates ({} bytes) — the feed's shape changed              or the parser no longer matches it",
+            "ECB feed parsed to zero rates ({} bytes): the feed's shape changed, or the parser no longer matches it",
             text.len()
         )));
     }
@@ -93,7 +93,9 @@ pub async fn refresh_from_ecb(db: &PgPool) -> Result<(), AppError> {
 ///
 /// It looked for double quotes, and the ECB has always sent single ones:
 ///
-///     <Cube currency='USD' rate='1.1615'/>
+/// ```text
+/// <Cube currency='USD' rate='1.1615'/>
+/// ```
 ///
 /// So `extract_attr` returned `None` on every line and this function returned
 /// an empty vector on every environment since it was written. Nothing said so,

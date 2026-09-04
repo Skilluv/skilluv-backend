@@ -93,13 +93,39 @@ async fn test_start_and_submit_challenge() {
     assert_eq!(submit_resp.status(), StatusCode::OK);
 
     let body: serde_json::Value = submit_resp.json().await.unwrap();
-    assert_eq!(body["data"]["submission"]["status"], "success");
-    assert!(body["data"]["fragments_earned"].as_i64().unwrap() > 0);
-    assert_eq!(body["data"]["user"]["profile_active"], true);
+
+    // This assertion used to read `"success"`, and it is worth saying why it
+    // passed. CI has never had a Judge0 to run anything, so the grader fell
+    // through to asking whether the *source* contained `expected_output` as a
+    // substring — and `print('Hello, Skilluv!')` contains "Hello, Skilluv!".
+    // The submission was never executed. Pasting the expected output into a
+    // comment would have passed just as well, which is what made the fallback
+    // a fraud surface rather than a degradation.
+    //
+    // Nothing grades code now. A submission goes to the queue a person reads,
+    // like every other domain, and fragments follow the reviewer's verdict.
+    assert_eq!(body["data"]["submission"]["status"], "pending_review");
+    assert_eq!(
+        body["data"]["fragments_earned"], 0,
+        "fragments are the reviewer's to award, not a string comparison's"
+    );
+    assert_eq!(
+        body["data"]["user"]["profile_active"], false,
+        "handing work in is not the same as having it read: the profile goes          live when a reviewer settles the deliverable (services/reviews.rs),          which is what test_code_newcomer_path drives end to end"
+    );
 }
 
+/// Submitting earns nothing on its own.
+///
+/// This asserted `badge_count >= 1` straight after a submission, which held
+/// only because the submission was auto-graded `success` — and it was graded
+/// success because the source contained the expected output as a substring,
+/// never because anything ran it. With the grader gone, a badge is something
+/// a reviewer's verdict produces (`proof_hooks` on a settled deliverable), and
+/// this test now pins the half it can see: the work is queued, and no badge
+/// has been minted for work nobody has read.
 #[tokio::test]
-async fn test_badge_earned_after_first_challenge() {
+async fn test_no_badge_before_anybody_has_read_the_work() {
     let app = common::TestApp::spawn().await;
 
     // Setup: admin creates and publishes challenge
@@ -153,7 +179,17 @@ async fn test_badge_earned_after_first_challenge() {
             .await
             .unwrap();
 
-    assert!(badge_count >= 1, "Should have earned at least 1 badge");
+    assert_eq!(badge_count, 0, "no badge for work nobody has read yet");
+
+    let queued: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM challenge_submissions
+          WHERE user_id = $1::UUID AND status = 'pending_review'",
+    )
+    .bind(&user_id)
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert_eq!(queued, 1, "and the submission is waiting for a reviewer");
 }
 
 #[tokio::test]

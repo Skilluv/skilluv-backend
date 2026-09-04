@@ -138,17 +138,6 @@
 
 ---
 
-## Sandbox (4 routes)
-
-| Method | Path | Auth | Body | Response |
-|--------|------|------|------|----------|
-| POST | `/sandbox/execute` | Yes (rate: 20/min) | `{ source_code, language, stdin?, expected_output? }` | `{ execution, verdict, success }` |
-| POST | `/sandbox/execute-async` | Yes | same | `{ token, message }` |
-| GET | `/sandbox/result/{token}` | Yes | — | `{ execution, verdict, success, processing }` |
-| GET | `/sandbox/languages` | Yes | — | `{ tier1, tier2, total }` |
-
----
-
 ## Enterprise (7 routes)
 
 | Method | Path | Auth | Body | Response |
@@ -714,7 +703,6 @@ Error shape:
 | Endpoint | Limit | Window |
 |----------|--------|---------|
 | `/auth/register`, `/auth/login` | 10 req | per minute, per IP |
-| `/sandbox/execute` | 20 req | per minute, per account |
 | `/contact/interest` | 5 req | per hour, per company |
 
 ---

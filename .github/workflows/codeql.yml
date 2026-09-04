@@ -45,7 +45,7 @@ jobs:
           languages: rust
           # security-extended keeps the security queries but drops the noisy
           # quality ones -- the queries that flagged assert! panic messages,
-          # config values (JUDGE0_URL) and https consts as findings. Triage on
+          # config values (service URLs) and https consts as findings. Triage on
           # PR #97 showed every prior alert was a false positive.
           queries: security-extended
           # Test code uses fixtures (fake usernames/tokens); exclude it so the

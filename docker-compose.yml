@@ -3,16 +3,11 @@
 # `docker compose up` starts only what the backend needs to boot and what the
 # test suite talks to: Postgres, Redis, MinIO, Mailpit. Four containers.
 #
-# Judge0 — the code execution engine — is behind the `judge0` profile and no
-# longer starts by default. It is four containers on its own (the engine, its
-# workers, and a dedicated Postgres and Redis), and together they were the
-# largest consumer of memory on a development machine, for a service the test
-# suite never calls: the suites that mention submissions read them back from
-# our own database.
-#
-# Start it only when working on challenge execution:
-#
-#   docker compose --profile judge0 up -d
+# Judge0 stood here behind a profile — the engine, its workers, and a Postgres
+# and Redis of its own. It graded code submissions by running them and
+# comparing stdout to an expected string. Nothing asks that question any more:
+# a challenge is a fork, a pull request and a deliverable somebody reads, so
+# the four containers and the service that called them are gone.
 #
 # Memory ceilings are set on every service. Postgres and Redis will happily
 # grow to fill whatever is available, which is fine on a server and not fine
@@ -115,97 +110,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # ─── Optional: code execution ──────────────────────────────────────
-  # Everything below starts only with `--profile judge0`.
-
-  judge0:
-    image: judge0/judge0:1.13.1
-    container_name: skilluv-judge0
-    profiles: ["judge0"]
-    ports:
-      - "2358:2358"
-    environment:
-      REDIS_URL: redis://judge0-redis:6379
-      POSTGRES_HOST: judge0-postgres
-      POSTGRES_DB: judge0
-      POSTGRES_USER: judge0
-      POSTGRES_PASSWORD: judge0_secret
-      RAILS_MAX_THREADS: 4
-      ENABLE_WAIT_RESULT: "true"
-      ENABLE_BATCHED_SUBMISSIONS: "true"
-      MAX_CPU_TIME_LIMIT: 30
-      MAX_MEMORY_LIMIT: 512000
-      MAX_MAX_PROCESSES_AND_OR_THREADS: 60
-      ENABLE_NETWORK: "false"
-    mem_limit: 1g
-    depends_on:
-      judge0-postgres:
-        condition: service_healthy
-      judge0-redis:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:2358/system_info"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
-
-  judge0-postgres:
-    image: postgres:18.4-alpine
-    container_name: skilluv-judge0-postgres
-    profiles: ["judge0"]
-    environment:
-      POSTGRES_USER: judge0
-      POSTGRES_PASSWORD: judge0_secret
-      POSTGRES_DB: judge0
-      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
-      LC_ALL: C.UTF-8
-      LANG: C.UTF-8
-    command: ["postgres", "-c", "lc_messages=C", "-c", "shared_buffers=64MB"]
-    volumes:
-      - judge0_pgdata:/var/lib/postgresql/data
-    mem_limit: 384m
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U judge0"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  judge0-redis:
-    image: redis:8.8-alpine
-    container_name: skilluv-judge0-redis
-    profiles: ["judge0"]
-    volumes:
-      - judge0_redisdata:/data
-    mem_limit: 128m
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  judge0-workers:
-    image: judge0/judge0:1.13.1
-    container_name: skilluv-judge0-workers
-    profiles: ["judge0"]
-    command: ["./scripts/workers"]
-    environment:
-      REDIS_URL: redis://judge0-redis:6379
-      POSTGRES_HOST: judge0-postgres
-      POSTGRES_DB: judge0
-      POSTGRES_USER: judge0
-      POSTGRES_PASSWORD: judge0_secret
-      ENABLE_NETWORK: "false"
-    mem_limit: 1g
-    depends_on:
-      judge0-postgres:
-        condition: service_healthy
-      judge0-redis:
-        condition: service_healthy
-
 volumes:
   skilluv_pgdata:
   skilluv_redisdata:
   skilluv_miniodata:
-  judge0_pgdata:
-  judge0_redisdata:

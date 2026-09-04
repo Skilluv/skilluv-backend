@@ -2,7 +2,7 @@
 //!
 //! - `GET /api/health` : process liveness (no dependency I/O). Used by Docker / k8s.
 //! - `GET /api/health/live` : alias of `/api/health`. Kept for Uptime Kuma backward compat.
-//! - `GET /api/health/deep` : exhaustive — Postgres + Redis + MinIO + Judge0 + Brevo + WS stats.
+//! - `GET /api/health/deep` : exhaustive — Postgres + Redis + MinIO + Brevo + WS stats.
 //!
 //! Sub-millisecond on the basic path. Up to ~3-5s on /deep when external deps are slow.
 
@@ -69,7 +69,6 @@ pub struct HealthServices {
     pub postgres: ServiceHealth,
     pub redis: ServiceHealth,
     pub minio: ServiceHealth,
-    pub judge0: ServiceHealth,
     pub brevo: ServiceHealth,
 }
 
@@ -92,7 +91,7 @@ pub struct DeepHealthResponse {
     pub websocket: WebsocketStats,
 }
 
-/// Exhaustive dependency check — Postgres + Redis + MinIO + Judge0 +
+/// Exhaustive dependency check — Postgres + Redis + MinIO +
 /// Brevo + WebSocket stats. Returns 200 when critical deps (postgres +
 /// redis) are OK, 503 otherwise. Takes up to ~3-5s when a dep is slow.
 #[utoipa::path(
@@ -108,12 +107,11 @@ pub async fn deep_health(State(state): State<AppState>) -> impl IntoResponse {
     let (pg_status, pg_ms) = check_postgres(&state).await;
     let (redis_status, redis_ms) = check_redis(&state).await;
     let (minio_status, minio_ms) = check_minio(&state).await;
-    let (judge0_status, judge0_ms) = check_judge0(&state).await;
     let brevo_status = check_brevo();
     let (ws_connections, ws_rooms, ws_users) = state.ws.stats().await;
 
     let critical_ok = pg_status == "ok" && redis_status == "ok";
-    let all_ok = critical_ok && minio_status == "ok" && judge0_status == "ok";
+    let all_ok = critical_ok && minio_status == "ok";
     let (overall, http_code) = if all_ok {
         ("healthy", StatusCode::OK)
     } else if critical_ok {
@@ -139,10 +137,6 @@ pub async fn deep_health(State(state): State<AppState>) -> impl IntoResponse {
                 minio: ServiceHealth {
                     status: minio_status.to_string(),
                     latency_ms: minio_ms,
-                },
-                judge0: ServiceHealth {
-                    status: judge0_status.to_string(),
-                    latency_ms: judge0_ms,
                 },
                 brevo: ServiceHealth {
                     status: brevo_status.to_string(),
@@ -189,15 +183,6 @@ async fn check_minio(state: &AppState) -> (&'static str, Option<u64>) {
     match state.storage.presigned_get_url("__healthcheck__", 1).await {
         Ok(_) => ("ok", Some(start.elapsed().as_millis() as u64)),
         Err(_) => ("unreachable", Some(start.elapsed().as_millis() as u64)),
-    }
-}
-
-async fn check_judge0(state: &AppState) -> (&'static str, Option<u64>) {
-    let start = Instant::now();
-    if state.sandbox.health_check().await {
-        ("ok", Some(start.elapsed().as_millis() as u64))
-    } else {
-        ("unreachable", Some(start.elapsed().as_millis() as u64))
     }
 }
 

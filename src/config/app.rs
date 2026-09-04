@@ -12,7 +12,6 @@ pub struct AppConfig {
     /// Split from `base_url`, which points at the API subdomain in staging/prod.
     /// Falls back to `base_url` so single-origin deployments keep working.
     pub frontend_url: String,
-    pub judge0_url: String,
     pub minio_endpoint: String,
     pub minio_access_key: String,
     pub minio_secret_key: String,
@@ -67,8 +66,6 @@ impl AppConfig {
                 .unwrap_or_else(|_| "redis://localhost:6379".to_string()),
             base_url,
             frontend_url,
-            judge0_url: env::var("JUDGE0_URL")
-                .unwrap_or_else(|_| "http://localhost:2358".to_string()),
             minio_endpoint: env::var("MINIO_ENDPOINT")
                 .unwrap_or_else(|_| "http://localhost:9002".to_string()),
             minio_access_key: env::var("MINIO_ACCESS_KEY")

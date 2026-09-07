@@ -22,6 +22,27 @@
 # ought to take. What is wrong is the input, not the expectation.
 allow-x00 = false
 
+[checks.negative_data_rejection]
+# 415 counts as a rejection.
+#
+# Schemathesis sends a POST with no body and no `Content-Type`, and axum's
+# `Json` extractor answers 415 Unsupported Media Type. The check's default set
+# of statuses that mean "properly rejected" is 400, 401, 403, 404, 405, 406,
+# 409, 422, 428 and 5xx — 415 is not among them, so every endpoint taking a
+# JSON body was reported as having accepted a schema-violating request when it
+# had done the exact opposite.
+#
+# Widened rather than disabled, following the rule at the top of this file:
+# turning the check off would end negative-data testing for the whole API to
+# settle a disagreement about one status code, and it is the check that would
+# notice an endpoint quietly accepting nonsense.
+#
+# The 415 is documented on every operation with a request body — see
+# `openapi::spec()` — so a client reading the contract is not surprised by it
+# either. That half was a real gap and is fixed in code; this half is the
+# fuzzer's list being narrower than HTTP.
+expected-statuses = ["400", "401", "403", "404", "405", "406", "409", "415", "422", "428", "5XX"]
+
 [[operations]]
 include-name = "GET /api/feed/public"
 
@@ -137,6 +158,50 @@ include-name = "POST /webhooks/linear"
 [operations.checks.positive_data_acceptance]
 enabled = false
 [operations.checks.not_a_server_error]
+enabled = false
+
+[[operations]]
+include-name = "POST /api/stripe/webhook"
+
+# Four webhook receivers below, same reason, and it is the CI environment
+# rather than the endpoint.
+#
+# Each verifies a provider signature, and each acks with 200
+# `acked_not_configured` when its secret is unset — deliberately, so that a
+# provider does not retry forever against a deployment that cannot process
+# what it sends (see the comment at src/routes/bounties.rs:615). The contract
+# job leaves those secrets unset, so a bodyless POST reaches the ack branch
+# and returns 200, which `negative_data_rejection` reads as the API accepting
+# invalid data.
+#
+# In production the secret is set and the same request is refused at signature
+# verification, which is the behaviour that matters and which no unsigned
+# fuzzer can reach. Excluded here rather than changed: making the handler
+# reject a missing body before deciding it is unconfigured would trade a real
+# property — never make a provider retry — for a green check in an
+# environment that does not exist anywhere else.
+#
+# `POST /webhooks/linear` above is the same shape, and answers 503 instead;
+# the difference is that Linear has no retry storm to avoid.
+[operations.checks.negative_data_rejection]
+enabled = false
+
+[[operations]]
+include-name = "POST /api/webhooks/github"
+
+[operations.checks.negative_data_rejection]
+enabled = false
+
+[[operations]]
+include-name = "POST /api/webhooks/github/slices/{project_id}"
+
+[operations.checks.negative_data_rejection]
+enabled = false
+
+[[operations]]
+include-name = "POST /api/webhooks/stripe-connect"
+
+[operations.checks.negative_data_rejection]
 enabled = false
 
 [[operations]]

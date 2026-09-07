@@ -59,7 +59,7 @@ async-trait = "0.1"
 redis = { version = "1.2", features = ["tokio-comp", "connection-manager"] }
 
 # Auth
-argon2 = "0.5"
+argon2 = "0.6"
 jsonwebtoken = { version = "11", features = ["aws_lc_rs"] }
 totp-rs = { version = "5", features = ["gen_secret", "otpauth"] }
 base32 = "0.5"
@@ -74,7 +74,7 @@ thiserror = "2"
 # Reads `ops/discord/server.toml`, the declaration of the Discord server, which
 # `services::discord_roles` embeds at build time so the role mapping has one
 # source of truth rather than a copy in a table.
-toml = "0.8"
+toml = "1.1"
 
 # HTTP client (Judge0)
 reqwest = { version = "0.13", features = ["json", "form"] }
@@ -93,7 +93,6 @@ sha2 = "0.11"
 hex = "0.4"
 base64 = "0.23"
 getrandom = "0.4"
-rand_core = "0.10"
 # `rand::rngs::OsRng` is the CryptoRng that p256 0.14's ecdh::EphemeralSecret::random accepts.
 rand = "0.10"
 

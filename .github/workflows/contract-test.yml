@@ -80,7 +80,17 @@ jobs:
           python-version: '3.12'
 
       - name: Install schemathesis
-        run: pip install schemathesis
+        # Pinned, like every action in this repository is pinned to a SHA.
+        # It was not, and on 2026-09-07 that cost a morning: 4.26.0 was
+        # published at 07:45 UTC, and the same commit that passed this job at
+        # 06:17 failed it at 10:55 — a red check that belonged to somebody
+        # else's release schedule, on a pull request that had not touched the
+        # API.
+        #
+        # 4.26.0's finding was correct and is fixed rather than pinned away
+        # (see `openapi::spec`); what is pinned is when we choose to hear the
+        # next one.
+        run: pip install schemathesis==4.26.0
 
       - name: Build backend (release)
         run: cargo build --release --bin skilluv-backend

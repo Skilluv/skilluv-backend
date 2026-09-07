@@ -2179,7 +2179,7 @@ where
     // to panic with 'Overlapping method route' the first time any test calls
     // build_router().
     if expose_swagger {
-        router.merge(SwaggerUi::new("/api/docs").url("/api/openapi.json", ApiDoc::openapi()))
+        router.merge(SwaggerUi::new("/api/docs").url("/api/openapi.json", spec()))
     } else {
         // Prod-mode : ship the spec JSON at /api/openapi.json but no Swagger
         // UI shell. Schemathesis in CI reads the JSON directly ; humans get 404.
@@ -2187,8 +2187,57 @@ where
     }
 }
 
+/// The published document, plus the response the framework writes on our
+/// behalf.
+///
+/// axum's `Json` extractor answers **415** when a request arrives without
+/// `Content-Type: application/json`, in our own error shape. No handler
+/// declares it, because no handler writes it — utoipa only sees what the
+/// annotations say. So every endpoint taking a JSON body published a set of
+/// statuses it could step outside of, and a contract fuzzer is exactly the
+/// thing that notices: schemathesis 4.26.0 started reporting it on
+/// 2026-09-07 and was right to.
+///
+/// Declared here rather than on two hundred handlers because the rule is
+/// "this operation has a request body" and it holds for every one of them.
+/// A fact that general belongs where it can be stated once, not copied into
+/// each annotation to drift from the others.
+pub fn spec() -> utoipa::openapi::OpenApi {
+    use utoipa::openapi::{RefOr, Response};
+
+    let mut doc = ApiDoc::openapi();
+    for item in doc.paths.paths.values_mut() {
+        let operations = [
+            item.get.as_mut(),
+            item.put.as_mut(),
+            item.post.as_mut(),
+            item.delete.as_mut(),
+            item.options.as_mut(),
+            item.head.as_mut(),
+            item.patch.as_mut(),
+            item.trace.as_mut(),
+        ];
+        for op in operations.into_iter().flatten() {
+            if op.request_body.is_none() {
+                continue;
+            }
+            let responses = &mut op.responses.responses;
+            if responses.contains_key("415") {
+                continue;
+            }
+            responses.insert(
+                "415".to_string(),
+                RefOr::T(Response::new(
+                    "Request body was not sent as `application/json`",
+                )),
+            );
+        }
+    }
+    doc
+}
+
 async fn openapi_json() -> impl IntoResponse {
-    axum::Json(ApiDoc::openapi())
+    axum::Json(spec())
 }
 
 #[cfg(test)]

@@ -64,6 +64,26 @@ pub struct AppStateConfig {
     pub sso_encryption_key: Option<[u8; 32]>,
     /// External PDF renderer service URL — `None` returns 503 on `/pdf` endpoints.
     pub pdf_renderer_url: Option<String>,
+    /// The deployment this process serves, as `ENVIRONMENT` names it.
+    ///
+    /// Carried here so that a handler deciding to behave differently outside
+    /// a test environment reads the same value `assert_production_secrets`
+    /// read at boot, rather than parsing the variable again with its own
+    /// spelling of "prod".
+    pub environment: String,
+}
+
+impl AppStateConfig {
+    /// Whether this deployment is a place where test fixtures may be created.
+    ///
+    /// Everything that is not explicitly a development or test environment
+    /// counts as serving real people. `ENVIRONMENT` unset reads as `dev`,
+    /// which is the convention `AppConfig::from_env` already established;
+    /// this does not tighten it, so a deployed box that forgets the variable
+    /// is as permissive here as it already is there.
+    pub fn tolerates_test_fixtures(&self) -> bool {
+        matches!(self.environment.as_str(), "dev" | "test" | "local")
+    }
 }
 
 pub fn build_router(state: AppState) -> Router {

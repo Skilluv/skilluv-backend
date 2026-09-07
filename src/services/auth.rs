@@ -1,7 +1,4 @@
-use argon2::{
-    Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
-    password_hash::{SaltString, rand_core::OsRng},
-};
+use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use chrono::{Duration, Utc};
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use redis::AsyncCommands;
@@ -29,11 +26,18 @@ pub struct Claims {
 pub struct AuthService;
 
 impl AuthService {
+    /// argon2 0.6 moved `SaltString` out of the crate root and gave
+    /// `hash_password` a one-argument form that draws the salt itself, from
+    /// the same CSPRNG this used to reach for by hand. Generating it here
+    /// bought nothing and is one more place to get wrong, so it is gone.
+    ///
+    /// Hashes written before this still verify: a PHC string carries its own
+    /// salt, and `verify_password` reads it from there. No rehash, no
+    /// migration.
     pub fn hash_password(password: &str) -> Result<String, AppError> {
-        let salt = SaltString::generate(&mut OsRng);
         let argon2 = Argon2::default();
         argon2
-            .hash_password(password.as_bytes(), &salt)
+            .hash_password(password.as_bytes())
             .map(|h| h.to_string())
             .map_err(|e| AppError::Internal(format!("Password hashing failed: {e}")))
     }

@@ -10,9 +10,15 @@ FROM rust:1.98-slim-trixie AS builder
 # curl is required by utoipa-swagger-ui's build.rs to fetch the Swagger UI
 # zip from GitHub at compile time. Without it, the build panics with
 # 'failed to download Swagger UI: curl command not found'.
+# lld alongside them: this stage links twelve release binaries with GNU ld,
+# which is the slowest part of the image build. The integration shards already
+# made this trade and recorded the reason — lld "uses a fraction of that and
+# links several times faster" — after ld was killing them outright.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        pkg-config libssl-dev curl ca-certificates \
+        pkg-config libssl-dev curl ca-certificates lld \
     && rm -rf /var/lib/apt/lists/*
+
+ENV RUSTFLAGS="-C link-arg=-fuse-ld=lld"
 
 WORKDIR /app
 
@@ -51,7 +57,26 @@ COPY ops/ ops/
 # Touch to force cargo to rebuild the (now real) sources.
 # --features discord-bot pulls serenity in so the discord_bot binary
 # is included in the image (feature-gated to keep test builds lean).
-RUN touch src/main.rs src/lib.rs && cargo build --release --features discord-bot
+# Named binaries rather than the whole package.
+#
+# `cargo build --release` builds all twelve `[[bin]]` targets. The runtime
+# stage below copies eight. So seed-all, seed-design-canvas, seed-guild and
+# timeline-backfill were compiled and linked into every image and then thrown
+# away — four link steps for artefacts nothing consumes.
+#
+# This changes nothing about the image's contents: those four were already
+# absent from it. If one of them is meant to be an ops tool available in
+# production, it needs a COPY line, and adding it here without one would keep
+# paying for the build while still not shipping it.
+RUN touch src/main.rs src/lib.rs && cargo build --release --features discord-bot \
+    --bin skilluv-backend \
+    --bin skilluv-backup \
+    --bin skilluv-discord-bot \
+    --bin skilluv-discord-notifier \
+    --bin skilluv-github-ingest \
+    --bin skilluv-seed \
+    --bin skilluv-seed-admin \
+    --bin skilluv-seed-projects
 
 # ═══════════════════════════════════════════════════════════════════
 # Stage 2 : Runtime

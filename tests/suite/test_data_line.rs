@@ -228,13 +228,14 @@ async fn an_api_key(app: &TestApp, owner: Uuid, plan: &str) -> String {
     raw
 }
 
+/// The hash the platform actually writes, not a second implementation of it.
+///
+/// This built its own Argon2 call with its own salt, which meant it tested a
+/// copy rather than the thing that ships — and it broke on the argon2 0.6
+/// upgrade while `AuthService` was already fixed, because the copy had to be
+/// found separately.
 fn argon2_hash(raw: &str) -> String {
-    use argon2::password_hash::{PasswordHasher, SaltString, rand_core::OsRng};
-    let salt = SaltString::generate(&mut OsRng);
-    argon2::Argon2::default()
-        .hash_password(raw.as_bytes(), &salt)
-        .unwrap()
-        .to_string()
+    skilluv_backend::services::AuthService::hash_password(raw).expect("hash a password")
 }
 
 #[tokio::test]

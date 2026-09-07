@@ -161,6 +161,50 @@ enabled = false
 enabled = false
 
 [[operations]]
+include-name = "POST /api/stripe/webhook"
+
+# Four webhook receivers below, same reason, and it is the CI environment
+# rather than the endpoint.
+#
+# Each verifies a provider signature, and each acks with 200
+# `acked_not_configured` when its secret is unset — deliberately, so that a
+# provider does not retry forever against a deployment that cannot process
+# what it sends (see the comment at src/routes/bounties.rs:615). The contract
+# job leaves those secrets unset, so a bodyless POST reaches the ack branch
+# and returns 200, which `negative_data_rejection` reads as the API accepting
+# invalid data.
+#
+# In production the secret is set and the same request is refused at signature
+# verification, which is the behaviour that matters and which no unsigned
+# fuzzer can reach. Excluded here rather than changed: making the handler
+# reject a missing body before deciding it is unconfigured would trade a real
+# property — never make a provider retry — for a green check in an
+# environment that does not exist anywhere else.
+#
+# `POST /webhooks/linear` above is the same shape, and answers 503 instead;
+# the difference is that Linear has no retry storm to avoid.
+[operations.checks.negative_data_rejection]
+enabled = false
+
+[[operations]]
+include-name = "POST /api/webhooks/github"
+
+[operations.checks.negative_data_rejection]
+enabled = false
+
+[[operations]]
+include-name = "POST /api/webhooks/github/slices/{project_id}"
+
+[operations.checks.negative_data_rejection]
+enabled = false
+
+[[operations]]
+include-name = "POST /api/webhooks/stripe-connect"
+
+[operations.checks.negative_data_rejection]
+enabled = false
+
+[[operations]]
 include-name = "GET /api/users/{id}/timeline"
 
 # `offset` is a nullable integer; for a nullable query parameter the fuzzer

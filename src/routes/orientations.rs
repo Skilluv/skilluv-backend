@@ -141,6 +141,15 @@ pub struct OrientationRow {
     pub primary_domain: String,
     pub secondary_domains: Vec<String>,
     pub tags: Vec<String>,
+    /// Tool identifiers this trade works with, in reading order — `react`,
+    /// `typescript`, `postgresql`. Stable by contract, so a client may map
+    /// them to logos; an identifier it does not recognise should render
+    /// nothing rather than guess. Empty means "not recorded yet", never
+    /// "this trade uses no tools".
+    ///
+    /// Distinct from `tags`, which are broad categories (`web`, `api`,
+    /// `mobile`) meant for filtering and unusable to draw a stack.
+    pub stack: Vec<String>,
     pub is_curated: bool,
     pub is_archived: bool,
 }
@@ -324,7 +333,7 @@ pub async fn list_orientations(
         SELECT o.id, o.slug,
                COALESCE(t.name, o.name) AS name,
                COALESCE(NULLIF(t.description, ''), o.description) AS description,
-               o.primary_domain, o.secondary_domains, o.tags,
+               o.primary_domain, o.secondary_domains, o.tags, o.stack,
                o.is_curated, o.is_archived
         FROM orientations o
         LEFT JOIN orientation_translations t
@@ -447,7 +456,7 @@ pub async fn get_orientation(
         "SELECT o.id, o.slug,
                 COALESCE(t.name, o.name) AS name,
                 COALESCE(NULLIF(t.description, ''), o.description) AS description,
-                o.primary_domain, o.secondary_domains, o.tags,
+                o.primary_domain, o.secondary_domains, o.tags, o.stack,
                 o.is_curated, o.is_archived
            FROM orientations o
            LEFT JOIN orientation_translations t

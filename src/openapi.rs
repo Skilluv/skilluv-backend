@@ -2206,7 +2206,7 @@ pub fn spec() -> utoipa::openapi::OpenApi {
     use utoipa::openapi::{RefOr, Response};
 
     let mut doc = ApiDoc::openapi();
-    for (_, item) in doc.paths.paths.iter_mut() {
+    for item in doc.paths.paths.values_mut() {
         let operations = [
             item.get.as_mut(),
             item.put.as_mut(),

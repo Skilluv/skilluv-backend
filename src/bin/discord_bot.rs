@@ -253,7 +253,7 @@ impl Handler {
                     .await?
             }
             "help" => help_message(&self.frontend_url),
-            other => format!("Unknown subcommand `{other}` — try `/skilluv help`"),
+            other => format!("Unknown subcommand `{other}`. Try `/skilluv help`."),
         };
         cmd.create_response(
             &ctx.http,
@@ -267,7 +267,7 @@ impl Handler {
         Ok(())
     }
 
-    /// `/skilluv craft <domain>` — the caller's craft score in one domain.
+    /// `/skilluv craft <domain>` : the caller's craft score in one domain.
     ///
     /// One command with a domain argument rather than one per domain. The
     /// Discord structure documents for leadership and quality each described
@@ -323,7 +323,7 @@ impl Handler {
         let mut out = t_with(locale, "discord.leaderboard_head", &[("domain", domain)]);
         for (i, (username, score, tier)) in top.iter().enumerate() {
             out.push_str(&format!(
-                "\n`{:>2}.` **{username}** — {score}{}",
+                "\n`{:>2}.` **{username}**: {score}{}",
                 i + 1,
                 tier.as_deref()
                     .map(|s| format!(" ({s})"))
@@ -407,9 +407,9 @@ impl Handler {
                 let who = c["reporter"]["username"]
                     .as_str()
                     .or_else(|| c["reporter"]["alias"].as_str())
-                    .unwrap_or("—");
+                    .unwrap_or("-");
                 out.push_str(&format!(
-                    "\n`{:>2}.` **{who}** — {} finding(s)",
+                    "\n`{:>2}.` **{who}**: {} finding(s)",
                     i + 1,
                     c["findings"].as_i64().unwrap_or(0)
                 ));
@@ -420,12 +420,12 @@ impl Handler {
             out.push('\n');
             out.push_str(&t(locale, "discord.findings_recent"));
             for f in recent.iter().take(3) {
-                let title = f["title"].as_str().unwrap_or("—");
-                let sev = f["severity_tier"].as_str().unwrap_or("—");
+                let title = f["title"].as_str().unwrap_or("-");
+                let sev = f["severity_tier"].as_str().unwrap_or("-");
                 out.push_str(&format!("\n- **{title}** ({sev})"));
                 if let Some(url) = f["writeup_url"].as_str() {
                     let sep = if url.starts_with("http") { "" } else { "/" };
-                    out.push_str(&format!(" — {}{sep}{url}", self.frontend_url));
+                    out.push_str(&format!(": {}{sep}{url}", self.frontend_url));
                 }
             }
         }
@@ -451,7 +451,7 @@ impl Handler {
                 .context("db query failed")?;
         let Some((user_id, username)) = user else {
             return Ok(format!(
-                "This Discord account is not linked to a Skilluv profile yet — {}/settings",
+                "This Discord account is not linked to a Skilluv profile yet: {}/settings",
                 self.frontend_url
             ));
         };
@@ -485,9 +485,9 @@ impl Handler {
         .await
         .unwrap_or(0);
 
-        let tier = tier.unwrap_or_else(|| "—".into());
+        let tier = tier.unwrap_or_else(|| "-".into());
         Ok(format!(
-            "**{username}** — `{domain}`\n\
+            "**{username}**: `{domain}`\n\
              Craft score: **{score}** ({tier})\n\
              Attestations in this domain: {attested}\n\
              {}/u/{username}",
@@ -495,7 +495,7 @@ impl Handler {
         ))
     }
 
-    /// `/skilluv queue <domain>` — what is waiting on a reviewer.
+    /// `/skilluv queue <domain>` : what is waiting on a reviewer.
     ///
     /// Public on purpose. A review queue nobody can see is a queue that grows
     /// quietly, and the number being visible is what makes somebody
@@ -563,7 +563,7 @@ impl Handler {
         ))
     }
 
-    /// `/skilluv cohorts [domain]` — cohorts somebody can still join.
+    /// `/skilluv cohorts [domain]` : cohorts somebody can still join.
     ///
     /// One command for every domain that runs cohorts, which is every domain
     /// since migration 0532 gave them one model. Private cohorts never appear
@@ -602,14 +602,14 @@ impl Handler {
             .iter()
             .map(|(name, slug, starts, members, max)| {
                 let when = starts
-                    .map(|d| format!(" — starts {}", d.format("%d/%m")))
+                    .map(|d| format!(", starts {}", d.format("%d/%m")))
                     .unwrap_or_default();
                 let places = match max {
                     Some(m) => format!(" ({members}/{m})"),
                     None => format!(" ({members} joined)"),
                 };
                 format!(
-                    "- **{name}**{when}{places} — {}/cohorts/{slug}",
+                    "- **{name}**{when}{places}: {}/cohorts/{slug}",
                     self.frontend_url
                 )
             })
@@ -641,7 +641,7 @@ impl Handler {
         skilluv_backend::services::i18n::resolve(stored.as_deref(), Some(&cmd.locale))
     }
 
-    /// `/skilluv me` — look up the caller by discord_user_id, echo the
+    /// `/skilluv me` : look up the caller by discord_user_id, echo the
     /// public profile URL if linked, otherwise instruct how to link.
     async fn handle_me(&self, cmd: &CommandInteraction) -> Result<String> {
         let discord_id = cmd.user.id.to_string();
@@ -681,7 +681,7 @@ impl Handler {
         })
     }
 
-    /// `/skilluv verify <hash>` — echo the attestation summary if the
+    /// `/skilluv verify <hash>` : echo the attestation summary if the
     /// hash is known. Public info, no auth needed.
     async fn handle_verify(&self, hash: &str) -> Result<String> {
         let trimmed = hash.trim();
@@ -718,13 +718,13 @@ impl Handler {
             // checking one has been shown a copy and needs to be told it no
             // longer holds.
             Some((title, username, true, code)) => format!(
-                "Attestation `{code}` — **{username}**, **{title}** — \
+                "Attestation `{code}` : **{username}**, **{title}**. \
                  **cette attestation a été révoquée**.\n\
                  {frontend}/attestations/verify/{code}",
                 frontend = self.frontend_url,
             ),
             Some((title, username, false, code)) => format!(
-                "Attestation `{code}` — **{username}** a validé **{title}**\n\
+                "Attestation `{code}` : **{username}** a validé **{title}**\n\
                  {frontend}/attestations/verify/{code}",
                 frontend = self.frontend_url,
             ),
@@ -779,7 +779,7 @@ impl Handler {
         out
     }
 
-    /// `/skilluv contests [domain]` — what somebody can still enter.
+    /// `/skilluv contests [domain]` : what somebody can still enter.
     ///
     /// Cross-domain contests are always included, whichever domain was asked
     /// for: those are the events that want the widest field, and filtering
@@ -807,18 +807,15 @@ impl Handler {
             .iter()
             .map(|(name, slug, ends)| {
                 let until = ends
-                    .map(|d| format!(" — jusqu'au {}", d.format("%d/%m")))
+                    .map(|d| format!(", jusqu'au {}", d.format("%d/%m")))
                     .unwrap_or_default();
-                format!(
-                    "- **{name}**{until} — {}/contests/{slug}",
-                    self.frontend_url
-                )
+                format!("- **{name}**{until}: {}/contests/{slug}", self.frontend_url)
             })
             .collect();
         Ok(format!("Concours ouverts :\n{}", lines.join("\n")))
     }
 
-    /// `/skilluv featured [domain]` — the week's editorial pick.
+    /// `/skilluv featured [domain]` : the week's editorial pick.
     async fn handle_featured(&self, domain: Option<&str>, locale: &str) -> Result<String> {
         let row: Option<(String, String, String, chrono::NaiveDate)> = sqlx::query_as(
             r#"
@@ -837,14 +834,14 @@ impl Handler {
 
         Ok(match row {
             Some((username, display_name, reason, week)) => format!(
-                "**{display_name}** ({}/@{username}) — semaine du {week}\n{reason}",
+                "**{display_name}** ({}/@{username}), semaine du {week}\n{reason}",
                 self.frontend_url
             ),
             None => t(locale, "discord.no_featured"),
         })
     }
 
-    /// `/skilluv portfolio <username>` — somebody's public profile.
+    /// `/skilluv portfolio <username>` : somebody's public profile.
     ///
     /// Public rows only. A hidden or banned profile answers as unknown rather
     /// than as hidden: confirming that an account exists is itself a leak on
@@ -865,7 +862,7 @@ impl Handler {
             Some((id, username, display_name)) => {
                 let profile = self.profile_lines(id, locale).await;
                 format!(
-                    "**{display_name}** — {frontend}/@{username}{profile}",
+                    "**{display_name}**: {frontend}/@{username}{profile}",
                     frontend = self.frontend_url,
                 )
             }
@@ -1176,16 +1173,16 @@ fn domain_hint() -> String {
 
 fn help_message(frontend: &str) -> String {
     format!(
-        "**Skilluv bot** — commands available :\n\
-         - `/skilluv me` — your linked profile, trades and craft score\n\
-         - `/skilluv verify <hash>` — check a Skilluv attestation\n\
-         - `/skilluv contests [domain]` — open contests\n\
-         - `/skilluv featured [domain]` — this week\'s featured member\n\
-         - `/skilluv portfolio <username>` — somebody\'s public profile\n\
-         - `/skilluv craft <domain>` — your craft score there\n\
-         - `/skilluv queue <domain>` — what is waiting on a reviewer\n\
-         - `/skilluv cohorts [domain]` — cohorts recruiting now\n\
-         - `/skilluv help` — this message\n\n\
+        "**Skilluv bot** : commands available\n\
+         - `/skilluv me` : your linked profile, trades and craft score\n\
+         - `/skilluv verify <hash>` : check a Skilluv attestation\n\
+         - `/skilluv contests [domain]` : open contests\n\
+         - `/skilluv featured [domain]` : this week\'s featured member\n\
+         - `/skilluv portfolio <username>` : somebody\'s public profile\n\
+         - `/skilluv craft <domain>` : your craft score there\n\
+         - `/skilluv queue <domain>` : what is waiting on a reviewer\n\
+         - `/skilluv cohorts [domain]` : cohorts recruiting now\n\
+         - `/skilluv help` : this message\n\n\
          Platform: {frontend}",
     )
 }

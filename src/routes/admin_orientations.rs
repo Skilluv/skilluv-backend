@@ -135,6 +135,7 @@ pub async fn create_orientation(
     crate::middleware::admin_destructive::enforce_admin_destructive(&state, auth.user_id).await?;
 
     validate_slug(&body.slug)?;
+    refuse_reserved_slug(&body.slug, state.config.tolerates_test_fixtures())?;
     if body.name.trim().is_empty() || body.name.len() > 120 {
         return Err(AppError::Validation("name must be 1..=120 chars".into()));
     }
@@ -504,6 +505,48 @@ pub async fn detach_skill(
     Ok(Json(build_response(json!({ "detached": true }))))
 }
 
+/// Slug prefixes a deployed environment refuses.
+///
+/// Four orientations named `e2e-orient-<id>` were created on production
+/// through this endpoint by a suite that never tore them down. They were
+/// `is_curated` and not archived, so they passed every public filter: they
+/// showed up in the trade carousel of the signup flow, and
+/// `GET /orientation-counts` reported 37 code orientations where 33 were
+/// real.
+///
+/// The read filters were not the bug — somebody genuinely created a curated
+/// orientation. Teaching the public catalogue to recognise test data would
+/// put that knowledge in the wrong place; refusing to write it is the guard
+/// that holds regardless of whether anyone's teardown runs.
+/// `test-` is deliberately NOT here. Six real trades in the quality domain
+/// already start with it — `test-strategy`, `test-automation-craft`,
+/// `test-flakiness-triage`, `test-level-selection`, `test-data-strategy`,
+/// `test-suite-performance` — and a rule aimed at fixtures that makes real
+/// trades uncreatable is worse than the problem it solves. The drift test in
+/// the suite checks the seeded catalogue against this list for exactly that
+/// reason.
+const RESERVED_SLUG_PREFIXES: [&str; 3] = ["e2e-", "fixture-", "tmp-"];
+
+/// Refuse a fixture slug anywhere that serves real people.
+///
+/// PATCH cannot rename an orientation — the slug is immutable there — so
+/// this is the only door into the reserved space.
+fn refuse_reserved_slug(slug: &str, tolerates_fixtures: bool) -> Result<(), AppError> {
+    if tolerates_fixtures {
+        return Ok(());
+    }
+    if let Some(prefix) = RESERVED_SLUG_PREFIXES
+        .iter()
+        .find(|p| slug.starts_with(**p))
+    {
+        // Naming the prefix, so a suite author reads why rather than guessing.
+        return Err(AppError::Validation(format!(
+            "slug prefix `{prefix}` is reserved for test fixtures and cannot be              created on a deployed environment; reserved prefixes are              {RESERVED_SLUG_PREFIXES:?}"
+        )));
+    }
+    Ok(())
+}
+
 fn validate_slug(s: &str) -> Result<(), AppError> {
     let len = s.len();
     if !(3..=60).contains(&len) {
@@ -516,4 +559,66 @@ fn validate_slug(s: &str) -> Result<(), AppError> {
         return Err(AppError::Validation("slug must match ^[a-z0-9-]+$".into()));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{RESERVED_SLUG_PREFIXES, refuse_reserved_slug};
+
+    #[test]
+    fn a_deployed_environment_refuses_a_fixture_slug() {
+        // The four that reached production, and the shape of the next one.
+        for slug in [
+            "e2e-orient-msoj30ffy0im",
+            "e2e-orient-msorwy5f0bvq",
+            "fixture-anything",
+            "tmp-scratch",
+        ] {
+            let refused = refuse_reserved_slug(slug, false);
+            assert!(
+                refused.is_err(),
+                "{slug} should not be creatable in production"
+            );
+            let message = format!("{}", refused.unwrap_err());
+            assert!(
+                message.contains("reserved"),
+                "the refusal has to say why: {message}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_real_orientation_is_untouched() {
+        // Nothing in the curated catalogue may collide with the reserved set.
+        for slug in [
+            "web-frontend-developer",
+            "web-backend-developer",
+            "dev-fullstack",
+            "security-red-team",
+            // The six the quality domain already ships, which is why `test-`
+            // is not reserved.
+            "test-strategy",
+            "test-automation-craft",
+            "test-flakiness-triage",
+        ] {
+            assert!(
+                refuse_reserved_slug(slug, false).is_ok(),
+                "{slug} is a trade somebody practises, not a fixture"
+            );
+        }
+    }
+
+    #[test]
+    fn a_test_environment_still_creates_its_own_fixtures() {
+        assert!(refuse_reserved_slug("e2e-orient-msoj30ffy0im", true).is_ok());
+    }
+
+    #[test]
+    fn every_reserved_prefix_ends_with_a_hyphen() {
+        // Otherwise `test-` would also claim `testing-engineer`, and a real
+        // trade would become uncreatable by a rule aimed at fixtures.
+        for p in RESERVED_SLUG_PREFIXES {
+            assert!(p.ends_with('-'), "{p} would swallow real slugs");
+        }
+    }
 }

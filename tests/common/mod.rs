@@ -386,6 +386,10 @@ impl TestApp {
                 frontend_url: "http://localhost:5173".to_string(),
                 sso_encryption_key: Some([42u8; 32]),
                 pdf_renderer_url: None,
+                // The suite is a test environment, and the fixture guard on
+                // POST /admin/orientations reads this to decide whether a
+                // reserved slug is allowed.
+                environment: "test".to_string(),
             },
             storage,
             email: Arc::new(skilluv_backend::services::EmailService::new(

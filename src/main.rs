@@ -242,6 +242,7 @@ async fn async_main(config: AppConfig) {
             frontend_url: config.frontend_url,
             sso_encryption_key: config.sso_encryption_key,
             pdf_renderer_url: config.pdf_renderer_url,
+            environment: config.environment.clone(),
         },
         storage,
         email,

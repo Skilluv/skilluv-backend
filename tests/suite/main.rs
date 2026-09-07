@@ -228,6 +228,7 @@ mod test_ski_289_guild_invitation_revoke;
 mod test_ski_291_user_projects;
 mod test_ski_293_294_contract;
 mod test_ski_293_seed_guild;
+mod test_ski_368_reserved_fixture_slugs;
 mod test_skill_domains;
 mod test_slice_orientation;
 mod test_storage_cors;

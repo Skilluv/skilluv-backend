@@ -30,6 +30,11 @@ struct StartQuery {
     /// (rejecting the flow if the provider email doesn't match the invited email).
     #[param(max_length = 128)]
     invite_token: Option<String>,
+    /// Absolute path on this deployment's own frontend to return the browser
+    /// to once the flow completes. Same shape and same `sanitise_return_path`
+    /// treatment as the other providers' start endpoint — a path, never a URL.
+    #[param(max_length = 512)]
+    return_to: Option<String>,
 }
 
 pub fn oauth_routes() -> Router<AppState> {
@@ -344,7 +349,11 @@ pub async fn github_login_start(
             provider: "github".into(),
             user_id: None,
             intent: "signup_login".into(),
-            redirect_after: None,
+            // Read, like the shared start handler does for Google and
+            // LinkedIn. This was hardcoded to None, so a GitHub login could
+            // not name where to come back to even once the callback learned
+            // to honour it.
+            redirect_after: q.return_to.as_deref().and_then(sanitise_return_path),
             invite_token: q.invite_token,
         },
     )
@@ -585,8 +594,38 @@ async fn finalise_login_or_link(
             )
             .increment(1);
 
+            // Home, if the flow said where home is.
+            //
+            // This branch used to return the JSON below and nothing else, so a
+            // browser that had just signed in with Google finished the round
+            // trip looking at `{"user_id": "..."}` on api.skill-uv.com — a
+            // domain it never chose to visit, with the back button as the only
+            // way out. The `link` branch above was given this treatment and the
+            // reasoning written down; signup and login never got it, which made
+            // the whole SSO signup path unusable from a browser while every
+            // endpoint in it answered correctly.
+            //
+            // The cookies ride along with the redirect: `AppendHeaders` sets
+            // them on the 303 exactly as it did on the 200.
+            //
+            // The JSON stays when no return path was given, so a programmatic
+            // caller reading the body is unaffected.
+            let headers = AppendHeaders([(SET_COOKIE, cookie), (SET_COOKIE, refresh_cookie)]);
+            if let Some(path) = oauth_state
+                .redirect_after
+                .as_deref()
+                .and_then(sanitise_return_path)
+            {
+                let target = format!(
+                    "{}{}",
+                    state.config.frontend_url.trim_end_matches('/'),
+                    path
+                );
+                return Ok((headers, Redirect::to(&target)).into_response());
+            }
+
             Ok((
-                AppendHeaders([(SET_COOKIE, cookie), (SET_COOKIE, refresh_cookie)]),
+                headers,
                 Json(build_response(json!({
                     "user_id": user_id,
                     "provider": profile.provider,
@@ -670,4 +709,48 @@ async fn create_user_from_profile(
     .fetch_one(db)
     .await?;
     Ok(inserted.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sanitise_return_path;
+
+    /// The filter that stands between a consent screen and an open redirect,
+    /// which had no test at all until this branch made a second flow depend
+    /// on it.
+    #[test]
+    fn only_a_path_on_our_own_origin_survives() {
+        // What a frontend legitimately asks for.
+        assert_eq!(
+            sanitise_return_path("/onboarding"),
+            Some("/onboarding".into())
+        );
+        assert_eq!(
+            sanitise_return_path("/onboarding?step=2&from=google"),
+            Some("/onboarding?step=2&from=google".into())
+        );
+        assert_eq!(sanitise_return_path("  /trades  "), Some("/trades".into()));
+
+        // Protocol-relative: a browser reads both as another origin while the
+        // string still looks local.
+        assert_eq!(sanitise_return_path("//evil.example"), None);
+        assert_eq!(sanitise_return_path(r"/\evil.example"), None);
+
+        // Not a path at all.
+        assert_eq!(sanitise_return_path("https://evil.example"), None);
+        assert_eq!(sanitise_return_path("evil.example"), None);
+        assert_eq!(sanitise_return_path(""), None);
+
+        // A newline would split the Location header and let the response
+        // carry whatever follows it.
+        assert_eq!(
+            sanitise_return_path("/ok\r\nLocation: https://evil.example"),
+            None
+        );
+        assert_eq!(sanitise_return_path("/ok\nSet-Cookie: a=b"), None);
+
+        // Length ceiling.
+        let long = format!("/{}", "a".repeat(512));
+        assert_eq!(sanitise_return_path(&long), None);
+    }
 }

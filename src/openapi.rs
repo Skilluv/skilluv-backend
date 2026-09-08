@@ -1224,6 +1224,10 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         // SKI-111 - was absent from the spec entirely.
         crate::routes::admin_projects::project_stats,
         // ─── contact (interest + conversations) ──────────────────
+        // newsletter (SKI-369)
+        crate::routes::newsletter::subscribe,
+        crate::routes::newsletter::confirm,
+        crate::routes::newsletter::unsubscribe,
         crate::routes::contact::send_interest,
         crate::routes::contact::sent_requests,
         crate::routes::contact::received_requests,
@@ -1888,6 +1892,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
             crate::models::PublicLabQuestion,
             crate::routes::challenge_tags::TagWithCount,
             crate::routes::challenge_tags::TagsResponse,
+            crate::routes::newsletter::SubscribeBody,
             crate::routes::challenge_tags::CategoryRow,
             crate::routes::challenge_tags::CategoriesResponse,
             crate::routes::challenge_tags::FeaturedChallengesResponse,

@@ -73,8 +73,13 @@ pub const RITES: &[Rite] = &[
     Rite {
         domain: "design",
         form: RiteForm::Submission,
-        gesture: "Design one screen against the entry brief of your trade, and say what each choice serves.",
-        expected_artifact: "One screen, uploaded, with two or three sentences of rationale.",
+        // Not "one screen against the entry brief": that brief was never
+        // written, and a screen is the work of one of the 26 design
+        // orientations. This is the code rite's own idea in another medium,
+        // which is why it can be asked of an illustrator and of an interface
+        // designer with the same sentence.
+        gesture: "Introduce yourself using your trade: your name, what you do, one thing you can do.",
+        expected_artifact: "One artefact: an image, a video, a text or a link.",
         continues_in: "design_critique",
     },
     Rite {

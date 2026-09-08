@@ -417,6 +417,12 @@ notification:
       body: "Les packs de credits, les challenges sponsorises qui te donnent acces direct aux soumissions, et le pipeline pour suivre tes candidats sans tableur."
       cta: "Voir les formules"
 
+  newsletter:
+    issue:
+      title: "Skilluv, ce mois-ci"
+      body: "Ce qui s'est forgé sur Skilluv depuis la dernière : les travaux rendus, les briefs ouverts, et ce qui change le mois prochain."
+      cta: "La lire"
+
   dispute:
     opened:
       title: "Un paiement de {amount} est conteste"

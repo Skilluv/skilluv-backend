@@ -220,3 +220,23 @@ include-name = "GET /api/users/{user_id}/skill-tree"
 # domain. Refusing it is correct rather than silently returning the whole tree.
 [operations.checks.positive_data_acceptance]
 enabled = false
+
+[[operations]]
+include-name = "POST /api/newsletter/subscriptions"
+
+# This endpoint is rate limited at 10 requests an hour per IP and 3 per
+# address, and a contract fuzzer sends hundreds from one IP. The 429 is the
+# endpoint working: without the address limit this is a way to mail somebody
+# repeatedly by typing their address from a handful of machines. So
+# `positive_data_acceptance` cannot pass here, not because the contract is
+# wrong but because the check and the limit describe two different sessions.
+#
+# Only this check is turned off. `not_a_server_error` stays on and is the
+# reason three real defects were found here rather than in production: a
+# `source` past its VARCHAR(40), a byte-versus-character length, and a domain
+# with no dot reaching the INSERT. `negative_data_rejection` stays on too.
+#
+# The positive path is covered by tests/suite/test_ski_369_newsletter.rs,
+# which subscribes, confirms, re-subscribes and unsubscribes for real.
+[operations.checks.positive_data_acceptance]
+enabled = false

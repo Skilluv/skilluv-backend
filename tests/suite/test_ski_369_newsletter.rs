@@ -425,3 +425,62 @@ async fn a_domain_without_a_real_tld_is_refused_before_the_insert() {
         .unwrap();
     assert_eq!(stored, 0, "a refused address must leave nothing behind");
 }
+
+/// Every bounded column is defended before the statement, not by it.
+///
+/// A utoipa `max_length` documents and does not reject, so `source` reached
+/// its `VARCHAR(40)` column at 41 characters and came back as a 500 carrying
+/// a Postgres message. `consent_ip` is the same shape of hole reached from
+/// the other side: it is `VARCHAR(45)` filled from `X-Forwarded-For`, which
+/// the caller sets, and no contract fuzzer sends headers so nothing would
+/// have found it. The IP is truncated rather than refused, because somebody
+/// subscribing should not be turned away over what a proxy wrote.
+#[tokio::test]
+async fn an_oversized_field_is_a_bad_request_and_an_oversized_ip_is_kept_short() {
+    let app = TestApp::spawn().await;
+
+    let resp = app
+        .post(
+            "/api/newsletter/subscriptions",
+            &json!({
+                "email": "bounded@example.com",
+                "locale": "fr",
+                "source": "0".repeat(41),
+            }),
+        )
+        .await;
+    assert_eq!(
+        resp.status(),
+        reqwest::StatusCode::BAD_REQUEST,
+        "a source past its column must be refused here, not by the INSERT"
+    );
+
+    let resp = app
+        .post_with_header(
+            "/api/newsletter/subscriptions",
+            &json!({
+                "email": "forwarded@example.com",
+                "locale": "fr",
+                "source": "footer",
+            }),
+            "X-Forwarded-For",
+            &"9".repeat(200),
+        )
+        .await;
+    assert!(
+        resp.status().is_success(),
+        "a forged forwarding header must not cost the subscriber their subscription: {}",
+        resp.status()
+    );
+
+    let ip: Option<String> =
+        sqlx::query_scalar("SELECT consent_ip FROM newsletter_subscriptions WHERE email = $1")
+            .bind("forwarded@example.com")
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
+    assert!(
+        ip.map(|v| v.chars().count()).unwrap_or(0) <= 45,
+        "the stored IP must fit the column it is stored in"
+    );
+}

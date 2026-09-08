@@ -717,6 +717,23 @@ impl TestApp {
             .expect("GET request failed")
     }
 
+    /// POST helper with one extra header, for the headers a caller controls.
+    pub async fn post_with_header(
+        &self,
+        path: &str,
+        body: &Value,
+        name: &'static str,
+        value: &str,
+    ) -> reqwest::Response {
+        self.client
+            .post(format!("{}{}", self.addr, path))
+            .header(name, value)
+            .json(body)
+            .send()
+            .await
+            .expect("POST request failed")
+    }
+
     /// POST helper with JSON body.
     pub async fn post(&self, path: &str, body: &Value) -> reqwest::Response {
         self.client

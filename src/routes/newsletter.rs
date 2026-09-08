@@ -137,7 +137,11 @@ fn looks_like_an_address(email: &str) -> bool {
         && tld.len() >= 2
         && !tld.contains('@')
         && !email.contains(' ')
-        && email.len() <= 320
+        // Characters, because the schema's `max_length` counts characters.
+        // `len()` counts bytes, so an accented address of 320 characters was
+        // schema-compliant and refused here, which is the same contract lie
+        // in its third costume.
+        && email.chars().count() <= 320
 }
 
 /// POST /api/newsletter/subscriptions
@@ -165,9 +169,37 @@ pub async fn subscribe(
             "locale must be one of fr, en, ar".into(),
         ));
     }
+    // A utoipa `max_length` documents, it does not reject. `source` is
+    // `VARCHAR(40)` and carried only the annotation, so 41 characters passed
+    // every check here and met the column instead: a 500 with a Postgres
+    // message in it, for a field the caller controls. The rule the rest of
+    // this handler already follows is that a bound on a column is enforced
+    // before the statement, not discovered by it.
+    if body.source.chars().count() > 40 {
+        return Err(AppError::Validation(
+            "source must be at most 40 characters".into(),
+        ));
+    }
+    if let Some(text) = body.consent_text.as_deref()
+        && text.chars().count() > 2000
+    {
+        return Err(AppError::Validation(
+            "consent_text must be at most 2000 characters".into(),
+        ));
+    }
 
     let mut redis = state.redis.clone();
-    let ip = extract_ip(&headers);
+    // Truncated rather than refused, and to characters rather than bytes.
+    //
+    // `consent_ip` is `VARCHAR(45)`, the width of a full IPv6 address, and
+    // this reads `X-Forwarded-For`, which anybody can set to anything. A
+    // header of a hundred characters was therefore a second way to a 500,
+    // this one not reachable by the contract fuzzer because it sends no
+    // headers. It is refused as evidence rather than as a request: somebody
+    // subscribing should not be turned away because a proxy in front of us
+    // wrote something odd, and a truncated IP is still worth what it was
+    // worth, which is a note beside a consent record.
+    let ip: String = extract_ip(&headers).chars().take(45).collect();
 
     // Per IP, and then per address.
     //

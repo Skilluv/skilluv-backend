@@ -69,17 +69,32 @@ pub struct SubscribeBody {
     /// reads, correctly, as the API rejecting valid data. A refusal the
     /// schema does not predict is a contract that lies.
     ///
-    /// `format = Email` was the second version of that same lie. It is a
-    /// hint, not a constraint: a generator reading it produced `0@com`, which
-    /// is schema-compliant and which this endpoint refuses, because a domain
-    /// with no dot cannot receive mail. The pattern says what is actually
-    /// required, and it is the same thing the column's CHECK requires: a
-    /// local part, a host, and a top level domain of at least two characters.
+    /// `format = Email` was the second version of that same lie, and it told
+    /// it in both directions. A generator reading it produced `0@com`, which
+    /// this endpoint refuses because a domain with no dot cannot receive
+    /// mail; then, once a pattern was added beside it, the format was the
+    /// stricter of the two and the fuzzer sent addresses violating it and
+    /// expecting a refusal this handler does not give.
+    ///
+    /// It is gone rather than tightened. The check here is deliberately a
+    /// cheap shape test: deliverability is decided by the confirmation mail
+    /// arriving, not by a regular expression, and an address that looks odd
+    /// to a validator is still somebody's address. What is left is a pattern
+    /// saying exactly what is enforced, which is what the column's CHECK
+    /// requires too: a local part, a host, and a top level domain of at least
+    /// two characters.
+    ///
+    /// The quantifiers are unbounded on purpose. An earlier version wrote
+    /// `{1,64}` for the local part and `{1,180}` for the host, which are the
+    /// conventional limits and which this handler does not check, so a local
+    /// part of seventy characters violated the schema and was accepted: the
+    /// same contradiction as the format, pointing the same way. A schema may
+    /// only claim what is enforced. The overall ceiling is `max_length`, and
+    /// that one is checked.
     #[schema(
         min_length = 6,
         max_length = 320,
-        format = Email,
-        pattern = r"^[^@\s]{1,64}@[^@\s]{1,180}\.[^@\s.]{2,63}$"
+        pattern = r"^[^@\s]+@[^@\s]+\.[^@\s.]{2,}$"
     )]
     pub email: String,
     /// `fr`, `en` or `ar`. Anything else is refused rather than silently

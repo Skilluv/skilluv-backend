@@ -418,6 +418,12 @@ notification:
       body: "Credit packs, sponsored challenges that give you direct access to the submissions, and a pipeline to track candidates without a spreadsheet."
       cta: "See the options"
 
+  newsletter:
+    issue:
+      title: "Skilluv, this month"
+      body: "What was forged on Skilluv since the last one: the work people handed in, the briefs that opened, and what changes next month."
+      cta: "Read it"
+
   dispute:
     opened:
       title: "A payment of {amount} is disputed"

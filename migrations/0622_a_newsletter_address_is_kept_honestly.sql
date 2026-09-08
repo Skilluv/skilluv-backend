@@ -127,13 +127,24 @@ CREATE TRIGGER trg_newsletter_subscriptions_updated_at
 -- failure this table was shaped to avoid, so the newsletter answers only to
 -- its own toggle and its own unsubscribe link.
 --
--- Off in every channel by default and opted into explicitly. `transactional`
--- is FALSE: nothing here is owed to anybody, and a transactional kind cannot
--- be refused.
+-- Every channel allowed, none of them on.
+--
+-- `allows_*` says whether a channel is possible at all; `default_*` says
+-- whether it starts on. A first draft had `allows_in_app` and `allows_push`
+-- FALSE, which does not mean "off by default", it means nobody may ever turn
+-- them on. `no_shipped_kind_locks_anyone_out_of_a_channel` refused it, and it
+-- was right: somebody who would rather read the newsletter in the app than in
+-- their inbox should be able to say so.
+--
+-- The send rule is unaffected, `mailable_addresses` reads the email channel
+-- specifically.
+--
+-- `transactional` is FALSE: nothing here is owed to anybody, and a
+-- transactional kind cannot be refused.
 INSERT INTO notification_kinds
     (kind, category, allows_in_app, allows_push, allows_email,
      default_in_app, default_push, default_email, transactional)
 VALUES
-    ('newsletter.issue', 'newsletter', FALSE, FALSE, TRUE,
+    ('newsletter.issue', 'newsletter', TRUE, TRUE, TRUE,
      FALSE, FALSE, FALSE, FALSE)
 ON CONFLICT (kind) DO NOTHING;

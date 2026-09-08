@@ -1,4 +1,4 @@
-//! Tests IA-D — Table ai_call_log + helper record.
+//! Tests IA-D - Table ai_call_log + helper record.
 
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use std::time::Duration;

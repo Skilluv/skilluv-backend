@@ -2,7 +2,7 @@
 //!
 //! Four tickets that are one path: register, be shown a first gesture, hand
 //! something in, and have it read. Each piece of it was broken in a way the
-//! next piece hid — eight domains had no gesture, so nobody noticed that
+//! next piece hid - eight domains had no gesture, so nobody noticed that
 //! handing in a hundred characters passed; and every gesture there was
 //! demanded a GitHub account, so nobody but a developer got that far.
 
@@ -121,7 +121,7 @@ async fn the_code_rite_is_the_same_challenge_twice() {
 ///
 /// `start_challenge` turns `duration_minutes` into an `expires_at`, and
 /// `submit_challenge` marks anything arriving after it `failure`. Sixty
-/// minutes — what migration 0607 first wrote — is impossible on the code rite,
+/// minutes - what migration 0607 first wrote - is impossible on the code rite,
 /// whose gesture is a fork and a pull request, and arbitrary on the other
 /// eleven, which are gestures somebody fits into their week (0610).
 #[tokio::test]
@@ -160,7 +160,7 @@ async fn no_rite_puts_a_clock_on_the_first_gesture() {
 }
 
 /// A domain nothing recognises is refused, rather than answered "no challenge
-/// found" — which reads as "that trade does not exist here".
+/// found" - which reads as "that trade does not exist here".
 #[tokio::test]
 async fn an_unknown_domain_is_a_bad_request_not_a_missing_challenge() {
     let app = crate::common::TestApp::spawn().await;
@@ -172,14 +172,14 @@ async fn an_unknown_domain_is_a_bad_request_not_a_missing_challenge() {
 }
 
 // ════════════════════════════════════════════════════════════════════
-// SKI-361 — a hundred characters is not a pass
+// SKI-361 - a hundred characters is not a pass
 // ════════════════════════════════════════════════════════════════════
 
 /// One filler submission per non-code domain never produces `success`, and
 /// never credits a fragment.
 ///
 /// This is the recette condition of SKI-361, run against the rite of each
-/// domain — which is the challenge a new account is actually sent to, and
+/// domain - which is the challenge a new account is actually sent to, and
 /// therefore the one the hole was reachable through.
 #[tokio::test]
 async fn filler_never_passes_a_domain_without_an_evaluator() {
@@ -207,7 +207,7 @@ async fn filler_never_passes_a_domain_without_an_evaluator() {
             "{domain}: start refused"
         );
 
-        // A hundred and twenty characters of nothing — comfortably over the
+        // A hundred and twenty characters of nothing - comfortably over the
         // old `code.len() >= 100` bar.
         let filler = "x".repeat(120);
         let resp = app
@@ -221,19 +221,19 @@ async fn filler_never_passes_a_domain_without_an_evaluator() {
 
         assert_eq!(
             body["data"]["submission"]["status"], "pending_review",
-            "{domain}: filler was scored instead of queued — {body}"
+            "{domain}: filler was scored instead of queued - {body}"
         );
         assert_eq!(
             body["data"]["fragments_earned"], 0,
-            "{domain}: filler earned fragments — {body}"
+            "{domain}: filler earned fragments - {body}"
         );
         assert_eq!(
             body["data"]["user"]["total_fragments"], 0,
-            "{domain}: filler moved the user's total — {body}"
+            "{domain}: filler moved the user's total - {body}"
         );
         assert_eq!(
             body["data"]["user"]["profile_active"], false,
-            "{domain}: filler activated a profile — {body}"
+            "{domain}: filler activated a profile - {body}"
         );
     }
 }
@@ -281,7 +281,7 @@ async fn a_pending_submission_reaches_the_review_queue() {
 /// An `approve` verdict is what turns the submission into a pass: fragments
 /// arrive, the profile activates, and the rite completes.
 ///
-/// The fragments come from the challenge template, not from a slice — a
+/// The fragments come from the challenge template, not from a slice - a
 /// challenge deliverable has no slice, so reading the reward only from
 /// `project_slices` would have approved the work and awarded nothing.
 #[tokio::test]
@@ -351,7 +351,7 @@ async fn an_approved_review_is_what_awards_the_fragments() {
 }
 
 // ════════════════════════════════════════════════════════════════════
-// SKI-362 — eleven of the twelve gestures are not a fork
+// SKI-362 - eleven of the twelve gestures are not a fork
 // ════════════════════════════════════════════════════════════════════
 
 /// The catalogue the signup screen renders: twelve gestures, one of which
@@ -409,7 +409,7 @@ async fn a_designer_starts_the_rite_without_a_github_account() {
     assert!(body["data"]["next_steps"]["challenge_id"].is_string());
 }
 
-/// `code` still forks, and still says so when there is no token — the one
+/// `code` still forks, and still says so when there is no token - the one
 /// domain where "connect GitHub" is the right answer.
 #[tokio::test]
 async fn the_code_rite_still_asks_for_github() {
@@ -466,7 +466,7 @@ async fn starting_a_submission_rite_is_idempotent() {
     assert_eq!(rows, 1);
 }
 
-/// Status describes the rite before anything is started — which is what lets
+/// Status describes the rite before anything is started - which is what lets
 /// the front stop hardcoding eleven shapes.
 #[tokio::test]
 async fn status_describes_the_rite_before_it_starts() {
@@ -490,7 +490,7 @@ async fn status_describes_the_rite_before_it_starts() {
 }
 
 /// Handing in the brief moves the rite on, and the reviewer's verdict finishes
-/// it — the submission form's equivalent of the webhook.
+/// it - the submission form's equivalent of the webhook.
 #[tokio::test]
 async fn handing_in_the_brief_advances_then_completes_the_rite() {
     let app = crate::common::TestApp::spawn().await;
@@ -558,7 +558,7 @@ async fn handing_in_the_brief_advances_then_completes_the_rite() {
 }
 
 // ════════════════════════════════════════════════════════════════════
-// SKI-364 — the catalogue says how big it is
+// SKI-364 - the catalogue says how big it is
 // ════════════════════════════════════════════════════════════════════
 
 /// The page says how many rows the filter matches, so a client can tell a full
@@ -575,7 +575,7 @@ async fn the_orientations_catalogue_carries_its_total() {
     assert_eq!(page, 50, "the default page size changed");
     assert!(
         total > page as i64,
-        "the total ({total}) should exceed one page — otherwise this test proves nothing"
+        "the total ({total}) should exceed one page - otherwise this test proves nothing"
     );
 
     let db_total: i64 = sqlx::query_scalar(
@@ -615,7 +615,7 @@ async fn the_total_is_counted_under_the_same_filter_as_the_page() {
 }
 
 /// The eleven class counts in one call rather than eleven, and never
-/// hardcoded — which is what the front was doing, from a count of the
+/// hardcoded - which is what the front was doing, from a count of the
 /// migrations, and which is wrong on the next orientation added.
 #[tokio::test]
 async fn the_counts_endpoint_answers_the_whole_catalogue_in_one_call() {
@@ -683,7 +683,7 @@ async fn the_counts_do_not_shadow_a_slug() {
 
 /// The counts take no query parameter, and refuse one.
 ///
-/// Archived trades are never counted — the screen this serves shows a beginner
+/// Archived trades are never counted - the screen this serves shows a beginner
 /// how many trades each class holds, and including retired ones tells them
 /// something false. So there is no flag, and the endpoint says so rather than
 /// ignoring what it is handed: the contract fuzzer reads a parameter the
@@ -843,8 +843,8 @@ async fn a_verdict_needs_more_than_an_account() {
 /// An approved pull request is what completes the code rite.
 ///
 /// The webhook takes it to `pr_opened` and attaches the deliverable; nothing
-/// used to move it further, so `badge_rules.bonjour_skilluv` — which fires on
-/// `completed_at IS NOT NULL` — was unreachable on the only path that had
+/// used to move it further, so `badge_rules.bonjour_skilluv` - which fires on
+/// `completed_at IS NOT NULL` - was unreachable on the only path that had
 /// shipped. This exercises the settlement, not the webhook itself: the webhook
 /// reads HELLO.md off GitHub, so the rows it writes are written here directly.
 #[tokio::test]
@@ -1111,8 +1111,8 @@ async fn the_catalogue_names_where_the_trade_continues() {
 
 /// Every seeded challenge names the trade it belongs to.
 ///
-/// `POST /admin/orientations/{slug}/challenges/publish` — the one surface that
-/// opens a catalogue, one trade at a time — selects on `orientation_id`. Only
+/// `POST /admin/orientations/{slug}/challenges/publish` - the one surface that
+/// opens a catalogue, one trade at a time - selects on `orientation_id`. Only
 /// the 130 design seeds carried one, so it published nothing for eleven
 /// domains of twelve, and a person who finished their first gesture met an
 /// empty `GET /api/challenges` (migration 0612).
@@ -1150,7 +1150,7 @@ async fn every_seeded_challenge_names_its_trade() {
 /// Every curated trade resolves to a starter, read from the table.
 ///
 /// The check this replaces lived in `onboarding.rs` and looped over a constant
-/// of 32 slugs commented "snapshot au 2026-07-22" — a snapshot of what the
+/// of 32 slugs commented "snapshot au 2026-07-22" - a snapshot of what the
 /// mapping already covered, so it compared the list to itself and could not
 /// fail. It stayed green while the table grew to 150 and the other 118
 /// orientations silently forked `starter-fullstack-node`, handing a
@@ -1175,7 +1175,7 @@ async fn every_curated_orientation_resolves_to_a_starter() {
 
     assert!(
         trades.len() > 100,
-        "only {} trades read — the catalogue is not being walked",
+        "only {} trades read - the catalogue is not being walked",
         trades.len()
     );
 

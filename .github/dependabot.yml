@@ -1,4 +1,4 @@
-# Dependabot config — Skilluv backend.
+# Dependabot config - Skilluv backend.
 # Groups minor + patch to avoid PR noise; majors get their own PR for review.
 # All schedules weekly (Monday morning UTC) to batch review load.
 

@@ -54,7 +54,7 @@ async fn test_privacy_hides_heatmap_in_public_profile() {
     assert!(body["data"]["skill_tree"].is_array()); // skill_tree should still be visible
 }
 
-/// SKI-70 — a freshly registered user has `profile_active = FALSE` until their
+/// SKI-70 - a freshly registered user has `profile_active = FALSE` until their
 /// first successful challenge. That flag gates the listing surfaces, not the
 /// public profile page, which must be reachable straight after signup.
 #[tokio::test]

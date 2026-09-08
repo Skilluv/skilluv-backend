@@ -1,6 +1,6 @@
 name: Nightly fuzz & mutation
 
-# The heavy half of the FZ/MU backlog — the part that must not run on every PR.
+# The heavy half of the FZ/MU backlog - the part that must not run on every PR.
 # cargo-fuzz needs nightly + libFuzzer (Linux only; it does not build on the
 # Windows dev box), and cargo-mutants reruns the suite hundreds of times. Both
 # run here, on a schedule, against a Linux runner, and report by opening an
@@ -10,7 +10,7 @@ name: Nightly fuzz & mutation
 
 on:
   schedule:
-    # 03:17 UTC — off the top of the hour to dodge the scheduler stampede.
+    # 03:17 UTC - off the top of the hour to dodge the scheduler stampede.
     - cron: "17 3 * * *"
   workflow_dispatch: {}
 
@@ -48,7 +48,7 @@ jobs:
         with:
           tool: cargo-fuzz
 
-      # Corpus grows across runs — a fuzzer that starts from what the last run
+      # Corpus grows across runs - a fuzzer that starts from what the last run
       # discovered goes deeper than one that starts cold every night.
       - name: Restore fuzz corpus
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6
@@ -81,7 +81,7 @@ jobs:
           # Don't pile a new issue on top of an unfixed one for the same target.
           existing=$(gh issue list --state open --search "$title in:title" --json number --jq 'length')
           if [ "$existing" != "0" ]; then
-            echo "an open issue already tracks $TARGET — not filing another"
+            echo "an open issue already tracks $TARGET - not filing another"
             exit 0
           fi
           gh issue create \
@@ -108,12 +108,12 @@ jobs:
 
       # Runs the mutants listed by mutants.toml (the ten critical modules).
       # Surviving mutants are lines a test "covers" but does not test. Reported
-      # as an artifact, not a gate — the PR-time gate is the incremental
+      # as an artifact, not a gate - the PR-time gate is the incremental
       # --in-diff run in ci.yml.
       - name: Mutation test the critical modules
         # No --in-place: cargo-mutants isolates each job in its own build dir,
         # which -j 2 needs. test_tool=nextest comes from .cargo/mutants.toml.
-        # `|| true` — surviving mutants are reported as an artifact, not a gate.
+        # `|| true` - surviving mutants are reported as an artifact, not a gate.
         run: cargo mutants --no-shuffle -j 2 || true
 
       - name: Upload mutants report

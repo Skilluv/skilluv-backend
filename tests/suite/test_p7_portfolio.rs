@@ -275,7 +275,7 @@ async fn badge_svg_shows_fragments_when_no_golden_stars() {
 async fn badge_svg_escapes_xml_special_chars_from_title() {
     let (db, db_name) = setup_test_db().await;
     let user_id = Uuid::new_v4();
-    // Title with unusual chars — falls back to Skilluv label
+    // Title with unusual chars - falls back to Skilluv label
     insert_test_user(&db, user_id, "escaped", true, Some("legende"), 5000, 5).await;
 
     let svg = PortfolioService::build_badge_svg(&db, "escaped")

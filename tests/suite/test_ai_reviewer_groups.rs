@@ -143,8 +143,8 @@ async fn every_derivable_reviewer_capability_is_grantable() {
     // fail to compile. It produces a grant the database refuses, with an
     // error naming a constraint rather than the trade nobody can review.
     //
-    // Five migrations have restated that list — 0098, 0117, 0120, 0176, 0210
-    // — and the sixth will be whichever domain gets review rights next. This
+    // Five migrations have restated that list - 0098, 0117, 0120, 0176, 0210
+    // - and the sixth will be whichever domain gets review rights next. This
     // is the guard that fails then, here, instead of in production.
     let derivable: Vec<String> = sqlx::query_scalar(
         "SELECT DISTINCT primary_domain || '_reviewer:' || reviewer_group

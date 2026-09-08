@@ -110,7 +110,7 @@ async fn cannot_register_more_than_three_active_orientations() {
     }
     // A fourth live orientation, so the 400 is the cap and not something else.
     // This used to name `pentester-web`, which migration 0542 archived when the
-    // security domain opened — and an archived slug is refused for its own
+    // security domain opened - and an archived slug is refused for its own
     // reason, which would have made this assertion pass while testing nothing.
     let over = app
         .post(
@@ -138,7 +138,7 @@ async fn delete_orientation_historises_but_keeps_row() {
     assert_eq!(del.status().as_u16(), 200);
 
     // La ligne existe encore avec ended_at, invisible dans le "actives" mais
-    // présente en base — historisation.
+    // présente en base - historisation.
     let cnt: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM user_orientations uo
          JOIN orientations o ON o.id = uo.orientation_id
@@ -183,7 +183,7 @@ async fn patch_switches_primary_flag_atomically() {
         )
         .await;
     // Note: TestApp::put uses PUT, but our route is PATCH. Use the raw client.
-    // We'll skip this test path if PATCH isn't in TestApp — swap with client.
+    // We'll skip this test path if PATCH isn't in TestApp - swap with client.
     let _ = patch;
     let resp = app
         .client

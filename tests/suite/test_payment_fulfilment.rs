@@ -3,7 +3,7 @@
 //! The scenario every one of these is written against: the payer confirms
 //! on their phone and closes the tab. The provider has the money. If
 //! delivery hangs off the front end coming back, or off a webhook that may
-//! never arrive, the payment is real and the order does not exist — and the
+//! never arrive, the payment is real and the order does not exist - and the
 //! only person who knows is the customer.
 
 use crate::common::TestApp;
@@ -90,7 +90,7 @@ async fn two_roads_arriving_together_deliver_once() {
     let (_, payment) = pending_session(&app, mentor, mentee).await;
 
     // The webhook and the poller both hearing about the same payment is the
-    // normal case, not the rare one — the poller runs every minute and does
+    // normal case, not the rare one - the poller runs every minute and does
     // not know a webhook is in flight.
     let first = fulfilment::settle_and_deliver(&app.db, payment, Some("txn_1"))
         .await
@@ -182,7 +182,7 @@ async fn money_taken_and_nothing_given_is_findable() {
     let owed = fulfilment::undelivered(&app.db, 60).await.unwrap();
     assert!(
         owed.iter().any(|p| p.id == payment),
-        "a paid, undelivered payment must be findable — this is the query an \
+        "a paid, undelivered payment must be findable - this is the query an \
          operator runs and the one the sweep runs every minute"
     );
 }
@@ -202,7 +202,7 @@ async fn every_way_of_paying_carries_a_reference_we_can_ask_about() {
     .unwrap();
     assert!(methods > 0, "the methods catalogue is seeded");
 
-    // The subset that needs no redirect — the one the front renders inline.
+    // The subset that needs no redirect - the one the front renders inline.
     let inline: Vec<String> = sqlx::query_scalar(
         "SELECT operator FROM payment_methods
           WHERE enabled = TRUE AND supports_inline = TRUE AND country = 'BJ'
@@ -230,7 +230,7 @@ async fn a_status_check_throttles_itself_between_calls() {
     // The endpoint asks the provider at most once every few seconds per
     // payment, and records when. A front polling every second would
     // otherwise turn three minutes of waiting into ninety requests for one
-    // payment — and the day that rate-limits the account, the background
+    // payment - and the day that rate-limits the account, the background
     // poller is throttled with it.
     sqlx::query("UPDATE payments SET last_checked_at = NOW() WHERE id = $1")
         .bind(payment)
@@ -239,7 +239,7 @@ async fn a_status_check_throttles_itself_between_calls() {
         .unwrap();
 
     // Cast, because EXTRACT(EPOCH ...) is numeric in Postgres and decoding
-    // it straight into an f64 fails — the same mismatch that stopped the
+    // it straight into an f64 fails - the same mismatch that stopped the
     // status endpoint and the background poller from running at all.
     let since: Option<f64> = sqlx::query_scalar(
         "SELECT EXTRACT(EPOCH FROM (NOW() - last_checked_at))::float8
@@ -264,7 +264,7 @@ async fn front_polling_does_not_eat_the_pollers_backoff_budget() {
 
     // `check_count` drives the background poller's backoff. If the status
     // endpoint incremented it, three minutes of a spinner would push it
-    // past sixty and convince the poller to wait half an hour — turning a
+    // past sixty and convince the poller to wait half an hour - turning a
     // cosmetic detail into the reason the safety net stops working.
     for _ in 0..40 {
         sqlx::query("UPDATE payments SET last_checked_at = NOW() WHERE id = $1")
@@ -310,7 +310,7 @@ async fn a_stripe_payment_is_polled_like_a_fedapay_one() {
 
     // No Stripe credentials in tests, so the poller skips the call rather
     // than failing. What must hold is that the payment is *in* its working
-    // set — a Stripe payment older than the quiet period is something the
+    // set - a Stripe payment older than the quiet period is something the
     // poller looks at.
     let open: Vec<Uuid> = sqlx::query_scalar(
         "SELECT id FROM payments

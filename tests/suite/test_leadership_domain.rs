@@ -10,7 +10,7 @@
 //!   * a retrospective is attested for its action items landing, not for the
 //!     hour in the room;
 //!   * a commitment counts once the project it commits has **acknowledged**
-//!     it — the one term in this domain nobody can produce alone;
+//!     it - the one term in this domain nobody can produce alone;
 //!   * a cohort's graduation rate is computed over everybody who joined.
 
 use crate::common::TestApp;
@@ -134,7 +134,7 @@ fn a_retro_body() -> Value {
     // Held a week ago, computed rather than written down.
     //
     // This was `"2026-06-01"`, and the suite went red on 2026-08-30 with
-    // "resolving the actions did not produce the attestation" — ninety days
+    // "resolving the actions did not produce the attestation" - ninety days
     // later to the day. `leadership_retrospective_followthrough` only counts an
     // action as followed through when `done_at <= held_on + INTERVAL '90 days'`,
     // so a fixed date does not fail when the code changes: it fails when the
@@ -251,7 +251,7 @@ async fn the_skill_map_reuses_what_the_tree_already_had() {
     .unwrap();
     assert_eq!(
         total, 71,
-        "the map is short — a skill slug in 0466 does not exist"
+        "the map is short - a skill slug in 0466 does not exist"
     );
 
     // `soft_skills` already held adr-writing, roadmap-thinking,
@@ -478,7 +478,7 @@ async fn a_confidential_artefact_is_counted_and_never_shown() {
     assert!(summary[0]["context"]["industry"].is_string());
     assert!(
         summary[0].get("title").is_none(),
-        "a confidential artefact published its title — often enough to identify a product"
+        "a confidential artefact published its title - often enough to identify a product"
     );
     assert!(body["data"]["profile"]["score"]["score"].as_i64().unwrap() > 0);
 }
@@ -573,7 +573,7 @@ async fn only_a_written_decision_can_be_adopted() {
     assert_eq!(
         resp.status(),
         400,
-        "a roadmap was 'adopted' — it is followed or it is not, and no moment says so"
+        "a roadmap was 'adopted' - it is followed or it is not, and no moment says so"
     );
 }
 
@@ -621,7 +621,7 @@ async fn a_retrospective_is_attested_for_its_actions_not_for_the_hour() {
     );
 
     // Three actions. Two closed and one dropped with a reason is 100 % resolved
-    // — dropping in writing is a decision, not a failure.
+    // - dropping in writing is a decision, not a failure.
     let mut action_ids = Vec::new();
     for what in [
         "Write the date assumptions down before quoting the date",
@@ -702,7 +702,7 @@ async fn an_action_with_nobody_on_it_is_refused() {
     assert_eq!(
         resp.status(),
         400,
-        "an action with no owner was accepted — that is an intention"
+        "an action with no owner was accepted - that is an intention"
     );
 }
 
@@ -858,7 +858,7 @@ async fn a_graduation_rate_is_computed_over_everybody_who_joined() {
         .await;
     assert_eq!(resp.status(), 200, "{}", resp.text().await.unwrap());
 
-    // Three finished, two left — one because the schedule did not work, one
+    // Three finished, two left - one because the schedule did not work, one
     // because they found a job.
     for m in &members[0..3] {
         let resp = app

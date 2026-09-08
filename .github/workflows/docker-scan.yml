@@ -5,12 +5,12 @@ name: Docker image scan + SBOM
 #   - SBOM generation (CycloneDX) for supply-chain traceability
 #   - Both results uploaded to the GitHub Security tab + as artifacts
 #
-# Does NOT push the image — publishing to GHCR is the job of the `publish`
+# Does NOT push the image - publishing to GHCR is the job of the `publish`
 # workflow (see PR #33). We build locally with buildx cache-from GHA so we
 # don't pay the full Rust compile twice.
 
 on:
-  # Push-master trigger removed — image is already scanned on the PR that
+  # Push-master trigger removed - image is already scanned on the PR that
   # merged, no value in re-scanning the identical build. Weekly cron picks
   # up new CVEs against unchanged deps.
   pull_request:

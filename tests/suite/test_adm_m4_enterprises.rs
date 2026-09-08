@@ -1,4 +1,4 @@
-//! Tests ADM-M4 — Enterprise type manager.
+//! Tests ADM-M4 - Enterprise type manager.
 
 use crate::common::TestApp;
 use serde_json::json;

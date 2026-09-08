@@ -1,4 +1,4 @@
-//! Integration tests for SKI-286 — mention inbox.
+//! Integration tests for SKI-286 - mention inbox.
 //!
 //! The load-bearing tests here are the confidentiality ones: a mention
 //! inside a DM or a private diary entry must never surface the content to
@@ -328,7 +328,7 @@ async fn a_mention_in_a_private_diary_entry_stays_private() {
         "a private diary entry must not reach the person it names"
     );
 
-    // Flipping the entry public makes the mention visible — visibility is
+    // Flipping the entry public makes the mention visible - visibility is
     // evaluated on read, against the content's current state.
     sqlx::query("UPDATE slice_diary_entries SET is_public = TRUE WHERE slice_id = $1")
         .bind(slice_id)
@@ -546,7 +546,7 @@ async fn excerpt_is_plain_text() {
 #[tokio::test]
 async fn source_type_allowlist_is_enforced_at_the_service_boundary() {
     // Guards against a caller inventing a source type that the inbox query
-    // has no branch for — such a mention would be invisible forever.
+    // has no branch for - such a mention would be invisible forever.
     assert!(mentions::validate_source_type("forum_post").is_ok());
     assert!(mentions::validate_source_type("tweet").is_err());
 }

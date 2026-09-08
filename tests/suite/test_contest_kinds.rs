@@ -28,7 +28,7 @@ async fn every_format_that_ever_existed_still_does() {
         // Migration 0114
         "marathon",
         "defi_solitaire",
-        // Migration 0189 — the two that 0223 deleted and 0228 restored
+        // Migration 0189 - the two that 0223 deleted and 0228 restored
         "code_golf",
         "tdd_contest",
         // Migration 0223
@@ -140,7 +140,7 @@ async fn no_format_belongs_to_a_domain_that_does_not_exist() {
 }
 
 /// The concrete case the 0223 regression broke, through the service rather
-/// than straight SQL — so the scoring direction is exercised too.
+/// than straight SQL - so the scoring direction is exercised too.
 ///
 /// Inherited from `test_tournament_kinds_agree`, which also held two tests
 /// asserting that the Rust list and the CHECK constraint agreed. Migration
@@ -151,7 +151,7 @@ async fn a_code_golf_can_actually_be_created() {
     let app = TestApp::spawn().await;
 
     // The concrete case the regression broke, through the service rather than
-    // straight SQL — so the scoring direction is exercised too.
+    // straight SQL - so the scoring direction is exercised too.
     app.register_user("kinds_admin").await;
     let admin: Uuid = sqlx::query_scalar("SELECT id FROM users WHERE username = 'kinds_admin'")
         .fetch_one(&app.db)

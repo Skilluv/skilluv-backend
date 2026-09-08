@@ -688,7 +688,7 @@ async fn a_contest_with_unjudged_entries_cannot_conclude() {
 
     app.login("unjudgedadmin").await;
     // People spent days on this. Concluding without a verdict leaves them
-    // nothing to show for it — not even a rank.
+    // nothing to show for it - not even a rank.
     let resp = app
         .post(&format!("/api/admin/contests/{id}/conclude"), &json!({}))
         .await;

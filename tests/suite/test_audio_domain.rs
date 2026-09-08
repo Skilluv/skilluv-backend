@@ -1,7 +1,7 @@
 //! The audio domain: the catalogue, the rights, and the rules the schema
 //! enforces rather than trusts.
 //!
-//! What is asserted here is what would be expensive to discover later — a
+//! What is asserted here is what would be expensive to discover later - a
 //! trade nobody can review, an attestation resting on nothing, a revision
 //! counter that does not stop.
 
@@ -64,7 +64,7 @@ async fn the_audio_domain_is_active_and_the_undeclared_ones_are_not() {
 ///
 /// The failure this catches is the one migration 0305 documented: the
 /// capability name is assembled from an orientation row, so a missing value
-/// does not fail to compile — it produces a grant the database refuses.
+/// does not fail to compile - it produces a grant the database refuses.
 #[tokio::test]
 async fn every_audio_review_capability_is_grantable() {
     let app = TestApp::spawn().await;
@@ -334,14 +334,14 @@ async fn a_creative_commons_source_states_its_credit_line() {
 ///
 /// The slice used to be a `figma_frame`. Migration 0231 folded that and
 /// `design_token` into `design_artifact` and moved the existing rows across,
-/// so the old slug names nothing — which is a different failure from the one
+/// so the old slug names nothing - which is a different failure from the one
 /// this test is about.
 #[tokio::test]
 async fn a_sound_file_cannot_hang_off_a_design_artefact() {
     let app = TestApp::spawn().await;
     let project_id = seed_project(&app).await;
 
-    // `orientation_id` is required on a design slice — 0231 refuses one that
+    // `orientation_id` is required on a design slice - 0231 refuses one that
     // does not name the trade it belongs to, because the reviewer family is
     // derived from it and a slice nobody can be given rights over cannot be
     // reviewed.
@@ -547,7 +547,7 @@ async fn the_audio_wizard_refuses_a_question_it_does_not_ask() {
 ///
 /// Ticket F-07 asked whether audio attestations feed the global rank. They do,
 /// because `services::ranks` counts attestations and verified deliverables
-/// without looking at a domain — and this test is here so a later change that
+/// without looking at a domain - and this test is here so a later change that
 /// adds a domain filter has to argue with it.
 #[tokio::test]
 async fn the_rank_counts_audio_attestations_like_any_other() {

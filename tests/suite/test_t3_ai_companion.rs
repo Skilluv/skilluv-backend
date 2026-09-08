@@ -1,9 +1,9 @@
-//! Integration tests for SKI-44 — disclosed AI learning companion.
+//! Integration tests for SKI-44 - disclosed AI learning companion.
 //!
 //! The AI worker is not running in the test environment (`grpc_ai_url` is
 //! `None` in the test harness), which is exactly the deployment state the
 //! ticket lists as a prerequisite. That makes the unavailable path the one
-//! these tests can exercise end to end — and it is the one that matters
+//! these tests can exercise end to end - and it is the one that matters
 //! most, because it is where an interaction could silently go unrecorded.
 //!
 //! Hashing, caching and quota arithmetic are unit-tested in
@@ -262,7 +262,7 @@ async fn disclosure_attaches_recent_interactions_to_a_deliverable() {
         .await
         .unwrap();
     }
-    // A failed one, which is not disclosable — no help was received.
+    // A failed one, which is not disclosable - no help was received.
     sqlx::query(
         "INSERT INTO ai_interactions (user_id, interaction_type, prompt, status)
          VALUES ($1, 'explain', 'q', 'unavailable')",

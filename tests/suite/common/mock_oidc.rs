@@ -58,7 +58,7 @@ impl MockIdp {
     /// ID token whose `email` and `name` claims match the given values, so
     /// callers can assert JIT provisioning downstream.
     pub async fn spawn(subject_email: &str, subject_name: &str) -> Self {
-        // RSA 2048 key generation is ~500 ms — acceptable for a per-test cost.
+        // RSA 2048 key generation is ~500 ms - acceptable for a per-test cost.
         let mut rng = rsa::rand_core::OsRng;
         let private_key =
             RsaPrivateKey::new(&mut rng, 2048).expect("RSA keypair generation failed");

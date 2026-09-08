@@ -1,7 +1,7 @@
 //! Tests d'intégration P11.1 : ingestion GitHub via slice_ingestion service.
 //!
 //! On teste directement la fn interne `insert_slice_from_issue` par des
-//! INSERTs SQL équivalents (elle n'est pas pub) — mais on peut valider :
+//! INSERTs SQL équivalents (elle n'est pas pub) - mais on peut valider :
 //! - `poll_all_github_projects` skip les projets sans repo GitHub.
 //! - Le UNIQUE index empêche les doublons cross-runs.
 //! - status='open' si mode='auto', 'draft' si 'curator_review'.

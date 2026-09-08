@@ -306,7 +306,7 @@ async fn the_ai_award_categories_join_the_existing_ceremony() {
     // would never have looked for them.
     // Named rather than matched. This was `slug LIKE '%ai%'`, which is a
     // substring and therefore also catches `best-blockchain-project`,
-    // `best-trainer` and `cross-domain-educator` — three letters in the
+    // `best-trainer` and `cross-domain-educator` - three letters in the
     // middle of an unrelated word. It passed while those categories did not
     // exist and broke the day two domains added theirs, which is the wrong
     // reason for a test about the AI categories to fail.
@@ -327,7 +327,7 @@ async fn the_ai_award_categories_join_the_existing_ceremony() {
     assert_eq!(ai.len(), AI_CATEGORIES.len(), "got {ai:?}");
 
     // The claim is that the AI categories live in the same table as the code
-    // ones — one ceremony — not that the table has a particular size. Every
+    // ones - one ceremony - not that the table has a particular size. Every
     // domain added since brings its own, and a fixed total tests only that
     // somebody ran the seed.
     let total: i64 = sqlx::query_scalar("SELECT count(*) FROM award_categories")
@@ -358,7 +358,7 @@ async fn every_ai_guide_exists_in_both_languages() {
     let app = TestApp::spawn().await;
 
     // F-01, F-05 and G-01 each say "FR + EN". A slug with no English row does
-    // not 404 — it falls back to French — which is why nothing would have
+    // not 404 - it falls back to French - which is why nothing would have
     // surfaced half a domain being untranslated.
     let untranslated: Vec<String> = sqlx::query_scalar(
         "SELECT fr.slug FROM content_guides fr

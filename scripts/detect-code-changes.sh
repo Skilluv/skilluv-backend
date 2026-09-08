@@ -14,7 +14,7 @@
 # lets a real change skip every test. Never bias toward skipping.
 #
 # The documentation set MUST stay identical to the paths the old
-# ci-docs-only.yml claimed — see the regex below.
+# ci-docs-only.yml claimed - see the regex below.
 
 set -euo pipefail
 
@@ -48,13 +48,13 @@ case "${EVENT:-}" in
 esac
 
 if [ -z "${old}" ]; then
-  echo "no reliable baseline for event '${EVENT:-?}' — running the full pipeline (fail safe)"
+  echo "no reliable baseline for event '${EVENT:-?}' - running the full pipeline (fail safe)"
   emit true
   exit 0
 fi
 
 if ! git cat-file -e "${old}^{commit}" 2>/dev/null; then
-  echo "baseline ${old} not reachable — running the full pipeline (fail safe)"
+  echo "baseline ${old} not reachable - running the full pipeline (fail safe)"
   emit true
   exit 0
 fi
@@ -63,7 +63,7 @@ fi
 files="$(git diff --name-only "${old}" "${new}" || true)"
 
 if [ -z "${files}" ]; then
-  echo "empty diff (${old}..${new}) — running the full pipeline (fail safe)"
+  echo "empty diff (${old}..${new}) - running the full pipeline (fail safe)"
   emit true
   exit 0
 fi

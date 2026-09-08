@@ -1,4 +1,4 @@
-//! The public design profile — everything a stranger needs in one call.
+//! The public design profile - everything a stranger needs in one call.
 //!
 //! Nine sections, and the rule that holds them together: what is shown is
 //! either verified work or a declaration clearly marked as one. Nothing in

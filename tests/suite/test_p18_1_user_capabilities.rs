@@ -89,7 +89,7 @@ async fn one_active_row_per_user_capability() {
     let (db, name) = setup_test_db().await;
     let u = create_user_with_role(&db, "user").await;
 
-    // 1re insertion mentor OK (backfill l'a peut-être déjà mise en réalité —
+    // 1re insertion mentor OK (backfill l'a peut-être déjà mise en réalité -
     // ici pour user 'user' non-mentor rien n'a été backfillé sauf challenger).
     sqlx::query("INSERT INTO user_capabilities (user_id, capability) VALUES ($1, 'mentor')")
         .bind(u)

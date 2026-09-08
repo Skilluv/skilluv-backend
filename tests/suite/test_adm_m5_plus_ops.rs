@@ -1,4 +1,4 @@
-//! Tests ADM-M5+ — proof-hooks sweep + admin gdpr-export + rank-history.
+//! Tests ADM-M5+ - proof-hooks sweep + admin gdpr-export + rank-history.
 
 use crate::common::TestApp;
 use serde_json::json;

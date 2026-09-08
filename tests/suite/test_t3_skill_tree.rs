@@ -1,4 +1,4 @@
-//! Integration tests for SKI-47 — skill tree with prerequisites.
+//! Integration tests for SKI-47 - skill tree with prerequisites.
 
 use crate::common::TestApp;
 use reqwest::StatusCode;
@@ -128,7 +128,7 @@ async fn statuses_reflect_prerequisites_and_progress() {
     assert_eq!(find_node(tree, "javascript").unwrap()["status"], "mastered");
 
     // Counts cover the whole catalog, which migration 0057 seeds with
-    // hundreds of nodes — assert on the buckets being populated, not on
+    // hundreds of nodes - assert on the buckets being populated, not on
     // absolute totals that any catalog change would invalidate.
     let counts = &body["data"]["counts"];
     assert!(
@@ -248,7 +248,7 @@ async fn admin_can_set_prerequisites_but_not_create_a_cycle() {
     app.register_admin("treeadmin").await;
     app.login("treeadmin").await;
 
-    // a requires b, b requires c — a legal chain.
+    // a requires b, b requires c - a legal chain.
     let resp = app
         .put(
             &format!("/api/admin/skills/{a}/prerequisites"),

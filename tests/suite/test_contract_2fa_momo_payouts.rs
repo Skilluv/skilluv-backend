@@ -2,14 +2,14 @@
 //! payout paths that failed without telling anyone.
 //!
 //! Each of the first three was a 422 on a request the client actually sends,
-//! so the feature was unusable end to end while every unit test passed —
+//! so the feature was unusable end to end while every unit test passed -
 //! the tests asserted the contract the back had invented for itself.
 
 use crate::common::TestApp;
 use serde_json::json;
 use uuid::Uuid;
 
-// ─── BE-P0-03 — enabling email 2FA takes no body ──────────────────
+// ─── BE-P0-03 - enabling email 2FA takes no body ──────────────────
 
 #[tokio::test]
 async fn enabling_email_2fa_needs_no_password() {
@@ -57,11 +57,11 @@ async fn enabling_email_2fa_still_checks_a_password_when_given_one() {
     assert_eq!(
         resp.status().as_u16(),
         401,
-        "a supplied password is verified — optional is not ignored"
+        "a supplied password is verified - optional is not ignored"
     );
 }
 
-// ─── BE-P0-04 — the client names it current_password ──────────────
+// ─── BE-P0-04 - the client names it current_password ──────────────
 
 #[tokio::test]
 async fn disabling_email_2fa_accepts_the_clients_field_name() {
@@ -113,7 +113,7 @@ async fn disabling_email_2fa_still_requires_the_password() {
     );
 }
 
-// ─── BE-P0-02 — totp/disable keeps both factors, but says so ──────
+// ─── BE-P0-02 - totp/disable keeps both factors, but says so ──────
 
 #[tokio::test]
 async fn disabling_totp_without_a_password_explains_itself() {
@@ -121,8 +121,8 @@ async fn disabling_totp_without_a_password_explains_itself() {
     app.register_user("totp_off").await;
     app.login("totp_off").await;
 
-    // The client sends only the code. The rule stands — dropping a second
-    // factor needs the password too — but the answer has to say that.
+    // The client sends only the code. The rule stands - dropping a second
+    // factor needs the password too - but the answer has to say that.
     let resp = app
         .post("/api/auth/totp/disable", &json!({ "code": "123456" }))
         .await;
@@ -138,7 +138,7 @@ async fn disabling_totp_without_a_password_explains_itself() {
     );
 }
 
-// ─── BE-P0-12 — Momo withdrawal without an explicit provider ──────
+// ─── BE-P0-12 - Momo withdrawal without an explicit provider ──────
 
 async fn wallet_owner(app: &TestApp, username: &str) -> Uuid {
     app.register_user(username).await;
@@ -173,7 +173,7 @@ async fn registering_a_momo_phone_remembers_the_operator() {
     assert_eq!(
         stored.as_deref(),
         Some("mtn"),
-        "the operator belongs to the number — storing it is what lets the \
+        "the operator belongs to the number - storing it is what lets the \
          withdrawal endpoint stop demanding it"
     );
 }
@@ -267,7 +267,7 @@ async fn held_funds_cannot_be_withdrawn() {
     let uid = wallet_owner(&app, "momo_held").await;
     // Inserted rather than updated: registering an account does not create
     // a wallet, so the UPDATE this used to do matched no row and the
-    // withdraw answered "wallet not initialized" — which is correct, and
+    // withdraw answered "wallet not initialized" - which is correct, and
     // not the refusal this test is about.
     sqlx::query(
         "INSERT INTO talent_wallets
@@ -282,7 +282,7 @@ async fn held_funds_cannot_be_withdrawn() {
     .await
     .unwrap();
 
-    // Captured, so it exists — but still inside its release window.
+    // Captured, so it exists - but still inside its release window.
     ledger::capture_for_recipient(
         &app.db,
         "mtn",
@@ -322,7 +322,7 @@ async fn withdrawing_without_a_destination_says_what_to_do() {
 
     // A wallet with a country and nothing to pay into. Inserted, because
     // registering an account does not create one and an UPDATE would match
-    // no row — leaving this asserting on "wallet not initialized" instead
+    // no row - leaving this asserting on "wallet not initialized" instead
     // of on the missing destination it is named after.
     sqlx::query(
         "INSERT INTO talent_wallets (user_id, residency_country)
@@ -429,7 +429,7 @@ async fn a_new_session_holds_the_mentor_share() {
     );
 }
 
-// ─── SKI-292 — the share card ─────────────────────────────────────
+// ─── SKI-292 - the share card ─────────────────────────────────────
 
 #[tokio::test]
 async fn an_unknown_hash_still_returns_a_card() {
@@ -482,7 +482,7 @@ async fn the_card_is_cacheable() {
 /// Give someone withdrawable XOF, the way a real flow would.
 ///
 /// Only released money can leave, and the withdraw endpoint checks the
-/// balance before anything else — so a test about any later refusal has to
+/// balance before anything else - so a test about any later refusal has to
 /// fund the account first, or it is answered for the wrong reason.
 async fn fund_xof(app: &TestApp, user: Uuid, amount: &str) {
     use bigdecimal::BigDecimal;

@@ -3,7 +3,7 @@
 # Apply every migration to a throwaway database, and say what broke.
 #
 # A migration is not checked by `cargo check`, by clippy, or by any unit test.
-# It is checked the first time something runs it — and in CI that is the
+# It is checked the first time something runs it - and in CI that is the
 # integration job, which starts by migrating. So a constraint violation does
 # not fail one test: it fails the chain, the backend never starts, and all
 # eight shards go red at once, thirty-five minutes later, with a failure that
@@ -15,7 +15,7 @@
 #
 # Usage:  ./scripts/check-migrations.sh
 #
-# Needs a PostgreSQL 18 reachable with the credentials below — the native
+# Needs a PostgreSQL 18 reachable with the credentials below - the native
 # install is fine, Docker is not required. Override with DATABASE_BASE_URL.
 
 set -euo pipefail
@@ -35,7 +35,7 @@ echo "Applying migrations"
 if ! DATABASE_URL="${BASE}/${DB}" cargo sqlx migrate run --source migrations; then
     echo
     echo "A migration failed. The chain stops at the one named above; nothing"
-    echo "after it ran. Fix that one and run this again — CI will not tell you"
+    echo "after it ran. Fix that one and run this again - CI will not tell you"
     echo "anything this does not, and it takes thirty-five minutes to say it."
     exit 1
 fi

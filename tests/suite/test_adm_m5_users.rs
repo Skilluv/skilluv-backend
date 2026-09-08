@@ -1,4 +1,4 @@
-//! Tests ADM-M5 — recompute-proofs + rank-override + orientations admin peek.
+//! Tests ADM-M5 - recompute-proofs + rank-override + orientations admin peek.
 
 use crate::common::TestApp;
 use serde_json::json;
@@ -89,7 +89,7 @@ async fn recompute_proofs_returns_report_and_audits() {
     let body: serde_json::Value = resp.json().await.unwrap();
     assert_eq!(body["data"]["dry_run"], true);
     assert!(body["data"]["current_state"].is_object());
-    // Un dry-run n'audit pas — l'audit est fait au vrai run seulement.
+    // Un dry-run n'audit pas - l'audit est fait au vrai run seulement.
     let _admin_uid = admin_uid;
 }
 

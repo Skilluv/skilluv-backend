@@ -1,4 +1,4 @@
-//! SKI-289 — revoking a guild invitation.
+//! SKI-289 - revoking a guild invitation.
 //!
 //! Two things the front end needs and did not have:
 //!   * a route under the guild (`DELETE /guilds/{id}/invitations/{inv}`),

@@ -164,7 +164,7 @@ async fn backfill_assigns_mapped_orientation_from_skill_domain() {
     let (db, name) = setup_test_db().await;
     // Simule un user créé APRÈS la migration en insérant manuellement.
     // Le backfill de la migration ne joue que sur ce qui existait au moment
-    // où elle a tourné — ici on vérifie qu'un user pré-existant serait pris.
+    // où elle a tourné - ici on vérifie qu'un user pré-existant serait pris.
     // On simule ça en insérant user + skill_domain, puis en ré-appliquant
     // l'INSERT ON CONFLICT DO NOTHING (idempotent).
     let u_code = create_user_with_domain(&db, Some("code")).await;

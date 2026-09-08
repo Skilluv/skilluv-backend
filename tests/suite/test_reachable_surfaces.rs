@@ -16,7 +16,7 @@ use serde_json::json;
 use uuid::Uuid;
 
 // ═══════════════════════════════════════════════════════════════════
-// SKI-359 — the link flow ends somewhere a person can be
+// SKI-359 - the link flow ends somewhere a person can be
 // ═══════════════════════════════════════════════════════════════════
 
 /// A return path is carried through the flow and used.
@@ -59,8 +59,8 @@ async fn a_return_path_cannot_address_another_origin() {
     // Percent-encoded as a browser would send them, so the test exercises the
     // decoded value the handler actually sees.
     for hostile in [
-        "%2F%2Fevil.example%2Fphish", // `//evil.example` — protocol-relative, leaves the origin
-        "%2F%5Cevil.example%2Fphish", // `/\evil.example` — the same, as browsers parse it
+        "%2F%2Fevil.example%2Fphish", // `//evil.example` - protocol-relative, leaves the origin
+        "%2F%5Cevil.example%2Fphish", // `/\evil.example` - the same, as browsers parse it
         "https%3A%2F%2Fevil.example", // outright another origin
         "evil.example",               // becomes one once joined to ours
     ] {
@@ -88,7 +88,7 @@ async fn a_return_path_cannot_address_another_origin() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SKI-356 — a comment arrives drawable
+// SKI-356 - a comment arrives drawable
 // ═══════════════════════════════════════════════════════════════════
 
 /// The list carries the author, the vote counts and the accepted marker.
@@ -202,7 +202,7 @@ async fn a_vote_on_a_comment_is_counted_on_that_comment() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SKI-358 — the id the judge button needs
+// SKI-358 - the id the judge button needs
 // ═══════════════════════════════════════════════════════════════════
 
 /// A lab's contributions are listable, and unjudged ones come first.
@@ -229,7 +229,7 @@ async fn a_lab_contribution_can_be_found_before_it_is_judged() {
         .expect("contributions");
     assert_eq!(rows.len(), 2, "the lab's contributions are not all listed");
 
-    // Unjudged first — the screen exists to work through what is waiting.
+    // Unjudged first - the screen exists to work through what is waiting.
     assert!(
         rows[0]["accepted"].is_null(),
         "a judged contribution was put above one still waiting"
@@ -396,7 +396,7 @@ async fn seed_a_lab_with_contributions(app: &TestApp, username: &str) -> (Uuid, 
 ///
 /// It inserted without `theme`, which migration 0069 made NOT NULL with no
 /// default, so every call had returned 500 since. Nothing tested it, so nobody
-/// found out — and it is deleted rather than repaired because `POST /api/seasons`
+/// found out - and it is deleted rather than repaired because `POST /api/seasons`
 /// already does the job correctly.
 #[tokio::test]
 async fn there_is_one_way_to_create_a_season_and_it_works() {

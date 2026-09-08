@@ -1,8 +1,8 @@
 //! A running total is only safe if nothing can invalidate it.
 //!
 //! The snapshot replaces a `SUM` over every entry an account ever had. That
-//! is normally a bug waiting to happen — a cached total whose source can
-//! change underneath it — and it is safe here for two reasons, both of
+//! is normally a bug waiting to happen - a cached total whose source can
+//! change underneath it - and it is safe here for two reasons, both of
 //! which are enforced by the database rather than by convention: entries
 //! are never updated, and never deleted. These tests hold both, and check
 //! the arithmetic agrees.
@@ -212,7 +212,7 @@ async fn the_verification_catches_a_snapshot_that_has_been_tampered_with() {
     assert!(drifted(&app).await.is_empty(), "clean to start with");
 
     // Trusting the invariant is right. Trusting it without ever checking is
-    // how a subtle trigger bug becomes a year of wrong balances — so the
+    // how a subtle trigger bug becomes a year of wrong balances - so the
     // check has to actually be able to fail.
     sqlx::query(
         "UPDATE ledger_account_balances

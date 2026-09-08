@@ -18,7 +18,7 @@ fn monday_of_this_week() -> chrono::NaiveDate {
 }
 
 /// A configured room. An empty domain means the domain-blind room, which is
-/// NULL in the column since 0440 — the empty string was a sentinel kept only
+/// NULL in the column since 0440 - the empty string was a sentinel kept only
 /// so the primary key would not have to reason about NULL equality, and a
 /// sentinel cannot point at the domain catalogue.
 ///
@@ -85,7 +85,7 @@ async fn a_domain_room_beats_the_shared_one() {
 async fn an_unconfigured_purpose_still_enqueues() {
     let app = TestApp::spawn().await;
     // No room configured at all. The announcement is queued with a null
-    // channel and the consumer posts it in its default — a message in the
+    // channel and the consumer posts it in its default - a message in the
     // wrong room is recoverable, a message nobody sent is not.
     skilluv_backend::services::discord_announce::mission_posted(
         &app.db,
@@ -176,7 +176,7 @@ async fn a_broken_queue_is_swallowed_rather_than_raised() {
     let app = TestApp::spawn().await;
 
     // Make every insert fail. A Discord post is the least important thing
-    // happening at any of these call sites — a contest is still concluded, a
+    // happening at any of these call sites - a contest is still concluded, a
     // featuring still awarded, a mission still published. Trading a real
     // outcome for a chat message is the failure mode this guards against, and
     // the producer returns `()` precisely so a caller cannot make that trade

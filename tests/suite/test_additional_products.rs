@@ -547,7 +547,7 @@ async fn consulting_is_a_third_kind_of_consultation() {
     let app = TestApp::spawn().await;
     an_enterprise(&app, "Implementco").await;
 
-    // Same table, same experts, same commission machinery — a longer clock.
+    // Same table, same experts, same commission machinery - a longer clock.
     let resp = app
         .post(
             "/api/enterprise/consultations",

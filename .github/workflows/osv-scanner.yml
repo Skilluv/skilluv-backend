@@ -1,10 +1,10 @@
 name: OSV vulnerability scan
 
-# SA-04 — osv-scanner over Cargo.lock.
+# SA-04 - osv-scanner over Cargo.lock.
 #
 # cargo-deny (in ci.yml) checks the RustSec advisory DB; osv-scanner checks
 # Google's OSV database, which aggregates RustSec plus GitHub advisories, CVEs
-# and other sources — a wider net for the same lockfile. Runs on the lockfile
+# and other sources - a wider net for the same lockfile. Runs on the lockfile
 # alone, so it compiles nothing and is fast.
 #
 # Installed by CLI download (pinned version), the same choice as the gitleaks
@@ -56,7 +56,7 @@ jobs:
           osv-scanner --version
 
       - name: Scan Cargo.lock (SARIF for the Security tab)
-        # Does not fail the job — SARIF is for visibility. The gate is the next
+        # Does not fail the job - SARIF is for visibility. The gate is the next
         # step. `--format sarif` still exits non-zero on findings, so allow it.
         continue-on-error: true
         run: osv-scanner --lockfile Cargo.lock --format sarif > osv.sarif

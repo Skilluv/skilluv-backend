@@ -9,7 +9,7 @@ use skilluv_backend::services::cvss;
 
 fuzz_target!(|data: &[u8]| {
     if let Ok(s) = std::str::from_utf8(data) {
-        // Success or failure both fine — the contract is "does not panic", and
+        // Success or failure both fine - the contract is "does not panic", and
         // any Ok must stay in range (proptest checks the bound exhaustively).
         if let Ok(scored) = cvss::score_vector(s) {
             assert!((0.0..=10.0).contains(&scored.score));

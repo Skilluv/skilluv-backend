@@ -1,10 +1,10 @@
-// k6 smoke + light load test — asserts the API stays healthy under nominal
+// k6 smoke + light load test - asserts the API stays healthy under nominal
 // traffic. Run locally:
 //   k6 run tests/load/smoke.js
 // Or targeting a real deployment:
 //   BASE_URL=https://api.skill-uv.com k6 run tests/load/smoke.js
 //
-// This is a smoke test, not a stress test — it verifies the endpoints
+// This is a smoke test, not a stress test - it verifies the endpoints
 // respond correctly under ~10 concurrent users for 30s. The real
 // stress/soak scenarios belong in tests/load/stress.js (add when needed).
 
@@ -23,7 +23,7 @@ export const options = {
     },
   },
   thresholds: {
-    // p95 latency under 500ms — realistic for a Rust axum backend on a
+    // p95 latency under 500ms - realistic for a Rust axum backend on a
     // small VPS. Bump if the target is a bigger box.
     http_req_duration: ["p(95)<500"],
     // No more than 1% failed requests.
@@ -34,7 +34,7 @@ export const options = {
 };
 
 export default function () {
-  // Cheap read paths — no auth required. Enough to prove the routing,
+  // Cheap read paths - no auth required. Enough to prove the routing,
   // middleware and DB pool are functional under load.
   const endpoints = [
     "/api/health",

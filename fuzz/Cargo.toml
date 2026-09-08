@@ -1,9 +1,9 @@
-# cargo-fuzz crate — the nightly amplifier for the pure parsers.
+# cargo-fuzz crate - the nightly amplifier for the pure parsers.
 #
 # This is a SEPARATE workspace (see the empty [workspace] at the bottom) so it
 # never joins the parent crate's normal `cargo build` / `cargo test` / clippy.
 # It builds only under `cargo +nightly fuzz`, which needs libFuzzer and the
-# address sanitizer — neither available on Windows/MSVC. So it is authored here
+# address sanitizer - neither available on Windows/MSVC. So it is authored here
 # and verified by the nightly CI job (.github/workflows/fuzz-nightly.yml), not
 # locally. The same functions are covered locally, panic-freedom and all, by
 # tests/prop_pure_parsers.rs on the pinned stable toolchain.
@@ -23,7 +23,7 @@ libfuzzer-sys = "0.4"
 [dependencies.skilluv-backend]
 path = ".."
 
-# Keep each target out of the doc/test/bench passes — they are fuzz entrypoints,
+# Keep each target out of the doc/test/bench passes - they are fuzz entrypoints,
 # nothing else builds them.
 [[bin]]
 name = "cvss_score_vector"

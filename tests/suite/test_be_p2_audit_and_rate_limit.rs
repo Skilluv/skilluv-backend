@@ -1,4 +1,4 @@
-//! Tests BE-D + BE-E + BE-F — Rate-limit destructif, audit append-only, audit sur handlers.
+//! Tests BE-D + BE-E + BE-F - Rate-limit destructif, audit append-only, audit sur handlers.
 
 use crate::common::TestApp;
 use serde_json::json;
@@ -33,7 +33,7 @@ async fn setup_admin_with_passkey(app: &TestApp, username: &str) -> uuid::Uuid {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// BE-E — Append-only enforcement (rôle audit_admin)
+// BE-E - Append-only enforcement (rôle audit_admin)
 // ═══════════════════════════════════════════════════════════════════
 
 #[tokio::test]
@@ -66,7 +66,7 @@ async fn audit_log_table_has_revoke_documented_via_comment() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// BE-F — Audit sur handlers admin sensibles
+// BE-F - Audit sur handlers admin sensibles
 // ═══════════════════════════════════════════════════════════════════
 
 #[tokio::test]
@@ -165,12 +165,12 @@ async fn sso_revoke_writes_audit_log() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// BE-D — Rate-limit destructif + dry-run
+// BE-D - Rate-limit destructif + dry-run
 // ═══════════════════════════════════════════════════════════════════
 
 #[tokio::test]
 async fn dry_run_env_is_readable_and_default_false() {
-    // Test purement fonctionnel du helper — sans écrire de DB.
+    // Test purement fonctionnel du helper - sans écrire de DB.
     let was = std::env::var("SKILLUV_ADMIN_DRY_RUN").ok();
     // SAFETY: single-threaded env access in a self-contained test.
     unsafe {

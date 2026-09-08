@@ -297,7 +297,7 @@ async fn the_answers_land_in_one_table_for_every_domain() {
     .await;
 
     // Two domains, two rows, one table. The code answers used to live on
-    // `users` — eight columns, and fifty-six if every domain had followed.
+    // `users` - eight columns, and fifty-six if every domain had followed.
     assert_eq!(answers(&app, "wiz_one_table", "code").await["level"], "mid");
     assert_eq!(
         answers(&app, "wiz_one_table", "design").await["level"],

@@ -9,7 +9,7 @@ on:
       - '.github/workflows/contract-test.yml'
   workflow_dispatch:
 
-# Least-privilege default — schemathesis only reads the repo + hits the API.
+# Least-privilege default - schemathesis only reads the repo + hits the API.
 permissions:
   contents: read
 
@@ -54,7 +54,7 @@ jobs:
       SKILLUV_EXPOSE_SWAGGER: "1"
       # Schemathesis envoie 25 examples par endpoint depuis localhost.
       # Sans whitelist, POST /api/auth/login trigger le rate-limit (5/h par
-      # IP) et retourne 429 — que schemathesis flagge en
+      # IP) et retourne 429 - que schemathesis flagge en
       # positive_data_acceptance ("valid data was rejected"). 429 est un
       # comportement stateful legitime hors du scope contract-test.
       # Reserve : depuis le fix extract_ip -> "" (au lieu de "unknown"), le
@@ -83,7 +83,7 @@ jobs:
         # Pinned, like every action in this repository is pinned to a SHA.
         # It was not, and on 2026-09-07 that cost a morning: 4.26.0 was
         # published at 07:45 UTC, and the same commit that passed this job at
-        # 06:17 failed it at 10:55 — a red check that belonged to somebody
+        # 06:17 failed it at 10:55 - a red check that belonged to somebody
         # else's release schedule, on a pull request that had not touched the
         # API.
         #
@@ -136,7 +136,7 @@ jobs:
           paths=$(curl -fsS http://localhost:3001/api/openapi.json | jq '.paths | length')
           echo "OpenAPI exposes ${paths} paths"
           if [ "${paths}" -lt 100 ]; then
-            echo "ERROR: fewer than 100 paths exposed — schema generation likely broken"
+            echo "ERROR: fewer than 100 paths exposed - schema generation likely broken"
             exit 1
           fi
 

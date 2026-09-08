@@ -1,4 +1,4 @@
-//! Integration tests for SKI-38 — measurable personal goals.
+//! Integration tests for SKI-38 - measurable personal goals.
 //!
 //! The interesting surface is the derived progress: a goal must never
 //! disagree with the profile it describes, and the percentage must reflect
@@ -137,7 +137,7 @@ async fn goal_crud_roundtrip() {
     let resp = app
         .put(&format!("/api/users/me/goals/{goal_id}"), &json!({}))
         .await;
-    // PUT is not routed for this path — PATCH is. Confirms we did not
+    // PUT is not routed for this path - PATCH is. Confirms we did not
     // accidentally widen the verb set.
     assert_eq!(resp.status(), StatusCode::METHOD_NOT_ALLOWED);
 
@@ -309,7 +309,7 @@ async fn capability_goal_is_binary() {
     assert_eq!(body["data"]["goal"]["progress_pct"], 0.0);
     assert!(
         body["data"]["goal"]["eta_days_at_current_pace"].is_null(),
-        "a capability is granted, not accumulated — no ETA is honest here"
+        "a capability is granted, not accumulated - no ETA is honest here"
     );
 
     sqlx::query(
@@ -335,7 +335,7 @@ async fn goal_validation_rejects_incoherent_targets() {
     let cases = [
         // Unknown kind.
         json!({ "kind": "vibes", "target_value": "5" }),
-        // apprenti is granted at signup — a no-op goal.
+        // apprenti is granted at signup - a no-op goal.
         json!({ "kind": "rank", "target_value": "apprenti" }),
         json!({ "kind": "rank", "target_value": "legende" }),
         // skill_level without a skill.

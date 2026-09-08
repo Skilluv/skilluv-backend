@@ -3,7 +3,7 @@
 use crate::common::TestApp;
 
 async fn insert_event(app: &TestApp, slug: &str, active: bool) -> uuid::Uuid {
-    // `is_active` is derived from `status` since migration 0357 — it is a
+    // `is_active` is derived from `status` since migration 0357 - it is a
     // generated column, and writing to one is an error rather than a silent
     // no-op. Setting the status is now the only way to say an event is on,
     // which is the point: the flag and the status could not disagree.

@@ -3,7 +3,7 @@
 //! These tests exercise the parts that do not need a live object store: the
 //! ceilings, the ownership rule, the session lifecycle and the refusals. The
 //! presigning itself needs MinIO, and the suite says so rather than mocking a
-//! signature — a mocked presign proves nothing about whether the real one is
+//! signature - a mocked presign proves nothing about whether the real one is
 //! accepted.
 
 use crate::common::TestApp;
@@ -19,7 +19,7 @@ async fn user_id(app: &TestApp, username: &str) -> Uuid {
 }
 
 /// Whether MinIO answered. Without it, `init` cannot open a multipart upload,
-/// and the tests that need one say they were skipped rather than failing —
+/// and the tests that need one say they were skipped rather than failing -
 /// a red suite that means "no object store on this machine" teaches people to
 /// ignore red suites.
 async fn storage_is_up(app: &TestApp) -> bool {

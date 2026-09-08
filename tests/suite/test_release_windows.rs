@@ -92,7 +92,7 @@ async fn a_merged_bounty_is_not_held_at_all() {
     let window = release::window_for(&app.db, "bounty_slice").await.unwrap();
     assert_eq!(
         window.hold_hours, 0,
-        "the contribution is merged upstream and public — there is nothing \
+        "the contribution is merged upstream and public - there is nothing \
          to contest, so holding it would be a delay with no purpose"
     );
 }
@@ -273,7 +273,7 @@ async fn released_money_cannot_be_disputed_afterwards() {
     let result = release::dispute(&app.db, "mentorship_session", session).await;
     assert!(
         result.is_err(),
-        "once released the money is the recipient's — clawing it back is a \
+        "once released the money is the recipient's - clawing it back is a \
          refund, and a harder problem"
     );
 }

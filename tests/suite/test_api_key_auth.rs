@@ -4,13 +4,13 @@
 //!
 //! SKI-172 asked for a VS Code extension. The extension was never the hard
 //! part: `POST /api/security/reports` took a session cookie, and a cookie is a
-//! browser thing — so nothing without a browser could file a finding,
+//! browser thing - so nothing without a browser could file a finding,
 //! whatever it was written in. An editor extension, a CLI, a CI job and a
 //! GitHub Action all hit the same wall.
 //!
 //! Reading that route turned up a second thing, in the table rather than the
 //! route. Migration 0359 added `revoked_at` and `revoked_reason` to `api_keys`
-//! **and an index keyed on `revoked_at IS NULL`** — which says, in the schema,
+//! **and an index keyed on `revoked_at IS NULL`** - which says, in the schema,
 //! that a NULL there is what makes a key live. The authenticator only ever
 //! read `active`, and revocation only ever wrote it.
 //!
@@ -25,7 +25,7 @@ use uuid::Uuid;
 
 /// Mint a key straight into the table, with the scopes the test wants.
 ///
-/// The raw key is returned because it is never recoverable afterwards — only
+/// The raw key is returned because it is never recoverable afterwards - only
 /// its hash is stored, which is the property worth having.
 async fn a_key(app: &TestApp, user: Uuid, scopes: &[&str]) -> String {
     let raw = format!("sk_live_{}", Uuid::new_v4().simple());
@@ -55,7 +55,7 @@ async fn user_id(app: &TestApp, username: &str) -> Uuid {
 
 /// A report the platform will actually accept.
 ///
-/// `target_host` has to be one of the published scope hosts — `submit` refuses
+/// `target_host` has to be one of the published scope hosts - `submit` refuses
 /// anything else, and says why: the safe harbour covers what is in scope and
 /// nothing outside it. Using a made-up host here would have the suite fail on
 /// the scope rule rather than on what it is testing.
@@ -134,7 +134,7 @@ async fn a_key_without_the_scope_is_refused_as_forbidden() {
 ///
 /// `revoked_at` is what migration 0359's index treats as the liveness test.
 /// Before this, the authenticator read only `active`, so a key revoked this
-/// way — the obvious way, given the column exists — kept authenticating.
+/// way - the obvious way, given the column exists - kept authenticating.
 #[tokio::test]
 async fn a_key_revoked_by_its_timestamp_stops_working() {
     let app = TestApp::spawn().await;
@@ -177,7 +177,7 @@ async fn a_key_revoked_by_its_timestamp_stops_working() {
         .as_u16();
     assert_eq!(
         after, 401,
-        "a key with revoked_at set still authenticated — the column and the \
+        "a key with revoked_at set still authenticated - the column and the \
          index of migration 0359 say it is dead"
     );
 }
@@ -185,7 +185,7 @@ async fn a_key_revoked_by_its_timestamp_stops_working() {
 /// And the other direction: revoking through the API writes both columns.
 ///
 /// Writing only `active` left the two disagreeing, so anything reading
-/// `revoked_at` — or the index built on it — counted a revoked key as live.
+/// `revoked_at` - or the index built on it - counted a revoked key as live.
 #[tokio::test]
 async fn revoking_through_the_api_leaves_both_columns_agreeing() {
     let app = TestApp::spawn().await;

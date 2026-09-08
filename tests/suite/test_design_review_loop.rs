@@ -1,7 +1,7 @@
 //! The design critique loop, end to end.
 //!
 //! What this suite really guards: a design challenge must be able to run for
-//! several rounds, keep the whole trail, and — once validated — produce the
+//! several rounds, keep the whole trail, and - once validated - produce the
 //! same class of proof a merged pull request produces. A validated design
 //! slice that leaves `deliverables`, `attestations` and the rank untouched
 //! would be a green mark and nothing else, which is the failure this whole
@@ -785,8 +785,8 @@ async fn nothing_the_checks_say_blocks_a_verdict() {
         a_challenge_that_took(&app, "checks_free_designer", "checks_free_reviewer", 1).await;
 
     // A version whose checks recorded an `error` is still approvable, because
-    // no check knows whether a mark is right for a cooperative. The reverse —
-    // a clean run and a rejection — is the common case.
+    // no check knows whether a mark is right for a cooperative. The reverse -
+    // a clean run and a rejection - is the common case.
     sqlx::query(
         "INSERT INTO design_auto_check_results (slice_id, round, check_type, severity, message)
          VALUES ($1, 1, 'palette_contrast', 'error', 'Aucune paire lisible.')",
@@ -903,7 +903,7 @@ async fn the_basis_follows_what_was_actually_delivered() {
 
     // An interface, not a brand kit and not a typeface. Naming a basis per
     // subtype would mean twelve of them, eleven saying the same thing in
-    // different words — so everything but those two gets the general claim.
+    // different words - so everything but those two gets the general claim.
     let slice = a_claimed_challenge(&app, designer, "design-web", "interface", 60).await;
 
     app.login("basis_designer").await;

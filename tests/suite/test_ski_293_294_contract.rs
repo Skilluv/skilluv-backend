@@ -9,7 +9,7 @@
 use crate::common::TestApp;
 use serde_json::json;
 
-// ─── SKI-293.1/2 — the duplicates are gone ────────────────────────
+// ─── SKI-293.1/2 - the duplicates are gone ────────────────────────
 
 #[tokio::test]
 async fn the_legacy_mentions_alias_is_gone() {
@@ -72,7 +72,7 @@ async fn the_surviving_email_preferences_route_keeps_its_flat_shape() {
     );
 }
 
-// ─── SKI-293.3 — decide is typed ──────────────────────────────────
+// ─── SKI-293.3 - decide is typed ──────────────────────────────────
 
 #[tokio::test]
 async fn decide_rejects_a_payload_that_is_not_the_contract() {
@@ -95,7 +95,7 @@ async fn decide_rejects_a_payload_that_is_not_the_contract() {
     );
 }
 
-// ─── SKI-293.5 — one-click unsubscribe is reachable ───────────────
+// ─── SKI-293.5 - one-click unsubscribe is reachable ───────────────
 
 #[tokio::test]
 async fn one_click_unsubscribe_is_served() {
@@ -108,11 +108,11 @@ async fn one_click_unsubscribe_is_served() {
     assert_ne!(
         resp.status().as_u16(),
         404,
-        "the route must exist — the token being invalid is a separate matter"
+        "the route must exist - the token being invalid is a separate matter"
     );
 }
 
-// ─── SKI-294 — booting without GeoNames ───────────────────────────
+// ─── SKI-294 - booting without GeoNames ───────────────────────────
 
 #[tokio::test]
 async fn geo_service_falls_back_to_empty_instead_of_panicking() {

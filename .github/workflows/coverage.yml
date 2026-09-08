@@ -1,13 +1,13 @@
 name: Test coverage
 
 # Coverage report via cargo-llvm-cov. Runs on-demand (workflow_dispatch) and
-# on push to master. Does NOT gate PRs — we don't want a "coverage % dropped
+# on push to master. Does NOT gate PRs - we don't want a "coverage % dropped
 # by 0.3%" churn. Report is uploaded as a GHA artifact + printed in the job
 # summary. Wire to Codecov / Coveralls later if we want per-PR deltas.
 
 on:
   workflow_dispatch:
-  # Removed push:master + nightly triggers — coverage doubled compute
+  # Removed push:master + nightly triggers - coverage doubled compute
   # per merge and per day. Weekly + manual dispatch is enough signal
   # for a solo team on the free tier.
   schedule:
@@ -16,7 +16,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  # Same env parity as the test job in ci.yml — coverage runs the same tests.
+  # Same env parity as the test job in ci.yml - coverage runs the same tests.
   DATABASE_URL: postgres://skilluv:skilluv_secret@localhost:5433/skilluv
   REDIS_URL: redis://localhost:6379
   JWT_SECRET: ci-test-secret
@@ -32,7 +32,7 @@ concurrency:
   group: coverage-${{ github.ref }}
   cancel-in-progress: true
 
-# Least-privilege default — coverage runs tests + uploads artifact only.
+# Least-privilege default - coverage runs tests + uploads artifact only.
 permissions:
   contents: read
 

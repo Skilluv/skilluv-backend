@@ -1,6 +1,6 @@
 #![no_main]
 //! Fuzz the webhook HMAC verifier with an arbitrary (secret, body, signature).
-//! It must never panic on any bytes — the signature string is fully
+//! It must never panic on any bytes - the signature string is fully
 //! attacker-controlled (it arrives in a request header), so a panic is a
 //! remotely triggerable crash. Correctness (a valid MAC verifies, a tampered
 //! one does not) is pinned by tests/prop_pure_parsers.rs against RFC 4231.

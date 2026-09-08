@@ -1,4 +1,4 @@
-//! Tests ADM-M3.1 — CRUD admin sur orientations + orientation_skill_map.
+//! Tests ADM-M3.1 - CRUD admin sur orientations + orientation_skill_map.
 
 use crate::common::TestApp;
 use serde_json::json;

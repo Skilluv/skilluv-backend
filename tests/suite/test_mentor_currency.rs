@@ -3,7 +3,7 @@
 //! Every mentor on the platform was priced in euros: `mentor_profiles` carried
 //! `hourly_rate_eur_cents` and no currency, and `book_session` forced
 //! `Currency::Eur`. Storing euros and converting at display time would leave a
-//! Beninese mentor's income floating with the euro — they announce 15 000 XOF,
+//! Beninese mentor's income floating with the euro - they announce 15 000 XOF,
 //! the euro moves, and they receive something else. What somebody is owed has
 //! to be denominated in the money they are owed it in.
 
@@ -75,7 +75,7 @@ async fn an_omitted_currency_is_euros() {
 }
 
 /// A currency the ledger cannot settle is refused, and the message says which
-/// two it can — rather than surfacing a constraint violation.
+/// two it can - rather than surfacing a constraint violation.
 #[tokio::test]
 async fn a_currency_the_ledger_cannot_settle_is_refused() {
     let app = TestApp::spawn().await;
@@ -102,7 +102,7 @@ async fn a_currency_the_ledger_cannot_settle_is_refused() {
 
 /// The listing converts to filter, and says both numbers.
 ///
-/// A ceiling given in euros still has to see a mentor priced in francs — but
+/// A ceiling given in euros still has to see a mentor priced in francs - but
 /// what is billed stays the mentor's own figure, and the euro equivalent is
 /// marked as what it is.
 #[tokio::test]
@@ -198,13 +198,13 @@ async fn a_mentor_is_not_hidden_by_a_missing_rate() {
     );
 }
 
-/// Booking prices the session in the mentor's currency — and a booking that
+/// Booking prices the session in the mentor's currency - and a booking that
 /// cannot be routed holds nothing.
 ///
 /// This test cannot complete an XOF checkout: taking francs needs FedaPay, and
 /// neither CI nor a developer's machine holds those credentials. What it can
 /// assert is the part that broke twice. The session used to be inserted before
-/// the payment was routed, so a missing corridor left a `pending` row — and
+/// the payment was routed, so a missing corridor left a `pending` row - and
 /// `pending` blocks the overlap check, meaning a payment nobody ever took
 /// silently held an hour of the mentor's calendar.
 #[tokio::test]

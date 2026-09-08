@@ -1,6 +1,6 @@
 // Ce module est partagé entre plusieurs binaires de test ; Rust émet un
 // dead_code par binaire pour chaque helper qui n'est pas utilisé dans CE
-// binaire — même si un autre s'en sert. On les tolère globalement.
+// binaire - même si un autre s'en sert. On les tolère globalement.
 #![allow(dead_code)]
 
 pub mod mock_oidc;
@@ -31,8 +31,8 @@ fn init_test_tracing() {
 /// name. Override with `TEST_DATABASE_BASE_URL`.
 ///
 /// Configurable rather than hardcoded because the default port is easy to
-/// shadow: anything else bound to `127.0.0.1:5433` — most plausibly an SSH
-/// tunnel to a remote database — silently wins over the Docker container,
+/// shadow: anything else bound to `127.0.0.1:5433` - most plausibly an SSH
+/// tunnel to a remote database - silently wins over the Docker container,
 /// and this harness issues `CREATE DATABASE` / `DROP DATABASE` on whatever
 /// answers. Pointing the suite somewhere explicit must not require editing
 /// source.
@@ -51,7 +51,7 @@ pub fn test_db_url(db_name: &str) -> String {
 ///
 /// Every test used to create an empty database and replay every migration
 /// into it. That is roughly thirteen seconds each, on a schema that is over
-/// two hundred and forty migrations long — a suite of eighteen tests spent
+/// two hundred and forty migrations long - a suite of eighteen tests spent
 /// four minutes doing the same work eighteen times, and the whole integration
 /// suite spent most of an hour on it.
 ///
@@ -63,9 +63,9 @@ pub fn test_db_url(db_name: &str) -> String {
 ///
 /// It is built from every migration's version and checksum, which is exactly
 /// what would have been applied. Change any migration and the name changes,
-/// so the next run builds a fresh template instead of copying a stale schema
-/// — the failure mode this optimisation would otherwise introduce, and the
-/// one that would waste an afternoon.
+/// so the next run builds a fresh template instead of copying a stale
+/// schema - the failure mode this optimisation would otherwise introduce,
+/// and the one that would waste an afternoon.
 ///
 /// ## Why an advisory lock
 ///
@@ -250,7 +250,7 @@ impl TestApp {
     pub async fn spawn() -> Self {
         init_test_tracing();
         // Wire the EmailService onto Mailpit for tests. Read by `email::build_smtp_from_env`.
-        // Safe to set for every test — env vars are process-global, but the values don't vary.
+        // Safe to set for every test - env vars are process-global, but the values don't vary.
         // SAFETY: we're only reading and setting env at test-startup, before any concurrent
         // reader kicks in, and the value is the same across every parallel test.
         unsafe {
@@ -302,7 +302,7 @@ impl TestApp {
         // quand `cargo test --jobs 2+` fait tourner plusieurs suites en parallèle
         // qui écrasent mutuellement les clés partagées (rate-limit, leaderboards,
         // notifications:unread:*, etc.). Les tests d'un même binaire partagent
-        // néanmoins la DB — c'est OK, ils utilisent des user_ids uniques.
+        // néanmoins la DB - c'est OK, ils utilisent des user_ids uniques.
         let redis_db = (std::process::id() as usize) % 16;
         let redis_url = format!("redis://localhost:6379/{redis_db}");
         let redis_client = redis::Client::open(redis_url.clone()).expect("Invalid Redis URL");
@@ -315,7 +315,7 @@ impl TestApp {
             .await
             .ok();
 
-        // Storage — create a minimal config for tests
+        // Storage - create a minimal config for tests
         let storage_config = skilluv_backend::config::AppConfig {
             host: "0.0.0.0".to_string(),
             port: 0,
@@ -349,7 +349,7 @@ impl TestApp {
 
         let queue = Arc::new(skilluv_backend::services::QueueService::new(redis.clone()));
 
-        // SKI-294 — same tolerance as the server: a suite that does not touch
+        // SKI-294 - same tolerance as the server: a suite that does not touch
         // country autocompletion should not need the 31 MB of dumps present.
         let geo = Arc::new(skilluv_backend::services::GeoService::load_or_empty(
             &skilluv_backend::services::GeoService::data_dir_from_env(),
@@ -393,7 +393,7 @@ impl TestApp {
             },
             storage,
             email: Arc::new(skilluv_backend::services::EmailService::new(
-                None, // No Brevo in tests — dev mode (logging only)
+                None, // No Brevo in tests - dev mode (logging only)
                 "test@skilluv.com",
                 "Skilluv Test",
             )),
@@ -429,7 +429,7 @@ impl TestApp {
             }
         }
 
-        // Chaque TestApp fabrique un X-Forwarded-For unique — le RateLimiter
+        // Chaque TestApp fabrique un X-Forwarded-For unique - le RateLimiter
         // clé par IP, sinon toutes les requêtes tests partageraient le même
         // bucket "unknown" et se rate-limiteraient mutuellement en parallèle.
         let mut headers = reqwest::header::HeaderMap::new();
@@ -466,7 +466,7 @@ impl TestApp {
         }
     }
 
-    /// Password used across tests — satisfies the Vague 1 policy (10+ chars, upper/lower/digit/symbol).
+    /// Password used across tests - satisfies the Vague 1 policy (10+ chars, upper/lower/digit/symbol).
     pub const TEST_PASSWORD: &'static str = "TestPass123!";
 
     /// Register a user with the standard test payload.
@@ -501,7 +501,7 @@ impl TestApp {
             "register {username} said: {body}"
         );
 
-        // Short-circuit the email-verification hop for tests — real users have
+        // Short-circuit the email-verification hop for tests - real users have
         // to click the link in the verification email before AuthUserComplete
         // (write endpoints) or /enterprise/* let them through.
         sqlx::query("UPDATE users SET email_verified = TRUE WHERE username = $1")
@@ -517,7 +517,7 @@ impl TestApp {
     ///
     /// A second factor is stepped around rather than failed on. An enterprise
     /// fixture turns TOTP on so the `/enterprise/*` gate lets it through, and
-    /// every later `login` for that user then answered 403 —
+    /// every later `login` for that user then answered 403 -
     /// `AUTH_TOTP_REQUIRED`, correctly, because the helper has no authenticator
     /// and cannot produce a code. That is not what any of these tests are
     /// about, and the failure read as an authorisation bug twenty tests wide.
@@ -534,8 +534,8 @@ impl TestApp {
         }
 
         // A 403 is only stepped around when the account actually has TOTP on.
-        // Checking first matters: a 403 for any other reason — a banned
-        // account, say — would otherwise be retried and then left with
+        // Checking first matters: a 403 for any other reason - a banned
+        // account, say - would otherwise be retried and then left with
         // `totp_enabled = TRUE` on a user who never had a second factor,
         // which is a lie the next assertion in that test would inherit.
         let has_totp: bool = sqlx::query_scalar(
@@ -594,7 +594,7 @@ impl TestApp {
 
         // Middleware ensure_admin_2fa exige TOTP OU passkey. Setter totp_enabled
         // casserait le login (TotpRequired), donc on insere plutot une passkey
-        // fictive (webauthn_credentials) — satisfait le middleware sans affecter
+        // fictive (webauthn_credentials) - satisfait le middleware sans affecter
         // le flow login. credential_id doit etre unique, on derive des bytes de
         // l'user_id UUID (parse -> as_bytes).
         let user_uuid = Uuid::parse_str(user_id).expect("user_id is valid UUID");
@@ -609,7 +609,7 @@ impl TestApp {
         .await
         .expect("Failed to insert test passkey");
 
-        // P21.1 — require_admin lit désormais depuis user_capabilities.
+        // P21.1 - require_admin lit désormais depuis user_capabilities.
         // On grant explicitement la capability admin pour rester compatible.
         sqlx::query(
             "INSERT INTO user_capabilities (user_id, capability, granted_reason)
@@ -891,7 +891,7 @@ impl Drop for TestApp {
         // principle; in practice the detached thread had not finished dropping
         // before the next test created the next one, so they accumulated for
         // the length of a shard. Postgres then answered
-        // `53100 disk_full — could not write` and every remaining test in that
+        // `53100 disk_full - could not write` and every remaining test in that
         // shard failed at `TestApp::spawn`, which reads as a broken test suite
         // rather than as a full disk.
         //
@@ -921,7 +921,7 @@ impl Drop for TestApp {
                 }
             });
         });
-        // A failed join means the cleanup thread panicked — the database is
+        // A failed join means the cleanup thread panicked - the database is
         // then left behind, which is a wasted gigabyte and not a broken test,
         // so it is ignored rather than turned into a second failure on top of
         // whatever the test itself reported.
@@ -934,7 +934,7 @@ impl Drop for TestApp {
 ///
 /// `199`, `199.00` and `199.0000` are the same amount. A test that fails on
 /// the difference is asserting a NUMERIC's scale, which is a storage decision
-/// nobody promised a caller — and it breaks on the day somebody widens the
+/// nobody promised a caller - and it breaks on the day somebody widens the
 /// column for a currency with three decimal places.
 #[track_caller]
 #[allow(dead_code)]
@@ -966,7 +966,7 @@ pub fn assert_decimal(actual: &sqlx::types::BigDecimal, expected: &str) {
 /// Give somebody a verified deliverable in a reviewer family.
 ///
 /// The mentor matcher reads a mentor's families from what they have actually
-/// delivered, not from what they told the wizard interests them — a mentor who
+/// delivered, not from what they told the wizard interests them - a mentor who
 /// declared motion and never delivered any is not a motion mentor. So a test
 /// that wants a mentor to be suggested has to give them work, and one that
 /// only sets a craft score and a profile is describing the person the rule
@@ -1009,7 +1009,7 @@ pub async fn delivered_in(app: &TestApp, user: Uuid, domain: &str, family: &str)
         other => panic!("no slice type known for the {other} domain"),
     };
 
-    // `published_artifact_url` on every one of them. Two subtypes demand it —
+    // `published_artifact_url` on every one of them. Two subtypes demand it -
     // an `ml_model` and a `library_published` are claims about something a
     // stranger can fetch, and the schema refuses one that says nowhere. Giving
     // it to all five is simpler than tracking which, and it is never wrong:

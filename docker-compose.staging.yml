@@ -22,7 +22,7 @@ services:
       # SMTP via MailHog for transactional emails in staging
       SMTP_HOST: mailhog
       SMTP_PORT: "1025"
-      # Sentry: staging project DSN — set in deploy env, not in compose
+      # Sentry: staging project DSN - set in deploy env, not in compose
       SENTRY_DSN: ${SENTRY_DSN_STAGING:-}
       SENTRY_TRACES_SAMPLE_RATE: "0.5"
 
@@ -38,4 +38,4 @@ services:
 
   # Optional: dedicated GlitchTip instance for staging (or share with prod via env)
   # Not added here by default; share the GlitchTip prod instance with a separate
-  # project DSN — cheaper and simpler.
+  # project DSN - cheaper and simpler.

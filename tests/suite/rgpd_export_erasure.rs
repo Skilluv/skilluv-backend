@@ -1,4 +1,4 @@
-//! LO-07 — the right to export and the right to erasure actually happen.
+//! LO-07 - the right to export and the right to erasure actually happen.
 //!
 //! A right to erasure that leaves rows naming the user is what a complaint
 //! finds. `DELETE /api/auth/account` tombstones the account: erasure::erase

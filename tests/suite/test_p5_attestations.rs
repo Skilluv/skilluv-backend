@@ -488,7 +488,7 @@ async fn compagnonnage_eligibility_requires_five_deliverables_and_mature_project
         .expect("check");
     assert!(!eligible, "Active project + 0 deliverables → not eligible");
 
-    // Set to mature and try again — still 0 deliverables → still not eligible
+    // Set to mature and try again - still 0 deliverables → still not eligible
     sqlx::query("UPDATE projects SET lifecycle_status = 'mature' WHERE id = $1")
         .bind(project_id)
         .execute(&db)

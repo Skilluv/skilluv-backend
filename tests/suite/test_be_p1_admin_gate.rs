@@ -1,4 +1,4 @@
-//! Tests BE-A + BE-B + BE-C — Admin gate + reset-2fa endpoint.
+//! Tests BE-A + BE-B + BE-C - Admin gate + reset-2fa endpoint.
 //!
 //! Couvre :
 //!   - BE-A : admin sans 2FA reçoit AUTH_ADMIN_2FA_SETUP_REQUIRED (403) sur
@@ -40,7 +40,7 @@ async fn register_passkey_for(app: &TestApp, uid: uuid::Uuid) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// BE-A — 2FA mandatory admin
+// BE-A - 2FA mandatory admin
 // ═══════════════════════════════════════════════════════════════════
 
 #[tokio::test]
@@ -107,7 +107,7 @@ async fn admin_with_totp_passes_admin_2fa_gate() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// BE-C — Origin server-side check
+// BE-C - Origin server-side check
 // ═══════════════════════════════════════════════════════════════════
 
 #[tokio::test]
@@ -121,7 +121,7 @@ async fn admin_route_from_non_admin_origin_is_rejected() {
             .unwrap();
     register_passkey_for(&app, uid).await;
 
-    // Le test client par défaut n'envoie pas d'Origin admin — reproduit
+    // Le test client par défaut n'envoie pas d'Origin admin - reproduit
     // le comportement d'un browser sur skilluv.com qui appellerait /api/admin/*.
     let resp = app
         .client
@@ -161,7 +161,7 @@ async fn admin_route_from_admin_origin_localhost5174_passes_origin_gate() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// BE-B — reset-2fa endpoint
+// BE-B - reset-2fa endpoint
 // ═══════════════════════════════════════════════════════════════════
 
 #[tokio::test]
@@ -309,6 +309,6 @@ async fn admin_reset_2fa_refuses_non_admin() {
         .await
         .unwrap();
     // Peut être 403 pour cause d'origin (si CORS filtre avant) ou 403
-    // pour cause de capability. Les deux sont acceptables — on refuse.
+    // pour cause de capability. Les deux sont acceptables - on refuse.
     assert_eq!(resp.status().as_u16(), 403);
 }

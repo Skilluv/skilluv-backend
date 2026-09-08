@@ -1,4 +1,4 @@
-# Skilluv observability — Grafana + Prometheus (SKI-31)
+# Skilluv observability - Grafana + Prometheus (SKI-31)
 
 Stack Coolify-deployable pour visualiser les metrics Prometheus du
 backend Skilluv.
@@ -7,10 +7,10 @@ backend Skilluv.
 
 1. **Nouvelle app "Docker Compose"** dans Coolify → pointer sur ce dossier.
 2. Env vars :
-   - `GRAFANA_ADMIN_PASSWORD` — password admin initial (change via UI ensuite)
+   - `GRAFANA_ADMIN_PASSWORD` - password admin initial (change via UI ensuite)
 3. **Ports exposés** :
    - `3005` → Grafana UI (`https://grafana.skill-uv.com` via Coolify reverse proxy)
-   - `9090` → Prometheus (optionnel exposer publiquement — usually internal-only)
+   - `9090` → Prometheus (optionnel exposer publiquement - usually internal-only)
 4. **Config Prometheus** : édite `provisioning/prometheus.yml` pour ajouter d'autres cibles ou changer l'URL du backend.
 
 ## Login
@@ -24,7 +24,7 @@ Admin username : `admin` / password : celui de `GRAFANA_ADMIN_PASSWORD`.
 | Dashboard | Purpose | Data sources |
 |---|---|---|
 | **Workflow challenge (P26 v2)** | Signal du workflow : ingest domains, external refresh transitions, CI advances, merge bonus | `skilluv_ingest_domain_source_total`, `skilluv_external_refresh_*_total`, `skilluv_ci_webhook_advanced_total`, `skilluv_ci_poll_advanced_total`, `skilluv_merge_bonus_awarded_total` |
-| **Business overview** | KPIs core : users, challenges, enterprises, reports pending | gauges refreshed every 60s par `start_business_gauges` — `skilluv_users_total`, `skilluv_users_active_24h`, `skilluv_challenges_in_progress`, `skilluv_enterprises_total`, `skilluv_reports_pending`, `skilluv_conversations_active` |
+| **Business overview** | KPIs core : users, challenges, enterprises, reports pending | gauges refreshed every 60s par `start_business_gauges` - `skilluv_users_total`, `skilluv_users_active_24h`, `skilluv_challenges_in_progress`, `skilluv_enterprises_total`, `skilluv_reports_pending`, `skilluv_conversations_active` |
 | **Ops** | Latence AI, jobs queue, fraude, checkouts | `skilluv_ai_call_latency_ms`, `skilluv_ai_jobs_enqueued_total`, `skilluv_admin_2fa_resets_total`, `skilluv_fraud_deliverables_revoked_total`, `skilluv_deep_plagiarism_scans_total`, `skilluv_subscriptions_checkout_created_total` |
 
 ## /metrics gating (important)

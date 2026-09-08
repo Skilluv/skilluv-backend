@@ -63,7 +63,7 @@ async fn cleanup_test_db(db_name: &str) {
     admin_pool.close().await;
 }
 
-// Un ingestor factice qui rapporte simplement un nombre paramétrable — prouve
+// Un ingestor factice qui rapporte simplement un nombre paramétrable - prouve
 // que le trait accepte des impls custom sans coupler le dispatcher.
 struct FakeIngestor {
     to_report: u32,

@@ -1,7 +1,7 @@
 //! The burst limit on the assistant, and the refusal it has to write down.
 //!
 //! Its own binary, and the only test in it. Every other integration test runs
-//! with `SKILLUV_DISABLE_RATELIMIT=1` — a blunt switch the harness sets because
+//! with `SKILLUV_DISABLE_RATELIMIT=1` - a blunt switch the harness sets because
 //! several test binaries in parallel used to eat each other's IP buckets. This
 //! assertion is about the limiter firing, so it cannot run under that switch,
 //! and re-enabling it is a process-global change that would reach every test
@@ -27,7 +27,7 @@ async fn the_burst_limit_is_recorded_as_a_refusal() {
     let app = TestApp::spawn().await;
 
     // `TestApp::spawn` sets `SKILLUV_DISABLE_RATELIMIT=1`, so this has to be
-    // undone after it, and this test has to be the only one in its binary —
+    // undone after it, and this test has to be the only one in its binary -
     // an env var is process-global and the tests of one binary run in
     // parallel threads.
     //
@@ -35,7 +35,7 @@ async fn the_burst_limit_is_recorded_as_a_refusal() {
     // its own Redis database (`pid % 16`), and the bucket this exercises is
     // keyed on a user id created a line below. Nothing else can be in it.
     //
-    // SAFETY: single-threaded at this point — one test, no other reader.
+    // SAFETY: single-threaded at this point - one test, no other reader.
     unsafe {
         std::env::set_var("SKILLUV_DISABLE_RATELIMIT", "0");
     }

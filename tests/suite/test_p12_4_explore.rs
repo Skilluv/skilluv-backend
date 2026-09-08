@@ -184,7 +184,7 @@ async fn explore_language_filter_targets_challenges() {
     let items = body["data"]["items"].as_array().unwrap();
     let titles: Vec<&str> = items.iter().map(|i| i["title"].as_str().unwrap()).collect();
     assert!(titles.contains(&"Rust Challenge"), "rust challenge attendu");
-    // Le filtre language ne s'applique qu'aux challenges — les slices sans language
+    // Le filtre language ne s'applique qu'aux challenges - les slices sans language
     // ne sont pas filtrées. Ici on n'a pas de slices, donc :
     assert!(
         !titles.contains(&"Python Challenge"),

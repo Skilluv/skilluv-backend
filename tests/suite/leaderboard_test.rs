@@ -38,7 +38,7 @@ async fn test_leaderboard_validation() {
 async fn test_my_rank_requires_auth() {
     let app = crate::common::TestApp::spawn().await;
 
-    // No login — should fail
+    // No login - should fail
     let resp = app.get("/api/leaderboards/global/me").await;
     assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
 }

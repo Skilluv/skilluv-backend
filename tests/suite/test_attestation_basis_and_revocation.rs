@@ -146,7 +146,7 @@ async fn a_basis_that_names_an_artifact_must_link_one() {
     let user = a_user(&app, "att_link").await;
 
     // "PR merged upstream" with nothing attached is a label, not a claim
-    // anyone can check — and being checkable by a stranger is the whole
+    // anyone can check - and being checkable by a stranger is the whole
     // point of an attestation.
     let refused = sqlx::query(
         "INSERT INTO attestations

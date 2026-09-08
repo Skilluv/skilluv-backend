@@ -2,7 +2,7 @@
 
 What to do when something has gone wrong, written for whoever is on their own at
 the time. `SECURITY.md` has the runbooks for four specific technical scenarios;
-this document is the process around them — severities, who decides, the clocks,
+this document is the process around them - severities, who decides, the clocks,
 and the post-mortem.
 
 It is also an audit exercise in the security catalogue. A runbook nobody has
@@ -20,7 +20,7 @@ tried is a document.
 | **S4** | Cosmetic, or an informational finding | Next working day | Nobody in particular |
 
 Two things to notice. **A confirmed critical finding is an S2 even before it is
-exploited** — an unpatched hole somebody else knows about is a service problem.
+exploited** - an unpatched hole somebody else knows about is a service problem.
 And **an S1 is defined by exposure, not by certainty**: if you are not sure
 whether data was reached, it is an S1 until you are.
 
@@ -40,7 +40,7 @@ catastrophic. Both of those stop being true with users.
 
 ### 1. Declare, and write the time down
 
-Open a document — anything — with the timestamp, what you know, and the
+Open a document - anything - with the timestamp, what you know, and the
 severity. Everything else in this process reads it.
 
 Do not skip this because you are busy. The reconstruction afterwards is what
@@ -51,14 +51,14 @@ be done from recollection.
 
 Stop it spreading, before understanding it. In practice:
 
-- **Credentials suspected:** rotate `JWT_SECRET` — this invalidates every
-  session, deliberately — and any provider secret involved.
+- **Credentials suspected:** rotate `JWT_SECRET` - this invalidates every
+  session, deliberately - and any provider secret involved.
 - **A specific account:**
   ```sql
   UPDATE user_sessions SET revoked_at = NOW() WHERE user_id = $1;
   ```
 - **A specific address:** Cloudflare rule, and check whether it holds a research
-  token — a researcher exceeding the scope looks exactly like an attacker at
+  token - a researcher exceeding the scope looks exactly like an attacker at
   this point, and the difference is one query.
 - **A deployment:** roll back to the previous signed image. `SECURITY.md` has
   the commands.
@@ -70,8 +70,8 @@ evidence, and you will want it in step 4.
 
 Now understand it. What was the path in, what did it reach, and is it closed.
 
-If it came from a reported finding, the finding's own record — its reproduction,
-its rounds, its proof files — is the best evidence available, and it is already
+If it came from a reported finding, the finding's own record - its reproduction,
+its rounds, its proof files - is the best evidence available, and it is already
 in the database.
 
 Do not restore service until the way in is closed. A restored service with an
@@ -82,7 +82,7 @@ open door is a second incident.
 Bring it back, then answer the question the notification depends on: **whose
 data was involved?**
 
-For an S1 this is the whole task. Be specific — "the users table was readable"
+For an S1 this is the whole task. Be specific - "the users table was readable"
 is not an answer; "these 340 accounts' email addresses and display names were
 readable between 14:02 and 14:31" is.
 
@@ -94,7 +94,7 @@ shape:
 - **What happened**, in two sentences.
 - **When**, as a timeline with times.
 - **Impact**, specifically. Who and what, or "nobody, and here is how we know".
-- **Root cause**, technical. Not "human error" — the reason the system allowed
+- **Root cause**, technical. Not "human error" - the reason the system allowed
   the error.
 - **What we are changing**, with an owner and a date each.
 
@@ -111,7 +111,7 @@ happened, what data, roughly how many people, what the likely consequences are,
 and what is being done. "We are still establishing the scope" is an acceptable
 sentence in a first notification and a fatal one in a fourth.
 
-People affected are told directly, in plain language, with what they should do —
+People affected are told directly, in plain language, with what they should do -
 change a password, watch for a phishing email. Not a paragraph of reassurance
 with the facts in the middle.
 
@@ -123,7 +123,7 @@ is what the letter needs.
 Most incidents in this domain will arrive as a report rather than as an alert,
 and the two processes have to meet:
 
-1. The finding goes through the normal flow — triage, confirmation — because
+1. The finding goes through the normal flow - triage, confirmation - because
    that is what credits the reporter and records the severity.
 2. **In parallel**, if the finding is exploitable now, it is an S2 and this
    document applies. Do not wait for the disclosure process to finish before
@@ -139,7 +139,7 @@ and the two processes have to meet:
 It happens: somebody runs a load test, or takes a whole table to prove a read.
 
 The safe harbour holds. Somebody acting in good faith who exceeded the scope
-and told us is covered — that is what the commitment is for, and it is worth
+and told us is covered - that is what the commitment is for, and it is worth
 most in exactly this case. Revoke the research token, tell them what happened,
 and ask them to write up what they did, because it is now the best evidence
 available.

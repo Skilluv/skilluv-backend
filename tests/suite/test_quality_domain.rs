@@ -189,7 +189,7 @@ async fn the_skill_map_lost_nothing_on_the_way_in() {
 
     // Migration 0454 joins on slugs. A slug that does not exist drops out
     // silently, which is exactly the failure mode a JOIN has and a subquery
-    // does not — so the count is asserted rather than trusted.
+    // does not - so the count is asserted rather than trusted.
     let mapped: Vec<(String, i64)> = sqlx::query_as(
         "SELECT o.slug, count(*)
            FROM orientation_skill_map m
@@ -205,7 +205,7 @@ async fn the_skill_map_lost_nothing_on_the_way_in() {
     let total: i64 = mapped.iter().map(|(_, n)| n).sum();
     assert_eq!(
         total, 66,
-        "the map is short — a skill slug in 0454 does not exist: {mapped:?}"
+        "the map is short - a skill slug in 0454 does not exist: {mapped:?}"
     );
 
     // The map points at nodes other domains declared rather than re-creating
@@ -683,7 +683,7 @@ async fn re_importing_a_run_replaces_it_and_drops_its_verification() {
         .await;
     assert_eq!(resp.status(), 200, "{}", resp.text().await.unwrap());
 
-    // The same run re-imported is one run, not two — and it is new data, so
+    // The same run re-imported is one run, not two - and it is new data, so
     // what the reviewer checked no longer describes the row.
     app.login("qa_reimport").await;
     let mut updated = run.clone();
@@ -802,7 +802,7 @@ async fn a_defect_report_is_not_a_proof_until_the_fix_is_confirmed() {
 
     // The endpoint recomputes the proof itself, so the attestation is already
     // there. Asserting on the row rather than on a second call's return value:
-    // a generator that is idempotent — which this one has to be — reports
+    // a generator that is idempotent - which this one has to be - reports
     // nothing on the second pass, and a test reading that as failure would be
     // testing the harness rather than the behaviour.
     let count: i64 = sqlx::query_scalar(
@@ -918,7 +918,7 @@ async fn the_quality_tiers_kept_the_slugs_the_search_filters_on() {
     .unwrap();
     // Three of the six differ: `contributor` reads Tester, `engineer` reads
     // Quality Engineer, `staff` reads Quality Lead. Apprentice, Senior and
-    // Principal are the same word in both domains, which is correct — they
+    // Principal are the same word in both domains, which is correct - they
     // are positions on a scale, not job titles.
     assert!(
         renamed >= 3,
@@ -995,7 +995,7 @@ async fn the_wizard_asks_this_domain_its_own_questions() {
 ///
 /// The parser reads JUnit reports so a reviewer checks whether the run is the
 /// one it claims to be rather than whether somebody's arithmetic was honest.
-/// But a CI artefact expires, a link rots, a runner sits behind a login —
+/// But a CI artefact expires, a link rots, a runner sits behind a login -
 /// none of which makes the run untrue. Refusing would push people towards the
 /// sources nothing reads at all, so the import succeeds and the row says
 /// where its figures came from.

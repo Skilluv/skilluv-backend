@@ -1,4 +1,4 @@
-//! Tests IA-C — Routes ai_coach (performance + suggest_orientations).
+//! Tests IA-C - Routes ai_coach (performance + suggest_orientations).
 //!
 //! Comme IA-B, l'appel gRPC réel nécessite skilluv-ia up. On teste ici :
 //!   - Routes existent + auth required.
@@ -42,8 +42,8 @@ async fn performance_route_requires_auth() {
 /// This asserted 500 until the derived sweep in
 /// `tests/test_read_endpoints_answer.rs` reached the endpoint and found it
 /// answering 500 to every signed-in caller. The distinction was already the
-/// platform's position — four Stripe handlers were corrected for exactly this
-/// in August — and the AI ones were missed because the sweep's list was
+/// platform's position - four Stripe handlers were corrected for exactly this
+/// in August - and the AI ones were missed because the sweep's list was
 /// maintained by hand and did not include them.
 ///
 /// It matters to a caller: 503 is retryable and says the deployment lacks an
@@ -85,7 +85,7 @@ async fn suggest_orientations_refresh_rate_limited() {
     app.login("rate_user").await;
     // SKILLUV_DISABLE_RATELIMIT=1 in tests (see common/mod.rs) turns the rate
     // limit off, so the limit itself is not exercised here. What is checked is
-    // that `refresh: true` is accepted and reaches the AI call — which is 503
+    // that `refresh: true` is accepted and reaches the AI call - which is 503
     // because no worker is connected, and would have been 401 or 400 if the
     // parameter were being refused earlier.
     let r1 = app

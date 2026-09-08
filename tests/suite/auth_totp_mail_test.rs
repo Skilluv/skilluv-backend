@@ -17,7 +17,7 @@ async fn test_totp_setup_enable_login_and_disable() {
     let app = TestApp::spawn().await;
     app.register_user("totpguy").await;
 
-    // Setup — returns otpauth_url + secret_base32.
+    // Setup - returns otpauth_url + secret_base32.
     let setup: serde_json::Value = app
         .post("/api/auth/totp/setup", &json!({}))
         .await
@@ -304,7 +304,7 @@ async fn test_email_2fa_login_flow() {
         .await;
     assert_eq!(resp.status(), StatusCode::OK);
 
-    // Enable email 2FA — BE-P0-03 now requires the password (symmetry with
+    // Enable email 2FA - BE-P0-03 now requires the password (symmetry with
     // disable, blocks stolen sessions from flipping 2FA silently).
     let resp = app
         .post(
@@ -378,7 +378,7 @@ async fn test_change_email_end_to_end() {
     let msg = mp.wait_for(new_email, 5_000).await;
     let token = Mailpit::extract_token(&msg, "token").expect("no token in confirm email");
 
-    // Anyone can confirm — the token itself is the capability.
+    // Anyone can confirm - the token itself is the capability.
     let confirm_client = reqwest::Client::new();
     let resp = confirm_client
         .get(format!(

@@ -1,4 +1,4 @@
-//! FZ/MU — property and exhaustive tests for the pure parsers and decision
+//! FZ/MU - property and exhaustive tests for the pure parsers and decision
 //! tables, in the form that runs on the pinned stable toolchain without
 //! libFuzzer.
 //!
@@ -28,7 +28,7 @@ use skilluv_backend::services::security_findings::{
 };
 
 // ═══════════════════════════════════════════════════════════════════
-// CVSS — the number that decides a payout
+// CVSS - the number that decides a payout
 // ═══════════════════════════════════════════════════════════════════
 
 const AVS: [AttackVector; 4] = [
@@ -143,8 +143,8 @@ proptest! {
         }
     }
 
-    /// The same, but with input shaped like a real vector — a `CVSS:3.1`
-    /// prefix followed by plausible `X:Y` tokens — so the parser's metric
+    /// The same, but with input shaped like a real vector - a `CVSS:3.1`
+    /// prefix followed by plausible `X:Y` tokens - so the parser's metric
     /// arms, missing-metric errors and unknown-value errors are all exercised
     /// instead of being rejected at the prefix.
     #[test]
@@ -159,7 +159,7 @@ proptest! {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// fragments_for — the award, by tier
+// fragments_for - the award, by tier
 // ═══════════════════════════════════════════════════════════════════
 
 proptest! {
@@ -190,7 +190,7 @@ fn fragments_for_scale_is_monotonic_by_tier() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// allowed_transition — who may move a finding, and to where
+// allowed_transition - who may move a finding, and to where
 // ═══════════════════════════════════════════════════════════════════
 
 const STATES: [&str; 8] = [
@@ -232,7 +232,7 @@ fn transition_table_holds_its_privilege_boundaries() {
                 }
 
                 if allowed {
-                    // Only an administrator publishes — the irreversible door.
+                    // Only an administrator publishes - the irreversible door.
                     if to == "published" {
                         assert_eq!(actor, Actor::Admin, "non-admin published {from} -> {to}");
                     }
@@ -256,7 +256,7 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(1024))]
 
     /// Arbitrary state names never panic, and a transition out of an unknown
-    /// state is never allowed — the table is closed, not open by default.
+    /// state is never allowed - the table is closed, not open by default.
     #[test]
     fn unknown_states_never_transition(from in ".*", to in ".*") {
         let from_known = STATES.contains(&from.as_str());
@@ -270,10 +270,10 @@ proptest! {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// verify_signature — the webhook HMAC gate
+// verify_signature - the webhook HMAC gate
 // ═══════════════════════════════════════════════════════════════════
 
-// RFC 4231 test case 2 for HMAC-SHA256 — a published vector, so this asserts
+// RFC 4231 test case 2 for HMAC-SHA256 - a published vector, so this asserts
 // the function agrees with the standard, not merely with itself.
 const RFC4231_KEY: &str = "Jefe";
 const RFC4231_DATA: &[u8] = b"what do ya want for nothing?";
@@ -317,14 +317,14 @@ proptest! {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Keyset cursors — decode never panics, and a cursor survives a round trip
+// Keyset cursors - decode never panics, and a cursor survives a round trip
 // ═══════════════════════════════════════════════════════════════════
 
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(1024))]
 
     /// The public feed cursor (base64url of `<rfc3339>|<uuid>`) survives a
-    /// round trip for any instant and id, and the encoding is URL-safe — the
+    /// round trip for any instant and id, and the encoding is URL-safe - the
     /// bug the encoding exists to prevent is a `+` in a query string, so this
     /// asserts no character needs escaping.
     #[test]
@@ -344,7 +344,7 @@ proptest! {
         prop_assert_eq!(decoded.id, id);
     }
 
-    /// Arbitrary bytes never panic the public-feed decoder — answering "from
+    /// Arbitrary bytes never panic the public-feed decoder - answering "from
     /// the beginning" to a broken cursor would silently re-read the whole feed,
     /// so it must return None, not a default.
     #[test]
@@ -372,7 +372,7 @@ proptest! {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// parse_scope — the published bug-bounty scope is never empty
+// parse_scope - the published bug-bounty scope is never empty
 // ═══════════════════════════════════════════════════════════════════
 
 proptest! {
@@ -382,7 +382,7 @@ proptest! {
     /// scope is never empty and every host is trimmed, lowercased and
     /// non-blank. This matters because scope_hosts() gates finding submission
     /// (security_findings.rs: "'{host}' is not in the published scope"): an
-    /// empty scope would reject *every* submission — a silent availability
+    /// empty scope would reject *every* submission - a silent availability
     /// lockout from a malformed env var. So a garbage override falls back to
     /// the defaults rather than to nothing.
     #[test]
@@ -398,8 +398,8 @@ proptest! {
 
 #[test]
 fn parse_scope_falls_back_on_a_blank_or_punctuation_only_override() {
-    // The regressions this locks: None, "", whitespace, and — the one the
-    // first version missed — a string of separators with no host between them.
+    // The regressions this locks: None, "", whitespace, and - the one the
+    // first version missed - a string of separators with no host between them.
     let default = parse_scope(None);
     assert!(!default.is_empty());
     assert_eq!(parse_scope(Some("")), default);

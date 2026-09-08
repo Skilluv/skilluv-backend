@@ -1,7 +1,7 @@
 //! A fresh database seeds itself.
 //!
 //! The failure this file exists to catch is not a crash. It is a seed that runs
-//! to completion, reports success and inserts nothing — which is what four of
+//! to completion, reports success and inserts nothing - which is what four of
 //! the seven SQL scripts did for as long as they existed, because they resolved
 //! their owner as `admin@skilluv.local` while the admin seeder creates
 //! `admin@skill-uv.com`. An empty `INSERT ... SELECT` is not an error in
@@ -103,7 +103,7 @@ async fn a_fresh_database_seeds_its_whole_catalogue() {
     assert_eq!(
         count(&app, "SELECT count(*) FROM projects WHERE is_flagship").await,
         2,
-        "the flagships did not land — this is the script that carried a \
+        "the flagships did not land - this is the script that carried a \
          hard-coded owner UUID"
     );
 
@@ -190,7 +190,7 @@ async fn forgetting_a_step_applies_it_again_without_duplicating_it() {
         "re-applying a step duplicated its rows"
     );
 
-    // Forgetting something that was never there is not an error — it is the
+    // Forgetting something that was never there is not an error - it is the
     // shape of `--forget` on a step that has not run yet.
     assert!(!seed::forget(&app.db, "no-such-step").await.unwrap());
 }
@@ -221,7 +221,7 @@ async fn without_a_password_the_catalogue_declines_instead_of_half_seeding() {
         0
     );
 
-    // The admin step itself did run, and recorded why it produced nothing —
+    // The admin step itself did run, and recorded why it produced nothing -
     // so an operator reading `seed_runs` finds the answer rather than a gap.
     let detail: String =
         sqlx::query_scalar("SELECT detail FROM seed_runs WHERE name = 'admin_account'")
@@ -237,7 +237,7 @@ async fn without_a_password_the_catalogue_declines_instead_of_half_seeding() {
 #[tokio::test]
 async fn a_short_password_is_refused_rather_than_accepted_quietly() {
     let _env = ENV.lock().await;
-    // SAFETY: the lock is held — same reasoning as the test above.
+    // SAFETY: the lock is held - same reasoning as the test above.
     unsafe {
         std::env::set_var("SEED_ADMIN_PASSWORD", "short");
     }
@@ -258,9 +258,9 @@ async fn a_short_password_is_refused_rather_than_accepted_quietly() {
 
 /// The Discord routing survives the database being dropped.
 ///
-/// It could not before: migration 0257 refuses to seed `discord_channels` —
+/// It could not before: migration 0257 refuses to seed `discord_channels` -
 /// rightly, since every value is a snowflake from one specific server and a
-/// migration carrying them would post the test suite into somebody's Discord —
+/// migration carrying them would post the test suite into somebody's Discord -
 /// so the rows lived only in whatever database somebody had run the SQL
 /// against. Drop it and every announcement silently falls back to the default
 /// room, because a missing row is not an error.

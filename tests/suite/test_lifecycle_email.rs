@@ -1,8 +1,8 @@
 //! One preference system, and the toggles that now mean something.
 //!
 //! What is being proved: that turning email off in the settings screen also
-//! stops the digest and the onboarding sequence — which it did not, because
-//! those read a second table — that quiet hours suppress a buzz without
+//! stops the digest and the onboarding sequence - which it did not, because
+//! those read a second table - that quiet hours suppress a buzz without
 //! losing the message, and that no email is built outside the shared
 //! template any more.
 
@@ -144,7 +144,7 @@ async fn the_three_words_and_the_per_kind_screen_agree() {
     assert_eq!(
         body["data"]["digest_weekly"],
         json!(false),
-        "one storage, two views — they cannot disagree"
+        "one storage, two views - they cannot disagree"
     );
 }
 
@@ -327,7 +327,7 @@ async fn a_notification_from_a_pool_only_caller_can_still_email() {
     // `rank.promoted` has email on by default, and the proof engine that
     // emits it holds a `PgPool` and nothing else. That combination used to
     // log "email channel requested but this context carries no email
-    // service" and send nothing — every rank promotion, every first
+    // service" and send nothing - every rank promotion, every first
     // verified contribution, and the queue of payouts an operator has to
     // unblock.
     let delivery = skilluv_backend::services::notify::send(

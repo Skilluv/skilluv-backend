@@ -1,4 +1,4 @@
-//! Integration tests for SKI-42 — external reputation signals.
+//! Integration tests for SKI-42 - external reputation signals.
 //!
 //! The load-bearing test here is [`external_signals_never_touch_proofs`]:
 //! the whole feature is only acceptable because importing off-platform
@@ -179,7 +179,7 @@ async fn blog_signals_are_declared_then_moderator_verified() {
         "manual_review"
     );
 
-    // Verifying twice is a 404 — it is no longer pending.
+    // Verifying twice is a 404 - it is no longer pending.
     let resp = app
         .post(
             &format!("/api/moderation/external-signals/{signal_id}/verify"),
@@ -279,7 +279,7 @@ async fn external_signals_never_touch_proofs() {
     assert_eq!(rank_before, rank_after, "rank is unchanged");
     assert_eq!(
         wpc_before, wpc_after,
-        "weighted_proven_count is unchanged — 'proven on Skilluv' stays literal"
+        "weighted_proven_count is unchanged - 'proven on Skilluv' stays literal"
     );
     assert_eq!(badges_before, badges_after, "no badge is earned");
 }
@@ -393,7 +393,7 @@ async fn public_profile_shows_both_buckets_and_respects_hiding() {
     assert_eq!(
         body["data"]["declared"].as_array().unwrap().len(),
         1,
-        "unverified signals stay visible — hiding them would erase the distinction \
+        "unverified signals stay visible - hiding them would erase the distinction \
          exactly where a recruiter needs it"
     );
 

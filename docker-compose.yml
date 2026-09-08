@@ -3,7 +3,7 @@
 # `docker compose up` starts only what the backend needs to boot and what the
 # test suite talks to: Postgres, Redis, MinIO, Mailpit. Four containers.
 #
-# Judge0 stood here behind a profile — the engine, its workers, and a Postgres
+# Judge0 stood here behind a profile - the engine, its workers, and a Postgres
 # and Redis of its own. It graded code submissions by running them and
 # comparing stdout to an expected string. Nothing asks that question any more:
 # a challenge is a fork, a pull request and a deliverable somebody reads, so
@@ -70,7 +70,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # MinIO — S3-compatible object storage (avatars). Required: the test
+  # MinIO - S3-compatible object storage (avatars). Required: the test
   # harness provisions a bucket per suite.
   minio:
     image: minio/minio:RELEASE.2025-09-07T16-13-09Z
@@ -91,7 +91,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # Mailpit — local SMTP catcher (SMTP :1025, UI :8025). Required:
+  # Mailpit - local SMTP catcher (SMTP :1025, UI :8025). Required:
   # registration returns 500 when SMTP refuses the connection.
   mailpit:
     image: axllent/mailpit:v1.30.5

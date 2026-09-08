@@ -1,4 +1,4 @@
-//! SKI-367 — a trade says which tools it works with, as data.
+//! SKI-367 - a trade says which tools it works with, as data.
 //!
 //! The signup card wants to draw tool logos. The information existed only in
 //! `description` prose ("React, Vue ou Svelte, TypeScript, CSS moderne"), and
@@ -45,7 +45,7 @@ async fn the_stack_arrives_with_the_orientation() {
     );
 
     // Every row carries the field, so a client never has to branch on its
-    // absence — only on its emptiness.
+    // absence - only on its emptiness.
     assert!(
         orientations.iter().all(|o| o["stack"].is_array()),
         "stack is absent from at least one row"

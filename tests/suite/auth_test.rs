@@ -12,7 +12,7 @@ async fn test_register_success() {
 
     assert_eq!(result["data"]["user"]["username"], "alice");
     assert_eq!(result["data"]["user"]["skill_domain"], "code");
-    // Vague 1/2: refresh_token is no longer in the body — it lives in an httpOnly cookie.
+    // Vague 1/2: refresh_token is no longer in the body - it lives in an httpOnly cookie.
     assert!(result["data"].get("refresh_token").is_none());
     assert!(result["data"]["csrf_token"].is_string());
 }
@@ -38,7 +38,7 @@ async fn test_register_duplicate() {
         .await;
 
     // 409 Conflict : email/username unique constraint violation. Semantiquement
-    // REST (etait 400 avant la migration vers Conflict — voir errors::AppError).
+    // REST (etait 400 avant la migration vers Conflict - voir errors::AppError).
     assert_eq!(resp.status(), StatusCode::CONFLICT);
 }
 
@@ -55,7 +55,7 @@ async fn test_register_without_terms_accepted_rejected() {
                 "first_name": "No",
                 "last_name": "Terms",
                 "skill_domain": "code",
-                // terms_accepted omitted — sans #[serde(default)] cote DTO,
+                // terms_accepted omitted - sans #[serde(default)] cote DTO,
                 // axum Json extractor renvoie 422 UNPROCESSABLE_ENTITY
                 // (missing field). Semantiquement correct : payload malforme.
             }),
@@ -141,7 +141,7 @@ async fn test_login_lockout_after_five_failures() {
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
     }
 
-    // 6th attempt with the CORRECT password must still be rejected — account is locked.
+    // 6th attempt with the CORRECT password must still be rejected - account is locked.
     let resp = app
         .post(
             "/api/auth/login",
@@ -223,7 +223,7 @@ async fn test_refresh_reuse_detection_revokes_all_sessions() {
     let old_refresh = extract_set_cookie_value(&resp, "refresh_token")
         .expect("refresh_token Set-Cookie on register");
 
-    // Rotate as the legitimate client — the jar auto-updates to the new cookie.
+    // Rotate as the legitimate client - the jar auto-updates to the new cookie.
     let resp = legit
         .post(format!("{}/api/auth/refresh", app.addr))
         .json(&json!({}))
@@ -286,7 +286,7 @@ async fn test_sessions_list_and_revoke_all_others() {
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 
-    // Device A (the TestApp client) lists sessions — should see 2.
+    // Device A (the TestApp client) lists sessions - should see 2.
     let list = app.get("/api/auth/sessions").await;
     assert_eq!(list.status(), StatusCode::OK);
     let body: serde_json::Value = list.json().await.unwrap();
@@ -429,7 +429,7 @@ async fn test_admin_ban_revokes_sessions_and_blocks_login() {
     let victim_id = victim["data"]["user"]["id"].as_str().unwrap().to_string();
 
     // Fresh admin client so it has its own cookies. Doit inclure Origin (admin
-    // gate check) — sinon /api/admin/* renvoie 403 AdminOriginRequired.
+    // gate check) - sinon /api/admin/* renvoie 403 AdminOriginRequired.
     let mut admin_headers = reqwest::header::HeaderMap::new();
     admin_headers.insert(
         reqwest::header::ORIGIN,
@@ -477,7 +477,7 @@ async fn test_admin_ban_revokes_sessions_and_blocks_login() {
     .await
     .unwrap();
     // Capability 'admin' (require_capability lit user_capabilities, pas
-    // users.role — le UPDATE role='admin' plus haut ne suffit pas).
+    // users.role - le UPDATE role='admin' plus haut ne suffit pas).
     sqlx::query(
         "INSERT INTO user_capabilities (user_id, capability, granted_reason)
          VALUES ($1, 'admin', 'test_setup')

@@ -1,6 +1,6 @@
 name: Threat-model gate
 
-# SA-03 — the threat model as a grep gate (scripts/check-threat-model.sh).
+# SA-03 - the threat model as a grep gate (scripts/check-threat-model.sh).
 # Compiles nothing, runs in a second, and is transparent enough to read in
 # full. Separate from ci.yml with its own job name, so it never touches the
 # required-check graph; make it required in branch protection if you want the

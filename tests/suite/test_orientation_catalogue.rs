@@ -1,7 +1,7 @@
 //! The code catalogue: thirty-three trades, two languages, and a lineage
 //! that survives a rename.
 //!
-//! These assert the things a migration can get wrong silently — a JOIN that
+//! These assert the things a migration can get wrong silently - a JOIN that
 //! drops rows on a mistyped slug, a translation nobody reads, an archived
 //! orientation whose people become unreachable.
 

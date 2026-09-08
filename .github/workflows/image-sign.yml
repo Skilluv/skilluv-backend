@@ -1,7 +1,7 @@
 name: Sign published image + attach SBOM
 
 # Runs AFTER the publish workflow (see PR #33) has pushed an image to GHCR.
-# Signs the image with cosign (keyless, OIDC-based — no keys to rotate) and
+# Signs the image with cosign (keyless, OIDC-based - no keys to rotate) and
 # attaches the CycloneDX SBOM as a signed attestation. Consumers can verify
 # both with `cosign verify` against our GitHub Actions identity.
 #

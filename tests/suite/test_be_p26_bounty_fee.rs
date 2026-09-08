@@ -1,4 +1,4 @@
-//! Tests BE-P26 — Bounty platform fee 8%.
+//! Tests BE-P26 - Bounty platform fee 8%.
 //!
 //! Vérifie que le webhook GitHub PR merged applique bien le split 92/8 :
 //!   - Talent reçoit talent_share × credit_to_frag en fragments
@@ -127,7 +127,7 @@ async fn platform_revenues_requires_at_least_one_amount() {
 // ─── Test unitaire du split fee ──────────────────────────────────
 // On reproduit la formule dans le test pour éviter d'importer le module bounties
 // (qui dépend d'AppState complet). Le vrai chemin webhook est trop lourd
-// à mock pour un test unitaire — voir tests d'intégration end-to-end
+// à mock pour un test unitaire - voir tests d'intégration end-to-end
 // (tests/test_bounties_integration.rs si existe pour test complet).
 
 #[test]

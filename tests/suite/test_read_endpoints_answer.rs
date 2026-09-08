@@ -4,7 +4,7 @@
 //! ever received: one figure in its query was cast to `INT` while the struct
 //! read every column as `i64`, so sqlx refused to decode the row. It survived
 //! because exactly one test reached it, incidentally, on its way to checking
-//! something else — a wholly dead endpoint and one awkward test look identical
+//! something else - a wholly dead endpoint and one awkward test look identical
 //! from outside.
 //!
 //! ## Why the list is no longer written down
@@ -25,13 +25,13 @@
 //!
 //! That moves the drift somewhere better rather than removing it: a route in
 //! the router and absent from `openapi.rs` is still uncovered. It is a
-//! narrower and louder gap — an undocumented public endpoint is its own
-//! problem, whatever this file does — and
+//! narrower and louder gap - an undocumented public endpoint is its own
+//! problem, whatever this file does - and
 //! `an_undocumented_route_is_not_a_hidden_one` is what reports it.
 //!
 //! ## What is asserted
 //!
-//! The *shape* of the answer, not its content — so these stay true as the
+//! The *shape* of the answer, not its content - so these stay true as the
 //! endpoints grow, and fail only for the reason worth failing on.
 //! Unauthenticated is 401, forbidden is 403, absent is 404, and an integration
 //! this deployment does not have is 503. A 500 to a well-formed request is
@@ -40,7 +40,7 @@
 //! The three doors matter, because an endpoint can decode fine on the path
 //! that refuses you and fail on the one that reads rows. The unauthenticated
 //! pass alone would not have caught the ops profile, and it did not catch
-//! `/users/me/performance` either — that answered 500 to every signed-in
+//! `/users/me/performance` either - that answered 500 to every signed-in
 //! caller because an absent AI worker was being reported as a server fault.
 
 use crate::common::TestApp;
@@ -148,7 +148,7 @@ fn paths_with_undescribed_segments() -> Vec<String> {
 /// A segment in the path and nothing describing it.
 ///
 /// The sweep cannot fill those, so the path drops out of the coverage without
-/// anybody noticing — which is the failure this whole file exists to stop. It
+/// anybody noticing - which is the failure this whole file exists to stop. It
 /// is also a real defect in the published document: a client generator reading
 /// it produces a method with no argument for the segment.
 #[tokio::test]
@@ -187,7 +187,7 @@ const NOT_PART_OF_THE_API: &[&str] = &[
 ///
 /// The gap the derived sweep moved rather than closed. A route that exists and
 /// is undocumented is invisible to this file, to the OpenAPI consumers and to
-/// the front end — and adding one is a single line in a `Router`, with nothing
+/// the front end - and adding one is a single line in a `Router`, with nothing
 /// asking for the `#[utoipa::path]` that should come with it.
 ///
 /// This held a list of eighty-five inherited exceptions: sixty-two reads and
@@ -249,7 +249,7 @@ async fn an_undocumented_route_is_not_a_hidden_one() {
             };
             // The methods a route is served with are named just after its
             // literal. Bounded, because the piece runs to the next `.route(`
-            // — for the last route in a module that is everything left in the
+            // - for the last route in a module that is everything left in the
             // file, and every `get(` in a handler body would read as a route.
             // Counted in characters, not bytes: these modules are separated
             // by box-drawing banners, and a byte offset lands inside one.
@@ -299,7 +299,7 @@ async fn an_undocumented_route_is_not_a_hidden_one() {
     assert!(
         fresh.is_empty(),
         "{} route(s) were added without an OpenAPI entry, so nothing sweeps them \
-         and no client knows they exist — add the `#[utoipa::path]` and register the \
+         and no client knows they exist - add the `#[utoipa::path]` and register the \
          handler in `src/openapi.rs`:\n{}",
         fresh.len(),
         fresh.join("\n")
@@ -313,11 +313,11 @@ async fn every_endpoint_answers(app: &TestApp, who: &str) {
 
     // A floor rather than an exact count: the number grows with the platform,
     // and an assertion on the exact figure would be edited without being read.
-    // A collapse to nothing is the failure worth catching — an empty sweep
+    // A collapse to nothing is the failure worth catching - an empty sweep
     // passes silently, which is the shape of bug this file is about.
     assert!(
         paths.len() > 300,
-        "the derived sweep collapsed to {} paths — something stopped the OpenAPI \
+        "the derived sweep collapsed to {} paths - something stopped the OpenAPI \
          document being built",
         paths.len()
     );
@@ -330,7 +330,7 @@ async fn every_endpoint_answers(app: &TestApp, who: &str) {
         // 503 is allowed and 500 is not, which is the whole distinction: an
         // integration this deployment does not have is unavailable, not
         // broken. Stripe is absent here and in CI, and four handlers used to
-        // call that an internal error — telling a caller the server failed
+        // call that an internal error - telling a caller the server failed
         // when the honest answer is that payments were never configured. The
         // AI worker is absent for the same reason, and four more handlers
         // were saying the same thing about it.
@@ -377,7 +377,7 @@ async fn no_read_endpoint_answers_5xx_to_an_admin() {
 /// purpose, so it is never checked for completeness. It is checked for
 /// truthfulness: a front-end developer reading it should not be sent to a
 /// route that was renamed or merged away. It named three wallet payout
-/// endpoints — `/withdraw/stripe`, `/withdraw/momo` and `/onboard/stripe` —
+/// endpoints - `/withdraw/stripe`, `/withdraw/momo` and `/onboard/stripe` -
 /// for long after the rails were unified behind one `/withdraw`.
 #[test]
 fn every_route_the_reference_names_exists() {
@@ -409,7 +409,7 @@ fn every_route_the_reference_names_exists() {
     }
 
     // `src/openapi.rs` serves the document itself, and mounts Swagger UI as a
-    // whole subtree rather than route by route — so its mount point never
+    // whole subtree rather than route by route - so its mount point never
     // appears as a `.route(` literal. Both are served paths, and the reference
     // sends readers to both.
     let openapi = std::fs::read_to_string(root.join("src/openapi.rs")).expect("readable");

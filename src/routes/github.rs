@@ -16,6 +16,7 @@ use crate::middleware::AuthUser;
 use crate::routes::analytics_consent;
 use crate::services::analytics::{events, props};
 use crate::services::{github, projects};
+use axum::response::IntoResponse;
 
 // Type aliases pour clippy::type_complexity (rangées sqlx::query_as).
 type GithubRow187 = (
@@ -70,9 +71,23 @@ fn github_oauth_env() -> Result<(String, String, String), AppError> {
     Ok((client_id, client_secret, redirect))
 }
 
+/// Where to put the browser once the account is linked.
+#[derive(Debug, Default, serde::Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct StartQuery {
+    /// An absolute path on this deployment's own frontend. Validated by
+    /// `oauth::sanitise_return_path`: one leading slash, never
+    /// protocol-relative, no control characters, 512 characters at most.
+    /// Anything else is ignored rather than refused, because a malformed
+    /// return path is not a reason to fail a link somebody has consented to.
+    #[param(max_length = 512)]
+    pub return_to: Option<String>,
+}
+
 /// Kick off GitHub OAuth authorize dance. Returns a 302 redirect.
 #[utoipa::path(
     get, path = "/api/auth/github/start", tag = "auth",
+    params(StartQuery),
     responses(
         (status = 302, description = "Redirect to GitHub authorize URL"),
         (status = 401, body = crate::api_response::ErrorResponse),
@@ -80,15 +95,33 @@ fn github_oauth_env() -> Result<(String, String, String), AppError> {
     security(("cookie_auth" = [])),
     operation_id = "githubStart",
 )]
-pub async fn start(State(state): State<AppState>, auth: AuthUser) -> Result<Redirect, AppError> {
+pub async fn start(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Query(q): Query<StartQuery>,
+) -> Result<Redirect, AppError> {
     let (client_id, _, redirect_uri) = github_oauth_env()?;
     // State token bound to the user, 15-min TTL in Redis.
     let state_token = format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple());
     let key = format!("gh_oauth_state:{state_token}");
     let mut redis = state.redis.clone();
-    let () = redis
-        .set_ex(&key, auth.user_id.to_string(), 15 * 60)
-        .await?;
+
+    // The user id, and where to put the browser afterwards.
+    //
+    // Stored together under one key so the callback needs one round trip and
+    // so a path cannot outlive the state it belongs to. `user_id|path`, with
+    // the path absent when none was asked for: a UUID contains no `|`, so the
+    // split is unambiguous and old keys written before this change still parse
+    // as "no path".
+    let return_to = q
+        .return_to
+        .as_deref()
+        .and_then(crate::routes::oauth::sanitise_return_path);
+    let payload = match &return_to {
+        Some(path) => format!("{}|{path}", auth.user_id),
+        None => auth.user_id.to_string(),
+    };
+    let () = redis.set_ex(&key, payload, 15 * 60).await?;
 
     let url = github::build_authorize_url(&client_id, &redirect_uri, &state_token);
     Ok(Redirect::to(&url))
@@ -114,13 +147,17 @@ pub async fn callback(
     State(state): State<AppState>,
     headers: HeaderMap,
     Query(q): Query<CallbackQuery>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<axum::response::Response, AppError> {
     let (client_id, client_secret, redirect_uri) = github_oauth_env()?;
     let mut redis = state.redis.clone();
     let key = format!("gh_oauth_state:{}", q.state);
-    let user_id_str: Option<String> = redis.get(&key).await?;
-    let user_id_str = user_id_str.ok_or(AppError::Unauthorized)?;
+    let stored: Option<String> = redis.get(&key).await?;
+    let stored = stored.ok_or(AppError::Unauthorized)?;
     let _: () = redis.del(&key).await?;
+    let (user_id_str, return_to) = match stored.split_once('|') {
+        Some((id, path)) => (id.to_string(), Some(path.to_string())),
+        None => (stored, None),
+    };
     let user_id = Uuid::parse_str(&user_id_str).map_err(|_| AppError::Unauthorized)?;
 
     let (token, scopes) =
@@ -201,10 +238,39 @@ pub async fn callback(
     }
     metrics::counter!("skilluv_github_connections_total").increment(1);
 
+    // Home, if the flow said where home is.
+    //
+    // Linking GitHub is a browser navigation: consent screen, then back here.
+    // Without this the person who has just done the right thing lands on
+    // api.skill-uv.com looking at `{"connected": true}`, with the back button
+    // as their only way out - and this route sits inside onboarding, where
+    // the frontend has deliberately removed the navbar so nobody wanders out
+    // of a mandatory flow. It was the one exit they could not close.
+    //
+    // `/auth/github/link` does not exist, so this is the only way to attach
+    // GitHub to an existing account, and attaching it is a precondition of
+    // the code rite.
+    //
+    // The JSON stays when no path was given, so a programmatic caller reading
+    // the body is unaffected. It is a fallback, not a contract: a browser
+    // should always send `return_to`.
+    if let Some(path) = return_to
+        .as_deref()
+        .and_then(crate::routes::oauth::sanitise_return_path)
+    {
+        let target = format!(
+            "{}{}",
+            state.config.frontend_url.trim_end_matches('/'),
+            path
+        );
+        return Ok(axum::response::Redirect::to(&target).into_response());
+    }
+
     Ok(Json(build_response(json!({
         "connected": true,
         "github_login": gh_user.login,
-    }))))
+    })))
+    .into_response())
 }
 
 /// Disconnect the caller's GitHub account (revokes token, keeps history).
@@ -609,4 +675,38 @@ fn render_cv_html(c: CvContext) -> String {
             repos
         },
     )
+}
+
+#[cfg(test)]
+mod return_path_tests {
+    use crate::routes::oauth::sanitise_return_path;
+
+    /// The path the onboarding step sends, and the shapes around it.
+    ///
+    /// `/auth/github/start` took no query at all, so linking an account left
+    /// the person on the API origin looking at `{"connected": true}`. This is
+    /// the same filter the OAuth module uses, reached through it rather than
+    /// copied, and these are the values this route actually sees.
+    #[test]
+    fn the_onboarding_return_path_survives_the_filter() {
+        assert_eq!(
+            sanitise_return_path("/challenges/onboarding"),
+            Some("/challenges/onboarding".into()),
+            "the path the code rite sends after linking GitHub"
+        );
+        assert_eq!(
+            sanitise_return_path("/settings/security?linked=github"),
+            Some("/settings/security?linked=github".into())
+        );
+
+        // And the shapes that must never reach a Location header, checked
+        // here too because this route is the one reached straight after a
+        // consent screen.
+        assert_eq!(sanitise_return_path("//evil.example"), None);
+        assert_eq!(sanitise_return_path("https://evil.example"), None);
+        assert_eq!(
+            sanitise_return_path("/ok\r\nLocation: https://evil.example"),
+            None
+        );
+    }
 }

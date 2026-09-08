@@ -174,7 +174,11 @@ struct LinkQuery {
 ///   - anything not starting with `/` -- `https://evil.example` reaches another
 ///     origin outright, and a bare `evil.example` becomes one once joined;
 ///   - control characters -- a `\r` or `\n` splits the `Location` header.
-fn sanitise_return_path(raw: &str) -> Option<String> {
+///
+/// `pub(crate)` so `routes::github` uses this one rather than growing a
+/// second copy. A security filter that exists twice drifts, and the copy that
+/// drifts is the one nobody remembers to check.
+pub(crate) fn sanitise_return_path(raw: &str) -> Option<String> {
     let path = raw.trim();
     if path.len() > 512 || !path.starts_with('/') {
         return None;

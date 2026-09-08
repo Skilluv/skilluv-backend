@@ -144,12 +144,7 @@ async fn nothing_promises_three_reviewers() {
 async fn the_catalogue_promises_what_the_brief_asks() {
     let app = TestApp::spawn().await;
 
-    let body: serde_json::Value = app
-        .get("/api/onboarding/rites")
-        .await
-        .json()
-        .await
-        .unwrap();
+    let body: serde_json::Value = app.get("/api/onboarding/rites").await.json().await.unwrap();
 
     let design = body["data"]["rites"]
         .as_array()

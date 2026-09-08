@@ -76,6 +76,41 @@ pub async fn recompute_capabilities_for_user(
         .await?;
     }
 
+    // rite_reviewer:{domain} : le rite de ce domaine est passé.
+    //
+    // The first rung of the reviewer ladder, and the one that was missing.
+    // Every other reviewer capability wants work somebody already validated,
+    // and validating wants one of those capabilities, so nothing granted the
+    // first one: an admin had to read every entrance of every domain forever.
+    //
+    // Whoever passed the entrance of a trade may witness the next entrance of
+    // that trade. Person one still needs a steward; person two can be read by
+    // person one. See migration 0624 for why this is a new capability rather
+    // than a lowered `mentor` threshold.
+    //
+    // Scoped by the domain of the rite that was actually completed, so
+    // somebody who wrote a design HELLO reads design HELLOs. A person with
+    // three declared trades who passed one rite gets one capability.
+    let passed_rites: Vec<String> = sqlx::query_scalar(
+        "SELECT DISTINCT skill_domain FROM onboarding_bonjour_skilluv
+          WHERE user_id = $1 AND completed_at IS NOT NULL",
+    )
+    .bind(user_id)
+    .fetch_all(db)
+    .await
+    .unwrap_or_default();
+    for domain in passed_rites {
+        grant_if_missing(
+            db,
+            user_id,
+            &format!("rite_reviewer:{domain}"),
+            "auto:rite_passed",
+            &mut granted,
+            &mut already,
+        )
+        .await?;
+    }
+
     // pr_reviewer : 10 reviews approuvées (via reviews table verdict='approved').
     let reviews: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM reviews WHERE reviewer_user_id = $1 AND verdict = 'approve'",

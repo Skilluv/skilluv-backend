@@ -183,12 +183,46 @@ impl ReviewsService {
         // between them, the stewards who actually review today all hold one.
         let domain =
             ReviewQueueService::resolve_deliverable_domain(&mut tx, params.deliverable_id).await?;
-        let allowed = [
+        let mut allowed = vec![
             "admin".to_string(),
             "mentor".to_string(),
             "domain_curator:all".to_string(),
             format!("domain_curator:{domain}"),
         ];
+
+        // And one narrower key, for one kind of door.
+        //
+        // Those four are the stewards, and requiring one of them for every
+        // verdict left the platform in a circle: `mentor` is the only one
+        // granted automatically, it wants five attestations or three
+        // mentorship sessions, and both need work somebody already validated.
+        // No reviewer, no completed rite, no attestation, no mentor. An admin
+        // had to read every entrance of every domain, forever, in all twelve
+        // domains - the code rite is queued here too (routes/onboarding.rs),
+        // so this was never the design problem it was first filed as.
+        //
+        // `rite_reviewer:{domain}` is granted when somebody passes the rite of
+        // that domain, and it is honoured here only when the deliverable is
+        // itself a published domain rite of the same domain. Checked against
+        // the template rather than inferred from the capability's name: the
+        // capability says what its holder passed, the query says what they are
+        // being asked to read, and only the second one can authorise.
+        let is_domain_rite: bool = sqlx::query_scalar(
+            "SELECT COALESCE(
+                (SELECT ct.is_domain_rite AND ct.skill_domain = $2
+                   FROM deliverables d
+                   JOIN challenge_templates ct ON ct.id = d.challenge_id
+                  WHERE d.id = $1),
+                FALSE)",
+        )
+        .bind(params.deliverable_id)
+        .bind(&domain)
+        .fetch_one(&mut *tx)
+        .await?;
+        if is_domain_rite {
+            allowed.push(format!("rite_reviewer:{domain}"));
+        }
+
         let held =
             crate::middleware::capabilities::list_active_capabilities(db, params.reviewer_user_id)
                 .await?;

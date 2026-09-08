@@ -1353,10 +1353,28 @@ pub async fn recompute_badges_for_user(
             }
             (true, None) => {
                 let rarity = resolve_rarity(&rule.rarity, count);
+                // The read above and this write are not one statement, and
+                // `recompute_all_for_user` is spawned from every approved
+                // verdict. Two of them for the same person both saw `None`
+                // and both inserted, and `uniq_user_badges_by_rule` refused
+                // the second - which `?` turned into an aborted pass, so the
+                // loser of the race silently dropped every badge it had not
+                // reached yet. Awarding a badge somebody has already been
+                // awarded is not a conflict, it is the same outcome twice.
+                //
+                // `DO UPDATE` rather than `DO NOTHING`: if the racing row
+                // landed revoked, the branch below would have un-revoked it,
+                // and losing the race should not change the result. A badge an
+                // operator revoked on purpose reads as `Some(false)` here and
+                // never reaches this arm.
                 sqlx::query(
                     "INSERT INTO user_badges
                          (user_id, badge_id, rule_id, source_proofs, rarity)
-                     VALUES ($1, $2, $3, $4, $5)",
+                     VALUES ($1, $2, $3, $4, $5)
+                     ON CONFLICT (user_id, rule_id) WHERE rule_id IS NOT NULL
+                     DO UPDATE SET revoked_at = NULL,
+                                   revoked_reason = NULL,
+                                   source_proofs = EXCLUDED.source_proofs",
                 )
                 .bind(user_id)
                 .bind(sentinel_badge_id)

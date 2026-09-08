@@ -13,9 +13,11 @@
 -- (`user_email_preferences` and its `marketing` boolean are what the frontend
 -- and I both reached for first. Migration 0164 dropped that table: it was a
 -- second preference system that disagreed with the catalogue, and the
--- catalogue won. The equivalent today is the `lifecycle` category, described
--- there as "off by default in every channel and opted into explicitly,
--- because that is what marketing consent is".)
+-- catalogue won. The nearest equivalent is the `lifecycle` category,
+-- described there as "off by default in every channel and opted into
+-- explicitly, because that is what marketing consent is" - the newsletter
+-- borrows that stance and not that category, for the reason set out beside
+-- the INSERT below.)
 --
 -- So the newsletter is registered below as a kind in that catalogue rather
 -- than bolted beside it, and the two records are joined at send time by a
@@ -109,13 +111,29 @@ CREATE TRIGGER trg_newsletter_subscriptions_updated_at
 
 -- The newsletter, as a kind the settings screen already knows how to render.
 --
--- Off in every channel by default and opted into explicitly, like the rest of
--- `lifecycle`. `transactional` is FALSE: nothing here is owed to anybody, and
--- a transactional kind cannot be refused.
+-- Its own category, and not `lifecycle`, which is where it nearly went.
+--
+-- `GET/PUT /users/me/email-preferences` is a narrower view over this
+-- catalogue: its `marketing` boolean reads true when ANY `lifecycle` kind has
+-- email enabled, and writing it false writes false across every one of them
+-- (routes/email_prefs.rs, `lifecycle_kinds`). A newsletter filed under
+-- `lifecycle` would therefore be switched off by somebody using a coarse
+-- toggle to stop the onboarding drip - an explicit, confirmed, double opt-in
+-- consent silently overridden by a control that was never about it, with the
+-- subscription row still reading `confirmed` and nothing to show the person
+-- why they stopped receiving anything.
+--
+-- Two records disagreeing about whether somebody may be mailed is the exact
+-- failure this table was shaped to avoid, so the newsletter answers only to
+-- its own toggle and its own unsubscribe link.
+--
+-- Off in every channel by default and opted into explicitly. `transactional`
+-- is FALSE: nothing here is owed to anybody, and a transactional kind cannot
+-- be refused.
 INSERT INTO notification_kinds
     (kind, category, allows_in_app, allows_push, allows_email,
      default_in_app, default_push, default_email, transactional)
 VALUES
-    ('newsletter.issue', 'lifecycle', FALSE, FALSE, TRUE,
+    ('newsletter.issue', 'newsletter', FALSE, FALSE, TRUE,
      FALSE, FALSE, FALSE, FALSE)
 ON CONFLICT (kind) DO NOTHING;

@@ -319,3 +319,81 @@ async fn a_pending_address_is_never_mailable() {
         "double opt-in means pending is not a licence to send"
     );
 }
+
+/// The coarse `marketing` toggle cannot switch the newsletter off.
+///
+/// `GET/PUT /users/me/email-preferences` is a narrower view over the
+/// catalogue: its `marketing` boolean reads true when any `lifecycle` kind has
+/// email enabled, and writing it false writes false across every one of them.
+/// A newsletter filed under `lifecycle` would be switched off by somebody
+/// using that toggle to stop the onboarding drip, while their subscription row
+/// still read `confirmed` and nothing showed them why the mail stopped.
+///
+/// So it has its own category, and this is what says so. If anybody moves it
+/// back, the newsletter starts answering to a control that was never about it.
+#[tokio::test]
+async fn the_newsletter_is_not_a_lifecycle_kind() {
+    let app = TestApp::spawn().await;
+
+    let category: String = sqlx::query_scalar(
+        "SELECT category FROM notification_kinds WHERE kind = 'newsletter.issue'",
+    )
+    .fetch_one(&app.db)
+    .await
+    .expect("the newsletter is registered in the catalogue");
+
+    assert_eq!(
+        category, "newsletter",
+        "under `lifecycle`, PUT /users/me/email-preferences with marketing=false \
+         would silently unsubscribe somebody who double opted in"
+    );
+}
+
+/// Turning marketing off in the settings screen leaves the newsletter alone.
+///
+/// The property above, exercised through the endpoint rather than asserted
+/// about a column, because that is where it would actually break.
+#[tokio::test]
+async fn refusing_marketing_does_not_unsubscribe_the_newsletter() {
+    let app = TestApp::spawn().await;
+    app.register_user("bothways").await;
+    app.login("bothways").await;
+
+    let email: String = sqlx::query_scalar("SELECT email FROM users WHERE username = 'bothways'")
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
+
+    subscribe(&app, &email).await;
+    sqlx::query(
+        "UPDATE newsletter_subscriptions SET status = 'confirmed', confirmed_at = NOW(),
+                confirm_token = NULL WHERE email = lower($1)",
+    )
+    .bind(&email)
+    .execute(&app.db)
+    .await
+    .unwrap();
+
+    // The person stops the onboarding drip. They said nothing about the
+    // newsletter.
+    let resp = app
+        .put(
+            "/api/users/me/email-preferences",
+            &json!({ "digest_weekly": true, "streak_reminder": true, "marketing": false }),
+        )
+        .await;
+    assert!(
+        resp.status().is_success(),
+        "the settings screen still works: {}",
+        resp.text().await.unwrap()
+    );
+
+    let mailable = skilluv_backend::routes::newsletter::mailable_addresses(&app.db)
+        .await
+        .unwrap();
+    assert!(
+        mailable.iter().any(|(e, _)| e == &email.to_lowercase()),
+        "refusing marketing must not revoke a newsletter consent that was \
+         given separately and confirmed by clicking a link"
+    );
+}

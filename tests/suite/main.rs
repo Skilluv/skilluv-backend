@@ -231,6 +231,7 @@ mod test_ski_293_294_contract;
 mod test_ski_293_seed_guild;
 mod test_ski_367_orientation_stack;
 mod test_ski_368_reserved_fixture_slugs;
+mod test_ski_369_newsletter;
 mod test_skill_domains;
 mod test_slice_orientation;
 mod test_storage_cors;

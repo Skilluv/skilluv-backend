@@ -1,4 +1,4 @@
-//! Tests FE-M1 — GET /api/users/{id}/orientations (route publique).
+//! Tests FE-M1 - GET /api/users/{id}/orientations (route publique).
 
 use crate::common::TestApp;
 
@@ -50,8 +50,8 @@ async fn public_orientations_returns_active_ones_for_public_profile() {
 #[tokio::test]
 async fn public_orientations_returns_empty_when_profile_hidden() {
     // SKI-70 (migration 0133) split profile_active into two concepts:
-    //   - profile_active — "user cleared onboarding" (listing surfaces)
-    //   - profile_hidden — "user hid the public profile page"
+    //   - profile_active - "user cleared onboarding" (listing surfaces)
+    //   - profile_hidden - "user hid the public profile page"
     // The public orientations endpoint follows the *profile visibility*
     // signal, so this test seeds profile_hidden = true.
     let app = TestApp::spawn().await;

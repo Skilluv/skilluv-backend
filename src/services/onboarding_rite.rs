@@ -1,8 +1,8 @@
 //! What Bonjour Skilluv asks for, per domain.
 //!
 //! One rite, twelve gestures. The name, the badge and the moment are single;
-//! the shape belongs to the trade. Until SKI-362 there was one shape — fork a
-//! GitHub starter and open a pull request — and the first thing the platform
+//! the shape belongs to the trade. Until SKI-362 there was one shape - fork a
+//! GitHub starter and open a pull request - and the first thing the platform
 //! asked of a designer, a sound engineer or a teacher was to open a GitHub
 //! account.
 //!
@@ -29,7 +29,7 @@
 pub enum RiteForm {
     /// A `skilluv-community/starter-*` forked on the caller's GitHub account,
     /// a pull request on their own fork, a webhook. Requires a connected
-    /// GitHub account — and is the only form that does.
+    /// GitHub account - and is the only form that does.
     Fork,
     /// An artifact submitted against the domain's rite template, which lands
     /// in the human review queue (SKI-361). No GitHub account, no repository.
@@ -43,9 +43,9 @@ pub struct Rite {
     pub form: RiteForm,
     /// One line: what the person does. The full brief is the template's.
     pub gesture: &'static str,
-    /// What is handed in — what the front builds an input for.
+    /// What is handed in - what the front builds an input for.
     pub expected_artifact: &'static str,
-    /// The loop this trade *continues* into once the rite is passed — the
+    /// The loop this trade *continues* into once the rite is passed - the
     /// design critique, the playtest verdicts, the disclosure programme.
     ///
     /// Not where the rite itself is read. Every rite, all twelve, is read in
@@ -123,7 +123,7 @@ pub const RITES: &[Rite] = &[
         domain: "quality",
         form: RiteForm::Submission,
         gesture: "File one defect report on the Skilluv canvas that needs no follow-up question.",
-        expected_artifact: "Steps, expected, actual, where — and how sure you are.",
+        expected_artifact: "Steps, expected, actual, where - and how sure you are.",
         continues_in: "defect_reports",
     },
     Rite {
@@ -144,7 +144,7 @@ pub const RITES: &[Rite] = &[
         domain: "education",
         form: RiteForm::Submission,
         gesture: "Explain one skill node in three beats, to somebody who does not have it yet.",
-        expected_artifact: "Problem solved, smallest example, first mistake — in that order.",
+        expected_artifact: "Problem solved, smallest example, first mistake - in that order.",
         continues_in: "cohorts",
     },
 ];

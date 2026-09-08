@@ -3,7 +3,7 @@
 //!
 //! They live in one file because they are one theme: every surface built
 //! for its owner turned out to be unusable by the two callers that also
-//! need it — the visitor reading somebody else's profile, and the
+//! need it - the visitor reading somebody else's profile, and the
 //! moderator who has to act on content nobody else can see.
 
 use crate::common::TestApp;
@@ -62,7 +62,7 @@ async fn audit_entries(app: &TestApp, action: &str) -> Vec<(Option<Uuid>, Option
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SKI-300 — the public profile exposes its own id
+// SKI-300 - the public profile exposes its own id
 // ═══════════════════════════════════════════════════════════════════
 
 #[tokio::test]
@@ -115,7 +115,7 @@ async fn a_hidden_or_banned_profile_leaks_nothing() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SKI-301 — vouchings carry a linkable identity
+// SKI-301 - vouchings carry a linkable identity
 // ═══════════════════════════════════════════════════════════════════
 
 /// Seed a live vouching directly. Going through `POST /api/vouchings`
@@ -162,7 +162,7 @@ async fn vouchings_expose_the_vouchers_username() {
     assert_eq!(row["voucher_username"].as_str(), Some("gapvoucher"));
     assert_eq!(row["voucher_display_name"].as_str(), Some("Ada Lovelace"));
 
-    // The username must actually address a profile — that is the whole
+    // The username must actually address a profile - that is the whole
     // point of the field.
     let resp = app.get("/api/profile/gapvoucher").await;
     assert_eq!(resp.status(), StatusCode::OK);
@@ -199,7 +199,7 @@ async fn my_vouchings_resolve_the_other_party_on_both_sides() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SKI-297 — the global vouchings moderation queue
+// SKI-297 - the global vouchings moderation queue
 // ═══════════════════════════════════════════════════════════════════
 
 #[tokio::test]
@@ -343,7 +343,7 @@ async fn the_vouching_queue_is_closed_to_everyone_else() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SKI-295 — admin moderation of cohorts
+// SKI-295 - admin moderation of cohorts
 // ═══════════════════════════════════════════════════════════════════
 
 async fn create_cohort(app: &TestApp, slug: &str, is_public: bool) -> Uuid {
@@ -462,7 +462,7 @@ async fn admin_archive_freezes_a_cohort_and_leaves_the_history_readable() {
         .await;
     assert_eq!(resp.status(), StatusCode::CONFLICT);
 
-    // SKI-299 — the entry is there, and carries the motive.
+    // SKI-299 - the entry is there, and carries the motive.
     let entries = audit_entries(&app, "cohort.archive").await;
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].0, Some(admin_id));
@@ -514,7 +514,7 @@ async fn cohort_moderation_is_closed_to_ordinary_users() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SKI-296 — admin moderation of talent offers
+// SKI-296 - admin moderation of talent offers
 // ═══════════════════════════════════════════════════════════════════
 
 async fn create_offer(app: &TestApp, offer_type: &str) -> Uuid {
@@ -589,7 +589,7 @@ async fn a_held_offer_leaves_the_browse_and_the_author_cannot_bring_it_back() {
             .unwrap();
     assert!(still_there);
 
-    // The author cannot undo it — otherwise the gesture is worth nothing.
+    // The author cannot undo it - otherwise the gesture is worth nothing.
     app.login("gapofferauthor").await;
     let resp = app
         .patch(
@@ -734,7 +734,7 @@ async fn the_admin_offer_listing_shows_offers_from_hidden_authors() {
         .await
         .unwrap();
 
-    // The public browse drops it — which is why it could not be inspected.
+    // The public browse drops it - which is why it could not be inspected.
     let body: Value = app.get("/api/talent-offers").await.json().await.unwrap();
     assert!(body["data"]["offers"].as_array().unwrap().is_empty());
 
@@ -753,7 +753,7 @@ async fn the_admin_offer_listing_shows_offers_from_hidden_authors() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SKI-298 — the AI companion cost projection
+// SKI-298 - the AI companion cost projection
 // ═══════════════════════════════════════════════════════════════════
 
 #[tokio::test]
@@ -893,7 +893,7 @@ async fn the_admin_can_read_one_users_disclosure_ledger() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SKI-299 — audit log on the destructive moderation routes
+// SKI-299 - audit log on the destructive moderation routes
 // ═══════════════════════════════════════════════════════════════════
 
 #[tokio::test]
@@ -999,7 +999,7 @@ async fn deleting_an_external_signal_requires_a_motive_and_is_journalled() {
     assert_eq!(
         meta["url"].as_str(),
         Some("https://medium.com/@someone/a-post"),
-        "the entry carries what was destroyed — an id pointing at nothing documents nothing"
+        "the entry carries what was destroyed - an id pointing at nothing documents nothing"
     );
     assert!(meta["reason"].as_str().unwrap().starts_with("claimed"));
 

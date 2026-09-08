@@ -12,7 +12,7 @@
 //!
 //! That file already declares the server: 24 categories, 182 channels, the
 //! roles. Putting the mapping anywhere else would create a second source of
-//! truth to keep in step with the first — the exact failure this codebase has
+//! truth to keep in step with the first - the exact failure this codebase has
 //! already paid for once, when the admin panel held its own copy of a
 //! capability list anchored to a CHECK that migration 0404 had deleted.
 //!
@@ -26,14 +26,14 @@
 //!
 //!   * **132 orientations collapse to 12 domain roles.** The orientation lives
 //!     on the profile; what a Discord room is about is the domain. `@design`
-//!     has to be mentionable — `@design-motion-designer` does not.
+//!     has to be mentionable - `@design-motion-designer` does not.
 //!   * **~100 scoped capabilities collapse to one role per family**, through
 //!     the `*` in `capability = "design_reviewer:*"`. What a member wants to
 //!     know is who to ask, not which sub-family the grant names.
 //!
 //! ## What is deliberately not synced
 //!
-//! See [`NEVER_PUBLISHED`]. Discord roles are public — the member list shows
+//! See [`NEVER_PUBLISHED`]. Discord roles are public - the member list shows
 //! them to anybody who joins.
 
 use sqlx::PgPool;
@@ -52,8 +52,8 @@ const SERVER_TOML: &str = include_str!("../../ops/discord/server.toml");
 /// Capabilities whose holders are never named on Discord.
 ///
 /// Not an oversight and not a preference. A Discord role is visible to every
-/// member of the server, so syncing these would publish — permanently, and to
-/// anybody who joins — who decides plagiarism cases, who reads identity
+/// member of the server, so syncing these would publish - permanently, and to
+/// anybody who joins - who decides plagiarism cases, who reads identity
 /// documents and who triages security reports. Those are the three roles on
 /// this platform whose holders somebody has a motive to pressure.
 ///
@@ -71,7 +71,7 @@ pub const NEVER_PUBLISHED: &[&str] = &[
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RoleRule {
     pub name: String,
-    /// `None` for roles this loop must never touch — the ones marked
+    /// `None` for roles this loop must never touch - the ones marked
     /// `manual = true`, which are yours to hand out.
     pub grant: Option<Grant>,
 }
@@ -83,7 +83,7 @@ pub enum Grant {
     /// Anybody holding a capability matching this pattern. A trailing `*`
     /// matches a whole scoped family: `design_reviewer:*`.
     Capability { pattern: String },
-    /// Exactly this rank. Exclusive — see [`Grant::is_exclusive`].
+    /// Exactly this rank. Exclusive - see [`Grant::is_exclusive`].
     Rank { rank: String },
 }
 
@@ -103,7 +103,7 @@ impl Grant {
 fn capability_matches(pattern: &str, held: &str) -> bool {
     match pattern.strip_suffix('*') {
         // `design_reviewer:*` matches `design_reviewer:motion` and must not
-        // match `design_reviewer_elsewhere` — the prefix keeps its colon.
+        // match `design_reviewer_elsewhere` - the prefix keeps its colon.
         Some(prefix) => held.starts_with(prefix),
         None => held == pattern,
     }
@@ -219,7 +219,7 @@ pub async fn standing(db: &PgPool, user_id: Uuid) -> Result<Standing, AppError> 
 
 /// The roles this standing earns, by name.
 ///
-/// Pure, so it is testable without a database or a Discord server — which
+/// Pure, so it is testable without a database or a Discord server - which
 /// matters, because the failure it can produce is somebody wearing an
 /// authority they do not hold, and that is not a thing to discover in
 /// production.
@@ -255,8 +255,8 @@ pub fn desired(rules: &[RoleRule], standing: &Standing) -> Vec<String> {
 
 /// Every role name the loop is allowed to remove.
 ///
-/// Anything outside this set is somebody's decision — `@Incident Commander`,
-/// `@AI Champion` — and the loop leaves it exactly where it found it.
+/// Anything outside this set is somebody's decision - `@Incident Commander`,
+/// `@AI Champion` - and the loop leaves it exactly where it found it.
 pub fn managed(rules: &[RoleRule]) -> Vec<String> {
     rules
         .iter()
@@ -327,14 +327,14 @@ impl Diff {
 ///   * **Standing can be lost.** A revoked capability, an abandoned trade, an
 ///     unlinked account. Only a diff takes the role back.
 ///
-/// `held` is every role the member wears, by name — including ones this
+/// `held` is every role the member wears, by name - including ones this
 /// repository has never heard of. `managed` is the only set the loop may
 /// remove from, which is what keeps a hand-granted `@Incident Commander` where
 /// somebody put it.
 ///
 /// Pure, and lives here rather than beside the Discord calls, because the two
-/// failures it can produce — stripping a role nobody asked it to touch, and
-/// leaving an authority somebody no longer holds — are not things to discover
+/// failures it can produce - stripping a role nobody asked it to touch, and
+/// leaving an authority somebody no longer holds - are not things to discover
 /// on a live server.
 pub fn diff(desired: &[String], held: &[String], managed: &[String]) -> Diff {
     use std::collections::HashSet;
@@ -557,7 +557,7 @@ mod tests {
             let got = desired(&rules, &standing_of(&[], &[sensitive], None));
             assert!(
                 got.is_empty(),
-                "holding {sensitive} produced {got:?} — a public list of targets"
+                "holding {sensitive} produced {got:?} - a public list of targets"
             );
         }
     }

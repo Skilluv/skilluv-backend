@@ -1,4 +1,4 @@
-//! The mission board — paid work published by enterprises.
+//! The mission board - paid work published by enterprises.
 //!
 //! Three audiences, three sets of routes:
 //!
@@ -7,7 +7,7 @@
 //!   * the enterprise that published it reads the applications and decides.
 //!
 //! The enterprise side goes through the same gate as every other enterprise
-//! surface — verified email, strong second factor — rather than a check
+//! surface - verified email, strong second factor - rather than a check
 //! written again here.
 
 use axum::extract::{Path, Query, State};
@@ -566,7 +566,7 @@ pub async fn decide(
 // ─── Invoicing ───────────────────────────────────────────────────
 
 /// What is owed on a mission. Readable by the enterprise that publishes it
-/// and by the person doing the work — those are the two parties to it.
+/// and by the person doing the work - those are the two parties to it.
 #[utoipa::path(
     get, path = "/api/missions/{slug}/invoices", tag = "missions",
     params(("slug" = String, Path, description = "Mission slug")),
@@ -650,7 +650,7 @@ pub async fn pay_invoice(
     }
     if invoice.status != "issued" {
         return Err(AppError::Validation(format!(
-            "this invoice is {} — there is nothing to pay",
+            "this invoice is {} - there is nothing to pay",
             invoice.status
         )));
     }
@@ -680,7 +680,7 @@ pub async fn pay_invoice(
     // Keyed on the invoice: paying the same one twice is a mistake, paying
     // two months of a retainer is not.
     let idempotency_key = format!("mission_invoice:{}", invoice.id);
-    let description = format!("Skilluv — {} ({})", mission.title, invoice.label);
+    let description = format!("Skilluv - {} ({})", mission.title, invoice.label);
 
     let session = crate::services::collect::start(
         &state.db,
@@ -783,7 +783,7 @@ pub struct DeliverBody {
 /// Hand in a round.
 ///
 /// Two or three rounds is the normal case for design work, not a failure. The
-/// mission stays `in_progress` until a round is accepted — nothing about the
+/// mission stays `in_progress` until a round is accepted - nothing about the
 /// mission regresses, because the rounds live on the delivery.
 #[utoipa::path(
     post, path = "/api/missions/{slug}/deliveries", tag = "missions",
@@ -819,7 +819,7 @@ pub async fn deliver_round(
     ))
 }
 
-/// Every round of a mission, oldest first — the trail an arbitration reads.
+/// Every round of a mission, oldest first - the trail an arbitration reads.
 #[utoipa::path(
     get, path = "/api/missions/{slug}/deliveries", tag = "missions",
     params(("slug" = String, Path)),
@@ -833,7 +833,7 @@ pub async fn list_rounds(
 ) -> Result<Json<Value>, AppError> {
     let mission = missions::by_slug(&state.db, &slug).await?;
 
-    // A round carries the artifact_url and the notes on it — the delivery
+    // A round carries the artifact_url and the notes on it - the delivery
     // itself. Only the two parties read it, plus an arbiter reading the trail
     // to decide a dispute. The arbiter is an administrator; a mission has no
     // dedicated arbitration capability wired to a route yet. Same shape as

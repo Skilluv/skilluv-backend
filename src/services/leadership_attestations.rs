@@ -10,13 +10,13 @@
 //! It is the strictest gate on the platform, and it is strict in the
 //! direction of the people who did not choose to be written about. A roadmap
 //! naming an unreleased product, an RFC naming a system's weaknesses, a team
-//! health audit naming a team — publishing any of those because somebody
+//! health audit naming a team - publishing any of those because somebody
 //! ticked a box is a harm the author cannot take back, and it is not the
 //! author's alone to risk.
 //!
 //! `public` needs no confirmation: the author is saying the document was
 //! already publishable, which is a claim about their own material.
-//! `confidential` needs no confirmation either, because nothing is published —
+//! `confidential` needs no confirmation either, because nothing is published -
 //! what the attestation carries is the abstract claim in
 //! `leadership_context`.
 //!
@@ -30,7 +30,7 @@
 //!
 //! ## What is not issued from a slice
 //!
-//! Two things, and both for the same reason — nothing in a slice can see
+//! Two things, and both for the same reason - nothing in a slice can see
 //! them.
 //!
 //! `leadership_cohort_completed` rests on a cohort having been run to its end
@@ -51,8 +51,8 @@ use crate::errors::AppError;
 ///
 /// Four subtypes share `leadership_roadmap_validated`, and that is deliberate
 /// where the quality domain split its two plan bases. A roadmap, a delivery
-/// plan, an OKR document and a product spec all answer one question — what a
-/// period will be spent on, and what it will not be — at four granularities,
+/// plan, an OKR document and a product spec all answer one question - what a
+/// period will be spent on, and what it will not be - at four granularities,
 /// and they are read by the same reviewer family. Four counts for one
 /// competence would tell a recruiter less, not more.
 ///
@@ -166,7 +166,7 @@ async fn issue(
 /// Put the attestation on the public feed, when there is something to open.
 ///
 /// A confidential artefact is never announced. The feed line would have to
-/// point at something, and the only honest link would be the profile — which
+/// point at something, and the only honest link would be the profile - which
 /// turns the feed into a stream of claims with nothing behind them, the exact
 /// thing migration 0203 replaced.
 async fn announce(
@@ -220,7 +220,7 @@ async fn announce(
             subject_type: "user",
             subject_id: user_id,
             subject_label: &username,
-            headline: format!("{title} — {username}"),
+            headline: format!("{title} - {username}"),
             artifact_url: url,
             repository: None,
             amount: None,
@@ -388,9 +388,9 @@ pub async fn issue_for_user(db: &PgPool, user_id: Uuid) -> Result<Vec<String>, A
 
 /// Attest the cohorts this person led to their end.
 ///
-/// Not derived from a slice, because a cohort is not a document. The rule —
+/// Not derived from a slice, because a cohort is not a document. The rule -
 /// concluded, at least three people, seventy per cent of the ones not lost to
-/// a job finishing — lives in `cohort_outcomes`, so this reads a
+/// a job finishing - lives in `cohort_outcomes`, so this reads a
 /// boolean rather than reimplementing arithmetic a view already does.
 ///
 /// The attestation links the curriculum's deliverable when the cohort names
@@ -490,8 +490,8 @@ pub async fn issue_cohort_outcomes(db: &PgPool, user_id: Uuid) -> Result<Vec<Str
 /// What this domain may issue editorially or on a reviewer's word.
 ///
 /// Two bases rather than the usual one. A community initiative's effect is a
-/// number that moved somewhere we cannot see — a Discord's retention, a
-/// project's contributor count, an event's attendance — and no row here can
+/// number that moved somewhere we cannot see - a Discord's retention, a
+/// project's contributor count, an event's attendance - and no row here can
 /// read it. A reviewer who followed the evidence issues it, and the evidence
 /// URL is stored on the attestation so a reader can follow it too.
 const EDITORIAL: crate::services::artefact_attestations::Domain =
@@ -534,7 +534,7 @@ pub async fn featured_leader(
 /// Attest a community initiative that moved a number.
 ///
 /// Issued by a reviewer who followed the evidence, for the reason at
-/// [`EDITORIAL`]. The caller is responsible for the permission check — this is
+/// [`EDITORIAL`]. The caller is responsible for the permission check - this is
 /// reached through an endpoint guarded by `leadership_reviewer:community`.
 ///
 /// `what_moved` is required and is the whole substance of the claim: "the
@@ -548,7 +548,7 @@ pub async fn issue_community_impact(
     crate::validators::validate_url(evidence_url, "evidence_url", 500)?;
     if what_moved.trim().len() < 20 {
         return Err(AppError::Validation(
-            "say which number moved, from what to what, over what period — \
+            "say which number moved, from what to what, over what period - \
              \"the community grew\" is the claim this refuses"
                 .into(),
         ));
@@ -578,7 +578,7 @@ mod tests {
     #[test]
     fn every_subtype_the_schema_allows_earns_something() {
         // Migration 0460's CHECK. A subtype added there and forgotten here
-        // produces artefacts that verify and never attest — silently, and
+        // produces artefacts that verify and never attest - silently, and
         // visible only as a profile that stays empty.
         for subtype in [
             "roadmap",

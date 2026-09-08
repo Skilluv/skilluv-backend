@@ -1,6 +1,6 @@
 name: k6 load test
 
-# Runs the smoke load test against a target URL. Not a PR gate — used to
+# Runs the smoke load test against a target URL. Not a PR gate - used to
 # validate a deployment or catch perf regressions between releases.
 #
 # Manual: gh workflow run load-test.yml -f target=https://api.skill-uv.com
@@ -20,11 +20,11 @@ on:
         type: choice
         options:
           - tests/load/smoke.js
-  # Uncomment once staging exists — nightly automated smoke.
+  # Uncomment once staging exists - nightly automated smoke.
   # schedule:
   #   - cron: "30 3 * * *"
 
-# Least-privilege default — k6 only hits an external URL.
+# Least-privilege default - k6 only hits an external URL.
 permissions:
   contents: read
 

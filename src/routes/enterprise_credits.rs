@@ -1,4 +1,4 @@
-//! Enterprise credits + Stripe checkout + webhook (Phase 3 — items 3.6-3.10).
+//! Enterprise credits + Stripe checkout + webhook (Phase 3 - items 3.6-3.10).
 
 use axum::body::Bytes;
 use axum::extract::{Query, State};
@@ -37,13 +37,13 @@ pub fn enterprise_credits_routes() -> Router<AppState> {
         .route("/enterprise/invoices", get(list_invoices))
         .route("/enterprise/invoices/{id}", get(get_invoice))
         .route("/enterprise/invoices/{id}/html", get(get_invoice_html))
-        // Alias — front called it `/preview` (per BE-P0-13 audit) and there's
+        // Alias - front called it `/preview` (per BE-P0-13 audit) and there's
         // no reason to make the front migrate the name for a doc mismatch.
         .route(
             "/enterprise/invoices/{id}/preview",
             get(get_invoice_preview),
         )
-        // BE-P0-36 — PDF endpoint. Delegates to the external
+        // BE-P0-36 - PDF endpoint. Delegates to the external
         // `skilluv-pdf-renderer` service (Python + weasyprint) via HTTP.
         // Returns 503 when `PDF_RENDERER_URL` isn't configured.
         .route("/enterprise/invoices/{id}/pdf", get(get_invoice_pdf))
@@ -165,7 +165,7 @@ pub async fn create_checkout(
         stripe::pack_by_slug(&body.pack_slug).ok_or(AppError::Validation("unknown pack".into()))?;
     let enterprise_id = enterprise.id;
 
-    // The buyer, and the country their organisation is in — which decides
+    // The buyer, and the country their organisation is in - which decides
     // whether a card checkout reaches them at all. A Beninese enterprise
     // could not buy credits before this: the only door was Stripe, and
     // Stripe does not take Mobile Money there.
@@ -199,7 +199,7 @@ pub async fn create_checkout(
     // packs in a day is buying two packs.
     let order = Uuid::new_v4();
     let idempotency_key = format!("credit_pack:{order}");
-    let description = format!("Skilluv — {} crédit(s)", pack.credits);
+    let description = format!("Skilluv - {} crédit(s)", pack.credits);
 
     let session = crate::services::collect::start(
         &state.db,
@@ -246,7 +246,7 @@ pub async fn billing_portal(
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
     // Owner-only: the portal lets the caller update the card, download every
-    // invoice, and — crucially — cancel the subscription. Recruiters must not
+    // invoice, and - crucially - cancel the subscription. Recruiters must not
     // be able to nuke the enterprise's billing state.
     let enterprise = crate::routes::enterprise::require_enterprise_owner_pub(&state, &auth).await?;
     let cfg = stripe::StripeConfig::from_env().ok_or(AppError::ServiceUnavailable(
@@ -284,11 +284,11 @@ pub async fn stripe_webhook(
     body: Bytes,
 ) -> Result<impl IntoResponse, AppError> {
     // Stripe not configured (dev/CI/deployments qui n'utilisent pas Stripe) :
-    // silently ack le webhook avec 200. C'est la best-practice Stripe — un
+    // silently ack le webhook avec 200. C'est la best-practice Stripe - un
     // non-200 declenche des retries indefinis. Le webhook n'est pas traite,
     // on log pour observabilite.
     let Some(cfg) = stripe::StripeConfig::from_env() else {
-        tracing::warn!("Stripe webhook received but STRIPE_* env not configured — acking silently");
+        tracing::warn!("Stripe webhook received but STRIPE_* env not configured - acking silently");
         return Ok(axum::http::StatusCode::OK);
     };
     let sig = headers
@@ -315,7 +315,7 @@ pub async fn stripe_webhook(
         .and_then(Value::as_str)
         .unwrap_or("");
 
-    // Certifications, mentorship, subscriptions — utilisent checkout.session.completed
+    // Certifications, mentorship, subscriptions - utilisent checkout.session.completed
     // avec `metadata.purpose` distinct de la vente de crédits.
     if event.event_type == "checkout.session.completed" && purpose == "certification" {
         handle_certification_paid(&state, &event.data.object).await?;
@@ -751,7 +751,7 @@ pub async fn redeem_promo(
             .await?;
         }
         "percent_off" => {
-            // Discount applies on the next Stripe Checkout — kept as a record only ;
+            // Discount applies on the next Stripe Checkout - kept as a record only ;
             // the actual coupon application logic ties into Stripe Coupons (deferred).
         }
         _ => return Err(AppError::Internal("unknown promo kind".into())),
@@ -878,7 +878,7 @@ pub async fn get_invoice_preview(
     get_invoice_html(state, auth, id).await
 }
 
-// BE-P0-36 / BE-P2-INVOICE-PDF — invoice PDF via external renderer.
+// BE-P0-36 / BE-P2-INVOICE-PDF - invoice PDF via external renderer.
 //
 // The backend stays in Rust land : it renders the same HTML as `/html` then
 // POSTs it to a sidecar `skilluv-pdf-renderer` service (Python + weasyprint)
@@ -890,7 +890,7 @@ pub async fn get_invoice_preview(
 // returns 200 application/pdf on success.
 //
 // When `PDF_RENDERER_URL` isn't configured we surface a clear 503 rather than
-// a broken blob or 500 — the front knows to fall back to browser print.
+// a broken blob or 500 - the front knows to fall back to browser print.
 /// An invoice as a PDF, rendered by the sidecar service.
 #[utoipa::path(
     get, path = "/api/enterprise/invoices/{id}/pdf", tag = "enterprise",
@@ -994,13 +994,13 @@ pub async fn public_pricing(
 
     // Can this currency actually be quoted? `convert_from_eur` needs a row in
     // `fx_rates`, and the ECB feed carries none for NGN, KES, UGX, EGP or GHS
-    // — the CFA peg is seeded, the rest are majors or nothing.
+    // - the CFA peg is seeded, the rest are majors or nothing.
     //
     // A failed conversion used to fall back to the euro *amount* while the
     // response went on saying ZAR. A South African visitor was quoted "39" and
     // told it was rands: about two euros, for a pack that costs thirty-nine.
     // The label has to follow the number. If we cannot convert, we quote in
-    // euros and we say euros — an unconverted price is a limitation, a
+    // euros and we say euros - an unconverted price is a limitation, a
     // mislabelled one is a lie.
     let currency =
         match crate::services::fx::convert_from_eur(&state.db, &mut redis, &currency, 100).await {
@@ -1081,7 +1081,7 @@ pub async fn public_pricing(
 ///
 /// The provider used to come back from here too, out of a const array in
 /// `psp.rs` that nothing else read. It comes from `collection_routes` now,
-/// which is the table that actually decides — a display that disagrees with
+/// which is the table that actually decides - a display that disagrees with
 /// the routing is worse than no display.
 fn resolve_currency(country: Option<&str>, currency: Option<&str>) -> String {
     if let Some(c) = currency {
@@ -1119,7 +1119,7 @@ fn resolve_currency(country: Option<&str>, currency: Option<&str>) -> String {
 /// Which provider would take this payment, for display.
 ///
 /// Read from the routing table rather than guessed, and `None` when no
-/// route matches — a currency we cannot collect should say so on the
+/// route matches - a currency we cannot collect should say so on the
 /// pricing page rather than at checkout.
 async fn provider_for_display(
     db: &sqlx::PgPool,

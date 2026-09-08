@@ -1,4 +1,4 @@
-//! Service `reviews` — soumission de verdict par un reviewer humain (Phase P2.2).
+//! Service `reviews` - soumission de verdict par un reviewer humain (Phase P2.2).
 //!
 //! Voir docs/challenges-target-model-and-roadmap.md partie G.3 (attestations)
 //! et H.2 (workflow reviewer).
@@ -19,9 +19,9 @@ use crate::services::ReviewQueueService;
 ///
 /// - `approve` sur un deliverable qui reste valide 30j → 10 fragments
 ///   (attribution différée pour l'instant : on donne 10 dès le vote,
-///   révoqué si le deliverable est révoqué dans les 30j — Phase P3+)
+///   révoqué si le deliverable est révoqué dans les 30j - Phase P3+)
 /// - `reject` avec confirmation par un 2e reviewer ou une correction ultérieure
-///   → 15 fragments (attribution différée — Phase P3+)
+///   → 15 fragments (attribution différée - Phase P3+)
 /// - `request_changes` menant à un cycle réussi → 5 fragments (Phase P3+)
 /// - `abstain` → 0 fragments
 ///
@@ -128,7 +128,7 @@ impl ReviewsService {
         // reward here, and it is not a fallback for tidiness: since SKI-361 a
         // submission in a domain nothing can score reaches a reviewer through
         // this path, carrying no slice. Read only from the slice, every one of
-        // those verdicts would have awarded zero — approved, and worth nothing.
+        // those verdicts would have awarded zero - approved, and worth nothing.
         let (verification_status, slice_id, deliverable_user_id, fragments_reward): (
             String,
             Option<Uuid>,
@@ -179,7 +179,7 @@ impl ReviewsService {
         // said so in the module header, deferring the gate to P3. It stops
         // being acceptable the moment a verdict is worth something, which is
         // now. `mentor` is the platform's cross-domain reviewer capability,
-        // `domain_curator:*` runs a domain, and `admin` covers the rest —
+        // `domain_curator:*` runs a domain, and `admin` covers the rest -
         // between them, the stewards who actually review today all hold one.
         let domain =
             ReviewQueueService::resolve_deliverable_domain(&mut tx, params.deliverable_id).await?;
@@ -283,7 +283,7 @@ impl ReviewsService {
 
         tx.commit().await?;
 
-        // P19.2 — Best-effort recompute des badges + rank + capabilities
+        // P19.2 - Best-effort recompute des badges + rank + capabilities
         // pour l'auteur du deliverable dès qu'un verdict 'approve' passe.
         // Spawn async pour ne pas bloquer la réponse HTTP ; erreurs loggées
         // via tracing dans proof_hooks.
@@ -358,21 +358,21 @@ impl ReviewsService {
         Ok(())
     }
 
-    /// Close whatever an approved deliverable was the end of — a challenge
+    /// Close whatever an approved deliverable was the end of - a challenge
     /// submission, a Bonjour Skilluv rite, or both.
     ///
     /// Since SKI-361, a submission in a domain no evaluator covers is written
     /// `pending_review` with zero fragments and its deliverable is queued for a
     /// person. This is the other end of that: an `approve` verdict is what
-    /// turns it into a `success`, records what it earned, and — for somebody
-    /// whose very first act on the platform was that submission — activates
+    /// turns it into a `success`, records what it earned, and - for somebody
+    /// whose very first act on the platform was that submission - activates
     /// the profile that `submit_challenge` could not activate at the time.
     ///
     /// A no-op for every deliverable that did not come from a submission, and
     /// for a submission already settled: the `status = 'pending_review'`
     /// predicate makes a second verdict on the same deliverable idempotent.
     ///
-    /// The user's total is not touched here — `apply_verified_side_effects`
+    /// The user's total is not touched here - `apply_verified_side_effects`
     /// has already added `fragments_reward` to it, and adding it twice is the
     /// obvious way to get this wrong.
     async fn settle_pending_challenge_submission(
@@ -415,7 +415,7 @@ impl ReviewsService {
             .await?;
         }
 
-        // The fork rite has no `challenge_submissions` row — its artifact is a
+        // The fork rite has no `challenge_submissions` row - its artifact is a
         // pull request, and the webhook attaches the deliverable directly. So
         // it is keyed on the deliverable rather than on a submission, and this
         // is the only thing that ever moves it past `pr_opened`.

@@ -2,7 +2,7 @@ name: Trivy vulnerability scan
 
 # Trivy scans the repo filesystem for :
 #   - Vulnerable dependencies (Rust Cargo.lock, Python pyproject if any, etc.)
-#     — complements `cargo audit` with a different CVE DB.
+#     - complements `cargo audit` with a different CVE DB.
 #   - Vulnerable base images referenced in Dockerfiles.
 #   - Misconfigurations in IaC files (docker-compose, GitHub Actions,
 #     Kubernetes if we ever add it).
@@ -13,7 +13,7 @@ name: Trivy vulnerability scan
 
 on:
   # Only run trivy when deps or IaC actually change. Doc / test-only PRs
-  # don't affect CVE surface — no reason to burn minutes on them.
+  # don't affect CVE surface - no reason to burn minutes on them.
   pull_request:
     branches: [master]
     paths:
@@ -52,10 +52,10 @@ jobs:
           scan-ref: .
           format: sarif
           output: trivy-results.sarif
-          # HIGH + CRITICAL only for PR gate — LOW/MEDIUM would drown the noise.
+          # HIGH + CRITICAL only for PR gate - LOW/MEDIUM would drown the noise.
           severity: HIGH,CRITICAL
           # Skip warnings we can't act on immediately (dev-only Docker images
-          # etc.). Empty for now — populate as needed.
+          # etc.). Empty for now - populate as needed.
           skip-files: ""
           skip-dirs: "target,node_modules"
           # Fail the job on findings so the PR gate actually blocks.

@@ -103,7 +103,7 @@ pub struct GenerateVariantRequest {
     #[prost(string, tag = "3")]
     pub target_param: ::prost::alloc::string::String,
     /// Contexte original fourni par le backend (source de vérité : Postgres).
-    /// L'IA reste stateless — pas de dépendance à un cache inter-appels.
+    /// L'IA reste stateless - pas de dépendance à un cache inter-appels.
     #[prost(message, optional, tag = "4")]
     pub original: ::core::option::Option<GeneratedChallenge>,
 }
@@ -456,7 +456,7 @@ pub mod code_review_service_client {
     use tonic::codegen::http::Uri;
     /// ===========================================================================
     ///
-    /// 1. CodeReviewService — utilisé par backend P15.2 llm_verifier
+    /// 1. CodeReviewService - utilisé par backend P15.2 llm_verifier
     ///   ===========================================================================
     #[derive(Debug, Clone)]
     pub struct CodeReviewServiceClient<T> {
@@ -733,7 +733,7 @@ pub mod talent_detection_service_client {
     use tonic::codegen::*;
     use tonic::codegen::http::Uri;
     /// # ===========================================================================
-    /// 3. TalentDetectionService — nouveau, backend attend ce contrat
+    /// 3. TalentDetectionService - nouveau, backend attend ce contrat
     #[derive(Debug, Clone)]
     pub struct TalentDetectionServiceClient<T> {
         inner: tonic::client::Grpc<T>,
@@ -888,7 +888,7 @@ pub mod plagiarism_service_client {
     use tonic::codegen::*;
     use tonic::codegen::http::Uri;
     /// # ===========================================================================
-    /// 4. PlagiarismService — utilisé par backend P14.3
+    /// 4. PlagiarismService - utilisé par backend P14.3
     #[derive(Debug, Clone)]
     pub struct PlagiarismServiceClient<T> {
         inner: tonic::client::Grpc<T>,
@@ -1009,14 +1009,14 @@ pub mod learning_companion_service_client {
     use tonic::codegen::*;
     use tonic::codegen::http::Uri;
     /// # ===========================================================================
-    /// 5. LearningCompanionService — SKI-44 (Post-MVP T3-01)
+    /// 5. LearningCompanionService - SKI-44 (Post-MVP T3-01)
     ///
     /// A single `Ask` RPC typed by `interaction_type`, rather than four narrow
     /// RPCs. The four interactions differ only in the prompt the worker
     /// selects: same inputs (a question, optionally some code and context),
     /// same output (an answer plus optional structured items). Four RPCs would
-    /// mean four near-identical messages and a proto change — coordinated
-    /// across two repositories — every time an interaction is added.
+    /// mean four near-identical messages and a proto change - coordinated
+    /// across two repositories - every time an interaction is added.
     ///
     /// Every response carries `disclosure_label`. The backend stores it in
     /// `ai_interactions` and copies it onto the next submitted deliverable's

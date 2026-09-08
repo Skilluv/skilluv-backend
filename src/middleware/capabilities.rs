@@ -1,4 +1,4 @@
-//! P18.3 — Helpers de vérification de capability.
+//! P18.3 - Helpers de vérification de capability.
 //!
 //! Chaque handler HTTP qui a besoin d'un droit particulier appelle :
 //!
@@ -40,8 +40,8 @@ pub async fn require_capability(
 
 /// Boolean variant of [`require_capability`]: returns whether the user holds
 /// the (non-revoked, non-expired) capability, without turning its absence into
-/// an error. Used by endpoints whose gate is a compound condition — e.g. a
-/// guild officer *or* an admin may act — where the admin arm is one branch of
+/// an error. Used by endpoints whose gate is a compound condition - e.g. a
+/// guild officer *or* an admin may act - where the admin arm is one branch of
 /// an `||` rather than the whole check.
 pub async fn has_capability(
     db: &PgPool,
@@ -66,7 +66,7 @@ pub async fn has_capability(
     Ok(has)
 }
 
-/// P25.3 — Retourne Ok(()) si l'user a AU MOINS UNE des capabilities listées
+/// P25.3 - Retourne Ok(()) si l'user a AU MOINS UNE des capabilities listées
 /// active. Utile pour les endpoints modération accessibles à plusieurs
 /// personas (ex: admin OU plagiarism_reviewer peuvent revoker un deliverable).
 pub async fn require_any_capability(
@@ -130,7 +130,7 @@ pub async fn require_challenge_validator_for(
 ///
 /// Review rights are granted by family, not by trade: thirty-three code
 /// orientations would mean thirty-three capabilities and an operator granting
-/// them one at a time, and nobody reviews at that granularity anyway — someone
+/// them one at a time, and nobody reviews at that granularity anyway - someone
 /// who can judge a React component can judge a Svelte one, and cannot judge a
 /// CUDA kernel.
 ///

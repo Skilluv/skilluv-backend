@@ -1,4 +1,4 @@
-//! P11 — Ingestion automatique de `project_slices` depuis des sources externes.
+//! P11 - Ingestion automatique de `project_slices` depuis des sources externes.
 //!
 //! Rôle : abstraire "un projet Skilluv veut détecter automatiquement les
 //! nouvelles unités de travail à claimer" (issues GitHub curées, frames Figma,
@@ -7,7 +7,7 @@
 //! Design :
 //! - Un `trait SliceIngestor` normalise l'interface.
 //! - `GitHubIngestor` implémente le pattern pour les issues GitHub avec labels
-//!   curés — la seule impl live en P11. Les autres (Figma, Notion) sont des
+//!   curés - la seule impl live en P11. Les autres (Figma, Notion) sont des
 //!   stubs futurs.
 //! - Le worker `bin/github_ingest.rs` boucle sur tous les projets éligibles
 //!   et appelle l'ingestor correspondant. Idempotent via
@@ -52,7 +52,7 @@ pub trait SliceIngestor: Send + Sync {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Implémentation GitHub — issues avec labels curés
+// Implémentation GitHub - issues avec labels curés
 // ═══════════════════════════════════════════════════════════════════
 
 pub struct GitHubIngestor;
@@ -66,7 +66,7 @@ struct GithubIssue {
     #[serde(default)]
     labels: Vec<GithubLabel>,
     #[serde(default)]
-    pull_request: Option<serde_json::Value>, // Present si issue est un PR — on skip.
+    pull_request: Option<serde_json::Value>, // Present si issue est un PR - on skip.
 }
 
 #[derive(Debug, Deserialize)]
@@ -178,7 +178,7 @@ impl SliceIngestor for GitHubIngestor {
 }
 
 /// Interroge l'API GitHub public (no token) pour lister les issues open
-/// avec au moins un des `curated_labels`. Sans token, rate-limit 60/h par IP —
+/// avec au moins un des `curated_labels`. Sans token, rate-limit 60/h par IP -
 /// suffisant pour un poll horaire de quelques dizaines de projets.
 async fn fetch_open_issues(
     owner: &str,
@@ -217,7 +217,7 @@ async fn fetch_open_issues(
 /// Which trade an ingested issue belongs to, read from the labels the
 /// maintainers put on it.
 ///
-/// `trigger` is the label that caused the ingestion, when there is one — a
+/// `trigger` is the label that caused the ingestion, when there is one - a
 /// webhook knows which label was just added, a polling cycle does not. It
 /// wins over the rest, because it is the most recent statement anybody made
 /// about that issue.
@@ -268,7 +268,7 @@ pub async fn orientation_for_labels(
 
 /// INSERT ON CONFLICT : true si nouveau, false si duplicate.
 ///
-/// P26 v2 SKI-101 — `default_domain` is the project's fallback (usually
+/// P26 v2 SKI-101 - `default_domain` is the project's fallback (usually
 /// `projects.skill_domains[0]`). The enricher parses labels and body to
 /// derive `primary_domain`, `difficulty` and `acceptance_criteria`; only
 /// values it cannot infer fall back to the defaults.
@@ -371,7 +371,7 @@ fn truncate(s: &str, max: usize) -> String {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// P11.3 — Stubs pour futures sources (Figma, Notion, partenaires)
+// P11.3 - Stubs pour futures sources (Figma, Notion, partenaires)
 // ═══════════════════════════════════════════════════════════════════
 
 /// Stub Figma : futur ingestor qui lira les nouveaux frames d'un projet Figma
@@ -390,7 +390,7 @@ impl SliceIngestor for FigmaIngestor {
         _db: &PgPool,
         project_id: Uuid,
     ) -> Result<IngestReport, AppError> {
-        tracing::debug!(project_id = %project_id, "FigmaIngestor is a stub — no-op");
+        tracing::debug!(project_id = %project_id, "FigmaIngestor is a stub - no-op");
         Ok(IngestReport {
             project_id,
             ..Default::default()
@@ -422,7 +422,7 @@ pub async fn dispatch_ingestors(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Fonction utilitaire — parcourt tous les projets éligibles
+// Fonction utilitaire - parcourt tous les projets éligibles
 // ═══════════════════════════════════════════════════════════════════
 
 /// Poll tous les projets en mode `auto` ou `curator_review` qui ont un repo

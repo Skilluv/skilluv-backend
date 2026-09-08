@@ -622,7 +622,7 @@ grants_on = "orientation"
 #
 # Exclusifs : on n'est pas a la fois apprenti et doyen. La boucle de
 # reconciliation le sait par `grants_on = "rank"` et retire l'ancien en
-# posant le nouveau — une boucle purement additive laisserait quelqu'un
+# posant le nouveau - une boucle purement additive laisserait quelqu'un
 # promu artisan avec son role ranger colle dessus, definitivement.
 #
 # C'est le seul axe qui merite d'etre colore et remonte en haut de la

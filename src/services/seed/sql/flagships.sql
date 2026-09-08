@@ -24,7 +24,7 @@ INSERT INTO projects (
     true, true, 'user', $1,
     true, true, $1,
     NULL,
-    'Flagship #1 — onboarding. Objectif : produire l''artefact "premier commit merged" pour chaque nouveau user Skilluv. Ne jamais laisser stagner : issues good-first-issue triées manuellement chaque semaine. Steward Jérémie (à réassigner en prod).'
+    'Flagship #1 - onboarding. Objectif : produire l''artefact "premier commit merged" pour chaque nouveau user Skilluv. Ne jamais laisser stagner : issues good-first-issue triées manuellement chaque semaine. Steward Jérémie (à réassigner en prod).'
 ),
 (
     'wax-icons', 'Wax Icons',
@@ -34,7 +34,7 @@ INSERT INTO projects (
     true, true, 'user', $1,
     true, true, $1,
     NULL,
-    'Flagship #2 — design + culture. Objectif : premier design system africain OSS. Contribution accessible aux designers non-devs (SVG upload + naming), tremplin vers l''écriture de composants React/Svelte. Steward Jérémie (à réassigner en prod).'
+    'Flagship #2 - design + culture. Objectif : premier design system africain OSS. Contribution accessible aux designers non-devs (SVG upload + naming), tremplin vers l''écriture de composants React/Svelte. Steward Jérémie (à réassigner en prod).'
 )
 ON CONFLICT (slug) DO NOTHING;
 

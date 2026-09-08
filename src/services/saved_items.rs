@@ -1,15 +1,15 @@
-//! SKI-36 / SKI-37 — shared plumbing for the polymorphic "saved items"
+//! SKI-36 / SKI-37 - shared plumbing for the polymorphic "saved items"
 //! family: bookmarks and private notes.
 //!
 //! Both tables key on `(target_type, target_id)` with no foreign key, so
 //! this module owns the two invariants a real FK would have given us:
 //!
-//!   1. **Existence + visibility** — [`assert_target_visible`] resolves
+//!   1. **Existence + visibility** - [`assert_target_visible`] resolves
 //!      `target_type` to its real table and refuses targets the caller
 //!      cannot see anyway (a private deliverable, a hidden profile, an
 //!      archived project). Saving something you cannot read would leak
 //!      its existence.
-//!   2. **Readable output** — [`resolve_labels`] batch-resolves a page of
+//!   2. **Readable output** - [`resolve_labels`] batch-resolves a page of
 //!      rows into display labels so the front end does not have to fan out
 //!      six extra requests per list.
 //!
@@ -27,7 +27,7 @@ use uuid::Uuid;
 use crate::errors::AppError;
 
 /// Every `target_type` accepted by `bookmarks` and `user_notes`. Kept in
-/// sync with the CHECK constraints in migrations 0139 / 0140 — the DB is
+/// sync with the CHECK constraints in migrations 0139 / 0140 - the DB is
 /// the backstop, this is the fast path that produces a clean 400.
 /// Every `target_type` accepted by `bookmarks` and `user_notes`.
 ///
@@ -52,7 +52,7 @@ pub struct TargetLabel {
     /// have no natural title column (deliverables are identified by their
     /// artifact type).
     pub title: String,
-    /// Stable slug or handle when the target has one — lets the front end
+    /// Stable slug or handle when the target has one - lets the front end
     /// build a link without a second lookup. `None` for targets addressed
     /// by UUID only.
     pub slug: Option<String>,
@@ -71,16 +71,16 @@ pub fn validate_target_type(target_type: &str) -> Result<(), AppError> {
 
 /// Assert the target exists AND is visible to `viewer_id`.
 ///
-/// Visibility rules per type — deliberately matching what the
+/// Visibility rules per type - deliberately matching what the
 /// corresponding public read endpoint already enforces:
 ///
-/// * `challenge_template` — must exist and not be archived.
-/// * `project` — must exist and not be archived.
-/// * `user` — must exist and not be `profile_hidden`; you may always
+/// * `challenge_template` - must exist and not be archived.
+/// * `project` - must exist and not be archived.
+/// * `user` - must exist and not be `profile_hidden`; you may always
 ///   target yourself.
-/// * `team` — must exist and not be disbanded.
-/// * `deliverable` — must be `public`, or authored by the viewer.
-/// * `slice` — must exist and not be a draft.
+/// * `team` - must exist and not be disbanded.
+/// * `deliverable` - must be `public`, or authored by the viewer.
+/// * `slice` - must exist and not be a draft.
 ///
 /// Returns [`AppError::NotFound`] (never `Forbidden`) when the target is
 /// invisible: distinguishing "does not exist" from "exists but hidden"
@@ -141,7 +141,7 @@ pub async fn assert_target_visible(
             .fetch_one(db)
             .await?
         }
-        // Drafts are slices awaiting curator review — not yet public.
+        // Drafts are slices awaiting curator review - not yet public.
         "slice" => {
             sqlx::query_scalar(
                 "SELECT EXISTS(SELECT 1 FROM project_slices
@@ -188,7 +188,7 @@ pub async fn resolve_labels(
     }
 
     for (target_type, ids) in by_type {
-        // (id, title, slug) — each arm projects its table onto that shape.
+        // (id, title, slug) - each arm projects its table onto that shape.
         let sql = match target_type {
             "challenge_template" => {
                 "SELECT id, title, NULL::TEXT FROM challenge_templates WHERE id = ANY($1)"
@@ -199,7 +199,7 @@ pub async fn resolve_labels(
                    FROM users WHERE id = ANY($1)"
             }
             "team" => "SELECT id, name, NULL::TEXT FROM challenge_teams WHERE id = ANY($1)",
-            // Deliverables have no title column — the artifact type is the
+            // Deliverables have no title column - the artifact type is the
             // most meaningful short label we can show.
             "deliverable" => {
                 "SELECT id, artifact_type, NULL::TEXT FROM deliverables WHERE id = ANY($1)"
@@ -242,7 +242,7 @@ mod unit {
         }
         assert!(validate_target_type("enterprise").is_err());
         assert!(validate_target_type("").is_err());
-        // Casing matters — the DB CHECK is case-sensitive too.
+        // Casing matters - the DB CHECK is case-sensitive too.
         assert!(validate_target_type("User").is_err());
     }
 }

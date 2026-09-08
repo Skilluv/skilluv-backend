@@ -48,7 +48,7 @@
   "templating": {"list": []},
   "time": {"from": "now-24h", "to": "now"},
   "timezone": "browser",
-  "title": "Skilluv — Business overview",
+  "title": "Skilluv - Business overview",
   "uid": "skilluv-business",
   "version": 1
 }

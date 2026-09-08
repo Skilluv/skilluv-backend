@@ -9,7 +9,7 @@
 //!
 //! A score with no explanation is a number somebody has to trust. Every call
 //! here returns what was counted and what each count was worth, so the
-//! profile can show "3 bibliothèques publiées — 90 points" rather than "1240".
+//! profile can show "3 bibliothèques publiées - 90 points" rather than "1240".
 //! That is also the only honest way to publish a formula that will change.
 //!
 //! ## Where the weights come from
@@ -75,7 +75,7 @@ pub struct WeightRow {
 //
 // The formula, the tiers and the storage are keyed by domain; only the
 // measuring is domain-specific, because it reads different tables. These
-// three take the domain so a second module — `ai_profile` is the first —
+// three take the domain so a second module - `ai_profile` is the first -
 // reuses them instead of copying the queries and drifting.
 
 /// The active formula for one domain, in display order.
@@ -285,7 +285,7 @@ async fn measure(db: &PgPool, user_id: Uuid) -> Result<Measurements, AppError> {
 /// What one term is worth, given what was measured.
 ///
 /// Split out and tested: the three kinds are the part of the formula where a
-/// mistake is silent — a log term that credits a thousand times too much
+/// mistake is silent - a log term that credits a thousand times too much
 /// looks like a very good developer rather than like a bug.
 pub fn points_for(kind: &str, weight: f64, baseline: Option<f64>, measured: f64) -> i32 {
     let raw = match kind {
@@ -315,14 +315,14 @@ pub fn points_for(kind: &str, weight: f64, baseline: Option<f64>, measured: f64)
 /// Turn a set of weights and a way of measuring each term into a score.
 ///
 /// Extracted when audio became the third domain to score. Everything up to
-/// here differs per domain — each one counts different tables — and everything
+/// here differs per domain - each one counts different tables - and everything
 /// from here does not: skip the unmeasured, apply the weight for its kind,
 /// drop the zeroes, cap, resolve the tier. Three copies of that loop is three
 /// places for the cap or the skip-on-zero to drift, and the drift would be
 /// invisible because each domain's score is only ever compared to itself.
 ///
 /// `measured` returns `None` for a term this domain does not know how to
-/// count, and for one it counts as "not measured" — the review-grid average of
+/// count, and for one it counts as "not measured" - the review-grid average of
 /// somebody nobody has reviewed. Both must be skipped rather than counted as
 /// zero: an `offset_scaled` term at zero subtracts its whole baseline.
 pub async fn assemble(

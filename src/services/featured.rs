@@ -11,7 +11,7 @@
 //!
 //! The backlog asked for automatic publication to social networks. That would
 //! publish somebody's name and work to a third-party platform on a schedule
-//! with no human between the decision and the post — and it needs credentials
+//! with no human between the decision and the post - and it needs credentials
 //! for accounts that do not exist. What this produces instead is [`Card`]:
 //! everything a post needs, ready for a person to send.
 //!
@@ -39,8 +39,8 @@ pub const COOLDOWN_WEEKS: i64 = 13;
 /// The Monday of the week containing `day`, in UTC.
 ///
 /// Weeks are stored as a date rather than a week number because ISO week
-/// numbering disagrees with itself across new year boundaries — week 1 of a
-/// year can start in December — and a date is unambiguous everywhere.
+/// numbering disagrees with itself across new year boundaries - week 1 of a
+/// year can start in December - and a date is unambiguous everywhere.
 pub fn week_of(day: NaiveDate) -> NaiveDate {
     let weekday = day.weekday().num_days_from_monday() as i64;
     day - chrono::Duration::days(weekday)
@@ -84,10 +84,10 @@ pub struct Card {
 ///
 /// Refuses three things, each for a stated reason:
 ///
-/// * a week already awarded in this domain — two people featured in one week
+/// * a week already awarded in this domain - two people featured in one week
 ///   means neither was;
 /// * somebody featured in the same domain inside the cooldown;
-/// * somebody with no verified deliverable in the domain — being put forward
+/// * somebody with no verified deliverable in the domain - being put forward
 ///   for work nobody has checked is exactly the claim this platform exists
 ///   not to make.
 #[allow(clippy::too_many_arguments)]
@@ -216,7 +216,7 @@ pub async fn feature(
 /// Issue the editorial attestation, where the domain has one.
 ///
 /// Seven domains do, and the list is `attestation_bases` filtered to
-/// `featured\_%` rather than anything written here — which is the point of the
+/// `featured\_%` rather than anything written here - which is the point of the
 /// fallthrough below. Game, security and soft_skills declare none and are
 /// featured without one.
 ///
@@ -331,7 +331,7 @@ async fn issue_attestation(
         // announcement goes out, and there is nothing to attest.
         //
         // A domain that *does* declare one and reaches this arm is a different
-        // thing entirely, and it is the bug that hid here for two domains —
+        // thing entirely, and it is the bug that hid here for two domains -
         // ops and audio each had a basis, a profile term counting it, and no
         // arm. The featuring was recorded, nothing was issued, and the only
         // symptom was a number stuck at zero on somebody else's profile.
@@ -360,7 +360,7 @@ async fn warn_if_the_domain_expected_one(db: &PgPool, domain: &str) {
     if let Ok(Some(basis)) = basis {
         tracing::error!(
             domain, %basis,
-            "this domain declares a featuring basis and no generator issues it —              the featuring was recorded and the attestation was not, which shows              up only as a profile term stuck at zero"
+            "this domain declares a featuring basis and no generator issues it -              the featuring was recorded and the attestation was not, which shows              up only as a profile term stuck at zero"
         );
     }
 }
@@ -477,7 +477,7 @@ pub async fn card(db: &PgPool, featured: &Featured, frontend_url: &str) -> Resul
         .unwrap_or_else(|| "Un talent Skilluv".to_string());
 
     Ok(Card {
-        headline: format!("{name} — mis en avant cette semaine"),
+        headline: format!("{name} - mis en avant cette semaine"),
         body: featured.reason_md.clone(),
         profile_url: match &featured.username {
             Some(username) => format!("{frontend_url}/u/{username}"),
@@ -495,7 +495,7 @@ mod tests {
     #[test]
     fn a_week_is_its_monday() {
         // Every day of one week maps to the same Monday, including the
-        // Sunday — which is the day a naive implementation gets wrong.
+        // Sunday - which is the day a naive implementation gets wrong.
         let monday = NaiveDate::from_ymd_opt(2026, 8, 17).unwrap();
         for offset in 0..7 {
             let day = monday + chrono::Duration::days(offset);

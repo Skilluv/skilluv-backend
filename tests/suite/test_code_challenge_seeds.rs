@@ -64,7 +64,7 @@ async fn every_seed_carries_criteria() {
 async fn a_seed_states_what_has_to_come_out_of_it() {
     let app = TestApp::spawn().await;
 
-    // Every one names an artefact — a merged contribution, a published
+    // Every one names an artefact - a merged contribution, a published
     // package, something in service. A challenge whose instructions do not
     // say what to deliver produces submissions nobody can compare.
     let vague: i64 = sqlx::query_scalar(

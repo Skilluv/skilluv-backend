@@ -1,6 +1,6 @@
 //! Interview scheduling.
 //!
-//! One table for every interview Skilluv arranges — off a contest shortlist,
+//! One table for every interview Skilluv arranges - off a contest shortlist,
 //! off a recruitment campaign, off a trial period. Three tables would have
 //! meant three notification paths and three places to forget the time zone.
 //!
@@ -283,7 +283,7 @@ pub async fn complete(db: &PgPool, interview_id: Uuid) -> Result<(), AppError> {
     let interview = by_id(db, interview_id).await?;
     if interview.status != "confirmed" {
         return Err(AppError::Validation(format!(
-            "this interview is {} — only a confirmed one can be marked done",
+            "this interview is {} - only a confirmed one can be marked done",
             interview.status
         )));
     }

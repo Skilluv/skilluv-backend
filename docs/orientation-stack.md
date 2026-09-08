@@ -8,7 +8,7 @@ about them.
 
 `orientations.stack` is a `TEXT[]` of identifiers, in reading order. It comes
 back on every row of `GET /api/orientations`, in the same response as the rest
-— there is no second call per trade, deliberately, because that would undo the
+- there is no second call per trade, deliberately, because that would undo the
 work `/api/orientation-counts` exists to do.
 
 ```json
@@ -20,7 +20,7 @@ work `/api/orientation-counts` exists to do.
 }
 ```
 
-`stack` is not `tags`. Tags are broad categories — `web`, `api`, `mobile` —
+`stack` is not `tags`. Tags are broad categories - `web`, `api`, `mobile` -
 meant for filtering. They cannot draw a stack, which is what made this column
 necessary.
 
@@ -37,7 +37,7 @@ guess. The registry grows; a client that has not caught up must degrade to
 silence.
 
 **An empty stack means "not recorded yet".** It never means "this trade uses
-no tools". Most trades are empty today — see below.
+no tools". Most trades are empty today - see below.
 
 ## Why most are empty
 
@@ -48,7 +48,7 @@ The tools were, and still are, written into `description` as prose:
 
 That sentence has alternatives ("ou"), qualifiers ("moderne") and punctuation.
 Deriving identifiers from it would produce a card showing three right logos
-and a fourth invented, with nothing to signal the error — and on the screen
+and a fourth invented, with nothing to signal the error - and on the screen
 that asks somebody to choose their trade, a wrong logo is worse than no logo.
 
 So the backfill in migration `0619` was written by hand and covers only the
@@ -74,6 +74,6 @@ look broken.
 
 `SELECT id, display_name, category FROM tools ORDER BY category, id;`
 
-The table is the source of truth — this document explains the contract, it
+The table is the source of truth - this document explains the contract, it
 does not duplicate the list. Categories are `language`, `framework`, `runtime`,
 `database`, `platform`, `protocol`, `os`, `tool`.

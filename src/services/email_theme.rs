@@ -13,7 +13,7 @@
 //! Each world has a dark and a light variant. Emails always use the light
 //! one. A dark background is a deliberate choice inside an application
 //! someone opened; in an inbox, between two white messages, it reads as a
-//! rendering fault — and several clients force their own background anyway,
+//! rendering fault - and several clients force their own background anyway,
 //! leaving pale text on white.
 //!
 //! ## Where the values come from
@@ -39,7 +39,7 @@ pub struct Theme {
     /// The signature colour: the accent bar, the button.
     pub accent: &'static str,
     pub accent_fg: &'static str,
-    /// Shown under the wordmark. Not decoration — it is what tells someone
+    /// Shown under the wordmark. Not decoration - it is what tells someone
     /// the message comes from the same place they chose this world in.
     pub tagline: &'static str,
 }
@@ -118,7 +118,7 @@ pub const ALL: &[Theme] = &[FORGE, VESPERAL, ARENA, SCRIPTORIUM, SAKURA];
 /// preference was saved should not decide what their email looks like.
 ///
 /// Anything unknown falls back to the workshop. A new theme shipped in the
-/// frontend before it is added here sends a Forge email — plain, never
+/// frontend before it is added here sends a Forge email - plain, never
 /// broken.
 pub fn resolve(preference: Option<&str>) -> Theme {
     let Some(pref) = preference else {

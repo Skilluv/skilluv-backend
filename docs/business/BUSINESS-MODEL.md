@@ -1,7 +1,7 @@
 # Le modèle économique de Skilluv
 
 Ce document remplace toute note de monétisation antérieure. Il décrit ce que
-Skilluv vend, à qui, et — plus important — ce qu'il ne vendra pas.
+Skilluv vend, à qui, et - plus important - ce qu'il ne vendra pas.
 
 Il est écrit après l'implémentation, ce qui est l'ordre inhabituel : chaque
 règle citée ici est appliquée par le code ou par la base, et la référence est
@@ -62,7 +62,7 @@ personne nommée répond elle-même. `recruitment_shortlist`,
 **Personne n'est évalué sans le savoir.** Un audit de compétences d'équipe ne
 peut rien écrire sur quelqu'un qui n'a pas été informé, et l'audit n'est pas
 livrable tant que chaque personne évaluée n'a pas vu ce qui a été écrit sur
-elle — avec un droit de réponse conservé à côté.
+elle - avec un droit de réponse conservé à côté.
 `enterprise_employee_assessments`.
 
 **Le consentement aux données est par finalité, daté, révocable, et le texte
@@ -105,7 +105,7 @@ contrat signé. Le code est complet ; l'interrupteur est un document.
 
 - **la mise en avant payante d'un profil**. C'est la règle d'or ;
 - **l'accès à des personnes qui n'ont pas consenti**. L'API répond
-  « introuvable », jamais « privé » — un annuaire construit à partir des refus
+  « introuvable », jamais « privé » - un annuaire construit à partir des refus
   serait un annuaire des personnes ayant refusé ;
 - **un label sans audit** ;
 - **une reconnaissance officielle sans convention signée avec l'État
@@ -138,11 +138,11 @@ Aucun de ces points n'est un développement.
 
 ## Documents liés
 
-- [CHARTER.md](CHARTER.md) — ce à quoi Skilluv s'engage
-- [PRICING.md](PRICING.md) — la grille tarifaire
-- [DATA-LICENSING.md](DATA-LICENSING.md) — la politique de données
-- [CONTRACT-CLAUSES.md](CONTRACT-CLAUSES.md) — les clauses B2B
-- [CERTIFICATION-LEGAL.md](CERTIFICATION-LEGAL.md) — les labels
-- [STUDIOS-PLAYBOOK.md](STUDIOS-PLAYBOOK.md) — monter et vendre un studio
-- [ENTERPRISE-ONBOARDING.md](ENTERPRISE-ONBOARDING.md) — accueillir un client
-- [WEB3-ANALYSIS.md](WEB3-ANALYSIS.md) — pourquoi il n'y a pas de jeton
+- [CHARTER.md](CHARTER.md) - ce à quoi Skilluv s'engage
+- [PRICING.md](PRICING.md) - la grille tarifaire
+- [DATA-LICENSING.md](DATA-LICENSING.md) - la politique de données
+- [CONTRACT-CLAUSES.md](CONTRACT-CLAUSES.md) - les clauses B2B
+- [CERTIFICATION-LEGAL.md](CERTIFICATION-LEGAL.md) - les labels
+- [STUDIOS-PLAYBOOK.md](STUDIOS-PLAYBOOK.md) - monter et vendre un studio
+- [ENTERPRISE-ONBOARDING.md](ENTERPRISE-ONBOARDING.md) - accueillir un client
+- [WEB3-ANALYSIS.md](WEB3-ANALYSIS.md) - pourquoi il n'y a pas de jeton

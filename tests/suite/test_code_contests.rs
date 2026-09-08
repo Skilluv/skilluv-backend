@@ -50,7 +50,7 @@ async fn enter(app: &TestApp, contest: Uuid, user: Uuid) {
 
     // Every entry in this file points at `github.com/x/…`, and an entry has to
     // be the entrant's own work since the ownership check. So an entrant here
-    // is `x` on GitHub — which is what these fixtures always meant and never
+    // is `x` on GitHub - which is what these fixtures always meant and never
     // said.
     sqlx::query(
         "INSERT INTO github_connections
@@ -408,7 +408,7 @@ async fn judging_is_a_competence_not_an_office() {
 
 /// A verified merged pull request, `days_ago` before now.
 ///
-/// Every deliverable answers something — a slice or a challenge — so the
+/// Every deliverable answers something - a slice or a challenge - so the
 /// marathon work hangs off one shared training challenge rather than
 /// floating free.
 async fn a_merged_pr(app: &TestApp, user: Uuid, days_ago: i32) {
@@ -589,7 +589,7 @@ async fn every_category_is_public_and_says_what_it_is() {
 
     // Named rather than counted. This test asserted "eight" and started
     // failing the day migration 0303 added the AI categories to the same
-    // ceremony — a count is a number every domain changes, and what the test
+    // ceremony - a count is a number every domain changes, and what the test
     // is actually about is that the code ones are offered and that nobody can
     // nominate into a category with no description.
     let slugs: Vec<&str> = categories
@@ -943,8 +943,8 @@ async fn an_entry_on_your_own_repository_is_marked_verified() {
 
 /// A host nobody can attribute is accepted and recorded as unchecked.
 ///
-/// Refusing it would forbid whole domains from entering — a deployed site, a
-/// hosted design file, a video — for a property only a GitHub URL can have.
+/// Refusing it would forbid whole domains from entering - a deployed site, a
+/// hosted design file, a video - for a property only a GitHub URL can have.
 /// The ranking carries the distinction instead of the rules pretending it does
 /// not exist.
 #[tokio::test]

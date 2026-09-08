@@ -1,4 +1,4 @@
-//! P26 v2 SKI-121 — personalized challenge feed for the authenticated user.
+//! P26 v2 SKI-121 - personalized challenge feed for the authenticated user.
 //!
 //! `GET /api/me/feed/challenges?limit=20`
 //!
@@ -12,15 +12,15 @@
 //!
 //!   Excluded:
 //!     * slices whose `min_rank` is above the user's rank (SKI-78 gate
-//!       would refuse the claim — no point showing what they can't take)
+//!       would refuse the claim - no point showing what they can't take)
 //!     * slices whose `required_orientation_slugs` is non-empty AND the
 //!       user has no active user_orientation matching (SKI-79 gate)
 //!     * slices the user has already claimed before (in the past or now)
 //!
 //!   Ordered:
-//!     * `abs(difficulty - user_median_recent_difficulty)` ascending —
+//!     * `abs(difficulty - user_median_recent_difficulty)` ascending -
 //!       "close to what you usually do"
-//!     * then `created_at DESC` — fresher first
+//!     * then `created_at DESC` - fresher first
 //!
 //! ─── Fallbacks ────────────────────────────────────────────────────
 //!
@@ -75,7 +75,7 @@ pub async fn feed(
             .await?;
     let user_rank_ord = user_rank.map(|(r,)| rank_ordinal_public(&r)).unwrap_or(0);
 
-    // Median difficulty of the user's recent (last 20) claims — used to
+    // Median difficulty of the user's recent (last 20) claims - used to
     // sort "close to what you usually do". Falls back to 3 (mid) when
     // no history exists.
     let median: Option<f64> = sqlx::query_scalar(
@@ -97,7 +97,7 @@ pub async fn feed(
     let median_difficulty = median.unwrap_or(3.0);
 
     // The rank filter is expressed with a subquery evaluating the
-    // slice's min_rank on the same ordinal — keeps the logic aligned
+    // slice's min_rank on the same ordinal - keeps the logic aligned
     // with SKI-78 (`services::slices::assert_rank_access`).
     let rows: Vec<ProjectSlice> = sqlx::query_as::<_, ProjectSlice>(
         r#"

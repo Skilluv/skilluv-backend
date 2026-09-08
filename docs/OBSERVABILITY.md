@@ -1,14 +1,14 @@
-# Observability — Sentry + Grafana / Metabase (SKI-31)
+# Observability - Sentry + Grafana / Metabase (SKI-31)
 
 Comment surveiller le backend Skilluv en prod : erreurs (Sentry),
 metrics timeseries (Grafana), business queries (Metabase).
 
 ## 1. Sentry (errors + traces)
 
-**Already integrated** dans `src/observability.rs` — désactivé quand
+**Already integrated** dans `src/observability.rs` - désactivé quand
 `SENTRY_DSN` est vide.
 
-### Setup gratuit — GlitchTip via Coolify
+### Setup gratuit - GlitchTip via Coolify
 
 GlitchTip est une alternative Sentry-compatible open-source, self-hostable,
 runs sur Coolify sans effort.
@@ -20,17 +20,17 @@ runs sur Coolify sans effort.
 
 ### Setup Sentry.io (SaaS)
 
-- Free tier 5k events/mois — largement suffisant pour Phase 1.
+- Free tier 5k events/mois - largement suffisant pour Phase 1.
 - Créer un projet Rust sur sentry.io, copier le DSN, coller côté backend.
 
 ### Env vars
 
 | Variable | Note |
 |---|---|
-| `SENTRY_DSN` | DSN GlitchTip/Sentry — si vide, Sentry est disabled (aucun overhead) |
+| `SENTRY_DSN` | DSN GlitchTip/Sentry - si vide, Sentry est disabled (aucun overhead) |
 | `SENTRY_TRACES_SAMPLE_RATE` | 0.1 = 10% des requests tracées, ajuster selon volume |
-| `ENVIRONMENT` | `prod` / `staging` — apparaît sur chaque event Sentry |
-| `RELEASE` | Auto-populé depuis `CARGO_PKG_VERSION` — override via env si besoin |
+| `ENVIRONMENT` | `prod` / `staging` - apparaît sur chaque event Sentry |
+| `RELEASE` | Auto-populé depuis `CARGO_PKG_VERSION` - override via env si besoin |
 
 ### Test intentional error
 
@@ -49,10 +49,10 @@ Voir `ops/grafana/README.md`. **3 dashboards** livrés :
 - Business overview (users/enterprises/reports)
 - Ops (AI, fraud, checkouts)
 
-Backend expose `/metrics` (public) et `/api/metrics/summary` (JSON —
+Backend expose `/metrics` (public) et `/api/metrics/summary` (JSON -
 gated admin depuis SKI-31).
 
-## 3. Metabase (business queries — alternative à Grafana)
+## 3. Metabase (business queries - alternative à Grafana)
 
 Grafana est timeseries-first ; Metabase est **SQL-first + dashboards
 narratifs**. Deux perspectives complémentaires, pas concurrentes. Si tu
@@ -108,7 +108,7 @@ WHERE s.attestation_hash IS NOT NULL
 GROUP BY u.username
 ORDER BY attestations DESC LIMIT 10;
 
--- Q4 : Enterprises + payouts total (fake demo — replace with real transactions table)
+-- Q4 : Enterprises + payouts total (fake demo - replace with real transactions table)
 SELECT e.slug, COUNT(DISTINCT em.user_id) AS members
 FROM enterprises e
 LEFT JOIN enterprise_members em ON em.enterprise_id = e.id AND em.status = 'active'
@@ -126,7 +126,7 @@ FROM users;
 Sauve chaque query comme "Question" dans Metabase, pin les 5 dans un
 dashboard "Skilluv Business".
 
-### Grafana vs Metabase — comment choisir
+### Grafana vs Metabase - comment choisir
 
 | Besoin | Outil |
 |---|---|

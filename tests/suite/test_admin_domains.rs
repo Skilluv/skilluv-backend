@@ -134,7 +134,7 @@ async fn the_overview_counts_what_is_in_the_domain_and_not_next_to_it() {
         .unwrap();
     let design_before = before["data"]["challenges_published"].as_i64().unwrap();
 
-    // A published challenge must be training or attached to a project — the
+    // A published challenge must be training or attached to a project - the
     // platform does not publish exercises that lead nowhere.
     sqlx::query(
         "INSERT INTO challenge_templates (title, description, instructions,
@@ -226,7 +226,7 @@ async fn reviewers_are_listed_by_family_with_their_open_work() {
         "a code family on a design page: {body}"
     );
 
-    // Nothing decided yet — null rather than zero, for the same reason as
+    // Nothing decided yet - null rather than zero, for the same reason as
     // above.
     assert_eq!(rows[0]["decisions_total"], 0);
     assert!(rows[0]["mean_hours_to_decide"].is_null(), "{body}");
@@ -305,7 +305,7 @@ async fn the_challenge_list_filters_and_counts_honestly() {
         .unwrap();
 
     // The page holds two and the total says otherwise. It used to report the
-    // length of the page it had just built — a number that agreed with itself
+    // length of the page it had just built - a number that agreed with itself
     // and with nothing else.
     assert_eq!(body["data"].as_array().unwrap().len(), 2, "{body}");
     assert!(body["pagination"]["total"].as_i64().unwrap() > 2);
@@ -333,7 +333,7 @@ async fn the_challenge_list_filters_and_counts_honestly() {
 async fn the_financial_dashboard_reads_the_capability_and_not_the_column() {
     let app = TestApp::spawn().await;
     // A complete admin: the legacy column, a second factor, and the
-    // capability. Then the capability alone is taken away — the column still
+    // capability. Then the capability alone is taken away - the column still
     // says `admin` and the token still carries it.
     app.register_admin("dom_fin_admin").await;
     app.login("dom_fin_admin").await;

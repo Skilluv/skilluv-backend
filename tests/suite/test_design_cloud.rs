@@ -1,6 +1,6 @@
 //! Design tools Skilluv does not own.
 //!
-//! Two halves. Reading a pasted link works today and needs no credential —
+//! Two halves. Reading a pasted link works today and needs no credential -
 //! and it is the half that pays off, because knowing a Figma link is private
 //! *before* a deliverable is submitted is the difference between a review
 //! queue that moves and one that does not.
@@ -117,7 +117,7 @@ async fn an_unconfigured_provider_names_the_variable_it_is_missing() {
 
     // Skilluv has no developer account on any of the three, so this is the
     // state of every deployment today. An operator reading it needs the
-    // variable name, not a stack trace — and a button that silently does
+    // variable name, not a stack trace - and a button that silently does
     // nothing is worse than one that says why.
     let resp = app.get("/api/design/cloud/figma/start").await;
     assert_eq!(resp.status(), 503);

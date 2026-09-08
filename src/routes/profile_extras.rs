@@ -1,4 +1,4 @@
-//! Phase 3.4 — profile enrichment endpoints (experiences, educations, languages, availability).
+//! Phase 3.4 - profile enrichment endpoints (experiences, educations, languages, availability).
 
 use axum::extract::{Path, State};
 use axum::routing::{delete, get, put};

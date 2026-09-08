@@ -1,7 +1,7 @@
 //! The ecosystem line.
 //!
 //! Two things are worth testing here more than the rest. That a badge cannot
-//! be bought — because the person a bought badge misleads is the contributor
+//! be bought - because the person a bought badge misleads is the contributor
 //! who took the job, not the company that paid. And that a marketplace sale
 //! always adds back to what the buyer paid, because the alternative is money
 //! that went somewhere nobody can name.
@@ -555,7 +555,7 @@ async fn only_a_buyer_can_rate_and_the_average_follows() {
     let body: Value = resp.json().await.unwrap();
     let purchase = body["data"]["purchase_id"].as_str().unwrap().to_string();
 
-    // Somebody who bought nothing cannot rate — a rating anybody can leave
+    // Somebody who bought nothing cannot rate - a rating anybody can leave
     // is a rating a competitor can leave.
     a_talent(&app, "ratestranger").await;
     app.login("ratestranger").await;

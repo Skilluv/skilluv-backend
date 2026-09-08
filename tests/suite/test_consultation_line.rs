@@ -2,7 +2,7 @@
 //!
 //! The audit half is the one worth testing hardest. The person assessed is
 //! not the customer, did not ask for it, and may be managed out of a job on
-//! the strength of it — so nothing is written about somebody who has not been
+//! the strength of it - so nothing is written about somebody who has not been
 //! told, and nothing reaches the client until everybody assessed has seen
 //! what was concluded about them.
 

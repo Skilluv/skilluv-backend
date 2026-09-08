@@ -1,4 +1,4 @@
-//! skilluv-discord-bot (SKI-116) — v2 gateway bot.
+//! skilluv-discord-bot (SKI-116) - v2 gateway bot.
 //!
 //! Supersedes the v1 skilluv-discord-notifier by adding what a webhook
 //! process cannot do:
@@ -10,7 +10,7 @@
 //! rather than channel webhooks. This means only ONE Coolify app is
 //! needed for all Discord surfaces (queue + interactivity), and the
 //! queue's producer contract (rows in discord_notifications_queue)
-//! is unchanged from v1 — the backend keeps enqueuing the same events.
+//! is unchanged from v1 - the backend keeps enqueuing the same events.
 //!
 //! Deploy as a long-running Coolify app pointing at this binary. The
 //! gateway keeps a WebSocket connection open to Discord; if the process
@@ -38,7 +38,7 @@ const MAX_FAILED_ATTEMPTS: i16 = 10;
 /// A cohort as the listing reads it: name, slug, start, members, cap.
 ///
 /// Named rather than written inline because clippy's `type_complexity` is
-/// right about a five-element tuple — and because the first thing anybody
+/// right about a five-element tuple - and because the first thing anybody
 /// asks of that row is which element is the count and which is the cap.
 type CohortRow = (
     String,
@@ -68,7 +68,7 @@ impl EventHandler for Handler {
         // Set an activity so the bot's presence carries some intent.
         ctx.set_activity(Some(ActivityData::watching("skill-uv.com")));
 
-        // Register slash commands scoped to our single guild — instant
+        // Register slash commands scoped to our single guild - instant
         // availability vs. up-to-one-hour propagation for global commands.
         // Built from the list every validator reads, not copied beside it.
         // The copy that used to sit here named seven domains long after four
@@ -77,7 +77,7 @@ impl EventHandler for Handler {
         let domain_hint = domain_hint();
 
         // A `domain` argument, described by the trade list. Same in both
-        // languages — the values are slugs, and `code, design, game…` does not
+        // languages - the values are slugs, and `code, design, game…` does not
         // translate.
         let domain_arg = |required: bool| {
             CreateCommandOption::new(CommandOptionType::String, "domain", domain_hint.as_str())
@@ -141,7 +141,7 @@ impl EventHandler for Handler {
         // Second poller: the Discord half of the role loop.
         //
         // Separate from the notification tick because the two fail
-        // independently and at different rates — a rate-limited role write
+        // independently and at different rates - a rate-limited role write
         // must not stop an announcement from going out, and vice versa.
         let http2 = ctx.http.clone();
         let db2 = self.db.clone();
@@ -163,7 +163,7 @@ impl EventHandler for Handler {
         let locale =
             skilluv_backend::services::i18n::resolve(None, new_member.user.locale.as_deref());
         // This carried the same obsolete instruction the `/skilluv me` reply
-        // did — "reply here with your username" — from the months when linking
+        // did - "reply here with your username" - from the months when linking
         // was a moderator's job. It is a redirect now, and the message says so
         // in the order that makes it pay: trades first, then the link.
         let msg = t_with(
@@ -174,7 +174,7 @@ impl EventHandler for Handler {
                 ("frontend", &self.frontend_url),
             ],
         );
-        // Best-effort — a user with DMs disabled just doesn't get one.
+        // Best-effort - a user with DMs disabled just doesn't get one.
         if let Err(e) = new_member
             .user
             .direct_message(&ctx.http, CreateMessage::new().content(msg))
@@ -253,7 +253,7 @@ impl Handler {
                     .await?
             }
             "help" => help_message(&self.frontend_url),
-            other => format!("Unknown subcommand `{other}` — try `/skilluv help`"),
+            other => format!("Unknown subcommand `{other}`. Try `/skilluv help`."),
         };
         cmd.create_response(
             &ctx.http,
@@ -267,7 +267,7 @@ impl Handler {
         Ok(())
     }
 
-    /// `/skilluv craft <domain>` — the caller's craft score in one domain.
+    /// `/skilluv craft <domain>` : the caller's craft score in one domain.
     ///
     /// One command with a domain argument rather than one per domain. The
     /// Discord structure documents for leadership and quality each described
@@ -323,7 +323,7 @@ impl Handler {
         let mut out = t_with(locale, "discord.leaderboard_head", &[("domain", domain)]);
         for (i, (username, score, tier)) in top.iter().enumerate() {
             out.push_str(&format!(
-                "\n`{:>2}.` **{username}** — {score}{}",
+                "\n`{:>2}.` **{username}**: {score}{}",
                 i + 1,
                 tier.as_deref()
                     .map(|s| format!(" ({s})"))
@@ -407,9 +407,9 @@ impl Handler {
                 let who = c["reporter"]["username"]
                     .as_str()
                     .or_else(|| c["reporter"]["alias"].as_str())
-                    .unwrap_or("—");
+                    .unwrap_or("-");
                 out.push_str(&format!(
-                    "\n`{:>2}.` **{who}** — {} finding(s)",
+                    "\n`{:>2}.` **{who}**: {} finding(s)",
                     i + 1,
                     c["findings"].as_i64().unwrap_or(0)
                 ));
@@ -420,12 +420,12 @@ impl Handler {
             out.push('\n');
             out.push_str(&t(locale, "discord.findings_recent"));
             for f in recent.iter().take(3) {
-                let title = f["title"].as_str().unwrap_or("—");
-                let sev = f["severity_tier"].as_str().unwrap_or("—");
+                let title = f["title"].as_str().unwrap_or("-");
+                let sev = f["severity_tier"].as_str().unwrap_or("-");
                 out.push_str(&format!("\n- **{title}** ({sev})"));
                 if let Some(url) = f["writeup_url"].as_str() {
                     let sep = if url.starts_with("http") { "" } else { "/" };
-                    out.push_str(&format!(" — {}{sep}{url}", self.frontend_url));
+                    out.push_str(&format!(": {}{sep}{url}", self.frontend_url));
                 }
             }
         }
@@ -451,7 +451,7 @@ impl Handler {
                 .context("db query failed")?;
         let Some((user_id, username)) = user else {
             return Ok(format!(
-                "This Discord account is not linked to a Skilluv profile yet — {}/settings",
+                "This Discord account is not linked to a Skilluv profile yet: {}/settings",
                 self.frontend_url
             ));
         };
@@ -485,9 +485,9 @@ impl Handler {
         .await
         .unwrap_or(0);
 
-        let tier = tier.unwrap_or_else(|| "—".into());
+        let tier = tier.unwrap_or_else(|| "-".into());
         Ok(format!(
-            "**{username}** — `{domain}`\n\
+            "**{username}**: `{domain}`\n\
              Craft score: **{score}** ({tier})\n\
              Attestations in this domain: {attested}\n\
              {}/u/{username}",
@@ -495,7 +495,7 @@ impl Handler {
         ))
     }
 
-    /// `/skilluv queue <domain>` — what is waiting on a reviewer.
+    /// `/skilluv queue <domain>` : what is waiting on a reviewer.
     ///
     /// Public on purpose. A review queue nobody can see is a queue that grows
     /// quietly, and the number being visible is what makes somebody
@@ -563,7 +563,7 @@ impl Handler {
         ))
     }
 
-    /// `/skilluv cohorts [domain]` — cohorts somebody can still join.
+    /// `/skilluv cohorts [domain]` : cohorts somebody can still join.
     ///
     /// One command for every domain that runs cohorts, which is every domain
     /// since migration 0532 gave them one model. Private cohorts never appear
@@ -602,14 +602,14 @@ impl Handler {
             .iter()
             .map(|(name, slug, starts, members, max)| {
                 let when = starts
-                    .map(|d| format!(" — starts {}", d.format("%d/%m")))
+                    .map(|d| format!(", starts {}", d.format("%d/%m")))
                     .unwrap_or_default();
                 let places = match max {
                     Some(m) => format!(" ({members}/{m})"),
                     None => format!(" ({members} joined)"),
                 };
                 format!(
-                    "- **{name}**{when}{places} — {}/cohorts/{slug}",
+                    "- **{name}**{when}{places}: {}/cohorts/{slug}",
                     self.frontend_url
                 )
             })
@@ -620,7 +620,7 @@ impl Handler {
     /// Which language to answer this person in.
     ///
     /// The community is francophone and anglophone both, so "the bot's
-    /// language" is not a thing that exists — only this person's.
+    /// language" is not a thing that exists - only this person's.
     ///
     /// Their stored `preferred_language` first, because somebody who set
     /// French on the platform meant it. Discord's interaction locale second:
@@ -641,7 +641,7 @@ impl Handler {
         skilluv_backend::services::i18n::resolve(stored.as_deref(), Some(&cmd.locale))
     }
 
-    /// `/skilluv me` — look up the caller by discord_user_id, echo the
+    /// `/skilluv me` : look up the caller by discord_user_id, echo the
     /// public profile URL if linked, otherwise instruct how to link.
     async fn handle_me(&self, cmd: &CommandInteraction) -> Result<String> {
         let discord_id = cmd.user.id.to_string();
@@ -670,7 +670,7 @@ impl Handler {
             }
             // This used to send people to a moderator, because linking was
             // manual and `users.discord_user_id` had no writer. It has one
-            // now, so the instruction changed with it — a message telling
+            // now, so the instruction changed with it - a message telling
             // somebody to queue for a human when a button exists is worse
             // than no message.
             None => t_with(
@@ -681,7 +681,7 @@ impl Handler {
         })
     }
 
-    /// `/skilluv verify <hash>` — echo the attestation summary if the
+    /// `/skilluv verify <hash>` : echo the attestation summary if the
     /// hash is known. Public info, no auth needed.
     async fn handle_verify(&self, hash: &str) -> Result<String> {
         let trimmed = hash.trim();
@@ -718,13 +718,13 @@ impl Handler {
             // checking one has been shown a copy and needs to be told it no
             // longer holds.
             Some((title, username, true, code)) => format!(
-                "Attestation `{code}` — **{username}**, **{title}** — \
+                "Attestation `{code}` : **{username}**, **{title}**. \
                  **cette attestation a été révoquée**.\n\
                  {frontend}/attestations/verify/{code}",
                 frontend = self.frontend_url,
             ),
             Some((title, username, false, code)) => format!(
-                "Attestation `{code}` — **{username}** a validé **{title}**\n\
+                "Attestation `{code}` : **{username}** a validé **{title}**\n\
                  {frontend}/attestations/verify/{code}",
                 frontend = self.frontend_url,
             ),
@@ -779,7 +779,7 @@ impl Handler {
         out
     }
 
-    /// `/skilluv contests [domain]` — what somebody can still enter.
+    /// `/skilluv contests [domain]` : what somebody can still enter.
     ///
     /// Cross-domain contests are always included, whichever domain was asked
     /// for: those are the events that want the widest field, and filtering
@@ -807,18 +807,15 @@ impl Handler {
             .iter()
             .map(|(name, slug, ends)| {
                 let until = ends
-                    .map(|d| format!(" — jusqu'au {}", d.format("%d/%m")))
+                    .map(|d| format!(", jusqu'au {}", d.format("%d/%m")))
                     .unwrap_or_default();
-                format!(
-                    "- **{name}**{until} — {}/contests/{slug}",
-                    self.frontend_url
-                )
+                format!("- **{name}**{until}: {}/contests/{slug}", self.frontend_url)
             })
             .collect();
         Ok(format!("Concours ouverts :\n{}", lines.join("\n")))
     }
 
-    /// `/skilluv featured [domain]` — the week's editorial pick.
+    /// `/skilluv featured [domain]` : the week's editorial pick.
     async fn handle_featured(&self, domain: Option<&str>, locale: &str) -> Result<String> {
         let row: Option<(String, String, String, chrono::NaiveDate)> = sqlx::query_as(
             r#"
@@ -837,14 +834,14 @@ impl Handler {
 
         Ok(match row {
             Some((username, display_name, reason, week)) => format!(
-                "**{display_name}** ({}/@{username}) — semaine du {week}\n{reason}",
+                "**{display_name}** ({}/@{username}), semaine du {week}\n{reason}",
                 self.frontend_url
             ),
             None => t(locale, "discord.no_featured"),
         })
     }
 
-    /// `/skilluv portfolio <username>` — somebody's public profile.
+    /// `/skilluv portfolio <username>` : somebody's public profile.
     ///
     /// Public rows only. A hidden or banned profile answers as unknown rather
     /// than as hidden: confirming that an account exists is itself a leak on
@@ -865,7 +862,7 @@ impl Handler {
             Some((id, username, display_name)) => {
                 let profile = self.profile_lines(id, locale).await;
                 format!(
-                    "**{display_name}** — {frontend}/@{username}{profile}",
+                    "**{display_name}**: {frontend}/@{username}{profile}",
                     frontend = self.frontend_url,
                 )
             }
@@ -993,7 +990,7 @@ async fn apply_one(
 
     let Ok(member) = guild.member(http, discord_id).await else {
         // Linked the account but never joined the server, or has left it.
-        // Neither is an error worth ten retries — there is nobody there to
+        // Neither is an error worth ten retries - there is nobody there to
         // give a role to.
         mark_synced(db, row.id, &[], &[]).await;
         return Ok(false);
@@ -1052,7 +1049,7 @@ async fn apply_one(
             .map(|r| format!("**{r}**"))
             .collect::<Vec<_>>()
             .join(", ");
-        // No interaction to read a locale from — nobody typed anything, this
+        // No interaction to read a locale from - nobody typed anything, this
         // follows a browser redirect minutes ago. So the account's own
         // preference is the only signal, and `i18n::resolve` falls back for
         // the accounts that never set one.
@@ -1102,7 +1099,7 @@ async fn mark_synced(db: &PgPool, id: Uuid, added: &[String], removed: &[String]
 ///
 /// It applies to **every localisation**, not only the default one. That is the
 /// trap worth naming: French runs 15-20% longer than English, so a description
-/// that fits in the default can still fail on its translation — and
+/// that fits in the default can still fail on its translation - and
 /// `set_commands` replaces the whole command tree, so one long string takes
 /// all of it down and leaves whatever a previous build registered.
 const DESCRIPTION_LIMIT: usize = 100;
@@ -1143,7 +1140,7 @@ fn arg(option: CreateCommandOption, key: &str) -> CreateCommandOption {
 /// ## Why capping and not a shorter list
 ///
 /// Discord rejects any description over 100 characters, and `set_commands`
-/// replaces the whole command tree in one call — so one long string fails the
+/// replaces the whole command tree in one call - so one long string fails the
 /// entire registration. The bot then keeps whatever commands a previous build
 /// left behind, logs an error nobody is watching, and serves a stale command
 /// list. That is exactly what happened: the twelfth domain took the joined
@@ -1176,16 +1173,16 @@ fn domain_hint() -> String {
 
 fn help_message(frontend: &str) -> String {
     format!(
-        "**Skilluv bot** — commands available :\n\
-         - `/skilluv me` — your linked profile, trades and craft score\n\
-         - `/skilluv verify <hash>` — check a Skilluv attestation\n\
-         - `/skilluv contests [domain]` — open contests\n\
-         - `/skilluv featured [domain]` — this week\'s featured member\n\
-         - `/skilluv portfolio <username>` — somebody\'s public profile\n\
-         - `/skilluv craft <domain>` — your craft score there\n\
-         - `/skilluv queue <domain>` — what is waiting on a reviewer\n\
-         - `/skilluv cohorts [domain]` — cohorts recruiting now\n\
-         - `/skilluv help` — this message\n\n\
+        "**Skilluv bot** : commands available\n\
+         - `/skilluv me` : your linked profile, trades and craft score\n\
+         - `/skilluv verify <hash>` : check a Skilluv attestation\n\
+         - `/skilluv contests [domain]` : open contests\n\
+         - `/skilluv featured [domain]` : this week\'s featured member\n\
+         - `/skilluv portfolio <username>` : somebody\'s public profile\n\
+         - `/skilluv craft <domain>` : your craft score there\n\
+         - `/skilluv queue <domain>` : what is waiting on a reviewer\n\
+         - `/skilluv cohorts [domain]` : cohorts recruiting now\n\
+         - `/skilluv help` : this message\n\n\
          Platform: {frontend}",
     )
 }
@@ -1206,7 +1203,7 @@ fn extract_string(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Notification queue poller — parity with v1 notifier, posts via bot.
+// Notification queue poller - parity with v1 notifier, posts via bot.
 // ═══════════════════════════════════════════════════════════════════
 
 async fn queue_poll_loop(
@@ -1389,7 +1386,7 @@ mod tests {
         );
     }
 
-    /// The cap has to hold for a catalogue that keeps growing — that is the
+    /// The cap has to hold for a catalogue that keeps growing - that is the
     /// whole reason it exists rather than a hand-shortened list.
     #[test]
     fn the_hint_would_still_fit_with_far_more_domains() {
@@ -1417,7 +1414,7 @@ mod tests {
     /// sent in.
     ///
     /// An earlier attempt at this listed the strings by hand and every one of
-    /// them was subtly wrong — "Open contests" for "Open contests you can
+    /// them was subtly wrong - "Open contests" for "Open contests you can
     /// still enter". It passed and asserted nothing, because a copy of a
     /// literal is not a check on that literal. It was deleted.
     ///
@@ -1426,7 +1423,7 @@ mod tests {
     /// now: the limit applies per localisation, French runs longer than
     /// English, and `set_commands` fails as a whole. A translation four
     /// characters too long would take the entire command tree down and leave
-    /// the bot serving whatever a previous build registered — exactly what
+    /// the bot serving whatever a previous build registered - exactly what
     /// happened here two days ago, from the same limit and a different string.
     #[test]
     fn every_command_description_fits_discord() {

@@ -68,7 +68,7 @@ Skilluv partner. The conditions are the same as for everything else: a written
 protocol, named subgroups, a measured gap, and a third party able to replay
 it.
 
-A bias result that cannot be reproduced is not disclosed — not out of
+A bias result that cannot be reproduced is not disclosed - not out of
 political caution, but because it is not established.
 
 ## 6. Dual use

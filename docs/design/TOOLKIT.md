@@ -26,7 +26,7 @@ Un outil qui permet ces trois choses convient. C'est toute l'exigence.
 
 ---
 
-## `product`, `web`, `mobile` — écrans et systèmes
+## `product`, `web`, `mobile` - écrans et systèmes
 
 | Gratuit ou libre | Payant |
 | --- | --- |
@@ -38,7 +38,7 @@ Un outil qui permet ces trois choses convient. C'est toute l'exigence.
 sur un poste modeste. L'offre gratuite de Figma tombe vite à court de fichiers
 quand on enchaîne les challenges.
 
-## `motion` — animation et vidéo
+## `motion` - animation et vidéo
 
 | Gratuit ou libre | Payant |
 | --- | --- |
@@ -48,14 +48,14 @@ quand on enchaîne les challenges.
 | Lottie / lottiefiles | |
 
 **Recommandé :** Blender pour la 3D et le rendu, Kdenlive pour le montage. Le
-motion d'interface se livre en Lottie, qui est un format ouvert et léger — et
+motion d'interface se livre en Lottie, qui est un format ouvert et léger - et
 qui est ce qu'un développeur intégrera de toute façon.
 
 **Attention au poids.** Une animation rendue en 4K non compressée dépasse
 n'importe quelle limite raisonnable. Livrez en 1080p, H.264, et gardez le
 projet à côté.
 
-## `brand`, `illustration` — identité, dessin, icônes
+## `brand`, `illustration` - identité, dessin, icônes
 
 | Gratuit ou libre | Payant |
 | --- | --- |
@@ -70,7 +70,7 @@ propre et c'est le format de livraison exigé de toute façon.
 **Pour les polices :** FontForge est austère mais complet et libre. Une famille
 livrée en WOFF2 + les sources est ce qu'on demande.
 
-## `dataviz` — données lisibles
+## `dataviz` - données lisibles
 
 | Gratuit ou libre | Payant |
 | --- | --- |
@@ -83,7 +83,7 @@ livrée en WOFF2 + les sources est ce qu'on demande.
 finir. Une visualisation livrée en SVG reste modifiable ; une image ne l'est
 pas.
 
-## `ux-writing`, `marketing` — mots et déclinaisons
+## `ux-writing`, `marketing` - mots et déclinaisons
 
 Presque rien de spécifique. Un éditeur de texte, un tableur pour les tableaux
 de libellés, et l'outil d'écrans de la famille `product` pour voir les mots en
@@ -93,7 +93,7 @@ place.
 emplacement. Un libellé qui tient en français et déborde en anglais est
 l'erreur la plus fréquente du métier.
 
-## `game` — sous contrainte de moteur
+## `game` - sous contrainte de moteur
 
 | Gratuit ou libre | Payant |
 | --- | --- |
@@ -102,11 +102,11 @@ l'erreur la plus fréquente du métier.
 | Materialize, ArmorPaint | |
 | Aseprite (source libre, binaire payant) | |
 
-**Recommandé :** Godot et Blender. La contrainte de moteur — budget de
-polygones, taille de textures — se vérifie dans le moteur, pas dans le logiciel
+**Recommandé :** Godot et Blender. La contrainte de moteur - budget de
+polygones, taille de textures - se vérifie dans le moteur, pas dans le logiciel
 de dessin, et un livrable de jeu doit tourner.
 
-## `3d-viz` — architecture et intérieur
+## `3d-viz` - architecture et intérieur
 
 | Gratuit ou libre | Payant |
 | --- | --- |
@@ -118,7 +118,7 @@ de dessin, et un livrable de jeu doit tourner.
 présentation, et le temps de calcul se contourne en réduisant les échantillons
 plutôt qu'en payant.
 
-## `immersive` — spatial et son
+## `immersive` - spatial et son
 
 | Gratuit ou libre | Payant |
 | --- | --- |
@@ -127,11 +127,11 @@ plutôt qu'en payant.
 | LMMS | |
 
 **Recommandé :** A-Frame pour un prototype spatial consultable dans un
-navigateur — c'est aussi ce qui rend le livrable ouvrable par un relecteur qui
+navigateur - c'est aussi ce qui rend le livrable ouvrable par un relecteur qui
 n'a pas de casque. Reaper pour le son : l'essai n'expire pas, et la licence
 personnelle est parmi les moins chères du secteur.
 
-## `service` — processus
+## `service` - processus
 
 Un tableur, un outil de diagramme, et de l'écrit. Excalidraw, draw.io, ou
 Penpot. Le livrable est un raisonnement, pas un rendu.
@@ -144,8 +144,8 @@ Penpot. Le livrable est un raisonnement, pas un rendu.
 le piège le plus coûteux du domaine : la licence est la vôtre, pas la sienne,
 et c'est lui qui recevra la facture.
 
-Pour livrer une identité sans mauvaise surprise, utilisez des polices libres —
-Google Fonts, Fontshare, Velvetyne — ou faites acheter la licence par le
+Pour livrer une identité sans mauvaise surprise, utilisez des polices libres -
+Google Fonts, Fontshare, Velvetyne - ou faites acheter la licence par le
 client, à son nom, avant de livrer.
 
 Même règle pour les photographies, les modèles 3D et les bibliothèques de

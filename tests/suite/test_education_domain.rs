@@ -1,7 +1,7 @@
 //! The education domain: the catalogue, the gates, and the rules that exist
 //! because the artefacts are about people who are not here.
 //!
-//! What is asserted is what would be expensive to discover later — a trade
+//! What is asserted is what would be expensive to discover later - a trade
 //! nobody can review, a badge whose condition nothing implements, a cohort
 //! report published with a learner in it, a curriculum adopted by its own
 //! author.
@@ -401,7 +401,7 @@ async fn a_cohort_is_attested_by_the_person_who_taught_it() {
     let teacher = user_id(&app, "eduteacher3").await;
     let impostor = user_id(&app, "eduimpostor").await;
     // Three, because a cohort of one is tutoring. The shared definition in
-    // `cohort_outcomes` requires three since migration 0532 — the same floor
+    // `cohort_outcomes` requires three since migration 0532 - the same floor
     // the leadership domain already applied, now applied once for both.
     let learners = [
         user_id(&app, "edul4a").await,
@@ -554,7 +554,7 @@ async fn concluding_a_cohort_says_whether_it_meets_the_threshold() {
 /// A education attestation counts towards the platform rank like any other.
 ///
 /// Ticket F-07 asked for a check that it does. It does because the rank
-/// counts attestations without looking at what they rest on — which is the
+/// counts attestations without looking at what they rest on - which is the
 /// right design and the kind of thing that gets broken by somebody adding a
 /// domain filter for a reason that seemed good at the time.
 #[tokio::test]
@@ -630,7 +630,7 @@ async fn seed_project(app: &TestApp, slug: &str, owner: Uuid) -> Uuid {
 ///
 /// Two writes since migration 0532: the assessments and the satisfaction go on
 /// the outcome row, and whether they finished goes on their membership. One
-/// helper so a test cannot set one and forget the other — which is the whole
+/// helper so a test cannot set one and forget the other - which is the whole
 /// reason the duplicate column was removed.
 async fn record_outcome(app: &TestApp, cohort: Uuid, learner: Uuid, completed: bool) {
     sqlx::query(

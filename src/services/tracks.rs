@@ -1,4 +1,4 @@
-//! Service `tracks` — curriculums structurants + DAG des prérequis (Phase P3).
+//! Service `tracks` - curriculums structurants + DAG des prérequis (Phase P3).
 //!
 //! Voir docs/challenges-target-model-and-roadmap.md section B.10-B.11 et 5.5.
 //!

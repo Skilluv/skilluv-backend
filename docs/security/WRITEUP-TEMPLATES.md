@@ -39,7 +39,7 @@ depends on.
 
 Both are what a reviewer most needs and neither is what somebody writing about
 their own work volunteers. Putting them in the template is the only reliable way
-to get them — and in the finding template, the first of the two is the section
+to get them - and in the finding template, the first of the two is the section
 that earns the one badge nothing awards automatically.
 
 ## The two rules that are not in any template

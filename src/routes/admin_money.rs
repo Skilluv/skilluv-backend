@@ -62,7 +62,7 @@ pub struct Overview {
     /// every retry.
     pub notifications_abandoned: i64,
     /// Ledger accounts whose running total disagrees with their own
-    /// entries. Must be zero — anything else means balances are wrong.
+    /// entries. Must be zero - anything else means balances are wrong.
     pub ledger_snapshot_drift: i64,
     /// What each provider is holding, per our books.
     pub provider_positions: Vec<ProviderPosition>,
@@ -158,7 +158,7 @@ pub struct PaymentRow {
     pub currency: String,
     pub status: String,
     /// Their identifier, for looking the charge up in the provider's own
-    /// dashboard — which is where an operator goes next.
+    /// dashboard - which is where an operator goes next.
     pub provider_reference: Option<String>,
     /// Ours, which is what a poller recovers a lost payment by.
     pub merchant_reference: Option<String>,

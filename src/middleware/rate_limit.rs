@@ -26,7 +26,7 @@ impl RateLimiter {
     ///
     /// `identifier` : IP client (via `extract_ip`) ou user_id. Une string
     /// vide `""` signale "pas d'IP fiable" (ex : appel direct sans reverse
-    /// proxy en dev/CI) et désactive le check pour ce call — évite un
+    /// proxy en dev/CI) et désactive le check pour ce call - évite un
     /// bucket sentinel partagé qui bloquerait tout le monde après N req.
     /// En prod, le reverse proxy DOIT set `X-Forwarded-For` (sinon aucun
     /// rate limit ne s'applique aux requêtes non-authentifiées, à surveiller).
@@ -46,7 +46,7 @@ impl RateLimiter {
         if is_whitelisted_ip(identifier) {
             return Ok(());
         }
-        // A declared research token multiplies the ceiling — see
+        // A declared research token multiplies the ceiling - see
         // `middleware::security_research`. Applied here rather than at every
         // call site because this function is called from a hundred handlers
         // and none of them sees the request.
@@ -73,7 +73,7 @@ impl RateLimiter {
 }
 
 /// Check if the given identifier (IP) is in the SKILLUV_RATELIMIT_IP_WHITELIST
-/// env var (comma-separated). Reads the env fresh on every call — the list
+/// env var (comma-separated). Reads the env fresh on every call - the list
 /// is small (0-10 entries) and rate-limit checks are already cheap.
 fn is_whitelisted_ip(identifier: &str) -> bool {
     let Ok(raw) = std::env::var("SKILLUV_RATELIMIT_IP_WHITELIST") else {
@@ -87,7 +87,7 @@ fn is_whitelisted_ip(identifier: &str) -> bool {
 
 /// Extrait l'IP client depuis les headers set par un reverse proxy
 /// (`X-Forwarded-For` en priorité, `X-Real-IP` en fallback). Renvoie
-/// une string vide `""` quand aucun header n'est présent — ce qui
+/// une string vide `""` quand aucun header n'est présent - ce qui
 /// signale un appel direct (dev local, tests, ou déploiement mal
 /// configuré derrière un proxy qui n'écrit pas ces headers).
 ///

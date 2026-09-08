@@ -136,7 +136,7 @@ pub async fn declare_objective(
 ) -> Result<Objective, AppError> {
     if input.slice_id.is_none() && input.project_id.is_none() {
         return Err(AppError::Validation(
-            "an objective belongs to a slice or a project — a target floating on its \
+            "an objective belongs to a slice or a project - a target floating on its \
              own is a promise about nothing"
                 .into(),
         ));
@@ -235,7 +235,7 @@ pub async fn verify_objective(db: &PgPool, id: Uuid, reviewer: Uuid) -> Result<b
     // If the source happens to be a public status page, read it and put what
     // it published next to the claim. Best-effort by design: a page that is
     // down, moved, or not a status page after all leaves the objective as it
-    // was — declared, sourced, read by a person — which is the normal path
+    // was - declared, sourced, read by a person - which is the normal path
     // rather than a degraded one.
     if let Err(err) = observe_public_status(db, &objective).await {
         tracing::debug!(objective = %id, %err, "no public observation attached");
@@ -252,8 +252,8 @@ pub async fn verify_objective(db: &PgPool, id: Uuid, reviewer: Uuid) -> Result<b
 
     let met = objective_met(&objective.target_percent, &achieved);
     if !met {
-        // A missed objective is still worth recording — it is what an error
-        // budget is for — and it earns nothing.
+        // A missed objective is still worth recording - it is what an error
+        // budget is for - and it earns nothing.
         return Ok(false);
     }
 
@@ -261,7 +261,7 @@ pub async fn verify_objective(db: &PgPool, id: Uuid, reviewer: Uuid) -> Result<b
         db,
         objective.owner_user_id,
         "ops_uptime_achievement",
-        &format!("Objectif tenu — {}", objective.service_name),
+        &format!("Objectif tenu - {}", objective.service_name),
         &format!(
             "{} a tenu {}% sur {} jours, pour un objectif de {}%.",
             objective.service_name, achieved, objective.window_days, objective.target_percent
@@ -375,7 +375,7 @@ pub async fn open_incident(
 
     // An incident that has not happened yet is a typo in the date. Left
     // alone it is worse than that: resolving stamps `NOW()`, which lands
-    // before the start and trips `an_incident_runs_forward` — so the person
+    // before the start and trips `an_incident_runs_forward` - so the person
     // recording it gets a 500 at the end of an outage, on the step that was
     // supposed to close it.
     if input.started_at > chrono::Utc::now() {
@@ -539,7 +539,7 @@ pub async fn publish_postmortem(
         db,
         commander,
         "ops_incident_led",
-        &format!("Incident conduit — {}", incident.title),
+        &format!("Incident conduit - {}", incident.title),
         &format!(
             "Incident {} conduit et post-mortem publié, avec {actions} action(s) de \
              suivi enregistrée(s).",
@@ -671,7 +671,7 @@ pub async fn cost_work(db: &PgPool, id: Uuid) -> Result<CostWork, AppError> {
     .ok_or_else(|| AppError::NotFound("cost record not found".into()))
 }
 
-/// Verify a cost reduction — both halves.
+/// Verify a cost reduction - both halves.
 ///
 /// Somebody has to say the service still works. Verifying the saving alone
 /// would certify an outage with a spreadsheet.
@@ -703,7 +703,7 @@ pub async fn verify_cost_work(
         db,
         work.owner_user_id,
         "ops_cost_optimization",
-        &format!("Réduction de coûts — {}", work.scope),
+        &format!("Réduction de coûts - {}", work.scope),
         &format!(
             "{} : {} {} par an économisés, service toujours conforme à son objectif.",
             work.scope, saved, work.currency
@@ -767,7 +767,7 @@ pub async fn attest_artefact(
     crate::validators::check_max_len(title, "title", 200)?;
     if !evidence_url.trim().starts_with("https://") {
         return Err(AppError::Validation(
-            "the evidence URL must be a public https link — an attestation \
+            "the evidence URL must be a public https link - an attestation \
              nobody can open is worth nothing"
                 .into(),
         ));
@@ -847,7 +847,7 @@ const EDITORIAL: crate::services::artefact_attestations::Domain =
 /// `POST /admin/ops/attestations/featured`, and the weekly featuring through
 /// [`crate::services::featured`]. Until this change only the first existed,
 /// so an ops engineer the community put forward got the announcement and no
-/// attestation — the row was written, the match arm did nothing, and the
+/// attestation - the row was written, the match arm did nothing, and the
 /// absence showed only as a profile term stuck at zero.
 ///
 /// It goes through `artefact_attestations::issue` rather than the local
@@ -863,7 +863,7 @@ pub async fn featured_ops_engineer(
 ) -> Result<crate::services::artefact_attestations::Issued, AppError> {
     if citation.trim().len() < 40 {
         return Err(AppError::Validation(
-            "say why in a sentence somebody outside the decision would              understand — at least forty characters"
+            "say why in a sentence somebody outside the decision would              understand - at least forty characters"
                 .into(),
         ));
     }

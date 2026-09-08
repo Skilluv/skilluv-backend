@@ -4,7 +4,7 @@
 //!
 //! Three different answers, and the difference is the design.
 //!
-//! **Reviewing** an artefact is guarded by the trade behind the slice —
+//! **Reviewing** an artefact is guarded by the trade behind the slice -
 //! `leadership_reviewer:{reviewer_group}`, derived by migration 0404's
 //! trigger. Somebody who can read a delivery plan cannot necessarily read a
 //! curriculum.
@@ -12,7 +12,7 @@
 //! **Acknowledging** a commitment is guarded by nothing at all except not
 //! being the author. It is a person saying "yes, my project agreed to that",
 //! and a capability gate on it would mean a plan could be agreed only by
-//! people the platform had already promoted — which is not what agreement is.
+//! people the platform had already promoted - which is not what agreement is.
 //!
 //! **Confirming a redaction** is guarded by any leadership review capability,
 //! and it is the strictest thing here: what is being confirmed is that nobody
@@ -319,7 +319,7 @@ pub async fn acknowledge_link(
     let link = leadership_practice::acknowledge_link(&state.db, auth.user_id, id).await?;
 
     // The acknowledgement is a term in the author's score, not in the
-    // steward's — so the recompute is for them.
+    // steward's - so the recompute is for them.
     if let Some(author) = slice_author(&state, link.leadership_slice_id).await
         && let Err(e) =
             crate::services::proof_hooks::recompute_all_for_user(&state.db, author).await
@@ -410,7 +410,7 @@ pub async fn actions(
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct ResolveBody {
     /// Present to drop the action rather than close it. Dropping is not a
-    /// lesser outcome — the follow-through counts it as resolved — but it
+    /// lesser outcome - the follow-through counts it as resolved - but it
     /// says why.
     #[serde(default)]
     pub abandoned_reason: Option<String>,

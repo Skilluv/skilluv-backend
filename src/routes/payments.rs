@@ -2,8 +2,8 @@
 //!
 //! ## Why the front asks rather than knows
 //!
-//! The operators available in a country change — Celtiis appeared in Benin,
-//! Togocel is called Mixx By Yas now — and a list compiled into the front
+//! The operators available in a country change - Celtiis appeared in Benin,
+//! Togocel is called Mixx By Yas now - and a list compiled into the front
 //! end means a release to add one. The list lives in `payment_methods` and
 //! is served from here, so opening an operator is a row.
 //!
@@ -87,7 +87,7 @@ pub async fn methods(
     //
     // The question this endpoint answers is "what can this payer use". When
     // we cannot tell who is asking or from where, the honest answer is
-    // "nothing we can determine" — which is a list, and one every client
+    // "nothing we can determine" - which is a list, and one every client
     // already renders. Refusing instead would mean the schema advertises an
     // optional parameter that is not really optional, and a caller sending
     // a request the schema calls valid would be told it is not.
@@ -137,7 +137,7 @@ pub struct ChargeRequest {
 ///
 /// For the methods that support it, this is the whole payment: no
 /// redirect, no new tab. The payer approves on their handset and the
-/// confirmation reaches us by webhook or by polling — never through this
+/// confirmation reaches us by webhook or by polling - never through this
 /// request, which returns as soon as the prompt is sent.
 #[utoipa::path(
     post, path = "/api/payments/{id}/charge", tag = "payments",
@@ -209,7 +209,7 @@ pub async fn charge(
     };
     if !supports_inline {
         return Err(AppError::Validation(format!(
-            "'{}' cannot be paid without leaving the page — use the checkout URL",
+            "'{}' cannot be paid without leaving the page - use the checkout URL",
             body.operator
         )));
     }
@@ -268,7 +268,7 @@ pub async fn charge(
 /// The front polls this endpoint every second or two while someone watches
 /// a spinner, and every one of those used to become a request to FedaPay:
 /// three minutes of waiting is ninety requests for a single payment.
-/// Multiply by concurrent checkouts and the account gets rate-limited —
+/// Multiply by concurrent checkouts and the account gets rate-limited -
 /// and the day that happens, the background poller is throttled with it,
 /// which turns a cosmetic problem into a delivery one.
 ///
@@ -278,8 +278,8 @@ const PROVIDER_ASK_EVERY_SECONDS: i64 = 3;
 
 /// Where a payment has got to.
 ///
-/// Called by the page the payer is waiting on. It asks the provider — a
-/// real question, not a cached guess — but at most once every few seconds
+/// Called by the page the payer is waiting on. It asks the provider - a
+/// real question, not a cached guess - but at most once every few seconds
 /// per payment, and it routes any answer through the shared fulfilment
 /// path. It is a way to stop showing a spinner, not a way to be paid: a
 /// forged call delivers nothing that the poller would not have delivered a
@@ -338,7 +338,7 @@ pub async fn status(
         // together must not both decide they are allowed to ask.
         //
         // `last_checked_at` only. `check_count` drives the poller's
-        // backoff — a front polling for three minutes would push it past
+        // backoff - a front polling for three minutes would push it past
         // sixty and convince the poller to wait half an hour, turning a
         // spinner into the reason the safety net stops working.
         sqlx::query("UPDATE payments SET last_checked_at = NOW() WHERE id = $1")
@@ -379,7 +379,7 @@ pub async fn status(
                 }
                 // No session id means the create response was lost.
                 // Recovering it replays a create call, which is the
-                // poller's job rather than a request handler's — the front
+                // poller's job rather than a request handler's - the front
                 // waits a minute rather than this endpoint doing something
                 // expensive on every impatient refresh.
                 _ => Ok("pending".to_string()),
@@ -391,7 +391,7 @@ pub async fn status(
         if let Ok(remote) = lookup
             && matches!(remote.as_str(), "approved" | "transferred" | "paid")
         {
-            // The delivery happens in the shared path, not here — so a
+            // The delivery happens in the shared path, not here - so a
             // forged call to this endpoint cannot deliver anything, and the
             // result is identical to the poller finding it a minute later.
             let _ = crate::services::fulfilment::settle_and_deliver(&state.db, id, None).await;

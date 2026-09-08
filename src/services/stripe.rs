@@ -1,4 +1,4 @@
-//! Stripe integration — Phase 3 (3.8).
+//! Stripe integration - Phase 3 (3.8).
 //!
 //! Thin HTTP wrapper. We don't pull the `async-stripe` crate (heavy, generated SDK) ;
 //! we only need 3 endpoints: create Checkout Session, verify webhook signature,
@@ -134,12 +134,12 @@ pub async fn create_checkout_session(
     ));
     form.push((
         "line_items[0][price_data][product_data][name]".into(),
-        format!("Skilluv — {} crédit(s)", pack.credits),
+        format!("Skilluv - {} crédit(s)", pack.credits),
     ));
     form.push((
         "line_items[0][price_data][product_data][description]".into(),
         format!(
-            "Pack de {} crédit(s) — chacun débloque 1 prise de contact talent.",
+            "Pack de {} crédit(s) - chacun débloque 1 prise de contact talent.",
             pack.credits
         ),
     ));
@@ -483,8 +483,8 @@ pub async fn retrieve_transfer(
 
 /// A checkout for an arbitrary amount, not a credit pack.
 ///
-/// The pack-shaped helper above serves one flow. Everything else — a
-/// mentorship session, a certification — pays a price computed at runtime,
+/// The pack-shaped helper above serves one flow. Everything else - a
+/// mentorship session, a certification - pays a price computed at runtime,
 /// and had to be expressed as a fake pack or by calling Stripe again by
 /// hand. This is the generic form the collection adapter uses.
 pub struct PaymentCheckout<'a> {
@@ -612,7 +612,7 @@ pub async fn available_balance(
         .map_err(|e| AppError::Internal(format!("balance decode: {e}")))?;
 
     // `available` and `pending` are separate lists. Both are money Stripe
-    // holds for us and both belong in the comparison — leaving `pending`
+    // holds for us and both belong in the comparison - leaving `pending`
     // out would report drift on every payment that has not settled yet.
     let wanted = currency.to_lowercase();
     let mut total: Option<i64> = None;

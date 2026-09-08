@@ -9,7 +9,7 @@
 //!
 //! Without it, every part uploads perfectly, the store keeps them all, and
 //! `complete` can never be called. The symptom is a failure at the **end** of
-//! a five-gigabyte upload, on a file that has nothing wrong with it — the most
+//! a five-gigabyte upload, on a file that has nothing wrong with it - the most
 //! expensive kind to diagnose and the most discouraging to sit through.
 //!
 //! ## Why this asserts behaviour and not configuration
@@ -18,7 +18,7 @@
 //! contains `Etag`. Real S3 needs a bucket CORS rule, because it exposes
 //! nothing by default. A test that checked for the rule would fail on MinIO
 //! where nothing is wrong; a test that checks what the store actually answers
-//! holds across both, and keeps holding on the day this moves off MinIO —
+//! holds across both, and keeps holding on the day this moves off MinIO -
 //! which is the day the rule stops being optional.
 
 use std::time::Duration;
@@ -51,7 +51,7 @@ async fn etag_is_exposed_to_browsers() {
             // about a deployment property, and a laptop without MinIO up is
             // not a broken deployment.
             eprintln!(
-                "object store unreachable at {} ({e}) — skipping",
+                "object store unreachable at {} ({e}) - skipping",
                 endpoint()
             );
             return;
@@ -73,7 +73,7 @@ async fn etag_is_exposed_to_browsers() {
          with ExposeHeaders: [\"ETag\"]."
     );
 
-    // A `*` is enough — it exposes everything, which includes the ETag. MinIO
+    // A `*` is enough - it exposes everything, which includes the ETag. MinIO
     // sends both the wildcard and the name; S3 with a rule sends the name.
     assert!(
         exposed.contains("etag") || exposed.contains('*'),
@@ -86,7 +86,7 @@ async fn etag_is_exposed_to_browsers() {
 /// send the PUT in the first place.
 ///
 /// Separate from the test above because they fail differently and at different
-/// moments — this one fails on the *first* part, which is at least fast and
+/// moments - this one fails on the *first* part, which is at least fast and
 /// legible. It is here so that a store configured to expose the ETag but not
 /// to accept the method does not read as "CORS is fine".
 #[tokio::test]
@@ -109,7 +109,7 @@ async fn a_browser_is_allowed_to_put_a_part() {
         Ok(r) => r,
         Err(e) => {
             eprintln!(
-                "object store unreachable at {} ({e}) — skipping",
+                "object store unreachable at {} ({e}) - skipping",
                 endpoint()
             );
             return;

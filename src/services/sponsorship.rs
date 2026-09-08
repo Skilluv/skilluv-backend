@@ -13,7 +13,7 @@
 //! tier.
 //!
 //! **A lead is an act by the person named.** Nothing about a participant
-//! reaches a sponsor because they attended — only because they walked up and
+//! reaches a sponsor because they attended - only because they walked up and
 //! said they were interested, and said the sponsor could have their details.
 
 use bigdecimal::BigDecimal;
@@ -87,7 +87,7 @@ async fn package(db: &PgPool, tier: &str) -> Result<Package, AppError> {
 
     row.ok_or_else(|| {
         AppError::Validation(format!(
-            "'{tier}' is not a package we sell — one of: {}",
+            "'{tier}' is not a package we sell - one of: {}",
             TIERS.join(", ")
         ))
     })
@@ -159,7 +159,7 @@ pub async fn propose(
     let (_slug, status) = event.ok_or_else(|| AppError::NotFound("event not found".into()))?;
     if matches!(status.as_str(), "finished" | "cancelled") {
         return Err(AppError::Validation(format!(
-            "that event is {status} — a sponsorship signed now buys nothing"
+            "that event is {status} - a sponsorship signed now buys nothing"
         )));
     }
 
@@ -169,7 +169,7 @@ pub async fn propose(
         Some(fee) => fee,
         None if input.package_tier == "custom" => {
             return Err(AppError::Validation(
-                "a custom package has no published price — say what was agreed".into(),
+                "a custom package has no published price - say what was agreed".into(),
             ));
         }
         None => package.list_fee.clone(),
@@ -217,7 +217,7 @@ pub async fn propose(
         let m = e.to_string();
         if m.contains("event_sponsorships_event_id_enterprise_id_key") {
             AppError::Validation(
-                "this company already sponsors that event — change the existing \
+                "this company already sponsors that event - change the existing \
                  sponsorship rather than adding a second logo"
                     .into(),
             )
@@ -282,7 +282,7 @@ pub async fn sign(db: &PgPool, sponsorship_id: Uuid) -> Result<Sponsorship, AppE
     let sponsorship = by_id(db, sponsorship_id).await?;
     if !matches!(sponsorship.status.as_str(), "proposed" | "negotiating") {
         return Err(AppError::Validation(format!(
-            "this sponsorship is {} — only a proposed one can be signed",
+            "this sponsorship is {} - only a proposed one can be signed",
             sponsorship.status
         )));
     }
@@ -337,7 +337,7 @@ pub async fn honour(db: &PgPool, sponsorship_id: Uuid) -> Result<BigDecimal, App
     let sponsorship = by_id(db, sponsorship_id).await?;
     if sponsorship.status != "signed" {
         return Err(AppError::Validation(format!(
-            "this sponsorship is {} — only a signed one can be honoured",
+            "this sponsorship is {} - only a signed one can be honoured",
             sponsorship.status
         )));
     }
@@ -374,7 +374,7 @@ pub async fn honour(db: &PgPool, sponsorship_id: Uuid) -> Result<BigDecimal, App
 pub async fn cancel(db: &PgPool, sponsorship_id: Uuid, reason: &str) -> Result<(), AppError> {
     if reason.trim().is_empty() {
         return Err(AppError::Validation(
-            "say why — a sponsor who withdrew and a sponsor we turned down are not \
+            "say why - a sponsor who withdrew and a sponsor we turned down are not \
              the same company next year"
                 .into(),
         ));
@@ -541,7 +541,7 @@ pub async fn open_annual_contract(
     let signed = input.contract_url.is_some();
     if discount.is_positive() && !signed {
         return Err(AppError::Validation(
-            "a discount applies to a signed contract — attach the signed document".into(),
+            "a discount applies to a signed contract - attach the signed document".into(),
         ));
     }
 
@@ -565,7 +565,7 @@ pub async fn open_annual_contract(
             .contains("annual_sponsorship_contracts_enterprise_id_year_key")
         {
             AppError::Validation(format!(
-                "this company already has a {} contract — raise its event count \
+                "this company already has a {} contract - raise its event count \
                  rather than opening a second",
                 input.year
             ))
@@ -818,7 +818,7 @@ pub async fn publish_content(
         )
         .bind(content.sponsor_enterprise_id)
         .bind(&content.fee)
-        .bind(format!("{} — {}", content.content_type, content.title))
+        .bind(format!("{} - {}", content.content_type, content.title))
         .execute(&mut *tx)
         .await?;
     }

@@ -1,6 +1,6 @@
-//! P26 v2 SKI-115 — public attestation verification endpoint.
+//! P26 v2 SKI-115 - public attestation verification endpoint.
 //!
-//! Route `GET /verify/{attestation_hash}` — **unauthenticated**, mounted
+//! Route `GET /verify/{attestation_hash}` - **unauthenticated**, mounted
 //! OUTSIDE `/api` (same convention as `/webhooks/*`). Anyone with an
 //! attestation hash can verify it's real, without a Skilluv account.
 //!
@@ -10,14 +10,14 @@
 //!
 //! ─── Response shape ───────────────────────────────────────────────
 //!
-//! 200 OK — { valid: true, ...metadata }
-//! 200 OK — { valid: false, reason: "unknown attestation hash" }
+//! 200 OK - { valid: true, ...metadata }
+//! 200 OK - { valid: false, reason: "unknown attestation hash" }
 //!
 //! We deliberately return **200 with `valid:false`** in ambiguous cases
 //! (bad shape, unknown hash) so the client can render a stable UI. Only
 //! internal errors bubble as 5xx.
 //!
-//! SKI-288 — this paragraph described the intent from the start, but the
+//! SKI-288 - this paragraph described the intent from the start, but the
 //! code answered 404 on those two branches. That is a meaningful
 //! difference for the caller: "this hash is not a valid attestation" is a
 //! successful answer to the question asked, and an HTTP client that treats
@@ -45,10 +45,10 @@ use crate::services::og_card;
 pub fn attestations_public_routes() -> Router<AppState> {
     Router::new()
         .route("/verify/{hash}", get(verify))
-        // SKI-292 — share card. Same segment-per-parameter constraint as the
+        // SKI-292 - share card. Same segment-per-parameter constraint as the
         // PDF route below, hence `/og.png` as its own segment.
         .route("/verify/{hash}/og.png", get(verify_og_card))
-        // SKI-118 — separate segment for the PDF form. axum/matchit
+        // SKI-118 - separate segment for the PDF form. axum/matchit
         // requires exactly one parameter per path segment, so
         // `/verify/{hash}.pdf` panics at Router::new() time. Adding
         // `/pdf` as its own segment sidesteps that limitation with a
@@ -56,7 +56,7 @@ pub fn attestations_public_routes() -> Router<AppState> {
         .route("/verify/{hash}/pdf", get(verify_pdf))
 }
 
-/// SKI-288 — the same handlers under `/api`, mounted by `build_router`.
+/// SKI-288 - the same handlers under `/api`, mounted by `build_router`.
 ///
 /// The root-level route above cannot serve the front end: the SvelteKit app
 /// owns `/verify/{hash}` on its own origin, so a browser asking for that
@@ -72,7 +72,7 @@ pub fn attestations_public_api_routes() -> Router<AppState> {
         .route("/verify/{hash}/pdf", get(verify_pdf))
 }
 
-/// Shape check — must be 64 lowercase hex chars (SHA-256 output).
+/// Shape check - must be 64 lowercase hex chars (SHA-256 output).
 /// Rejecting bad shape as `valid:false` (not 400) keeps the endpoint
 /// friendly to human copy-paste with trailing whitespace already trimmed
 /// on the caller side; internal errors are the only 5xx source.
@@ -187,7 +187,7 @@ pub async fn verify(
         "domain": domain,
         "difficulty": difficulty,
         "validated_at": validated_at.to_rfc3339(),
-        // Not the hash itself in the response — client already has it.
+        // Not the hash itself in the response - client already has it.
     });
     Ok((StatusCode::OK, Json(body)))
 }
@@ -464,7 +464,7 @@ struct EvidenceLine {
 ///
 /// Only reproduced benchmarks and hub figures we fetched ourselves. An
 /// unreproduced measurement is the author's word, and an attestation exists
-/// precisely so a reader does not have to take it — printing one would undo
+/// precisely so a reader does not have to take it - printing one would undo
 /// the point of the document.
 async fn measured_evidence(
     state: &AppState,
@@ -494,7 +494,7 @@ async fn measured_evidence(
         let on = split.map(|s| format!(", sur {s}")).unwrap_or_default();
         lines.push(EvidenceLine {
             label: name,
-            value: format!("{metric} {value} {unit} ({direction}{on}) — rejoué par un relecteur"),
+            value: format!("{metric} {value} {unit} ({direction}{on}) - rejoué par un relecteur"),
         });
     }
 
@@ -523,7 +523,7 @@ async fn measured_evidence(
         lines.push(EvidenceLine {
             label: "Diffusion".into(),
             value: format!(
-                "{downloads} téléchargements sur 30 jours, {likes} mentions — relevé le {}",
+                "{downloads} téléchargements sur 30 jours, {likes} mentions - relevé le {}",
                 fetched.format("%d/%m/%Y")
             ),
         });
@@ -538,14 +538,14 @@ async fn measured_evidence(
 ///
 /// The AI backlog asked for model-card thumbnails and benchmark charts. Both
 /// mean the PDF renderer fetching a URL somebody else controls, at render
-/// time, from inside our network — which is a request-forgery primitive and a
+/// time, from inside our network - which is a request-forgery primitive and a
 /// way to put arbitrary bytes into a document carrying our name. The existing
 /// QR code is inline SVG for the same reason, and that decision is worth
 /// keeping rather than making an exception to.
 ///
 /// The substance survives without them. What makes a benchmark worth printing
 /// is the figure, the baseline it beat, and the fact that a second person
-/// re-ran it — all three are text we already hold. A chart would be a picture
+/// re-ran it - all three are text we already hold. A chart would be a picture
 /// of one row.
 fn render_evidence(lines: &[EvidenceLine]) -> String {
     if lines.is_empty() {
@@ -555,7 +555,7 @@ fn render_evidence(lines: &[EvidenceLine]) -> String {
         .iter()
         .map(|l| {
             format!(
-                r#"<div style="margin-top: 8px; font-size: 14px;"><strong>{}</strong> — {}</div>"#,
+                r#"<div style="margin-top: 8px; font-size: 14px;"><strong>{}</strong> - {}</div>"#,
                 html_escape(&l.label),
                 html_escape(&l.value)
             )
@@ -575,7 +575,7 @@ fn render_evidence(lines: &[EvidenceLine]) -> String {
 /// Pure HTML template. Uses inline styles because the pdf_renderer
 /// service is expected to consume standalone HTML (no CSS bundling).
 /// The QR code is embedded as inline SVG generated by the `qrcode`
-/// crate — no external image fetch during PDF rendering.
+/// crate - no external image fetch during PDF rendering.
 fn render_attestation_html(v: AttestationView<'_>) -> String {
     let qr_svg = render_qr_svg(v.verify_url);
     let evidence_html = render_evidence(&v.evidence);

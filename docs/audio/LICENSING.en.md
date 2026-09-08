@@ -1,4 +1,4 @@
-# Music licensing — what to know before you deliver
+# Music licensing - what to know before you deliver
 
 *To be published at `skill-uv.com/audio/licensing`.*
 
@@ -21,7 +21,7 @@ without making you pay for it.
 That is why the platform asks for a **source declaration** before issuing a
 composition or pack attestation. The declaration is a sentence you sign: *this
 list is complete and accurate*. An empty list with that sentence is perfectly
-valid — it means "everything is original". An empty list without it means
+valid - it means "everything is original". An empty list without it means
 "nobody filled the form in", and those are not the same thing.
 
 ## 2. The six kinds of source
@@ -37,12 +37,12 @@ valid — it means "everything is original". An empty list without it means
 
 ### Creative Commons: free does not mean unconditional
 
-- **BY** — credit required, in the exact wording the author asks for. Using the
+- **BY** - credit required, in the exact wording the author asks for. Using the
   sound without the credit is not an oversight, it is infringement.
-- **BY-SA** — the credit, **and** the derivative under the same licence. That
+- **BY-SA** - the credit, **and** the derivative under the same licence. That
   spreads to your track: avoid it in client work unless the client knows and
   agrees.
-- **BY-NC** — no commercial use. **A paid mission is commercial use**, including
+- **BY-NC** - no commercial use. **A paid mission is commercial use**, including
   when the game is free and funded some other way.
 
 Freesound and OpenGameArt mix all three. The licence is per file, not per pack.
@@ -63,7 +63,7 @@ Declare the library once, with its licence number if it has one.
 ## 3. Registration: SACEM, ASCAP, BMI
 
 Registering a work with a collecting society is about collecting performance
-royalties — radio, television, platforms, public venues. It does **not**
+royalties - radio, television, platforms, public venues. It does **not**
 replace the contract with the client, and it can conflict with it.
 
 Three things to know before registering:
@@ -84,10 +84,10 @@ decision to take knowingly, not a rite of passage.
 
 Three distinct rights, often confused:
 
-- **Synchronisation** — pairing music with picture or software. The one that
+- **Synchronisation** - pairing music with picture or software. The one that
   matters in nearly every mission on this platform.
-- **Mechanical** — reproducing the work on a medium. Mostly relevant to covers.
-- **Public performance** — playing or broadcasting the work publicly. What a
+- **Mechanical** - reproducing the work on a medium. Mostly relevant to covers.
+- **Public performance** - playing or broadcasting the work publicly. What a
   collecting society collects.
 
 A Skilluv mission normally grants a **sync licence** of a declared scope. The
@@ -96,15 +96,15 @@ mission's `licensing_scope` field is that scope.
 ### Covers
 
 A cover needs a mechanical licence from the rights holder, and a cover in a
-game additionally needs a sync licence — which the holder may refuse without
+game additionally needs a sync licence - which the holder may refuse without
 reason. In practice: **do not accept a cover commission until the client has
 the permissions in writing.**
 
 ## 5. Generated music
 
 The legal status of output from Suno, Udio or MusicGen is unsettled. As of
-2026, depending on jurisdiction, it may carry no copyright at all — meaning
-anybody, including the client's competitor, can reuse it — and may attract
+2026, depending on jurisdiction, it may carry no copyright at all - meaning
+anybody, including the client's competitor, can reuse it - and may attract
 claims over training data.
 
 The platform's position:
@@ -118,11 +118,11 @@ The platform's position:
 
 Five lines, before recording:
 
-1. **What is delivered** — formats, stems, dates.
-2. **What is granted** — ownership, or a licence and its scope.
-3. **Where and for how long** — territory and duration.
+1. **What is delivered** - formats, stems, dates.
+2. **What is granted** - ownership, or a licence and its scope.
+3. **Where and for how long** - territory and duration.
 4. **Exclusive or not.**
-5. **Portfolio** — yes by default; if no, why and at what price.
+5. **Portfolio** - yes by default; if no, why and at what price.
 
 A template per scope ships with the brief templates
 (`/api/guides?domain=audio&kind=brief_template`).

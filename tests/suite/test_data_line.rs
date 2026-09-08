@@ -231,7 +231,7 @@ async fn an_api_key(app: &TestApp, owner: Uuid, plan: &str) -> String {
 /// The hash the platform actually writes, not a second implementation of it.
 ///
 /// This built its own Argon2 call with its own salt, which meant it tested a
-/// copy rather than the thing that ships — and it broke on the argon2 0.6
+/// copy rather than the thing that ships - and it broke on the argon2 0.6
 /// upgrade while `AuthService` was already fixed, because the copy had to be
 /// found separately.
 fn argon2_hash(raw: &str) -> String {
@@ -522,7 +522,7 @@ async fn settling_pays_everybody_currently_consenting_and_nobody_who_withdrew() 
     let created: Value = resp.json().await.unwrap();
     let licence = created["data"]["licence"]["id"].as_str().unwrap();
 
-    // A licence is created `negotiating`, and settling one refuses — paying
+    // A licence is created `negotiating`, and settling one refuses - paying
     // royalties out of a contract nobody signed is the thing that check
     // exists to stop. There is no sign endpoint yet, so the test signs it the
     // only way there is, and `an_active_contract_is_signed` means the date
@@ -594,7 +594,7 @@ async fn settling_the_same_period_twice_does_not_pay_twice() {
     let created: Value = resp.json().await.unwrap();
     let licence = created["data"]["licence"]["id"].as_str().unwrap();
 
-    // A licence is created `negotiating`, and settling one refuses — paying
+    // A licence is created `negotiating`, and settling one refuses - paying
     // royalties out of a contract nobody signed is the thing that check
     // exists to stop. There is no sign endpoint yet, so the test signs it the
     // only way there is, and `an_active_contract_is_signed` means the date

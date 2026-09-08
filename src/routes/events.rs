@@ -1,8 +1,8 @@
-//! Events — the whole of them, not just the stamp.
+//! Events - the whole of them, not just the stamp.
 //!
 //! Migration 0093 gave events a slug, a window and a visual theme: enough to
 //! say "this person was at Hacktoberfest". They are now the object the brand
-//! line sells against — a type, a place, a jury, a livestream, sponsors — and
+//! line sells against - a type, a place, a jury, a livestream, sponsors - and
 //! there is still one table and one set of routes, because a hackathon that
 //! issues a stamp *and* sells sponsorship is one event with one date.
 //!
@@ -48,7 +48,7 @@ pub struct EventRow {
     pub status: String,
     pub starts_at: chrono::DateTime<chrono::Utc>,
     pub ends_at: Option<chrono::DateTime<chrono::Utc>>,
-    /// Free-form theme payload (colours, hero image URL, etc.) — the front
+    /// Free-form theme payload (colours, hero image URL, etc.) - the front
     /// renders it; the backend does not care about the shape.
     pub visual_theme: Value,
     /// True for partner-hosted events (Hacktoberfest, external hackathons);
@@ -90,10 +90,10 @@ pub struct MyEventRow {
     /// undefined (SKI-352). It is served now, and it is honest about three
     /// distinct states rather than collapsing them:
     ///
-    ///   * `None` — this event awards no stamp. Most do not, and that is not
+    ///   * `None` - this event awards no stamp. Most do not, and that is not
     ///     a failure to report.
-    ///   * `Some(false)` — it awards one and the caller has not got it.
-    ///   * `Some(true)` — it is on their profile.
+    ///   * `Some(false)` - it awards one and the caller has not got it.
+    ///   * `Some(true)` - it is on their profile.
     ///
     /// Distinct from `contribution_ref`: "something was counted" is not "a
     /// stamp was issued", and until migration 0604 nothing joined the two.
@@ -112,7 +112,7 @@ pub struct ListEventsQuery {
     pub event_type: Option<String>,
 }
 
-/// Every event on. Public — no auth required.
+/// Every event on. Public - no auth required.
 #[utoipa::path(
     get, path = "/api/events", tag = "profile",
     params(ListEventsQuery),
@@ -247,7 +247,7 @@ pub async fn join_event(
     let role = body.role.as_deref().unwrap_or("participant");
     if role != "participant" {
         return Err(AppError::Validation(
-            "only a participant seat can be taken directly — a jury, organizer or \
+            "only a participant seat can be taken directly - a jury, organizer or \
              speaker place is an appointment"
                 .into(),
         ));
@@ -434,7 +434,7 @@ pub async fn set_status(
         .map_err(|e| {
             if e.to_string().contains("onsite_events_say_where") {
                 AppError::Validation(
-                    "an onsite event needs an address before it is published — one \
+                    "an onsite event needs an address before it is published - one \
                      nobody can find is one nobody attends"
                         .into(),
                 )

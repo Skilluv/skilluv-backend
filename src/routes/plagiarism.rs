@@ -73,8 +73,8 @@ pub async fn flag(
     Path(submission_id): Path<Uuid>,
     Json(input): Json<FlagInput>,
 ) -> Result<(axum::http::StatusCode, Json<ApiResponse<Case>>), AppError> {
-    // Anyone may flag — plagiarism is spotted by whoever recognises the
-    // original, not by whoever judges — but not at any rate. The 409 on an
+    // Anyone may flag - plagiarism is spotted by whoever recognises the
+    // original, not by whoever judges - but not at any rate. The 409 on an
     // already-open case stops one person being flagged twice; nothing stopped
     // one account opening a case per submission and putting a whole contest on
     // the defensive the night before it closes (SKI-312). A ceiling per account

@@ -35,7 +35,7 @@ ENV_FILE = ROOT / ".env.trello"
 
 def load_env() -> None:
     if not ENV_FILE.exists():
-        sys.exit(f"missing {ENV_FILE} — copy from .env.trello template and fill creds")
+        sys.exit(f"missing {ENV_FILE} - copy from .env.trello template and fill creds")
     for line in ENV_FILE.read_text().splitlines():
         if "=" in line and not line.startswith("#"):
             k, v = line.split("=", 1)
@@ -160,7 +160,7 @@ def cmd_list(scope: str, list_filter: str | None) -> None:
 # description body until next `## `. Optional labels via `**Labels**: a, b, c`
 # line inside the body. Priority (P0/P1/P2) auto-detected from the ID prefix
 # or from the label list.
-ID_LINE = re.compile(r"^##\s+([A-Z0-9-]+)\s*[—-]\s*(.+?)\s*$")
+ID_LINE = re.compile(r"^##\s+([A-Z0-9-]+)\s*[--]\s*(.+?)\s*$")
 LABEL_LINE = re.compile(r"^\*\*Labels?\*\*\s*:\s*(.+)$", re.IGNORECASE)
 
 
@@ -205,7 +205,7 @@ def cmd_push(md_path: Path, scope: str, dry_run: bool) -> None:
     existing = req("GET", f"/boards/{BOARD}/cards", {"fields": "name"})
     known_ids = set()
     for c in existing:
-        m = re.match(r"^([A-Z0-9-]+)\s*[—-]", c["name"])
+        m = re.match(r"^([A-Z0-9-]+)\s*[--]", c["name"])
         if m:
             known_ids.add(m.group(1))
 
@@ -247,7 +247,7 @@ def cmd_push(md_path: Path, scope: str, dry_run: bool) -> None:
         label_ids = [ensure_label(l) for l in labels]
         params = {
             "idList": backlog_id,
-            "name": f"{it['id']} — {it['title']}",
+            "name": f"{it['id']} - {it['title']}",
             "desc": "\n".join(it["body"]).strip(),
             "pos": "bottom",
             "idLabels": ",".join(label_ids),
@@ -270,7 +270,7 @@ def cmd_move(card_id_prefix: str, target_list: str) -> None:
     if not matches:
         sys.exit(f"no card with ID prefix '{card_id_prefix}'")
     if len(matches) > 1:
-        print(f"warning: {len(matches)} cards match prefix — moving all")
+        print(f"warning: {len(matches)} cards match prefix - moving all")
     for c in matches:
         req("PUT", f"/cards/{c['id']}", {"idList": target})
         list_name = next(

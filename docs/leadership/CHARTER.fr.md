@@ -1,4 +1,4 @@
-# Skilluv Leadership — charte
+# Skilluv Leadership - charte
 
 Traduction de `CHARTER.md`, qui fait foi. Publiée sur
 `skill-uv.com/leadership/charter`.
@@ -8,7 +8,7 @@ Traduction de `CHARTER.md`, qui fait foi. Publiée sur
 ## 1. Le leadership est un métier, et il a des artefacts
 
 Ce qu'on dit habituellement du leadership, c'est qu'il ne se prouve pas. Que
-c'est une affaire de présence, de jugement, de « la salle » — des choses qu'on
+c'est une affaire de présence, de jugement, de « la salle » - des choses qu'on
 a ou qu'on n'a pas, et qui apparaissent sur un CV sous forme d'un titre et d'un
 effectif.
 
@@ -29,15 +29,15 @@ Pas le titre. Pas l'effectif. Le document, et ce qui est arrivé grâce à lui.
 Concrètement, l'un de ceux-ci :
 
 - Une **feuille de route**, un **plan de livraison**, une **spécification
-  produit** ou un **document d'objectifs** — à quoi sert une période, et à quoi
+  produit** ou un **document d'objectifs** - à quoi sert une période, et à quoi
   elle ne sert pas.
-- Une **fiche de décision** — les alternatives, le compromis, et ce qui en
+- Une **fiche de décision** - les alternatives, le compromis, et ce qui en
   ferait le mauvais choix.
-- Une **rétrospective** — et, trois mois plus tard, ses actions.
-- Un **manuel d'équipe** — comment une équipe fait une chose récurrente, écrit
+- Une **rétrospective** - et, trois mois plus tard, ses actions.
+- Un **manuel d'équipe** - comment une équipe fait une chose récurrente, écrit
   pour qu'elle continue après le départ de son auteur.
 - Une **grille de progression**, un **processus de recrutement** ou un
-  **diagnostic d'équipe** — une structure dans laquelle d'autres sont évalués
+  **diagnostic d'équipe** - une structure dans laquelle d'autres sont évalués
   ou grandissent.
 - Un **parcours**, et la cohorte qui l'a suivi.
 
@@ -67,7 +67,7 @@ toutes sont courantes.
 
 La règle ici est donc plus stricte que partout ailleurs : une affirmation sur
 des personnes vient avec **ce qui a été mesuré, auprès de combien, et quand**.
-Pas dévaluée quand ça manque — refusée.
+Pas dévaluée quand ça manque - refusée.
 
 Ce n'est pas du scepticisme sur le travail. C'est la seule chose qui lui donne
 de la valeur pour quelqu'un qui lit le profil d'un inconnu.
@@ -80,11 +80,11 @@ personnes qui n'ont pas choisi qu'on écrive sur elles.
 
 Chaque artefact déclare ce qu'on peut en montrer :
 
-- **Public** — c'était déjà publiable.
-- **Anonymisé** — réécrit pour que l'organisation, les équipes et les personnes
+- **Public** - c'était déjà publiable.
+- **Anonymisé** - réécrit pour que l'organisation, les équipes et les personnes
   ne soient pas identifiables. **Une seconde personne le confirme avant toute
   publication.** Pas l'auteur.
-- **Confidentiel** — montré à personne. Ce qui est attesté, c'est la forme :
+- **Confidentiel** - montré à personne. Ce qui est attesté, c'est la forme :
   quel type d'artefact, à quelle échelle, dans quel secteur.
 
 Un artefact confidentiel compte dans le score et n'apparaît sur aucun profil.
@@ -93,7 +93,7 @@ plateforme où seuls les sans-emploi peuvent constituer un dossier de
 leadership.
 
 **Nous ne prétendons anonymiser rien automatiquement.** Aucun système ne peut
-retirer l'identité d'un texte de façon fiable — enlevez le nom de l'entreprise
+retirer l'identité d'un texte de façon fiable - enlevez le nom de l'entreprise
 et il reste le nom du produit, la ville du bureau, l'effectif, les trois
 clients cités au quatrième paragraphe. Ce que nous enregistrons, c'est qu'un
 humain l'a lu et a dit que personne n'est identifiable. C'est une affirmation
@@ -123,7 +123,7 @@ les gens ensuite sont la partie que personne ne fait, et c'est celle que nous
 comptons.
 
 Abandonner une action compte comme la résoudre. Décider de ne pas faire quelque
-chose, par écrit, avec une raison, est une décision — et une règle qui la
+chose, par écrit, avec une raison, est une décision - et une règle qui la
 punirait apprendrait aux gens à laisser les actions ouvertes indéfiniment.
 
 ## 8. La coordination s'accorde, elle ne s'annonce pas
@@ -134,7 +134,7 @@ ne l'ont pas dit.
 Chaque engagement qu'un artefact de leadership prend sur un autre projet est
 enregistré, et le responsable de ce projet peut l'accepter. Cette acceptation
 est le seul terme du score de ce domaine qui **ne peut pas être produit seul à
-un bureau** — c'est ce que le leadership a de plus proche d'une contribution
+un bureau** - c'est ce que le leadership a de plus proche d'une contribution
 fusionnée, et il est pondéré comme tel.
 
 Un plan écrit *sur* quelqu'un n'est pas un plan accordé *avec* lui, et le
@@ -147,7 +147,7 @@ qui sont restés. Ce chiffre s'améliore chaque fois que quelqu'un abandonne, ce
 qui le fait récompenser exactement l'échec qu'il devrait détecter.
 
 Ici, le dénominateur est **tous ceux qui ont rejoint**. La seule exception est
-celui qui est parti parce qu'il a trouvé du travail — c'est le résultat pour
+celui qui est parti parce qu'il a trouvé du travail - c'est le résultat pour
 lequel la cohorte existait, et il est retiré plutôt que compté comme une perte.
 
 Les raisons de départ sont enregistrées, parce que quatre personnes qui partent
@@ -162,7 +162,7 @@ est enregistrée avec crédit, et s'attribuer seul un document écrit par une
 équipe est ce qui coûte sa réputation ici.
 
 Quand les termes d'une mission interdisent de nommer un client, l'attestation
-dit quel type d'organisation, à quelle échelle, et ce qui a été produit —
+dit quel type d'organisation, à quelle échelle, et ce qui a été produit -
 jamais qui. La compétence reste démontrable sans trahir l'engagement.
 
 ## 11. L'IA

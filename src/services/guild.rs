@@ -1,4 +1,4 @@
-//! Guilds service — Phase 2 Sprint 4.
+//! Guilds service - Phase 2 Sprint 4.
 //!
 //! Persistent MMO/F1-style groups. Solo membership, 7-day cooldown on leave,
 //! 10% of fragments → GP, divisions for matchmaking, three invitation flows.
@@ -515,11 +515,11 @@ pub async fn kick_member(
 
 // ─── GP integration ───────────────────────────────────────────────
 
-/// P10.5 — Push a collective GP bonus to a specific guild, independent of individual members.
+/// P10.5 - Push a collective GP bonus to a specific guild, independent of individual members.
 ///
 /// Utilisé quand une team liée à une guilde submit un team challenge : en plus
 /// du 10% par membre distribué via `award_gp_for_fragments`, on abonde la guilde
-/// avec 10% du total collectif — la victoire team = coup de force pour la guilde.
+/// avec 10% du total collectif - la victoire team = coup de force pour la guilde.
 pub async fn award_bonus_gp_for_team(
     db: &PgPool,
     guild_id: Uuid,
@@ -599,7 +599,7 @@ pub struct GuildDomainRow {
 
 /// Skill matrix d'une guilde : agrégat par domaine.
 ///
-/// Computed à la volée (pas de matview) — le volume est petit (30 members × ~10 skills
+/// Computed à la volée (pas de matview) - le volume est petit (30 members × ~10 skills
 /// prouvés/membre × 7 domaines = ~2100 rows max). Cache Redis peut être ajouté
 /// plus tard si mesure de perf le justifie.
 pub async fn guild_skill_matrix(
@@ -755,7 +755,7 @@ pub async fn create_shareable_token(
     Ok(invite)
 }
 
-/// Trello BE-P0-41 — owner/officer révoque une invitation direct ou un lien
+/// Trello BE-P0-41 - owner/officer révoque une invitation direct ou un lien
 /// token avant `expires_at`. Marque `revoked_at = NOW()` pour que le prochain
 /// GET la filtre. Idempotent : rejette proprement si déjà révoquée ou acceptée.
 pub async fn revoke_invitation(
@@ -779,7 +779,7 @@ pub async fn revoke_invitation(
         return Err(AppError::Forbidden);
     }
 
-    // An accepted invitation is a member, not a pending offer — revoking it
+    // An accepted invitation is a member, not a pending offer - revoking it
     // would silently do nothing while reading as success.
     if invite.accepted_at.is_some() {
         return Err(AppError::Validation(
@@ -787,7 +787,7 @@ pub async fn revoke_invitation(
         ));
     }
 
-    // SKI-289 — idempotent: revoking twice is the normal outcome of a
+    // SKI-289 - idempotent: revoking twice is the normal outcome of a
     // double-click or a retried request, and the caller's intent ("this
     // invitation must not be usable") is already satisfied. Only the first
     // call writes, so `revoked_at` keeps recording when it actually
@@ -805,7 +805,7 @@ pub async fn revoke_invitation(
 
 /// Same as [`revoke_invitation`], scoped to a guild.
 ///
-/// SKI-289 — the front end addresses invitations under their guild
+/// SKI-289 - the front end addresses invitations under their guild
 /// (`/guilds/{id}/invitations/{invitation_id}`). Checking that the
 /// invitation really belongs to `guild_id` means a mistyped guild cannot
 /// silently revoke someone else's invitation on the strength of the id
@@ -855,7 +855,7 @@ pub async fn accept_direct_invitation(
         .execute(&mut *tx)
         .await?;
     tx.commit().await?;
-    // Now join (separate tx — keeps locking minimal). If it fails, the invitation stays marked
+    // Now join (separate tx - keeps locking minimal). If it fails, the invitation stays marked
     // accepted ; the user can be added manually if needed (rare).
     join_guild(db, invite.guild_id, user_id).await?;
     Ok(invite.guild_id)

@@ -1,4 +1,4 @@
-//! Web Push subscription endpoints — Phase 4.12.
+//! Web Push subscription endpoints - Phase 4.12.
 //!
 //! Backend part only. Actual VAPID delivery uses the `web-push` protocol ; a full
 //! push-sending helper is registered but sending itself is deferred to when the
@@ -29,7 +29,7 @@ pub fn push_routes() -> Router<AppState> {
         .route("/notifications/push/subscribe", post(subscribe))
         .route("/notifications/push/{id}", delete(unsubscribe))
         .route("/manifest.webmanifest", get(pwa_manifest))
-        // P15.1 — mobile push tokens (FCM + APNS)
+        // P15.1 - mobile push tokens (FCM + APNS)
         .route(
             "/users/me/push-tokens/register",
             post(register_mobile_token),
@@ -95,7 +95,7 @@ pub async fn vapid_public_key() -> Result<Json<ApiResponse<VapidPublicKeyRespons
 }
 
 /// Subscribe the current session to Web Push. Idempotent via
-/// `(user_id, endpoint)` — re-subscribing the same endpoint updates
+/// `(user_id, endpoint)` - re-subscribing the same endpoint updates
 /// the keys and resets the failure counter.
 #[utoipa::path(
     post,
@@ -180,7 +180,7 @@ pub async fn unsubscribe(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// P15.1 — Mobile push tokens (FCM + APNS)
+// P15.1 - Mobile push tokens (FCM + APNS)
 // ═══════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -208,7 +208,7 @@ pub struct MobileTokenRevokedResponse {
     pub removed: bool,
 }
 
-/// Sanitised mobile token metadata — the raw token is never exposed
+/// Sanitised mobile token metadata - the raw token is never exposed
 /// back to the client, only the identifying info.
 #[derive(Debug, Serialize, ToSchema)]
 pub struct MobileTokenSummary {
@@ -286,7 +286,7 @@ pub async fn revoke_mobile_token(
     })))
 }
 
-/// List the caller's registered mobile push tokens (metadata only —
+/// List the caller's registered mobile push tokens (metadata only -
 /// the raw provider tokens are never echoed back).
 #[utoipa::path(
     get,
@@ -304,7 +304,7 @@ pub async fn list_mobile_tokens(
 ) -> Result<Json<ApiResponse<MobileTokensListResponse>>, AppError> {
     let tokens =
         crate::services::mobile_push::list_tokens_for_user(&state.db, auth.user_id).await?;
-    // Ne pas exposer les tokens en clair — juste les metadata.
+    // Ne pas exposer les tokens en clair - juste les metadata.
     let items: Vec<MobileTokenSummary> = tokens
         .iter()
         .map(|t| MobileTokenSummary {
@@ -320,7 +320,7 @@ pub async fn list_mobile_tokens(
     })))
 }
 
-/// PWA web app manifest. Not JSON — served as
+/// PWA web app manifest. Not JSON - served as
 /// `application/manifest+json`. Intentionally omitted from the OpenAPI
 /// schema (`/manifest.webmanifest` is served at root, not under /api).
 async fn pwa_manifest() -> impl IntoResponse {

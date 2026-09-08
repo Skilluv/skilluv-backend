@@ -29,13 +29,13 @@ Terraform lit un chart Helm et n'a pas d'avis utile sur un plan de requête.
 
 Pas une pull request. Dans ce domaine, la preuve est :
 
-- **un artefact réutilisable** — un module, un chart, un pipeline, un tableau
+- **un artefact réutilisable** - un module, un chart, un pipeline, un tableau
   de bord, un runbook. Jugé sur une question : quelqu'un d'autre peut-il s'en
   servir sans l'auteur dans la pièce ;
-- **un objectif tenu** — une cible annoncée, une fenêtre, un chiffre atteint,
+- **un objectif tenu** - une cible annoncée, une fenêtre, un chiffre atteint,
   et la source du chiffre ;
-- **un incident conduit** — avec les deux durées et un post-mortem publié ;
-- **une réduction de coûts** — les deux montants, ce qui a été changé, et la
+- **un incident conduit** - avec les deux durées et un post-mortem publié ;
+- **une réduction de coûts** - les deux montants, ce qui a été changé, et la
   confirmation que le service tient toujours.
 
 Chacune de ces preuves est enregistrée avec ce sur quoi elle repose. « Fiable »
@@ -65,7 +65,7 @@ pratique de post-mortem d'une archive de post-mortems.
 
 Un objectif se ferme avec un chiffre que son auteur écrit lui-même, et une
 adresse où ce chiffre se vérifie. La façon évidente d'automatiser la
-vérification serait une clé API vers la supervision du client — Datadog,
+vérification serait une clé API vers la supervision du client - Datadog,
 Instana, un Grafana privé. **Skilluv ne le fera pas.**
 
 Une telle clé ne donne pas « le service était debout ou pas ». Elle donne la
@@ -87,7 +87,7 @@ Ce qui est lu publiquement ne remplace pas le chiffre annoncé, et ne le
 prétend pas : une page d'état ne montre que les pannes que son exploitant a
 choisi de publier. Ce que ça donne au relecteur, c'est l'autre moitié de la
 conversation. Quelqu'un qui annonce 99,99 % sur une fenêtre où sa propre page
-publique affiche onze heures de panne majeure n'a pas menti à une machine — il
+publique affiche onze heures de panne majeure n'a pas menti à une machine - il
 a écrit quelque chose qu'un lecteur voit maintenant ne pas tenir.
 
 ## 5. Le coût est une compétence
@@ -116,7 +116,7 @@ quelqu'un d'autre, à trois heures du matin, sans l'auteur.
 ## 7. Ce que Skilluv doit
 
 **Un accès délimité.** Une mission ops donne accès à une infrastructure de
-production. Cet accès est temporaire, tracé, et retiré à la fin — pas quand
+production. Cet accès est temporaire, tracé, et retiré à la fin - pas quand
 quelqu'un y pense.
 
 **Une astreinte payée.** Être joignable est du travail. Une mission qui inclut

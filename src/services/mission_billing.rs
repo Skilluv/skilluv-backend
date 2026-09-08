@@ -4,7 +4,7 @@
 //!
 //! The enterprise issues an invoice, pays it through the same collection
 //! machinery as everything else, and the talent's share lands in their
-//! *pending* balance. It becomes withdrawable when the mission closes —
+//! *pending* balance. It becomes withdrawable when the mission closes -
 //! which is the client accepting delivery, not the talent declaring it.
 //!
 //! That window is the whole point of `pending`: a payer who is unhappy has
@@ -77,7 +77,7 @@ pub struct IssueInput {
     #[serde(default)]
     pub period_end: Option<chrono::NaiveDate>,
     /// `per_hour` only. The amount is derived from it and the agreed rate,
-    /// rather than typed — a rate agreed in writing and an amount typed by
+    /// rather than typed - a rate agreed in writing and an amount typed by
     /// hand is how invoices end up disputed.
     #[serde(default)]
     pub hours: Option<BigDecimal>,
@@ -113,7 +113,7 @@ pub async fn issue(db: &PgPool, mission_id: Uuid, input: IssueInput) -> Result<I
     } = terms;
 
     // A reimbursement is not priced by the payment model: it is what the
-    // receipt says. And it carries no commission — charging on money the
+    // receipt says. And it carries no commission - charging on money the
     // platform is only passing through would mean somebody pays to be repaid,
     // and the more honest they are about their costs the more it costs them.
     let is_reimbursement = input.expense_evidence_url.is_some();
@@ -146,7 +146,7 @@ pub async fn issue(db: &PgPool, mission_id: Uuid, input: IssueInput) -> Result<I
             })?,
             // A retainer's monthly figure and a per-deliverable amount both live
             // on the invoice: the budget is the agreed unit, and an instalment
-            // can legitimately differ from it — a half month, a smaller feature.
+            // can legitimately differ from it - a half month, a smaller feature.
             _ => input
                 .amount
                 .clone()
@@ -235,7 +235,7 @@ pub async fn for_mission(db: &PgPool, mission_id: Uuid) -> Result<Vec<Invoice>, 
 /// What the platform keeps on this invoice, rounded to the currency's
 /// smallest unit.
 ///
-/// Rounded down, so the split can never credit more than was captured — a
+/// Rounded down, so the split can never credit more than was captured - a
 /// posting whose legs do not balance is refused, and the round that produces
 /// it would only ever be discovered in production.
 pub fn platform_share(amount: &BigDecimal, commission_percent: &BigDecimal) -> BigDecimal {
@@ -247,7 +247,7 @@ pub fn platform_share(amount: &BigDecimal, commission_percent: &BigDecimal) -> B
 /// revenue in one posting.
 ///
 /// Called from `fulfilment::deliver`, which claims delivery exactly once, so
-/// this runs once per invoice — and the ledger's idempotency key makes a
+/// this runs once per invoice - and the ledger's idempotency key makes a
 /// second call harmless anyway.
 pub async fn capture(db: &PgPool, invoice_id: Uuid, payment_id: Uuid) -> Result<(), AppError> {
     let row: Option<CaptureContext> = sqlx::query_as(
@@ -418,7 +418,7 @@ pub async fn release_one(db: &PgPool, invoice_id: Uuid) -> Result<bool, AppError
 /// **Only `paid` invoices.** An invoice already `released` is the talent's to
 /// withdraw and possibly already withdrawn; taking it back is the much harder
 /// problem the release window exists to avoid, and a client who wants that has
-/// a dispute — which has its own machinery, its own queue and its own burden
+/// a dispute - which has its own machinery, its own queue and its own burden
 /// of proof. On a `milestone_iteration` mission this is exactly the right
 /// line: rounds that were accepted stay paid, and the escrow for rounds that
 /// were not goes home.
@@ -454,13 +454,13 @@ pub async fn refund_all(db: &PgPool, mission_id: Uuid, reason: &str) -> Result<u
                 .await?;
 
         if at_provider.is_none() {
-            // The books still have to move — the money is certainly not the
-            // talent's — but somebody has to give it back by hand. Loud, and
+            // The books still have to move - the money is certainly not the
+            // talent's - but somebody has to give it back by hand. Loud, and
             // counted, because nothing else will notice.
             tracing::error!(
                 mission = %mission_id,
                 invoice = %invoice_id,
-                "refunded in the books with no provider charge to reverse — refund this by hand"
+                "refunded in the books with no provider charge to reverse - refund this by hand"
             );
             metrics::counter!("skilluv_mission_manual_refund_needed_total").increment(1);
         }
@@ -588,7 +588,7 @@ mod tests {
     fn the_share_is_rounded_down_so_the_legs_balance() {
         // 15% of 33.33 is 4.9995. Rounding up would credit the platform half
         // a centime that was never captured, and the posting would be
-        // refused — in production, on somebody's invoice.
+        // refused - in production, on somebody's invoice.
         assert_eq!(platform_share(&dec("33.33"), &dec("15.00")), dec("4.99"));
     }
 

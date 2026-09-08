@@ -1,4 +1,4 @@
-//! P12.4 — GET /api/explore
+//! P12.4 - GET /api/explore
 //!
 //! Recherche multi-critères pré-filtrée qui unifie deux types d'unités de
 //! travail dans un seul endpoint :
@@ -56,7 +56,7 @@ pub struct ExploreQuery {
     pub kind: Option<String>,
     /// One of the eight active domains. The handler checks it against
     /// `validators::SKILL_DOMAINS`; this pattern is the same list, and it had
-    /// gone stale — a contract that understates what it accepts sends a caller
+    /// gone stale - a contract that understates what it accepts sends a caller
     /// looking for an endpoint that does not exist.
     #[param(value_type = Option<crate::validators::SkillDomain>)]
     pub domain: Option<String>,
@@ -106,7 +106,7 @@ pub struct ExploreResponse {
     pub meta: MetaInfo,
 }
 
-/// Public multi-source explore endpoint — unifies open slices and
+/// Public multi-source explore endpoint - unifies open slices and
 /// published challenge templates in one paginated feed. Both sources
 /// pre-fetched then merged/sorted server-side by `created_at DESC`.
 #[utoipa::path(
@@ -138,7 +138,7 @@ pub async fn explore(
     let page = q.page.unwrap_or(1).max(1);
     let per_page = q.per_page.unwrap_or(20).clamp(1, 100);
     // Chaque source SQL retourne assez d'items pour couvrir jusqu'à la page
-    // demandée après le merge + tri en mémoire — sinon la pagination cross-source
+    // demandée après le merge + tri en mémoire - sinon la pagination cross-source
     // ne ferait pas remonter les items plus anciens en page 2+.
     let limit_each = (page * per_page).min(500);
 

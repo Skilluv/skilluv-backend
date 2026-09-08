@@ -1,4 +1,4 @@
-//! P26 v2 SKI-116 / SKI-117 — public SVG badges (shields.io-compatible).
+//! P26 v2 SKI-116 / SKI-117 - public SVG badges (shields.io-compatible).
 //!
 //! Two flavours, same renderer:
 //!
@@ -17,7 +17,7 @@
 //! - **Server-rendered SVG**, no dependency on shields.io / third parties.
 //!   The template is a single format string with the two dynamic labels;
 //!   the layout matches shields.io's flat style (110×20 canvas).
-//! - **Cache-Control: public, max-age=3600** — badges are cheap to
+//! - **Cache-Control: public, max-age=3600** - badges are cheap to
 //!   compute but hit-per-README-render adds up. One-hour freshness is
 //!   enough for a slowly-growing counter.
 //! - **Missing user / repo → still 200** with count=0. A 404 would
@@ -55,7 +55,7 @@ const BADGE_LEFT: &str = "Skilluv";
 /// "Skilluv"; the right side is the caller-supplied label + count.
 ///
 /// Widths are computed with a heuristic (7px per char, 10px padding)
-/// that matches shields.io within a few pixels — good enough for
+/// that matches shields.io within a few pixels - good enough for
 /// README embedding where font metrics differ across viewers anyway.
 pub fn render_badge_svg(right_label: &str) -> String {
     let left = BADGE_LEFT;
@@ -120,8 +120,8 @@ fn svg_response(body: String) -> impl IntoResponse {
     )
 }
 
-/// SKI-116 — user badge. Counts slices where the user is the challenger
-/// AND status ∈ {validated, merged} (both count as success — merged is
+/// SKI-116 - user badge. Counts slices where the user is the challenger
+/// AND status ∈ {validated, merged} (both count as success - merged is
 /// the bonus tier of a validated slice).
 #[utoipa::path(
     // Mounted at the root, not under `/api`, so a README can carry a short
@@ -161,7 +161,7 @@ pub async fn user_validated_svg(
     Ok(svg_response(render_badge_svg(&label)))
 }
 
-/// SKI-117 — repo badge. Counts slices attached to the project matching
+/// SKI-117 - repo badge. Counts slices attached to the project matching
 /// (owner, name) with `status ∈ {validated, merged}`.
 #[utoipa::path(
     get, path = "/badge/repo/{owner}/{name}/validated.svg", tag = "public",

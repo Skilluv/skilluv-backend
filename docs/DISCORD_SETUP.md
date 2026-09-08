@@ -33,7 +33,7 @@ Skip if already exists. Otherwise :
 For each of `#annonces` and `#promotions` :
 1. Right-click channel → Edit Channel → Integrations
 2. Webhooks → New Webhook → name "Skilluv Notifier"
-3. Copy the URL — pattern `https://discord.com/api/webhooks/XXXX/YYYY`
+3. Copy the URL - pattern `https://discord.com/api/webhooks/XXXX/YYYY`
 
 ### 3. Env vars for the notifier binary
 
@@ -45,12 +45,12 @@ export DISCORD_ANNONCES_WEBHOOK_URL="https://discord.com/api/webhooks/AAA/BBB"
 
 ### 4. Deploy the notifier
 
-**Option A — Coolify (recommended)** :
+**Option A - Coolify (recommended)** :
 Create a new Docker application in Coolify with the same Dockerfile as
 the backend but overriding `CMD` to `["skilluv-discord-notifier"]`. Or
 build a dedicated Dockerfile stage that only includes this binary.
 
-**Option B — Systemd on the host** :
+**Option B - Systemd on the host** :
 ```
 # /etc/systemd/system/skilluv-discord-notifier.service
 [Unit]
@@ -83,7 +83,7 @@ VALUES (
 Within 15s, `#promotions` should receive :
 >  **jeremie** just reached rank **artisan** on Skilluv !
 
-## Backend integration — how to enqueue
+## Backend integration - how to enqueue
 
 From any service that detects a notable event :
 
@@ -114,8 +114,8 @@ Recommended integration points (post-PR follow-up) :
 **Notifier polls but never posts** → check env vars, run `cargo run --bin skilluv-discord-notifier` locally with `RUST_LOG=info`. If it says "no Discord webhook URLs configured", set the env vars.
 
 **Row stuck with high failed_count** → look at `last_error` column. Common causes:
-- Discord rate-limited (429) — the retry backoff will handle it, wait
-- Webhook URL revoked (401) — regenerate + update env, then reset the row: `UPDATE discord_notifications_queue SET failed_count=0, last_error=NULL WHERE id='...';`
-- Malformed payload — check the message rendering in `render_message()`
+- Discord rate-limited (429) - the retry backoff will handle it, wait
+- Webhook URL revoked (401) - regenerate + update env, then reset the row: `UPDATE discord_notifications_queue SET failed_count=0, last_error=NULL WHERE id='...';`
+- Malformed payload - check the message rendering in `render_message()`
 
 **Delayed notifications** → poll interval is 15s. Increase or decrease via editing `POLL_INTERVAL_SECONDS` in `src/bin/discord_notifier.rs`.

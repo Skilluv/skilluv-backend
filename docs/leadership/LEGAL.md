@@ -1,4 +1,4 @@
-# Leadership — legal and confidentiality
+# Leadership - legal and confidentiality
 
 Backlog: leadership/L-01. Shares a counsel review with the security, design,
 game and quality charters.
@@ -21,8 +21,8 @@ Three consequences follow, and they shape everything below.
 - The **confidentiality period** outlasts the engagement by longer than
   elsewhere: a roadmap is commercially sensitive for as long as it is
   unshipped.
-- Some of what a contributor sees is **other people's personal data** —
-  performance conversations, engagement survey responses, departure reasons —
+- Some of what a contributor sees is **other people's personal data** -
+  performance conversations, engagement survey responses, departure reasons -
   and none of those people are a party to the contract.
 
 ## 2. The three redaction states, and what each one commits us to
@@ -41,7 +41,7 @@ that nobody is identifiable. Two things matter about how this is worded:
   that nobody agrees to be a reviewer.
 
 **`confidential`.** Nothing is shown. The attestation carries only
-`leadership_context` — industry, organisation size, team size, duration.
+`leadership_context` - industry, organisation size, team size, duration.
 
 **For counsel:** the wording of the reviewer's undertaking. What is a reviewer
 representing when they confirm, and to whom.
@@ -50,14 +50,14 @@ representing when they confirm, and to whom.
 
 The realistic failure is not somebody publishing a document with a company name
 in it. It is an anonymised roadmap that names a product, a market, a headcount
-and a quarter — and one reader in the industry who recognises all four.
+and a quarter - and one reader in the industry who recognises all four.
 
 Our position:
 
 - The review grid names this explicitly ("including by a detail only they would
   have").
 - A contributor may request retraction of a published artefact at any time,
-  without giving a reason, and it is removed from public view — the attestation
+  without giving a reason, and it is removed from public view - the attestation
   survives with its evidence link disabled.
 - A **third party** who believes they are identifiable in a published artefact
   can ask for it to be taken down, and it is taken down while it is looked at.
@@ -80,8 +80,8 @@ Position:
 - Interview and performance material is **never** submitted, in any state.
   There is no redaction of it that we would accept, because the risk to a
   third party outweighs any career benefit to the author.
-- Cohort data on this platform — who joined, who graduated, why somebody left
-  — is visible to the lead and in aggregate on their profile. The individual
+- Cohort data on this platform - who joined, who graduated, why somebody left
+  - is visible to the lead and in aggregate on their profile. The individual
   rows are not public, and `leave_reason` is never shown attached to a name.
 
 **For counsel:** the second bullet, as a hard prohibition in the terms rather
@@ -95,7 +95,7 @@ engagement belongs to the client on delivery and payment.
 The contributor keeps:
 
 - The right to state the work happened, at the abstraction of section 2.
-- The right to reuse **structure and method** — a decision-record template, a
+- The right to reuse **structure and method** - a decision-record template, a
   ladder's shape, a curriculum's sequencing. A method is not a deliverable.
 
 They do not keep the right to reuse the content, the context, or anything that
@@ -145,8 +145,8 @@ the question we most need answered before those mission types open.
 
 ## 8. Skilluv's own community roles
 
-The three roles in migration 0469 — cohort lead, community operations, roadmap
-contributor — are volunteer positions with a term. They are not employment,
+The three roles in migration 0469 - cohort lead, community operations, roadmap
+contributor - are volunteer positions with a term. They are not employment,
 they are not paid, and the handover document at the end is the deliverable.
 
 Two things need writing down: what a role holder may say publicly on behalf of

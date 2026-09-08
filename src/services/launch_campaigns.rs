@@ -1,4 +1,4 @@
-//! Product launch campaigns — the community writes, the sponsor pays.
+//! Product launch campaigns - the community writes, the sponsor pays.
 //!
 //! A company launches something and asks the community for articles, videos,
 //! tutorials, integrations. Skilluv charges a fee to run it; each accepted
@@ -119,7 +119,7 @@ pub async fn open(
     for kind in &input.content_types_wanted {
         if !CONTENT_TYPES.contains(&kind.as_str()) {
             return Err(AppError::Validation(format!(
-                "'{kind}' is not a content type we run — one of: {}",
+                "'{kind}' is not a content type we run - one of: {}",
                 CONTENT_TYPES.join(", ")
             )));
         }
@@ -328,7 +328,7 @@ pub async fn submit(
     let (_left, affordable) = budget_left(db, campaign_id).await?;
     if affordable <= 0 {
         return Err(AppError::Validation(
-            "this campaign's pot is spent — nothing submitted now could be paid".into(),
+            "this campaign's pot is spent - nothing submitted now could be paid".into(),
         ));
     }
 
@@ -414,7 +414,7 @@ pub async fn decide(
 
     if status != "quality_passed" {
         return Err(AppError::Validation(format!(
-            "this piece is {status} — only one that has passed Skilluv's check reaches \
+            "this piece is {status} - only one that has passed Skilluv's check reaches \
              the sponsor"
         )));
     }
@@ -448,7 +448,7 @@ pub async fn decide(
     if affordable <= 0 {
         return Err(AppError::Validation(
             "the pot is spent. Accepting now would promise a payment that cannot be \
-             made — raise the pool first."
+             made - raise the pool first."
                 .into(),
         ));
     }

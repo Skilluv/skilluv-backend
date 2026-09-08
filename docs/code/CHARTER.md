@@ -40,7 +40,7 @@ mauvais test et ne compte pas.
 
 **De la documentation.** Un lecteur qui découvre le dépôt doit savoir quoi
 lancer et pourquoi les choix ont été faits. **Un code sans documentation est
-refusé** — c'est la règle la plus souvent sous-estimée et celle qui écarte le
+refusé** - c'est la règle la plus souvent sous-estimée et celle qui écarte le
 plus de soumissions.
 
 **Une licence.** Un travail sans licence explicite n'est utilisable par
@@ -69,14 +69,14 @@ L'usage d'un assistant est **accepté et déclaré**.
 Accepté : ces outils font partie du métier, et prétendre le contraire
 produirait des déclarations fausses plutôt que des pratiques différentes.
 
-Déclaré : la soumission indique le niveau d'assistance — aucun, complétion,
+Déclaré : la soumission indique le niveau d'assistance - aucun, complétion,
 programmation en binôme, généré puis remanié, généré tel quel. Le camoufler
 est une faute distincte du fait de l'utiliser, et c'est celle-là qui est
 sanctionnée.
 
 Ce qui est jugé reste le résultat et votre capacité à en répondre. La
-soutenance en temps réel — expliquer un choix, modifier le code devant un
-relecteur — est ce qui départage, pas la déclaration elle-même.
+soutenance en temps réel - expliquer un choix, modifier le code devant un
+relecteur - est ce qui départage, pas la déclaration elle-même.
 
 ## 5. Validation
 
@@ -92,7 +92,7 @@ sans motif exploitable n'est pas un refus valable.
 Un artefact validé peut être révoqué : plagiat découvert, contribution
 rétractée en amont, fraude établie.
 
-La révocation retire l'artefact du décompte — rang, badges, attestations qui
+La révocation retire l'artefact du décompte - rang, badges, attestations qui
 s'appuyaient dessus. Elle n'efface pas l'historique : ce qui a été révoqué
 reste visible comme tel.
 

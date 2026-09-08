@@ -1,13 +1,13 @@
-//! SKI-38 (Post-MVP T1-03) — personal goals CRUD.
+//! SKI-38 (Post-MVP T1-03) - personal goals CRUD.
 //!
 //! Endpoints:
-//!   POST   /api/users/me/goals        (auth) — create
-//!   GET    /api/users/me/goals        (auth) — list with live progress
-//!   GET    /api/users/me/goals/{id}   (auth) — one goal with progress
-//!   PATCH  /api/users/me/goals/{id}   (auth) — move or clear the deadline
-//!   DELETE /api/users/me/goals/{id}   (auth) — abandon
+//!   POST   /api/users/me/goals        (auth) - create
+//!   GET    /api/users/me/goals        (auth) - list with live progress
+//!   GET    /api/users/me/goals/{id}   (auth) - one goal with progress
+//!   PATCH  /api/users/me/goals/{id}   (auth) - move or clear the deadline
+//!   DELETE /api/users/me/goals/{id}   (auth) - abandon
 //!
-//! Progress is never stored, only computed — see `services::goals`. That
+//! Progress is never stored, only computed - see `services::goals`. That
 //! means GET is the expensive verb here and POST is trivial, which is the
 //! opposite of most of the API, and deliberate: a stored percentage would
 //! be wrong the moment a deliverable is verified elsewhere.
@@ -58,7 +58,7 @@ fn wrap(data: serde_json::Value) -> serde_json::Value {
 pub struct CreateGoalBody {
     /// `rank` | `skill_level` | `capability` | `artifact_count`
     pub kind: String,
-    /// Interpretation depends on `kind` — see `services::goals`.
+    /// Interpretation depends on `kind` - see `services::goals`.
     pub target_value: String,
     /// Required for `skill_level`, rejected for every other kind.
     #[serde(default)]
@@ -109,7 +109,7 @@ pub async fn create(
     .await?;
     if live >= MAX_LIVE_GOALS {
         return Err(AppError::Validation(format!(
-            "at most {MAX_LIVE_GOALS} live goals — archive or delete one first"
+            "at most {MAX_LIVE_GOALS} live goals - archive or delete one first"
         )));
     }
 
@@ -198,7 +198,7 @@ pub async fn fetch(
 #[serde(deny_unknown_fields)]
 pub struct UpdateGoalBody {
     /// New deadline. Explicit `null` clears it; omitting the field leaves
-    /// it untouched — hence the double Option.
+    /// it untouched - hence the double Option.
     #[serde(default, deserialize_with = "deserialize_double_option")]
     pub deadline: Option<Option<chrono::NaiveDate>>,
 }
@@ -235,7 +235,7 @@ pub async fn update(
     Json(body): Json<UpdateGoalBody>,
 ) -> Result<impl IntoResponse, AppError> {
     let Some(deadline) = body.deadline else {
-        // Nothing to change — return current state rather than a no-op 204,
+        // Nothing to change - return current state rather than a no-op 204,
         // so the client always gets fresh progress from this verb.
         let progress = goals::compute_progress(&state.db, auth.user_id, id).await?;
         return Ok(Json(wrap(json!({ "goal": progress }))));
@@ -249,7 +249,7 @@ pub async fn update(
         ));
     }
 
-    // Archived goals are settled history — moving their deadline would
+    // Archived goals are settled history - moving their deadline would
     // resurrect them outside the archival job's control.
     let affected = sqlx::query(
         "UPDATE user_goals SET deadline = $3

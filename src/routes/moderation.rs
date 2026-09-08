@@ -1,4 +1,4 @@
-//! FE-M9 — Routes modération inline accessibles aux modérateurs non-admin.
+//! FE-M9 - Routes modération inline accessibles aux modérateurs non-admin.
 //!
 //! Le panneau admin utilise `/admin/*` (dans admin_gate = admin origin + 2FA).
 //! Les modérateurs communautaires (forum_moderator, community_curator,
@@ -212,7 +212,7 @@ pub async fn community_challenge_approve(
 }
 
 /// Reject reason. `feedback` accepted as legacy alias so front clients
-/// mid-migration don't break — remove the alias once the frontend contract
+/// mid-migration don't break - remove the alias once the frontend contract
 /// pins `reason` (see FE-P0-BE10).
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
 pub struct RejectBody {

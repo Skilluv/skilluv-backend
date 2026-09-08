@@ -1,4 +1,4 @@
-# Trames d'écrit — domaine Design
+# Trames d'écrit - domaine Design
 
 Trois trames : la note qui accompagne une version, la critique qu'écrit un
 relecteur, et l'étude de cas qu'on met sur un profil.
@@ -17,7 +17,7 @@ critique à chaque fois qu'il est bien écrit.
 
 ```
 ## Ce que j'ai fait
-Deux ou trois phrases. Pas la liste des fichiers — l'intention.
+Deux ou trois phrases. Pas la liste des fichiers - l'intention.
 
 ## Ce que j'ai changé depuis le tour précédent
 Point par point, en reprenant les termes de la critique reçue.
@@ -37,7 +37,7 @@ Rien de tout cela n'est jugé, et ça déplace la lecture.
 
 ## 2. La critique
 
-*Écrite par le relecteur. Minimum quarante caractères — qui est une contrainte
+*Écrite par le relecteur. Minimum quarante caractères - qui est une contrainte
 technique, pas une cible.*
 
 ```
@@ -51,7 +51,7 @@ barre ont des épaisseurs de trait différentes : 1,5, 2 et 2 px ».
 
 ## Pourquoi c'est un problème
 Au regard du brief ou de la grille. Si vous ne pouvez rattacher la remarque
-ni à l'un ni à l'autre, c'est un avis — dites-le comme tel, dans une section
+ni à l'un ni à l'autre, c'est un avis - dites-le comme tel, dans une section
 séparée, et ne bloquez pas dessus.
 
 ## Ce qui changerait ma réponse

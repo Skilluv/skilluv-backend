@@ -1,10 +1,10 @@
-//! Tests ADM — POST /admin/events (MVP.md Annexe A #8).
+//! Tests ADM - POST /admin/events (MVP.md Annexe A #8).
 //!
 //! The backlog line called it `/admin/badge-events` and these tests followed
 //! it, so every call answered 404 and the assertions read as validation
 //! failures. The route is `/admin/events`, and it stays there: the item
-//! operations on the same row — appoint an organiser, set a status, add a
-//! livestream — live under `/admin/events/{id}` in `routes/events.rs`, and a
+//! operations on the same row - appoint an organiser, set a status, add a
+//! livestream - live under `/admin/events/{id}` in `routes/events.rs`, and a
 //! collection at one prefix with its members at another is worse than a name
 //! that does not match a planning document.
 

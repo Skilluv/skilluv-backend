@@ -5,7 +5,7 @@
 //! `code_attestations::issue` and `design_attestations::issue` were the same
 //! ninety lines twice: the same basis check, the same "an artefact basis must
 //! name a deliverable", the same ownership check on that deliverable, the same
-//! INSERT, the same verification code. They differed in three things — which
+//! INSERT, the same verification code. They differed in three things - which
 //! bases are legal, whether a stored object counts as evidence, and the metric
 //! label.
 //!
@@ -14,7 +14,7 @@
 //! issued from somebody else's work, and it is not a check that should exist
 //! in two places where one can be edited without the other.
 //!
-//! A third domain — cybersecurity — is already in the backlog, and would have
+//! A third domain - cybersecurity - is already in the backlog, and would have
 //! been a third copy.
 //!
 //! ## What stays per domain
@@ -56,7 +56,7 @@ pub struct Links {
     /// co-discovery has a finding and no fix of its own (migration 0559).
     pub security_finding_id: Option<Uuid>,
     /// The catalogue challenge this rests on, where completing the challenge
-    /// is itself the attestable act — a captured flag, a passed lab. Also the
+    /// is itself the attestable act - a captured flag, a passed lab. Also the
     /// key the uniqueness rule of 0559 uses, since those produce no
     /// deliverable to be unique per.
     pub challenge_template_id: Option<Uuid>,
@@ -68,7 +68,7 @@ pub struct Links {
     pub game_mod_id: Option<Uuid>,
     /// The itch / GameJolt / store page a `game_shipped_title` vouches for
     /// (migration 0585). Game only, and descriptive rather than a uniqueness
-    /// key — the shipped title rests on its deliverable.
+    /// key - the shipped title rests on its deliverable.
     pub external_publish_url: Option<String>,
 }
 
@@ -109,7 +109,7 @@ pub struct Domain {
 /// `attestation_type` is `artefact` (migration 0198): the type says what kind
 /// of statement it is, the basis says what it rests on. A merged contribution
 /// to the Linux kernel is not "C, level 4", and a validated brand identity is
-/// not "colour theory, level 4" — which is why neither is a `skill`.
+/// not "colour theory, level 4" - which is why neither is a `skill`.
 pub async fn issue(
     db: &PgPool,
     user_id: Uuid,
@@ -151,11 +151,11 @@ pub async fn issue_linked(
         url.starts_with("https://") || (domain.allows_stored_objects && url.starts_with("s3://"));
     if !scheme_ok {
         return Err(AppError::Validation(if domain.allows_stored_objects {
-            "the evidence URL must be an https link or a stored object — an \
+            "the evidence URL must be an https link or a stored object - an \
              attestation nobody can open is worth nothing"
                 .into()
         } else {
-            "the evidence URL must be a public https link — an attestation \
+            "the evidence URL must be a public https link - an attestation \
              nobody can check is worth nothing"
                 .to_string()
         }));
@@ -189,8 +189,8 @@ pub async fn issue_linked(
 
     // `ON CONFLICT DO NOTHING`, and the existing row read back when it fires.
     //
-    // Three partial unique indexes cover this table — per deliverable (0198),
-    // per challenge and per finding (0559) — and every generator that reaches
+    // Three partial unique indexes cover this table - per deliverable (0198),
+    // per challenge and per finding (0559) - and every generator that reaches
     // here is re-runnable by design: the proof orchestrator sweeps the same
     // user repeatedly, and a hook can fire twice for one event. Erroring on the
     // second pass would mean a caller has to distinguish "already issued" from
@@ -349,7 +349,7 @@ mod tests {
 
     #[test]
     fn every_artifact_basis_is_also_a_basis() {
-        // The reverse is allowed — an editorial basis rests on nothing — but
+        // The reverse is allowed - an editorial basis rests on nothing - but
         // an artefact basis missing from `bases` would be permanently
         // unissuable, and nothing would say so.
         for domain in [CODE, DESIGN] {

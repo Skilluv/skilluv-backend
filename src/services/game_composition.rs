@@ -9,7 +9,7 @@
 //! The `game_multi_artefact_ship` and `game_team_ship` badges read the same
 //! facts straight from SQL in the badge engine; this module is the shape a
 //! route hands the front end for the "assembled game" view, so the two never
-//! answer differently — both count verified game deliverables and nothing else.
+//! answer differently - both count verified game deliverables and nothing else.
 
 use serde::Serialize;
 use sqlx::PgPool;
@@ -30,7 +30,7 @@ pub struct Composition {
     pub contributors: Vec<Uuid>,
     /// A full game built from more than one craft.
     pub is_multi_artefact: bool,
-    /// Owned by a guild — made by a team.
+    /// Owned by a guild - made by a team.
     pub is_team: bool,
 }
 

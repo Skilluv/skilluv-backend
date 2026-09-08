@@ -1,10 +1,10 @@
-//! Admin visibility for SSO sessions — list + revoke.
+//! Admin visibility for SSO sessions - list + revoke.
 
 use reqwest::StatusCode;
 use serde_json::json;
 
 async fn insert_sso_session(app: &crate::common::TestApp, user_id: uuid::Uuid) -> uuid::Uuid {
-    // The refresh_hash is a sha256 blob — any 32-byte value is fine for this
+    // The refresh_hash is a sha256 blob - any 32-byte value is fine for this
     // test since we don't rotate the token, we only inspect / revoke.
     let hash: Vec<u8> = vec![0u8; 32];
     let row: (uuid::Uuid,) = sqlx::query_as(
@@ -35,12 +35,12 @@ async fn test_admin_lists_sso_sessions() {
             .unwrap();
     let session_id = insert_sso_session(&app, owner_id.0).await;
 
-    // Admin lists — sees the SSO session with enterprise info.
+    // Admin lists - sees the SSO session with enterprise info.
     app.register_admin("root").await;
     let resp = app.get("/api/admin/sso/sessions").await;
     assert_eq!(resp.status(), StatusCode::OK);
     let body: serde_json::Value = resp.json().await.unwrap();
-    // Trello MshrIOYf — shape flattened from {data:{sessions:[…]}} to {data:[…]}.
+    // Trello MshrIOYf - shape flattened from {data:{sessions:[…]}} to {data:[…]}.
     let sessions = body["data"].as_array().unwrap();
     assert_eq!(sessions.len(), 1);
     assert_eq!(sessions[0]["session_id"], session_id.to_string());

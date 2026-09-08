@@ -8,7 +8,7 @@
 
 Une charte dit ce qui est exigé. Elle ne dit pas qui a écrit l'exigence, ni
 comment on la conteste. Sans ça, la première fois que quelqu'un est en
-désaccord avec une critique, il découvre qu'il n'y a personne à qui parler —
+désaccord avec une critique, il découvre qu'il n'y a personne à qui parler -
 et une communauté où le désaccord n'a pas de chemin devient une communauté qui
 se tait puis qui part.
 
@@ -46,7 +46,7 @@ disponibilité. Le détail est dans
 
 **Il se retire.** Trois motifs, et ils sont écrits :
 
-- approuver sans lire — repérable parce que les tours de critique sont publics ;
+- approuver sans lire - repérable parce que les tours de critique sont publics ;
 - une file laissée à l'abandon plusieurs semaines ;
 - une critique qui juge la personne au lieu du travail.
 
@@ -68,7 +68,7 @@ Un designer qui estime un verdict injuste demande un arbitrage. Le chemin :
 
 Ce qui n'est pas un motif d'arbitrage : ne pas être d'accord avec un goût. Un
 relecteur qui bloque sur un critère absent de la grille, en revanche, en est un
-— et c'est pour ça que la grille est publiée avant.
+- et c'est pour ça que la grille est publiée avant.
 
 ## 4. Proposer un changement
 
@@ -92,7 +92,7 @@ Les vingt-six ne sont pas gravés. Un vingt-septième s'ajoute quand trois
 conditions sont réunies :
 
 - **des gens le pratiquent** et sont sur la plateforme ;
-- **quelqu'un peut le relire** — un métier sans relecteur est une promesse
+- **quelqu'un peut le relire** - un métier sans relecteur est une promesse
   vide ;
 - **il produit un artefact opposable** qu'un inconnu peut ouvrir et juger.
 
@@ -135,7 +135,7 @@ décision et la publication, n'est pas une fonctionnalité.
 Écrit ici parce qu'une limite qu'on s'impose ne vaut que si elle est publique.
 
 - **Émettre une attestation sans livrable vérifié.** Le schéma le refuse pour
-  six bases sur sept, et la septième — la mise en avant — est éditoriale et
+  six bases sur sept, et la septième - la mise en avant - est éditoriale et
   nommée comme telle.
 - **Modifier une critique déjà rendue.** Le journal est en ajout seul.
 - **Retirer une ligne d'un classement conclu.** Ça réécrirait le classement de

@@ -1,9 +1,9 @@
-//! P26 v2 SKI-81 / SKI-82 — validator candidacy + admin invitation routes.
+//! P26 v2 SKI-81 / SKI-82 - validator candidacy + admin invitation routes.
 //!
 //! Two route groups:
-//!   `validator_application_routes()`       — user-facing (apply, accept
+//!   `validator_application_routes()`       - user-facing (apply, accept
 //!                                             invitation, withdraw)
-//!   `admin_validator_application_routes()` — admin-only (invite, approve
+//!   `admin_validator_application_routes()` - admin-only (invite, approve
 //!                                             candidacy, reject)
 //! The admin group is mounted through `admin_gate` in `lib.rs`.
 
@@ -42,7 +42,7 @@ pub fn admin_validator_application_routes() -> Router<AppState> {
             "/admin/validator-applications/{id}/reject",
             post(admin_reject),
         )
-        // SKI-107 — listing endpoint for the admin dashboard.
+        // SKI-107 - listing endpoint for the admin dashboard.
         .route(
             "/admin/validator-applications",
             axum::routing::get(list_applications_admin),
@@ -61,7 +61,7 @@ fn wrap(data: serde_json::Value) -> serde_json::Value {
 
 // ─── User routes ─────────────────────────────────────────────────
 
-/// SKI-81 — user self-nominates for a validator domain.
+/// SKI-81 - user self-nominates for a validator domain.
 #[utoipa::path(
     post, path = "/api/me/apply-as-validator",
     operation_id = "validatorApplicationsApply",
@@ -103,7 +103,7 @@ pub async fn my_applications(
     Ok(Json(wrap(json!({ "applications": rows }))))
 }
 
-/// SKI-82 — invitee accepts the pending invitation.
+/// SKI-82 - invitee accepts the pending invitation.
 #[utoipa::path(
     post, path = "/api/validator-applications/{id}/accept", tag = "profile",
     params(("id" = uuid::Uuid, Path)),
@@ -147,7 +147,7 @@ pub async fn withdraw(
 
 // ─── Admin routes ────────────────────────────────────────────────
 
-/// SKI-82 — admin invites a user (bypasses stats).
+/// SKI-82 - admin invites a user (bypasses stats).
 #[utoipa::path(
     post, path = "/api/admin/validators/invite", tag = "admin",
     request_body = crate::services::validator_applications::InviteInput,
@@ -162,7 +162,7 @@ pub async fn admin_invite(
     auth: AuthUser,
     Json(input): Json<InviteInput>,
 ) -> Result<impl IntoResponse, AppError> {
-    // AZ-01: this endpoint had no authorization — any authenticated user could
+    // AZ-01: this endpoint had no authorization - any authenticated user could
     // invite a validator (a self-grant path to validator status), while its
     // sibling `approve` below already required it. Match that.
     crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
@@ -174,7 +174,7 @@ pub async fn admin_invite(
 }
 
 /// Approve an application. Grants the capability, which is what makes it
-/// real — the row on its own validates nothing.
+/// real - the row on its own validates nothing.
 #[utoipa::path(
     post, path = "/api/admin/validator-applications/{id}/approve", tag = "admin",
     params(("id" = uuid::Uuid, Path)),
@@ -232,7 +232,7 @@ pub async fn admin_reject(
     Ok(Json(wrap(json!({ "application": app }))))
 }
 
-// ─── SKI-107 — admin listing with live stats ─────────────────────
+// ─── SKI-107 - admin listing with live stats ─────────────────────
 
 #[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
 pub struct ListApplicationsQuery {

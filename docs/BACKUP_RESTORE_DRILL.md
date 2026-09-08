@@ -1,9 +1,9 @@
 # Backup restore drill
 
-SKI-29 (Hygiène pré-prod HYG-02). Cadence : **mensuel** — un backup
+SKI-29 (Hygiène pré-prod HYG-02). Cadence : **mensuel** - un backup
 qu'on n'a jamais restauré n'est pas un backup.
 
-## Automatique — subcommand `drill-report`
+## Automatique - subcommand `drill-report`
 
 Le binary `skilluv-backup` a une subcommand `drill-report` qui automatise :
 1. Crée un backup frais (via `run_backup`)
@@ -41,7 +41,7 @@ Sortie type :
 }
 ```
 
-## Manuel — étape par étape
+## Manuel - étape par étape
 
 Si tu veux valider chaque étape ou reproduire sur un serveur ad-hoc :
 
@@ -106,8 +106,8 @@ Après chaque drill, capturer :
 ## Runbook incident : "backup fail"
 
 Si `skilluv-backup backup` échoue en prod :
-1. Vérifier `df -h` — disque plein ? (`pg_dump` écrit temporaire local avant upload)
-2. Vérifier `s3cmd ls s3://skilluv-backups/prod/` — R2/MinIO reachable ?
+1. Vérifier `df -h` - disque plein ? (`pg_dump` écrit temporaire local avant upload)
+2. Vérifier `s3cmd ls s3://skilluv-backups/prod/` - R2/MinIO reachable ?
 3. Vérifier les credentials env `BACKUP_R2_ACCESS_KEY` / `BACKUP_R2_SECRET_KEY`
 4. Rollback vers l'ancien backup n-1 si besoin (`skilluv-backup list` → identifier avant-dernier)
 
@@ -132,6 +132,6 @@ Ajouter au crontab du runner ops :
 
 | Date | Duration | Verdict | Ran by |
 |---|---|---|---|
-| 2026-08-10 | *(pending — first run)* | *(pending)* | — |
+| 2026-08-10 | *(pending - first run)* | *(pending)* | - |
 
 *Update ce tableau après chaque drill mensuel.*

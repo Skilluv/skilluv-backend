@@ -42,7 +42,7 @@ pub struct Window {
 ///
 /// An unknown type is refused rather than defaulted. Guessing would mean
 /// either paying out immediately on something that should have been held, or
-/// holding money on something that should have been paid — both silent, both
+/// holding money on something that should have been paid - both silent, both
 /// discovered by the person who did not get their money.
 pub async fn window_for(db: &PgPool, subject_type: &str) -> Result<Window, AppError> {
     sqlx::query_as(
@@ -54,7 +54,7 @@ pub async fn window_for(db: &PgPool, subject_type: &str) -> Result<Window, AppEr
     .await?
     .ok_or_else(|| {
         AppError::Internal(format!(
-            "no release window defined for '{subject_type}' — add a row to \
+            "no release window defined for '{subject_type}' - add a row to \
              release_windows saying how long this kind of money is held and why"
         ))
     })
@@ -73,7 +73,7 @@ pub struct Hold<'a> {
     /// caller can hold inside a transaction it already owns.
     pub hold_hours: i32,
     /// Who funded this, and therefore who may dispute it. A hold created
-    /// without one is money nobody can contest — the release window
+    /// without one is money nobody can contest - the release window
     /// promises the payer recourse, and this is what makes the promise
     /// keepable.
     pub payer_id: Option<Uuid>,
@@ -104,13 +104,13 @@ pub async fn hold(
     } = params;
 
     // Not an error, because an existing flow may legitimately have no
-    // single payer yet — but loud, because it silently removes the payer's
+    // single payer yet - but loud, because it silently removes the payer's
     // only recourse and nothing else in the system would say so.
     if payer_id.is_none() && payer_enterprise_id.is_none() {
         tracing::warn!(
             subject_type = subject_type,
             subject_id = %subject_id,
-            "hold created with no payer — nobody will be able to dispute it"
+            "hold created with no payer - nobody will be able to dispute it"
         );
     }
     let release_at = Utc::now() + Duration::hours(hold_hours as i64);
@@ -173,7 +173,7 @@ async fn find_hold(
 
 /// The payer confirmed early: release now instead of waiting.
 ///
-/// Refused when the window forbids it — some holds exist for reasons the
+/// Refused when the window forbids it - some holds exist for reasons the
 /// payer cannot waive.
 pub async fn release_early(
     db: &PgPool,
@@ -207,7 +207,7 @@ pub async fn release_now(
     }
     if hold.disputed_at.is_some() {
         return Err(AppError::Validation(
-            "these funds are disputed — resolve the dispute before releasing".into(),
+            "these funds are disputed - resolve the dispute before releasing".into(),
         ));
     }
 
@@ -233,7 +233,7 @@ pub async fn release_now(
     )
     .increment(1);
 
-    // A bounty actually paid, on the public feed — off by default, because
+    // A bounty actually paid, on the public feed - off by default, because
     // publishing what somebody earns because they took a bounty is not the
     // same as repeating a merged pull request that was already public.
     //
@@ -280,7 +280,7 @@ async fn announce_bounty(
             subject_type: "user",
             subject_id: hold.beneficiary_id,
             subject_label: &username,
-            headline: format!("prime versée — {title}"),
+            headline: format!("prime versée - {title}"),
             artifact_url: format!(
                 "{}/slices/{slice_id}",
                 std::env::var("SKILLUV_FRONTEND_URL")
@@ -310,7 +310,7 @@ pub async fn dispute(db: &PgPool, subject_type: &str, subject_id: Uuid) -> Resul
     };
     if hold.released_at.is_some() {
         return Err(AppError::Validation(
-            "these funds were already released — a claw-back is a refund, \
+            "these funds were already released - a claw-back is a refund, \
              not a hold"
                 .into(),
         ));
@@ -385,7 +385,7 @@ pub async fn sweep(db: &PgPool) -> Result<SweepReport, AppError> {
                     beneficiary = %hold.beneficiary_id,
                     amount = %hold.amount,
                     error = %e,
-                    "failed to release funds whose hold has expired — the \
+                    "failed to release funds whose hold has expired - the \
                      beneficiary is owed money and cannot reach it"
                 );
             }

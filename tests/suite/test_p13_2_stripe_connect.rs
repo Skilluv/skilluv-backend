@@ -119,7 +119,7 @@ async fn withdraw_refuses_when_kyc_not_verified() {
     .expect("seed wallet");
 
     // Funded, because the balance is checked before onboarding is. An empty
-    // account is refused for having no money — true, and not what this test
+    // account is refused for having no money - true, and not what this test
     // is named after.
     fund_eur(&app, user_id, "50.00").await;
 
@@ -156,7 +156,7 @@ async fn the_bank_rail_refuses_a_currency_it_cannot_carry() {
 
     // There used to be a Stripe-only endpoint that rejected anything but
     // EUR. There is one endpoint now, and which rail carries which currency
-    // is a row in `payout_routes` rather than a branch in a handler — the
+    // is a row in `payout_routes` rather than a branch in a handler - the
     // only bank_account route is EUR, so this has nowhere to go.
     let resp = app
         .post(
@@ -289,7 +289,7 @@ async fn webhook_rejects_invalid_signature() {
 /// Give someone withdrawable EUR, the way a real flow would.
 ///
 /// Only released money can leave, and the withdraw endpoint checks the
-/// balance before anything else — so a test about any later refusal has to
+/// balance before anything else - so a test about any later refusal has to
 /// fund the account first, or it is answered for the wrong reason.
 async fn fund_eur(app: &TestApp, user: Uuid, amount: &str) {
     use bigdecimal::BigDecimal;

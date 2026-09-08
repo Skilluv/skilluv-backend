@@ -29,7 +29,7 @@ async fn the_rust_domain_list_matches_the_table() {
 
     assert_eq!(
         active, mirrored,
-        "validators::SKILL_DOMAINS and the active rows of skill_domains disagree — \
+        "validators::SKILL_DOMAINS and the active rows of skill_domains disagree - \
          one of them was updated and the other was not"
     );
 }
@@ -83,7 +83,7 @@ async fn every_domain_column_references_the_table() {
 
     assert!(
         unreferenced.is_empty(),
-        "these columns hold a domain and nothing checks it — \
+        "these columns hold a domain and nothing checks it - \
          add a foreign key onto skill_domains: {unreferenced:?}"
     );
 }
@@ -112,7 +112,7 @@ async fn an_undeclared_domain_is_refused_by_the_database() {
 /// has held rows for domains that were not open since migration 0204, and a
 /// foreign key that refused them would have had to delete them.
 ///
-/// The test used to point at whichever domain happened to be closed — first
+/// The test used to point at whichever domain happened to be closed - first
 /// `quality`, then `communication`. That made it a tripwire: it failed every
 /// time a domain opened, and each failure was a correct assertion about a
 /// stale fact, which is the worst kind to leave in a suite. Every declared

@@ -2,22 +2,22 @@
 
 Branch protection on `master` requires two checks *by name*: `Build & Lint`
 and `Integration Tests`. GitHub matches a required check to a job by its
-resolved `name:`, across every workflow file — not by which workflow it lives
+resolved `name:`, across every workflow file - not by which workflow it lives
 in. That has two failure modes, both silent in a diff review, and this guard
 fails the build on either:
 
-  * a required name declared by NO job — the check is never reported and every
+  * a required name declared by NO job - the check is never reported and every
     pull request waits for it forever (this is what a too-broad `paths-ignore`
     or a rename does);
 
-  * a required name declared by MORE THAN ONE job — two checks share the name,
+  * a required name declared by MORE THAN ONE job - two checks share the name,
     GitHub is satisfied by whichever reports success first, and a three-second
     stub can green a real change. This is exactly the ci.yml / ci-docs-only.yml
     duplication that CI-01 removed. Re-introducing any second workflow that
     claims one of these names brings the hole straight back, so it is refused
     here rather than trusted to a comment.
 
-The invariant is "exactly one", not "the two lists match" — the old check
+The invariant is "exactly one", not "the two lists match" - the old check
 compared two path filters for equality, which said nothing about a pull request
 touching Markdown *and* Rust, the case that actually broke.
 """
@@ -65,13 +65,13 @@ def main():
         elif not files:
             failed = True
             print(f"FAIL required check {name!r} is declared by NO job")
-            print("       branch protection will wait for it forever — every PR unmergeable")
+            print("       branch protection will wait for it forever - every PR unmergeable")
         else:
             failed = True
             print(f"FAIL required check {name!r} is declared by {len(files)} jobs:")
             for path in files:
                 print(f"         {path}")
-            print("       two jobs share a required name — the faster one can green a real change (CI-01)")
+            print("       two jobs share a required name - the faster one can green a real change (CI-01)")
 
     return 1 if failed else 0
 

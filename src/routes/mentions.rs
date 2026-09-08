@@ -1,11 +1,11 @@
-//! SKI-286 — mention inbox.
+//! SKI-286 - mention inbox.
 //!
 //! Endpoints:
 //!   GET  /api/users/me/mentions            (auth)
 //!   POST /api/users/me/mentions/{id}/read  (auth)
 //!   POST /api/users/me/mentions/read-all   (auth)
 //!
-//! Everything is scoped to the caller — a mention is addressed to exactly
+//! Everything is scoped to the caller - a mention is addressed to exactly
 //! one person, so there is no target parameter to get wrong. Visibility of
 //! the underlying content is enforced in `services::mentions`, not here.
 
@@ -65,7 +65,7 @@ pub struct MentionListResponse {
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct MentionRead {
     pub id: Uuid,
-    /// When it was first opened. Unchanged on a repeated call — marking read
+    /// When it was first opened. Unchanged on a repeated call - marking read
     /// is idempotent.
     pub read_at: Option<chrono::DateTime<chrono::Utc>>,
 }
@@ -90,7 +90,7 @@ pub struct MentionsMarkedResponse {
 
 /// Mentions addressed to the caller, newest first.
 ///
-/// SKI-293 — this route replaces `GET /api/social/mentions/me`, which was
+/// SKI-293 - this route replaces `GET /api/social/mentions/me`, which was
 /// documented with an empty schema while this one carried the real contract.
 #[utoipa::path(
     get,

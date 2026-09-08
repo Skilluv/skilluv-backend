@@ -7,7 +7,7 @@
 //!
 //! ## Adding a language
 //!
-//! Drop a file in `locales/`. That is the whole procedure — no code, no
+//! Drop a file in `locales/`. That is the whole procedure - no code, no
 //! deployment, no template. The files are embedded at build time, so a new
 //! language ships with the binary rather than depending on what happens to
 //! be on disk next to it.
@@ -21,7 +21,7 @@
 //! A translation falls back to the default locale, and then to the key
 //! itself. A half-translated file therefore degrades to French rather than
 //! rendering blanks, and a missing key is visible in the output instead of
-//! silently producing an empty subject line — which is the failure that gets
+//! silently producing an empty subject line - which is the failure that gets
 //! shipped, because an empty string looks like a rendering choice.
 
 use std::collections::HashMap;
@@ -32,7 +32,7 @@ use std::sync::OnceLock;
 pub const DEFAULT_LOCALE: &str = "fr";
 
 /// Locales shipped with the binary. Adding to `locales/` requires adding the
-/// file here too — the only line of code a new language costs, and it exists
+/// file here too - the only line of code a new language costs, and it exists
 /// because `include_str!` needs a literal path.
 const BUNDLED: &[(&str, &str)] = &[
     ("fr", include_str!("../../locales/fr.yml")),
@@ -65,7 +65,7 @@ fn catalog() -> &'static Catalog {
                     tracing::error!(
                         locale = locale,
                         error = %e,
-                        "locale file failed to parse — its translations will fall back"
+                        "locale file failed to parse - its translations will fall back"
                     );
                 }
             }
@@ -165,7 +165,7 @@ pub fn t(locale: &str, key: &str) -> String {
     tracing::warn!(
         locale = lang,
         key = key,
-        "translation missing in every locale — the key is being rendered as-is"
+        "translation missing in every locale - the key is being rendered as-is"
     );
     key.to_string()
 }
@@ -173,8 +173,8 @@ pub fn t(locale: &str, key: &str) -> String {
 /// Look up a key and substitute `{placeholders}`.
 ///
 /// Interpolation is by name, not by position: a translator reordering a
-/// sentence — which every translator does, because word order differs
-/// between languages — must not silently swap two values.
+/// sentence - which every translator does, because word order differs
+/// between languages - must not silently swap two values.
 pub fn t_with(locale: &str, key: &str, args: &[(&str, &str)]) -> String {
     let mut text = t(locale, key);
     for (name, value) in args {
@@ -197,7 +197,7 @@ pub fn resolve(stored: Option<&str>, accept_language: Option<&str>) -> String {
     }
     if let Some(header) = accept_language {
         for part in header.split(',') {
-            // `fr-CH;q=0.9` — the quality factor is dropped; the header is
+            // `fr-CH;q=0.9` - the quality factor is dropped; the header is
             // already in preference order.
             let tag = part.split(';').next().unwrap_or("").trim();
             if !tag.is_empty() && is_supported(tag) {

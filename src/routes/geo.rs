@@ -55,7 +55,7 @@ pub async fn list_countries(State(state): State<AppState>) -> Json<ApiResponse<V
 }
 
 /// Search cities within a country by optional name prefix. Sorted by
-/// population desc — the first hit is the largest match. Bounded to
+/// population desc - the first hit is the largest match. Bounded to
 /// 50 results max.
 #[utoipa::path(
     get,

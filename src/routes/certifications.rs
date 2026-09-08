@@ -1,4 +1,4 @@
-//! Certifications payantes — Phase 5.10.
+//! Certifications payantes - Phase 5.10.
 //!
 //! Endpoints :
 //!   GET  /api/certifications                   catalogue public
@@ -195,7 +195,7 @@ pub async fn list_certifications(
 /// Buy a certification: creates a Stripe checkout session. If the
 /// caller already has an in-progress attempt (`pending` / `paid` /
 /// `started`), the existing attempt is echoed back rather than a new
-/// one created — front should surface the resume flow.
+/// one created - front should surface the resume flow.
 #[utoipa::path(
     post,
     path = "/api/certifications/{slug}/purchase",
@@ -301,7 +301,7 @@ pub async fn purchase_certification(
     let success_url = format!("{base}/certifications/{slug}?paid=1");
     let cancel_url = format!("{base}/certifications/{slug}?canceled=1");
     let idempotency_key = format!("certification_purchase:{}", attempt.0);
-    let description = format!("Skilluv — {title}");
+    let description = format!("Skilluv - {title}");
 
     let session = crate::services::collect::start(
         &state.db,
@@ -589,7 +589,7 @@ async fn generate_verification_code(
 
 // ─── Vérification publique du diplôme ────────────────────────────
 
-/// Public diploma verification — no auth required. Any third party
+/// Public diploma verification - no auth required. Any third party
 /// with a verification_code can check the diploma's validity.
 #[utoipa::path(
     get,
@@ -653,7 +653,7 @@ pub async fn verify_diploma(
     })))
 }
 
-/// List the caller's diplomas — ordered newest first.
+/// List the caller's diplomas - ordered newest first.
 #[utoipa::path(
     get,
     path = "/api/diplomas/my",

@@ -6,7 +6,7 @@ on:
   # by name, and a workflow skipped by a path filter never reports them, so a
   # docs-only pull request either waits forever (paths-ignore too broad) or a
   # second stub workflow has to answer for it (paths in one file, paths-ignore
-  # in the other) — and those two filters are NOT complements for a pull
+  # in the other) - and those two filters are NOT complements for a pull
   # request touching Markdown *and* Rust: both fire, two jobs claim the same
   # required name, and the trivial one can green a real change.
   #
@@ -48,7 +48,7 @@ jobs:
   # A changed file counts as code unless it matches one of the documentation
   # patterns (see scripts/detect-code-changes.sh). So a pull request that
   # touches a README *and* a .rs file yields code=true (the .rs file is not a
-  # doc) — the exact mixed case the two-workflow design got wrong. When the
+  # doc) - the exact mixed case the two-workflow design got wrong. When the
   # diff range can't be resolved, the script fails safe to code=true.
   changes:
     name: Detect changed paths
@@ -70,7 +70,7 @@ jobs:
           # lines of git in scripts/detect-code-changes.sh, testable locally,
           # in the spirit of the gitleaks-CLI-over-action choice elsewhere.
           fetch-depth: 0
-      - name: Classify the diff — code vs documentation only
+      - name: Classify the diff - code vs documentation only
         id: filter
         env:
           EVENT: ${{ github.event_name }}
@@ -94,7 +94,7 @@ jobs:
 
   check:
     name: Build & Lint
-    # Required check. On a docs-only change this skips cleanly — a skipped
+    # Required check. On a docs-only change this skips cleanly - a skipped
     # required job is reported to branch protection as success, so the check
     # is satisfied without compiling a line of Rust.
     #
@@ -103,7 +103,7 @@ jobs:
     # clippy are pure functions of the source: run twice over a tree whose
     # hash has not moved, they cannot reach a different verdict. Skipping the
     # shards alone still left master waiting twenty-nine minutes here, because
-    # `publish` needs `test` and `test` needs this job — so the image build
+    # `publish` needs `test` and `test` needs this job - so the image build
     # queued behind a lint that had already passed on the pull request.
     #
     # Branch protection is unaffected: it gates pull requests, where the tree
@@ -124,7 +124,7 @@ jobs:
       # sccache-action needs the GHA cache API (mozilla-actions/sccache-action).
       actions: write
     env:
-      # sccache is installed in this job only — RUSTC_WRAPPER is job-scoped
+      # sccache is installed in this job only - RUSTC_WRAPPER is job-scoped
       # so cargo commands in other jobs don't try to invoke a non-existent binary.
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: sccache
@@ -149,7 +149,7 @@ jobs:
           # save/restore round-trip alone was blowing the job timeout
           # (7 min download + 4+ min upload out of a 25 min budget).
           # sccache handles compile-unit caching for us via the GHA
-          # cache API — no need to also snapshot target/. Registry + git
+          # cache API - no need to also snapshot target/. Registry + git
           # dirs stay cached to avoid re-downloading crates.io deps.
           path: |
             ~/.cargo/registry
@@ -236,7 +236,7 @@ jobs:
           fetch-depth: 0
       # gitleaks-action@v2 requires a paid license for GitHub Organizations
       # (breaking change, cf. https://github.com/gitleaks/gitleaks-action#-announcement).
-      # Fallback to the CLI download — free, same detection, no license needed.
+      # Fallback to the CLI download - free, same detection, no license needed.
       # We keep .gitleaks.toml as the allowlist config (auto-picked from repo root).
       - name: Install gitleaks CLI
         run: |
@@ -299,7 +299,7 @@ jobs:
         run: bash scripts/check-migrations.sh
 
   test:
-    # Matrix sharding — nextest partitions tests by hash across N runners.
+    # Matrix sharding - nextest partitions tests by hash across N runners.
     # Each shard is a fresh job with its own Postgres/Redis/MinIO, so there
     # are no shared-state collisions.
     #
@@ -311,33 +311,33 @@ jobs:
     #
     # What sharding actually buys, measured on the 4-shard runs: a shard is
     # ~12 min of checkout, services and compilation, plus ~16 min of tests.
-    # Only the second half divides — `cargo nextest --partition` compiles the
+    # Only the second half divides - `cargo nextest --partition` compiles the
     # whole suite in every shard and then runs a slice of it. So 8 shards is
     # ~12 + ~8 = ~20 min, not half of 28. Past this the fixed compile cost
     # dominates and more runners buy almost nothing; the next real win is
     # compile time, not more parallelism.
     #
-    # It finds no additional failures. The same suite runs either way — what
+    # It finds no additional failures. The same suite runs either way - what
     # changes is that its results survive to be read.
     #
     # fail-fast: false ensures we see all shard failures at once instead of
-    # the first one aborting the rest — critical for debugging.
+    # the first one aborting the rest - critical for debugging.
     name: Integration Tests (shard ${{ matrix.shard }}/8)
     runs-on: ubuntu-latest
     # `migrations` too: a chain that does not apply makes all eight shards red
     # with the same unrelated error, which is eight runners spent to learn one
     # thing that job already said.
     needs: [changes, check, audit, secrets, migrations]
-    # Skip drafts to save quota — devs can mark PR ready when they want CI.
+    # Skip drafts to save quota - devs can mark PR ready when they want CI.
     # Also skip on a docs-only change (code=false): the aggregator below still
     # reports the required "Integration Tests" check green in that case.
     # The third clause is the merge-day saving. `already-tested` is only ever
     # true for a push whose tree a previous run already carried through every
-    # shard — see scripts/tree-already-tested.sh for why that is sound and
+    # shard - see scripts/tree-already-tested.sh for why that is sound and
     # where it refuses to be.
     if: needs.changes.outputs.code == 'true' && github.event.pull_request.draft == false
       && needs.changes.outputs.already-tested != 'true' 
-    # A timeout should catch a hang, not a slow week — which means it has to
+    # A timeout should catch a hang, not a slow week - which means it has to
     # be sized for what the job actually does, and shard 1 does more than the
     # rest. It runs the doctests, and it is the single writer for the shared
     # build cache, so on a cache miss it pays an upload the other seven skip.
@@ -361,7 +361,7 @@ jobs:
     # single number for jobs doing different work is how one of them silently
     # runs out of it.
     # Raised from 75/45. Seven shards finished inside forty-five and the eighth
-    # was cancelled at it — a suite that grows a few tests per branch will keep
+    # was cancelled at it - a suite that grows a few tests per branch will keep
     # brushing a limit set that close, and a cancellation reads as a failure
     # nobody can diagnose from the log, because the log stops mid-run.
     timeout-minutes: ${{ matrix.shard == 1 && 90 || 60 }}
@@ -399,7 +399,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
-      # Mailpit — SMTP dev catcher. Le test harness force SMTP_HOST=localhost:1025
+      # Mailpit - SMTP dev catcher. Le test harness force SMTP_HOST=localhost:1025
       # (voir tests/common/mod.rs::spawn). Sans ce service, /api/auth/register et
       # /api/enterprise/register renvoient 500 sur echec SMTP.
       mailpit:
@@ -438,7 +438,7 @@ jobs:
       #
       # Every one of the eight shards died at
       # `collect2: fatal error: ld terminated with signal 7 [Bus error]`, with
-      # 107 GB of disk free — so this was never the disk the comment below
+      # 107 GB of disk free - so this was never the disk the comment below
       # talks about. It is memory: the runner has 16 GB and GNU ld holds the
       # whole of each of these binaries in it, several at a time.
       #
@@ -477,7 +477,7 @@ jobs:
 
       # A runner ships with ~25 GB of SDKs this repository never touches, and
       # linking 46 test binaries per shard needs the space more than they do.
-      # Without this the shards die mid-link — ENOSPC on three of them and a
+      # Without this the shards die mid-link - ENOSPC on three of them and a
       # linker SIGBUS on the fourth, which is the same disk with a different
       # error message. `[profile.test] debug = "line-tables-only"` in
       # Cargo.toml is the other half; either alone leaves no margin.
@@ -547,7 +547,7 @@ jobs:
       # The four shards share one cache key, so on a cold key all four try
       # to upload the same ~9 GB `target/` at once. Only one upload can win;
       # the others compress and transfer for minutes before losing the race.
-      # That is what cancelled shard 2 on 1d12b2e8 — its tests had already
+      # That is what cancelled shard 2 on 1d12b2e8 - its tests had already
       # passed, and the job hit its budget inside the cache save.
       #
       # Cache entries are branch-scoped, so the first run on master after a
@@ -577,7 +577,7 @@ jobs:
           tool: cargo-nextest
 
       - name: Run integration tests (shard ${{ matrix.shard }}/8)
-        # `--partition count:N/8` — nextest hash-partitions the suite
+        # `--partition count:N/8` - nextest hash-partitions the suite
         # across 8 shards. `--test-threads=1` kept within each shard
         # because a few tests still touch shared Postgres server-side
         # state (RLS GUC, metrics counters).
@@ -601,7 +601,7 @@ jobs:
         if: matrix.shard == 1
         run: cargo test --doc
 
-      # One writer for the shared key. Runs even when the tests fail —
+      # One writer for the shared key. Runs even when the tests fail -
       # a populated `target/` is worth caching either way, and paying the
       # upload only to discard it on red would make every failing run
       # slower for nothing.
@@ -629,7 +629,7 @@ jobs:
     name: Integration Tests
     runs-on: ubuntu-latest
     needs: [changes, test]
-    # always() so this required check always reports a conclusion — never
+    # always() so this required check always reports a conclusion - never
     # pending. On a docs-only change the `test` matrix is skipped and this
     # greens (nothing to run); on a code change it mirrors the matrix result.
     if: always() && github.event.pull_request.draft == false
@@ -643,13 +643,13 @@ jobs:
         run: |
           echo "test matrix result: ${{ needs.test.result }}"
           exit 1
-      - name: Docs-only change — no Rust to test
+      - name: Docs-only change - no Rust to test
         if: needs.changes.outputs.code != 'true'
         run: |
           echo "Documentation-only change. The suite would run the same code already green on master."
       - name: Already green on this exact tree
         # The suite ran over these same bytes on the pull request. Reporting
-        # this check green is not a shortcut around it — it is the same
+        # this check green is not a shortcut around it - it is the same
         # verdict, on the same content, not recomputed.
         if: needs.changes.outputs.already-tested == 'true'
         run: echo "This tree already passed every shard. See scripts/tree-already-tested.sh."
@@ -711,7 +711,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Trigger Coolify redeploy
-        # Skips silently if the required secrets are unset — lets the workflow
+        # Skips silently if the required secrets are unset - lets the workflow
         # keep working in forks / rewinds without hard-failing on missing config.
         # Coolify's /api/v1/deploy endpoint requires a Bearer token; the UUID
         # in the URL only identifies which app to redeploy.
@@ -720,7 +720,7 @@ jobs:
           COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
         run: |
           if [ -z "$COOLIFY_WEBHOOK_URL" ] || [ -z "$COOLIFY_TOKEN" ]; then
-            echo "COOLIFY_WEBHOOK_URL or COOLIFY_TOKEN unset — skipping deploy trigger."
+            echo "COOLIFY_WEBHOOK_URL or COOLIFY_TOKEN unset - skipping deploy trigger."
             exit 0
           fi
           # -w prints HTTP status + response body on both success and failure so
@@ -739,7 +739,7 @@ jobs:
           fi
 
       - name: Wait for deploy + smoke test
-        # SKI-28 (Hygiène pré-prod HYG-01) — after Coolify triggers a
+        # SKI-28 (Hygiène pré-prod HYG-01) - after Coolify triggers a
         # redeploy, wait a bit for the new container to boot then hit
         # scripts/smoke.sh against the live URL. Fails the workflow if
         # the new deploy is silently broken.
@@ -754,7 +754,7 @@ jobs:
           bash scripts/smoke.sh "$SKILLUV_SMOKE_URL"
 
       - name: Notify Discord on failure
-        # SKI-32 (Hygiène pré-prod HYG-05) — post the failure to Discord
+        # SKI-32 (Hygiène pré-prod HYG-05) - post the failure to Discord
         # #ops-alerts channel via webhook. Fires on any prior step failing
         # in this job (Docker publish, Coolify webhook, or smoke test).
         # Skips silently when DISCORD_ALERT_WEBHOOK_URL is unset.
@@ -771,9 +771,9 @@ jobs:
             --arg sha "$COMMIT_SHA" \
             --arg actor "$ACTOR" \
             --arg url "$RUN_URL" \
-            '{content: ("**CI publish/deploy failed on master** — commit `" + $sha + "` by " + $actor + "\n" + $url)}')
+            '{content: ("**CI publish/deploy failed on master** - commit `" + $sha + "` by " + $actor + "\n" + $url)}')
           curl --silent --show-error --max-time 15 \
             -X POST \
             -H "Content-Type: application/json" \
             -d "$payload" \
-            "$DISCORD_ALERT_WEBHOOK_URL" || echo "Discord notify failed — not blocking"
+            "$DISCORD_ALERT_WEBHOOK_URL" || echo "Discord notify failed - not blocking"

@@ -1,11 +1,11 @@
-//! P16.3 — Routes API pour orientations (métiers) + user_orientations.
+//! P16.3 - Routes API pour orientations (métiers) + user_orientations.
 //!
 //! Le contrat produit :
 //!   - Catalogue public : `GET /api/orientations` (paginé, filtre domain/tag)
 //!     et `GET /api/orientations/{slug}` (détail + skills recommandés).
 //!   - Onboarding : `POST /api/users/me/orientations` inscrit 1 orientation
-//!     (cap à 3 actives — au-delà, HTTP 409). `PATCH` modifie mode/primary,
-//!     `DELETE` termine (sans supprimer — historisation via ended_at).
+//!     (cap à 3 actives - au-delà, HTTP 409). `PATCH` modifie mode/primary,
+//!     `DELETE` termine (sans supprimer - historisation via ended_at).
 //!
 //! Cap de 3 orientations non-ended = règle applicative (pas de CHECK DB pour
 //! garder la flexibilité admin d'over-ride via SQL direct).
@@ -32,7 +32,7 @@ pub fn orientation_routes() -> Router<AppState> {
         // Deliberately not `/orientations/counts`.
         //
         // That would shadow `/orientations/{slug}` for the one slug spelled
-        // `counts`, and a slug is a free string — so the contract fuzzer
+        // `counts`, and a slug is a free string - so the contract fuzzer
         // generates it, reaches this handler instead of the detail one, and is
         // handed a payload the detail operation never described. The platform
         // has the same shape at `/challenges/onboarding` and it is safe there
@@ -65,7 +65,7 @@ pub fn orientation_routes() -> Router<AppState> {
             "/users/me/orientations/{slug}/playlist",
             get(orientation_playlist),
         )
-        // FE-M1 — projection publique des orientations d'un user (profil public).
+        // FE-M1 - projection publique des orientations d'un user (profil public).
         .route("/users/{id}/orientations", get(public_user_orientations))
 }
 
@@ -73,7 +73,7 @@ pub fn orientation_routes() -> Router<AppState> {
 ///
 /// The default locale lives on the `orientations` row itself and every other
 /// one in `orientation_translations`, so asking for French finds no
-/// translation row and falls back to the base — which is the same answer,
+/// translation row and falls back to the base - which is the same answer,
 /// reached without a special case.
 ///
 /// `resolve_from_accept_language` answers `en` when the header is absent or
@@ -116,8 +116,8 @@ fn default_limit() -> i64 {
 
 /// The counts take no parameters at all.
 ///
-/// Archived trades are never counted. This exists for one screen — the eleven
-/// classes with the number of trades under each — and showing a beginner "26
+/// Archived trades are never counted. This exists for one screen - the eleven
+/// classes with the number of trades under each - and showing a beginner "26
 /// specialities" where three of them are retired tells them something false.
 /// There is no correct `true` for that flag here. Any other filtered count is
 /// what `GET /api/orientations` already answers with its `total`.
@@ -125,7 +125,7 @@ fn default_limit() -> i64 {
 /// An empty struct rather than no extractor: without one, axum ignores the
 /// query string and `?anything=1` returns 200, while the document says this
 /// operation takes no parameters. `deny_unknown_fields` is what makes the two
-/// agree — and disagreeing is what the contract fuzzer caught.
+/// agree - and disagreeing is what the contract fuzzer caught.
 #[derive(Debug, Deserialize, IntoParams)]
 #[into_params(parameter_in = Query)]
 #[serde(deny_unknown_fields)]
@@ -141,7 +141,7 @@ pub struct OrientationRow {
     pub primary_domain: String,
     pub secondary_domains: Vec<String>,
     pub tags: Vec<String>,
-    /// Tool identifiers this trade works with, in reading order — `react`,
+    /// Tool identifiers this trade works with, in reading order - `react`,
     /// `typescript`, `postgresql`. Stable by contract, so a client may map
     /// them to logos; an identifier it does not recognise should render
     /// nothing rather than guess. Empty means "not recorded yet", never
@@ -168,7 +168,7 @@ pub struct OrientationsCatalogResponse {
     ///
     /// The catalogue is ~255 rows and `limit` caps at 200, so the whole of it
     /// never fit in one response and the default page of 50 handed a client a
-    /// fifth of the trades with nothing saying so — the signup screen offered
+    /// fifth of the trades with nothing saying so - the signup screen offered
     /// 50 of 255 and looked complete (SKI-364).
     pub total: i64,
 }
@@ -184,7 +184,7 @@ pub struct OrientationDomainCount {
 pub struct OrientationCountsResponse {
     /// Every domain that has at least one curated orientation, most first.
     pub domains: Vec<OrientationDomainCount>,
-    /// The sum across domains — the size of the catalogue under this filter.
+    /// The sum across domains - the size of the catalogue under this filter.
     pub total: i64,
 }
 
@@ -295,7 +295,7 @@ pub struct PublicUserOrientationsResponse {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// GET /orientations — catalogue public paginé
+// GET /orientations - catalogue public paginé
 // ═══════════════════════════════════════════════════════════════════
 
 /// Public paginated catalogue of curated orientations. Optional
@@ -384,14 +384,14 @@ pub async fn list_orientations(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// GET /orientation-counts — combien de métiers par domaine
+// GET /orientation-counts - combien de métiers par domaine
 // ═══════════════════════════════════════════════════════════════════
 
 /// How many curated orientations each domain holds.
 ///
 /// The class-picking screen shows the eleven domains with "73 specialties"
 /// under each name. Without this it costs eleven requests, or one capped
-/// request that cannot answer the question at all — so the count was hardcoded
+/// request that cannot answer the question at all - so the count was hardcoded
 /// in the front from a count of the migrations, and went wrong on the next
 /// orientation added (SKI-364).
 #[utoipa::path(
@@ -431,7 +431,7 @@ pub async fn orientation_counts(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// GET /orientations/{slug} — détail + skills recommandés
+// GET /orientations/{slug} - détail + skills recommandés
 // ═══════════════════════════════════════════════════════════════════
 
 /// Detail on a single orientation + the map of recommended /
@@ -500,7 +500,7 @@ pub async fn get_orientation(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// GET /users/me/orientations — les miennes
+// GET /users/me/orientations - les miennes
 // ═══════════════════════════════════════════════════════════════════
 
 /// List every orientation the caller has ever picked (active + ended).
@@ -538,11 +538,11 @@ pub async fn my_orientations(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// POST /users/me/orientations — s'inscrire (cap 3 actives)
+// POST /users/me/orientations - s'inscrire (cap 3 actives)
 // ═══════════════════════════════════════════════════════════════════
 
 /// Enroll the caller in an orientation. Idempotent on
-/// `(user_id, orientation_id)` — re-POSTing an already-active row
+/// `(user_id, orientation_id)` - re-POSTing an already-active row
 /// refreshes the mode/languages/etc fields and un-ends it. Enforces
 /// the 3-active cap.
 #[utoipa::path(
@@ -583,7 +583,7 @@ pub async fn register_orientation(
     })?;
     if archived {
         return Err(AppError::Validation(
-            "this orientation is archived — cannot be selected".into(),
+            "this orientation is archived - cannot be selected".into(),
         ));
     }
 
@@ -597,7 +597,7 @@ pub async fn register_orientation(
     .await?;
     if active_count >= MAX_ACTIVE_ORIENTATIONS {
         return Err(AppError::Validation(format!(
-            "max {MAX_ACTIVE_ORIENTATIONS} active orientations reached — end one first or prove more artifacts to unlock more"
+            "max {MAX_ACTIVE_ORIENTATIONS} active orientations reached - end one first or prove more artifacts to unlock more"
         )));
     }
 
@@ -745,12 +745,12 @@ pub async fn update_orientation(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// GET /users/me/orientations/{slug}/playlist — P16.5
+// GET /users/me/orientations/{slug}/playlist - P16.5
 // ═══════════════════════════════════════════════════════════════════
 
 /// Personalised learning playlist for an orientation. The playlist
 /// service returns a rich structured payload (recommended slices,
-/// missing skills, next steps) — documented here as free-form JSON
+/// missing skills, next steps) - documented here as free-form JSON
 /// since it evolves independently.
 #[utoipa::path(
     get,
@@ -775,7 +775,7 @@ pub async fn orientation_playlist(
     Ok(Json(serde_json::json!(playlist)))
 }
 
-/// End an active orientation (soft — sets `ended_at`, un-flags
+/// End an active orientation (soft - sets `ended_at`, un-flags
 /// `is_primary`).
 #[utoipa::path(
     delete,
@@ -811,7 +811,7 @@ pub async fn end_orientation(
             "active orientation '{slug}' not found"
         )));
     }
-    // Dropping a trade takes its role back — the other half of the same rule.
+    // Dropping a trade takes its role back - the other half of the same rule.
     crate::services::discord_roles::request_sync_best_effort(
         &state.db,
         auth.user_id,
@@ -826,7 +826,7 @@ pub async fn end_orientation(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// FE-M1 — GET /users/{id}/orientations (public, projection minimale)
+// FE-M1 - GET /users/{id}/orientations (public, projection minimale)
 // ═══════════════════════════════════════════════════════════════════
 //
 // Retourne uniquement les orientations actives (ended_at IS NULL) et une
@@ -904,8 +904,8 @@ pub async fn public_user_orientations(
 // ═══════════════════════════════════════════════════════════════════
 //
 // Migration 0239 seeded 130 design challenges as drafts and said why: the
-// title and the intent came from a backlog, and the brief — the constraints,
-// the references, what is out of scope — needs an author who knows the trade.
+// title and the intent came from a backlog, and the brief - the constraints,
+// the references, what is out of scope - needs an author who knows the trade.
 // A challenge nobody has read must not be handed to somebody who is learning.
 //
 // That decision stands. What was missing is everything around it: 0239 knew
@@ -922,7 +922,7 @@ pub struct TradeReadiness {
     pub orientation_slug: String,
     pub orientation_name: String,
     /// The review family. `None` for a trade that has none, which is itself a
-    /// reason not to publish — see `blockers`.
+    /// reason not to publish - see `blockers`.
     pub reviewer_group: Option<String>,
     pub total: i64,
     pub published: i64,
@@ -950,7 +950,7 @@ pub struct DraftChallenge {
 
 /// The length below which an instruction block is still a stub.
 ///
-/// The seeded briefs are around 600 characters of shared boilerplate — the
+/// The seeded briefs are around 600 characters of shared boilerplate - the
 /// same three sections for all 130. A real brief carries this trade's
 /// constraints, its references and its out-of-scope, and does not fit in that.
 /// The number is a floor, not a standard: it catches "nobody touched this",
@@ -982,7 +982,7 @@ pub async fn orientation_challenges(
 ///
 /// All of it or none of it. Publishing three of five leaves a trade whose
 /// catalogue looks thin rather than unopened, and somebody arriving cannot
-/// tell the difference — which is the state the front already asked us not to
+/// tell the difference - which is the state the front already asked us not to
 /// produce.
 #[utoipa::path(
     post, path = "/api/admin/orientations/{slug}/challenges/publish", tag = "admin",
@@ -1106,7 +1106,7 @@ async fn readiness_for(
     }
     if unwritten > 0 {
         blockers.push(format!(
-            "{unwritten} of {total} briefs are still the seeded stub — they \
+            "{unwritten} of {total} briefs are still the seeded stub - they \
              need this trade's constraints, references and out-of-scope, not \
              just a title."
         ));
@@ -1122,7 +1122,7 @@ async fn readiness_for(
         // than trusting: a challenge somebody can submit and nobody can
         // validate is worse than a challenge that is not there.
         blockers.push(format!(
-            "Nobody holds {domain}_reviewer:{} — a submission here could be \
+            "Nobody holds {domain}_reviewer:{} - a submission here could be \
              made and never judged.",
             reviewer_group.as_deref().unwrap_or("?")
         ));

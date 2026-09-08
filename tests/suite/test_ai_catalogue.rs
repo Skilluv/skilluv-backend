@@ -169,7 +169,7 @@ async fn ai_has_a_default_review_grid() {
     let app = TestApp::spawn().await;
 
     // Without it, an AI challenge carrying no rubric reached the verifier
-    // with its instructions alone — asking a model whether work is good with
+    // with its instructions alone - asking a model whether work is good with
     // no statement of what good means.
     let criteria: Option<serde_json::Value> = sqlx::query_scalar(
         "SELECT criteria FROM review_grids

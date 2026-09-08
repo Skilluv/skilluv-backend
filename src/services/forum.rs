@@ -189,7 +189,7 @@ pub async fn create_post(
     .fetch_one(db)
     .await?;
 
-    // SKI-286 — @username mentions in the body.
+    // SKI-286 - @username mentions in the body.
     crate::services::mentions::record_and_notify(
         db,
         input.author_id,
@@ -244,7 +244,7 @@ pub async fn list_posts(
     //
     // `hot` used to be `ORDER BY (upvotes - downvotes)` directly on the
     // main query. Postgres accepts a bare output alias in ORDER BY, but not
-    // one inside an expression — there it resolves names against the input
+    // one inside an expression - there it resolves names against the input
     // relations and fails with `column "upvotes" does not exist`. The sort
     // returned 500 on every call. Wrapping the query makes the aliases real
     // columns, so the arithmetic is legal.
@@ -371,7 +371,7 @@ pub async fn edit_post(
     .fetch_one(db)
     .await?;
 
-    // SKI-286 — an edit that adds a new @username mentions only that
+    // SKI-286 - an edit that adds a new @username mentions only that
     // person: `record_and_notify` is idempotent per (target, source,
     // author), so the handles already recorded are skipped. Attributed to
     // the post's author even when a moderator did the edit, so the
@@ -549,7 +549,7 @@ pub async fn search_posts(
     // `websearch_to_tsquery` is the one built for a search box: it never
     // raises on its input, whatever it is. It also reads quoted phrases and a
     // leading `-` as exclusion, which is what somebody typing into a search
-    // box already expects, and it still ANDs bare words — so what used to work
+    // box already expects, and it still ANDs bare words - so what used to work
     // works the same.
     if trimmed.is_empty() {
         return Ok(Vec::new());

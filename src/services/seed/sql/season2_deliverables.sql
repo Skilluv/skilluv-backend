@@ -16,9 +16,9 @@
 INSERT INTO seasons (slug, name, theme, description, starts_at, ends_at, status)
 VALUES (
     'saison-2-wax',
-    'Saison 2 — Wax',
+    'Saison 2 - Wax',
     'Wax',
-    'La saison du design system africain. On construit Wax : une bibliotheque d''icones, tokens, patterns et composants inspires des textiles wax d''Afrique de l''Ouest, poussee dans les projets OSS partenaires. Les cohortes S1 reviennent avec 6 mois d''experience — la difficulte moyenne monte d''un cran.',
+    'La saison du design system africain. On construit Wax : une bibliotheque d''icones, tokens, patterns et composants inspires des textiles wax d''Afrique de l''Ouest, poussee dans les projets OSS partenaires. Les cohortes S1 reviennent avec 6 mois d''experience - la difficulte moyenne monte d''un cran.',
     '2027-07-01 00:00:00+00',
     '2027-12-31 23:59:59+00',
     'upcoming'
@@ -60,7 +60,7 @@ SELECT
     pm.id, 'disclosure_required', false, au.id
 FROM admin_user au
 CROSS JOIN (VALUES
-    -- 1. Wax color palette — design tokens
+    -- 1. Wax color palette - design tokens
     (
         'Publier une palette de couleurs wax en design tokens',
         'Extraire les couleurs dominantes d''un motif wax de ton pays et les publier en tokens JSON conformes au W3C Design Tokens Community Group format.',
@@ -115,7 +115,7 @@ CROSS JOIN (VALUES
         'design', 3, 'solo', 'serious',
         50, 'calcom'
     ),
-    -- 6. rust-i18n — full locale for wax naming
+    -- 6. rust-i18n - full locale for wax naming
     (
         'Nommer toutes les icones wax dans une langue africaine complete',
         'Certaines icones wax ont un nom FR/EN. Ajouter la traduction complete dans une langue africaine que TU parles (wolof, lingala, bambara, ewe, yoruba, swahili, amharique...) + tests rust-i18n.',
@@ -126,7 +126,7 @@ CROSS JOIN (VALUES
         'code', 3, 'solo', 'educational',
         50, 'rust-i18n'
     ),
-    -- 7. Directus — wax collection template
+    -- 7. Directus - wax collection template
     (
         'Publier un content model wax pour Directus',
         'Creer un content model Directus (collections + fields + interfaces) qui expose wax-icons comme headless CMS pour d''autres projets. Import direct via Directus schema-snapshot.',

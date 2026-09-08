@@ -1,6 +1,6 @@
 //! Reading a public registry or hub to see whether published work is used.
 //!
-//! Covers package registries — crates.io, npm, PyPI — the model and dataset
+//! Covers package registries - crates.io, npm, PyPI - the model and dataset
 //! hubs, HuggingFace and Kaggle, and the infrastructure registries a
 //! published ops artefact lives on: Terraform, Ansible Galaxy, ArtifactHub,
 //! Docker Hub. The question is the same in all three cases and so is the
@@ -12,8 +12,8 @@
 //! Not all of them answer "how many". The Terraform registry and Docker Hub
 //! publish a lifetime count; ArtifactHub publishes stars and no count at all;
 //! Galaxy publishes a count whose field name has moved twice. So a figure is
-//! stored where it belongs — stars in `likes_count`, never in a downloads
-//! column — and absent where it is genuinely absent. Filling a downloads
+//! stored where it belongs - stars in `likes_count`, never in a downloads
+//! column - and absent where it is genuinely absent. Filling a downloads
 //! column with an approval count would claim use the hub never measured.
 //!
 //! ## What is testable and what is not
@@ -23,8 +23,8 @@
 //! HuggingFace how many times it was downloaded is a network call to somebody
 //! else's service, and a test that made it would fail whenever they deploy.
 //!
-//! The split is deliberate: everything that can be wrong in our code —
-//! parsing, storage, staleness — is tested, and the part that can only be
+//! The split is deliberate: everything that can be wrong in our code -
+//! parsing, storage, staleness - is tested, and the part that can only be
 //! wrong in theirs is not.
 //!
 //! ## Why NULL and not zero
@@ -51,7 +51,7 @@ pub struct PackageRef {
 ///
 /// Returns `None` rather than guessing. A URL we do not recognise is better
 /// left unclaimed than filed under the wrong registry, where its figures
-/// would be fetched from the wrong package of the same name — `serde` exists
+/// would be fetched from the wrong package of the same name - `serde` exists
 /// on crates.io and on npm, and they are not the same project.
 pub fn identify(url: &str) -> Option<PackageRef> {
     let url = url.trim();
@@ -78,7 +78,7 @@ pub fn identify(url: &str) -> Option<PackageRef> {
             ["crates", name, ..] => named("crates_io", (*name).to_string()),
             _ => None,
         },
-        // https://www.npmjs.com/package/@scope/thing — the scope is part of
+        // https://www.npmjs.com/package/@scope/thing - the scope is part of
         // the name, so it is kept.
         "npmjs.com" => match segments.as_slice() {
             ["package", scope, name, ..] if scope.starts_with('@') => {
@@ -92,7 +92,7 @@ pub fn identify(url: &str) -> Option<PackageRef> {
             ["project", name, ..] => named("pypi", (*name).to_string()),
             _ => None,
         },
-        // https://pkg.go.dev/github.com/user/module — the whole path is the
+        // https://pkg.go.dev/github.com/user/module - the whole path is the
         // module path.
         "pkg.go.dev" => named("go_modules", segments.join("/")),
         // https://central.sonatype.com/artifact/org.example/thing
@@ -130,7 +130,7 @@ pub fn identify(url: &str) -> Option<PackageRef> {
         // HuggingFace puts models at the root and datasets one level down:
         //   https://huggingface.co/mistralai/Mistral-7B-v0.1
         //   https://huggingface.co/datasets/masakhane/masakhaner
-        // The owner is part of the name — two people can publish `bert-base`
+        // The owner is part of the name - two people can publish `bert-base`
         // and they are not the same weights.
         "huggingface.co" | "hf.co" => match segments.as_slice() {
             ["datasets", owner, name, ..] => {
@@ -234,7 +234,7 @@ pub fn identify(url: &str) -> Option<PackageRef> {
             [slug, ..] => named("medium", (*slug).to_string()),
             _ => None,
         },
-        // https://www.youtube.com/watch?v=ID  — the id is in the query, which
+        // https://www.youtube.com/watch?v=ID  - the id is in the query, which
         //   `segments` has already discarded, so it is read from the raw URL.
         // https://youtu.be/ID
         "youtube.com" => youtube_id(url).and_then(|id| named("youtube", id)),
@@ -275,7 +275,7 @@ pub fn identify(url: &str) -> Option<PackageRef> {
 /// The video id out of a YouTube watch URL.
 ///
 /// Its own function because the id lives in the query string, and
-/// [`identify`] discards the query before splitting the path — for every other
+/// [`identify`] discards the query before splitting the path - for every other
 /// platform here the identity is in the path, and rewriting that split for one
 /// case would make eighteen matches read the query they do not use.
 fn youtube_id(url: &str) -> Option<String> {
@@ -298,7 +298,7 @@ pub struct PackageStats {
     /// Readers or viewers. Never folded into a downloads column: that one
     /// means somebody installed something, and the code craft score sums it.
     pub views_count: Option<i64>,
-    /// Deliberate gestures — reactions, claps, comments. Platform-neutral on
+    /// Deliberate gestures - reactions, claps, comments. Platform-neutral on
     /// purpose: nobody compares a clap to a reaction.
     pub engagement_count: Option<i32>,
     /// When the platform says it went out.
@@ -309,7 +309,7 @@ pub struct PackageStats {
 ///
 /// Only the registries that publish usage figures over a public API are
 /// implemented. The rest are recognised by [`identify`] and stored with no
-/// numbers, which is the truth about them — Kaggle among them, because its
+/// numbers, which is the truth about them - Kaggle among them, because its
 /// API asks for credentials before it answers anything.
 pub async fn fetch(
     client: &reqwest::Client,
@@ -386,7 +386,7 @@ struct NpmDownloads {
 
 async fn fetch_npm(client: &reqwest::Client, name: &str) -> Result<PackageStats, AppError> {
     // npm publishes downloads on a separate host from the registry itself,
-    // and only over a window — there is no lifetime total to ask for.
+    // and only over a window - there is no lifetime total to ask for.
     let recent: NpmDownloads = client
         .get(format!(
             "https://api.npmjs.org/downloads/point/last-month/{name}"
@@ -505,8 +505,8 @@ struct TerraformArtifact {
 
 /// Ask the Terraform registry about a module or a provider.
 ///
-/// The name carries its own path — `modules/ns/name/provider` or
-/// `providers/ns/name` — because the two live at different endpoints and a
+/// The name carries its own path - `modules/ns/name/provider` or
+/// `providers/ns/name` - because the two live at different endpoints and a
 /// bare name would not say which to call.
 async fn fetch_terraform(client: &reqwest::Client, name: &str) -> Result<PackageStats, AppError> {
     let body: TerraformArtifact = client
@@ -689,7 +689,7 @@ struct DevToArticle {
 ///
 /// `page_views_count` is returned only to the article's own author over an
 /// authenticated call; the public endpoint omits it. So views usually come
-/// back absent here and engagement does not, which is the honest split — a
+/// back absent here and engagement does not, which is the honest split - a
 /// figure the platform will not tell us is not a figure of zero.
 async fn fetch_dev_to(client: &reqwest::Client, name: &str) -> Result<PackageStats, AppError> {
     let (author, slug) = name
@@ -708,8 +708,8 @@ async fn fetch_dev_to(client: &reqwest::Client, name: &str) -> Result<PackageSta
         .await
         .map_err(|e| AppError::Internal(format!("dev.to sent something unexpected: {e}")))?;
 
-    // Reactions and comments are two counts of the same thing — somebody
-    // bothered — and the column is one. Summed rather than one of the two
+    // Reactions and comments are two counts of the same thing - somebody
+    // bothered - and the column is one. Summed rather than one of the two
     // picked, because picking would make an article with fifty comments and
     // no reactions read as ignored.
     let engagement = match (body.public_reactions_count, body.comments_count) {
@@ -763,7 +763,7 @@ struct YouTubeSnippet {
 /// written down.
 async fn fetch_youtube(client: &reqwest::Client, id: &str) -> Result<PackageStats, AppError> {
     let Ok(key) = std::env::var("YOUTUBE_API_KEY") else {
-        tracing::debug!(video = id, "YOUTUBE_API_KEY absent — figures not fetched");
+        tracing::debug!(video = id, "YOUTUBE_API_KEY absent - figures not fetched");
         return Ok(PackageStats::default());
     };
 
@@ -820,7 +820,7 @@ async fn fetch_youtube(client: &reqwest::Client, id: &str) -> Result<PackageStat
 /// The Atom API gives the version and the date and no readership figure at
 /// all, and that is the truth about arXiv. Writing zero views for a paper
 /// everybody reads would be worse than writing nothing, which is why the
-/// column stays NULL — the rule migration 0181 set for Go modules and
+/// column stays NULL - the rule migration 0181 set for Go modules and
 /// Homebrew.
 ///
 /// The response is Atom rather than JSON, and it is read for two fields by
@@ -905,8 +905,8 @@ struct ZenodoMetadata {
 /// are the ones read: a raw view count on Zenodo includes every crawler that
 /// ever passed, and a paper is not more read for being indexed twice.
 ///
-/// The counters come back as floats — Zenodo's aggregation produces them that
-/// way — and are rounded rather than truncated, because 41.999999 views is
+/// The counters come back as floats - Zenodo's aggregation produces them that
+/// way - and are rounded rather than truncated, because 41.999999 views is
 /// forty-two.
 async fn fetch_zenodo(client: &reqwest::Client, id: &str) -> Result<PackageStats, AppError> {
     let body: ZenodoRecord = client
@@ -1015,7 +1015,7 @@ pub async fn record(
 /// others: the whole point of running this on a schedule is that a bad day
 /// at npm costs a week of freshness, not the entire sweep.
 ///
-/// Two kinds of slice qualify — a published library, which names a package
+/// Two kinds of slice qualify - a published library, which names a package
 /// registry, and a published model or dataset, which names a hub. One sweep
 /// for both, because the staleness rule is the same and having two would mean
 /// one of them silently stops running.
@@ -1043,7 +1043,7 @@ pub async fn sync_stale(db: &PgPool, client: &reqwest::Client) -> Result<usize, 
             tracing::warn!(
                 slice = %slice_id,
                 url = %url,
-                "package registry URL not recognised — no figures will be fetched"
+                "package registry URL not recognised - no figures will be fetched"
             );
             continue;
         };
@@ -1053,7 +1053,7 @@ pub async fn sync_stale(db: &PgPool, client: &reqwest::Client) -> Result<usize, 
         if !failed {
             refreshed += 1;
             // The registry answered, so the package exists and is installable
-            // — which is what "published" means and the only moment we can
+            // - which is what "published" means and the only moment we can
             // honestly say it. Idempotent on the slice, so the weekly sweep
             // does not repost it.
             if let Err(err) = announce_publication(db, slice_id, &package).await {
@@ -1067,7 +1067,7 @@ pub async fn sync_stale(db: &PgPool, client: &reqwest::Client) -> Result<usize, 
 
 /// Put a published package on the public feed.
 ///
-/// Already public elsewhere — anybody can install it — so this repeats
+/// Already public elsewhere - anybody can install it - so this repeats
 /// something rather than publishing it, and defaults to visible for that
 /// reason.
 async fn announce_publication(
@@ -1103,7 +1103,7 @@ async fn announce_publication(
             subject_id: user_id,
             subject_label: &username,
             headline: format!(
-                "bibliothèque publiée sur {} — {}",
+                "bibliothèque publiée sur {} - {}",
                 package.registry, package.name
             ),
             artifact_url: url,

@@ -6,9 +6,9 @@ pub struct AppConfig {
     pub jwt_secret: String,
     pub database_url: String,
     pub redis_url: String,
-    /// API origin — machine-facing callbacks (SSO `redirect_uri`, WebAuthn RP).
+    /// API origin - machine-facing callbacks (SSO `redirect_uri`, WebAuthn RP).
     pub base_url: String,
-    /// Frontend origin — every link a human clicks (emails, post-SSO redirect).
+    /// Frontend origin - every link a human clicks (emails, post-SSO redirect).
     /// Split from `base_url`, which points at the API subdomain in staging/prod.
     /// Falls back to `base_url` so single-origin deployments keep working.
     pub frontend_url: String,
@@ -42,7 +42,7 @@ pub struct AppConfig {
 
 /// The site's public address, for the places that cannot read the config.
 ///
-/// Twenty-two places hardcoded `https://skilluv.com` — a domain nobody here
+/// Twenty-two places hardcoded `https://skilluv.com` - a domain nobody here
 /// owns, which anyone could register and which every drip email, every
 /// legal link and `security.txt` pointed at. The domain is `skill-uv.com`.
 ///
@@ -117,7 +117,7 @@ impl AppConfig {
         if self.frontend_url == self.base_url && Self::looks_like_api_host(&self.base_url) {
             tracing::error!(
                 base_url = %self.base_url,
-                "FRONTEND_URL is unset and BASE_URL points at an API host — \
+                "FRONTEND_URL is unset and BASE_URL points at an API host - \
                  emailed links (verify-email, reset-password, invites) will 404. \
                  Set FRONTEND_URL to the user-facing origin."
             );
@@ -173,11 +173,11 @@ impl AppConfig {
         }
         // Belt-and-braces : dev-mode helpers (see src/routes/dev.rs) must NEVER
         // be reachable in prod. `dev_routes` handlers self-gate on the same
-        // env var, but this check refuses to boot at all — clearer signal for
+        // env var, but this check refuses to boot at all - clearer signal for
         // an operator who mis-set the env.
         if std::env::var("SKILLUV_DEV_MODE").as_deref() == Ok("true") {
             issues.push(
-                "SKILLUV_DEV_MODE=true is set — dev helper endpoints would be reachable. \
+                "SKILLUV_DEV_MODE=true is set - dev helper endpoints would be reachable. \
                  Never enable this in prod, only in staging/local"
                     .into(),
             );

@@ -4,7 +4,7 @@
 //!
 //! An objective closes with a figure its own author typed. Checking it means
 //! looking at where the figure came from, and the tempting way to automate
-//! that is an API key to the client's monitoring — Datadog, Instana, a
+//! that is an API key to the client's monitoring - Datadog, Instana, a
 //! private Grafana.
 //!
 //! Skilluv does not do that, and `docs/ops/LEGAL.md` says why: such a key
@@ -28,7 +28,7 @@
 //! What it gives a reviewer is the other half of the conversation: the public
 //! record, next to the claim, with the dates. Somebody who announces 99.99%
 //! over a window in which their own status page shows eleven hours of major
-//! outage has not lied to a machine — they have written something a reader
+//! outage has not lied to a machine - they have written something a reader
 //! can now see does not add up.
 
 use chrono::{DateTime, Duration, Utc};
@@ -52,7 +52,7 @@ pub struct StatusPageRef {
 /// Recognise a public status page from the URL somebody gave as evidence.
 ///
 /// Deliberately narrow. A URL that is not obviously a status page returns
-/// `None`, and the objective keeps working exactly as before — declared,
+/// `None`, and the objective keeps working exactly as before - declared,
 /// sourced, read by a human.
 pub fn identify(url: &str) -> Option<StatusPageRef> {
     let url = url.trim();
@@ -84,7 +84,7 @@ pub fn identify(url: &str) -> Option<StatusPageRef> {
 #[derive(Debug, Clone, Serialize)]
 pub struct PublicIncident {
     pub name: String,
-    /// `minor`, `major`, `critical` — the page's own word, not ours.
+    /// `minor`, `major`, `critical` - the page's own word, not ours.
     pub impact: String,
     pub started_at: DateTime<Utc>,
     /// Absent while an incident is still open.
@@ -167,7 +167,7 @@ pub fn observe(
 ///
 /// Failure is not an error the caller has to handle loudly: a page that is
 /// down, moved or not a Statuspage after all leaves the objective exactly as
-/// it was — declared, sourced, read by a human. That is the fallback, and it
+/// it was - declared, sourced, read by a human. That is the fallback, and it
 /// is the normal path rather than a degraded one.
 pub async fn fetch(
     client: &reqwest::Client,
@@ -252,7 +252,7 @@ mod tests {
     #[test]
     fn anything_that_is_not_obviously_a_status_page_is_left_alone() {
         // The fallback is a human reading the link, which is not a
-        // degradation — it is what happens today for everything.
+        // degradation - it is what happens today for everything.
         assert_eq!(identify("https://app.datadoghq.com/dashboard/abc"), None);
         assert_eq!(identify("https://grafana.example.com/d/xyz"), None);
         assert_eq!(identify("https://example.com/uptime.png"), None);

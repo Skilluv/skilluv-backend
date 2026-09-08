@@ -1,4 +1,4 @@
-//! SKI-41 (Post-MVP T2-02) — peer coaching HTTP surface.
+//! SKI-41 (Post-MVP T2-02) - peer coaching HTTP surface.
 //!
 //! Endpoints:
 //!   POST   /api/users/me/peer-matching/enroll              (auth)
@@ -185,7 +185,7 @@ pub struct ProposalsQuery {
     pub orientation_id: Uuid,
 }
 
-/// Candidate peers for one orientation, ranked. Proposals only — pairing
+/// Candidate peers for one orientation, ranked. Proposals only - pairing
 /// is a separate, deliberate act.
 #[utoipa::path(
     get, path = "/api/peer-matching/proposals", tag = "social",

@@ -1,4 +1,4 @@
-//! SKI-39 (Post-MVP T1-04) — profile timeline read surface.
+//! SKI-39 (Post-MVP T1-04) - profile timeline read surface.
 //!
 //! Endpoints:
 //!   GET  /api/users/{id}/timeline           (public when the profile is)
@@ -7,7 +7,7 @@
 //! Visibility mirrors `routes::profile`: a timeline is readable when the
 //! profile is, i.e. `profile_hidden = FALSE AND is_banned = FALSE`, with
 //! the owner always able to read their own. Hidden profiles answer 404
-//! rather than 403 — the same answer as a nonexistent user, so the
+//! rather than 403 - the same answer as a nonexistent user, so the
 //! endpoint cannot be used to enumerate who exists.
 
 use axum::extract::{Path, Query, State};
@@ -110,7 +110,7 @@ pub async fn get_timeline(
 
 /// Replay the timeline for one user from the source tables.
 ///
-/// Idempotent — `rows_inserted: 0` means the timeline was already
+/// Idempotent - `rows_inserted: 0` means the timeline was already
 /// complete, which is the normal answer and the point of running it.
 ///
 /// `AdminGate` only enforces the admin origin and mandatory 2FA; it

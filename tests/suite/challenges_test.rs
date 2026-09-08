@@ -7,7 +7,7 @@ use serde_json::json;
 /// This asserted `total == 0` against the whole catalogue, which was true
 /// while nothing anywhere was published. Migration 0615 publishes the six code
 /// exercises a newcomer climbs, so the unfiltered catalogue is no longer
-/// empty — and an assertion that only held because the platform had nothing to
+/// empty - and an assertion that only held because the platform had nothing to
 /// offer was never testing the endpoint.
 ///
 /// Scoped to a domain with nothing published instead: `soft_skills` has its
@@ -95,7 +95,7 @@ async fn test_start_and_submit_challenge() {
     // This assertion used to read `"success"`, and it is worth saying why it
     // passed. CI has never had a Judge0 to run anything, so the grader fell
     // through to asking whether the *source* contained `expected_output` as a
-    // substring — and `print('Hello, Skilluv!')` contains "Hello, Skilluv!".
+    // substring - and `print('Hello, Skilluv!')` contains "Hello, Skilluv!".
     // The submission was never executed. Pasting the expected output into a
     // comment would have passed just as well, which is what made the fallback
     // a fraud surface rather than a degradation.
@@ -116,7 +116,7 @@ async fn test_start_and_submit_challenge() {
 /// Submitting earns nothing on its own.
 ///
 /// This asserted `badge_count >= 1` straight after a submission, which held
-/// only because the submission was auto-graded `success` — and it was graded
+/// only because the submission was auto-graded `success` - and it was graded
 /// success because the source contained the expected output as a substring,
 /// never because anything ran it. With the grader gone, a badge is something
 /// a reviewer's verdict produces (`proof_hooks` on a settled deliverable), and

@@ -1,4 +1,4 @@
-//! P26 v2 SKI-101 — enrich a slice ingested from a GitHub issue with data
+//! P26 v2 SKI-101 - enrich a slice ingested from a GitHub issue with data
 //! derived from the issue's labels and body, replacing the old hardcoded
 //! defaults (`primary_domain='code'`, `difficulty=3`, no acceptance
 //! criteria).
@@ -35,7 +35,7 @@
 //!
 //! When a signal is missing, we fall back to values that don't lie:
 //! - `primary_domain` → the project's fallback (see `Enricher::default_domain`)
-//! - `difficulty`     → 3 (mid) — same as pre-SKI-101 behaviour
+//! - `difficulty`     → 3 (mid) - same as pre-SKI-101 behaviour
 //! - `acceptance_criteria` → NULL (nothing to parse ≠ empty criteria)
 
 use crate::validators::SKILL_DOMAINS;
@@ -51,7 +51,7 @@ pub const ACCEPTANCE_HEADINGS: &[&str] = &[
 
 pub const MAX_ACCEPTANCE_LEN: usize = 4000;
 
-/// Output of `enrich_from_issue`. Only carries what we might overwrite —
+/// Output of `enrich_from_issue`. Only carries what we might overwrite -
 /// caller keeps the raw `title` / `description` / `external_ref` as-is.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EnrichedFields {
@@ -61,7 +61,7 @@ pub struct EnrichedFields {
 }
 
 /// Infer domain + difficulty from labels; parse acceptance criteria from
-/// the body. `default_domain` is used when no `domain:*` label is set —
+/// the body. `default_domain` is used when no `domain:*` label is set -
 /// callers typically pass the project's primary domain (e.g. a
 /// design-heavy repo passes `"design"`).
 pub fn enrich_from_issue(
@@ -71,7 +71,7 @@ pub fn enrich_from_issue(
 ) -> EnrichedFields {
     let lower_labels: Vec<String> = labels.iter().map(|l| l.to_lowercase()).collect();
 
-    // SKI-125 — track which source drove the domain choice. Feeds the
+    // SKI-125 - track which source drove the domain choice. Feeds the
     // "% of external repos with a `domain:*` label" adoption metric
     // (see also SKI-124 domain_source_distribution in the admin stats).
     let domain_source = if lower_labels.iter().any(|l| l.starts_with("domain:")) {
@@ -100,7 +100,7 @@ fn infer_domain(lower_labels: &[String], default_domain: &str) -> String {
             return rest.to_string();
         }
     }
-    // Fallback must itself be a valid domain — guard against a caller
+    // Fallback must itself be a valid domain - guard against a caller
     // passing junk (would otherwise poison downstream validators).
     if SKILL_DOMAINS.contains(&default_domain) {
         default_domain.to_string()
@@ -128,7 +128,7 @@ fn infer_difficulty(lower_labels: &[String]) -> i16 {
             _ => {}
         }
     }
-    3 // pre-SKI-101 fallback — unchanged so ingest of unlabelled issues stays stable.
+    3 // pre-SKI-101 fallback - unchanged so ingest of unlabelled issues stays stable.
 }
 
 /// Extract the acceptance-criteria section from the body. Returns `None`

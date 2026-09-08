@@ -3,7 +3,7 @@
 //! The rule this proves is the one that makes grouping useful rather than
 //! destructive: the unit is the **context**, not the kind. Folding by kind
 //! alone would turn ten conversations into "10 mentions" and destroy the
-//! only thing that mattered — where.
+//! only thing that mattered - where.
 
 use crate::common::TestApp;
 use serde_json::json;
@@ -68,7 +68,7 @@ async fn several_mentions_in_one_thread_are_one_line() {
     assert_eq!(actors, vec!["Fatou", "Kofi", "Awa"]);
     assert!(rows[0].0.contains('3'), "the count is in the title");
 
-    // The third event was folded, not delivered again — that is the whole
+    // The third event was folded, not delivered again - that is the whole
     // point, and the report says so rather than pretending it was new.
     assert_eq!(third.grouped, 1);
     assert_eq!(third.in_app, 0);
@@ -192,7 +192,7 @@ async fn a_notification_with_no_context_never_groups() {
     let user = person(&app, "grp_nocontext").await;
 
     // `social.mention` has a window, but a payload naming no subject gives
-    // no context to group by — so it must not fold with an unrelated one.
+    // no context to group by - so it must not fold with an unrelated one.
     for _ in 0..3 {
         notify::send(
             Ctx::db_only(&app.db),
@@ -223,7 +223,7 @@ async fn every_grouping_kind_has_grouped_copy_in_every_locale() {
     assert!(!grouping.is_empty());
 
     // Without this a kind given a window renders its own key as a title the
-    // first time two events arrive together — in production, on a Sunday.
+    // first time two events arrive together - in production, on a Sunday.
     let mut missing = Vec::new();
     for locale in i18n::available() {
         for kind in &grouping {

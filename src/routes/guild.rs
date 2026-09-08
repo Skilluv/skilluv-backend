@@ -1,4 +1,4 @@
-//! Guild routes — Phase 2 Sprint 4.
+//! Guild routes - Phase 2 Sprint 4.
 
 use axum::extract::{Path, Query, State};
 use axum::http::HeaderMap;
@@ -51,9 +51,9 @@ pub fn guild_routes() -> Router<AppState> {
         )
         .route("/guilds/{id}/invitations/link", post(create_token_link))
         .route("/guild-invitations/{id}/accept", post(accept_invite))
-        // Trello BE-P0-41 — owner/officer révoque une invitation avant expires_at.
+        // Trello BE-P0-41 - owner/officer révoque une invitation avant expires_at.
         .route("/guild-invitations/{id}", delete(revoke_invitation))
-        // SKI-289 — guild-scoped spelling, which is what the front calls.
+        // SKI-289 - guild-scoped spelling, which is what the front calls.
         .route(
             "/guilds/{id}/invitations/{invitation_id}",
             delete(revoke_guild_invitation),
@@ -71,7 +71,7 @@ pub fn guild_routes() -> Router<AppState> {
         .route("/guild-wars/{id}/conclude", post(conclude_war))
         // Moderation
         .route("/admin/guilds/{id}/dissolve", post(admin_dissolve))
-        // P10.6 — skill matrix (agrégat par domaine)
+        // P10.6 - skill matrix (agrégat par domaine)
         .route("/guilds/{slug}/composition", get(guild_composition))
 }
 
@@ -438,12 +438,12 @@ pub async fn accept_invite(
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct RevokedInvitation {
     /// Always true on success. Revoking an already-revoked invitation is a
-    /// success too — see `services::guild::revoke_invitation`.
+    /// success too - see `services::guild::revoke_invitation`.
     pub revoked: bool,
     pub invitation_id: Uuid,
 }
 
-/// DELETE /api/guild-invitations/{id} — owner/officer révoque une invitation
+/// DELETE /api/guild-invitations/{id} - owner/officer révoque une invitation
 /// direct ou un lien token avant `expires_at`. Trello BE-P0-41.
 #[utoipa::path(
     delete, path = "/api/guild-invitations/{id}", tag = "guilds",
@@ -467,7 +467,7 @@ pub async fn revoke_invitation(
     }))))
 }
 
-/// SKI-289 — the guild-scoped spelling the front end calls.
+/// SKI-289 - the guild-scoped spelling the front end calls.
 ///
 /// Same behaviour as the flat route above, plus a check that the
 /// invitation belongs to the guild in the path. Both are kept: the flat
@@ -578,7 +578,7 @@ pub struct InvitationToken {
 
 /// One pending invitation.
 ///
-/// SKI-289 — typed because the front could otherwise only guess this
+/// SKI-289 - typed because the front could otherwise only guess this
 /// shape, and guessing a contract is what produced the empty-page bugs
 /// this ticket cites. Exactly one of `invitee` / `token` is set: a direct
 /// invitation names a user, a link invitation carries a token.
@@ -606,7 +606,7 @@ pub struct GuildApplicationView {
     pub id: Uuid,
     pub applicant: GuildUserRef,
     pub message: Option<String>,
-    /// Always `pending` on this endpoint — decided applications drop out.
+    /// Always `pending` on this endpoint - decided applications drop out.
     pub status: String,
     /// RFC 3339.
     pub applied_at: String,
@@ -704,7 +704,7 @@ pub async fn list_applications(
     auth: AuthUser,
     Path(guild_id): Path<Uuid>,
 ) -> Result<Json<Value>, AppError> {
-    // Owner/officer gate — same rule as the decide endpoint.
+    // Owner/officer gate - same rule as the decide endpoint.
     let is_officer: Option<(String,)> = sqlx::query_as(
         "SELECT role FROM guild_members
          WHERE guild_id = $1 AND user_id = $2 AND role IN ('founder', 'officer')",
@@ -757,7 +757,7 @@ pub async fn list_applications(
 
 /// Body of `POST /guild-applications/{id}/decide`.
 ///
-/// SKI-293 — the request body was published as an untyped blob, so the only
+/// SKI-293 - the request body was published as an untyped blob, so the only
 /// way to learn the field name was to probe the API until it stopped
 /// answering `missing field 'accept'`. A plausible guess like
 /// `{"decision": "accept"}` compiles, passes a test written against the same
@@ -1072,7 +1072,7 @@ pub async fn admin_dissolve(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// P10.6 — Skill matrix (dashboard officer + matching guilde ↔ project)
+// P10.6 - Skill matrix (dashboard officer + matching guilde ↔ project)
 // ═══════════════════════════════════════════════════════════════════
 
 /// GET /api/guilds/{slug}/composition

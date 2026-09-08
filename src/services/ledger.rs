@@ -1,9 +1,9 @@
-//! Double-entry ledger — the source of truth for real money.
+//! Double-entry ledger - the source of truth for real money.
 //!
 //! Every movement is a [`Posting`]: a reason, an optional idempotency key,
 //! and legs that sum to zero per currency. The database enforces the balance
 //! rule (migration 0153), so money cannot be posted into existence even by
-//! mistake — the transaction fails at commit.
+//! mistake - the transaction fails at commit.
 //!
 //! ## Why not just update a balance
 //!
@@ -11,7 +11,7 @@
 //! to have it. It cannot express "earned but not yet released", cannot be
 //! reconciled against a provider statement, and cannot survive a partial
 //! failure: this codebase has already shipped three payout paths that marked
-//! work as paid when no money moved. Here a balance is the sum of a history —
+//! work as paid when no money moved. Here a balance is the sum of a history -
 //! derived, replayable, and impossible to set directly.
 //!
 //! ## Signs
@@ -30,10 +30,10 @@
 //!
 //! Money owed to a person sits in one of three accounts:
 //!
-//! * `pending` — earned, not withdrawable. Where funds wait out the window
+//! * `pending` - earned, not withdrawable. Where funds wait out the window
 //!   in which the payer can still complain.
-//! * `available` — released, withdrawable.
-//! * `disputed` — frozen while a human decides.
+//! * `available` - released, withdrawable.
+//! * `disputed` - frozen while a human decides.
 //!
 //! Nothing skips straight to `available`: [`release`] is the only way in, so
 //! every flow has to state when it considers work settled instead of paying
@@ -93,7 +93,7 @@ impl std::str::FromStr for Currency {
 /// Which of a person's three accounts an amount sits in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum State {
-    /// Earned, not withdrawable — the payer can still contest.
+    /// Earned, not withdrawable - the payer can still contest.
     Pending,
     /// Released and withdrawable.
     Available,
@@ -138,7 +138,7 @@ pub enum Account {
     /// Money owed to whoever an outcome designates, held until it does.
     ///
     /// A contest prize is escrowed before anybody knows who wins, so it
-    /// cannot sit on a `User` account — those are claims on a named person.
+    /// cannot sit on a `User` account - those are claims on a named person.
     /// It sits here, keyed to the thing that will decide, and moves to the
     /// winners' `pending` accounts at finalisation.
     Escrow {
@@ -347,7 +347,7 @@ async fn ensure_account(
 
 /// Post a movement inside an existing transaction.
 ///
-/// Use this when money has to move atomically with something else — a
+/// Use this when money has to move atomically with something else - a
 /// session marked complete, a slice marked merged. The balance rule is
 /// checked at commit, so a caller that fails afterwards leaves nothing
 /// behind.
@@ -359,8 +359,8 @@ pub async fn post_in_tx(
 
     // A leg that moves nothing is dropped rather than written.
     //
-    // Zero shares are legitimate — a bounty with no platform cut, a waived
-    // fee — and the caller should not have to build its leg list
+    // Zero shares are legitimate - a bounty with no platform cut, a waived
+    // fee - and the caller should not have to build its leg list
     // conditionally to express that. The database forbids a zero amount, and
     // it is right to: an entry that moves nothing says nothing, and in an
     // append-only book it is noise that never goes away.
@@ -487,12 +487,12 @@ pub async fn user_balance(
 /// Someone paid, and part of it is owed to a recipient.
 ///
 /// The money lands at the provider (an asset) and is split in the same
-/// breath between what we owe the recipient — held `pending`, not
-/// withdrawable — and what we earned.
+/// breath between what we owe the recipient - held `pending`, not
+/// withdrawable - and what we earned.
 /// A sale where the platform is the seller and nobody else is owed.
 ///
 /// A certification is bought from us: the money arrives at the provider and
-/// all of it is revenue. There is no recipient, no hold and no release —
+/// all of it is revenue. There is no recipient, no hold and no release -
 /// which is why this flow was never posted to the books at all, and why
 /// `platform:revenue` was understated by every certification ever sold.
 ///
@@ -581,7 +581,7 @@ pub async fn capture_for_recipient(
 /// The payer's window closed, or they validated early: `pending` becomes
 /// `available`.
 ///
-/// No asset moves — the money is still at the provider. Only our idea of
+/// No asset moves - the money is still at the provider. Only our idea of
 /// whose it is has changed.
 pub async fn release(
     db: &PgPool,
@@ -609,7 +609,7 @@ pub async fn release(
 /// Freeze an amount while a complaint is examined.
 ///
 /// Taken from `pending`: once released, the money is the recipient's to
-/// withdraw, and clawing it back is a different and much harder problem —
+/// withdraw, and clawing it back is a different and much harder problem -
 /// which is the whole reason the release window exists.
 pub async fn hold_dispute(
     db: &PgPool,
@@ -663,7 +663,7 @@ pub async fn resolve_dispute_for_recipient(
 /// The same movement as `refund_from_dispute` and deliberately a separate
 /// function, because it starts from a different state: `pending` rather than
 /// `disputed`. Routing a cancellation through the dispute pair would write a
-/// dispute that nobody raised, and `hold_dispute` is not free of meaning —
+/// dispute that nobody raised, and `hold_dispute` is not free of meaning -
 /// it is what an operator's queue counts.
 ///
 /// Only what is still `pending` can go back this way. An amount already
@@ -709,7 +709,7 @@ pub async fn refund_from_pending(
 /// Dispute resolved for the payer: the money goes back out.
 ///
 /// Our commission goes back with it. Keeping a fee on a refunded service
-/// would be indefensible, and it also keeps the books honest — the asset
+/// would be indefensible, and it also keeps the books honest - the asset
 /// leaving has to equal the claims cancelled.
 #[allow(clippy::too_many_arguments)]
 pub async fn refund_from_dispute(
@@ -748,7 +748,7 @@ pub async fn refund_from_dispute(
 /// A recipient withdrew: we owe them less, and the float at the paying
 /// provider drops by the same amount.
 ///
-/// The paying provider need not be the one that collected — a card payment
+/// The paying provider need not be the one that collected - a card payment
 /// in EUR can leave as Mobile Money in XOF. What connects the two is this
 /// ledger, not the money itself.
 pub async fn withdraw(

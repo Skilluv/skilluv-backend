@@ -3,7 +3,7 @@
 //! ## Two limits, not one
 //!
 //! A monthly quota is what the client bought. A daily ceiling stops one
-//! runaway script spending the month in an afternoon — the client finds out on
+//! runaway script spending the month in an afternoon - the client finds out on
 //! day one instead of at the next invoice, which is the difference between a
 //! bug and a bill.
 //!

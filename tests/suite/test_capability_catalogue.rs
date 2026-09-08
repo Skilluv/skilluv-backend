@@ -107,7 +107,7 @@ async fn the_generated_reviewer_capabilities_are_served_too() {
 
     // `admin_security::require_reader` accepts `security_reviewer:%` through a
     // LIKE. That is only safe because the catalogue is what a grant is checked
-    // against — asserted below.
+    // against - asserted below.
     assert!(
         derived
             .iter()
@@ -134,7 +134,7 @@ async fn a_capability_that_is_not_in_the_catalogue_cannot_be_granted() {
         .unwrap();
 
     // Straight at the table, because the point is that the database refuses
-    // it — not that a handler happens to check first.
+    // it - not that a handler happens to check first.
     let refused = sqlx::query(
         "INSERT INTO user_capabilities (user_id, capability, granted_reason)
          VALUES ($1, 'security_reviewer:anything-i-like', 'test')",

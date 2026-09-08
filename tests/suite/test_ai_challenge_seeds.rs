@@ -103,7 +103,7 @@ async fn the_families_get_their_own_criteria_not_the_default() {
     let app = TestApp::spawn().await;
 
     // A safety challenge judged on the generic grid loses the criteria that
-    // make it a safety challenge — disclosure, dual use.
+    // make it a safety challenge - disclosure, dual use.
     let has_disclosure: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM challenge_templates
           WHERE skill_domain = 'ai' AND is_training = TRUE

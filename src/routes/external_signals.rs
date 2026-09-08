@@ -1,11 +1,11 @@
-//! SKI-42 (Post-MVP T2-03) — external reputation signals.
+//! SKI-42 (Post-MVP T2-03) - external reputation signals.
 //!
 //! Endpoints:
 //!   POST   /api/users/me/external-signals        (auth)
 //!   GET    /api/users/me/external-signals        (auth)
 //!   DELETE /api/users/me/external-signals/{id}   (auth)
 //!   GET    /api/users/{id}/external-signals      (public if the profile is)
-//!   GET    /api/moderation/external-signals      (moderator — review queue)
+//!   GET    /api/moderation/external-signals      (moderator - review queue)
 //!   POST   /api/moderation/external-signals/{id}/verify   (moderator)
 //!   DELETE /api/moderation/external-signals/{id}?reason=… (moderator)
 //!
@@ -47,7 +47,7 @@ pub fn external_signal_routes() -> Router<AppState> {
 }
 
 /// Capabilities allowed to review external signals. Reuses the P25
-/// community-moderation family rather than inventing a new one — vetting a
+/// community-moderation family rather than inventing a new one - vetting a
 /// claimed blog post is the same job as vetting any other user content.
 const MODERATOR_CAPS: &[&str] = &["community_moderator", "community_curator"];
 
@@ -66,7 +66,7 @@ fn split_buckets(signals: Vec<external_signals::ExternalSignal>) -> serde_json::
     let (verified, declared): (Vec<_>, Vec<_>) =
         signals.into_iter().partition(|s| s.verified_at.is_some());
     json!({
-        // Ownership confirmed — still not a Skilluv proof.
+        // Ownership confirmed - still not a Skilluv proof.
         "verified": verified,
         // Self-declared, unconfirmed.
         "declared": declared,
@@ -185,7 +185,7 @@ pub async fn remove(
 
 /// Public view of a profile's signals.
 ///
-/// Unverified signals are visible here too — hiding them would make the
+/// Unverified signals are visible here too - hiding them would make the
 /// "declared vs verified" distinction invisible precisely where it
 /// matters, on the profile a recruiter reads.
 #[utoipa::path(
@@ -290,7 +290,7 @@ pub async fn moderator_verify(
     let signal = signal
         .ok_or_else(|| AppError::NotFound(format!("pending external signal {id} not found")))?;
 
-    // SKI-299 — a verification is a moderation decision: it moves a claim
+    // SKI-299 - a verification is a moderation decision: it moves a claim
     // from "declared" to "confirmed" on a public profile. `verified_by`
     // says who, but on a row a later decision overwrites; the journal is
     // what survives the next one.
@@ -327,9 +327,9 @@ pub struct ModeratorDeleteQuery {
 
 /// Remove a signal as a moderator (bogus or abusive claim).
 ///
-/// SKI-299 — this is the most destructive endpoint of the Post-MVP batch:
+/// SKI-299 - this is the most destructive endpoint of the Post-MVP batch:
 /// the row is gone, and nothing anywhere recorded who removed it or why.
-/// The endpoint did not even accept a motive, which is the real problem —
+/// The endpoint did not even accept a motive, which is the real problem -
 /// the missing journal entry was only its consequence.
 ///
 /// The signal is captured before the delete, so the audit entry carries
@@ -357,7 +357,7 @@ pub async fn moderator_delete(
     let reason = q.reason.trim();
     if reason.chars().count() < 8 {
         return Err(AppError::Validation(
-            "reason must be at least 8 characters — this deletes a user declaration for good"
+            "reason must be at least 8 characters - this deletes a user declaration for good"
                 .into(),
         ));
     }

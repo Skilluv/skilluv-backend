@@ -1,6 +1,6 @@
 //! Contests read as one event, over HTTP.
 //!
-//! Reading is public — an awards edition nobody can read is a press release —
+//! Reading is public - an awards edition nobody can read is a press release -
 //! and composing one is an editorial act, so it needs `admin`.
 
 use axum::extract::{Path, Query, State};
@@ -100,7 +100,7 @@ pub async fn one(
 ///
 /// No overall winner, and that is not an omission. Summing places across
 /// thirteen categories would rank somebody who entered all of them above
-/// somebody who won the only category they work in — the opposite of what an
+/// somebody who won the only category they work in - the opposite of what an
 /// awards edition is for.
 #[utoipa::path(
     get, path = "/api/series/{slug}/standings", tag = "challenges",
@@ -149,7 +149,7 @@ pub async fn create(
 #[serde(deny_unknown_fields)]
 pub struct AttachBody {
     pub tournament_id: Uuid,
-    /// What this contest is *for* inside the series — a family for an awards
+    /// What this contest is *for* inside the series - a family for an awards
     /// edition, an editorial axis for a programme. Absent for a sprint, whose
     /// contest is the whole of its series.
     #[serde(default)]

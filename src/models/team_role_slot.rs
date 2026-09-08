@@ -1,4 +1,4 @@
-//! P10.2 — Rôles multidisciplinaires sur les teams.
+//! P10.2 - Rôles multidisciplinaires sur les teams.
 //!
 //! Un `team_role_slot` = une case à pourvoir dans une team (ex: "musicien",
 //! "animateur 3D", "coder Godot"), potentiellement contrainte par un skill

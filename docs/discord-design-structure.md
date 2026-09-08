@@ -1,6 +1,6 @@
 # The design community on Discord
 
-What SKI-268 asked for, and what was built — with the reasons for the
+What SKI-268 asked for, and what was built - with the reasons for the
 differences.
 
 ## The short version
@@ -30,7 +30,7 @@ hand: if a channel is not in that file it does not exist.
 | `design-relecteurs` | Reviewers coordinating on the queue |
 
 `showcase` and `critique` are not the same room on purpose. One is "this is
-done", the other is "tell me what is wrong with this" — and a critique posted
+done", the other is "tell me what is wrong with this" - and a critique posted
 under a showcase gets applause instead of an answer.
 
 **One per trade**, the thirteen families:
@@ -52,7 +52,7 @@ Voice: **Design Cowork Room**, **Critique Live**.
 ### `design-system` was missing
 
 It is one of the 26 trades and one of the four in the first batch to open
-(SKI-349) — the four a developer can review without recruiting anybody. It was
+(SKI-349) - the four a developer can review without recruiting anybody. It was
 the only family with no room to be discussed in, which would have been noticed
 by the first person to arrive for it.
 
@@ -71,7 +71,7 @@ They are one line each in `server.toml` the day the feature ships.
 
 ## Roles
 
-Assigned by the bot from the profile, never by hand, and reconciled as a diff —
+Assigned by the bot from the profile, never by hand, and reconciled as a diff -
 a role the profile no longer justifies is removed.
 
 | Role | Granted on |
@@ -79,7 +79,7 @@ a role the profile no longer justifies is removed.
 | `Designer` | Having declared a trade in this domain |
 | `Relecteur design` | Capability `design_reviewer:*` |
 | `Jury` | Capability, for contest juries |
-| `Mentor` | Capability `mentor` — one role across all domains |
+| `Mentor` | Capability `mentor` - one role across all domains |
 
 ### The roles the ticket asked for and did not get
 
@@ -104,7 +104,7 @@ exist because this craft has failure modes the others do not:
 - **Critique addresses the work, never the person.** "This hierarchy does not
   read at a glance" is useful. "This is amateur" is not, and it is what makes
   people stop posting.
-- **Credit what you did not make.** Fonts, photography, icons, references — say
+- **Credit what you did not make.** Fonts, photography, icons, references - say
   where they came from. This is a platform whose whole promise is that work is
   attributable; a design channel that shrugs at attribution contradicts it.
 - **Self-promotion belongs in `design-showcase` and `design-missions`.** Not in

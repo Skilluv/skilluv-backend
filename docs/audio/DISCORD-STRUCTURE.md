@@ -1,7 +1,7 @@
-# Discord — the audio corner
+# Discord - the audio corner
 
 What to create, what to call it, and which channels have a rule of their own.
-The server-wide setup — webhooks, the notifier binary, env vars — is in
+The server-wide setup - webhooks, the notifier binary, env vars - is in
 [../DISCORD_SETUP.md](../DISCORD_SETUP.md); this is the audio structure that
 sits on top of it.
 
@@ -9,7 +9,7 @@ sits on top of it.
 
 ## The shape, and why it is not one channel per trade
 
-The backlog asked for five trade channels — composer, implementer, sound
+The backlog asked for five trade channels - composer, implementer, sound
 designer, voice actor, programmer. Two of those talk to each other constantly
 (the implementer and the programmer answer the same questions about builds and
 budgets) and two of them are almost silent early on. Five channels for a
@@ -17,7 +17,7 @@ community of forty people is five empty rooms, and an empty room reads as an
 empty platform.
 
 So the channels follow the **four review families**, which is how the trades
-are grouped everywhere else on the platform — the guides, the review grids, the
+are grouped everywhere else on the platform - the guides, the review grids, the
 capabilities. When a family gets busy enough to be split, splitting it is a
 Discord setting and not a rewrite of anything.
 
@@ -60,9 +60,9 @@ moderators.
 
 ## Bot commands
 
-- `/skilluv audio contests` — what is open right now
-- `/skilluv audio castings` — open voice castings, deadline first
-- `/skilluv audio featured` — this week's featured work
+- `/skilluv audio contests` - what is open right now
+- `/skilluv audio castings` - open voice castings, deadline first
+- `/skilluv audio featured` - this week's featured work
 
 ## The two rules that are specific to this corner
 
@@ -73,7 +73,7 @@ posting, and a domain where nobody posts their work has no way to prove
 anything.
 
 **Nobody uploads somebody else's voice.** Posting a synthetic voice trained on
-a person — a member, a professional actor, anybody — is an immediate removal,
+a person - a member, a professional actor, anybody - is an immediate removal,
 without the usual warning. This is the one moderation rule in the audio corner
 that is not proportionate, and the reason is in
 [VOICE-RIGHTS.md](./VOICE-RIGHTS.md): it is the only thing here that can take

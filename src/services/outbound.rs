@@ -3,7 +3,7 @@
 //! Three places take a URL from a member and go and read it: the personal
 //! blog feed in `portfolio_sync`, the CI report in `quality_practice`, and
 //! anything added later. A server that fetches what it is told to fetch is a
-//! proxy into its own network — the request comes from inside, so a firewall
+//! proxy into its own network - the request comes from inside, so a firewall
 //! does not see it, and `http://169.254.169.254/` is a cloud provider's
 //! credential endpoint on every major host.
 //!
@@ -16,7 +16,7 @@
 //! the machine, the network, or the ranges reserved for them: loopback,
 //! private, link-local (which is where the metadata endpoints live),
 //! carrier-grade NAT, unique-local, multicast and the unspecified address.
-//! Every address a name resolves to is checked, not just the first — a name
+//! Every address a name resolves to is checked, not just the first - a name
 //! with one public and one private answer is a name chosen to get through.
 //!
 //! ## Rebinding
@@ -30,7 +30,7 @@
 //!
 //! A public address that belongs to somebody else's private service. That is
 //! not solvable at this layer, and the answer to it is that nothing fetched
-//! this way is ever echoed back to the caller — the readers of this module
+//! this way is ever echoed back to the caller - the readers of this module
 //! keep a count, not a body.
 
 use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
@@ -52,7 +52,7 @@ pub async fn get_text(url: &str) -> Result<String, AppError> {
     let (host, addr) = check(url)?;
 
     // Pinned to the address that was checked. `redirect::Policy::none()`
-    // because a redirect is a second address nobody checked — a 3xx to
+    // because a redirect is a second address nobody checked - a 3xx to
     // `http://169.254.169.254/` is the shortest version of this attack.
     let client = reqwest::Client::builder()
         .timeout(TIMEOUT)
@@ -71,7 +71,7 @@ pub async fn get_text(url: &str) -> Result<String, AppError> {
     if response.status().is_redirection() {
         return Err(AppError::Validation(
             "that address redirects, and the address it redirects to is one nobody \
-             checked — give the final address instead"
+             checked - give the final address instead"
                 .into(),
         ));
     }
@@ -111,7 +111,7 @@ fn check(url: &str) -> Result<(String, SocketAddr), AppError> {
 
     if parsed.scheme() != "https" {
         return Err(AppError::Validation(
-            "the address has to be https — plain http would send whatever it carries \
+            "the address has to be https - plain http would send whatever it carries \
              in the clear, and it is also how this check gets walked around"
                 .into(),
         ));

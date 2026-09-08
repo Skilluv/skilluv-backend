@@ -13,7 +13,7 @@ use crate::api_response::ApiResponse;
 use crate::errors::AppError;
 use crate::middleware::{OptionalAuth, extract_ip};
 
-/// Current legal consent version. Bump this when CGU / Privacy text changes — the front
+/// Current legal consent version. Bump this when CGU / Privacy text changes - the front
 /// will re-prompt users to accept again. Keep history of versions in `docs/legal/`.
 pub const CURRENT_CONSENT_VERSION: i32 = 1;
 
@@ -42,7 +42,7 @@ pub struct ConsentVersionResponse {
 }
 
 /// Return the current consent-banner version + canonical URLs to the
-/// legal pages. Public — used by the cookie banner on first visit.
+/// legal pages. Public - used by the cookie banner on first visit.
 #[utoipa::path(
     get,
     path = "/api/legal/consent-version",
@@ -75,7 +75,7 @@ pub struct ConsentRecordedResponse {
     pub version: i32,
     pub analytics: bool,
     pub marketing: bool,
-    /// Always `true` — essential cookies are outside the consent gate.
+    /// Always `true` - essential cookies are outside the consent gate.
     pub essential: bool,
     pub stored: bool,
 }

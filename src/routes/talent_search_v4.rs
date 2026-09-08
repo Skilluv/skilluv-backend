@@ -1,4 +1,4 @@
-//! Recruiter search — one endpoint, replacing three.
+//! Recruiter search - one endpoint, replacing three.
 //!
 //! ## Why one and not four
 //!
@@ -10,8 +10,8 @@
 //!
 //! ## What it filters on
 //!
-//! Everything the three did — free text, domain, country, availability,
-//! languages, badges, tags — plus what the platform has learned to record
+//! Everything the three did - free text, domain, country, availability,
+//! languages, badges, tags - plus what the platform has learned to record
 //! since: the trade (one of the 127 orientations), a specific capability, a
 //! craft-score tier, and whether somebody has a *proved* account on an
 //! external platform.
@@ -23,22 +23,22 @@
 //! cursor is `(score, id)`, which is the order rows are returned in.
 //!
 //! **Cached for fifteen minutes, keyed by the whole query.** Recruiters
-//! re-run the same search across a session, and none of the inputs — scores,
-//! orientations, capabilities — moves faster than the hourly sweep that
+//! re-run the same search across a session, and none of the inputs - scores,
+//! orientations, capabilities - moves faster than the hourly sweep that
 //! writes them.
 //!
 //! ## What somebody is, and what they have done
 //!
 //! The filters above describe a person: their trade, their skills, their
-//! country. A recruiter also asks the other question — *what have they
-//! finished* — and until now the endpoint could not answer it: contests won,
+//! country. A recruiter also asks the other question - *what have they
+//! finished* - and until now the endpoint could not answer it: contests won,
 //! missions delivered and editorial featurings were all recorded and none of
 //! them was reachable from a search.
 //!
 //! They are filters here, and sort keys, on the one endpoint. Not a second
 //! endpoint per domain: a design track record and a security one are the same
 //! four facts about different work, and the moment there are two queries the
-//! filters start disagreeing — which is the whole reason v4 exists.
+//! filters start disagreeing - which is the whole reason v4 exists.
 
 use axum::extract::{Path, Query, State};
 use axum::routing::get;
@@ -112,7 +112,7 @@ pub struct SearchQuery {
     /// Only people for whom this is their primary trade.
     #[serde(default)]
     pub only_primary: bool,
-    /// Family within a trade — `brand`, `motion`, `systems`, `llm-nlp`. It is
+    /// Family within a trade - `brand`, `motion`, `systems`, `llm-nlp`. It is
     /// the grouping reviewers are drawn from, which makes it the one grouping
     /// the platform actually maintains; a recruiter looking for "somebody in
     /// motion" is asking exactly this.
@@ -132,12 +132,12 @@ pub struct SearchQuery {
     pub min_tier: Option<String>,
     #[param(minimum = 0, maximum = 10000)]
     pub min_craft_score: Option<i32>,
-    /// An external platform the person has *proved* they own — `github`,
+    /// An external platform the person has *proved* they own - `github`,
     /// `gitlab`, `crates_io`. A claimed handle does not match: anybody can
     /// type anybody's.
     #[param(max_length = 30)]
     pub platform: Option<String>,
-    /// A credential the person has declared — `OSCP`, `CISSP`, `CKA`.
+    /// A credential the person has declared - `OSCP`, `CISSP`, `CKA`.
     ///
     /// Matched case-insensitively on the name or the level, because an
     /// enterprise types `OSCP` and a holder typed `oscp`.
@@ -169,7 +169,7 @@ pub struct SearchQuery {
     #[param(minimum = 1)]
     pub min_contests_won: Option<i64>,
     /// Missions handed in and accepted. Cancelled and in-flight ones do not
-    /// count — an unfinished mission says nothing about finishing.
+    /// count - an unfinished mission says nothing about finishing.
     #[param(minimum = 1)]
     pub min_missions_delivered: Option<i64>,
     /// Only people featured within this many days. A featuring is editorial,
@@ -255,7 +255,7 @@ pub struct SearchResponse {
     pub filters_applied: Vec<String>,
 }
 
-/// Where a page stopped. `(sort_key, user_id)` — the order rows come back in,
+/// Where a page stopped. `(sort_key, user_id)` - the order rows come back in,
 /// so the next page resumes exactly where this one ended.
 ///
 /// The key is whatever was sorted on, not always the craft score: a cursor
@@ -342,7 +342,7 @@ pub async fn search(
         None => None,
     };
 
-    // A tier is a floor, so it becomes a score threshold — one comparison
+    // A tier is a floor, so it becomes a score threshold - one comparison
     // rather than a join and a range condition on every row.
     let tier_floor: Option<i32> = match &q.min_tier {
         Some(slug) => {
@@ -676,7 +676,7 @@ fn validate(q: &SearchQuery) -> Result<(), AppError> {
         };
         if !shaped {
             return Err(AppError::Validation(
-                "capability must be a slug, optionally scoped — `mentor`, \
+                "capability must be a slug, optionally scoped - `mentor`, \
                  `code_reviewer:web`"
                     .into(),
             ));
@@ -725,7 +725,7 @@ fn validate(q: &SearchQuery) -> Result<(), AppError> {
     }
     // The two-letter codes, declared with a pattern and enforced nowhere.
     // `?language_spoken=` was accepted, applied, and reported back in
-    // `filters_applied` — so the answer said it had narrowed the search on a
+    // `filters_applied` - so the answer said it had narrowed the search on a
     // language while matching nobody, which reads as "no such people" rather
     // than "that is not a language code".
     if let Some(code) = &q.country_iso2
@@ -751,7 +751,7 @@ fn validate(q: &SearchQuery) -> Result<(), AppError> {
                 .into(),
         ));
     }
-    // Floors, so zero is not a filter — asking for at least nothing is asking
+    // Floors, so zero is not a filter - asking for at least nothing is asking
     // for nothing, and a caller who sends it means they left the field blank.
     for (name, value) in [
         ("min_contests_won", q.min_contests_won),
@@ -779,7 +779,7 @@ fn validate(q: &SearchQuery) -> Result<(), AppError> {
 /// What actually narrowed the search, in the answer.
 ///
 /// A recruiter who gets forty results wants to know which of their eight
-/// filters the endpoint honoured — silently ignoring one is how somebody
+/// filters the endpoint honoured - silently ignoring one is how somebody
 /// concludes nobody matches when the filter was simply dropped.
 fn filters_applied(q: &SearchQuery, skills: &[String]) -> Vec<String> {
     let mut applied = Vec::new();

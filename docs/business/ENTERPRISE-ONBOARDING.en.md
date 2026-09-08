@@ -1,4 +1,4 @@
-# Onboarding an enterprise — the sequence
+# Onboarding an enterprise - the sequence
 
 Written for a sales team that does not exist yet. That is deliberate: a
 process written afterwards describes what was done, not what was meant.
@@ -61,7 +61,7 @@ saying it: this is not us asserting, it is checkable.
 What not to do:
 
 - show the feature list;
-- show a profile invented for the demonstration — that is precisely the
+- show a profile invented for the demonstration - that is precisely the
   failure mode the product corrects;
 - show an empty page while promising it will fill up.
 
@@ -82,10 +82,10 @@ compromised recruiter account is an entire address book.
 
 **Technical setup**, where applicable:
 
-- delegated authentication (SSO) — for enterprises that ask;
-- account provisioning (SCIM) — beyond about ten recruiters;
-- API and tokens — for integration with an existing tool;
-- webhooks — to receive events rather than poll.
+- delegated authentication (SSO) - for enterprises that ask;
+- account provisioning (SCIM) - beyond about ten recruiters;
+- API and tokens - for integration with an existing tool;
+- webhooks - to receive events rather than poll.
 
 Allow half a day with a technical contact. With no technical contact, do not
 offer an integration: it will not be finished and will leave the impression of
@@ -98,7 +98,7 @@ a complicated product.
 **One objective: that something real happens within seven days.**
 
 A first guided search, a first message sent, or a first bounty posted. It does
-not matter which — what matters is that they completed an action, on their
+not matter which - what matters is that they completed an action, on their
 own, and that it worked.
 
 An enterprise that has done nothing in the first seven days will do nothing.
@@ -111,7 +111,7 @@ It is the most reliable indicator there is, and it never improves by itself.
 **Thirty days.** Have they used the product without us? If not, the problem is
 the setup, not the interest. Go back to §5.
 
-**Sixty days.** Has there been an outcome — an interview, a delivery, a bounty
+**Sixty days.** Has there been an outcome - an interview, a delivery, a bounty
 paid? If not, find out where it is stuck: the profiles, the approach, the
 product chosen.
 
@@ -139,16 +139,16 @@ The paths that make sense:
 
 Four, short. A long sales email is not read.
 
-**After the first call** — restate their problem in one sentence, propose one
+**After the first call** - restate their problem in one sentence, propose one
 thing, give a date.
 
-**After the demonstration** — the verification link that was shown, and
+**After the demonstration** - the verification link that was shown, and
 nothing else. That is the piece that works on its own.
 
-**Seven days with no action** — a question, not a chase: "what stopped you?"
+**Seven days with no action** - a question, not a chase: "what stopped you?"
 You learn more from the answer than from ten meetings.
 
-**Before a renewal** — thirty days out, with what happened over the period. A
+**Before a renewal** - thirty days out, with what happened over the period. A
 renewal asked for with no review is a renewal that was not earned.
 
 ---

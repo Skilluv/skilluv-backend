@@ -39,7 +39,7 @@ test that breaks on a refactor with no behaviour change is a bad test and does
 not count.
 
 **Documentation.** A reader arriving at the repository must know what to run
-and why the choices were made. **Code with no documentation is refused** — the
+and why the choices were made. **Code with no documentation is refused** - the
 most underestimated rule here, and the one that turns away the most
 submissions.
 
@@ -69,13 +69,13 @@ Using an assistant is **accepted and declared**.
 Accepted: these tools are part of the trade, and pretending otherwise would
 produce false declarations rather than different practices.
 
-Declared: the submission states the level of assistance — none, autocomplete,
+Declared: the submission states the level of assistance - none, autocomplete,
 pair programming, generated then reworked, generated as is. Hiding it is a
 separate offence from using it, and it is the one that is sanctioned.
 
 What is judged remains the result and your ability to answer for it. Defending
-the work in real time — explaining a choice, changing the code in front of a
-reviewer — is what settles it, not the declaration itself.
+the work in real time - explaining a choice, changing the code in front of a
+reviewer - is what settles it, not the declaration itself.
 
 ## 5. Validation
 
@@ -91,7 +91,7 @@ with no actionable reason is not a valid rejection.
 A validated artefact can be revoked: plagiarism discovered, an upstream
 contribution retracted, fraud established.
 
-Revocation removes the artefact from the count — rank, badges, attestations
+Revocation removes the artefact from the count - rank, badges, attestations
 that rested on it. It does not erase the history: what was revoked stays
 visible as revoked.
 

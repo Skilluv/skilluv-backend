@@ -1,4 +1,4 @@
-//! Enqueue jobs vers skilluv-ia via Redis queues — Phase 5 integration.
+//! Enqueue jobs vers skilluv-ia via Redis queues - Phase 5 integration.
 //!
 //! Format uniforme (aligné sur skilluv-ia/README) :
 //! ```json

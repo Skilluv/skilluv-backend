@@ -1,4 +1,4 @@
-# Modèles de brief — domaine IA
+# Modèles de brief - domaine IA
 
 Six modèles, un par nature d'artefact. À utiliser pour rédiger l'énoncé d'un
 challenge IA.
@@ -88,7 +88,7 @@ Ajouter à la structure commune :
 - **Sources et fraîcheur attendue** : d'où vient la donnée, à quelle fréquence
   elle doit arriver, quel retard est tolérable.
 - **Sémantique de livraison** : au plus une fois, au moins une fois, exactement
-  une fois. Dire laquelle est exigée — pas « fiable ».
+  une fois. Dire laquelle est exigée - pas « fiable ».
 - **Volume et croissance** : le volume d'aujourd'hui et celui prévu, sinon le
   travail est calibré pour l'échantillon.
 - **Comportement en panne** : ce qui doit se passer si la source disparaît en
@@ -121,7 +121,7 @@ l'autre.
 Ajouter à la structure commune :
 
 - **Jeu d'évaluation** : les cas, dont des cas d'échec choisis exprès. Fourni
-  par le brief, ou à construire — et alors c'est un livrable à part entière.
+  par le brief, ou à construire - et alors c'est un livrable à part entière.
 - **Outils accessibles** et ce que l'agent ne doit jamais pouvoir faire.
 - **Comportement en cas d'ignorance** : dire qu'il ne sait pas, ou inventer.
   Le premier est le seul acceptable, et cela se teste.
@@ -139,7 +139,7 @@ Ajouter à la structure commune :
 - **Conditions de prise de vue** : lumière, angle, résolution, flou. Un modèle
   entraîné sur des images propres échoue en production.
 - **Composition du jeu d'images** et sous-populations à évaluer séparément.
-- **Annotation** : fournie, ou à produire — et alors avec quel protocole et
+- **Annotation** : fournie, ou à produire - et alors avec quel protocole et
   quel accord inter-annotateurs.
 - **Cible matérielle** et images par seconde attendues.
 - **Personnes** : si le sujet en montre, l'usage prévu et le consentement se

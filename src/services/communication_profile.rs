@@ -1,8 +1,8 @@
 //! The communication craft score (migration 0508).
 //!
 //! The fourth domain to score. The formula, the tiers, the cap and the
-//! assembly are shared — [`craft_score::assemble`] was extracted when audio
-//! became the third — and what is domain-specific is the measuring, and only
+//! assembly are shared - [`craft_score::assemble`] was extracted when audio
+//! became the third - and what is domain-specific is the measuring, and only
 //! the measuring.
 //!
 //! ## What the score counts, and the one figure it discounts
@@ -13,7 +13,7 @@
 //! the sharpest case of it on the platform.
 //!
 //! Audience figures come from two places. Per-artefact ones are fetched from
-//! platforms with an API — DEV, Hashnode, YouTube, Zenodo — and are as good as
+//! platforms with an API - DEV, Hashnode, YouTube, Zenodo - and are as good as
 //! the platform. Per-account ones come from `user_external_portfolios`, where
 //! Medium, a personal blog and Apple Podcasts have no API at all and the
 //! number is what the person read on their own dashboard.
@@ -337,7 +337,7 @@ pub struct CommunicationProfile {
     pub username: String,
     pub craft_score: i32,
     /// `apprentice`, `contributor`, `engineer`, `senior`, `staff`,
-    /// `principal` — the same six every domain uses, so somebody can compare
+    /// `principal` - the same six every domain uses, so somebody can compare
     /// their own two profiles.
     pub tier: String,
     pub tier_name: String,

@@ -47,7 +47,7 @@ arbitre. Détenir la famille dont on relève n'y donne pas droit.
 Trois choses, dans cet ordre d'importance :
 
 1. **Du métier dans la famille visée.** Pas un rang sur la plateforme : du
-   travail qu'on peut regarder. Un portfolio externe suffit à cette étape —
+   travail qu'on peut regarder. Un portfolio externe suffit à cette étape -
    c'est le seul endroit où une réputation importée compte, parce qu'on ne
    juge pas un profil mais une compétence.
 2. **Savoir écrire une critique.** C'est la compétence rare. Beaucoup de gens
@@ -67,14 +67,14 @@ cible.
 
 **Une critique utilisable dit trois choses :**
 
-- *ce que vous voyez* — descriptif, vérifiable, pas une impression ;
-- *pourquoi c'est un problème* — au regard du brief, pas de votre goût ;
-- *ce qui changerait la réponse* — sans dessiner à la place de l'auteur.
+- *ce que vous voyez* - descriptif, vérifiable, pas une impression ;
+- *pourquoi c'est un problème* - au regard du brief, pas de votre goût ;
+- *ce qui changerait la réponse* - sans dessiner à la place de l'auteur.
 
 > Inutilisable : « Le logo ne fonctionne pas, il manque quelque chose. »
 >
 > Utilisable : « Le logotype passe sous 24 px dans le favicon et les deux
-> contreformes se ferment — c'est le pire cas que le brief posait comme
+> contreformes se ferment - c'est le pire cas que le brief posait comme
 > non négociable. Une version simplifiée pour les petites tailles, ou un
 > dessin qui tient tel quel à 16 px, répondraient tous les deux. »
 

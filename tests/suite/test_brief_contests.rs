@@ -682,7 +682,7 @@ async fn the_contest_list_narrows_in_sql_not_in_the_browser() {
 
     // Without this filter the design contest page asked for two hundred rows
     // and sorted them client-side, which stops working at the two hundred and
-    // first tournament — silently, by dropping the oldest.
+    // first tournament - silently, by dropping the oldest.
     let body: Value = app
         .get("/api/tournaments?kind=brief_contest&skill_domain=design")
         .await
@@ -906,7 +906,7 @@ async fn the_panel_is_never_blinded() {
     submit(&app, "brief-blind-jury", "blind_entrant", 3).await;
 
     // Blinding the panel too would not be a flag, it would be a different
-    // contest calendar — judging could only start after the deadline.
+    // contest calendar - judging could only start after the deadline.
     sqlx::query(
         "INSERT INTO tournament_juries (tournament_id, juror_user_id, accepted_at)
          VALUES ($1, $2, NOW())",
@@ -950,7 +950,7 @@ async fn the_field_opens_at_the_deadline_and_stays_open() {
     submit(&app, "brief-blind-closed", "blind_closer", 4).await;
 
     // A result nobody can check against the whole field is not a result. The
-    // window narrows *when*, never *whether* — including for a reader who
+    // window narrows *when*, never *whether* - including for a reader who
     // never had an account.
     sqlx::query("UPDATE tournaments SET status = 'concluded' WHERE id = $1")
         .bind(contest)
@@ -1035,7 +1035,7 @@ async fn a_third_entrant_is_refused_in_a_duel() {
     enter(&app, duel, two).await;
 
     // A third turns it into a small contest judged by the room with no jury
-    // and no brief — a worse format than either of the two it sits between.
+    // and no brief - a worse format than either of the two it sits between.
     let third = sqlx::query(
         "INSERT INTO tournament_participants (tournament_id, participant_type, participant_id)
          VALUES ($1, 'user', $2)",

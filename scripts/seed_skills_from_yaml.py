@@ -12,7 +12,7 @@ Le script est idempotent : re-run overwrite le fichier de migration. À re-lance
 quand le seed YAML est modifié (ajout/retrait/renommage de skills).
 
 Le seed YAML est le SEUL SOURCE OF TRUTH pour les skills atomiques Skilluv.
-Ne PAS éditer le SQL généré directement — il sera écrasé.
+Ne PAS éditer le SQL généré directement - il sera écrasé.
 """
 
 import sys
@@ -82,7 +82,7 @@ def generate_sql() -> str:
                     f"{'TRUE' if skill_skilluv else 'FALSE'})"
                 )
 
-    sql = f"""-- Phase P0 — Fondations du modèle cible.
+    sql = f"""-- Phase P0 - Fondations du modèle cible.
 -- Migration 0057 : seed initial de la table `skill_nodes`.
 --
 -- Ce fichier est AUTO-GÉNÉRÉ depuis docs/skill-nodes-seed.yaml
@@ -129,7 +129,7 @@ JOIN skill_nodes parent ON parent.slug = ns.parent_slug AND parent.parent_id IS 
 ON CONFLICT (slug) DO NOTHING;
 
 -- ═══════════════════════════════════════════════════════════════════
--- Vérification (commentaires — les COUNT ne s'exécutent pas dans une migration)
+-- Vérification (commentaires - les COUNT ne s'exécutent pas dans une migration)
 -- ═══════════════════════════════════════════════════════════════════
 --
 -- Après application, on doit avoir :

@@ -11,7 +11,7 @@
 use crate::common::TestApp;
 use uuid::Uuid;
 
-/// An attestation of a given basis, written straight to the table — the
+/// An attestation of a given basis, written straight to the table - the
 /// issuing paths are covered by their own suites, and what is under test here
 /// is the rendering.
 async fn an_attestation(app: &TestApp, username: &str, basis: &str, code: &str) -> Uuid {
@@ -21,7 +21,7 @@ async fn an_attestation(app: &TestApp, username: &str, basis: &str, code: &str) 
         .await
         .unwrap();
 
-    // An artefact basis must link a deliverable — a CHECK constraint that has
+    // An artefact basis must link a deliverable - a CHECK constraint that has
     // been widened once per domain since 0178, and which is the whole point of
     // the distinction the sheet draws. An editorial featuring links nothing,
     // because it rests on somebody's judgement rather than on a file.
@@ -237,7 +237,7 @@ async fn a_card_is_not_cached_for_a_year() {
 // ═══════════════════════════════════════════════════════════════════
 
 /// Like `an_attestation`, but it asks the catalogue whether the basis needs a
-/// deliverable instead of guessing from the name — which is the same question
+/// deliverable instead of guessing from the name - which is the same question
 /// the sheet now asks, and the reason these rows can be written at all.
 async fn an_attestation_of(
     app: &TestApp,
@@ -399,7 +399,7 @@ async fn the_full_sheet_carries_the_evidence_and_the_short_one_does_not() {
     assert!(full.contains(r#"width="794""#));
     assert!(full.contains(r#"height="1123""#));
 
-    // An unreadable value prints the short sheet rather than a 400 — this is a
+    // An unreadable value prints the short sheet rather than a 400 - this is a
     // document somebody is trying to print.
     assert_eq!(sheet(&app, "JJJJ999911", "?type=complet").await, short);
 }

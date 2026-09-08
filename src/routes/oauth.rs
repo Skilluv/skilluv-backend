@@ -1,4 +1,4 @@
-//! OAuth login + linking routes — Phase 3.1 + 3.2.
+//! OAuth login + linking routes - Phase 3.1 + 3.2.
 //!
 //! Unified across GitHub / Google / LinkedIn. The GitHub-specific token storage
 //! (Sprint 5) remains in `routes::github` for the repo-sync flow ; this module
@@ -32,7 +32,7 @@ struct StartQuery {
     invite_token: Option<String>,
     /// Absolute path on this deployment's own frontend to return the browser
     /// to once the flow completes. Same shape and same `sanitise_return_path`
-    /// treatment as the other providers' start endpoint — a path, never a URL.
+    /// treatment as the other providers' start endpoint - a path, never a URL.
     #[param(max_length = 512)]
     return_to: Option<String>,
 }
@@ -45,7 +45,7 @@ pub fn oauth_routes() -> Router<AppState> {
             "/auth/me/oauth-providers/{provider}",
             axum::routing::delete(unlink_provider),
         )
-        // Discord — link only. There is deliberately no `/start`: Discord is
+        // Discord - link only. There is deliberately no `/start`: Discord is
         // not a sign-up route here (see `services::oauth::discord`), it is how
         // an existing account claims its Discord identity.
         .route("/auth/discord/link", get(discord_link_start))
@@ -152,7 +152,7 @@ struct LinkQuery {
     /// Path on the Skilluv frontend to return to, e.g. `/settings/connections`.
     ///
     /// A **path**, never a URL. The flow appends it to the deployment's own
-    /// frontend origin, so no other destination is expressible — which is what
+    /// frontend origin, so no other destination is expressible - which is what
     /// makes this safe to accept from a query string. Anything that is not a
     /// plain absolute path is ignored rather than rejected: a malformed return
     /// path is not a reason to fail a link the user has already consented to.
@@ -228,7 +228,7 @@ pub async fn google_callback(
 /// Link only, and that is the whole design. Discord is not a way to sign up
 /// here: somebody who has never had a Skilluv account has nothing for a role
 /// to be derived from, and creating one from a Discord identity would produce
-/// an account with no trades, no rank and no proof — which is precisely the
+/// an account with no trades, no rank and no proof - which is precisely the
 /// account the community cannot place.
 #[utoipa::path(
     get, path = "/api/auth/discord/link", tag = "auth",
@@ -522,7 +522,7 @@ async fn finalise_login_or_link(
                     .email
                     .as_deref()
                     .ok_or(AppError::Validation(
-                        "Provider did not return an email — cannot verify invite.".into(),
+                        "Provider did not return an email - cannot verify invite.".into(),
                     ))?
                     .trim()
                     .to_lowercase();
@@ -570,7 +570,7 @@ async fn finalise_login_or_link(
                 .fetch_one(&state.db)
                 .await?;
             // OAuth signup/login goes through the consumer providers (Google,
-            // LinkedIn, GitHub) — distinct from enterprise SSO which is
+            // LinkedIn, GitHub) - distinct from enterprise SSO which is
             // labelled 'sso' in enterprise_sso.rs. Keeping them separate lets
             // require_enterprise apply the enforce_sso rule without treating
             // "signed in with my personal Google" as an enterprise IdP proof.
@@ -598,7 +598,7 @@ async fn finalise_login_or_link(
             //
             // This branch used to return the JSON below and nothing else, so a
             // browser that had just signed in with Google finished the round
-            // trip looking at `{"user_id": "..."}` on api.skill-uv.com — a
+            // trip looking at `{"user_id": "..."}` on api.skill-uv.com - a
             // domain it never chose to visit, with the back button as the only
             // way out. The `link` branch above was given this treatment and the
             // reasoning written down; signup and login never got it, which made
@@ -645,7 +645,7 @@ async fn create_user_from_profile(
         .email
         .as_ref()
         .ok_or(AppError::Validation(
-            "Provider did not return an email — cannot create account. Sign in with password first and link.".into(),
+            "Provider did not return an email - cannot create account. Sign in with password first and link.".into(),
         ))?
         .trim()
         .to_lowercase();
@@ -688,11 +688,11 @@ async fn create_user_from_profile(
     } else {
         String::new()
     };
-    // Placeholder password_hash (unusable) — the user can add a real password later.
+    // Placeholder password_hash (unusable) - the user can add a real password later.
     let password_hash = "$argon2id$v=19$m=19456,t=2,p=1$oauth-placeholder$oauth-placeholder";
     // Pattern C: skill_domain and terms_accepted_at are deliberately NULL.
     // The onboarding flow (POST /auth/complete-profile) fills them in and RGPD consent is
-    // captured explicitly at that point — never assumed from the OAuth click.
+    // captured explicitly at that point - never assumed from the OAuth click.
     let inserted: (Uuid,) = sqlx::query_as(
         r#"
         INSERT INTO users (email, username, password_hash, first_name, last_name, display_name, skill_domain, email_verified)

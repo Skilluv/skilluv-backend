@@ -156,7 +156,7 @@ async fn the_capabilities_added_before_this_one_are_still_grantable() {
 
     // A CHECK cannot be extended, only replaced. Migration 0176 rewrote it,
     // and dropping a value here would silently disable the guard that reads
-    // it — the validator workflow, and the apprentice sas.
+    // it - the validator workflow, and the apprentice sas.
     for (n, capability) in [
         "verified_apprentice",
         "apprentice_verifier",

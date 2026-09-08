@@ -1,4 +1,4 @@
-# Modération front vs Admin panel — split de responsabilités
+# Modération front vs Admin panel - split de responsabilités
 
 **Statut au 2026-07-15** : P25 livre les 5 capabilities community moderator +
 helpers `require_capability` / `require_any_capability`. Ce doc explique
@@ -7,10 +7,10 @@ comment le front doit consommer.
 ## Principe fondateur
 
 Deux fronts distincts sur Skilluv :
-- **`skilluv-frontend`** — l'app utilisateur (Svelte), où vivent talents,
+- **`skilluv-frontend`** - l'app utilisateur (Svelte), où vivent talents,
   mentors, entreprises, ET **modérateurs communautaires** (power users
   volontaires de confiance).
-- **`skilluv-admin`** — le back-office staff Skilluv (réservé aux
+- **`skilluv-admin`** - le back-office staff Skilluv (réservé aux
   salariés / core team).
 
 **La règle** : un modérateur communautaire n'a **jamais** accès à
@@ -53,24 +53,24 @@ uniquement depuis les routes `/api/admin/**`.
 
 ## Exemples de wiring backend attendu (P26+ à implémenter)
 
-### Modération inline — accessible depuis front
+### Modération inline - accessible depuis front
 
 ```rust
-// POST /api/forum/posts/{id}/moderate — accessible forum_mod ou admin
+// POST /api/forum/posts/{id}/moderate - accessible forum_mod ou admin
 async fn moderate_post(State(state), auth: AuthUser, ...) {
     require_any_capability(&state.db, auth.user_id,
         &["forum_moderator", "admin"]).await?;
     // ... action de modération
 }
 
-// POST /api/fraud/deliverables/{id}/mark-valid — plagiarism_reviewer ou admin
+// POST /api/fraud/deliverables/{id}/mark-valid - plagiarism_reviewer ou admin
 async fn mark_valid(State(state), auth: AuthUser, ...) {
     require_any_capability(&state.db, auth.user_id,
         &["plagiarism_reviewer", "admin"]).await?;
     // ...
 }
 
-// POST /api/community/challenges/{id}/approve — curator ou admin
+// POST /api/community/challenges/{id}/approve - curator ou admin
 async fn approve_community_challenge(State(state), auth, ...) {
     require_any_capability(&state.db, auth.user_id,
         &["community_curator", "admin"]).await?;
@@ -78,10 +78,10 @@ async fn approve_community_challenge(State(state), auth, ...) {
 }
 ```
 
-### Admin uniquement — servi depuis skilluv-admin
+### Admin uniquement - servi depuis skilluv-admin
 
 ```rust
-// POST /api/admin/users/{id}/capabilities — grant capability
+// POST /api/admin/users/{id}/capabilities - grant capability
 async fn admin_grant(...) {
     require_capability(&state.db, auth.user_id, "admin").await?;
     // pas d'alternative moderator
@@ -93,7 +93,7 @@ async fn admin_grant(...) {
 Trois familles livrées en Post-MVP T2/T3 étaient scopées uniquement sur leur
 propriétaire, ce qui laissait la modération sans prise. Le correctif suit la
 même forme partout : **un geste sur l'objet, et un listing qui voit ce que la
-surface publique cache**. Les deux sont inutiles l'un sans l'autre — un geste
+surface publique cache**. Les deux sont inutiles l'un sans l'autre - un geste
 dont on ne peut pas trouver la cible ne sert à rien, et c'est exactement ce
 qu'était `POST /moderation/vouchings/{id}/break` avant SKI-297.
 
@@ -131,7 +131,7 @@ est décrit dans `AUDIT-APPEND-ONLY.md`.
 - Retirer une offre ne la supprime pas. Un litige s'instruit contre ce qui a
   été publié, pas contre le souvenir qu'on en a.
 - Rien de tout cela ne touche le moteur de preuves. Un signal externe reste du
-  contexte déclaré, un vouching reste une caution — voir migrations 0145 et
+  contexte déclaré, un vouching reste une caution - voir migrations 0145 et
   0148.
 
 ## Comment le front conditionne l'UI
@@ -169,7 +169,7 @@ C'est exactement le pattern Skilluv.
 3. **Audit trail toutes les actions modération** (déjà en place via
    `audit_logs` P4). Chaque `mute/revoke/approve` doit tracer le
    moderator + timestamp + raison.
-4. **Notification à l'utilisateur affecté** — si un post est deleted
+4. **Notification à l'utilisateur affecté** - si un post est deleted
    ou un deliverable revoked par un moderator, l'utilisateur reçoit
    une notif expliquant pourquoi (transparence).
 

@@ -1,4 +1,4 @@
-# Brief templates — Code
+# Brief templates - Code
 
 Eight templates, one per family of trades. Use them to write the statement of
 a challenge.
@@ -37,7 +37,7 @@ version to support, deployment environment.
 ### 3. Deliverables
 
 Always the three: **code**, **tests**, **documentation**. Say where they land
-— a repository, an upstream contribution, a published package.
+- a repository, an upstream contribution, a published package.
 
 ### 4. Acceptance criteria
 
@@ -59,7 +59,7 @@ avoids the most wasted work.
 
 ---
 
-## 1. Web application — `web`
+## 1. Web application - `web`
 
 *frontend, backend, fullstack, performance, web3-frontend*
 
@@ -72,18 +72,18 @@ Also state:
 For web3: the target network, what happens when the user refuses to sign, and
 the behaviour on a chain reorganisation.
 
-## 2. Mobile application — `mobile`
+## 2. Mobile application - `mobile`
 
 *iOS, Android, cross-platform*
 
 Also state:
 - minimum OS versions;
-- expected offline behaviour — the question that separates serious mobile work
+- expected offline behaviour - the question that separates serious mobile work
   from the rest;
 - permissions requested, and what to do when one is permanently refused;
 - whether store publication is part of the deliverable.
 
-## 3. Desktop and enterprise software — `devtools-media`
+## 3. Desktop and enterprise software - `devtools-media`
 
 *desktop, enterprise, low-code*
 
@@ -92,18 +92,18 @@ Also state:
 - signing and updates: expected, or out of scope;
 - for enterprise: authentication method, data separation, audit requirements.
 
-## 4. Systems and embedded — `systems`
+## 4. Systems and embedded - `systems`
 
 *systems programming, kernel, firmware, robotics, safety-critical*
 
 Also state:
 - target hardware, or a simulator accepted instead;
 - memory and power constraints, with numbers;
-- expected behaviour on failure — an embedded system with no defined degraded
+- expected behaviour on failure - an embedded system with no defined degraded
   mode is not finished;
 - for safety-critical: the applicable standard and the target level.
 
-## 5. Blockchain — `blockchain`
+## 5. Blockchain - `blockchain`
 
 *smart contracts, protocols*
 
@@ -114,7 +114,7 @@ Also state:
 - **always**: a deployment cannot be corrected. The brief must say what is
   irreversible.
 
-## 6. Compilers and formal methods — `compilers`
+## 6. Compilers and formal methods - `compilers`
 
 *compilers, languages, proofs*
 
@@ -125,7 +125,7 @@ Also state:
   and that is judged;
 - a set of test programs, supplied or to be built.
 
-## 7. Data and distributed systems — `data`
+## 7. Data and distributed systems - `data`
 
 *database engines, search, distributed, streaming*
 
@@ -135,13 +135,13 @@ Also state:
 - failures to survive, and the expected behaviour under each;
 - what is measured: high percentiles, not the mean.
 
-## 8. Scientific and GPU computing — `scientific`
+## 8. Scientific and GPU computing - `scientific`
 
 *scientific computing, GPU, quantitative*
 
 Also state:
 - the validation reference: an analytical solution, a known dataset;
-- the reproducibility requirement — seeds, a pinned environment;
+- the reproducibility requirement - seeds, a pinned environment;
 - reference hardware for performance measurements;
 - for quantitative work: transaction costs and the biases to avoid in a
   backtest.
@@ -151,5 +151,5 @@ Also state:
 ## On the French version
 
 Briefs are published in the language of the challenge. The structure above
-translates without adaptation. The numbered examples do not translate — they
+translates without adaptation. The numbered examples do not translate - they
 are recalculated for the context in question.

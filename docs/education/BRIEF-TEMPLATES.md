@@ -1,8 +1,8 @@
-# Education — brief templates
+# Education - brief templates
 
 Backlog: education/F-05. What a client or a challenge author fills in when they
-want teaching or curriculum work done. The **write-up** templates — what the
-contributor hands back — are the other end of the same conversation.
+want teaching or curriculum work done. The **write-up** templates - what the
+contributor hands back - are the other end of the same conversation.
 
 Both halves are rows in `content_guides`, seeded by migration
 `0530_education_content_guides.sql` and translated in
@@ -11,7 +11,7 @@ Both halves are rows in `content_guides`, seeded by migration
 because they are edited by people who do not deploy, and this document says
 what they are for.
 
-Three briefs, one per trade — and here the trade split is right even though
+Three briefs, one per trade - and here the trade split is right even though
 there are only two review families, for the same reason it is right for the
 onboarding guides. Commissioning a curriculum and commissioning a term of
 teaching have nothing in common to say.
@@ -22,7 +22,7 @@ teaching have nothing in common to say.
 
 Every education brief answers these:
 
-1. **Who the learners are**, how many, and what they can already do —
+1. **Who the learners are**, how many, and what they can already do -
    honestly. The optimistic answer here is the single most expensive error in
    this domain.
 2. **Whether they are attending voluntarily.** If they are not, the first
@@ -34,7 +34,7 @@ Every education brief answers these:
 6. **The environment**: whose machines, what is installed, who can install,
    and the fallback for the laptop that will not cooperate.
 7. **What is handed over**: slides, exercises, solutions, facilitator notes,
-   recording — and who owns them afterwards.
+   recording - and who owns them afterwards.
 
 A brief that cannot answer 1 and 3 is not ready.
 
@@ -60,7 +60,7 @@ things it should not have.
 
 ---
 
-## `brief-education-training` — delivering a workshop, course or cohort
+## `brief-education-training` - delivering a workshop, course or cohort
 
 The environment section is the longest, because more sessions fail on setup
 than on content. It asks who can install software and how long approval takes,
@@ -70,7 +70,7 @@ Also asks how many runs the fee includes. A course prepared once and delivered
 four times is a different commission from one delivered once, and the
 difference is usually discovered on the second delivery.
 
-## `brief-education-curriculum` — designing a programme somebody else runs
+## `brief-education-curriculum` - designing a programme somebody else runs
 
 Opens with the problem rather than the topic: what can people not do today,
 what changes in the organisation when they can, and why a programme rather
@@ -84,10 +84,10 @@ The rights section asks who updates the curriculum when a tool version moves,
 and whether maintenance is part of this commission. A curriculum with no named
 maintainer breaks silently within a year.
 
-## `brief-education-teaching-engagement` — a term, a module, a series
+## `brief-education-teaching-engagement` - a term, a module, a series
 
 The one for ongoing teaching rather than a single delivery. It asks what
-proportion of learners are expected to complete, **based on your history** —
+proportion of learners are expected to complete, **based on your history** -
 not a target. A client who says ninety per cent and has never measured is
 telling the contributor something useful either way.
 
@@ -100,6 +100,6 @@ where these engagements quietly become underpaid.
 ## The clause every education brief should carry
 
 **What happens if the group does not fill.** A cohort designed for twenty and
-attended by four is a different job — better for the learners, worse for the
-economics — and who carries that is a question with a clean answer before
+attended by four is a different job - better for the learners, worse for the
+economics - and who carries that is a question with a clean answer before
 enrolment opens and no clean answer after.

@@ -29,10 +29,10 @@ rate_limit:
   exceeded: "Trop de requêtes. Réessaie dans un instant."
 
 emails:
-  verify_subject: "Skilluv — Vérifie ton email"
-  password_reset_subject: "Skilluv — Réinitialisation de mot de passe"
-  data_export_subject: "Skilluv — Ton export de données est prêt"
-  digest_subject: "Ta semaine Skilluv — {challenges_completed} challenges / {fragments_earned} fragments"
+  verify_subject: "Skilluv : vérifie ton email"
+  password_reset_subject: "Skilluv : réinitialisation de mot de passe"
+  data_export_subject: "Skilluv : ton export de données est prêt"
+  digest_subject: "Ta semaine Skilluv : {challenges_completed} challenges / {fragments_earned} fragments"
 
 system:
   internal_error: "Une erreur est survenue. Réessaie."
@@ -402,7 +402,7 @@ notification:
       cta: "Revenir a l'atelier"
     last_chance:
       title: "Le dernier mail de cette serie"
-      body: "Un mois sans nouvelles. On arrete de t'ecrire ici — ton compte et tes preuves restent intacts, et tu reviens quand tu veux. Si tu as une raison de ne pas etre revenu, reponds a ce mail : on lit tout."
+      body: "Un mois sans nouvelles. On arrete de t'ecrire ici. Ton compte et tes preuves restent intacts, et tu reviens quand tu veux. Si tu as une raison de ne pas etre revenu, reponds a ce mail : on lit tout."
       cta: "Revenir quand meme"
     enterprise_welcome:
       title: "Comment lire une preuve"
@@ -523,8 +523,8 @@ discord:
 
     Connecte-toi sur {frontend}, puis va dans **Paramètres -> Comptes liés -> Discord**. Tes rôles arrivent dans la minute, et ils suivront ton profil ensuite.
 
-    Astuce : déclare d'abord tes métiers. C'est ce qui ouvre les salons de ton domaine — sans eux, il n'y a pas grand-chose à te donner.
-  linked: "**{display_name}** — {frontend}/@{username}{profile}"
+    Astuce : déclare d'abord tes métiers. C'est ce qui ouvre les salons de ton domaine. Sans eux, il n'y a pas grand-chose à te donner.
+  linked: "**{display_name}** : {frontend}/@{username}{profile}"
   trades: "Métiers : {list}"
   welcome: |-
     Ton compte Discord est lié à **{username}**.
@@ -542,7 +542,7 @@ discord:
   join_welcome: |-
     Bienvenue sur Skilluv, **{name}** !
 
-    Ici c'est la communaute autour de {frontend} — une plateforme de compagnonnage ou les contributions open source deviennent des attestations verifiables.
+    Ici c'est la communaute autour de {frontend}, une plateforme de compagnonnage ou les contributions open source deviennent des attestations verifiables.
 
     Pour commencer :
     - Presente-toi dans le salon de ton metier
@@ -550,7 +550,7 @@ discord:
     - Connecte-toi sur {frontend}, declare tes metiers, puis lie Discord depuis **Parametres -> Comptes lies**. Tes roles et tes salons s'ouvrent tout seuls.
 
     A bientot !
-  leaderboard_head: "**{domain}** — classement craft"
+  leaderboard_head: "**{domain}** : classement craft"
   leaderboard_you: "Toi : **#{rank}** avec {score} ({username})"
   leaderboard_empty: "Personne n'a encore de score craft en `{domain}`. Il se calcule sur du travail validé."
   findings_head: |-

@@ -38,8 +38,8 @@ async fn a_company_sees_every_product_it_has_in_one_answer() {
         sqlx::query(
             // `renews_at` on every row: a data room is a recurring product and
             // the trigger from 0206 refuses one that does not say when. That
-            // is the point of the trigger — a renewal nobody was told to ask
-            // for lapses — so the test supplies a date rather than working
+            // is the point of the trigger - a renewal nobody was told to ask
+            // for lapses - so the test supplies a date rather than working
             // around it.
             "INSERT INTO enterprise_products
                 (enterprise_id, product_type, contract_value, currency, renews_at)

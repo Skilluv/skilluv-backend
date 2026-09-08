@@ -5,12 +5,12 @@
 //! The word `admin` in the path is about which surface this is, not about who
 //! may reach it. Three roles work here and they are deliberately unequal:
 //!
-//!   * **`security_triager`** — reads the incoming queue and decides what is
+//!   * **`security_triager`** - reads the incoming queue and decides what is
 //!     worth a reviewer's afternoon. High volume, mostly refusals. May not
 //!     confirm anything.
-//!   * **`security_reviewer:{family}`** — reproduces, confirms, argues
+//!   * **`security_reviewer:{family}`** - reproduces, confirms, argues
 //!     severity, opens rounds, rules duplicates. The judgement.
-//!   * **`admin`** — publishes, withholds, grants an extension, curates the
+//!   * **`admin`** - publishes, withholds, grants an extension, curates the
 //!     catalogue. The decisions that are irreversible or that commit the
 //!     platform to something.
 //!
@@ -143,7 +143,7 @@ async fn require_reader(state: &AppState, auth: &AuthUser) -> Result<(), AppErro
 /// Which actor this person is, taking the strongest they hold.
 ///
 /// Returned rather than checked, because the state machine in
-/// `services::security_findings` is what decides what each actor may do — and
+/// `services::security_findings` is what decides what each actor may do - and
 /// keeping that decision in one place is the reason it is a table there rather
 /// than a series of `if` statements here.
 async fn actor_for(
@@ -223,7 +223,7 @@ pub struct QueueQuery {
 /// The incoming queue.
 ///
 /// Ordered by severity and then by age, which is the order somebody working
-/// through it wants — not by arrival, which buries a critical filed on a
+/// through it wants - not by arrival, which buries a critical filed on a
 /// Friday under a week of informationals.
 #[utoipa::path(
     get, path = "/api/admin/security/findings",
@@ -460,7 +460,7 @@ pub async fn transition(
 
     // The proof engine, after the fact: a confirmation may have earned a badge
     // or a rank, and the person who earned it should be told in the same
-    // minute. Best-effort — a notification failure must not undo a decision.
+    // minute. Best-effort - a notification failure must not undo a decision.
     let db = state.db.clone();
     tokio::spawn(async move {
         let reporter: Option<Uuid> =
@@ -1136,7 +1136,7 @@ pub async fn revoke_token(
 /// The artefact is supplied rather than extracted: the request log lives in the
 /// reverse proxy and not in this database, and its redaction is a judgement
 /// about other people's requests that nothing here should be making. What this
-/// endpoint does is everything after the export — the challenge, the questions,
+/// endpoint does is everything after the export - the challenge, the questions,
 /// and the answers that are known because the finding is on the record.
 #[utoipa::path(
     post, path = "/api/admin/security/findings/{id}/blue-lab",
@@ -1367,7 +1367,7 @@ pub async fn overview(
 #[serde(deny_unknown_fields)]
 pub struct CommentBody {
     /// What you want the next person on this finding to know. At least three
-    /// characters after trimming — the floor is the schema's, and it is there
+    /// characters after trimming - the floor is the schema's, and it is there
     /// because "ok" satisfies "not empty".
     pub body_md: String,
 }
@@ -1376,7 +1376,7 @@ pub struct CommentBody {
 ///
 /// Read by whoever works findings and by nobody else. It is never notified to
 /// the reporter and never returned by `GET /api/security/findings/{id}`, which
-/// is the reporter's own view of their report — the guarantee is that this
+/// is the reporter's own view of their report - the guarantee is that this
 /// table is joined by exactly one handler, the admin detail below.
 ///
 /// Append-only, and there is no route to edit or delete one. A note that
@@ -1454,7 +1454,7 @@ pub struct TokenQuery {
 ///
 /// ## Why this is the missing half rather than a nice listing
 ///
-/// Revocation has existed since the tokens did, and nothing listed them — so
+/// Revocation has existed since the tokens did, and nothing listed them - so
 /// the only way to revoke one was with an id somebody pulled out of psql. The
 /// moment you want to revoke is the moment you are looking at traffic and
 /// deciding it is abuse; you have a pattern, not an id. This is the step
@@ -1531,7 +1531,7 @@ pub async fn list_tokens(
 
     Ok(Json(ApiResponse::new(json!({
         "tokens": tokens,
-        "note": "The token itself is never returned — only its prefix, which is \
+        "note": "The token itself is never returned - only its prefix, which is \
                  what matches a log line. Revoke with the id.",
     }))))
 }

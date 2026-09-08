@@ -9,7 +9,7 @@
 //! So this asks. Three outcomes, in order of preference:
 //!
 //! 1. **The provider answers.** Stripe and FedaPay can be polled, and the
-//!    answer becomes the same [`Event`] a callback would have produced —
+//!    answer becomes the same [`Event`] a callback would have produced -
 //!    routed through the same apply path, so a payout resolved by polling
 //!    is indistinguishable from one resolved by a callback.
 //! 2. **The provider cannot be polled.** The Mobile Money operators only
@@ -106,7 +106,7 @@ pub async fn sweep(db: &PgPool, registry: &PayoutRegistry) -> Result<SweepReport
         metrics::counter!("skilluv_batch_truncated_total", "job" => "reconciliation").increment(1);
         tracing::warn!(
             page = STALE_PAGE,
-            "more unconfirmed payouts than one sweep examines — the rest are \
+            "more unconfirmed payouts than one sweep examines - the rest are \
              checked next cycle, but a backlog that persists means payouts are \
              not settling"
         );
@@ -140,7 +140,7 @@ pub async fn sweep(db: &PgPool, registry: &PayoutRegistry) -> Result<SweepReport
 
         let Some(provider) = registry.get(&row.provider) else {
             // The deployment running the sweep does not hold this
-            // provider's credentials. Not an error — but not something to
+            // provider's credentials. Not an error - but not something to
             // count as checked either.
             tracing::debug!(
                 provider = %row.provider,
@@ -303,7 +303,7 @@ fn event_from_stored(kind: Option<&str>, payload: &serde_json::Value) -> Option<
 
 /// Hand a payout to a person, once.
 ///
-/// The notification kind was seeded for exactly this and had no sender —
+/// The notification kind was seeded for exactly this and had no sender -
 /// `admin.payout_needs_replay` existed in the catalogue and nothing ever
 /// emitted it.
 async fn escalate(db: &PgPool, provider: &str, payout_id: Uuid, why: &str) -> Result<(), AppError> {
@@ -328,7 +328,7 @@ async fn escalate(db: &PgPool, provider: &str, payout_id: Uuid, why: &str) -> Re
         provider = provider,
         payout = %payout_id,
         reason = why,
-        "payout unresolved — escalating to an operator"
+        "payout unresolved - escalating to an operator"
     );
 
     crate::services::notify::send(

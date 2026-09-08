@@ -1,8 +1,8 @@
-//! SKI-291 — `GET /api/u/{username}/projects`.
+//! SKI-291 - `GET /api/u/{username}/projects`.
 //!
 //! The route gated on `profile_active`, which only records whether the user
 //! cleared onboarding. `GET /api/profile/{username}` gates on
-//! `profile_hidden` instead — the same fix was applied there under SKI-70 and
+//! `profile_hidden` instead - the same fix was applied there under SKI-70 and
 //! never propagated here. The result: one username, two routes, 200 on one
 //! and 404 "user not found" on the other.
 //!
@@ -88,7 +88,7 @@ async fn a_user_without_projects_gets_200_and_an_empty_list() {
     assert_eq!(
         body["data"]["projects"].as_array().map(Vec::len),
         Some(0),
-        "an empty list is 200 with [], not 404 — the front cannot tell \
+        "an empty list is 200 with [], not 404 - the front cannot tell \
          'owns nothing' from 'no such account' otherwise"
     );
 }

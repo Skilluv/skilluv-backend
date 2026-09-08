@@ -1,4 +1,4 @@
-//! Sponsored challenges workflow — Phase 3.12.
+//! Sponsored challenges workflow - Phase 3.12.
 
 use axum::extract::{Path, Query, State};
 use axum::routing::{get, post};
@@ -30,7 +30,7 @@ pub fn sponsored_routes() -> Router<AppState> {
             "/admin/sponsored-challenges/{id}/link",
             post(admin_link_challenge),
         )
-        // Public sponsor visibility — leaderboard of currently sponsored challenges
+        // Public sponsor visibility - leaderboard of currently sponsored challenges
         .route("/sponsored-challenges/active", get(public_active))
         // Sponsor-side : list submissions for the challenge they sponsored
         .route(
@@ -55,7 +55,7 @@ async fn current_enterprise_for(db: &sqlx::PgPool, user_id: Uuid) -> Result<Uuid
 pub struct RequestBody {
     #[schema(max_length = 10000)]
     pub proposed_title: String,
-    /// At least 30 chars — enforced server-side.
+    /// At least 30 chars - enforced server-side.
     #[schema(max_length = 10000)]
     pub brief: String,
     #[schema(schema_with = crate::validators::skill_domain_schema)]
@@ -211,7 +211,7 @@ pub async fn request_sponsorship(
     let enterprise_id = current_enterprise_for(&state.db, auth.user_id).await?;
     // The same stale four as `routes/challenges.rs` had. A company could not
     // sponsor an AI, ops or audio challenge, and the refusal said only
-    // "invalid skill_domain" — so the answer to "why can I not sponsor this"
+    // "invalid skill_domain" - so the answer to "why can I not sponsor this"
     // was nowhere in it.
     crate::validators::check_skill_domain(&body.skill_domain, "skill_domain")?;
     if body.brief.trim().len() < 30 {

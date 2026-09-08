@@ -1,8 +1,8 @@
 //! Routes HTTP portfolio export (Phase P7).
 //!
-//! Endpoints publics par username (pas UUID — URL partageables) :
-//!   GET /api/users/{username}/portfolio.json    — JSON-LD schema.org Person
-//!   GET /api/users/{username}/badge.svg         — SVG dynamique pour README
+//! Endpoints publics par username (pas UUID - URL partageables) :
+//!   GET /api/users/{username}/portfolio.json    - JSON-LD schema.org Person
+//!   GET /api/users/{username}/badge.svg         - SVG dynamique pour README
 
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
@@ -23,7 +23,7 @@ pub fn portfolio_routes() -> Router<AppState> {
 
 /// Public portfolio as JSON-LD (schema.org Person). The exact shape is
 /// defined by schema.org, not by Skilluv, so it is documented here as a
-/// free-form JSON object — the front consumes it verbatim for SSR meta.
+/// free-form JSON object - the front consumes it verbatim for SSR meta.
 #[utoipa::path(
     get,
     path = "/api/users/{username}/portfolio.json",
@@ -44,7 +44,7 @@ pub async fn portfolio_json(
     Ok(Json(portfolio))
 }
 
-/// SVG badge for embedding in a README. Not JSON — served as
+/// SVG badge for embedding in a README. Not JSON - served as
 /// `image/svg+xml` with 15-min public cache.
 #[utoipa::path(
     get,
@@ -67,7 +67,7 @@ pub async fn badge_svg(
         "Content-Type",
         HeaderValue::from_static("image/svg+xml; charset=utf-8"),
     );
-    // Cache 15 minutes — le badge n'a pas besoin d'être temps réel
+    // Cache 15 minutes - le badge n'a pas besoin d'être temps réel
     headers.insert(
         "Cache-Control",
         HeaderValue::from_static("public, max-age=900"),

@@ -1,4 +1,4 @@
-//! Integration tests — Phase 5.10 Certifications.
+//! Integration tests - Phase 5.10 Certifications.
 
 use crate::common::TestApp;
 use serde_json::{Value, json};
@@ -136,7 +136,7 @@ async fn purchase_returns_checkout_or_stripe_missing_error() {
         .await
         .expect("POST purchase");
     // Without credentials the EUR card route resolves to a provider this
-    // deployment cannot build, which is a 500 — ours to fix, not the
+    // deployment cannot build, which is a 500 - ours to fix, not the
     // payer's. With Stripe configured it is a 200 and a checkout URL. Both
     // are the API working.
     assert!(

@@ -1,7 +1,7 @@
-# Leadership — brief templates
+# Leadership - brief templates
 
 Backlog: leadership/F-05. What a client fills in when they want leadership work
-done. The **write-up** templates — what the contributor hands back — are rows
+done. The **write-up** templates - what the contributor hands back - are rows
 in `content_guides` (`kind = 'writeup_template'`, migration 0470).
 
 Six briefs, one per trade. The shared skeleton first.
@@ -17,13 +17,13 @@ Every leadership brief answers these:
    behind it produces a document that is read once and filed.
 2. **Who can accept the answer.** If nobody in the engagement has the authority
    to accept the omissions the work will propose, the deliverable is a
-   proposal rather than a strategy — and the brief should say so, because the
+   proposal rather than a strategy - and the brief should say so, because the
    two are priced differently.
 3. **What has already been tried**, and why it stopped. Most leadership
    engagements are the third attempt. A brief that hides that buys the second
    attempt again.
 4. **Confidentiality.** NDA yes or no; whether the contributor may say publicly
-   that the engagement happened; and — the one that gets forgotten — whether
+   that the engagement happened; and - the one that gets forgotten - whether
    they may submit an **anonymised** version for review. If not, they can still
    build a record: the confidential state exists for exactly this, and the
    brief should say which applies.
@@ -31,7 +31,7 @@ Every leadership brief answers these:
    happening. Arriving to interview a team that has not been told is the
    fastest way to a useless engagement.
 6. **What is handed back**, from `mission_deliverable_formats`.
-7. **When**, and what happens if the client's own inputs are late — which in
+7. **When**, and what happens if the client's own inputs are late - which in
    this domain is the normal failure and should be priced.
 
 A brief that cannot answer 1 and 2 is not ready, and the honest response is to
@@ -39,7 +39,7 @@ say so rather than start.
 
 ---
 
-## `brief-roadmap-quarterly` — product or delivery direction
+## `brief-roadmap-quarterly` - product or delivery direction
 
 Beyond the skeleton:
 
@@ -53,9 +53,9 @@ Beyond the skeleton:
   sometimes right and always slower.
 
 **Not in this brief:** the solution. A client who has written the roadmap and
-wants it formatted should say so — it is a real and much cheaper engagement.
+wants it formatted should say so - it is a real and much cheaper engagement.
 
-## `brief-tech-rfc` — a technical decision
+## `brief-tech-rfc` - a technical decision
 
 Beyond the skeleton:
 
@@ -69,7 +69,7 @@ Beyond the skeleton:
   what the description was worth.
 - **Who decides**, and by when. An RFC with no decider is a document.
 
-## `brief-project-delivery-plan` — delivery, usually recovery
+## `brief-project-delivery-plan` - delivery, usually recovery
 
 Beyond the skeleton, and this one is almost always a rescue:
 
@@ -84,7 +84,7 @@ Beyond the skeleton, and this one is almost always a rescue:
 date, and it will be later than the current one. A client who cannot accept
 that is not buying delivery leadership.
 
-## `brief-team-health-audit` — people
+## `brief-team-health-audit` - people
 
 Beyond the skeleton:
 
@@ -101,7 +101,7 @@ Beyond the skeleton:
 - **Individual data.** None leaves the client. This is not negotiable and the
   brief states it.
 
-## `brief-community-strategy` — community
+## `brief-community-strategy` - community
 
 Beyond the skeleton:
 
@@ -110,12 +110,12 @@ Beyond the skeleton:
 - **Who runs it today**, how many hours, and whether they are paid. A strategy
   handed to exhausted volunteers is a strategy that does not happen.
 - **What the community is for the client.** Support deflection, recruitment,
-  product feedback, goodwill — the honest answer changes the whole design, and
+  product feedback, goodwill - the honest answer changes the whole design, and
   a client who says "all of them" has not decided.
 - **What is out of bounds**: topics, tone, competitors, moderation the client
   will not allow.
 
-## `brief-mentoring-cohort` — mentoring and curriculum
+## `brief-mentoring-cohort` - mentoring and curriculum
 
 Beyond the skeleton:
 
@@ -123,7 +123,7 @@ Beyond the skeleton:
   self-selection and one assembled by a manager behave differently.
 - **The entry condition**, or the statement that the contributor is to
   establish it. Half a cohort is lost by week two when this is wrong.
-- **The outcome**, stated as something people will be able to do — and how it
+- **The outcome**, stated as something people will be able to do - and how it
   will be checked.
 - **Who owns the curriculum afterwards.** If the client keeps it, say so; if
   the contributor keeps it and licenses it, say that.

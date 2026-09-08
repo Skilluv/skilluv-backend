@@ -13,7 +13,7 @@
 INSERT INTO seasons (slug, name, theme, description, starts_at, ends_at, status)
 VALUES (
     'saison-1-hello-world',
-    'Saison 1 — Hello World',
+    'Saison 1 - Hello World',
     'Hello World',
     'La saison des premiers commits. Chaque contributeur·rice repart avec au moins une PR mergée sur un projet OSS réel. Pas de simulacres, pas de sandbox : de vraies contributions opposables.',
     '2027-01-01 00:00:00+00',
@@ -62,7 +62,7 @@ SELECT
     pm.id, 'disclosure_required', false, au.id
 FROM admin_user au
 CROSS JOIN (VALUES
-    -- 1. First README typo — Hello Africa
+    -- 1. First README typo - Hello Africa
     (
         'Ton premier commit : corriger un typo dans le README',
         'La contribution la plus simple : ouvrir une PR qui corrige une faute de frappe dans un README. Petit geste, grande porte d''entrée dans l''OSS.',
@@ -73,7 +73,7 @@ CROSS JOIN (VALUES
         'code', 1, 'solo', 'fun',
         10, true, 'hello-africa'
     ),
-    -- 2. Add Wolof locale — rust-i18n
+    -- 2. Add Wolof locale - rust-i18n
     (
         'Ajouter la locale wolof à rust-i18n',
         'Traduire quelques clés démo en wolof et ouvrir une PR sur rust-i18n. Impact linguistique + technique en une PR.',
@@ -84,7 +84,7 @@ CROSS JOIN (VALUES
         'code', 2, 'solo', 'serious',
         20, false, 'rust-i18n'
     ),
-    -- 3. Excalidraw — accessibility label
+    -- 3. Excalidraw - accessibility label
     (
         'Ajouter un aria-label manquant dans Excalidraw',
         'Accessibilité web : traquer un bouton sans aria-label dans Excalidraw et ouvrir une PR. Contribution TS + culture a11y.',
@@ -106,7 +106,7 @@ CROSS JOIN (VALUES
         'design', 1, 'solo', 'fun',
         15, true, 'wax-icons'
     ),
-    -- 5. sqlx — good-first-issue hunt
+    -- 5. sqlx - good-first-issue hunt
     (
         'Résoudre une good-first-issue sur sqlx',
         'Choisir une issue taggée `good-first-issue` sur sqlx, la comprendre, la coder, la tester. Ta première PR Rust dans un projet majeur.',
@@ -117,7 +117,7 @@ CROSS JOIN (VALUES
         'code', 3, 'solo', 'serious',
         40, false, 'sqlx'
     ),
-    -- 6. Flutter — first pub.dev package
+    -- 6. Flutter - first pub.dev package
     (
         'Publier ton premier package Flutter sur pub.dev',
         'Package minimal, utile, publiable : un widget "African Greeting" qui affiche "Hello" dans une langue africaine aléatoire.',
@@ -128,7 +128,7 @@ CROSS JOIN (VALUES
         'code', 3, 'solo', 'fun',
         50, false, 'flutter'
     ),
-    -- 7. Cal.com — translation FR-CI (Côte d'Ivoire specifics)
+    -- 7. Cal.com - translation FR-CI (Côte d'Ivoire specifics)
     (
         'Améliorer les traductions FR de Cal.com',
         'Traquer les strings anglaises qui traînent encore dans l''UI FR de Cal.com et ouvrir une PR de traduction.',
@@ -139,7 +139,7 @@ CROSS JOIN (VALUES
         'code', 2, 'solo', 'serious',
         25, false, 'calcom'
     ),
-    -- 8. Coolify — bug reproduction repo
+    -- 8. Coolify - bug reproduction repo
     (
         'Ouvrir un bug report Coolify avec reproduction minimale',
         'Prendre un bug ouvert non-reproduit sur Coolify, reproduire, documenter et ajouter un repro repo. Contribution non-code de haute valeur.',
@@ -150,7 +150,7 @@ CROSS JOIN (VALUES
         'code', 3, 'solo', 'serious',
         30, false, 'coolify'
     ),
-    -- 9. Meilisearch — doc translation FR
+    -- 9. Meilisearch - doc translation FR
     (
         'Traduire une page de documentation Meilisearch en français',
         'La doc Meilisearch se traduit progressivement en FR. Prends une page anglaise, traduis, ouvre une PR sur le repo docs.',
@@ -161,7 +161,7 @@ CROSS JOIN (VALUES
         'code', 2, 'solo', 'educational',
         25, false, 'meilisearch'
     ),
-    -- 10. Hello Africa — capstone team deliverable (fin de saison)
+    -- 10. Hello Africa - capstone team deliverable (fin de saison)
     (
         'Capstone Saison 1 : ajouter une langue africaine à Hello Africa',
         'Le deliverable de clôture. En équipe (2-4 personnes), ajouter une langue africaine complète au flagship Hello Africa : locale i18n + assets culturels + tests + doc contributeur.',

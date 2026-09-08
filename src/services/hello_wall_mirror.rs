@@ -4,7 +4,7 @@
 //! Flux :
 //!   1. Le webhook Bonjour Skilluv (`routes/onboarding::handle_bonjour_skilluv_pr_event`)
 //!      insere une ligne dans `hello_wall_entries` quand un user ouvre sa PR.
-//!   2. `mirrored_at` est NULL a ce moment — le fichier
+//!   2. `mirrored_at` est NULL a ce moment - le fichier
 //!      `entries/{username}.md` n'existe pas encore sur `skilluv-community/hello-wall`.
 //!   3. Ce service, appele soit inline par le webhook (best-effort), soit
 //!      par un cron/worker, prend les entrees WHERE mirrored_at IS NULL et

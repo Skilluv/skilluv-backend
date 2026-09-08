@@ -1,16 +1,16 @@
-//! SKI-41 (Post-MVP T2-02) — structured peer-to-peer coaching.
+//! SKI-41 (Post-MVP T2-02) - structured peer-to-peer coaching.
 //!
 //! ## The matching rule
 //!
 //! A candidate must share the caller's orientation and sit within one rank
 //! of them. Those two are hard filters, not preferences: the whole premise
 //! is *peers*, and a Doyen paired with an Apprenti is mentorship wearing a
-//! different hat — which the platform already sells, formally and for
+//! different hat - which the platform already sells, formally and for
 //! money, via `mentorship_sessions`.
 //!
 //! Timezone proximity and shared working languages are soft: they order
 //! the candidates rather than excluding them. Excluding on timezone would
-//! be actively harmful for the target audience — an orientation with four
+//! be actively harmful for the target audience - an orientation with four
 //! enrolled people across three continents must still produce a match.
 //!
 //! ## Scoring
@@ -125,7 +125,7 @@ struct PoolRow {
 /// Accepts the fixed-offset forms the profile actually stores (`UTC+2`,
 /// `+02:00`, `-5`). Named IANA zones (`Europe/Paris`) return `None`:
 /// resolving them needs a tz database, and a wrong offset would order
-/// candidates worse than no offset at all — an unknown timezone simply
+/// candidates worse than no offset at all - an unknown timezone simply
 /// stops contributing to the score instead of contributing a lie.
 fn offset_hours(tz: &str) -> Option<f64> {
     let raw = tz.trim();
@@ -188,7 +188,7 @@ fn score_candidate(
     let rank_score = WEIGHT_RANK * (1.0 - rank_distance as f64 / (MAX_RANK_DISTANCE + 1) as f64);
 
     // Timezone: linear decay to the horizon. An undeclared timezone on
-    // either side scores as half — neutral, so a user who never filled in
+    // either side scores as half - neutral, so a user who never filled in
     // their profile is neither rewarded nor buried.
     let their_tz = candidate.timezone.as_deref().and_then(offset_hours);
     let (tz_score, timezone_distance_hours) = match (me_tz, their_tz) {
@@ -422,7 +422,7 @@ pub async fn create_match(
         .find(|p| p.user_id == peer_id)
         .ok_or_else(|| {
             AppError::Validation(
-                "this peer is no longer a valid match — request fresh proposals".into(),
+                "this peer is no longer a valid match - request fresh proposals".into(),
             )
         })?;
 
@@ -482,7 +482,7 @@ pub async fn get_match_for(
     .ok_or_else(|| AppError::NotFound(format!("peer match {match_id} not found")))
 }
 
-/// End a match. Either side may, unilaterally — requiring consent to stop
+/// End a match. Either side may, unilaterally - requiring consent to stop
 /// would make it harder to leave than to join.
 pub async fn end_match(db: &PgPool, match_id: Uuid, user_id: Uuid) -> Result<(), AppError> {
     let m = get_match_for(db, match_id, user_id).await?;
@@ -714,7 +714,7 @@ mod unit {
         assert!(reason.shared_languages.is_empty());
         assert!(
             score > 0.0,
-            "a distant peer must remain proposable — a thin pool must still match"
+            "a distant peer must remain proposable - a thin pool must still match"
         );
     }
 

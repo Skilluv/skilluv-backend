@@ -21,7 +21,7 @@ Le second cas est le plus fréquent.
 ## Pourquoi elles ne bloquent pas
 
 Une vérification bloquante devrait avoir raison à chaque fois. Le premier faux
-positif sur un choix délibéré apprend à toute une communauté à la contourner —
+positif sur un choix délibéré apprend à toute une communauté à la contourner -
 et à partir de là, le panneau est du bruit que plus personne ne lit.
 
 Les trois niveaux se lisent donc ainsi :
@@ -36,7 +36,7 @@ Aucun des trois ne refuse une soumission.
 
 ## Ce qui est vérifié
 
-### Contraste d'une palette — `palette_contrast`
+### Contraste d'une palette - `palette_contrast`
 
 Toutes les paires de la palette, contre les seuils WCAG AA (4,5:1 pour du texte
 courant, 3:1 pour du grand texte et les objets graphiques).
@@ -45,12 +45,12 @@ Les paires plutôt que le blanc, parce qu'une palette de marque est utilisée
 contre elle-même : l'erreur qu'un designer découvre tard, c'est la couleur
 secondaire sur la primaire.
 
-La question posée n'est pas « toutes les paires passent-elles » — aucune
-palette n'y arrive — mais **« existe-t-il une paire dans laquelle on peut
+La question posée n'est pas « toutes les paires passent-elles » - aucune
+palette n'y arrive - mais **« existe-t-il une paire dans laquelle on peut
 écrire »**. Si la réponse est non, c'est une `error` : la palette ne permet
 aucun texte lisible.
 
-### Jetons de design — `token_lint`
+### Jetons de design - `token_lint`
 
 Lit les deux formes rencontrées dans la nature : plate (`{"nom": valeur}`) et
 imbriquée avec un `value` sur les feuilles, comme le format Design Tokens.
@@ -62,12 +62,12 @@ Signale :
 - un espacement hors du pas de 4 suivi par le reste de l'échelle ;
 - un nom qui mélange tiret et souligné.
 
-Le pas de 4 n'est pas une vérité universelle — certains systèmes utilisent 8,
-d'autres une échelle modulaire — c'est pourquoi c'est un `warning` qui nomme le
+Le pas de 4 n'est pas une vérité universelle - certains systèmes utilisent 8,
+d'autres une échelle modulaire - c'est pourquoi c'est un `warning` qui nomme le
 pas. Ce qu'il attrape, c'est le vrai défaut : une échelle 4, 8, 12, 16, 22, 24,
 où une valeur a été tapée au lieu d'être dérivée.
 
-### Coût d'une animation — `motion_cost`
+### Coût d'une animation - `motion_cost`
 
 Lit un document Lottie et dit ce qu'il coûtera à jouer : nombre de calques,
 durée, cadence.
@@ -80,7 +80,7 @@ plus une animation d'interface.
 aussi, et un fichier qui cache quarante calques derrière un seul est exactement
 celui que cette vérification existe pour repérer.
 
-### Cohérence d'un SVG — `svg_consistency`
+### Cohérence d'un SVG - `svg_consistency`
 
 Absence de `viewBox` (le dessin ne se met pas à l'échelle), et épaisseurs de
 trait multiples dans un même fichier.
@@ -90,7 +90,7 @@ le système de coordonnées et l'épaisseur, et les deux se lisent dans les
 attributs sans embarquer une dépendance pour se tromper sur les espaces de
 noms.
 
-### Lecture du fichier — `fetch`
+### Lecture du fichier - `fetch`
 
 Une adresse Figma, Miro ou Framer ne se lit pas sans détenir le compte de
 quelqu'un, et la plateforme n'en détient aucun. Ces versions enregistrent un

@@ -42,7 +42,7 @@ async fn link_discord(app: &TestApp, user: Uuid, snowflake: &str) -> Result<(), 
 ///
 /// `VALID_PROVIDERS` in `services::oauth` and the CHECK of migration 0603 say
 /// the same thing in two languages. Migration 0603 argues why that duplication
-/// is right here — a provider is a Rust module, not a row — and this is the
+/// is right here - a provider is a Rust module, not a row - and this is the
 /// other half of that argument: the duplication is only acceptable while
 /// something fails when the two drift.
 ///
@@ -124,7 +124,7 @@ async fn one_discord_account_cannot_dress_two_profiles() {
         "the refusal has to say what to do about it: {err}"
     );
 
-    // And the first link is untouched — a failed claim must not steal it.
+    // And the first link is untouched - a failed claim must not steal it.
     let still: Option<String> =
         sqlx::query_scalar("SELECT discord_user_id FROM users WHERE id = $1")
             .bind(a)
@@ -234,7 +234,7 @@ async fn unlinking_clears_the_column_and_asks_for_the_roles_back() {
 }
 
 /// The standing the roles are computed from, read out of the database rather
-/// than constructed in a test helper — this is the half `desired()` cannot
+/// than constructed in a test helper - this is the half `desired()` cannot
 /// check on its own.
 #[tokio::test]
 async fn standing_is_empty_for_an_unlinked_account_and_read_for_a_linked_one() {

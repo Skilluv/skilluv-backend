@@ -1,7 +1,7 @@
 //! What the platform earns, by stream and by pillar.
 //!
-//! Admin only. The catalogue itself is not a secret — the business model is
-//! public in `docs/` — but the figures are, and splitting the two into
+//! Admin only. The catalogue itself is not a secret - the business model is
+//! public in `docs/` - but the figures are, and splitting the two into
 //! separate endpoints would mean two places to get the authorisation wrong.
 
 use axum::extract::{Query, State};
@@ -54,7 +54,7 @@ pub struct RevenueStream {
 #[into_params(parameter_in = Query)]
 #[serde(deny_unknown_fields)]
 pub struct WindowQuery {
-    /// How many days back to total. Defaults to 365 — a business with
+    /// How many days back to total. Defaults to 365 - a business with
     /// seasonal revenue reads nothing useful from thirty.
     #[serde(default = "default_days")]
     #[param(minimum = 1, maximum = 3650)]

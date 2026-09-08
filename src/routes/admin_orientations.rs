@@ -1,12 +1,12 @@
-//! ADM-M3.1 — Admin CRUD sur orientations + orientation_skill_map.
+//! ADM-M3.1 - Admin CRUD sur orientations + orientation_skill_map.
 //!
 //! Endpoints exposés (tous montés dans `admin_routes()` → passent par le
 //! middleware admin_gate = origin + 2FA + capability admin) :
 //!
-//! - POST   /admin/orientations                              — crée (curated=true si admin veut)
-//! - PATCH  /admin/orientations/{slug}                       — édite (slug immutable)
-//! - POST   /admin/orientations/{slug}/skills                — attache skill (upsert)
-//! - DELETE /admin/orientations/{slug}/skills/{skill_id}     — détache skill (idempotent)
+//! - POST   /admin/orientations                              - crée (curated=true si admin veut)
+//! - PATCH  /admin/orientations/{slug}                       - édite (slug immutable)
+//! - POST   /admin/orientations/{slug}/skills                - attache skill (upsert)
+//! - DELETE /admin/orientations/{slug}/skills/{skill_id}     - détache skill (idempotent)
 
 use axum::extract::{Path, Query, State};
 use axum::routing::{delete, patch, post};
@@ -251,7 +251,7 @@ pub async fn patch_orientation(
 
     if body.slug.is_some() {
         return Err(AppError::Validation(
-            "slug is immutable — create a new orientation instead".into(),
+            "slug is immutable - create a new orientation instead".into(),
         ));
     }
     if let Some(pd) = body.primary_domain.as_ref()
@@ -514,14 +514,14 @@ pub async fn detach_skill(
 /// `GET /orientation-counts` reported 37 code orientations where 33 were
 /// real.
 ///
-/// The read filters were not the bug — somebody genuinely created a curated
+/// The read filters were not the bug - somebody genuinely created a curated
 /// orientation. Teaching the public catalogue to recognise test data would
 /// put that knowledge in the wrong place; refusing to write it is the guard
 /// that holds regardless of whether anyone's teardown runs.
 /// `test-` is deliberately NOT here. Six real trades in the quality domain
-/// already start with it — `test-strategy`, `test-automation-craft`,
+/// already start with it - `test-strategy`, `test-automation-craft`,
 /// `test-flakiness-triage`, `test-level-selection`, `test-data-strategy`,
-/// `test-suite-performance` — and a rule aimed at fixtures that makes real
+/// `test-suite-performance` - and a rule aimed at fixtures that makes real
 /// trades uncreatable is worse than the problem it solves. The drift test in
 /// the suite checks the seeded catalogue against this list for exactly that
 /// reason.
@@ -529,7 +529,7 @@ const RESERVED_SLUG_PREFIXES: [&str; 3] = ["e2e-", "fixture-", "tmp-"];
 
 /// Refuse a fixture slug anywhere that serves real people.
 ///
-/// PATCH cannot rename an orientation — the slug is immutable there — so
+/// PATCH cannot rename an orientation - the slug is immutable there - so
 /// this is the only door into the reserved space.
 fn refuse_reserved_slug(slug: &str, tolerates_fixtures: bool) -> Result<(), AppError> {
     if tolerates_fixtures {

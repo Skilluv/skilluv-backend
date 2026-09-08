@@ -46,7 +46,7 @@ async fn an_empty_named_parameter_is_refused_too() {
     let app = TestApp::spawn().await;
 
     // `?=1` parses to a field whose name is the empty string. It is not a
-    // parameter any of these endpoints has, so it is refused like any other —
+    // parameter any of these endpoints has, so it is refused like any other -
     // and it is the shape a fuzzer reaches for first.
     for base in LISTINGS {
         let sep = if base.contains('?') { '&' } else { '?' };
@@ -83,7 +83,7 @@ async fn a_nul_byte_is_a_client_error_not_a_server_one() {
     let app = TestApp::spawn().await;
 
     // PostgreSQL cannot hold a NUL in a text column at all, so a NUL that
-    // reaches the driver comes back as DATABASE_ERROR — a 500 telling the
+    // reaches the driver comes back as DATABASE_ERROR - a 500 telling the
     // caller our server broke, over input no text column anywhere will accept.
     // It arrives percent-encoded and is a literal NUL by the time a parameter
     // has been deserialised, which is why the check reads the raw URI.
@@ -113,7 +113,7 @@ async fn a_declared_pattern_is_enforced_and_not_only_documented() {
     let app = TestApp::spawn().await;
 
     // `?language_spoken=` was accepted, applied, and reported back in
-    // `filters_applied` — so the answer claimed to have narrowed the search on
+    // `filters_applied` - so the answer claimed to have narrowed the search on
     // a language while matching nobody, which reads as "no such people"
     // rather than "that is not a language code".
     for bad in ["", "x", "fra", "1r"] {
@@ -149,7 +149,7 @@ async fn the_domain_filters_accept_every_live_domain() {
     let app = TestApp::spawn().await;
 
     // Three endpoints declared a domain list in their contract and let it go
-    // stale — four domains in one, seven in two others, against eight live.
+    // stale - four domains in one, seven in two others, against eight live.
     // A contract that understates what it accepts sends a caller looking for
     // an endpoint that does not exist.
     let live: Vec<String> =

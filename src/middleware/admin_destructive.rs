@@ -1,4 +1,4 @@
-//! BE-D — Helpers pour les mutations admin sensibles.
+//! BE-D - Helpers pour les mutations admin sensibles.
 //!
 //! Deux fonctionnalités :
 //!
@@ -23,7 +23,7 @@ use uuid::Uuid;
 
 /// Rate-limit pour actions admin sensibles. Combine 2 fenêtres :
 ///   - 10 req / 60s (burst protection immédiat)
-///   - 100 req / 3600s (protection horaire — anti-script)
+///   - 100 req / 3600s (protection horaire - anti-script)
 ///
 /// Appelle-la au TOUT DÉBUT du handler, juste après `require_capability("admin")`.
 pub async fn enforce_admin_destructive(

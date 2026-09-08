@@ -30,10 +30,10 @@ rate_limit:
   exceeded: "طلبات كثيرة جدًا. حاول لاحقًا."
 
 emails:
-  verify_subject: "Skilluv — تحقق من بريدك الإلكتروني"
-  password_reset_subject: "Skilluv — إعادة تعيين كلمة المرور"
-  data_export_subject: "Skilluv — أرشيف بياناتك جاهز"
-  digest_subject: "أسبوعك على Skilluv — {challenges_completed} تحديات / {fragments_earned} شظية"
+  verify_subject: "Skilluv: تحقق من بريدك الإلكتروني"
+  password_reset_subject: "Skilluv: إعادة تعيين كلمة المرور"
+  data_export_subject: "Skilluv: أرشيف بياناتك جاهز"
+  digest_subject: "أسبوعك على Skilluv: {challenges_completed} تحديات / {fragments_earned} شظية"
 
 system:
   internal_error: "حدث خطأ ما. يرجى المحاولة مرة أخرى."
@@ -398,7 +398,7 @@ notification:
       cta: "العودة إلى الورشة"
     last_chance:
       title: "آخر رسالة في هذه السلسلة"
-      body: "شهر دون أخبار. سنتوقف هنا — حسابك وأدلتك تبقى كما هي، وتعود متى شئت. إن كان هناك سبب، ردّ على هذه الرسالة: نقرأ كل الردود."
+      body: "شهر دون أخبار. سنتوقف هنا. حسابك وأدلتك تبقى كما هي، وتعود متى شئت. إن كان هناك سبب، ردّ على هذه الرسالة: نقرأ كل الردود."
       cta: "العودة الآن"
     enterprise_welcome:
       title: "كيف تقرأ دليلاً"
@@ -523,7 +523,7 @@ discord:
     سجّل الدخول على {frontend}، ثم اذهب إلى **الإعدادات -> الحسابات المرتبطة -> ديسكورد**. ستصلك أدوارك خلال دقيقة، وستتبع ملفك بعد ذلك.
 
     نصيحة: صرّح بحرفك أولاً. هي ما يفتح قنوات مجالك.
-  linked: "**{display_name}** — {frontend}/@{username}{profile}"
+  linked: "**{display_name}**: {frontend}/@{username}{profile}"
   trades: "الحرف: {list}"
   welcome: |-
     حسابك على ديسكورد مرتبط بـ **{username}**.
@@ -539,7 +539,7 @@ discord:
   join_welcome: |-
     مرحباً بك في Skilluv يا **{name}**!
 
-    هذا مجتمع {frontend} — منصة رفقة حرفية تتحول فيها مساهمات المصدر المفتوح إلى شهادات قابلة للتحقق.
+    هذا مجتمع {frontend}، منصة رفقة حرفية تتحول فيها مساهمات المصدر المفتوح إلى شهادات قابلة للتحقق.
 
     للبدء:
     - عرّف بنفسك في قناة حرفتك

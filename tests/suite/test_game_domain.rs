@@ -97,7 +97,7 @@ async fn game_is_an_open_domain_with_twenty_one_trades_in_five_families() {
 
     // Live trades only: the five legacy orientations 0570 replaced are
     // is_archived = TRUE and pointed at their successors, and they stay
-    // is_curated so their history reads — the same filter the migration's own
+    // is_curated so their history reads - the same filter the migration's own
     // guard uses.
     let curated: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM orientations
@@ -207,7 +207,7 @@ async fn a_slice_needs_three_playtests_before_it_can_be_validated() {
     grant(&app, reviewer, "game_reviewer:all").await;
     let slice = a_game_slice(&app, creator, "gv-slice").await;
 
-    // Two playtests — below the floor.
+    // Two playtests - below the floor.
     a_playtest(&app, slice, a_person(&app, "gv_t1").await, 4).await;
     a_playtest(&app, slice, a_person(&app, "gv_t2").await, 4).await;
 

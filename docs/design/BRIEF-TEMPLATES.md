@@ -1,11 +1,11 @@
-# Modèles de brief — domaine Design
+# Modèles de brief - domaine Design
 
 Treize modèles, un par famille de métiers. À utiliser pour rédiger l'énoncé
 d'un challenge design ou d'un concours.
 
 Un brief mal écrit produit des propositions incomparables : chacune répond à
 une question différente, et le relecteur arbitre au jugé. C'est particulièrement
-vrai en design, où une proposition hors sujet peut être objectivement belle —
+vrai en design, où une proposition hors sujet peut être objectivement belle -
 et où « je préfère celle-ci » est le raisonnement qu'un brief précis rend
 impossible.
 
@@ -76,7 +76,7 @@ une promesse qu'on ne tiendra pas.
 
 ## Les treize familles
 
-### `product` — produit, systèmes, conversationnel
+### `product` - produit, systèmes, conversationnel
 
 *Trades : `design-product`, `design-system`, `design-ai-conversational`.*
 
@@ -91,7 +91,7 @@ Ajouter au brief commun :
 Pièges : proposer un écran isolé, oublier l'état vide, dessiner un composant
 sans dire comment il se comporte quand le texte double de longueur.
 
-### `web` — sites, éditorial
+### `web` - sites, éditorial
 
 *Trades : `design-web`, `design-editorial-web`.*
 
@@ -104,7 +104,7 @@ Ajouter :
 
 Pièges : composer sur du texte inventé plus court que le vrai.
 
-### `mobile` — applications
+### `mobile` - applications
 
 *Trade : `design-mobile`.*
 
@@ -112,13 +112,13 @@ Ajouter :
 
 - **Les plateformes** et les conventions à respecter ou à assumer ;
 - **La zone du pouce** et la tenue à une main ;
-- **Le hors ligne** et la connexion lente — non négociable pour un public
+- **Le hors ligne** et la connexion lente - non négociable pour un public
   ouest-africain ;
 - Les tailles réelles ciblées, y compris les petits écrans.
 
 Pièges : maquetter sur un écran de 6,7 pouces uniquement.
 
-### `motion` — animation, vidéo
+### `motion` - animation, vidéo
 
 *Trades : `design-motion-ui`, `design-motion-2d`, `design-motion-3d`,
 `design-video`.*
@@ -133,7 +133,7 @@ Ajouter :
 
 Pièges : livrer un rendu sans le projet ; ignorer `prefers-reduced-motion`.
 
-### `brand` — identité, typographie, verbal
+### `brand` - identité, typographie, verbal
 
 *Trades : `design-brand-identity`, `design-typography`,
 `design-naming-verbal`.*
@@ -150,7 +150,7 @@ Ajouter :
 
 Pièges : présenter une marque uniquement en grand sur fond blanc.
 
-### `illustration` — illustration, icônes, personnages
+### `illustration` - illustration, icônes, personnages
 
 *Trades : `design-illustration`, `design-iconography`, `design-character`.*
 
@@ -164,13 +164,13 @@ Ajouter :
 
 Pièges : dessiner une icône magnifique qui devient une tache à 16 px.
 
-### `dataviz` — données rendues lisibles
+### `dataviz` - données rendues lisibles
 
 *Trade : `design-dataviz`.*
 
 Ajouter :
 
-- **Les données réelles**, ou un jeu représentatif — avec les valeurs
+- **Les données réelles**, ou un jeu représentatif - avec les valeurs
   aberrantes ;
 - **La question** à laquelle la visualisation répond ;
 - **Le public** : expert ou non ;
@@ -179,7 +179,7 @@ Ajouter :
 
 Pièges : une visualisation calibrée sur des données propres et inventées.
 
-### `ux-writing` — les mots d'une interface
+### `ux-writing` - les mots d'une interface
 
 *Trade : `design-ux-writing`.*
 
@@ -193,7 +193,7 @@ Ajouter :
 Pièges : écrire les libellés heureux et laisser les erreurs en anglais
 technique.
 
-### `marketing` — un message sur plusieurs surfaces
+### `marketing` - un message sur plusieurs surfaces
 
 *Trade : `design-marketing`.*
 
@@ -206,7 +206,7 @@ Ajouter :
 
 Pièges : décliner un visuel qui ne fonctionne qu'au format d'origine.
 
-### `game` — sous contrainte de moteur
+### `game` - sous contrainte de moteur
 
 *Trades : `design-game-ui`, `design-game-environment`.*
 
@@ -219,7 +219,7 @@ Ajouter :
 
 Pièges : une interface conçue pour être vue à l'arrêt.
 
-### `3d-viz` — bâtiments qui n'existent pas encore
+### `3d-viz` - bâtiments qui n'existent pas encore
 
 *Trade : `design-arch-interior-viz`.*
 
@@ -233,7 +233,7 @@ Ajouter :
 Pièges : un rendu magnifique dont les proportions ne correspondent pas aux
 plans.
 
-### `immersive` — ce que ça fait à un corps dans un espace
+### `immersive` - ce que ça fait à un corps dans un espace
 
 *Trades : `design-ar-vr-spatial`, `design-sound`.*
 
@@ -248,7 +248,7 @@ Ajouter :
 Pièges : concevoir pour une démonstration de deux minutes une expérience qui
 durera vingt.
 
-### `service` — vérifier qu'un processus tient
+### `service` - vérifier qu'un processus tient
 
 *Trades : `design-service`, `design-ops`.*
 

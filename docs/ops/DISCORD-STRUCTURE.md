@@ -1,4 +1,4 @@
-# Discord — ops
+# Discord - ops
 
 The structure the ops side of the community runs on, and the reasoning behind
 it. Same rule as the code side: **a channel exists when a conversation is
@@ -32,7 +32,7 @@ Open them as the members exist. Eight empty rooms are worse than one busy one.
 
 ## The one that is not like the others
 
-`#ops-incidents-lounge` — where people tell what happened to them. Not a
+`#ops-incidents-lounge` - where people tell what happened to them. Not a
 help channel and not a support channel: a place to say "we lost four hours to
 a DNS record nobody owned" without it being a request.
 
@@ -64,7 +64,7 @@ audible.
 | `Ops Engineer` | Any verified ops artefact. The entry role. |
 | `Ops Reviewer` | Holds an `ops_reviewer:*` capability on the platform. Mirrors the family, so the review families are visible in the server too. |
 | `Ops Champion` | Community recognition: the person others go to. Given by the community, taken away by nobody. |
-| `Incident Commander` | On the Skilluv community rotation — the people who respond when our own platform falls over. |
+| `Incident Commander` | On the Skilluv community rotation - the people who respond when our own platform falls over. |
 
 The last one is a real responsibility and not a decoration. Anybody holding
 it is on a rotation with a response time, and the rotation is published. If

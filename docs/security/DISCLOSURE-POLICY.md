@@ -1,7 +1,7 @@
 # What happens to a report
 
 The clocks, the states, and who may move them. This is the policy the code
-enforces — every rule below is a constraint, a state-machine entry or a worker,
+enforces - every rule below is a constraint, a state-machine entry or a worker,
 and where it is one the file and function are named so you can check.
 
 ## The states
@@ -45,8 +45,8 @@ owner has gone quiet. That is refused, and the reason is in
 `sweep_embargoes`: publishing a vulnerability is irreversible, and a cron job
 at three in the morning is the wrong thing to be holding that decision.
 
-What expiry produces is `disclosure_stage = 'partially_disclosed'` — the
-existence and the severity become quotable, the reproduction does not — and an
+What expiry produces is `disclosure_stage = 'partially_disclosed'` - the
+existence and the severity become quotable, the reproduction does not - and an
 item on an administrator's list. Same outcome one working day later, and it
 cannot go wrong unattended.
 
@@ -65,7 +65,7 @@ asked for what and when.
 
 ## Withholding
 
-Some findings should never be published — a defect in a system that cannot be
+Some findings should never be published - a defect in a system that cannot be
 patched, a disclosure that would harm somebody who is not a party. An
 administrator can set `disclosure_stage = 'withheld'` with at least twenty
 characters of reasoning, which is stored and shown.
@@ -96,7 +96,7 @@ another round.
 ## Severity
 
 Computed from a CVSS 3.1 vector, never accepted as a number. `services::cvss`
-implements the published formula, including its own `Roundup` — which is not
+implements the published formula, including its own `Roundup` - which is not
 "round to one decimal", and getting that wrong moves scores across the
 medium/high boundary.
 
@@ -114,7 +114,7 @@ and it is not possible here.
 ## Duplicates
 
 Two people find the same thing. Industry practice is first-to-file, and this
-platform follows it — with the second finding recorded rather than discarded:
+platform follows it - with the second finding recorded rather than discarded:
 
 - the original keeps its confirmation and its fragments;
 - the duplicate gets `security_finding_co_credit`, an attestation that says
@@ -137,7 +137,7 @@ and not on a client engagement.
 
 ## Proof files
 
-Uploaded before the report — that is the shape of the form — to
+Uploaded before the report - that is the shape of the form - to
 `POST /api/security/reports/uploads`, which returns a **key** and not a URL.
 
 The private bucket, always. A screenshot of an unfixed vulnerability *is* the
@@ -153,7 +153,7 @@ never reported.
 Executables are refused on the extension **and** on the first bytes. This is a
 security platform, and a report attachment is the most obvious place to try to
 have somebody run something. Nothing is scanned for malware, and that is said
-plainly rather than implied — see `REVIEWER-ONBOARDING.md` for what a reviewer
+plainly rather than implied - see `REVIEWER-ONBOARDING.md` for what a reviewer
 is expected to open a proof file in.
 
 ## Notifications

@@ -1,7 +1,7 @@
 # Threat model
 
 What Skilluv is worth attacking for, who would, what stops them today, and what
-does not. Published so that it can be argued with — and it is an audit exercise
+does not. Published so that it can be argued with - and it is an audit exercise
 in the security catalogue, because a threat model nobody has attacked is a
 threat model nobody has checked.
 
@@ -66,7 +66,7 @@ where a lot of that traffic goes on purpose.
 **A researcher who exceeds the scope.** Not malicious, and the most likely
 source of a real incident: somebody testing enthusiastically who runs a load
 test, or pivots, or takes a whole table to prove a read. Mitigated by the scope,
-the research token's ceiling and the volume rule — and by the safe harbour,
+the research token's ceiling and the volume rule - and by the safe harbour,
 which is what makes them tell us instead of going quiet.
 
 **Somebody after the findings.** Skilled, specific, and the threat this platform
@@ -96,7 +96,7 @@ STRIDE, and only the entries where the answer is interesting.
 | Credential stuffing | Argon2id, rate limits on auth, WebAuthn available |
 | Session theft | Short-lived JWT, refresh tokens hashed in the database, secure cookies |
 | Forged attestation | Verification codes are random 50-bit values checked server-side; an attestation links the deliverable it rests on |
-| **An administrator without a second factor** | Refused at the gate — `AdminTwoFaSetupRequired` |
+| **An administrator without a second factor** | Refused at the gate - `AdminTwoFaSetupRequired` |
 
 ### Tampering
 
@@ -140,7 +140,7 @@ STRIDE, and only the entries where the answer is interesting.
 |---|---|
 | Granting yourself a capability | Capabilities are granted by an administrator or derived by a documented engine; there is no self-grant route |
 | **A triager confirming a finding** | Refused by the transition table, not by a convention |
-| **A reviewer publishing one** | Refused likewise — publication is administrator-only |
+| **A reviewer publishing one** | Refused likewise - publication is administrator-only |
 | Escape from the range | Dedicated network, no route inward, no secrets in its environment |
 | Tenant crossing | Row-level security, enforced when `SKILLUV_RLS_ENFORCED=1` |
 
@@ -162,7 +162,7 @@ at rest in a way that would survive it.
 **A zero-day in PostgreSQL, Redis or the Docker engine.** Patched within a day
 of an upstream fix, which is a response and not a mitigation.
 
-**Runtime intrusion detection.** There is none — no Falco, no eBPF monitoring.
+**Runtime intrusion detection.** There is none - no Falco, no eBPF monitoring.
 At this scale it would produce alerts nobody reads. This is a deliberate
 acceptance and it is the one most likely to be wrong first.
 

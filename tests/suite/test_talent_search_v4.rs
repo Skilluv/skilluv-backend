@@ -446,7 +446,7 @@ async fn a_revenue_line_must_name_a_known_stream() {
     let app = TestApp::spawn().await;
 
     // A foreign key rather than a CHECK, so adding the twenty-third is an
-    // INSERT — but an unknown one is still refused.
+    // INSERT - but an unknown one is still refused.
     let refused = sqlx::query(
         "INSERT INTO platform_revenues (source, amount_credits) VALUES ('vibes', 10.00)",
     )
@@ -581,7 +581,7 @@ async fn a_design_portfolio_counts_as_a_proved_platform() {
     let designer = a_talent(&app, "plat_behance").await;
 
     // Design portfolios live in `external_signals`, confirmed by a moderator
-    // rather than by OAuth — the platform will not fetch arbitrary
+    // rather than by OAuth - the platform will not fetch arbitrary
     // user-supplied URLs. The search read only the forges and registries, so
     // a recruiter filtering on Behance was shown nobody.
     sqlx::query(

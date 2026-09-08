@@ -1,4 +1,4 @@
-//! P14.5 — Admin fraud dashboard.
+//! P14.5 - Admin fraud dashboard.
 //!
 //! Endpoints admin pour la modération anti-fraude :
 //! - GET /api/admin/fraud/queue : deliverables flaggés + users suspects.
@@ -46,7 +46,7 @@ pub fn admin_fraud_routes() -> Router<AppState> {
             "/admin/fraud/llm-evaluate/{id}",
             post(llm_evaluate_endpoint),
         )
-        // IA-B — deep plagiarism scan (LLM-assisted AST + embeddings via IA).
+        // IA-B - deep plagiarism scan (LLM-assisted AST + embeddings via IA).
         // Complémentaire au cosine local rapide (P14.3). Accessible admin
         // OU plagiarism_reviewer (P25).
         .route(
@@ -76,7 +76,7 @@ struct QueueQuery {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SKI-111 — response schemas
+// SKI-111 - response schemas
 // ═══════════════════════════════════════════════════════════════════
 
 /// A deliverable the plagiarism pass flagged.
@@ -148,7 +148,7 @@ pub struct LlmEvaluationData {
     pub deliverable_id: Uuid,
     pub new_status: String,
     pub score: Option<f64>,
-    /// False when the AI worker was unreachable — the deliverable then
+    /// False when the AI worker was unreachable - the deliverable then
     /// falls back to human review rather than being judged.
     pub llm_reachable: bool,
     pub notes: Option<String>,
@@ -454,7 +454,7 @@ pub async fn detect_multi_accounts_endpoint(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// POST /admin/fraud/llm-evaluate/{id} — P15.2 déclenche évaluation LLM
+// POST /admin/fraud/llm-evaluate/{id} - P15.2 déclenche évaluation LLM
 // ═══════════════════════════════════════════════════════════════════
 
 /// Admin: LLM evaluation of a deliverable (fraud/quality).
@@ -478,7 +478,7 @@ pub async fn llm_evaluate_endpoint(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// IA-B — POST /admin/fraud/deep-scan/{id}
+// IA-B - POST /admin/fraud/deep-scan/{id}
 // ═══════════════════════════════════════════════════════════════════
 //
 // Deep plagiarism scan via IA (AST + embeddings). Complémentaire au cosine
@@ -489,10 +489,10 @@ pub async fn llm_evaluate_endpoint(
 //      (cosine score 0.3-0.7) et veut une seconde opinion IA.
 //   2. **Auto-escalation** : le hook post-cosine peut appeler ce endpoint
 //      quand `cosine_score >= 0.7` pour affiner la décision. (Câblage
-//      automatique post-MVP — on garde l'endpoint manuel au MVP.)
+//      automatique post-MVP - on garde l'endpoint manuel au MVP.)
 //
 // Le résultat est mergé dans `deliverables.verification_signal.deep_plagiarism`
-// (JSONB) — préserve le cosine_score existant, ajoute une clé distincte.
+// (JSONB) - préserve le cosine_score existant, ajoute une clé distincte.
 // Accessible : `admin` OU `plagiarism_reviewer` (require_any_capability).
 
 #[derive(Debug, Deserialize)]
@@ -555,7 +555,7 @@ pub async fn deep_plagiarism_scan_endpoint(
 
     if code.trim().is_empty() {
         return Err(AppError::Validation(
-            "artifact_metadata.code_content vide — rien à scanner".into(),
+            "artifact_metadata.code_content vide - rien à scanner".into(),
         ));
     }
 

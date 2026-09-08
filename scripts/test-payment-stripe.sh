@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SKI-35 — Stripe Connect payout end-to-end test.
+# SKI-35 - Stripe Connect payout end-to-end test.
 #
 # Runs a real 1€ payout against Stripe test mode. Cleanup manuel via
 # le `test_run_id` tagué dans la description.
@@ -26,7 +26,7 @@ COOKIE_JAR=$(mktemp)
 trap 'rm -f "$COOKIE_JAR"' EXIT
 
 echo "═══════════════════════════════════════════════════════════"
-echo "  Stripe payout test — $TEST_RUN_ID"
+echo "  Stripe payout test - $TEST_RUN_ID"
 echo "  Base URL   : $SKILLUV_BASE_URL"
 echo "  Connect acct: $STRIPE_TEST_CONNECT_ACCOUNT"
 echo "═══════════════════════════════════════════════════════════"
@@ -56,7 +56,7 @@ transaction_id=$(echo "$payout_response" | python3 -c "import sys,json; print(js
 stripe_transfer_id=$(echo "$payout_response" | python3 -c "import sys,json; print(json.load(sys.stdin)['data'].get('stripe_transfer_id',''))")
 
 if [[ -z "$transaction_id" ]]; then
-    echo "  FAIL No transaction_id returned — payout failed" >&2
+    echo "  FAIL No transaction_id returned - payout failed" >&2
     exit 1
 fi
 
@@ -92,7 +92,7 @@ for i in $(seq 1 12); do
 done
 
 echo "═══════════════════════════════════════════════════════════"
-echo "  OK Stripe payout test complete — run_id: $TEST_RUN_ID"
+echo "  OK Stripe payout test complete - run_id: $TEST_RUN_ID"
 echo "═══════════════════════════════════════════════════════════"
 echo ""
 echo "Cleanup: DELETE FROM talent_wallet_transactions WHERE description LIKE '%$TEST_RUN_ID%';"

@@ -12,8 +12,8 @@ FROM rust:1.98-slim-trixie AS builder
 # 'failed to download Swagger UI: curl command not found'.
 # lld alongside them: this stage links twelve release binaries with GNU ld,
 # which is the slowest part of the image build. The integration shards already
-# made this trade and recorded the reason — lld "uses a fraction of that and
-# links several times faster" — after ld was killing them outright.
+# made this trade and recorded the reason - lld "uses a fraction of that and
+# links several times faster" - after ld was killing them outright.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         pkg-config libssl-dev curl ca-certificates lld \
     && rm -rf /var/lib/apt/lists/*
@@ -62,7 +62,7 @@ COPY ops/ ops/
 # `cargo build --release` builds all twelve `[[bin]]` targets. The runtime
 # stage below copies eight. So seed-all, seed-design-canvas, seed-guild and
 # timeline-backfill were compiled and linked into every image and then thrown
-# away — four link steps for artefacts nothing consumes.
+# away - four link steps for artefacts nothing consumes.
 #
 # This changes nothing about the image's contents: those four were already
 # absent from it. If one of them is meant to be an ops tool available in
@@ -84,7 +84,7 @@ RUN touch src/main.rs src/lib.rs && cargo build --release --features discord-bot
 FROM debian:trixie-slim
 
 # `upgrade` as well as `install`: the packages that ship inside the base
-# image — util-linux among them — never got a security update otherwise, so
+# image - util-linux among them - never got a security update otherwise, so
 # the scan failed on fixes Debian had already published and this image had
 # simply not taken. It costs a layer and makes the build non-reproducible
 # across days, which is the point: a rebuild should pick up patches.
@@ -104,12 +104,12 @@ RUN apt-get update \
 
 WORKDIR /app
 
-# Long-running binaries — one per Coolify app. All shipped in /usr/local/bin
+# Long-running binaries - one per Coolify app. All shipped in /usr/local/bin
 # so they're on PATH and `docker exec` works. Kept root-owned there (system
 # location, non-writable by the app user by design).
-#   skilluv-backend         — HTTP API (main)
-#   skilluv-discord-bot     — SKI-116 gateway bot v2 (long-running)
-#   skilluv-discord-notifier — SKI-34 webhook notifier v1 (kept for fallback)
+#   skilluv-backend         - HTTP API (main)
+#   skilluv-discord-bot     - SKI-116 gateway bot v2 (long-running)
+#   skilluv-discord-notifier - SKI-34 webhook notifier v1 (kept for fallback)
 COPY --from=builder /app/target/release/skilluv-backend          /usr/local/bin/skilluv-backend
 COPY --from=builder /app/target/release/skilluv-discord-bot      /usr/local/bin/skilluv-discord-bot
 COPY --from=builder /app/target/release/skilluv-discord-notifier /usr/local/bin/skilluv-discord-notifier
@@ -118,7 +118,7 @@ COPY --from=builder /app/target/release/skilluv-discord-notifier /usr/local/bin/
 # runs sqlx::migrate! at boot finds them at /app/migrations.
 COPY --from=builder --chown=skilluv:skilluv /app/migrations/ ./migrations/
 
-# Auxiliary one-shot binaries — seed catalog data, provision admin,
+# Auxiliary one-shot binaries - seed catalog data, provision admin,
 # dump DB, ingest GitHub. Run via `docker exec` or a Coolify one-shot job.
 COPY --from=builder /app/target/release/skilluv-seed          /usr/local/bin/skilluv-seed
 COPY --from=builder /app/target/release/skilluv-seed-admin    /usr/local/bin/skilluv-seed-admin
@@ -140,11 +140,11 @@ ENV HOST=0.0.0.0 \
     SKILLUV_BINARY=skilluv-backend
 
 # tini reaps zombies + forwards SIGTERM cleanly (axum shuts down gracefully
-# only if it actually receives the signal — bash shell PIDs swallow them).
+# only if it actually receives the signal - bash shell PIDs swallow them).
 # `exec` chains the binary so it inherits PID 1's signal handling from tini.
 ENTRYPOINT ["/usr/bin/tini", "--", "/bin/sh", "-c", "exec /usr/local/bin/${SKILLUV_BINARY}"]
 
-# Container-level healthcheck — conditional on which binary this
+# Container-level healthcheck - conditional on which binary this
 # container runs. The HTTP backend serves /api/health on port 3001 ;
 # every other binary (skilluv-discord-bot, skilluv-discord-notifier,
 # skilluv-github-ingest as a long-running worker) has no HTTP surface.
@@ -154,7 +154,7 @@ ENTRYPOINT ["/usr/bin/tini", "--", "/bin/sh", "-c", "exec /usr/local/bin/${SKILL
 # `main` runs 467 migrations and then seeds the catalogue BEFORE it binds the
 # listener, so `/api/health` cannot answer until all of it is done. Ten seconds
 # of grace then three checks thirty seconds apart declared the container
-# unhealthy about a hundred seconds in — and an orchestrator that believes a
+# unhealthy about a hundred seconds in - and an orchestrator that believes a
 # booting container is a dead one restarts it, into the same boot, forever.
 #
 # Failures still count normally once the app is up: after the grace period this

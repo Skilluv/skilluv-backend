@@ -1,7 +1,7 @@
 # Clauses contractuelles B2B
 
 Ce document n'est pas un contrat. C'est la liste des clauses que chaque
-contrat Skilluv doit contenir, avec la raison de chacune — pour qu'un juriste
+contrat Skilluv doit contenir, avec la raison de chacune - pour qu'un juriste
 rédige à partir de quelque chose, et pour que personne ne signe un contrat qui
 contredit ce que le code fait déjà.
 
@@ -25,12 +25,12 @@ le pays du client.
 Trois choses reviennent dans toutes les discussions commerciales et doivent
 être exclues par écrit :
 
-- **le résultat d'un travail** — nous garantissons la relecture, pas la
+- **le résultat d'un travail** - nous garantissons la relecture, pas la
   réussite d'un produit ;
-- **la disponibilité d'une personne nommée** — les gens partent, changent
+- **la disponibilité d'une personne nommée** - les gens partent, changent
   d'avis, tombent malades. Une clause qui promet Untel est une clause que nous
   ne pouvons pas tenir ;
-- **le comportement d'un tiers** — un contributeur n'est pas un salarié
+- **le comportement d'un tiers** - un contributeur n'est pas un salarié
   Skilluv, et la plateforme ne peut pas répondre de ce qu'il fera après avoir
   été présenté.
 
@@ -87,7 +87,7 @@ Adossé à `recruitment_campaigns`, `recruitment_success_fees` et
 - **honoraires de succès** : pourcentage du salaire annuel déclaré, plafonné
   à 30 % par la base. Le taux est gelé à l'ouverture de la campagne ;
 - **garantie de remplacement** : durée en jours, stockée par contrat parce que
-  négociable. Le remboursement est **dégressif** — intégral avant un quart de
+  négociable. Le remboursement est **dégressif** - intégral avant un quart de
   la période, la moitié avant la moitié, un quart ensuite ;
 - **ce qui déclenche la garantie** : le départ de la personne ou son
   licenciement. Ni une restructuration, ni la fin normale du contrat. Écrit
@@ -107,7 +107,7 @@ Adossé à `team_engagements` et `engagement_milestones`.
 - **jalons** : chaque jalon porte son critère d'acceptation, écrit à
   l'avance. Un jalon défini après coup est un jalon discuté ;
 - **double porte** : Skilluv relit avant le client. Le contrat dit que le
-  client ne reçoit rien qui n'ait passé cette relecture — c'est ce que la
+  client ne reçoit rien qui n'ait passé cette relecture - c'est ce que la
   marge achète ;
 - **paiement** : la totalité est versée à l'ouverture et libérée jalon par
   jalon. Le contrat nomme le tiers qui détient les fonds ;
@@ -166,7 +166,7 @@ Adossé à `certifications`. Voir aussi
 - **retrait** : Skilluv peut retirer un label si les faits qui l'ont fondé ne
   sont plus vrais, avec motif écrit et préavis ;
 - **usage de la marque** : où le logo peut figurer, dans quelle forme, et
-  jusqu'à quand après expiration — c'est-à-dire pas après.
+  jusqu'à quand après expiration - c'est-à-dire pas après.
 
 ## 8. Programme entreprise annuel
 

@@ -1,4 +1,4 @@
-# OpenAPI response typing — recipe
+# OpenAPI response typing - recipe
 
 SKI-59 (Hygiène pré-prod QA-06). Goal: promote every admin route to a
 fully-typed 200 response so schemathesis can catch shape drifts before
@@ -18,7 +18,7 @@ extending this to the rest of the API:
 
 - **`serde_json::Value` is not "typed"**. It renders as an empty schema, so
   schemathesis validates nothing against it. The 61 endpoints that carried
-  it were annotated but unchecked — which looked like coverage in a grep
+  it were annotated but unchecked - which looked like coverage in a grep
   and was not. Count `body = serde_json::Value` separately from missing
   annotations when measuring.
 - **The spec drifted from the code in ways only typing surfaced**:
@@ -35,7 +35,7 @@ of this document, never existed. The real shared types are
 An untyped 200 (empty schema `{}`) lets any drift pass silently. Three
 bugs already caught in E2E tests, none catchable by the current spec:
 
-- `GET /admin/sso/sessions` returned `{data:{sessions:[…]}}` instead of `{data:[…]}` — SKI-58
+- `GET /admin/sso/sessions` returned `{data:{sessions:[…]}}` instead of `{data:[…]}` - SKI-58
 - `GET /admin/users/{id}` was missing `totp_enabled`, `email_2fa_enabled`, `webauthn_credentials_count` fields
 - `is_banned` vs `banned` field name inconsistency across `admin_users` list
 

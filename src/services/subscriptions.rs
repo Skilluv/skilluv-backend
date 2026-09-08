@@ -1,4 +1,4 @@
-//! Enterprise subscriptions — Phase 4.6.
+//! Enterprise subscriptions - Phase 4.6.
 //!
 //! Managed via Stripe Subscriptions today ; other PSPs (Paystack, Flutterwave) have
 //! their own subscription APIs but wiring them is deferred to Phase 5.

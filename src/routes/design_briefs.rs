@@ -5,7 +5,7 @@
 //! a slice. These are the two ends of that.
 //!
 //! Anybody with a completed profile may propose. The gate is at publication,
-//! where a person reads the brief — not at proposal, because a capability
+//! where a person reads the brief - not at proposal, because a capability
 //! earned *by* proposing cannot also be required *to* propose.
 
 use axum::extract::{Path, Query, State};
@@ -59,8 +59,8 @@ fn wrap(data: serde_json::Value) -> serde_json::Value {
 /// every domain's community surfaces at once, which is precisely the
 /// over-grant a per-domain capability exists to avoid (SKI-334). The domain
 /// curator is the capability whose description already says "its challenges,
-/// its contests, its featurings" — a design brief becoming a slice is that
-/// sentence — so this queue is now reachable by the narrow grant as well as
+/// its contests, its featurings" - a design brief becoming a slice is that
+/// sentence - so this queue is now reachable by the narrow grant as well as
 /// the broad one.
 ///
 /// No `design_curator`. It would be a second name for `domain_curator:design`,
@@ -152,7 +152,7 @@ pub struct QueueQuery {
 
 /// Briefs waiting to be read, oldest first.
 ///
-/// Oldest first so nobody waits twice — the same rule the review queue
+/// Oldest first so nobody waits twice - the same rule the review queue
 /// follows, and for the same reason.
 #[utoipa::path(
     get, path = "/api/admin/design/briefs",
@@ -195,7 +195,7 @@ pub async fn publish(
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct RejectBody {
-    /// Why. At least twenty characters, and shown to the author — a refusal
+    /// Why. At least twenty characters, and shown to the author - a refusal
     /// with no reason is a refusal that comes back next week as the same
     /// brief.
     pub feedback: String,

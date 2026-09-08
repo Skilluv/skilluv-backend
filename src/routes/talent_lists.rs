@@ -92,7 +92,7 @@ pub struct UpdateListRequest {
     pub description: Option<String>,
 }
 
-/// Bookmarked talent — minimal projection for the enterprise-side
+/// Bookmarked talent - minimal projection for the enterprise-side
 /// bookmarks list.
 #[derive(Debug, Serialize, ToSchema)]
 pub struct BookmarkedTalent {
@@ -135,7 +135,7 @@ pub struct ListsResponse {
     pub lists: Vec<TalentListSummary>,
 }
 
-/// Talent projection inside a list — same shape as BookmarkedTalent
+/// Talent projection inside a list - same shape as BookmarkedTalent
 /// minus the bookmarked_at.
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ListMemberTalent {

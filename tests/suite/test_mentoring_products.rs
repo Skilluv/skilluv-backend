@@ -2,8 +2,8 @@
 //!
 //! The audit ticket asked whether the four modes from migration 0107 work.
 //! They did not: only `paid_session` was wired. These tests cover what was
-//! dormant — the monthly arrangement, the volunteer hours, the placement
-//! commission and its anti-double-dipping rule — plus the two products built
+//! dormant - the monthly arrangement, the volunteer hours, the placement
+//! commission and its anti-double-dipping rule - plus the two products built
 //! on top.
 
 use crate::common::TestApp;

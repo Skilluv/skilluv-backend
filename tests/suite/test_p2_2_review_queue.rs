@@ -22,7 +22,7 @@ use skilluv_backend::services::{
 /// holding the capability.
 ///
 /// Both halves matter since the gate on `submit_verdict`. These fixtures used
-/// to review with `claimed_by` — the person the deliverable belongs to — which
+/// to review with `claimed_by` - the person the deliverable belongs to - which
 /// is now refused outright, and any authenticated account used to be enough,
 /// which it no longer is. `mentor` is the platform's cross-domain reviewer
 /// capability.

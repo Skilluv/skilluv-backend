@@ -1,4 +1,4 @@
-//! Tests IA-B — Route deep-scan plagiarism.
+//! Tests IA-B - Route deep-scan plagiarism.
 //!
 //! Le vrai chemin gRPC (appel skilluv-ia + AST + embeddings) nécessite un
 //! serveur IA up + un GRPC_AI_URL configuré → non testable en unit. On
@@ -130,7 +130,7 @@ async fn deep_scan_route_rejects_admin_without_ai_client() {
         .await
         .unwrap();
     // GRPC_AI_URL is unset in tests, so `state.ai` is None and the handler
-    // answers 503 — an integration this deployment does not have, rather than
+    // answers 503 - an integration this deployment does not have, rather than
     // a fault. 400 is accepted too, for a validation that fires earlier. The
     // point of this test is neither: it is that the answer is not 403.
     let s = resp.status().as_u16();
@@ -214,7 +214,7 @@ async fn plagiarism_reviewer_capability_grants_access() {
         .await
         .unwrap();
     // Clears the capability gate, then fails further along because no AI
-    // worker is connected — 503, not 403.
+    // worker is connected - 503, not 403.
     let s = resp.status().as_u16();
     assert!(
         matches!(s, 503 | 400),

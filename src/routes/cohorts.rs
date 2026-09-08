@@ -1,13 +1,13 @@
-//! SKI-40 (Post-MVP T2-01) — cohort HTTP surface.
+//! SKI-40 (Post-MVP T2-01) - cohort HTTP surface.
 //!
 //! Endpoints:
 //!   POST   /api/cohorts                          (auth)
-//!   GET    /api/cohorts                          (public — discovery)
+//!   GET    /api/cohorts                          (public - discovery)
 //!   GET    /api/cohorts/{id}                     (public if the cohort is)
 //!   PATCH  /api/cohorts/{id}                     (organizer)
 //!   POST   /api/cohorts/{id}/join                (auth)
 //!   DELETE /api/cohorts/{id}/leave               (member)
-//!   POST   /api/cohorts/{id}/members             (organizer — add/promote)
+//!   POST   /api/cohorts/{id}/members             (organizer - add/promote)
 //!   DELETE /api/cohorts/{id}/members/{user_id}   (organizer)
 //!   GET    /api/cohorts/{id}/members             (readable by viewer)
 //!   POST   /api/cohorts/{id}/milestones          (organizer)
@@ -148,7 +148,7 @@ pub async fn create(
     }
     if body.ends_at <= chrono::Utc::now() {
         return Err(AppError::Validation(
-            "ends_at must be in the future — a cohort is a cycle to run, not a record".into(),
+            "ends_at must be in the future - a cohort is a cycle to run, not a record".into(),
         ));
     }
     let max_members = body.max_members.unwrap_or(20);
@@ -180,7 +180,7 @@ pub async fn create(
 /// Join result for the discovery listing.
 ///
 /// `#[sqlx(flatten)]` maps `c.*` onto the `Cohort` struct while the two
-/// aggregate columns stay siblings — a plain tuple would not work, since
+/// aggregate columns stay siblings - a plain tuple would not work, since
 /// `query_as` treats each tuple element as one scalar column.
 #[derive(Debug, sqlx::FromRow)]
 struct CohortListRow {
@@ -204,11 +204,11 @@ struct MyCohortRow {
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
 #[serde(deny_unknown_fields)]
 pub struct ListCohortsQuery {
-    /// Filter by orientation slug (not id — this is the discovery surface,
+    /// Filter by orientation slug (not id - this is the discovery surface,
     /// and slugs are what appear in URLs).
     #[serde(default)]
     pub orientation: Option<String>,
-    /// Only cohorts that have not started yet — the ones you can still
+    /// Only cohorts that have not started yet - the ones you can still
     /// join from the beginning.
     #[serde(default)]
     pub upcoming_only: bool,
@@ -218,7 +218,7 @@ pub struct ListCohortsQuery {
     pub offset: Option<i64>,
 }
 
-/// Discovery listing. Public, non-archived cohorts only — private cohorts
+/// Discovery listing. Public, non-archived cohorts only - private cohorts
 /// never appear here, even for their own members (they reach them through
 /// `/users/me/cohorts`).
 #[utoipa::path(
@@ -402,7 +402,7 @@ pub async fn update(
                 .await?;
         if (m as i64) < current {
             return Err(AppError::Conflict(format!(
-                "cohort already has {current} members — remove some before lowering the cap"
+                "cohort already has {current} members - remove some before lowering the cap"
             )));
         }
     }
@@ -455,7 +455,7 @@ pub async fn join(
     Ok((StatusCode::CREATED, Json(wrap(json!({ "member": member })))))
 }
 
-/// Leave a cohort. Recorded as a departure, not as an absence — a cohort
+/// Leave a cohort. Recorded as a departure, not as an absence - a cohort
 /// that counts only its survivors cannot tell you it is failing.
 #[utoipa::path(
     delete, path = "/api/cohorts/{id}/leave", tag = "education",
@@ -782,7 +782,7 @@ pub async fn list_messages(
 }
 
 /// The caller's cohorts, including private ones. This is how a member
-/// reaches a private cohort — it never appears in discovery.
+/// reaches a private cohort - it never appears in discovery.
 #[utoipa::path(
     get, path = "/api/users/me/cohorts",
     operation_id = "cohortsListMine",
@@ -816,7 +816,7 @@ pub async fn list_mine(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SKI-295 (T2-01b) — admin moderation
+// SKI-295 (T2-01b) - admin moderation
 // ═══════════════════════════════════════════════════════════════════
 //
 // The organizer-only surface has no answer for a cohort that has gone
@@ -830,7 +830,7 @@ pub async fn list_mine(
 // what it must moderate.
 //
 // Archiving is deliberately *not* a deletion, and members keep reading the
-// chat afterwards — `cohorts::list_messages` gates on membership alone,
+// chat afterwards - `cohorts::list_messages` gates on membership alone,
 // never on `archived_at`. A cohort that turned abusive is also a cohort
 // where several people did honest work, and erasing their history to
 // punish one organizer would cost more than it fixes.
@@ -865,7 +865,7 @@ pub struct AdminListCohortsQuery {
 }
 
 /// Join row for the admin listing: the public projection plus the two
-/// things moderation needs and discovery does not — who runs it, and
+/// things moderation needs and discovery does not - who runs it, and
 /// whether the chat is active.
 #[derive(Debug, sqlx::FromRow)]
 struct AdminCohortRow {
@@ -989,7 +989,7 @@ pub struct AdminArchiveBody {
 ///
 /// One-way, exactly like the organizer's own archive: un-archiving would
 /// resurrect a cycle everyone has been told is over. Archiving an already
-/// archived cohort answers 409 rather than succeeding silently — a
+/// archived cohort answers 409 rather than succeeding silently - a
 /// moderator needs to know the gesture they just made was somebody else's.
 #[utoipa::path(
     post, path = "/api/admin/cohorts/{id}/archive", tag = "admin",
@@ -1016,7 +1016,7 @@ pub async fn admin_archive(
     let reason = body.reason.trim();
     if reason.chars().count() < 8 {
         return Err(AppError::Validation(
-            "reason must be at least 8 characters — archiving is irreversible".into(),
+            "reason must be at least 8 characters - archiving is irreversible".into(),
         ));
     }
 

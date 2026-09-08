@@ -1,8 +1,8 @@
 # Seed binaries
 
-Utilities to bootstrap a Skilluv instance with initial data. All seeds are idempotent — safe to re-run.
+Utilities to bootstrap a Skilluv instance with initial data. All seeds are idempotent - safe to re-run.
 
-## `skilluv-seed-admin` — provision or rotate the admin account
+## `skilluv-seed-admin` - provision or rotate the admin account
 
 Creates a Skilluv admin account, or resets an existing one (password rotation, role force to `admin`, email verified).
 
@@ -13,7 +13,7 @@ Creates a Skilluv admin account, or resets an existing one (password rotation, r
 
 ### Password is mandatory
 
-The binary refuses to run without a password. Minimum **12 characters**. No auto-generation — an operator must consciously choose the secret.
+The binary refuses to run without a password. Minimum **12 characters**. No auto-generation - an operator must consciously choose the secret.
 
 ```bash
 # Via environment variable (recommended for CI / Coolify pre-deploy)
@@ -29,12 +29,12 @@ cargo run --bin skilluv-seed-admin -- \
 
 | Var | Required | Default |
 |---|---|---|
-| `SEED_ADMIN_PASSWORD` | **YES** (≥12 chars) | — |
+| `SEED_ADMIN_PASSWORD` | **YES** (≥12 chars) | - |
 | `SEED_ADMIN_EMAIL` | no | `admin@skill-uv.com` |
 | `SEED_ADMIN_USERNAME` | no | `admin` |
 | `SEED_ADMIN_FIRST_NAME` | no | `Admin` |
 | `SEED_ADMIN_LAST_NAME` | no | `Skilluv` |
-| `DATABASE_URL` | yes | — |
+| `DATABASE_URL` | yes | - |
 
 CLI args always take precedence over env vars.
 

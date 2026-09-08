@@ -1,11 +1,11 @@
 //! Routes HTTP pour les `project_slices` (Phase P1).
 //!
 //! Endpoints publics :
-//!   GET   /api/slices                    — liste des slices open (filtres domain/difficulty/project)
-//!   GET   /api/slices/{id}               — détail d'une slice
-//!   POST  /api/slices/{id}/claim         — claim une slice (soft-lock 7j)
-//!   POST  /api/slices/{id}/unclaim       — relâche sa slice
-//!   GET   /api/users/me/slices           — mes slices actives (claimed / in_review)
+//!   GET   /api/slices                    - liste des slices open (filtres domain/difficulty/project)
+//!   GET   /api/slices/{id}               - détail d'une slice
+//!   POST  /api/slices/{id}/claim         - claim une slice (soft-lock 7j)
+//!   POST  /api/slices/{id}/unclaim       - relâche sa slice
+//!   GET   /api/users/me/slices           - mes slices actives (claimed / in_review)
 //!
 //! Voir docs/challenges-target-model-and-roadmap.md partie G.1 et H pour
 //! les workflows amont/aval (vérification via webhook, review humaine).
@@ -35,7 +35,7 @@ pub fn slice_routes() -> Router<AppState> {
         .route("/slices/{id}/unclaim-team", post(unclaim_slice_by_team))
         .route("/users/me/slices", get(my_slices))
         .route("/teams/{team_id}/slices", get(team_slices))
-        // P11.4 — steward inbox : validation des drafts ingérés
+        // P11.4 - steward inbox : validation des drafts ingérés
         .route("/stewards/{project_id}/inbox", get(steward_inbox))
         .route("/slices/{id}/publish", post(publish_slice))
         .route("/slices/{id}/reject", post(reject_slice))
@@ -51,7 +51,7 @@ pub fn slice_routes() -> Router<AppState> {
 pub struct ListQuery {
     /// One of the eight active domains. The handler checks it against
     /// `validators::SKILL_DOMAINS`; this pattern is the same list, and it had
-    /// gone stale — a contract that understates what it accepts sends a caller
+    /// gone stale - a contract that understates what it accepts sends a caller
     /// looking for an endpoint that does not exist.
     #[param(value_type = Option<crate::validators::SkillDomain>)]
     domain: Option<String>,
@@ -95,7 +95,7 @@ fn build_response(data: serde_json::Value) -> serde_json::Value {
 /// Liste paginée des slices `status='open'`. Public (pas d'auth requise) pour que
 /// les visiteurs découvrent l'offre. Trié par difficulty ASC, created_at DESC.
 /// Paginated open slices. Filter on domain / difficulty / project.
-/// Public — no auth required.
+/// Public - no auth required.
 #[utoipa::path(
     get,
     path = "/api/slices",
@@ -141,7 +141,7 @@ pub async fn list_open(
 
 /// GET /api/slices/{id}
 ///
-/// Détail public d'une slice (peu importe son status — le status est dans la réponse).
+/// Détail public d'une slice (peu importe son status - le status est dans la réponse).
 /// Public slice detail.
 #[utoipa::path(
     get,
@@ -164,12 +164,12 @@ pub async fn get_slice(
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SubmitPrBody {
-    /// Canonical GitHub PR URL — validated by the service layer.
+    /// Canonical GitHub PR URL - validated by the service layer.
     pub pr_url: String,
-    /// P26 v2 SKI-119 — when true and the user has connected GitHub OAuth,
+    /// P26 v2 SKI-119 - when true and the user has connected GitHub OAuth,
     /// posts a Skilluv attribution comment on the PR (as the user, not
     /// the bot). Best-effort: a POST failure does not roll back the
-    /// submission itself. Default false — opt-in on purpose.
+    /// submission itself. Default false - opt-in on purpose.
     #[serde(default)]
     pub announce_publicly: bool,
 }
@@ -236,7 +236,7 @@ pub async fn claim_slice(
 ) -> Result<impl IntoResponse, AppError> {
     let slice = SlicesService::claim(&state.db, id, auth.user_id).await?;
 
-    // P26 v2 SKI-75 — best-effort auto-fork. Runs after the claim so a fork
+    // P26 v2 SKI-75 - best-effort auto-fork. Runs after the claim so a fork
     // failure never blocks the claim itself. Any error is logged as warn
     // and the slice is returned with `fork_repo_url = NULL`; the user can
     // then declare their fork manually via submit-pr (SKI-76).
@@ -255,7 +255,7 @@ pub async fn claim_slice(
 
 /// Attempt to fork the target GitHub repo to the user's account and record
 /// the URL on the slice. Returns `None` on any failure (missing GH
-/// connection, unknown target repo, upstream error) — the caller keeps the
+/// connection, unknown target repo, upstream error) - the caller keeps the
 /// original slice and the user completes the flow manually.
 async fn try_auto_fork(
     state: &AppState,
@@ -281,7 +281,7 @@ async fn try_auto_fork(
             .await
         {
             Ok(Some(t)) => t,
-            _ => return None, // user hasn't connected GitHub — silent no-op
+            _ => return None, // user hasn't connected GitHub - silent no-op
         };
 
     match crate::services::github::fork_repo_for_user(&token, &owner, &repo).await {
@@ -302,7 +302,7 @@ async fn try_auto_fork(
         Err(e) => {
             tracing::warn!(
                 slice_id = %slice.id, user_id = %user_id, error = %e,
-                "SKI-75 auto-fork failed — user will need to fork manually"
+                "SKI-75 auto-fork failed - user will need to fork manually"
             );
             None
         }
@@ -405,7 +405,7 @@ pub async fn claim_slice_as_team(
 ) -> Result<impl IntoResponse, AppError> {
     require_team_member(&state.db, body.team_id, auth.user_id).await?;
     // P26 v2 SKI-79 / SKI-78: the requester (as team member) must clear
-    // the orientation and rank gates on the slice — same rule as solo claim.
+    // the orientation and rank gates on the slice - same rule as solo claim.
     SlicesService::assert_orientation_access(&state.db, id, auth.user_id).await?;
     SlicesService::assert_rank_access(&state.db, id, auth.user_id).await?;
     let slice = SlicesService::claim_as_team(&state.db, id, body.team_id).await?;
@@ -472,7 +472,7 @@ pub async fn team_slices(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// P11.4 — Steward inbox : validation des drafts ingérés
+// P11.4 - Steward inbox : validation des drafts ingérés
 // ═══════════════════════════════════════════════════════════════════
 
 /// Vérifie que l'user est admin OU steward actif du project.
@@ -559,7 +559,7 @@ pub async fn publish_slice(
     .increment(1);
     Ok(Json(build_response(json!({
         "slice": slice,
-        "message": "Slice published — now open for claim."
+        "message": "Slice published - now open for claim."
     }))))
 }
 
@@ -595,6 +595,6 @@ pub async fn reject_slice(
     let slice = SlicesService::reject_draft(&state.db, id).await?;
     Ok(Json(build_response(json!({
         "slice": slice,
-        "message": "Slice rejected — moved to closed."
+        "message": "Slice rejected - moved to closed."
     }))))
 }

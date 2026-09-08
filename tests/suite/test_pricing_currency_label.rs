@@ -3,7 +3,7 @@
 //! `/api/pricing` quotes the credit packs in the visitor's currency. When
 //! `fx_rates` had no row for that currency the conversion failed, the handler
 //! fell back to the euro *amount*, and the response went on saying ZAR. A
-//! South African visitor was quoted "39" and told it was rands — about two
+//! South African visitor was quoted "39" and told it was rands - about two
 //! euros, for a pack that costs thirty-nine. Observed in production on
 //! 2026-09-03 for ZAR, NGN and KES.
 //!

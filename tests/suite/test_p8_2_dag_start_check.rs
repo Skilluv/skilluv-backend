@@ -252,7 +252,7 @@ async fn dag_optional_prereq_does_not_block() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Cas 5 : le check est 100% DAG en P8.3 — un user avec 0 fragments peut
+// Cas 5 : le check est 100% DAG en P8.3 - un user avec 0 fragments peut
 // démarrer un challenge dès que le DAG est satisfait
 // ═══════════════════════════════════════════════════════════════════
 

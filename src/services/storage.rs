@@ -7,12 +7,12 @@ use crate::errors::AppError;
 
 /// Split storage across two buckets so we never mix files intended for the
 /// browser with private documents. Any mix would force the public bucket to
-/// leak KYC / RGPD material via `GetObject` — a hard no for compliance.
+/// leak KYC / RGPD material via `GetObject` - a hard no for compliance.
 ///
-/// - `public_bucket` (`MINIO_BUCKET`, default `avatars`) — avatars + enterprise
+/// - `public_bucket` (`MINIO_BUCKET`, default `avatars`) - avatars + enterprise
 ///   logos. Must allow anonymous `GetObject` in production so `<img src>` works
 ///   without pre-signing every URL. `ListObjects` MUST stay denied.
-/// - `private_bucket` (`MINIO_BUCKET_PRIVATE`, default `documents`) — data
+/// - `private_bucket` (`MINIO_BUCKET_PRIVATE`, default `documents`) - data
 ///   exports, KYC docs, anything else. Zero anonymous access ; every read goes
 ///   through a short-TTL presigned URL.
 pub struct StorageService {
@@ -38,7 +38,7 @@ const PRESIGN_MAX_TTL_SECONDS: u32 = 7 * 24 * 3600;
 /// docker exec skilluv-minio mc anonymous set download local/"$MINIO_BUCKET"
 /// ```
 ///
-/// The `private_bucket` gets NO anonymous access — presigned URLs only. The
+/// The `private_bucket` gets NO anonymous access - presigned URLs only. The
 /// `rust-s3` crate we use (0.35) has no `put_bucket_policy` helper, so this
 /// policy step remains manual / IaC.
 ///
@@ -48,7 +48,7 @@ const PRESIGN_MAX_TTL_SECONDS: u32 = 7 * 24 * 3600;
 /// returned for each part. The PUT goes from a browser straight to the store,
 /// so it is cross-origin, and a browser cannot read a response header that the
 /// server has not named in `Access-Control-Expose-Headers`. Without it every
-/// part uploads fine and `complete` can never be called — a failure at the end
+/// part uploads fine and `complete` can never be called - a failure at the end
 /// of a five-gigabyte upload, on a file that has nothing wrong with it.
 ///
 /// **On MinIO this needs no configuration.** MinIO answers every CORS request
@@ -61,9 +61,9 @@ const PRESIGN_MAX_TTL_SECONDS: u32 = 7 * 24 * 3600;
 /// ```
 ///
 /// An earlier version of this comment gave a `mc cors set … cors.json` command
-/// for it. That command is wrong twice: MinIO rejects it — *"A header you
+/// for it. That command is wrong twice: MinIO rejects it - *"A header you
 /// provided implies functionality that is not implemented"*, because it does
-/// not serve the per-bucket CORS S3 API — and the rule it tried to add was
+/// not serve the per-bucket CORS S3 API - and the rule it tried to add was
 /// already true. Somebody following it would have concluded their store was
 /// broken while it was working.
 ///
@@ -227,7 +227,7 @@ impl StorageService {
     }
 
     /// Generate a presigned GET URL against the *private* bucket. TTL is capped
-    /// at [`PRESIGN_MAX_TTL_SECONDS`] (7 days) — callers asking for more get
+    /// at [`PRESIGN_MAX_TTL_SECONDS`] (7 days) - callers asking for more get
     /// silently capped and a warning is logged.
     pub async fn presigned_get_url(
         &self,
@@ -254,7 +254,7 @@ impl StorageService {
     /// Read an object back out of the private bucket.
     ///
     /// Used by the workers that have to look inside a file rather than hand it
-    /// to somebody — measuring an audio master, for one. A presigned URL plus
+    /// to somebody - measuring an audio master, for one. A presigned URL plus
     /// an HTTP client would work and would mean the service talking to itself
     /// through a signature it just made.
     pub async fn get_private(&self, key: &str) -> Result<Vec<u8>, AppError> {
@@ -303,7 +303,7 @@ impl StorageService {
     ///
     /// The `uploadId` and `partNumber` travel as query parameters because that
     /// is where S3 expects them, and they are part of what the signature
-    /// covers — a client cannot move a part to another upload or another
+    /// covers - a client cannot move a part to another upload or another
     /// position without invalidating it.
     pub async fn presign_part_put(
         &self,
@@ -328,7 +328,7 @@ impl StorageService {
     }
 
     /// A presigned PUT for a whole object. Used for the preview that
-    /// accompanies an unopenable source file — small enough to arrive in one
+    /// accompanies an unopenable source file - small enough to arrive in one
     /// request, and separate so it can be replaced without re-sending the
     /// source.
     pub async fn presign_put_url(
@@ -372,7 +372,7 @@ impl StorageService {
         // the status is checked rather than assumed.
         if response.status_code() >= 300 {
             return Err(AppError::Validation(format!(
-                "the object store refused the assembly ({}) — usually a part                  that was never uploaded, or one under the five-megabyte floor",
+                "the object store refused the assembly ({}) - usually a part                  that was never uploaded, or one under the five-megabyte floor",
                 response.status_code()
             )));
         }

@@ -1,4 +1,4 @@
-//! Integration tests for SKI-41 — peer coaching.
+//! Integration tests for SKI-41 - peer coaching.
 //!
 //! The matching rules are unit-tested in `services::peer_matching`; this
 //! suite covers the parts that need a database: the candidate pool query
@@ -183,7 +183,7 @@ async fn enrollment_is_an_idempotent_upsert_and_pauses_cleanly() {
     assert!(!active);
     assert_eq!(cadence, 3, "pausing must not lose the chosen cadence");
 
-    // Pausing twice is a 404 — there is nothing left to pause.
+    // Pausing twice is a 404 - there is nothing left to pause.
     let resp = app
         .delete(&format!(
             "/api/users/me/peer-matching/enroll/{orientation_id}"
@@ -206,10 +206,10 @@ async fn proposals_exclude_distant_ranks_self_and_blocked_users() {
     let app = TestApp::spawn().await;
     let orientation_id = seed_orientation(&app, "proposal-orientation").await;
 
-    // Same rank, same timezone, shared language — the best candidate.
+    // Same rank, same timezone, shared language - the best candidate.
     let good =
         seed_enrolled_peer(&app, "peergood", orientation_id, "UTC+1", &["fr"], "ranger").await;
-    // Two ranks away — must be filtered out entirely.
+    // Two ranks away - must be filtered out entirely.
     seed_enrolled_peer(&app, "peerfar", orientation_id, "UTC+1", &["fr"], "maitre").await;
     // Same rank but blocked.
     let blocked = seed_enrolled_peer(
@@ -221,7 +221,7 @@ async fn proposals_exclude_distant_ranks_self_and_blocked_users() {
         "ranger",
     )
     .await;
-    // Paused enrollment — should not appear.
+    // Paused enrollment - should not appear.
     let paused = seed_enrolled_peer(
         &app,
         "peerpaused",

@@ -1,8 +1,8 @@
-//! Payout orchestration — one way to send money out, whatever the rail.
+//! Payout orchestration - one way to send money out, whatever the rail.
 //!
 //! `services::psp` already abstracts *collection*: a `PaymentProvider` trait,
 //! a registry, adapters for Stripe, Paystack and Flutterwave. None of it is
-//! reachable — `PaymentRegistry` is never constructed, and the checkout route
+//! reachable - `PaymentRegistry` is never constructed, and the checkout route
 //! calls Stripe directly. And it only ever covered money coming in.
 //!
 //! Sending money out had no abstraction at all. `stripe_withdraw` and
@@ -12,10 +12,10 @@
 //!
 //! This module is the missing half:
 //!
-//! * [`PayoutProvider`] — what a rail must be able to do.
-//! * [`Route`] and [`routes`] — which rail serves which country and currency,
+//! * [`PayoutProvider`] - what a rail must be able to do.
+//! * [`Route`] and [`routes`] - which rail serves which country and currency,
 //!   as data. Adding a country is a row, not a branch.
-//! * [`send`] — the one entry point. Records the movement in the ledger,
+//! * [`send`] - the one entry point. Records the movement in the ledger,
 //!   asks the provider, and reverses the record if the provider says no.
 //!
 //! ## Why the routing is data
@@ -90,7 +90,7 @@ pub struct PayoutReceipt {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PayoutState {
-    /// Accepted, settlement confirmed later — the normal Mobile Money case.
+    /// Accepted, settlement confirmed later - the normal Mobile Money case.
     Pending,
     /// Confirmed by the provider.
     Completed,
@@ -103,7 +103,7 @@ pub enum PayoutState {
 /// Deliberately narrower than `psp::PaymentProvider`: a rail that can only
 /// pay out implements this and nothing else, and one that does both
 /// implements both. Splitting by capability rather than by vendor is what
-/// keeps FeexPay — collection only, today — from having to pretend it can
+/// keeps FeexPay - collection only, today - from having to pretend it can
 /// pay out.
 #[async_trait]
 pub trait PayoutProvider: Send + Sync {
@@ -124,7 +124,7 @@ pub trait PayoutProvider: Send + Sync {
     /// Ask the provider what became of a payout it accepted earlier.
     ///
     /// `Ok(None)` means this rail cannot be polled and only ever answers
-    /// over a callback — the Mobile Money operators, today. That is not a
+    /// over a callback - the Mobile Money operators, today. That is not a
     /// failure, but it does mean an unconfirmed payout there can only be
     /// escalated to a human, never resolved automatically, which is why
     /// [`crate::services::reconciliation`] treats the two differently.
@@ -150,7 +150,7 @@ const KNOWN_PROVIDERS: [&str; 5] = ["stripe", "fedapay", "orange", "mtn", "wave"
 /// Turn a runtime provider name into one the ledger will accept.
 ///
 /// `None` for anything unknown, which the callers report rather than
-/// guessing at — a payout attributed to the wrong provider account is a
+/// guessing at - a payout attributed to the wrong provider account is a
 /// reconciliation that never balances again.
 pub fn canonical_provider(name: &str) -> Option<&'static str> {
     KNOWN_PROVIDERS
@@ -211,7 +211,7 @@ pub async fn routes(
 /// Registry of the providers this deployment can actually use.
 ///
 /// Populated at startup from configuration, so a provider whose credentials
-/// are absent is simply not there — rather than present and failing on the
+/// are absent is simply not there - rather than present and failing on the
 /// first real payout.
 #[derive(Default)]
 pub struct PayoutRegistry {
@@ -283,7 +283,7 @@ impl PayoutRegistry {
 /// 3. If it refuses, the movement is reversed by a compensating entry.
 ///
 /// Asking the provider first would leave money sent and unrecorded whenever
-/// the process died in between — the failure mode that is impossible to
+/// the process died in between - the failure mode that is impossible to
 /// reconcile afterwards. Recording first can only leave a movement that is
 /// reversed, which is visible and correctable.
 pub async fn send(
@@ -311,7 +311,7 @@ pub async fn send(
             provider: provider.name().to_string(),
             reference: String::new(),
             status: PayoutState::Pending,
-            message: Some("already recorded under this idempotency key — not sent again".into()),
+            message: Some("already recorded under this idempotency key - not sent again".into()),
         });
     }
 
@@ -482,7 +482,7 @@ async fn reverse(
         amount = %request.amount,
         currency = request.currency.as_str(),
         reason = reason.unwrap_or("unspecified"),
-        "payout refused — funds returned to the recipient's available balance"
+        "payout refused - funds returned to the recipient's available balance"
     );
     Ok(())
 }

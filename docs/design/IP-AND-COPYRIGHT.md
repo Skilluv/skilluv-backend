@@ -1,7 +1,7 @@
 # Propriété intellectuelle, droit moral et concours
 
 *Ce document dit qui possède quoi. Il est écrit pour être lu par un designer,
-pas par un juriste — mais il est écrit pour tenir devant un juriste.*
+pas par un juriste - mais il est écrit pour tenir devant un juriste.*
 
 > **État de relecture.** Ce texte n'a pas encore été relu par un avocat. Il
 > décrit la position de la plateforme et la façon dont le code l'applique. Les
@@ -22,7 +22,7 @@ page de résultats, et dans ce qu'elle publie pour parler d'elle-même. Elle ne
 peut pas le vendre, le concéder à un tiers, ni le modifier.
 
 Cette licence dure tant que le contenu est publié. Vous le retirez, elle
-s'éteint — sauf sur les pages qui font l'objet d'un archivage historique, dont
+s'éteint - sauf sur les pages qui font l'objet d'un archivage historique, dont
 la liste est ci-dessous.
 
 ## 2. Le droit moral
@@ -60,7 +60,7 @@ légitime de ce travail spéculatif tient à **une seule question** : l'argent
 
 La plateforme y répond structurellement plutôt qu'éditorialement. Un concours
 doté ne peut pas s'ouvrir aux participants tant que la somme n'est pas
-séquestrée — c'est une contrainte de base de données, pas une bonne intention
+séquestrée - c'est une contrainte de base de données, pas une bonne intention
 (migration `0242`). Personne ne peut concourir pour une dotation qui n'existe
 pas.
 
@@ -71,7 +71,7 @@ Rien, par défaut. Gagner un concours ne transfère aucun droit.
 Si le commanditaire veut acquérir des droits d'exploitation sur la proposition
 lauréate, c'est un **contrat séparé**, négocié après le classement, entre le
 lauréat et lui. La plateforme ne le signe pas à sa place et n'en prend pas de
-commission — la dotation est versée entière au podium.
+commission - la dotation est versée entière au podium.
 
 ### Ce que les autres participants gardent
 
@@ -85,7 +85,7 @@ et la galerie publique des propositions est ce qui permet de le constater.
 ### Le débauchage
 
 Un commanditaire qui découvre un profil dans un concours a le droit de le
-contacter — c'est une des raisons d'être de la plateforme. Ce qui est interdit,
+contacter - c'est une des raisons d'être de la plateforme. Ce qui est interdit,
 c'est de **court-circuiter un concours en cours** : contacter les participants
 pendant la fenêtre de soumission pour leur proposer de travailler en direct
 vide le concours de son objet et lèse ceux qui y sont restés.
@@ -99,7 +99,7 @@ Un concours peut déclarer une fenêtre de soumission aveugle : tant qu'elle est
 ouverte, un participant ne voit que sa propre proposition.
 
 Ce n'est pas de l'opacité. À la clôture, tout le champ devient public et le
-reste — un résultat que personne ne peut vérifier contre l'ensemble des
+reste - un résultat que personne ne peut vérifier contre l'ensemble des
 propositions n'est pas un résultat. Ce que la fenêtre retire, c'est seulement
 la possibilité de lire le travail des autres **pendant qu'il est encore temps
 de s'en inspirer**, qui est l'échec connu du format.
@@ -114,7 +114,7 @@ déclarer : photographie, police de caractères, illustration, modèle 3D, son,
 bibliothèque de composants.
 
 Pour chacun : la source et la licence. Une police sous licence bureau utilisée
-dans une identité livrée à un client est un piège classique — la licence du
+dans une identité livrée à un client est un piège classique - la licence du
 client n'est pas la vôtre, et c'est lui qui recevra la facture.
 
 Une déclaration manquante est un motif de refus (`third_party_unclear`), pas
@@ -128,7 +128,7 @@ personnes identifiables, documents internes d'un client.
 
 Règles :
 
-- **anonymisez** avant de publier — noms, adresses, visages, identifiants ;
+- **anonymisez** avant de publier - noms, adresses, visages, identifiants ;
 - une photographie de personne identifiable demande son accord, écrit ;
 - un document sous accord de confidentialité ne se publie pas, même flouté ;
 - un entretien utilisateur se cite sans nommer la personne.
@@ -152,7 +152,7 @@ dire avant plutôt qu'après :
 2. **La trace d'une attestation révoquée.** Une révocation qui disparaît
    n'informe personne.
 3. **Le journal d'audit.** Il est en ajout seul par construction
-   (`docs/AUDIT-APPEND-ONLY.md`), et il ne contient pas d'œuvre — seulement des
+   (`docs/AUDIT-APPEND-ONLY.md`), et il ne contient pas d'œuvre - seulement des
    identifiants et des dates.
 
 Dans les trois cas, ce qui est conservé est le fait, pas l'image.

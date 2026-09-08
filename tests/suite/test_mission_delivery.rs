@@ -2,7 +2,7 @@
 //!
 //! Two claims this suite exists to hold:
 //!
-//!   * the mission status never goes backwards, even though the work does —
+//!   * the mission status never goes backwards, even though the work does -
 //!     the rounds live on the delivery, and the mission reaches `delivered`
 //!     only when a round is accepted;
 //!   * a rating is written blind. One that the other side can read before
@@ -214,8 +214,8 @@ async fn a_round_past_what_was_agreed_is_marked_not_refused() {
     )
     .await;
 
-    // The brief included one round. The second is still allowed — the
-    // platform is not party to the contract — but it is on the record.
+    // The brief included one round. The second is still allowed - the
+    // platform is not party to the contract - but it is on the record.
     app.login("scope_talent").await;
     let second = app
         .post("/api/missions/m-scope/deliveries", &a_delivery(2))
@@ -354,7 +354,7 @@ async fn a_silent_client_cannot_suppress_a_rating_for_ever() {
         .await;
 
     // The client never answers. After the window, the designer's rating is
-    // readable anyway — otherwise silence is a veto.
+    // readable anyway - otherwise silence is a veto.
     sqlx::query(
         "UPDATE mission_ratings SET created_at = NOW() - INTERVAL '15 days'
           WHERE mission_id = (SELECT id FROM missions WHERE slug = 'm-silent')",

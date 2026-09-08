@@ -1,4 +1,4 @@
-//! The code profile — one request, everything a reader needs to judge
+//! The code profile - one request, everything a reader needs to judge
 //! somebody's work without taking the platform's word for it.
 //!
 //! The score is first because it is what makes a list sortable, and the
@@ -286,7 +286,7 @@ pub async fn recompute_mine(
 #[derive(Debug, serde::Deserialize, ToSchema)]
 #[schema(as = CodeProfileClaimBody)]
 pub struct ClaimBody {
-    /// The profile page itself — `https://codeberg.org/someone`, not one of
+    /// The profile page itself - `https://codeberg.org/someone`, not one of
     /// its repositories.
     #[schema(max_length = 500)]
     pub profile_url: String,

@@ -11,12 +11,12 @@ pub struct AuthUser {
     pub user_id: Uuid,
     pub role: String,
     /// How the current session was authenticated (from the JWT claim). Read by
-    /// `require_enterprise` to bypass mandatory-TOTP when set to "sso" — the
+    /// `require_enterprise` to bypass mandatory-TOTP when set to "sso" - the
     /// external IdP is responsible for MFA in that case.
     pub login_method: String,
     /// UUID of the enterprise the user has selected in the workspace switcher
     /// (`active_enterprise` cookie). `None` when the user has never picked one
-    /// or was signed out — callers should fall back to the most recent
+    /// or was signed out - callers should fall back to the most recent
     /// membership. Also `None` for non-enterprise personas.
     pub active_enterprise_id: Option<Uuid>,
 }
@@ -44,7 +44,7 @@ impl FromRequestParts<AppState> for AuthUser {
             .ok_or(AppError::Unauthorized)?;
 
         // Admin app emits `admin_access_token`; public app emits `access_token`.
-        // The JWT signing key is shared so verification is identical — the
+        // The JWT signing key is shared so verification is identical - the
         // separate cookie name is the isolation vector (different Set-Cookie
         // scope in the browser jar, defense-in-depth against XSS-hijack of an
         // admin session by JS running on the public origin).
@@ -88,14 +88,14 @@ impl FromRequestParts<AppState> for AuthUser {
     }
 }
 
-/// Extracteur du tenant courant — Phase 5.9.
+/// Extracteur du tenant courant - Phase 5.9.
 ///
 /// Résolu depuis (dans l'ordre) :
 ///   1. header `X-Skilluv-Tenant` (slug)
 ///   2. sous-domaine du header `Host` (ex: `acme.skill-uv.com` → tenant `acme`)
 ///   3. tenant racine (`00000000-...-0001`) par défaut
 ///
-/// Ne rejette jamais — un tenant est toujours résolu, au pire c'est le racine.
+/// Ne rejette jamais - un tenant est toujours résolu, au pire c'est le racine.
 #[derive(Debug, Clone, Copy)]
 pub struct TenantContext {
     pub tenant_id: Uuid,
@@ -142,7 +142,7 @@ impl FromRequestParts<AppState> for AuthUserComplete {
             .await?;
         let (skill_domain, terms_accepted_at, email_verified) =
             row.ok_or(AppError::Unauthorized)?;
-        // Gate write endpoints on verified email — a bounced/typo'd address
+        // Gate write endpoints on verified email - a bounced/typo'd address
         // shouldn't be able to spam messages, invites, submissions, etc. The
         // gate is bypassed for enterprise SSO sessions since the IdP already
         // asserted email ownership (see login_method wiring).
@@ -159,7 +159,7 @@ impl FromRequestParts<AppState> for AuthUserComplete {
     }
 }
 
-/// Optional authentication extractor — never rejects.
+/// Optional authentication extractor - never rejects.
 /// Returns `Some(AuthUser)` if a valid token is present, `None` otherwise.
 #[derive(Debug, Clone)]
 pub struct OptionalAuth(pub Option<AuthUser>);
@@ -224,7 +224,7 @@ fn extract_auth(parts: &Parts, state: &AppState) -> Option<AuthUser> {
 /// ## Why an extractor and not a second route
 ///
 /// A `/api/v1/security/reports` twin would be two handlers to keep in step on
-/// rate limits, validation and the shape of the answer — and the day they
+/// rate limits, validation and the shape of the answer - and the day they
 /// diverge, one of them is the lenient one. One handler, two ways in.
 ///
 /// ## The scope is not optional

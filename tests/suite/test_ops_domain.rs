@@ -487,7 +487,7 @@ async fn an_incident_has_nowhere_to_name_who_caused_it() {
     ] {
         assert!(
             !columns.iter().any(|c| c == forbidden),
-            "{forbidden} exists — a post-mortem naming a person is one nobody writes \
+            "{forbidden} exists - a post-mortem naming a person is one nobody writes \
              honestly the second time"
         );
     }
@@ -574,7 +574,7 @@ async fn a_cost_reduction_is_attested_only_if_the_service_still_works() {
         .unwrap()
         .to_string();
 
-    // 2500 a month is 30 000 a year — the figure the decision was made
+    // 2500 a month is 30 000 a year - the figure the decision was made
     // against.
     crate::common::assert_amount(&created["data"]["annual_saving"], "30000.00");
     assert!((created["data"]["reduction_percent"].as_f64().unwrap() - 62.5).abs() < 0.01);
@@ -654,7 +654,7 @@ async fn an_ops_artefact_says_what_it_is() {
 /// No ops read endpoint answers 500 to a plain request.
 ///
 /// `GET /users/{username}/ops-profile` returned 500 to every call it had ever
-/// received — one figure in its query was cast to `INT` while the struct read
+/// received - one figure in its query was cast to `INT` while the struct read
 /// every column as `i64`, and sqlx refused to decode the row. The suite
 /// reported a single failure, because exactly one test reached that endpoint,
 /// and only on its way to checking something else.
@@ -662,7 +662,7 @@ async fn an_ops_artefact_says_what_it_is() {
 /// A 500 is never the right answer here: unauthenticated is 401, absent is
 /// 404, refused is 403. This asserts the shape of the answer rather than its
 /// content, so it stays true as the endpoints grow, and it fails the day a
-/// query stops decoding — which is the failure that hid.
+/// query stops decoding - which is the failure that hid.
 #[tokio::test]
 async fn no_ops_read_endpoint_answers_500() {
     let app = TestApp::spawn().await;

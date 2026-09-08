@@ -1,4 +1,4 @@
-//! P26 v2 SKI-106 — admin override of per-slice gates.
+//! P26 v2 SKI-106 - admin override of per-slice gates.
 //!
 //! Unblocks the "admin can force-open or force-restrict a specific
 //! challenge without touching the code" workflow. Corresponds to
@@ -19,7 +19,7 @@
 //! SKI-79 gates are the primary access control; letting non-admins
 //! bypass would defeat them. But an admin sometimes needs to open a
 //! `min_rank='doyen'` slice to a specific ranger for pedagogical
-//! reasons — this endpoint is the escape hatch, with audit trail.
+//! reasons - this endpoint is the escape hatch, with audit trail.
 
 use axum::extract::{Path, Query, State};
 use axum::routing::{get, patch};
@@ -36,7 +36,7 @@ use crate::models::ProjectSlice;
 pub fn admin_slice_routes() -> Router<AppState> {
     Router::new()
         .route("/admin/slices/{id}/config", patch(patch_slice_config))
-        // SKI-112 (M-06) — admin can list slices in any status.
+        // SKI-112 (M-06) - admin can list slices in any status.
         .route("/admin/slices", get(list_slices))
 }
 
@@ -53,7 +53,7 @@ fn wrap(data: Value) -> Value {
 /// Distinguishes "field absent from JSON" (no change) from "field is
 /// null" (clear the override). `Option<Option<T>>` with
 /// `#[serde(default, deserialize_with = "double_option")]` is the
-/// canonical way — but we settle for a simpler pattern: an explicit
+/// canonical way - but we settle for a simpler pattern: an explicit
 /// wrapper enum. Rust's serde is not as ergonomic here as it looks.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -110,7 +110,7 @@ fn validate_orientation_slugs(slugs: &Option<Vec<String>>) -> Result<(), AppErro
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SKI-111 — response schemas
+// SKI-111 - response schemas
 // ═══════════════════════════════════════════════════════════════════
 
 /// Payload of `PATCH /admin/slices/{id}/config`.
@@ -127,7 +127,7 @@ pub struct AdminSliceListResponse {
     pub meta: crate::api_response::MetaInfo,
 }
 
-/// SKI-106 admin — override sensibilité/rank sur une slice individuelle.
+/// SKI-106 admin - override sensibilité/rank sur une slice individuelle.
 #[utoipa::path(
     patch, path = "/api/admin/slices/{id}/config", tag = "admin",
     params(("id" = Uuid, Path)),
@@ -148,7 +148,7 @@ pub async fn patch_slice_config(
 ) -> Result<Json<Value>, AppError> {
     crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
 
-    // Validate what's present. `Some(None)` (explicit clear) is fine —
+    // Validate what's present. `Some(None)` (explicit clear) is fine -
     // we only validate the actual values that would land in the DB.
     if let Some(Some(rank_val)) = &body.min_rank {
         validate_min_rank(&Some(rank_val.clone()))?;
@@ -217,13 +217,13 @@ pub async fn patch_slice_config(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// GET /admin/slices — SKI-112 (M-06)
+// GET /admin/slices - SKI-112 (M-06)
 // ═══════════════════════════════════════════════════════════════════
 //
 // The public GET /api/slices only returns status='open'. Everything
 // else (claimed, in_progress, submitted, pending_validation, validated,
 // merged...) is unreachable from the admin panel without knowing the
-// UUID — which is exactly the state where overrides are most needed.
+// UUID - which is exactly the state where overrides are most needed.
 // This endpoint lifts the implicit filter and adds admin-oriented
 // filters (multi-status CSV, claimant, free-text search on title /
 // external_ref).
@@ -299,7 +299,7 @@ fn validate_q(q: &Option<String>) -> Result<Option<String>, AppError> {
     Ok(Some(trimmed.to_string()))
 }
 
-/// SKI-112 admin — list slices across every status, with filters.
+/// SKI-112 admin - list slices across every status, with filters.
 #[utoipa::path(
     get, path = "/api/admin/slices", tag = "admin",
     params(
@@ -332,7 +332,7 @@ pub async fn list_slices(
     let page = q.page.unwrap_or(1).max(1);
     let offset = (page - 1) * per_page;
 
-    // Trigrams / prefix ILIKE — pattern wrapped in the caller so we
+    // Trigrams / prefix ILIKE - pattern wrapped in the caller so we
     // bind a single string rather than concat in SQL.
     let search_pat = search.as_ref().map(|s| format!("%{s}%"));
 
@@ -447,7 +447,7 @@ mod tests {
 
     #[test]
     fn double_option_serde_roundtrip() {
-        // Sanity: field absent, field null, field with value — three distinct outcomes.
+        // Sanity: field absent, field null, field with value - three distinct outcomes.
         let absent: SliceConfigBody = serde_json::from_str(r#"{}"#).unwrap();
         assert!(absent.min_rank.is_none()); // Option::None (no change)
         assert!(absent.required_orientation_slugs.is_none());

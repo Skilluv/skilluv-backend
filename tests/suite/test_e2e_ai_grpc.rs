@@ -1,7 +1,7 @@
-//! Test e2e — prouve que le backend peut appeler l'IA gRPC v2 sur une vraie
+//! Test e2e - prouve que le backend peut appeler l'IA gRPC v2 sur une vraie
 //! socket. Nécessite l'IA écoutant sur `GRPC_AI_URL` (défaut :50051).
 //!
-//! Skip auto si l'IA n'est pas joignable — évite de casser CI standalone.
+//! Skip auto si l'IA n'est pas joignable - évite de casser CI standalone.
 //!
 //! Lancement local :
 //!     cd ../skilluv-ia
@@ -17,7 +17,7 @@ async fn connect_or_skip() -> Option<skilluv_backend::grpc::AiClient> {
 #[tokio::test]
 async fn e2e_review_code_returns_response_from_real_ia() {
     let Some(ai) = connect_or_skip().await else {
-        eprintln!("IA gRPC unreachable at :50051 — skipping e2e");
+        eprintln!("IA gRPC unreachable at :50051 - skipping e2e");
         return;
     };
 
@@ -39,7 +39,7 @@ async fn e2e_review_code_returns_response_from_real_ia() {
         .expect("gRPC call timed out")
         .expect("gRPC call failed");
 
-    // Mock LLM renvoie un dict conforme au schema — quality_score peut être 0
+    // Mock LLM renvoie un dict conforme au schema - quality_score peut être 0
     // (int par défaut). Le contrat est juste : la réponse existe et a les champs.
     let _score = response.quality_score;
     let _summary: &str = &response.summary;
@@ -49,7 +49,7 @@ async fn e2e_review_code_returns_response_from_real_ia() {
 #[tokio::test]
 async fn e2e_suggest_career_path_returns_response_from_real_ia() {
     let Some(ai) = connect_or_skip().await else {
-        eprintln!("IA gRPC unreachable at :50051 — skipping e2e");
+        eprintln!("IA gRPC unreachable at :50051 - skipping e2e");
         return;
     };
 

@@ -1,4 +1,4 @@
-# Legal — what is drafted, what is reviewed, and what is missing
+# Legal - what is drafted, what is reviewed, and what is missing
 
 **Nothing on this page has been reviewed by a lawyer.** That sentence is the
 most important one here, and it is repeated on every document it applies to and
@@ -34,9 +34,9 @@ operating entity exists (see §5); what happens to it if the entity changes.
 
 `mission_nda_templates` holds two, in English and French:
 
-- `mutual_standard` — mutual, two years, with an explicit carve-out letting the
+- `mutual_standard` - mutual, two years, with an explicit carve-out letting the
   contributor describe the engagement in general terms.
-- `mutual_extended` — five years, no public description beyond type and
+- `mutual_extended` - five years, no public description beyond type and
   duration, a six-month non-solicitation clause and a reference restriction.
 
 Both carry `is_reviewed = FALSE` on the row.
@@ -46,7 +46,7 @@ Both carry `is_reviewed = FALSE` on the row.
 A **simple electronic signature** under eIDAS: the signer is authenticated, is
 shown a document, accepts it, and what is recorded is the SHA-256 of the exact
 bytes shown, the time, the address where there is a trustworthy one, and the
-name they typed. Admissible and rebuttable — the lowest of the three tiers.
+name they typed. Admissible and rebuttable - the lowest of the three tiers.
 
 It is **not** an advanced or qualified signature. Self-hosting DocuSeal would
 produce the same tier through more moving parts; a commercial provider
@@ -103,7 +103,7 @@ and an administrator or a `mission_arbiter` decides with a written reason that
 goes into the mission's history.
 
 The decision is applicable and final. This platform is not a court and does not
-offer an appeal — and it says so rather than implying a process it cannot run.
+offer an appeal - and it says so rather than implying a process it cannot run.
 Nothing in it removes either party's right to go to an actual court.
 
 Five dispute shapes are expected: deliverable insufficient, late, scope creep,
@@ -123,7 +123,7 @@ before they rely on any of the above:
 2. **No professional liability insurance.** See §6.
 3. **Invoicing and VAT are not set up** for a marketplace. See §7.
 
-Until it exists, the honest position — and the one taken — is: no money moves
+Until it exists, the honest position - and the one taken - is: no money moves
 through the platform, missions are not being solicited from clients, and the
 disclosure programme offers recognition rather than payment. Every one of those
 is stated where a user reads it and not only here.
@@ -146,7 +146,7 @@ The market, as at 2026:
 | Individual professional indemnity | ~500 €/year | What is available without a company. Very limited cover |
 
 Minimum cover worth having: third-party damage, professional error, an incident
-on staging caused by a researcher, and data-breach costs — notification,
+on staging caused by a researcher, and data-breach costs - notification,
 forensics, communication.
 
 **Decision: not now, because the entity does not exist.** Until then, the
@@ -159,7 +159,7 @@ writing that the platform is in beta and its legal structure is in progress.
 **Status: partially implemented, unreviewed.**
 
 `mission_invoices` and `invoice_counters` exist, with sequential numbering per
-year and no gaps — which is a legal requirement in France and the reason the
+year and no gaps - which is a legal requirement in France and the reason the
 counter is a table and not a `count(*)`.
 
 What is implemented: invoice rows, sequential numbers, a monthly CSV export for
@@ -173,14 +173,14 @@ What is not, and needs the entity first:
 - **Invoices issued on behalf of a contributor** who is a French
   auto-entrepreneur, with the "TVA non applicable, art. 293 B du CGI" note.
   This is the Uber and Malt pattern and it needs the contributor's SIRET.
-- **DAS-2** — the annual declaration of fees paid to each contributor above
+- **DAS-2** - the annual declaration of fees paid to each contributor above
   1 200 €.
 - **DEB/DES** for intra-EU transactions.
 
 ## 8. Personal data
 
 `PRIVACY.md` at the repository root is the document, and it is also an audit
-exercise in this domain's catalogue — a platform that publishes a privacy notice
+exercise in this domain's catalogue - a platform that publishes a privacy notice
 and does not want it read is publishing decoration.
 
 The two things specific to this domain:
@@ -199,12 +199,12 @@ The two things specific to this domain:
 
 If there is a budget for two hours, spend it here:
 
-1. **The safe harbour wording** — is the undertaking in `SCOPE.md` enforceable,
+1. **The safe harbour wording** - is the undertaking in `SCOPE.md` enforceable,
    and can it be given before the entity exists?
 2. **The two confidentiality templates**, particularly the non-solicitation
    clause and its duration.
 3. **The `retain_reusable_components` default** and whether it holds.
-4. **The dispute process** — is "applicable and final" a statement this
+4. **The dispute process** - is "applicable and final" a statement this
    platform may make?
 
 Priority two, once there is money involved: terms of service for the

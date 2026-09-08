@@ -6,7 +6,7 @@
 //!
 //! Contests are not here. A design contest is a `brief_contest` on the
 //! tournament routes, because a contest is the same event whatever the
-//! subject — see `services::contest`.
+//! subject - see `services::contest`.
 //!
 //! Authorisation lives in the service (`design_reviewer:{group}` resolved
 //! from the slice's trade) and in the database (the five-round ceiling, the
@@ -251,7 +251,7 @@ pub struct CompareQuery {
 /// The diff is not computed here. This has neither the pixels nor the fonts,
 /// and rendering somebody's Figma node server-side would mean holding their
 /// design account. What it returns is both versions, everything that was said
-/// between them, and which comparison the subtype makes meaningful — so the
+/// between them, and which comparison the subtype makes meaningful - so the
 /// client does not have to keep its own copy of the twelve subtypes and guess
 /// wrong on the interesting ones.
 #[utoipa::path(
@@ -304,7 +304,7 @@ pub async fn version_at(
 ///
 /// Three rather than two: two rounds is one critique and a fix, which happens
 /// to everybody. Three is where a direction was questioned and the person came
-/// back — which is the thing worth putting on a profile, and the thing a
+/// back - which is the thing worth putting on a profile, and the thing a
 /// portfolio of finished images can never show.
 #[utoipa::path(
     get, path = "/api/design/users/{username}/iteration-stories", tag = "design",
@@ -344,7 +344,7 @@ pub async fn iteration_stories(
 /// the machine said about it.
 ///
 /// Nothing here is a verdict. A version can carry an `error` and be approved,
-/// and a clean run followed by a rejection is the common case — no check knows
+/// and a clean run followed by a rejection is the common case - no check knows
 /// whether a mark is right for a cooperative.
 #[utoipa::path(
     get, path = "/api/design/slices/{id}/auto-checks", tag = "design",
@@ -387,8 +387,8 @@ pub struct NextChallengesQuery {
 /// also carries `target_kind` (`"slice"` / `"tournament"`), so a client links
 /// to the target by its nature rather than guessing from the format.
 ///
-/// Called without `domain` by an account that has not finished onboarding —
-/// one whose `users.skill_domain` is still null — this answers **400**, not an
+/// Called without `domain` by an account that has not finished onboarding -
+/// one whose `users.skill_domain` is still null - this answers **400**, not an
 /// empty list: there is no domain to suggest in. A caller that cannot depend on
 /// onboarding being done should pass `domain` explicitly or handle the 400 as
 /// "pick a domain first", never as an outage.

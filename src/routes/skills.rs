@@ -1,10 +1,10 @@
 //! Routes HTTP pour les skills (Phase P4).
 //!
 //! Endpoints :
-//!   GET /api/skills                              — catalogue skill_nodes (public)
-//!   GET /api/skills/{slug}/talents               — recherche recruteur par skill
-//!   GET /api/users/{user_id}/skills              — skill map d'un profil
-//!   GET /api/users/me/skill-recommendations      — slices reco basées sur skills
+//!   GET /api/skills                              - catalogue skill_nodes (public)
+//!   GET /api/skills/{slug}/talents               - recherche recruteur par skill
+//!   GET /api/users/{user_id}/skills              - skill map d'un profil
+//!   GET /api/users/me/skill-recommendations      - slices reco basées sur skills
 //!                                                  proches d'un level-up (auth)
 
 use axum::extract::{Path, Query, State};

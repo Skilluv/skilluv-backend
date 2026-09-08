@@ -59,7 +59,7 @@ async fn the_rite_asks_for_a_trade_first() {
         "the refusal must say how to choose a trade: {body}"
     );
 
-    // With a trade, the code rite gets as far as asking for GitHub — which is
+    // With a trade, the code rite gets as far as asking for GitHub - which is
     // the next legitimate wall and not this one.
     assert_eq!(
         choose_trade(&app, "web-backend-developer").await,
@@ -273,7 +273,7 @@ async fn a_french_reader_is_served_french() {
     assert!(locales.contains(&json!("fr")) && locales.contains(&json!("en")));
 
     // The French reader sees the French resource first, and the English ones
-    // after — never instead.
+    // after - never instead.
     let first = &fr["data"]["guidance"]["resources"][0];
     assert!(
         fr["data"]["guidance"]["resources"]
@@ -449,7 +449,7 @@ async fn a_question_cannot_name_a_challenge_that_is_not_there() {
 // The loop closes
 // ════════════════════════════════════════════════════════════════════
 
-/// An exercise is handed in, queued for a person, approved, and rewarded —
+/// An exercise is handed in, queued for a person, approved, and rewarded -
 /// and the next rung then becomes reachable.
 #[tokio::test]
 async fn an_exercise_is_handed_in_read_and_rewarded() {
@@ -518,7 +518,7 @@ async fn an_exercise_is_handed_in_read_and_rewarded() {
 
 /// The first brief anybody reads carries guidance too.
 ///
-/// `GET /api/challenges/onboarding` returned the rite and nothing around it —
+/// `GET /api/challenges/onboarding` returned the rite and nothing around it -
 /// so the one brief where being stranded means never starting was the one with
 /// no reading, nowhere to ask, and no count of who asked before.
 #[tokio::test]
@@ -552,7 +552,7 @@ async fn the_rite_says_where_to_start_reading() {
 
 /// No resource points at a host this repository invented.
 ///
-/// Migration 0615 attached a Discord invite that exists nowhere — written
+/// Migration 0615 attached a Discord invite that exists nowhere - written
 /// because a community link belonged there, not because that one was real. A
 /// dead link in the first list a beginner is handed teaches them the guidance
 /// is decorative.

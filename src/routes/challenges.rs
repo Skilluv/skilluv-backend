@@ -35,13 +35,13 @@ struct OnboardingQuery {
 struct ListQuery {
     /// One of the eight active domains. The handler checks it against
     /// `validators::SKILL_DOMAINS`; this pattern is the same list, and it had
-    /// gone stale — a contract that understates what it accepts sends a caller
+    /// gone stale - a contract that understates what it accepts sends a caller
     /// looking for an endpoint that does not exist.
     #[param(value_type = Option<crate::validators::SkillDomain>)]
     domain: Option<String>,
     #[param(minimum = 1, maximum = 5)]
     difficulty: Option<i16>,
-    /// Narrow to one cyber discipline — the six `security_kind` values. Only a
+    /// Narrow to one cyber discipline - the six `security_kind` values. Only a
     /// security challenge carries one, so this implies `domain=security`
     /// (SKI-320). A `/ctf` or `/blue-lab` list is `?security_kind=ctf_flag` /
     /// `defensive_lab`.
@@ -63,7 +63,7 @@ struct SubmitRequest {
     /// `audio_file:<uuid>`.
     ///
     /// References rather than URLs, and every one of them is checked to belong
-    /// to the caller — see `services::submission_attachments`. Without this a
+    /// to the caller - see `services::submission_attachments`. Without this a
     /// design or audio rite had nowhere to put its artifact: the reviewer got
     /// whatever link the person had thought to paste into a paragraph.
     #[serde(default)]
@@ -74,7 +74,7 @@ struct SubmitRequest {
 ///
 /// `Accept-Language`, resolved against the three locales the platform serves.
 /// A challenge carries every language it has been written in and the reader
-/// decides which one comes back — the header is the only thing that knows.
+/// decides which one comes back - the header is the only thing that knows.
 fn locale_of(headers: &axum::http::HeaderMap) -> String {
     crate::routes::resolve_from_accept_language(
         headers
@@ -163,7 +163,7 @@ pub async fn get_onboarding(
     }))))
 }
 
-// GET /api/challenges (public — optional auth for locked/unlocked status)
+// GET /api/challenges (public - optional auth for locked/unlocked status)
 /// List published challenges (paginated).
 #[utoipa::path(
     get, path = "/api/challenges", tag = "challenges",
@@ -178,7 +178,7 @@ pub async fn list_challenges(
 ) -> Result<Json<serde_json::Value>, AppError> {
     // Against `validators::SKILL_DOMAINS`, not a fourth hand-written copy of
     // the list. This one had gone stale at four domains while eight were live,
-    // so `?domain=ai` was refused on an endpoint that has AI challenges — and
+    // so `?domain=ai` was refused on an endpoint that has AI challenges - and
     // the refusal named the four, which reads as "AI does not exist here".
     crate::validators::check_skill_domain_opt(&query.domain, "domain")?;
     crate::validators::check_range_opt(query.difficulty.map(i64::from), "difficulty", 1, 5)?;
@@ -395,7 +395,7 @@ pub async fn start_challenge(
     // P8.3 : le check des prérequis est désormais 100% DAG (via
     // challenge_prerequisites + deliverables verified). La colonne
     // prerequisite_fragments a été supprimée. Un challenge sans entrée DAG
-    // n'a aucun prérequis à vérifier — il est démarrable par tout user
+    // n'a aucun prérequis à vérifier - il est démarrable par tout user
     // profile_active.
     let _ = &user; // conservé pour compat future (rate limiting, etc.)
     let eligibility =
@@ -473,9 +473,9 @@ const SUBMIT_SUNSET_DATE: &str = "Fri, 31 Dec 2027 23:59:59 GMT";
 /// Headers HTTP standards signalant la deprecation d'un endpoint.
 ///
 /// Utilise les standards :
-/// - RFC 8594 `Sunset` — date de retrait effective
-/// - `Deprecation: true` — draft IETF, largement supporté par les proxies/API gateways
-/// - RFC 8288 `Link` avec rel="successor-version" — pointe vers le remplaçant
+/// - RFC 8594 `Sunset` - date de retrait effective
+/// - `Deprecation: true` - draft IETF, largement supporté par les proxies/API gateways
+/// - RFC 8288 `Link` avec rel="successor-version" - pointe vers le remplaçant
 fn submit_deprecation_headers() -> HeaderMap {
     let mut headers = HeaderMap::new();
     headers.insert("Deprecation", HeaderValue::from_static("true"));
@@ -491,7 +491,7 @@ fn submit_deprecation_headers() -> HeaderMap {
 }
 
 // POST /api/challenges/:id/submit
-/// Submit a challenge attempt (deprecated — use /deliverables).
+/// Submit a challenge attempt (deprecated - use /deliverables).
 #[utoipa::path(
     post, path = "/api/challenges/{id}/submit", tag = "challenges",
     params(("id" = uuid::Uuid, Path)),
@@ -523,7 +523,7 @@ pub async fn submit_challenge(
             .fetch_one(&state.db)
             .await?;
 
-    // P26.5 — Sas compagnonnage débutant. beginner_stage='free' est
+    // P26.5 - Sas compagnonnage débutant. beginner_stage='free' est
     // réservé aux users qui ont déjà passé le sas (capability
     // verified_apprentice). Les stages 'sas' et NULL passent sans gate :
     // pour 'sas' la vérification humaine se fait via un endpoint séparé
@@ -640,7 +640,7 @@ pub async fn submit_challenge(
     if eval_status == "success" || awaiting_review {
         // P8.5a : dual-write vers la nouvelle table `deliverables`. Best-effort
         // côté succès : si l'INSERT échoue (ex: contrainte, DB blip), on log et
-        // on continue — le pipeline legacy reste la source de vérité.
+        // on continue - le pipeline legacy reste la source de vérité.
         let deliverable = crate::services::DeliverablesService::create_from_challenge_submission(
             &state.db,
             crate::services::deliverables::ChallengeSubmissionInput {
@@ -695,7 +695,7 @@ pub async fn submit_challenge(
     )
     .increment(total_fragments as u64);
 
-    // Guild GP (Phase 2 Sprint 4) — 10% of awarded fragments goes to the user's guild.
+    // Guild GP (Phase 2 Sprint 4) - 10% of awarded fragments goes to the user's guild.
     if total_fragments > 0
         && let Ok(gp_added) =
             crate::services::guild::award_gp_for_fragments(&state.db, auth.user_id, total_fragments)
@@ -854,7 +854,7 @@ pub async fn submit_challenge(
 
     if awaiting_review {
         // Said plainly, because the alternative reading of a response that
-        // awards nothing is "it failed" — and it did not.
+        // awards nothing is "it failed" - and it did not.
         response["message"] = json!(
             "Received. Nothing here can score this one, so a reviewer will read              it; fragments are awarded on their verdict."
         );
@@ -972,7 +972,7 @@ pub async fn my_submissions(
 ///
 /// It is gone rather than repaired, because the platform no longer asks that
 /// question. A challenge is a fork, a pull request and a deliverable somebody
-/// reads — `RiteForm::Fork` for the rites, the review queue for everything
+/// reads - `RiteForm::Fork` for the rites, the review queue for everything
 /// else. A grader that decides whether stdout matches has nothing left to
 /// decide, and keeping it would have meant keeping Judge0 running to protect
 /// a path no challenge uses.
@@ -996,7 +996,7 @@ async fn evaluate_submission(
         ));
     }
 
-    // Not a failure — the work may be good and nothing has read it — and not a
+    // Not a failure - the work may be good and nothing has read it - and not a
     // pass either. `submit_challenge` puts the deliverable in the review queue
     // the platform already runs.
     Ok((PENDING_REVIEW.to_string(), 0, None, None))

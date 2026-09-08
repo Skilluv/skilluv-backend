@@ -1,7 +1,7 @@
 //! Being put forward by the platform.
 //!
 //! What this suite guards is the scarcity. One person per domain per week,
-//! with a written reason, resting on work somebody checked — those three
+//! with a written reason, resting on work somebody checked - those three
 //! together are the whole value, and each of them is a rule that would be
 //! easy to relax into meaninglessness.
 
@@ -72,7 +72,7 @@ async fn a_verified_design_deliverable(app: &TestApp, user: Uuid) -> Uuid {
 /// A verified deliverable in any domain, on a slice that domain accepts.
 ///
 /// The subtype columns differ per domain and several are required by a CHECK,
-/// so this uses the plain `documentation` surface — which every domain
+/// so this uses the plain `documentation` surface - which every domain
 /// accepts, carries no subtype, and is enough for a featuring: what the
 /// endpoint asks for is verified work, not work of a particular shape.
 async fn a_verified_deliverable_in(app: &TestApp, user: Uuid, domain: &str) -> Uuid {
@@ -119,7 +119,7 @@ const THE_MONDAY_AFTER: &str = "2026-06-08";
 
 fn a_reason() -> &'static str {
     "Trois identités menées à la validation ce trimestre, dont deux après quatre \
-     tours de critique — et ses critiques aux autres sont les mieux écrites de la famille."
+     tours de critique - et ses critiques aux autres sont les mieux écrites de la famille."
 }
 
 #[tokio::test]
@@ -202,7 +202,7 @@ async fn a_featuring_says_why_and_leaves_an_attestation() {
 /// `ops_profile` and `audio_profile`, and nothing ever issued them: the
 /// dispatch in `services::featured` had no arm and fell through to `_ => {}`.
 /// The featuring was recorded, the announcement went out, and the only symptom
-/// was a term stuck at zero on somebody else's profile — which is why nobody
+/// was a term stuck at zero on somebody else's profile - which is why nobody
 /// found it.
 ///
 /// The list is read from `attestation_bases` rather than written here, so the
@@ -286,7 +286,7 @@ async fn every_domain_that_declares_a_featuring_basis_issues_it() {
 
     assert!(
         missing.is_empty(),
-        "a featuring was recorded and no attestation followed — the symptom is a          profile term stuck at zero, which is why this is checked here: {missing:?}"
+        "a featuring was recorded and no attestation followed - the symptom is a          profile term stuck at zero, which is why this is checked here: {missing:?}"
     );
 }
 

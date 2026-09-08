@@ -1,9 +1,9 @@
-//! SKI-292 — OpenGraph share cards, rendered server-side.
+//! SKI-292 - OpenGraph share cards, rendered server-side.
 //!
 //! `/verify/{hash}` exists to be pasted into LinkedIn or X by a candidate and
 //! opened by a recruiter. The page used to advertise `og:image` pointing at
 //! the landing page's SVG, and none of the three major platforms render SVG
-//! in a card preview — so the link appeared with no image at all.
+//! in a card preview - so the link appeared with no image at all.
 //!
 //! A static PNG would fix the rendering and say nothing. A card that names
 //! the contributor is what makes the link worth clicking, so it is generated
@@ -54,7 +54,7 @@ pub struct CardData {
     pub repository: Option<String>,
     pub domain: Option<String>,
     pub difficulty: Option<i16>,
-    /// Already formatted for display — this module does no localisation.
+    /// Already formatted for display - this module does no localisation.
     pub validated_on: Option<String>,
     /// Shown truncated; the full hash is in the URL.
     pub hash: Option<String>,
@@ -84,7 +84,7 @@ fn options() -> &'static usvg::Options<'static> {
 /// Escape the five characters that would otherwise break out of XML text or
 /// an attribute value.
 ///
-/// Every dynamic value on the card is user-controlled — a display name is
+/// Every dynamic value on the card is user-controlled - a display name is
 /// whatever its owner typed. Interpolating it raw would let `</text>` inside
 /// a username rewrite the document.
 fn escape(input: &str) -> String {
@@ -258,7 +258,7 @@ mod tests {
     #[test]
     fn the_card_is_not_blank() {
         // A missing font renders an image that is uniformly the background
-        // colour — still a valid PNG, still 200, and completely useless.
+        // colour - still a valid PNG, still 200, and completely useless.
         // Counting distinct pixels catches that.
         let data = CardData {
             display_name: "Ada Lovelace".to_string(),
@@ -277,7 +277,7 @@ mod tests {
             .collect();
         assert!(
             distinct.len() > 8,
-            "only {} distinct colours — the text probably did not render",
+            "only {} distinct colours - the text probably did not render",
             distinct.len()
         );
     }

@@ -20,11 +20,11 @@ type ProfileRow37 = (
 pub fn profile_routes() -> Router<AppState> {
     Router::new()
         .route("/profile/{username}", get(public_profile))
-        // MVP.md ligne 114 — historique des ranks (public, respecte profile_active).
+        // MVP.md ligne 114 - historique des ranks (public, respecte profile_active).
         .route("/users/{id}/rank-history", get(user_rank_history))
 }
 
-// GET /api/users/{id}/rank-history — historique public des transitions de rang.
+// GET /api/users/{id}/rank-history - historique public des transitions de rang.
 /// Public rank-transition history for a user. Empty when the profile
 /// is inactive (anti-enumeration).
 #[utoipa::path(
@@ -90,7 +90,7 @@ struct ProfileUser {
     id: Uuid,
     username: String,
     display_name: String,
-    /// Nullable since migration 0049 — a user who has not picked a domain yet
+    /// Nullable since migration 0049 - a user who has not picked a domain yet
     /// has none. Declaring it `String` here made the public profile answer 500
     /// for every such account.
     skill_domain: Option<String>,
@@ -118,7 +118,7 @@ struct ActivityDay {
     fragments_earned: i32,
 }
 
-// GET /api/profile/{username} — public profile (no auth, SSR-ready)
+// GET /api/profile/{username} - public profile (no auth, SSR-ready)
 /// Public profile page (SSR-ready, no auth required).
 #[utoipa::path(
     get, path = "/api/profile/{username}", tag = "profile",
@@ -177,7 +177,7 @@ pub async fn public_profile(
     // Run parallel queries.
     // Source unique user_skills (skill_fragments droppée en P8.7).
     // La signature du helper retourne AppError alors que les autres futures
-    // retournent sqlx::Error — on encapsule manuellement pour try_join!.
+    // retournent sqlx::Error - on encapsule manuellement pour try_join!.
     let (
         fragments_result,
         challenges_count_result,
@@ -220,7 +220,7 @@ pub async fn public_profile(
         .bind(user.id)
         .fetch_all(&state.db),
 
-        // BE-P0-14 — experiences, educations, languages, availability sont
+        // BE-P0-14 - experiences, educations, languages, availability sont
         // publics par défaut (pas de flag dans user_privacy aujourd'hui).
         // Payload enrichi ici pour éviter 4 round-trips côté front.
         sqlx::query(
@@ -287,7 +287,7 @@ pub async fn public_profile(
     let mut redis = state.redis.clone();
     let global_rank =
         LeaderboardService::get_rank(&mut redis, "global", "alltime", user.id).await?;
-    // No domain means no domain leaderboard to rank against — not rank zero.
+    // No domain means no domain leaderboard to rank against - not rank zero.
     let domain_rank = match user.skill_domain.as_deref() {
         Some(domain) => {
             LeaderboardService::get_rank(&mut redis, domain, "alltime", user.id).await?
@@ -383,7 +383,7 @@ pub async fn public_profile(
 
     Ok(Json(build_response(json!({
         "user": {
-            // SKI-300 — four public endpoints (timeline, skill tree, external
+            // SKI-300 - four public endpoints (timeline, skill tree, external
             // signals, vouchings) are addressed by UUID, and this was the only
             // place a visitor could have resolved a username to one. Without
             // it the front could render those sections on your own profile
@@ -422,7 +422,7 @@ pub async fn public_profile(
             "last_30_days": heatmap_data,
         })) } else { None },
         "badges": if privacy.show_badges { Some(badges_data) } else { None },
-        // BE-P0-14 — sections publiques CV enrichi (recruteurs + pairs).
+        // BE-P0-14 - sections publiques CV enrichi (recruteurs + pairs).
         "experiences": experiences_data,
         "educations": educations_data,
         "languages": languages_data,

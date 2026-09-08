@@ -13,7 +13,7 @@
 //!
 //! The two properties that keep it safe rather than merely convenient: an
 //! unconfigured deployment seeds nothing, and a second run does not produce a
-//! second catalogue. The second is the one with teeth — a rotated key
+//! second catalogue. The second is the one with teeth - a rotated key
 //! re-derives every flag, and without the upsert target of migration 0605 that
 //! would leave twenty duplicates of which half no longer accept a correct
 //! answer.
@@ -41,7 +41,7 @@ async fn ctf_count(app: &TestApp) -> i64 {
 /// A deployment with no Juice Shop seeds nothing, and says so.
 ///
 /// The environment is read rather than injected, so this test asserts the
-/// default state of a test process — which is exactly the state of a
+/// default state of a test process - which is exactly the state of a
 /// deployment that has not configured a target.
 #[tokio::test]
 async fn an_unconfigured_deployment_seeds_no_challenges() {
@@ -147,7 +147,7 @@ async fn a_title_can_only_belong_to_one_flag_challenge() {
 ///
 /// The derivation below is one function, and if it is ever wrong every
 /// challenge is wrong the same way. A draft means somebody solves one and
-/// checks the flag is accepted before anybody is asked to solve twenty — which
+/// checks the flag is accepted before anybody is asked to solve twenty - which
 /// is the same rule every other seeded challenge in this catalogue follows.
 #[tokio::test]
 async fn nothing_derived_is_published_without_a_person() {

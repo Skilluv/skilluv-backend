@@ -1,4 +1,4 @@
-//! skilluv-timeline-backfill — rebuild `user_timeline_events` from the
+//! skilluv-timeline-backfill - rebuild `user_timeline_events` from the
 //! source tables (SKI-39).
 //!
 //! Migration 0142 backfills once at deploy time and installs triggers that

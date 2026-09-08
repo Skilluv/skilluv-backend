@@ -107,7 +107,7 @@ pub async fn list_categories(
     })))
 }
 
-/// Featured challenges — capped at 20, ordered by vote_count desc.
+/// Featured challenges - capped at 20, ordered by vote_count desc.
 /// Public, SSR-ready.
 #[utoipa::path(
     get,

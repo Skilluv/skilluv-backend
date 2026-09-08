@@ -39,8 +39,8 @@ the next job, and on this platform it is what makes their profile checkable.
 
 Two reasonable limits, to be written down:
 
-- **an embargo** — not before the work is released. Legitimate, bounded, common.
-- **a length** — thirty seconds rather than the whole session.
+- **an embargo** - not before the work is released. Legitimate, bounded, common.
+- **a length** - thirty seconds rather than the whole session.
 
 A total ban exists (`buyout`), must be visible, and is paid for. It is never a
 footnote.
@@ -61,13 +61,13 @@ platform. What the platform does is refuse to let them be implicit.
 
 ## 5. Pickups and sequels
 
-Reusing a voice in a later version — an expansion, a remaster, a sequel — is a
+Reusing a voice in a later version - an expansion, a remaster, a sequel - is a
 **new use**. Two honest ways to handle it:
 
 - provide for it in the original contract, with an agreed pickup rate;
 - renegotiate when it happens.
 
-The third — treating it as included — is what produces disputes, and is also
+The third - treating it as included - is what produces disputes, and is also
 what pushes studios towards synthetic voice.
 
 ## 6. Voice cloning: the platform's policy
@@ -81,7 +81,7 @@ Concretely, on Skilluv:
   contract, without a separate written agreement that names it;
 - **you may not** deliver a synthetic voice in answer to a casting or a voice
   mission;
-- **you may not** publish a demo reel containing a voice that is not yours —
+- **you may not** publish a demo reel containing a voice that is not yours -
   the only place in the catalogue where the `human_verified` AI policy applies
   to challenges, and it protects the entrant rather than the platform;
 - **you may** use a generative tool for a scratch track or a timing guide,
@@ -92,8 +92,8 @@ Concretely, on Skilluv:
 Cloning is the only technology in this domain capable of taking from somebody
 not a contract but their ability ever to get one. A cloned voice is
 indistinguishable to a listener, produces without limit, and does not
-renegotiate. A platform that lets that happen by default — through a general
-clause accepted at sign-up — replaces the trade it claims to support.
+renegotiate. A platform that lets that happen by default - through a general
+clause accepted at sign-up - replaces the trade it claims to support.
 
 A general clause is not consent. An agreement must name the use, its duration,
 and what happens at the end.
@@ -108,5 +108,5 @@ line to add to a session contract.
 
 Castings on this platform hide names until selection, by default. It is the one
 place where reputation most directly competes with the thing being judged, and
-where the judgement is close to instant. The creator can turn the blind off —
+where the judgement is close to instant. The creator can turn the blind off -
 visibly, and it is their right when recasting a returning character.

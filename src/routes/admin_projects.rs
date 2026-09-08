@@ -1,13 +1,13 @@
-//! Admin CRUD on projects — flagships, curated OSS partners, and internal
+//! Admin CRUD on projects - flagships, curated OSS partners, and internal
 //! administrative moderation of user projects.
 //!
 //! Endpoints (all gated by admin_gate = origin + 2FA + capability admin):
 //!
-//! - POST   /admin/projects                    — create curated / flagship / OSS partner
-//! - PATCH  /admin/projects/{slug}             — edit
-//! - DELETE /admin/projects/{slug}             — soft archive (sets archived_at)
-//! - GET    /admin/projects                    — list with filters
-//! - GET    /admin/projects/{slug}             — get by slug
+//! - POST   /admin/projects                    - create curated / flagship / OSS partner
+//! - PATCH  /admin/projects/{slug}             - edit
+//! - DELETE /admin/projects/{slug}             - soft archive (sets archived_at)
+//! - GET    /admin/projects                    - list with filters
+//! - GET    /admin/projects/{slug}             - get by slug
 //!
 //! See content-strategy-2027-2028.md §4, annexes E and F.
 
@@ -29,9 +29,9 @@ pub fn admin_project_routes() -> Router<AppState> {
         .route("/admin/projects/{slug}", get(get_project))
         .route("/admin/projects/{slug}", patch(patch_project))
         .route("/admin/projects/{slug}", delete(archive_project))
-        // P26 v2 SKI-124 — per-repo challenge stats (workflow health).
+        // P26 v2 SKI-124 - per-repo challenge stats (workflow health).
         .route("/admin/projects/{slug}/stats", get(project_stats))
-        // SKI-110 (M-05) — manual ingestion trigger for a single project.
+        // SKI-110 (M-05) - manual ingestion trigger for a single project.
         .route("/admin/projects/{slug}/ingest", post(trigger_ingest))
 }
 
@@ -84,7 +84,7 @@ struct CreateProjectBody {
     #[serde(default)]
     skilluv_editorial_notes: Option<String>,
 
-    // P26 v2 SKI-110 — GitHub ingestion wiring. All optional so the admin
+    // P26 v2 SKI-110 - GitHub ingestion wiring. All optional so the admin
     // route stays backward-compatible; enforced pairwise below.
     #[serde(default)]
     github_repo_owner: Option<String>,
@@ -115,7 +115,7 @@ pub struct CreatedProject {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SKI-111 — response schemas
+// SKI-111 - response schemas
 // ═══════════════════════════════════════════════════════════════════
 
 /// One row of `GET /admin/projects`. Narrower than the detail view: the
@@ -144,7 +144,7 @@ pub struct AdminProjectListResponse {
     pub meta: crate::api_response::MetaInfo,
 }
 
-/// Payload of `GET /admin/projects/{slug}` — the full record, including
+/// Payload of `GET /admin/projects/{slug}` - the full record, including
 /// the GitHub ingestion wiring an operator needs to debug a project.
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct AdminProjectDetail {
@@ -176,7 +176,7 @@ pub struct AdminProjectDetail {
     pub archived_at: Option<String>,
 }
 
-/// Payload of `POST /admin/projects/{slug}/ingest` — one manual pass of
+/// Payload of `POST /admin/projects/{slug}/ingest` - one manual pass of
 /// the GitHub ingestor.
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct IngestRunReport {
@@ -185,7 +185,7 @@ pub struct IngestRunReport {
     /// Issues that already had a slice, so nothing was created.
     pub slices_skipped_existing: u32,
     pub errors: u32,
-    /// `auto` or `curator_review` — `manual_only` is refused upstream.
+    /// `auto` or `curator_review` - `manual_only` is refused upstream.
     pub mode: String,
     /// Curated labels that actually matched during this run. Empty means
     /// the label filter let nothing through.
@@ -193,7 +193,7 @@ pub struct IngestRunReport {
 }
 
 /// Create a new project (admin curated OSS/enterprise project).
-// SKI-111 — the annotation claimed 201; the handler returns `Json<Value>`,
+// SKI-111 - the annotation claimed 201; the handler returns `Json<Value>`,
 // which axum serves as 200. Corrected to describe what actually happens
 // rather than changing a live status code as a side effect of a typing
 // pass.
@@ -227,7 +227,7 @@ pub async fn create_project(
     validate_ingestion_mode(body.slice_ingestion_mode.as_deref())?;
     validate_skill_domains(body.skill_domains.as_deref())?;
 
-    // SKI-110 — warn (don't fail) when the combination would ingest nothing.
+    // SKI-110 - warn (don't fail) when the combination would ingest nothing.
     warn_ingest_will_no_op(
         body.slice_ingestion_mode.as_deref(),
         body.curated_labels.as_deref(),
@@ -328,13 +328,13 @@ struct PatchProjectBody {
     #[serde(default)]
     skilluv_editorial_notes: Option<String>,
 
-    // P26 v2 SKI-110 — same fields as create, all optional.
+    // P26 v2 SKI-110 - same fields as create, all optional.
     //
-    // SKI-269 — the GitHub pair is a double Option so that `null` can mean
+    // SKI-269 - the GitHub pair is a double Option so that `null` can mean
     // "unwire this repo". With a plain Option, serde maps both an absent
     // field and an explicit `null` to `None`, `COALESCE` treats that as
     // "leave alone", and there is no value an admin can send to detach a
-    // repo — the PATCH answered 200 while changing nothing. The arrays
+    // repo - the PATCH answered 200 while changing nothing. The arrays
     // escape this because `[]` is not `null`.
     //
     //   absent      -> leave unchanged
@@ -391,7 +391,7 @@ fn resolve_github_patch(
         // Anything else is a half-specified change: one field mentioned
         // without the other, or a null paired with a value.
         _ => Err(AppError::Validation(
-            "github_repo_owner and github_repo_name must be changed together — \
+            "github_repo_owner and github_repo_name must be changed together - \
              send both as strings to wire a repo, or both as null to detach it"
                 .into(),
         )),
@@ -416,7 +416,7 @@ pub async fn patch_project(
     crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
     validate_slug(&slug)?;
     validate_partnership_level(body.skilluv_partnership_level)?;
-    // SKI-269 — resolve the GitHub pair into "touch or not, and to what".
+    // SKI-269 - resolve the GitHub pair into "touch or not, and to what".
     let (write_github, github_owner, github_name) =
         resolve_github_patch(&body.github_repo_owner, &body.github_repo_name)?;
     validate_ingestion_mode(body.slice_ingestion_mode.as_deref())?;
@@ -442,7 +442,7 @@ pub async fn patch_project(
             flagship_steward_user_id = COALESCE($10, flagship_steward_user_id),
             skilluv_partnership_level = COALESCE($11, skilluv_partnership_level),
             skilluv_editorial_notes = COALESCE($12, skilluv_editorial_notes),
-            -- SKI-269 — COALESCE cannot express "set to NULL", so the
+            -- SKI-269 - COALESCE cannot express "set to NULL", so the
             -- GitHub pair is gated on an explicit flag instead.
             github_repo_owner = CASE WHEN $19 THEN $14 ELSE github_repo_owner END,
             github_repo_name  = CASE WHEN $19 THEN $15 ELSE github_repo_name END,
@@ -498,7 +498,7 @@ pub async fn patch_project(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// DELETE /admin/projects/{slug} — soft archive
+// DELETE /admin/projects/{slug} - soft archive
 // ═══════════════════════════════════════════════════════════════════
 
 /// Archive a project (soft-delete).
@@ -551,7 +551,7 @@ pub async fn archive_project(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// GET /admin/projects — list with filters
+// GET /admin/projects - list with filters
 // ═══════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Deserialize)]
@@ -845,7 +845,7 @@ fn validate_partnership_level(level: Option<i16>) -> Result<(), AppError> {
 
 // ─── P26 v2 SKI-110 validators ───────────────────────────────────
 
-/// Reject when exactly one of (owner, name) is set — always a mistake.
+/// Reject when exactly one of (owner, name) is set - always a mistake.
 /// Also refuse empty strings on either side (would insert broken data).
 fn validate_github_pair(owner: Option<&str>, name: Option<&str>) -> Result<(), AppError> {
     let owner_present = owner.is_some_and(|s| !s.is_empty());
@@ -897,19 +897,19 @@ fn validate_skill_domains(domains: Option<&[String]>) -> Result<(), AppError> {
 }
 
 /// Log a warning (no failure) when the combination of mode + labels
-/// would silently no-op the ingest — operators usually don't intend this.
+/// would silently no-op the ingest - operators usually don't intend this.
 fn warn_ingest_will_no_op(mode: Option<&str>, curated_labels: Option<&[String]>, slug: &str) {
     if mode == Some("auto") && curated_labels.is_some_and(|l| l.is_empty()) {
         tracing::warn!(
             slug,
-            "project set to slice_ingestion_mode='auto' but curated_labels is empty — \
+            "project set to slice_ingestion_mode='auto' but curated_labels is empty - \
              the ingestor will not pick up any issues"
         );
     }
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// P26 v2 SKI-124 — per-repo challenge stats
+// P26 v2 SKI-124 - per-repo challenge stats
 // ═══════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
@@ -964,7 +964,7 @@ pub struct ProjectStats {
 /// from the P17 badges dashboard (per-user) and the SKI-122 public
 /// endpoint (community pulse): this is the admin operator's view of
 /// how the workflow is performing on THIS repo.
-// SKI-111 — this was the one admin handler with no utoipa annotation at
+// SKI-111 - this was the one admin handler with no utoipa annotation at
 // all, so it did not appear in the spec and schemathesis never exercised
 // it.
 #[utoipa::path(
@@ -1001,7 +1001,7 @@ pub async fn project_stats(
         .ok_or_else(|| AppError::NotFound(format!("project {slug} not found")))?
         .0;
 
-    // Slice count breakdown by status — single aggregate for cheapness.
+    // Slice count breakdown by status - single aggregate for cheapness.
     type StatusCounts = (i64, i64, i64, i64, i64, i64, i64, i64, i64, i64);
     let counts: StatusCounts = sqlx::query_as(
         r#"
@@ -1107,7 +1107,7 @@ pub async fn project_stats(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// POST /admin/projects/{slug}/ingest — SKI-110 (M-05)
+// POST /admin/projects/{slug}/ingest - SKI-110 (M-05)
 // ═══════════════════════════════════════════════════════════════════
 
 /// Manually trigger a single ingestion pass on one project.
@@ -1120,7 +1120,7 @@ pub async fn project_stats(
 /// "config right, nothing new to ingest".
 ///
 /// Rate-limited to 1 call / minute / project via a recent-audit-log
-/// check — cheap protection against a spammed button burning the
+/// check - cheap protection against a spammed button burning the
 /// unauthenticated GitHub API quota (60/h/IP).
 ///
 /// Returns 400 when the project has no GitHub repo pair configured OR
@@ -1170,14 +1170,14 @@ pub async fn trigger_ingest(
     .await?;
     let row = row.ok_or_else(|| AppError::NotFound(format!("project {slug} not found")))?;
 
-    // Fail loudly when the caller's about to trigger a no-op — the whole
+    // Fail loudly when the caller's about to trigger a no-op - the whole
     // point of this endpoint is to give the admin a real signal.
     let (Some(owner), Some(name)) = (
         row.github_repo_owner.as_deref(),
         row.github_repo_name.as_deref(),
     ) else {
         return Err(AppError::Validation(
-            "project has no github_repo_owner / github_repo_name — set them via PATCH /admin/projects/{slug} first".into(),
+            "project has no github_repo_owner / github_repo_name - set them via PATCH /admin/projects/{slug} first".into(),
         ));
     };
     let mode = row
@@ -1186,13 +1186,13 @@ pub async fn trigger_ingest(
         .unwrap_or("curator_review");
     if mode == "manual_only" {
         return Err(AppError::Validation(
-            "project runs in slice_ingestion_mode='manual_only' — the ingestor is intentionally disabled for it".into(),
+            "project runs in slice_ingestion_mode='manual_only' - the ingestor is intentionally disabled for it".into(),
         ));
     }
     let labels_matched: Vec<String> = row.curated_labels.clone().unwrap_or_default();
     if labels_matched.is_empty() {
         return Err(AppError::Validation(
-            "project has no curated_labels — set at least one label to filter GitHub issues".into(),
+            "project has no curated_labels - set at least one label to filter GitHub issues".into(),
         ));
     }
 
@@ -1213,7 +1213,7 @@ pub async fn trigger_ingest(
     .await?;
     if recent.is_some() {
         return Err(AppError::ServiceUnavailable(
-            "project.ingest.manual rate-limited to 1 call / minute / project — retry shortly"
+            "project.ingest.manual rate-limited to 1 call / minute / project - retry shortly"
                 .into(),
         ));
     }
@@ -1312,7 +1312,7 @@ mod tests {
 
     #[test]
     fn github_pair_rejects_empty_strings() {
-        // Empty is not the same as absent — refuse to insert broken data.
+        // Empty is not the same as absent - refuse to insert broken data.
         assert!(validate_github_pair(Some(""), Some("sqlx")).is_err());
         assert!(validate_github_pair(Some("launchbadge"), Some("")).is_err());
     }
@@ -1342,7 +1342,7 @@ mod tests {
         assert!(validate_skill_domains(Some(&bad)).is_err());
     }
 
-    // ─── SKI-269 — GitHub pair patch semantics ─────────────────────
+    // ─── SKI-269 - GitHub pair patch semantics ─────────────────────
 
     fn some(v: &str) -> Option<Option<String>> {
         Some(Some(v.to_string()))
@@ -1390,7 +1390,7 @@ mod tests {
 
     #[test]
     fn empty_strings_are_still_refused() {
-        // Clearing is `null`, not `""` — otherwise a form submitting blank
+        // Clearing is `null`, not `""` - otherwise a form submitting blank
         // inputs would silently detach a repo.
         assert!(resolve_github_patch(&some(""), &some("")).is_err());
         assert!(resolve_github_patch(&some("launchbadge"), &some("")).is_err());

@@ -1,5 +1,5 @@
 #![recursion_limit = "512"]
-// BE-P1-CONTRACT — route handlers are marked `pub async fn` so that utoipa
+// BE-P1-CONTRACT - route handlers are marked `pub async fn` so that utoipa
 // can generate their OpenAPI schema, but many of their internal request /
 // response DTOs remain private inside the route module (they are only
 // referenced through utoipa's `request_body(content = serde_json::Value)`
@@ -15,6 +15,7 @@ pub mod errors;
 pub mod grpc;
 pub mod middleware;
 pub mod models;
+mod no_em_dashes;
 pub mod observability;
 pub mod openapi;
 pub mod routes;
@@ -55,14 +56,14 @@ pub struct AppState {
 #[derive(Clone)]
 pub struct AppStateConfig {
     pub jwt_secret: String,
-    /// API origin — machine-facing callbacks (SSO `redirect_uri`, WebAuthn).
+    /// API origin - machine-facing callbacks (SSO `redirect_uri`, WebAuthn).
     pub base_url: String,
-    /// Frontend origin — every link a human clicks. See `AppConfig::frontend_url`.
+    /// Frontend origin - every link a human clicks. See `AppConfig::frontend_url`.
     pub frontend_url: String,
     /// 32-byte AES-256-GCM key for enterprise SSO client_secret at-rest encryption.
     /// `None` in dev when the env var is unset ; SSO endpoints error out cleanly.
     pub sso_encryption_key: Option<[u8; 32]>,
-    /// External PDF renderer service URL — `None` returns 503 on `/pdf` endpoints.
+    /// External PDF renderer service URL - `None` returns 503 on `/pdf` endpoints.
     pub pdf_renderer_url: Option<String>,
     /// The deployment this process serves, as `ENVIRONMENT` names it.
     ///
@@ -87,14 +88,14 @@ impl AppStateConfig {
 }
 
 pub fn build_router(state: AppState) -> Router {
-    // BE-A + BE-C — helper qui applique les 2 middlewares "admin gate" sur
+    // BE-A + BE-C - helper qui applique les 2 middlewares "admin gate" sur
     // les routers réservés aux surfaces admin (origin check + 2FA mandatory).
     // L'ordre importe : `ensure_admin_origin` d'abord (rejette avant même de
     // consulter la DB), puis `ensure_admin_2fa` (lookup role + totp/passkey).
     // Les gates admin (origin + 2FA) sont désormais appliqués via
     // l'extractor `middleware::admin_gate::AdminGate`, ajouté en premier
     // paramètre de chaque handler admin. L'extractor s'exécute UNIQUEMENT
-    // quand la (path, méthode) matche un handler enregistré — les
+    // quand la (path, méthode) matche un handler enregistré - les
     // méthodes non-supportées retombent naturellement sur le 405 par
     // défaut d'axum (au lieu du 403 qu'aurait renvoyé un middleware
     // Router-level qui intercepte tout, y compris les 405). Voir la
@@ -173,7 +174,7 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::code_stats_routes())
         .nest("/api", routes::onboarding_routes())
         .nest("/api", routes::attestation_routes())
-        // P26 — sas compagnonnage débutant (verified_apprentice unlock).
+        // P26 - sas compagnonnage débutant (verified_apprentice unlock).
         .nest("/api", routes::apprentice_verification_routes())
         .nest("/api", routes::season_routes())
         .nest("/api", routes::portfolio_routes())
@@ -209,31 +210,31 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::enterprise_dashboard_routes())
         .nest("/api", routes::user_profile_routes())
         .nest("/api", routes::profile_extras_routes())
-        // Post-MVP T1 — personal retention surfaces (bookmarks, notes).
+        // Post-MVP T1 - personal retention surfaces (bookmarks, notes).
         .nest("/api", routes::bookmark_routes())
         .nest("/api", routes::user_note_routes())
         .nest("/api", routes::goal_routes())
         .nest("/api", routes::timeline_routes())
-        // Post-MVP T2 — product moats (cohorts, peer coaching).
+        // Post-MVP T2 - product moats (cohorts, peer coaching).
         .nest("/api", routes::cohort_routes())
         .nest("/api", routes::peer_matching_routes())
         .nest("/api", routes::external_signal_routes())
-        // Post-MVP T3 — ambitious surfaces (skill tree, offers, vouching, AI).
+        // Post-MVP T3 - ambitious surfaces (skill tree, offers, vouching, AI).
         .nest("/api", routes::skill_tree_routes())
         .nest("/api", admin_gate(routes::admin_skill_tree_routes()))
         .nest("/api", routes::talent_offer_routes())
         .nest("/api", routes::vouching_routes())
         .nest("/api", routes::ai_companion_routes())
-        // SKI-295/296/298 — the admin side of those three surfaces. Behind
+        // SKI-295/296/298 - the admin side of those three surfaces. Behind
         // `admin_gate` like every other `/api/admin/*` router.
         .nest("/api", admin_gate(routes::admin_cohort_routes()))
         .nest("/api", admin_gate(routes::admin_talent_offer_routes()))
         .nest("/api", admin_gate(routes::admin_ai_companion_routes()))
-        // SKI-288 — attestation verification under /api as well. The front
+        // SKI-288 - attestation verification under /api as well. The front
         // end owns /verify/{hash} on its own origin, so the root-level
         // route below is unreachable from the browser app.
         .nest("/api", routes::attestations_public_api_routes())
-        // SKI-286 — mention inbox.
+        // SKI-286 - mention inbox.
         .nest("/api", routes::mention_routes())
         .nest("/api", admin_gate(routes::admin_timeline_routes()))
         .nest("/api", routes::oauth_routes())
@@ -242,12 +243,12 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::challenge_tag_routes())
         .nest("/api", routes::community_routes())
         .nest("/api", admin_gate(routes::admin_community_routes()))
-        // FE-M9 — modération inline (non admin-gated, require_any_capability).
+        // FE-M9 - modération inline (non admin-gated, require_any_capability).
         .nest("/api", routes::moderation_routes())
         .nest("/api", routes::challenge_team_routes())
         .nest("/api", routes::developer_routes())
         // Dev-mode-only helpers (verify token peek etc). Gated inside each
-        // handler by SKILLUV_DEV_MODE=true env — endpoints exist unconditionally
+        // handler by SKILLUV_DEV_MODE=true env - endpoints exist unconditionally
         // but return 403 in prod. See src/routes/dev.rs.
         .nest("/api", routes::dev_routes())
         .nest("/api", routes::public_api_routes())
@@ -277,11 +278,11 @@ pub fn build_router(state: AppState) -> Router {
         )
         .nest("/api", admin_gate(routes::admin_feature_flag_routes()))
         .nest("/api", admin_gate(routes::admin_content_ops_routes()))
-        // Trello vx5q6jW4 — admin_tournament_routes (seasons + tournaments
+        // Trello vx5q6jW4 - admin_tournament_routes (seasons + tournaments
         // admin) était mixé dans tournament_routes sans admin_gate. Split
         // out et wired ici. Les 6 autres admin_* modules (users, skills,
         // orientations, enterprises, badge_rules, ops) sont déjà merged
-        // dans admin_routes() (lignes 55-65 de src/routes/admin.rs) — les
+        // dans admin_routes() (lignes 55-65 de src/routes/admin.rs) - les
         // re-nest ici causerait un "Overlapping method route" panic axum.
         .nest("/api", admin_gate(routes::admin_tournament_routes()))
         // Phase 5
@@ -299,26 +300,26 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::dispute_routes())
         .nest("/api", routes::payment_routes())
         .nest("/api", routes::admin_money_routes())
-        // SKI-72 / SKI-73 — inbound webhook receivers for tracker⇄GitHub
+        // SKI-72 / SKI-73 - inbound webhook receivers for tracker⇄GitHub
         // sync. Mounted OUTSIDE `/api` so external senders don't hit API
         // rate-limits and signature verification is not conflated with JWT.
         .merge(routes::linear_webhook_routes().with_state(state.clone()))
         .merge(routes::github_webhook_routes().with_state(state.clone()))
-        // SKI-115 — public, unauthenticated attestation verification.
+        // SKI-115 - public, unauthenticated attestation verification.
         // Also outside /api on purpose: a recruiter reading a CV
         // shouldn't need to know Skilluv's internal API surface.
         .merge(routes::attestations_public_routes().with_state(state.clone()))
-        // SKI-116 / SKI-117 — public SVG badges for user profiles and
+        // SKI-116 / SKI-117 - public SVG badges for user profiles and
         // repo READMEs. Same "outside /api" rationale.
         .merge(routes::badge_svg_routes().with_state(state.clone()))
-        // SKI-120 — maintainer digest subscribe/confirm/unsubscribe.
+        // SKI-120 - maintainer digest subscribe/confirm/unsubscribe.
         // Public (self-serve), outside /api, double opt-in.
         .merge(routes::maintainer_digest_routes().with_state(state.clone()))
         .merge(routes::well_known_routes().with_state(state.clone()))
         .merge(routes::metrics_routes().with_state(state.clone()))
         .merge(websocket::ws_routes().with_state(state.clone()));
 
-    // BE-P1-CONTRACT — attach the OpenAPI JSON + Swagger UI *before* the
+    // BE-P1-CONTRACT - attach the OpenAPI JSON + Swagger UI *before* the
     // security layers so they don't accidentally block schemathesis introspection.
     let router = openapi::attach(router);
 
@@ -335,7 +336,7 @@ pub fn build_router(state: AppState) -> Router {
         // toute autre middleware. Deux objectifs :
         //   1. Securite : TRACE est un vecteur XST connu (Cross-Site Tracing,
         //      RFC 7231 §4.3.8 recommande de le desactiver). CONNECT n'a pas
-        //      de semantique pour une API REST — l'accepter serait suspect.
+        //      de semantique pour une API REST - l'accepter serait suspect.
         //   2. Conformite REST : sans ce block, notre admin_gate intercepte
         //      TRACE en 403 (defense en profondeur) avant qu'axum ne puisse
         //      repondre 405. Retourner 405 uniformement respecte l'attente
@@ -408,7 +409,7 @@ async fn reject_deprecated_methods(
 
 /// Refuse a request carrying a NUL byte, with a 400 rather than a 500.
 ///
-/// PostgreSQL cannot store `\0` in a `text` column at all — it is not an
+/// PostgreSQL cannot store `\0` in a `text` column at all - it is not an
 /// encoding we can widen, it is outside what the type accepts. So a NUL in any
 /// string reaches the driver, fails there, and surfaces as
 /// `DATABASE_ERROR ... invalid byte sequence for encoding "UTF8": 0x00`: a 500
@@ -419,7 +420,7 @@ async fn reject_deprecated_methods(
 /// first version of this only closed one of them:
 ///
 ///   * the URI, where it is written `%00` and is still a literal NUL by the
-///     time a query or path parameter has been deserialised — which is how it
+///     time a query or path parameter has been deserialised - which is how it
 ///     kept reaching the database after the body was being checked;
 ///   * a JSON body, checked as raw bytes before it is parsed.
 ///
@@ -577,11 +578,11 @@ async fn normalize_error_response_content_type(
 }
 
 /// Build the CORS layer with an explicit origin allowlist. Reads
-/// `ALLOWED_ORIGINS` from env — comma-separated, e.g.
+/// `ALLOWED_ORIGINS` from env - comma-separated, e.g.
 /// `http://localhost:5173,http://localhost:5174,https://skill-uv.com,https://admin.skill-uv.com`.
 /// Falls back to the two dev origins so `cargo run` on a fresh checkout works
 /// out of the box. `credentials: true` is required for the httpOnly cookie
-/// auth flow — the previous `permissive` layer set `Access-Control-Allow-*`
+/// auth flow - the previous `permissive` layer set `Access-Control-Allow-*`
 /// wildcards which browsers refuse to combine with credentials, meaning we
 /// were quietly relying on same-origin requests.
 fn build_cors_layer() -> CorsLayer {

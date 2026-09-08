@@ -1,8 +1,8 @@
-//! IA-C.2 + IA-C.3 — Routes user-facing branchées sur skilluv-ai.
+//! IA-C.2 + IA-C.3 - Routes user-facing branchées sur skilluv-ai.
 //!
-//! - `GET /api/users/me/performance` (IA-C.2) — analyse coach IA du profil,
+//! - `GET /api/users/me/performance` (IA-C.2) - analyse coach IA du profil,
 //!   cache Redis 24h, refresh manuel via `?refresh=1` (rate-limit 1/heure/user).
-//! - `POST /api/users/me/orientations/suggest` (IA-C.3) — suggère 3 orientations
+//! - `POST /api/users/me/orientations/suggest` (IA-C.3) - suggère 3 orientations
 //!   métier basées sur les skills, cache Redis 7 jours, appel Haiku 4.5.
 //!
 //! Le backend agrège les snapshots (deliverables, skills, orientations, rank)
@@ -24,7 +24,7 @@ use crate::middleware::AuthUser;
 /// Envelope for AI-backed endpoints. Distinct from `ApiResponse<T>`
 /// because these routes want to signal cache-freshness to the front
 /// without an extra header. The `data` payload shape is defined by
-/// the AI worker (skilluv-ia) and evolves independently — see
+/// the AI worker (skilluv-ia) and evolves independently - see
 /// `docs/BACKEND-INTEGRATION.md §6` for the current fields.
 #[derive(Debug, Serialize, ToSchema)]
 pub struct AiCoachEnvelope {
@@ -57,7 +57,7 @@ pub fn ai_coach_routes() -> Router<AppState> {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// IA-C.2 — GET /users/me/performance
+// IA-C.2 - GET /users/me/performance
 // ═══════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Deserialize, IntoParams)]
@@ -117,7 +117,7 @@ pub async fn my_performance(
     let ai = state.ai.as_deref().ok_or_else(|| {
         // Not `Internal`. The worker being absent is a deployment that
         // does not have this integration, and saying "the server failed"
-        // sends a caller looking for a fault that is not there — the same
+        // sends a caller looking for a fault that is not there - the same
         // distinction the four Stripe handlers were corrected for.
         AppError::ServiceUnavailable("the AI worker is not connected on this deployment".into())
     })?;
@@ -298,7 +298,7 @@ async fn build_analyze_request(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// IA-C.3 — POST /users/me/orientations/suggest
+// IA-C.3 - POST /users/me/orientations/suggest
 // ═══════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -363,7 +363,7 @@ pub async fn suggest_orientations(
     let ai = state.ai.as_deref().ok_or_else(|| {
         // Not `Internal`. The worker being absent is a deployment that
         // does not have this integration, and saying "the server failed"
-        // sends a caller looking for a fault that is not there — the same
+        // sends a caller looking for a fault that is not there - the same
         // distinction the four Stripe handlers were corrected for.
         AppError::ServiceUnavailable("the AI worker is not connected on this deployment".into())
     })?;
@@ -441,7 +441,7 @@ pub async fn suggest_orientations(
     let resp = result.map_err(|s| AppError::Internal(format!("suggest_career_path gRPC: {s}")))?;
 
     // Validation : chaque orientation_slug retourné doit exister dans notre catalogue
-    // (défense en profondeur — le catalogue IA peut diverger, voir doc §6.3).
+    // (défense en profondeur - le catalogue IA peut diverger, voir doc §6.3).
     let known: std::collections::HashSet<String> = sqlx::query_scalar(
         "SELECT slug FROM orientations WHERE is_curated = TRUE AND is_archived = FALSE",
     )

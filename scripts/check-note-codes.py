@@ -7,7 +7,7 @@ in Rust, on responses read by any member. They are not decorative labels: they
 are the sentences that tell somebody what they have just committed to,
 returned at the moment they commit to it.
 
-  * withdrawing consent is not retroactive — the thing people get wrong;
+  * withdrawing consent is not retroactive - the thing people get wrong;
   * an onboarding or a placement starts on acceptance, and the person may
     refuse what their employer paid for;
   * paying does not certify;
@@ -24,7 +24,7 @@ written by somebody who has not read this file, and it will be refused here.
 
 ## Why a script and not a Rust test
 
-The check is textual — "does this literal have a sibling literal" — and a Rust
+The check is textual - "does this literal have a sibling literal" - and a Rust
 test asserting it would have to re-list the sites by hand, which is the copy
 that drifts. Reading the source is the only version that cannot go stale.
 
@@ -40,7 +40,7 @@ ROUTES = ROOT / "src" / "routes"
 
 # Admin and security surfaces are out of scope, and deliberately so. Their
 # notes are in English and address administrators and an anglophone security
-# audience — a different reader, a different surface, and a code there would
+# audience - a different reader, a different surface, and a code there would
 # buy nothing.
 #
 # Every `admin_*.rs` for the same reason, found by running this: `admin_slices`
@@ -50,7 +50,7 @@ ROUTES = ROOT / "src" / "routes"
 EXEMPT = {"security.rs"}
 EXEMPT_PREFIX = "admin_"
 
-# Only a note whose value is a **string literal** — a sentence written in Rust.
+# Only a note whose value is a **string literal** - a sentence written in Rust.
 # `"note": body.note` passes through whatever a caller sent, so there is no
 # sentence here to translate and no code that could describe it.
 NOTE = re.compile(r'^\s*"note"\s*:\s*"')
@@ -86,8 +86,8 @@ def main() -> int:
         for entry in bare:
             print(f"  {entry}")
         print(
-            "\nAdd a `note_code` on the line after it. The sentence stays — it is\n"
-            "the commitment the backend makes — and the code is what lets an\n"
+            "\nAdd a `note_code` on the line after it. The sentence stays - it is\n"
+            "the commitment the backend makes - and the code is what lets an\n"
             "anglophone reader receive it in their own language.\n"
             "\nSee SKI-353. Admin and security surfaces are exempt (English, and a\n"
             "different audience); add the file to EXEMPT here if you add one."
@@ -97,7 +97,7 @@ def main() -> int:
     duplicates = {c for c in codes if codes.count(c) > 1}
     if duplicates:
         # Two different sentences under one code would have the front show the
-        # wrong commitment for one of them — worse than the French original,
+        # wrong commitment for one of them - worse than the French original,
         # because it would be confidently wrong.
         print(f"NOTE-CODES: the same code covers two different notes: {sorted(duplicates)}")
         return 1

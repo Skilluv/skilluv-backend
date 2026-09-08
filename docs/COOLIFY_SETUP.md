@@ -24,7 +24,7 @@ bash <(curl -sSL https://raw.githubusercontent.com/skilluv/skilluv-backend/maste
 
 **Pourquoi curl et pas un path local ?** Le script n'est PAS dans l'image Docker (le `Dockerfile` ne copie pas `scripts/`). Il doit être disponible sur le host Coolify. Deux options :
 
-1. **Fetch inline** (recommandé, pattern ci-dessus) — toujours à jour avec master, zero maintenance
+1. **Fetch inline** (recommandé, pattern ci-dessus) - toujours à jour avec master, zero maintenance
 2. **Installer sur le host** : `sudo curl -o /opt/skilluv/verify-image.sh https://raw.githubusercontent.com/skilluv/skilluv-backend/master/scripts/verify-image.sh && chmod +x /opt/skilluv/verify-image.sh` puis pre-deploy `bash /opt/skilluv/verify-image.sh "$COOLIFY_IMAGE_TAG"`.
 
 **Prérequis host Coolify** :
@@ -54,7 +54,7 @@ COOLIFY_IMAGE_TAG="ghcr.io/skilluv/skilluv-backend:definitely-not-signed" bash s
 
 ## 2. Env vars requises côté Coolify
 
-Sensitive — passe par le panel "Environment Variables" avec toggle "Is Secret".
+Sensitive - passe par le panel "Environment Variables" avec toggle "Is Secret".
 
 ### Coeur backend
 
@@ -87,7 +87,7 @@ Sensitive — passe par le panel "Environment Variables" avec toggle "Is Secret"
 
 | Variable | Note |
 |---|---|
-| `SENTRY_DSN` | GlitchTip ou Sentry.io — voir `docs/OBSERVABILITY.md` |
+| `SENTRY_DSN` | GlitchTip ou Sentry.io - voir `docs/OBSERVABILITY.md` |
 | `SENTRY_TRACES_SAMPLE_RATE` | `0.1` par défaut |
 | `METRICS_TOKEN` | bearer token qui protège `/metrics` (à passer à Prometheus scraper) |
 
@@ -115,14 +115,14 @@ Sensitive — passe par le panel "Environment Variables" avec toggle "Is Secret"
 
 **Fix immédiat** :
 1. Rollback vers l'image précédente signée : dans Coolify panel → **Rollback** → sélectionner la dernière version verte.
-2. Investiguer côté CI : `gh run list --workflow=image-sign.yml` — voir pourquoi le sign a échoué.
+2. Investiguer côté CI : `gh run list --workflow=image-sign.yml` - voir pourquoi le sign a échoué.
 3. Une fois CI green, relancer un deploy.
 
 ### Deploy en boucle sans succès
 
 Vérifier :
-- `docker logs` de l'image sur le host Coolify — probablement env var manquant qui fait paniquer `assert_production_secrets`
-- Ping `/api/health` post-deploy — si down, le smoke test CI (SKI-28) va le catcher
+- `docker logs` de l'image sur le host Coolify - probablement env var manquant qui fait paniquer `assert_production_secrets`
+- Ping `/api/health` post-deploy - si down, le smoke test CI (SKI-28) va le catcher
 
 ### Rollback rapide
 

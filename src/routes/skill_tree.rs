@@ -1,11 +1,11 @@
-//! SKI-47 (Post-MVP T3-04) — skill tree endpoints.
+//! SKI-47 (Post-MVP T3-04) - skill tree endpoints.
 //!
 //! Endpoints:
 //!   GET /api/users/{id}/skill-tree                       (public if profile is)
 //!   PUT /api/admin/skills/{id}/prerequisites             (admin)
 //!
 //! The read endpoint returns the whole tree with per-node status, which is
-//! what a graph rendering needs — it cannot lay out a partial graph.
+//! what a graph rendering needs - it cannot lay out a partial graph.
 //! Payload size is bounded by the skill catalog (a few hundred nodes), not
 //! by user data, so there is no pagination: paginating a tree would hand
 //! the client an unrenderable fragment.
@@ -170,7 +170,7 @@ pub async fn set_prerequisites(
     let updated =
         skill_tree::set_prerequisites(&state.db, id, &body.prerequisite_skill_ids).await?;
 
-    // SKI-299 — one edit here locks or unlocks a node for every user on the
+    // SKI-299 - one edit here locks or unlocks a node for every user on the
     // platform, and nothing about the resulting state says who chose it.
     crate::services::audit::record(
         &state.db,

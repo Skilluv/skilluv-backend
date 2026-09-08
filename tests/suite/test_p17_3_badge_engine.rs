@@ -317,7 +317,7 @@ async fn recompute_is_idempotent() {
     // One row for *this* rule, not one row in total. The seeded catalogue has
     // other rules a first verified deliverable satisfies, and counting every
     // badge the user holds measures the size of the catalogue rather than
-    // whether recompute awarded twice — which is what this test is about.
+    // whether recompute awarded twice - which is what this test is about.
     let count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM user_badges ub
            JOIN badge_rules br ON br.id = ub.rule_id

@@ -10,7 +10,7 @@
 //! contributes is the one thing that cannot be a row: what each term counts.
 //!
 //! Nothing is stored. The score is computed on read, which is the only way a
-//! revoked proof can stop counting the moment it is revoked — and in a domain
+//! revoked proof can stop counting the moment it is revoked - and in a domain
 //! whose entire product is "this can be checked", a number that outlives its
 //! evidence is the failure being sold against.
 //!
@@ -110,7 +110,7 @@ struct Measurements {
 
 async fn measure(db: &PgPool, user_id: Uuid) -> Result<Measurements, AppError> {
     // The basis list is interpolated because it is a compile-time constant of
-    // this module — no request data reaches it. Everything a caller supplies is
+    // this module - no request data reaches it. Everything a caller supplies is
     // bound.
     let sql = format!(
         r#"
@@ -229,7 +229,7 @@ async fn measure(db: &PgPool, user_id: Uuid) -> Result<Measurements, AppError> {
             -- BIGINT, not INT: every other figure here is a count(*), which
             -- PostgreSQL returns as bigint and sqlx does not widen. One ::INT
             -- makes the whole row undecodable and the endpoint answers 500 to
-            -- every call — the failure the ops profile documents at length.
+            -- every call - the failure the ops profile documents at length.
             (SELECT COALESCE(
                         date_part('year', age(NOW(), min(a.issued_at)))::BIGINT + 1,
                         0)
@@ -297,7 +297,7 @@ pub async fn compute(db: &PgPool, user_id: Uuid) -> Result<CraftScore, AppError>
 ///
 /// ## What is withheld, and why that is not a weaker profile
 ///
-/// The title of an embargoed finding is half of its disclosure — "SQL injection
+/// The title of an embargoed finding is half of its disclosure - "SQL injection
 /// in the export endpoint" tells a reader where to look. So a confirmed finding
 /// appears with its severity, its weakness class and its date, and its title
 /// only once it is published. That is what a coordinated disclosure looks like

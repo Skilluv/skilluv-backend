@@ -1,8 +1,8 @@
-//! SKI-47 (Post-MVP T3-04) — skill tree with prerequisites.
+//! SKI-47 (Post-MVP T3-04) - skill tree with prerequisites.
 //!
 //! Builds the whole tree in one pass: a single query loads every skill
 //! node plus the caller's proficiency, and the traversal happens in
-//! memory. The alternative — recursing per node — would issue a query per
+//! memory. The alternative - recursing per node - would issue a query per
 //! edge for a payload the front end renders all at once.
 //!
 //! ## Node status
@@ -39,8 +39,8 @@ pub const STATUS_MASTERED: &str = "mastered";
 /// Depth cap for the hierarchical view.
 ///
 /// The taxonomy is a handful of levels deep in practice. The cap exists so
-/// a cycle written directly into the database — bypassing
-/// [`assert_no_cycle`] — produces a truncated tree instead of an infinite
+/// a cycle written directly into the database - bypassing
+/// [`assert_no_cycle`] - produces a truncated tree instead of an infinite
 /// loop in a request handler.
 const MAX_DEPTH: usize = 16;
 
@@ -54,7 +54,7 @@ pub struct SkillTreeNode {
     pub display_category: String,
     pub parent_id: Option<Uuid>,
     pub prerequisite_skill_ids: Vec<Uuid>,
-    /// Prerequisites the user has not proven yet — what to show on hover
+    /// Prerequisites the user has not proven yet - what to show on hover
     /// for a locked node.
     pub missing_prerequisites: Vec<MissingPrerequisite>,
     pub status: String,
@@ -277,7 +277,7 @@ pub async fn assert_no_cycle(
         return Ok(());
     }
 
-    // Every prerequisite must exist — a dangling id would lock the node
+    // Every prerequisite must exist - a dangling id would lock the node
     // against a skill that can never be proven.
     let existing: Vec<Uuid> = sqlx::query_scalar("SELECT id FROM skill_nodes WHERE id = ANY($1)")
         .bind(proposed)
@@ -307,7 +307,7 @@ pub async fn assert_no_cycle(
         }
         if frontier.contains(&skill_id) {
             return Err(AppError::Validation(
-                "these prerequisites would create a cycle — the skills involved \
+                "these prerequisites would create a cycle - the skills involved \
                  could never be unlocked"
                     .into(),
             ));
@@ -341,8 +341,8 @@ pub async fn assert_no_cycle(
 /// A skill's current prerequisites.
 ///
 /// Read separately from `set_prerequisites` rather than returned by it,
-/// because the caller that needs the previous list — the audit entry on
-/// the admin PUT — needs it even when the replacement is rejected.
+/// because the caller that needs the previous list - the audit entry on
+/// the admin PUT - needs it even when the replacement is rejected.
 pub async fn prerequisites_of(db: &PgPool, skill_id: Uuid) -> Result<Vec<Uuid>, AppError> {
     let current: Option<Vec<Uuid>> =
         sqlx::query_scalar("SELECT prerequisite_skill_ids FROM skill_nodes WHERE id = $1")

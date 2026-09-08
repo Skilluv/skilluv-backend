@@ -1,7 +1,7 @@
 //! Product analytics via PostHog (self-hosted or cloud).
 //!
 //! Fire-and-forget: each `track` call spawns a tokio task that POSTs to PostHog.
-//! If PostHog is unreachable or unconfigured, the call is a no-op — never blocks the
+//! If PostHog is unreachable or unconfigured, the call is a no-op - never blocks the
 //! request and never propagates errors to the user.
 
 use std::sync::Arc;
@@ -103,7 +103,7 @@ struct CapturePayload {
     timestamp: String,
 }
 
-/// Centralised list of event names — keep in sync with PostHog dashboards.
+/// Centralised list of event names - keep in sync with PostHog dashboards.
 /// Adding a new event ? Add it here first so all sites use the same string.
 pub mod events {
     pub const USER_SIGNUP: &str = "user_signup";
@@ -121,17 +121,17 @@ pub mod events {
     pub const INTEREST_REQUEST_ACCEPTED: &str = "interest_request_accepted";
     pub const INTEREST_REQUEST_REJECTED: &str = "interest_request_rejected";
     pub const ACCOUNT_DELETED: &str = "account_deleted";
-    // Phase 2 Sprint 1 — social primitives
+    // Phase 2 Sprint 1 - social primitives
     pub const COMMENT_POSTED: &str = "comment_posted";
     pub const REACTION_ADDED: &str = "reaction_added";
     pub const MENTION_RECEIVED: &str = "mention_received";
-    // Phase 2 Sprint 2 — DM + feed + notifs
+    // Phase 2 Sprint 2 - DM + feed + notifs
     pub const DM_SENT: &str = "dm_sent";
     pub const DM_CONVERSATION_OPENED: &str = "dm_conversation_opened";
     pub const FEED_VIEWED: &str = "feed_viewed";
     pub const NOTIFICATION_CLICKED: &str = "notification_clicked";
     pub const USER_BLOCKED: &str = "user_blocked";
-    // Phase 2 Sprint 4 — guilds
+    // Phase 2 Sprint 4 - guilds
     pub const GUILD_CREATED: &str = "guild_created";
     pub const GUILD_JOINED: &str = "guild_joined";
     pub const GUILD_LEFT: &str = "guild_left";
@@ -142,7 +142,7 @@ pub mod events {
     pub const GUILD_WAR_PROPOSED: &str = "guild_war_proposed";
     pub const GUILD_WAR_ACCEPTED: &str = "guild_war_accepted";
     pub const GUILD_WAR_CONCLUDED: &str = "guild_war_concluded";
-    // Phase 2 Sprint 5 — GitHub + projects
+    // Phase 2 Sprint 5 - GitHub + projects
     pub const GITHUB_CONNECTED: &str = "github_connected";
     pub const GITHUB_SYNC_TRIGGERED: &str = "github_sync_triggered";
     pub const PROJECT_CREATED: &str = "project_created";

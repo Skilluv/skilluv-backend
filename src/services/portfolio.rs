@@ -1,4 +1,4 @@
-//! Service `portfolio` — pont sortant vers le monde extérieur (Phase P7).
+//! Service `portfolio` - pont sortant vers le monde extérieur (Phase P7).
 //!
 //! Voir docs/challenges-target-model-and-roadmap.md sections 8.6 et 9.6.
 //!
@@ -244,7 +244,7 @@ impl PortfolioService {
             "legende" => "Légende",
             _ => "Skilluv",
         };
-        // Couleurs shields.io par titre — gradient de rareté
+        // Couleurs shields.io par titre - gradient de rareté
         let color = match title {
             "legende" => "#f39c12", // gold
             "maitre" => "#8e44ad",  // purple

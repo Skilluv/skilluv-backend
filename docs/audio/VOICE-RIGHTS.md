@@ -41,8 +41,8 @@ rend son profil vérifiable.
 
 Deux tempéraments raisonnables, à écrire :
 
-- **un embargo** — pas avant la sortie de l'œuvre. Légitime, borné, courant.
-- **une longueur** — trente secondes plutôt que la session entière.
+- **un embargo** - pas avant la sortie de l'œuvre. Légitime, borné, courant.
+- **une longueur** - trente secondes plutôt que la session entière.
 
 Une interdiction totale existe (`buyout`), doit être visible, et se paie. Elle
 n'est jamais une clause de bas de page.
@@ -64,13 +64,13 @@ plateforme. Ce que la plateforme fait, c'est refuser qu'elles soient implicites.
 
 ## 5. Les reprises et les suites
 
-Réutiliser une voix dans une version ultérieure — une extension, un remaster,
-une suite — est un **nouvel usage**. Deux façons honnêtes de le traiter :
+Réutiliser une voix dans une version ultérieure - une extension, un remaster,
+une suite - est un **nouvel usage**. Deux façons honnêtes de le traiter :
 
 - le prévoir dans le contrat initial, avec un tarif de reprise convenu ;
 - le renégocier le moment venu.
 
-La troisième — considérer que c'était compris — est celle qui produit les
+La troisième - considérer que c'était compris - est celle qui produit les
 litiges, et c'est aussi celle qui pousse les studios vers la voix de synthèse.
 
 ## 6. Le clonage vocal : la politique de la plateforme
@@ -85,7 +85,7 @@ Concrètement, sur Skilluv :
 - **on ne peut pas** livrer une voix de synthèse en réponse à un casting ou à
   une mission de voix ;
 - **on ne peut pas** publier une bande démo contenant une voix qui n'est pas la
-  sienne — c'est le seul endroit du catalogue où la politique `human_verified`
+  sienne - c'est le seul endroit du catalogue où la politique `human_verified`
   s'applique aux défis, et elle protège l'entrant plutôt que la plateforme ;
 - **on peut** utiliser un outil génératif pour un repère de montage ou une
   maquette, en le déclarant, tant qu'aucune voix réelle n'est imitée.
@@ -95,8 +95,8 @@ Concrètement, sur Skilluv :
 Le clonage est la seule technologie de ce domaine capable de retirer à
 quelqu'un non pas un contrat, mais sa capacité à en obtenir un jamais. Une voix
 clonée est indiscernable pour un auditeur, se produit en illimité, et ne
-renégocie pas. Une plateforme qui laisse cela se faire par défaut — par une
-clause générale acceptée à l'inscription — remplace le métier qu'elle prétend
+renégocie pas. Une plateforme qui laisse cela se faire par défaut - par une
+clause générale acceptée à l'inscription - remplace le métier qu'elle prétend
 soutenir.
 
 Une clause générale ne vaut pas consentement. Un accord doit nommer l'usage, sa
@@ -113,5 +113,5 @@ retrait. Ce n'est pas une ligne à ajouter à un contrat de prise.
 Les castings de la plateforme masquent les noms jusqu'à la sélection, par
 défaut. C'est le seul endroit où une réputation entre le plus directement en
 concurrence avec ce qui est jugé, et où le jugement est presque instantané.
-Le créateur peut désactiver l'aveugle — c'est visible, et c'est son droit
+Le créateur peut désactiver l'aveugle - c'est visible, et c'est son droit
 quand il recase un personnage récurrent.

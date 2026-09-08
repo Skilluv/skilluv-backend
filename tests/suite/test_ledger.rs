@@ -1,6 +1,6 @@
 //! Double-entry ledger (migration 0153, `services::ledger`).
 //!
-//! Two things are being proved here. That the books cannot be made to lie —
+//! Two things are being proved here. That the books cannot be made to lie -
 //! unbalanced postings, single-legged postings and edits are refused by the
 //! database, not by a convention someone has to remember. And that the signs
 //! are the right way round, which is the mistake that costs the most and
@@ -353,7 +353,7 @@ async fn money_can_arrive_on_one_rail_and_leave_on_another() {
     .unwrap();
 
     // Paid out in XOF: a separate claim, funded separately. The ledger does
-    // not convert — exchange is a regulated activity and belongs to the
+    // not convert - exchange is a regulated activity and belongs to the
     // provider, not to us.
     ledger::post(
         &app.db,
@@ -823,7 +823,7 @@ async fn benin_routes_to_mobile_money_not_stripe() {
         .unwrap();
     assert!(
         !found.is_empty(),
-        "Benin must be reachable — Stripe does not serve it"
+        "Benin must be reachable - Stripe does not serve it"
     );
     assert_eq!(
         found[0].provider, "mtn",

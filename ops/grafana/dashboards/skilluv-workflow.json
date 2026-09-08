@@ -47,7 +47,7 @@
   "templating": {"list": []},
   "time": {"from": "now-6h", "to": "now"},
   "timezone": "browser",
-  "title": "Skilluv — Workflow challenge (P26 v2)",
+  "title": "Skilluv - Workflow challenge (P26 v2)",
   "uid": "skilluv-workflow",
   "version": 1
 }

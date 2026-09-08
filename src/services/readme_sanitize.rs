@@ -7,7 +7,7 @@
 //! on s'assure que les vecteurs XSS/phishing les plus evidents sont neutralises
 //! en amont.
 //!
-//! Ce sanitizer travaille sur du **markdown source** — pas du HTML rendu. Il
+//! Ce sanitizer travaille sur du **markdown source** - pas du HTML rendu. Il
 //! neutralise ce qui n'est pas markdown standard :
 //! - Blocs `<script>...</script>` et `<style>...</style>` (contenu drop)
 //! - Attributs `on*=` sur toute balise HTML inline (drop tag entier)
@@ -37,7 +37,7 @@ pub fn sanitize_readme_markdown(input: &str) -> String {
     let bytes = input.as_bytes();
 
     while cursor < bytes.len() {
-        // Detecte les blocs "code fence" markdown ```...``` — le contenu est
+        // Detecte les blocs "code fence" markdown ```...``` - le contenu est
         // preserve integralement (c'est du texte, pas du HTML rendu).
         if bytes[cursor..].starts_with(b"```") {
             let start = cursor;
@@ -83,12 +83,12 @@ pub fn sanitize_readme_markdown(input: &str) -> String {
                         cursor = bytes.len();
                         continue;
                     }
-                    // Tag inline dangereux (a/img avec javascript: etc) — on
+                    // Tag inline dangereux (a/img avec javascript: etc) - on
                     // le drop mais on garde le reste apres.
                     cursor += tag_end_off + 1;
                     continue;
                 }
-                // Tag safe — copie-le
+                // Tag safe - copie-le
                 output.push_str(tag);
                 cursor += tag_end_off + 1;
                 continue;
@@ -248,7 +248,7 @@ mod tests {
 
     #[test]
     fn preserves_code_fence_with_dangerous_content() {
-        // Le contenu dans un code fence est du TEXTE, pas du HTML — on le garde.
+        // Le contenu dans un code fence est du TEXTE, pas du HTML - on le garde.
         let input = "```html\n<script>alert(1)</script>\n```\n";
         let out = sanitize_readme_markdown(input);
         assert!(out.contains("<script>alert(1)</script>"));

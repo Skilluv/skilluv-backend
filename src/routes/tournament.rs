@@ -1,4 +1,4 @@
-//! Tournaments + seasons + events routes — Phase 2 Sprint 6.
+//! Tournaments + seasons + events routes - Phase 2 Sprint 6.
 
 use axum::extract::{Path, Query, State};
 use axum::http::HeaderMap;
@@ -18,12 +18,12 @@ use crate::services::tournament;
 
 pub fn tournament_routes() -> Router<AppState> {
     Router::new()
-        // Public — tournaments read + registration.
+        // Public - tournaments read + registration.
         .route("/tournaments", get(list_tournaments))
         .route("/tournaments/{slug}", get(get_tournament))
         .route("/tournaments/{slug}/leaderboard", get(get_leaderboard))
         .route("/tournaments/{slug}/register", post(register))
-        // Code contests (migration 0189) — hand in an entry, read the entries.
+        // Code contests (migration 0189) - hand in an entry, read the entries.
         .route(
             "/tournaments/{slug}/submissions",
             get(list_submissions).post(submit_entry),
@@ -38,14 +38,14 @@ pub fn tournament_routes() -> Router<AppState> {
             get(community_ranking),
         )
         // The season and what is coming up. Not `/events`: that path belongs
-        // to `events.rs`, which owns the `events` table and its sub-paths —
+        // to `events.rs`, which owns the `events` table and its sub-paths -
         // and registering both made the router panic at startup, so the
         // binary did not boot at all. Nothing caught it but the contract
         // test, because `build_router` is only ever built by the binary.
         .route("/tournaments/feed", get(events_feed))
 }
 
-/// Trello vx5q6jW4 — les admin routes de seasons/tournaments vivaient dans
+/// Trello vx5q6jW4 - les admin routes de seasons/tournaments vivaient dans
 /// `tournament_routes` sans admin_gate (juste un `require_capability("admin")`
 /// inline). Split maintenant pour permettre à `lib.rs` de nest ce sous-router
 /// derrière `admin_gate` (ensure_admin_origin + ensure_admin_2fa) comme les
@@ -216,7 +216,7 @@ pub async fn get_leaderboard(
 ) -> Result<Json<Value>, AppError> {
     let t = tournament::by_slug(&state.db, &slug).await?;
     // A marathon is scored from upstream contributions nobody files here, so
-    // the standing is counted at read time. Once concluded it is frozen —
+    // the standing is counted at read time. Once concluded it is frozen -
     // recounting a finished marathon would rewrite a published result.
     if t.kind == "marathon" && t.status != "concluded" {
         crate::services::contest::recompute_marathon_scores(&state.db, t.id).await?;
@@ -454,13 +454,13 @@ pub async fn admin_set_score(
 
     // A competition page with a live leaderboard has to hear that a score
     // moved. Into the tournament's own room rather than to everybody, on the
-    // pattern `routes::challenges` set with `challenge:{id}` — a global
+    // pattern `routes::challenges` set with `challenge:{id}` - a global
     // broadcast would make every open page filter every competition's traffic
     // (SKI-141, and what SKI-138 and SKI-149 are waiting on).
     //
     // The event carries no score. Whoever is watching re-reads
     // `GET /tournaments/{slug}/leaderboard`, which is the one place that
-    // knows the ordering rule for this kind — `lower_is_better` means a
+    // knows the ordering rule for this kind - `lower_is_better` means a
     // smaller number just took the lead, and a payload saying "score: 12"
     // cannot say whether that is good.
     let room = format!("tournament:{id}");
@@ -558,7 +558,7 @@ pub async fn admin_conclude(
         0
     };
 
-    // Notify the top 3 (users only — guilds get their GP, officers will see it in their dashboard).
+    // Notify the top 3 (users only - guilds get their GP, officers will see it in their dashboard).
     let top: Vec<(String, Uuid, i32, i32, i32)> = sqlx::query_as(
         r#"
         SELECT participant_type, participant_id, rank, prize_fragments_awarded, prize_gp_awarded
@@ -595,7 +595,7 @@ pub async fn admin_conclude(
     }
     metrics::counter!("skilluv_tournaments_concluded_total").increment(1);
 
-    // BE-F — audit log unifié.
+    // BE-F - audit log unifié.
     crate::services::audit::record(
         &state.db,
         crate::services::audit::AuditEntry {
@@ -662,14 +662,14 @@ pub struct FundPrizeBody {
     pub funder_enterprise_id: Uuid,
     /// What the podium receives, whole. The platform takes no share.
     pub amount: String,
-    /// `EUR` or `XOF` — the two the ledger can hold and pay out.
+    /// `EUR` or `XOF` - the two the ledger can hold and pay out.
     pub currency: String,
     /// The provider reference for the settled payment, so the ledger entry
     /// can be reconciled against the provider's statement.
     pub provider_reference: String,
 }
 
-/// POST /admin/tournaments/{id}/prize/fund — record that the money is held.
+/// POST /admin/tournaments/{id}/prize/fund - record that the money is held.
 ///
 /// Until this succeeds the contest cannot leave `upcoming`, which is the
 /// whole point: a brief promising money that nobody escrowed is spec work
@@ -739,7 +739,7 @@ pub struct RefundPrizeBody {
     pub reason: String,
 }
 
-/// POST /admin/tournaments/{id}/prize/refund — return the money to the sponsor.
+/// POST /admin/tournaments/{id}/prize/refund - return the money to the sponsor.
 ///
 /// For a cancelled contest, or one that ended with nobody in the running.
 /// Holding money for a contest that will never have a winner is the same
@@ -781,7 +781,7 @@ pub async fn admin_refund_prize(
     Ok(Json(build_response(json!({ "refunded": true }))))
 }
 
-/// GET /admin/tournaments/prizes/outstanding — contests still holding money.
+/// GET /admin/tournaments/prizes/outstanding - contests still holding money.
 ///
 /// Each one owes an award or a refund. Nothing decides which automatically:
 /// "nobody deserved the prize" and "nobody concluded the contest" look
@@ -808,7 +808,7 @@ pub async fn admin_outstanding_prizes(
 // Juries (migration 0509)
 // ═══════════════════════════════════════════════════════════════════
 
-/// GET /tournaments/{slug}/jury — who was asked, and what they answered.
+/// GET /tournaments/{slug}/jury - who was asked, and what they answered.
 ///
 /// Public: a contest whose panel is secret cannot be trusted, and the whole
 /// point of naming a jury before the deadline is that entrants can see who
@@ -837,7 +837,7 @@ pub struct JuryResponseBody {
     pub decline_reason: Option<String>,
 }
 
-/// POST /tournaments/{slug}/jury/respond — accept or decline an invitation.
+/// POST /tournaments/{slug}/jury/respond - accept or decline an invitation.
 #[utoipa::path(
     post, path = "/api/tournaments/{slug}/jury/respond", tag = "tournaments",
     params(("slug" = String, Path, description = "tournament slug")),
@@ -872,7 +872,7 @@ pub struct InviteJurorBody {
     pub juror_user_id: Uuid,
 }
 
-/// POST /admin/tournaments/{id}/jury — ask somebody to judge.
+/// POST /admin/tournaments/{id}/jury - ask somebody to judge.
 #[utoipa::path(
     post, path = "/api/admin/tournaments/{id}/jury", tag = "admin",
     params(("id" = Uuid, Path, description = "tournament id")),
@@ -907,10 +907,10 @@ pub struct CommunityVoteBody {
     pub submission_id: Uuid,
 }
 
-/// POST /tournaments/{slug}/community-vote — one voice, movable.
+/// POST /tournaments/{slug}/community-vote - one voice, movable.
 ///
-/// Voting again moves the vote rather than adding one. Eligibility — the
-/// account age floor, the self-vote, the withdrawn entry — is refused by the
+/// Voting again moves the vote rather than adding one. Eligibility - the
+/// account age floor, the self-vote, the withdrawn entry - is refused by the
 /// database, and the message it raises is written to be read by a person.
 #[utoipa::path(
     post, path = "/api/tournaments/{slug}/community-vote", tag = "tournaments",
@@ -940,7 +940,7 @@ pub async fn community_vote(
     Ok(Json(build_response(json!({ "recorded": true }))))
 }
 
-/// GET /tournaments/{slug}/community-ranking — the live standing.
+/// GET /tournaments/{slug}/community-ranking - the live standing.
 #[utoipa::path(
     get, path = "/api/tournaments/{slug}/community-ranking", tag = "tournaments",
     params(("slug" = String, Path, description = "tournament slug")),
@@ -970,7 +970,7 @@ pub struct BurstQuery {
     pub threshold: Option<i64>,
 }
 
-/// GET /admin/tournaments/{id}/vote-bursts — entries with a suspicious spike.
+/// GET /admin/tournaments/{id}/vote-bursts - entries with a suspicious spike.
 ///
 /// A reason to look, never a verdict: this reports, it does not disqualify.
 /// Deciding a vote was bought is a human judgement with consequences for a

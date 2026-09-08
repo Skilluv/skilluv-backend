@@ -95,7 +95,7 @@ services:
     networks:
       - skilluv-net
 
-  # Uptime Kuma — self-host uptime monitor + status page (Phase 1.4)
+  # Uptime Kuma - self-host uptime monitor + status page (Phase 1.4)
   uptime-kuma:
     image: louislam/uptime-kuma:1
     container_name: skilluv-uptime-kuma

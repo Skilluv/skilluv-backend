@@ -13,7 +13,7 @@ use crate::errors::AppError;
 
 /// BE-P0-35 : convert the invoice's BigDecimal `tva_rate` to a numeric
 /// `tva_rate_pct` when the front asks for it. Used by the enterprise_credits
-/// handlers to enrich the JSON response — see call sites there.
+/// handlers to enrich the JSON response - see call sites there.
 pub fn tva_rate_as_f64(v: &bigdecimal::BigDecimal) -> f64 {
     use num_traits::ToPrimitive;
     v.to_f64().unwrap_or(0.0)
@@ -233,6 +233,6 @@ pub fn render_html(inv: &Invoice, enterprise_name: &str) -> String {
         ttc_amount = money(inv.amount_ttc_cents),
         tva_rate = inv.tva_rate,
         currency = esc(&inv.currency),
-        pi = esc(inv.stripe_payment_intent_id.as_deref().unwrap_or("—")),
+        pi = esc(inv.stripe_payment_intent_id.as_deref().unwrap_or("-")),
     )
 }

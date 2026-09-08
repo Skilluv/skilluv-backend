@@ -1,4 +1,4 @@
-//! P24.2 — Routes CRUD pour agency_clients (workflow staffing_agency).
+//! P24.2 - Routes CRUD pour agency_clients (workflow staffing_agency).
 //!
 //! Contraintes :
 //!   - Nécessite un user authentifié rattaché à une enterprise `staffing_agency`.
@@ -27,7 +27,7 @@ pub fn agency_client_routes() -> Router<AppState> {
             "/enterprises/me/agency-clients/{id}",
             patch(update).delete(deactivate),
         )
-        // P24.3 — config JSONB par type
+        // P24.3 - config JSONB par type
         .route(
             "/enterprises/me/type-config",
             get(get_type_config).patch(patch_type_config),
@@ -35,7 +35,7 @@ pub fn agency_client_routes() -> Router<AppState> {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// P24.3 — GET / PATCH /enterprises/me/type-config
+// P24.3 - GET / PATCH /enterprises/me/type-config
 // ═══════════════════════════════════════════════════════════════════
 
 /// Clés autorisées par type. Toute clé hors de cette allowlist est rejetée.
@@ -83,7 +83,7 @@ async fn resolve_enterprise(state: &AppState, auth: &AuthUser) -> Result<(Uuid, 
 pub struct TypeConfigResponse {
     /// `staffing_agency`, `remote_international`, or `direct_hire`.
     pub enterprise_type: String,
-    /// Free-form JSONB — shape depends on enterprise_type. Only keys
+    /// Free-form JSONB - shape depends on enterprise_type. Only keys
     /// present in `allowed_keys` are honoured by PATCH.
     pub type_config: serde_json::Value,
     pub allowed_keys: Vec<String>,

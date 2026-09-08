@@ -310,7 +310,7 @@ pub async fn open_program(
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct EnrolBody {
-    /// For a corporate run, the client's employee — who may not have a
+    /// For a corporate run, the client's employee - who may not have a
     /// Skilluv account.
     #[serde(default)]
     pub mentee_email: Option<String>,

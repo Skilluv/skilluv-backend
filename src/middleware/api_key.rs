@@ -34,7 +34,7 @@ impl FromRequestParts<AppState> for ApiKeyAuth {
         //
         // `revoked_at` as well as `active`, and the asymmetry is worth naming.
         // Migration 0359 added `revoked_at` and `revoked_reason` to this table
-        // *and* an index keyed on `revoked_at IS NULL` — which states, in the
+        // *and* an index keyed on `revoked_at IS NULL` - which states, in the
         // schema, that a NULL there is what makes a key live. This
         // authenticator only ever read `active`.
         //

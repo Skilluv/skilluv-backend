@@ -70,7 +70,7 @@ async fn become_mentor(app: &TestApp, user: Uuid, headline: &str) {
     .unwrap();
 }
 
-/// A verified deliverable in a given trade — which is what makes somebody a
+/// A verified deliverable in a given trade - which is what makes somebody a
 /// mentor *of that family* rather than an admirer of it.
 async fn validated_in(app: &TestApp, user: Uuid, trade: &str) {
     let project: Uuid = sqlx::query_scalar(
@@ -126,7 +126,7 @@ async fn a_mentor_is_suggested_for_what_they_delivered_not_what_they_declared() 
     set_craft_score(&app, mentee, 100).await;
 
     // One has delivered brand work. The other only says they are interested in
-    // it — which is exactly the trap this rule exists to avoid.
+    // it - which is exactly the trap this rule exists to avoid.
     become_mentor(&app, real, "Identités et systèmes de marque").await;
     set_craft_score(&app, real, 2000).await;
     validated_in(&app, real, "design-brand-identity").await;

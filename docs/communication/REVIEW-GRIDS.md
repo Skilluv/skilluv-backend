@@ -33,7 +33,7 @@ Research writing does not merge into documentation, because what is being
 judged there is a method rather than a page.
 
 `communication_reviewer:all` reaches every family. It is granted sparingly,
-and holding it is not the same as being able to judge everything — it means
+and holding it is not the same as being able to judge everything - it means
 being trusted to know which submissions to leave to somebody else.
 
 ---
@@ -51,15 +51,15 @@ others would let a strong family score carry them.
 
 The seven:
 
-1. **Service to the reader** — somebody arrived with a question and left with
+1. **Service to the reader** - somebody arrived with a question and left with
    an answer.
-2. **Technical accuracy** — every claim checkable, every example executed.
-3. **Structure** — the reader always knows where they are.
-4. **Level announced and held** — no unannounced jump.
-5. **Attribution and sources** — including the sponsorship declaration, at the
+2. **Technical accuracy** - every claim checkable, every example executed.
+3. **Structure** - the reader always knows where they are.
+4. **Level announced and held** - no unannounced jump.
+5. **Attribution and sources** - including the sponsorship declaration, at the
    top.
-6. **Accessibility** — alt text, contrast, captions, transcript.
-7. **Transparency about AI** — declared use is accepted; unverified output is
+6. **Accessibility** - alt text, contrast, captions, transcript.
+7. **Transparency about AI** - declared use is accepted; unverified output is
    not.
 
 ---
@@ -68,7 +68,7 @@ The seven:
 
 A grid is not a mark out of ten. Each criterion is read against what the
 `looks_like` text describes, and a reviewer says what they saw. A submission
-that meets every criterion but one is not "almost validated" — it is a
+that meets every criterion but one is not "almost validated" - it is a
 submission with one thing to fix, named, with the fix usually smaller than the
 author feared.
 
@@ -86,5 +86,5 @@ from a real one to a reader who trusts the document, and the whole value of
 research writing is that its sources can be followed.
 
 A reviewer of that family is expected to open links. Not all of them, every
-time — enough of them, unpredictably, that a document with fabricated sources
+time - enough of them, unpredictably, that a document with fabricated sources
 does not survive review.

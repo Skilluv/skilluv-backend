@@ -2,8 +2,8 @@
 //!
 //! ## The distinction that runs through this file
 //!
-//! A **quota** is spent and does not come back — credits, campaigns, a bounty
-//! pool. A **ceiling** is a limit measured against reality — ten open
+//! A **quota** is spent and does not come back - credits, campaigns, a bounty
+//! pool. A **ceiling** is a limit measured against reality - ten open
 //! positions at a time, not ten ever. A **discount** is a percentage applied
 //! elsewhere. A **flag** is on or off.
 //!
@@ -12,7 +12,7 @@
 //! that shows them the same way lies about one of them.
 //!
 //! Ceilings are therefore never counted here. They are checked against the
-//! thing they limit, at the moment somebody tries to exceed it — a counter
+//! thing they limit, at the moment somebody tries to exceed it - a counter
 //! would drift the first time a row was deleted by anything but the endpoint
 //! that decrements it.
 
@@ -26,7 +26,7 @@ use crate::errors::AppError;
 
 /// Whether a nature has a balance that can run out.
 ///
-/// Only a quota does. An unknown nature answers no — somebody added one to
+/// Only a quota does. An unknown nature answers no - somebody added one to
 /// the table and not here, and refusing is better than inventing a balance.
 pub fn has_remainder(nature: &str) -> bool {
     nature == "quota"
@@ -130,7 +130,7 @@ pub async fn remaining(
 /// Spend from a quota, oldest engagement first.
 ///
 /// Oldest first so an entitlement that expires with its subscription is used
-/// before one that does not — the opposite order silently wastes what was
+/// before one that does not - the opposite order silently wastes what was
 /// about to lapse.
 ///
 /// Returns what could not be covered. Zero means fully covered; anything else
@@ -285,7 +285,7 @@ pub async fn grant(db: &PgPool, product_id: Uuid, input: &GrantInput) -> Result<
 fn nature_error(e: sqlx::Error) -> AppError {
     let message = e.to_string();
     if message.contains("carries no amount") {
-        return AppError::Validation("that entitlement is on or off — it takes no amount".into());
+        return AppError::Validation("that entitlement is on or off - it takes no amount".into());
     }
     if message.contains("must say how much") {
         return AppError::Validation(

@@ -1,4 +1,4 @@
-//! SCIM 2.0 provisioning service — token mgmt, user/group persistence,
+//! SCIM 2.0 provisioning service - token mgmt, user/group persistence,
 //! deprovisioning semantics.
 //!
 //! Auth: each enterprise config carries at most one active bearer token,
@@ -145,7 +145,7 @@ pub async fn set_token(
 }
 
 pub async fn clear_token(db: &PgPool, enterprise_id: Uuid) -> Result<(), AppError> {
-    // Explicit clear kills BOTH the current and the previous slot — the owner
+    // Explicit clear kills BOTH the current and the previous slot - the owner
     // wants SCIM off, not a grace period.
     sqlx::query(
         "UPDATE enterprise_sso_configs
@@ -629,7 +629,7 @@ pub async fn add_group_members(
     Ok(())
 }
 
-/// Ranks Skilluv roles by privilege — higher wins when a user is in several
+/// Ranks Skilluv roles by privilege - higher wins when a user is in several
 /// role-mapping groups. `default_role` is used as the floor when the user is
 /// in no role-mapping group.
 fn role_rank(role: &str) -> u8 {
@@ -776,7 +776,7 @@ pub async fn replace_group_members(
     user_ids: &[Uuid],
 ) -> Result<(), AppError> {
     // Capture existing members before the wipe so we can recompute *their*
-    // roles too — otherwise a user removed from the group would keep the
+    // roles too - otherwise a user removed from the group would keep the
     // previous mapped role forever.
     let existing: Vec<(Uuid,)> =
         sqlx::query_as("SELECT user_id FROM scim_group_members WHERE group_id = $1")

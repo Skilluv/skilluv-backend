@@ -125,7 +125,7 @@ async fn migrations_up_to_p0_apply_cleanly() {
 async fn every_active_domain_has_a_skill_tree() {
     // This used to assert 53 categories and 290 atomic skills. Every domain
     // added since broke it, and each time the fix was to write down a bigger
-    // number — which tested that somebody had run the seed, and nothing else.
+    // number - which tested that somebody had run the seed, and nothing else.
     //
     // What is worth holding is the shape: a domain the platform says is live
     // has skills to place people on, and every skill hangs off a category.
@@ -233,7 +233,7 @@ async fn projects_gained_new_columns() {
 async fn slice_ingestion_mode_check_constraint_rejects_bad_values() {
     let (db, db_name) = setup_test_db().await;
 
-    // First we need a valid project — quick insert with minimal fields
+    // First we need a valid project - quick insert with minimal fields
     let user_id = Uuid::new_v4();
     insert_test_user(&db, user_id).await;
 

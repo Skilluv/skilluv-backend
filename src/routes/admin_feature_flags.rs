@@ -1,4 +1,4 @@
-//! Hygiène pré-prod SKI-33 — admin CRUD for DB-backed feature flags.
+//! Hygiène pré-prod SKI-33 - admin CRUD for DB-backed feature flags.
 //!
 //! Routes:
 //!   GET    /api/admin/feature-flags       list all
@@ -34,7 +34,7 @@ fn wrap(data: Value) -> Value {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SKI-111 — response schemas
+// SKI-111 - response schemas
 // ═══════════════════════════════════════════════════════════════════
 
 /// A feature flag. Mirrors `services::feature_flags::FeatureFlag`, which
@@ -68,7 +68,7 @@ pub struct FeatureFlagRemoved {
     pub key: String,
 }
 
-/// SKI-33 admin — list all feature flags.
+/// SKI-33 admin - list all feature flags.
 #[utoipa::path(
     get, path = "/api/admin/feature-flags", tag = "admin",
     responses(
@@ -103,7 +103,7 @@ fn default_rollout() -> i16 {
     100
 }
 
-/// SKI-33 admin — create or update a flag (idempotent upsert).
+/// SKI-33 admin - create or update a flag (idempotent upsert).
 #[utoipa::path(
     post, path = "/api/admin/feature-flags",
     operation_id = "adminFeatureFlagsUpsert",
@@ -135,7 +135,7 @@ pub async fn upsert(
     Ok(Json(wrap(json!({ "flag": flag }))))
 }
 
-/// SKI-33 admin — delete a flag.
+/// SKI-33 admin - delete a flag.
 #[utoipa::path(
     delete, path = "/api/admin/feature-flags/{key}",
     operation_id = "adminFeatureFlagsRemove",

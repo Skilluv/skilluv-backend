@@ -1,8 +1,8 @@
-# Quality — brief templates
+# Quality - brief templates
 
 Backlog: quality/F-05. What a client or a challenge author fills in when they
-want quality work done. The **write-up** templates — what the contributor hands
-back — are rows in `content_guides` (`kind = 'writeup_template'`, migration
+want quality work done. The **write-up** templates - what the contributor hands
+back - are rows in `content_guides` (`kind = 'writeup_template'`, migration
 0457); these are the other end of the same conversation.
 
 Five briefs, one per trade. The shared skeleton first, then what each trade
@@ -33,19 +33,19 @@ say so rather than start.
 
 ---
 
-## `brief-qa-code` — test plan or suite
+## `brief-qa-code` - test plan or suite
 
 Beyond the skeleton:
 
 - **What already exists.** A suite, a partial one, or nothing. And whether it
-  currently passes — taking over a red suite is a different job and should be
+  currently passes - taking over a red suite is a different job and should be
   priced as one.
 - **Where it has to run.** The client's pipeline, with its constraints: run
   time budget, parallelism, whether a database is available.
 - **What the team will maintain afterwards.** A suite handed to a team that has
   not agreed to own it is a suite that is deleted in six months, and the brief
   should say who is taking it.
-- **Coverage target, if any** — and the warning that goes with it: a
+- **Coverage target, if any** - and the warning that goes with it: a
   percentage target produces tests that satisfy the percentage. Prefer naming
   the paths that matter.
 
@@ -53,7 +53,7 @@ Beyond the skeleton:
 the client's pipeline forces one, and forcing one for preference costs the
 engagement its best option.
 
-## `brief-qa-cyber` — scoped security testing
+## `brief-qa-cyber` - scoped security testing
 
 Beyond the skeleton:
 
@@ -63,7 +63,7 @@ Beyond the skeleton:
   system. A signature from somebody who does not own the system is not
   authorisation.
 - **Techniques not permitted.** Denial of service, social engineering,
-  physical access, testing against production data — each answered yes or no
+  physical access, testing against production data - each answered yes or no
   rather than left to judgement.
 - **Credentials provided**, and at which privilege levels. An unauthenticated
   test and a test with an admin account answer different questions.
@@ -71,7 +71,7 @@ Beyond the skeleton:
   contributor may publish an anonymised account.
 - **Escalation contact**, reachable during the window.
 
-## `brief-qa-design` — usability study or accessibility audit
+## `brief-qa-design` - usability study or accessibility audit
 
 Beyond the skeleton, and these two are different enough that the brief picks
 one.
@@ -82,7 +82,7 @@ one.
   is, the brief says by when; if the contributor is, the brief says the budget
   for compensating them.
 - **The tasks**, or the intent behind them. Realistic tasks, and the brief
-  should resist writing the instructions — a task worded by somebody who built
+  should resist writing the instructions - a task worded by somebody who built
   the product gives away the answer.
 - **Number of sessions**, and what the client expects to conclude from that
   number.
@@ -96,7 +96,7 @@ one.
 - **Assistive technologies to cover**, and on which platforms.
 - **Whether remediation is in scope** or only the findings.
 
-## `brief-qa-game` — playtest facilitation
+## `brief-qa-game` - playtest facilitation
 
 Beyond the skeleton:
 
@@ -110,7 +110,7 @@ Beyond the skeleton:
 - **Embargo.** Unreleased games mean participants see something confidential;
   the brief says what participants are told and what they sign.
 
-## `brief-qa-lead` — strategy or quality initiative
+## `brief-qa-lead` - strategy or quality initiative
 
 Beyond the skeleton:
 

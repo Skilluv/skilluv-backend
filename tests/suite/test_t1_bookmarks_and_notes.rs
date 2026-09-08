@@ -1,7 +1,7 @@
 //! Integration tests for SKI-36 (bookmarks) and SKI-37 (private notes).
 //!
 //! Both features share the polymorphic `saved_items` plumbing, so they are
-//! tested together — the interesting cases are the ones that exercise the
+//! tested together - the interesting cases are the ones that exercise the
 //! shared invariants: target-type validation, visibility enforcement, and
 //! the dangling-target policy.
 
@@ -11,7 +11,7 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 /// Insert a published challenge template and return its id. Challenge
-/// templates are the cheapest bookmarkable target — no owner, no
+/// templates are the cheapest bookmarkable target - no owner, no
 /// visibility rules beyond "not archived".
 ///
 /// `is_training = TRUE` satisfies `challenge_templates_project_or_training`
@@ -57,7 +57,7 @@ fn user_id_of(register_body: &Value) -> Uuid {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SKI-36 — bookmarks
+// SKI-36 - bookmarks
 // ═══════════════════════════════════════════════════════════════════
 
 #[tokio::test]
@@ -102,7 +102,7 @@ async fn bookmark_create_list_and_delete() {
     let body: Value = resp.json().await.unwrap();
     assert!(body["data"]["bookmarks"].as_array().unwrap().is_empty());
 
-    // Deleting twice is a 404, not a silent success — the client should be
+    // Deleting twice is a 404, not a silent success - the client should be
     // able to tell "gone now" from "was never there".
     let resp = app.delete(&format!("/api/bookmarks/{bookmark_id}")).await;
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
@@ -416,7 +416,7 @@ async fn bookmarks_require_authentication() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SKI-37 — private notes
+// SKI-37 - private notes
 // ═══════════════════════════════════════════════════════════════════
 
 #[tokio::test]

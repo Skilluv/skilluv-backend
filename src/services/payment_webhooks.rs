@@ -1,24 +1,24 @@
 //! One way in for what payment providers tell us.
 //!
-//! Every provider announces the same handful of facts — the payout arrived,
-//! the payout failed, the money came in, the customer disputed it — in its
+//! Every provider announces the same handful of facts - the payout arrived,
+//! the payout failed, the money came in, the customer disputed it - in its
 //! own vocabulary, its own envelope and its own signature scheme. Handling
 //! that per provider is how a codebase ends up with four webhook routes
 //! that each update the ledger slightly differently.
 //!
 //! So the vocabulary is normalised at the edge:
 //!
-//! * [`Source`] — what a provider must be able to do: prove the request is
+//! * [`Source`] - what a provider must be able to do: prove the request is
 //!   theirs, and say what it means in our words.
-//! * [`Event`] — our words. Four facts, no provider vocabulary.
-//! * [`receive`] — the one entry point. Verifies, stores, applies, and is
+//! * [`Event`] - our words. Four facts, no provider vocabulary.
+//! * [`receive`] - the one entry point. Verifies, stores, applies, and is
 //!   safe to call with the same event any number of times.
 //!
 //! ## Store before applying
 //!
 //! The raw body is written to `payment_webhook_events` before anything acts
 //! on it, and it is never edited afterwards. When our books and a
-//! provider's statement disagree — which is a matter of when, not if — the
+//! provider's statement disagree - which is a matter of when, not if - the
 //! argument is settled by what they actually sent, not by our reading of
 //! it. It is also what makes redelivery free: the unique key rejects the
 //! second copy before any money moves.
@@ -82,7 +82,7 @@ impl Event {
 /// A provider that sends us webhooks.
 ///
 /// Two responsibilities and no more: prove the request came from them, and
-/// translate it. Nothing here touches the ledger — the point of the split
+/// translate it. Nothing here touches the ledger - the point of the split
 /// is that a new provider cannot invent its own way of moving money.
 pub trait Source: Send + Sync {
     /// Must match `PayoutProvider::name()` where both exist, since that is
@@ -93,7 +93,7 @@ pub trait Source: Send + Sync {
     ///
     /// `signature` is whichever header the provider signs with, already
     /// extracted by the route. Returning `Ok(())` on an absent secret is
-    /// forbidden — a deployment with no secret configured must reject, not
+    /// forbidden - a deployment with no secret configured must reject, not
     /// wave events through.
     fn verify(&self, body: &str, signature: Option<&str>) -> Result<(), AppError>;
 
@@ -149,7 +149,7 @@ pub async fn receive(
             provider = source.name(),
             event_id = %event_id,
             error = %e,
-            "payment webhook failed signature verification — stored, not applied"
+            "payment webhook failed signature verification - stored, not applied"
         );
         return Err(AppError::Unauthorized);
     }
@@ -165,7 +165,7 @@ pub async fn receive(
                 provider = source.name(),
                 event_id = %event_id,
                 error = %e,
-                "payment webhook could not be interpreted — stored unprocessed"
+                "payment webhook could not be interpreted - stored unprocessed"
             );
             return Ok(Outcome::Ignored);
         }
@@ -212,12 +212,12 @@ pub async fn receive(
                 provider = source.name(),
                 event_id = %event_id,
                 error = %e,
-                "webhook stored but not applied — acknowledged anyway, the sweep will retry"
+                "webhook stored but not applied - acknowledged anyway, the sweep will retry"
             );
 
             // Acknowledged, not refused. The event is durably ours and two
             // other roads will apply it; answering non-2xx would only ask
-            // the provider to send it again — and FedaPay disables an
+            // the provider to send it again - and FedaPay disables an
             // endpoint after ten failures, which would cost us every
             // subsequent event to fix one.
             Ok(Outcome::Ignored)
@@ -243,7 +243,7 @@ async fn apply(db: &PgPool, provider: &str, event: &Event) -> Result<Outcome, Ap
             else {
                 // A payment we have no record of. Another environment
                 // sharing the credential, or a charge created outside this
-                // system — both worth eyes, neither worth failing over.
+                // system - both worth eyes, neither worth failing over.
                 tracing::error!(
                     provider = provider,
                     reference = %reference,
@@ -310,8 +310,8 @@ async fn apply(db: &PgPool, provider: &str, event: &Event) -> Result<Outcome, Ap
 
             if settled.rows_affected() == 0 {
                 // Either already settled, or about a payout we never
-                // recorded. The second is a real problem — money left the
-                // provider that our books know nothing about — so it is
+                // recorded. The second is a real problem - money left the
+                // provider that our books know nothing about - so it is
                 // said out loud rather than swallowed.
                 warn_unknown(db, provider, reference, "settled").await;
                 return Ok(Outcome::Ignored);
@@ -345,7 +345,7 @@ async fn apply(db: &PgPool, provider: &str, event: &Event) -> Result<Outcome, Ap
 
             // The money never arrived, so it goes back to where it was: the
             // recipient's available balance. This is the whole reason the
-            // module exists — before it, a failed Mobile Money payout left
+            // module exists - before it, a failed Mobile Money payout left
             // the balance debited and the money nowhere.
             ledger::reverse_withdrawal(
                 db,
@@ -381,7 +381,7 @@ async fn apply(db: &PgPool, provider: &str, event: &Event) -> Result<Outcome, Ap
                 reference = %reference,
                 user = %payout.user_id,
                 amount = %payout.amount,
-                "payout failed at the provider — funds returned to the recipient"
+                "payout failed at the provider - funds returned to the recipient"
             );
             Ok(Outcome::Applied("payout.failed".into()))
         }
@@ -489,7 +489,7 @@ async fn warn_unknown(db: &PgPool, provider: &str, reference: &str, what: &str) 
             provider = provider,
             reference = %reference,
             status = %status,
-            "webhook about an already-{what} payout — nothing to do"
+            "webhook about an already-{what} payout - nothing to do"
         ),
         None => {
             metrics::counter!(
@@ -536,7 +536,7 @@ async fn store(
 ///
 /// Deduplicates byte-identical redeliveries, which is all it claims to do:
 /// two genuinely distinct events with the same body are indistinguishable,
-/// and for payout callbacks — which name a reference — they do not occur.
+/// and for payout callbacks - which name a reference - they do not occur.
 fn fingerprint(body: &str) -> String {
     use sha2::{Digest, Sha256};
     let digest = Sha256::digest(body.as_bytes());

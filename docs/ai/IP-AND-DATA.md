@@ -1,4 +1,4 @@
-# Propriété, licences et données — domaine IA
+# Propriété, licences et données - domaine IA
 
 *Destinée à être publiée sur `skill-uv.com/ai/ip`.*
 
@@ -40,7 +40,7 @@ et l'écart est important :
 
 **Règle Skilluv** : la licence du modèle de base est citée dans la fiche, et
 la licence du dérivé est compatible avec elle. Un livrable dont la chaîne de
-licences n'est pas cohérente est refusé — non par formalisme, mais parce
+licences n'est pas cohérente est refusé - non par formalisme, mais parce
 qu'il est inutilisable par quiconque le reprendrait.
 
 Les termes changent. **Vérifier la licence à la date de l'entraînement**, et
@@ -73,7 +73,7 @@ La conséquence pratique est en amont, pas en aval :
 - ne pas mettre de données personnelles dans un jeu d'entraînement sans base
   légale explicite ;
 - anonymiser avant, pas après ;
-- pour un jeu contenant des personnes — visages, voix, textes identifiants —
+- pour un jeu contenant des personnes - visages, voix, textes identifiants -
   documenter le consentement dans la fiche.
 
 Un modèle qu'on ne pourrait pas corriger si une personne se retirait est un
@@ -84,10 +84,10 @@ modèle dont on ne publie pas les poids.
 Quand un travail est payé par un tiers, quatre partages sont possibles et le
 contrat en désigne un :
 
-- **cession complète** — poids et code passent au client ;
-- **modèle ouvert** — le client garde ses droits d'usage, le modèle est publié ;
-- **licence commerciale** — le client peut l'exploiter, personne d'autre ;
-- **poids au client, code à l'auteur** — le plus fréquent, et le plus mal écrit.
+- **cession complète** - poids et code passent au client ;
+- **modèle ouvert** - le client garde ses droits d'usage, le modèle est publié ;
+- **licence commerciale** - le client peut l'exploiter, personne d'autre ;
+- **poids au client, code à l'auteur** - le plus fréquent, et le plus mal écrit.
 
 **Aucune mission ne commence sans que le partage soit écrit.** L'ambiguïté ne
 se découvre qu'au moment où le travail a de la valeur, c'est-à-dire au pire
@@ -100,12 +100,12 @@ ce qu'il devra imposer.*
 
 Le règlement européen sur l'IA classe les usages par niveau de risque et
 impose des obligations de transparence croissantes. Skilluv n'est pas
-soumis à l'essentiel de ces obligations aujourd'hui — nous ne mettons pas de
-système IA sur le marché européen — mais les travaux publiés ici peuvent
+soumis à l'essentiel de ces obligations aujourd'hui - nous ne mettons pas de
+système IA sur le marché européen - mais les travaux publiés ici peuvent
 l'être par ceux qui les reprennent.
 
 La position : **écrire ce qu'il faut pour qu'un repreneur puisse se
-conformer**. C'est exactement ce que la fiche de modèle demande déjà — usage
+conformer**. C'est exactement ce que la fiche de modèle demande déjà - usage
 prévu, données, limites, évaluation. Un travail bien documenté au sens de la
 charte est un travail sur lequel la conformité est possible.
 
@@ -122,7 +122,7 @@ Ce que Skilluv applique :
 
 - les modèles et LoRA utilisés sont cités, avec leur licence ;
 - un style imitant une personne vivante identifiable n'est pas publié sans
-  son accord — indépendamment de ce que la loi autorise ;
+  son accord - indépendamment de ce que la loi autorise ;
 - la nature générative de l'artefact est déclarée.
 
 ## 8. Ce qui entraîne une révocation

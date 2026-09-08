@@ -2,9 +2,9 @@
 //!
 //! ## Why these are per-domain and not per-design
 //!
-//! The ticket asked for `/admin/design/*`. Every figure on those pages —
+//! The ticket asked for `/admin/design/*`. Every figure on those pages -
 //! how many people are active, how many challenges are open, how the
-//! reviewers are keeping up, who is due a featuring — is the same question
+//! reviewers are keeping up, who is due a featuring - is the same question
 //! asked of a different `skill_domain`. Seven copies would drift, and the
 //! sixth would be written by somebody who had forgotten what the first meant.
 //!
@@ -14,7 +14,7 @@
 //!
 //! An admin, or the curator of that domain. `domain_curator:design` is
 //! somebody who publishes design challenges, opens design contests and
-//! schedules design featurings — and who cannot ban anybody, move any money
+//! schedules design featurings - and who cannot ban anybody, move any money
 //! or read the financial dashboard. Until now that job required `admin`,
 //! which grants all three.
 //!
@@ -112,7 +112,7 @@ pub struct DomainOverview {
     pub oldest_pending_review_hours: Option<f64>,
     /// Mean rounds to an approval, over deliverables approved in the window.
     /// Rounds are how somebody learns, so this is a health figure and not a
-    /// target — it is meant to be read next to the approval rate, not alone.
+    /// target - it is meant to be read next to the approval rate, not alone.
     pub mean_rounds_to_approval: Option<f64>,
 
     /// The Monday of the most recent featuring in this domain, if any.
@@ -250,7 +250,7 @@ pub struct ReviewerStats {
     pub iterations_asked: i64,
     pub rejected: i64,
     /// Mean hours between picking a slice up and deciding on it. Null for
-    /// somebody who has decided nothing yet, rather than zero — never having
+    /// somebody who has decided nothing yet, rather than zero - never having
     /// reviewed is not reviewing instantly.
     pub mean_hours_to_decide: Option<f64>,
     /// Still picked up, still undecided. The figure that says a reviewer has
@@ -261,7 +261,7 @@ pub struct ReviewerStats {
 /// Who reviews in this domain, and how they are keeping up.
 ///
 /// No ranking and no target. A reviewer who asks for iterations more often
-/// than the others is not necessarily doing it wrong — the whole point of the
+/// than the others is not necessarily doing it wrong - the whole point of the
 /// round is that saying "not yet" is a valid answer, and a page that shames
 /// it would teach reviewers to approve.
 #[utoipa::path(
@@ -360,7 +360,7 @@ pub struct FeaturedCandidate {
     pub display_name: String,
     pub craft_score: i32,
     /// Deliverables approved inside the window. The reason to feature
-    /// somebody is work, so this is what the list is ordered by — not the
+    /// somebody is work, so this is what the list is ordered by - not the
     /// score, which is cumulative and would return the same five names every
     /// week until one of them died.
     pub approved_in_window: i64,

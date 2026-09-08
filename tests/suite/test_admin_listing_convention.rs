@@ -1,4 +1,4 @@
-//! SKI-58 — every `GET /admin/*` that returns a list must answer
+//! SKI-58 - every `GET /admin/*` that returns a list must answer
 //! `{data: [...], pagination: {page, per_page, total, total_pages}, meta}`.
 //!
 //! When a handler wraps its list in a named key instead (`{data: {queue: []}}`),
@@ -81,7 +81,7 @@ async fn admin_list_endpoints_follow_the_data_pagination_convention() {
     assert_listing_convention(&app, "/api/admin/sponsored-challenges").await;
 }
 
-/// Endpoints already conforming before SKI-58 — asserted so a future refactor
+/// Endpoints already conforming before SKI-58 - asserted so a future refactor
 /// cannot quietly regress them back to a wrapped shape.
 #[tokio::test]
 async fn previously_conforming_admin_listings_stay_conforming() {

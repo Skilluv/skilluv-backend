@@ -1,4 +1,4 @@
-//! Front-end feedback batch — the backend halves of SKI-309…330.
+//! Front-end feedback batch - the backend halves of SKI-309…330.
 //!
 //! These hold the public contracts the front raised: a warning that comes back
 //! as a code rather than a French sentence, portfolio labels that carry a
@@ -19,7 +19,7 @@ async fn a_person(app: &TestApp, username: &str) -> Uuid {
         .unwrap()
 }
 
-// SKI-311 — no natural-language string leaves /design/cloud/inspect without a
+// SKI-311 - no natural-language string leaves /design/cloud/inspect without a
 // code the client can translate.
 #[tokio::test]
 async fn inspect_warns_with_a_code_not_a_french_sentence() {
@@ -41,7 +41,7 @@ async fn inspect_warns_with_a_code_not_a_french_sentence() {
         "no natural-language warning field"
     );
 
-    // A private Figma link — needs public sharing, and names the provider.
+    // A private Figma link - needs public sharing, and names the provider.
     let resp = app
         .get("/api/design/cloud/inspect?url=https://www.figma.com/file/abc/Design")
         .await;
@@ -50,7 +50,7 @@ async fn inspect_warns_with_a_code_not_a_french_sentence() {
     assert_eq!(body["data"]["warning_provider"], "figma");
 }
 
-// SKI-311 — portfolio labels carry a language-neutral key, and it is ascii.
+// SKI-311 - portfolio labels carry a language-neutral key, and it is ascii.
 #[tokio::test]
 async fn portfolio_platforms_expose_ascii_label_keys() {
     let app = TestApp::spawn().await;
@@ -82,7 +82,7 @@ async fn portfolio_platforms_expose_ascii_label_keys() {
     );
 }
 
-// SKI-314 — award categories expose skill_domain, and the domain filter is
+// SKI-314 - award categories expose skill_domain, and the domain filter is
 // accepted.
 #[tokio::test]
 async fn award_categories_carry_skill_domain() {
@@ -109,7 +109,7 @@ async fn award_categories_carry_skill_domain() {
     assert_eq!(resp.status(), 400, "an unknown domain is refused");
 }
 
-// SKI-320 — the challenge list accepts a security_kind filter.
+// SKI-320 - the challenge list accepts a security_kind filter.
 #[tokio::test]
 async fn challenges_accept_a_security_kind_filter() {
     let app = TestApp::spawn().await;
@@ -128,7 +128,7 @@ async fn challenges_accept_a_security_kind_filter() {
     assert_eq!(resp.status(), 400, "an unknown security_kind is refused");
 }
 
-// SKI-331 — a junior can list the placements offered to them, each naming the
+// SKI-331 - a junior can list the placements offered to them, each naming the
 // company and the mentor, and nobody else sees them.
 #[tokio::test]
 async fn a_junior_lists_the_placements_offered_to_them() {

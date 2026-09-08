@@ -189,8 +189,8 @@ async fn a_channel_a_kind_forbids_is_refused() {
     app.register_user("notif_chan").await;
     app.login("notif_chan").await;
 
-    // No shipped kind forbids a channel — see the test below, which is the
-    // point of the policy — so the ceiling is exercised with one made here.
+    // No shipped kind forbids a channel - see the test below, which is the
+    // point of the policy - so the ceiling is exercised with one made here.
     sqlx::query(
         "INSERT INTO notification_kinds (kind, category, allows_email, default_email)
          VALUES ('test.no_email', 'test', FALSE, FALSE)",
@@ -230,7 +230,7 @@ async fn no_shipped_kind_locks_anyone_out_of_a_channel() {
 
     assert!(
         locked.is_empty(),
-        "these kinds cannot be enabled by anyone: {locked:?} — use default_* instead"
+        "these kinds cannot be enabled by anyone: {locked:?} - use default_* instead"
     );
 }
 

@@ -530,7 +530,7 @@ async fn nothing_without_consent_can_be_marked_exported() {
     .await
     .unwrap();
 
-    // The database refuses it outright — this is the constraint the whole
+    // The database refuses it outright - this is the constraint the whole
     // lead model rests on.
     let forced =
         sqlx::query("UPDATE sponsorship_leads SET exported_at = NOW() WHERE sponsorship_id = $1")
@@ -672,7 +672,7 @@ async fn the_sponsor_sees_nothing_skilluv_has_not_checked() {
         "an unchecked piece must not reach the sponsor"
     );
 
-    // And the sponsor cannot decide on it either — without the first gate, a
+    // And the sponsor cannot decide on it either - without the first gate, a
     // company could reject honest criticism as poor quality.
     let resp = app
         .post(
@@ -1078,8 +1078,8 @@ async fn the_only_thing_an_individual_can_buy_is_a_replay() {
     // or access to work.
     //
     // An allowlist rather than a count. The count said one, 0365 added the
-    // paid newsletter — an individual paying monthly for something that is
-    // not visibility, which is allowed — and a count would have been edited
+    // paid newsletter - an individual paying monthly for something that is
+    // not visibility, which is allowed - and a count would have been edited
     // to two without anybody restating why. Adding a plan should require
     // saying here that it does not sell attention.
     const AN_INDIVIDUAL_MAY_BUY: &[&str] = &[

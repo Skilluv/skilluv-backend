@@ -1,4 +1,4 @@
-//! Tests final batch — recompute-capabilities + skills CRUD.
+//! Tests final batch - recompute-capabilities + skills CRUD.
 
 use crate::common::TestApp;
 use serde_json::json;

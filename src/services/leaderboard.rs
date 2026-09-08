@@ -67,13 +67,13 @@ impl LeaderboardService {
     ) -> Result<(), AppError> {
         let user_id_str = user_id.to_string();
 
-        // 1. Global alltime — absolute score (ZADD replaces)
+        // 1. Global alltime - absolute score (ZADD replaces)
         let key = Self::leaderboard_key("global", "alltime");
         let () = redis
             .zadd(&key, &user_id_str, new_total_fragments as f64)
             .await?;
 
-        // 2. Domain alltime — sum of weighted_proven_count in that domain.
+        // 2. Domain alltime - sum of weighted_proven_count in that domain.
         // P8.7 : skill_fragments retiré, source unique = user_skills + skill_nodes.
         let domain_total: Option<i64> = sqlx::query_scalar(
             r#"
@@ -93,7 +93,7 @@ impl LeaderboardService {
             .zadd(&key, &user_id_str, domain_total.unwrap_or(0) as f64)
             .await?;
 
-        // 3. Weekly and monthly — ZINCRBY for incremental updates
+        // 3. Weekly and monthly - ZINCRBY for incremental updates
         let earned = fragments_just_earned as f64;
         for period in &["weekly", "monthly"] {
             let ttl = if *period == "weekly" {

@@ -29,8 +29,8 @@ pub struct LeaderboardMeta {
 /// `global`, or any of the twelve skill domains.
 ///
 /// An enum and not a `schema_with` on an `IntoParams` struct: that produced a
-/// *second* `domain` path parameter in the document — utoipa derives one from
-/// the handler's `Path<String>` as well — and schemathesis read the looser of
+/// *second* `domain` path parameter in the document - utoipa derives one from
+/// the handler's `Path<String>` as well - and schemathesis read the looser of
 /// the pair, so `/api/leaderboards/0` counted as compliant and the endpoint's
 /// correct 400 read as a contract violation. The tuple form takes a type, and
 /// a type is unambiguous.
@@ -38,7 +38,7 @@ pub struct LeaderboardMeta {
 /// The list is transcribed, which is the thing this file spent a commit
 /// removing elsewhere. `a_leaderboard_domain_is_global_or_a_skill_domain`
 /// compares it to `validators::SKILL_DOMAINS` so the copy cannot drift
-/// silently — the same contract `SkillDomain` carries.
+/// silently - the same contract `SkillDomain` carries.
 #[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum LeaderboardDomain {

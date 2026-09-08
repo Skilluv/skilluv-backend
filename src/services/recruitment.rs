@@ -2,7 +2,7 @@
 //!
 //! ## The two numbers worth testing
 //!
-//! The volume discount and the guarantee refund are both scales — a series of
+//! The volume discount and the guarantee refund are both scales - a series of
 //! thresholds with different answers on each side. Both are pure, both are
 //! tested here, and both are the kind of arithmetic that is wrong silently:
 //! a discount off by a band overcharges a client who will not check, and a
@@ -12,7 +12,7 @@
 //!
 //! Nobody is presented to a client without having agreed. That is enforced by
 //! a trigger, because the shortlist is written from an admin endpoint, a
-//! curation job and eventually an import — and a service check would hold for
+//! curation job and eventually an import - and a service check would hold for
 //! one of the three.
 
 use bigdecimal::BigDecimal;
@@ -56,7 +56,7 @@ pub fn volume_discount_percent(positions: i16) -> f64 {
 /// Proportional to how much of the window is left, in three bands. The bands
 /// exist rather than a straight proration because the work Skilluv did is the
 /// same whether the person stayed one month or five, and a straight line
-/// would refund almost everything for a departure at week two — which is
+/// would refund almost everything for a departure at week two - which is
 /// exactly when the client is angriest and least interested in the argument.
 ///
 /// Returns a fraction of the fee, from 0 to 1.
@@ -207,7 +207,7 @@ pub async fn open_campaign(
             .await?;
         if resolved.is_none() {
             return Err(AppError::Validation(format!(
-                "'{slug}' is not a trade Skilluv knows — a brief targeting a typo \
+                "'{slug}' is not a trade Skilluv knows - a brief targeting a typo \
                  sources against nothing"
             )));
         }
@@ -277,13 +277,13 @@ fn pricing_error(e: sqlx::Error) -> AppError {
     if message.contains("a_pool_is_paid_monthly") {
         return AppError::Validation(
             "a retained pool is paid monthly and refreshed on a cadence, and charges no \
-             success fee — the client is already paying to keep it warm"
+             success fee - the client is already paying to keep it warm"
                 .into(),
         );
     }
     if message.contains("volume_means_several_positions") {
         return AppError::Validation(
-            "a volume campaign is five positions or more — one position at a reduced rate \
+            "a volume campaign is five positions or more - one position at a reduced rate \
              is a discount, and should be recorded as the percentage it is"
                 .into(),
         );
@@ -346,7 +346,7 @@ pub async fn add_to_shortlist(
 ) -> Result<(), AppError> {
     if match_reason_md.trim().is_empty() {
         return Err(AppError::Validation(
-            "say why — a shortlist of names with no argument is a search result, and the \
+            "say why - a shortlist of names with no argument is a search result, and the \
              client is paying not to do that reading themselves"
                 .into(),
         ));
@@ -393,7 +393,7 @@ pub async fn shortlist_of(db: &PgPool, campaign_id: Uuid) -> Result<Vec<Shortlis
 
 /// The talent answers.
 ///
-/// Their own decision, taken through their own session — an admin cannot
+/// Their own decision, taken through their own session - an admin cannot
 /// answer on somebody's behalf, which is the point of the column.
 pub async fn talent_responds(
     db: &PgPool,
@@ -576,7 +576,7 @@ pub async fn record_departure(
 
 /// Fees whose guarantee has run out with nobody having left.
 ///
-/// Read by a monthly sweep. Not to do anything automatic — a guarantee
+/// Read by a monthly sweep. Not to do anything automatic - a guarantee
 /// expiring is the absence of an event, and the only thing to record is that
 /// the window closed.
 pub async fn guarantees_expiring(
@@ -628,7 +628,7 @@ mod tests {
     #[test]
     fn the_refund_falls_in_bands_rather_than_a_straight_line() {
         // Halfway through, half back. Not "half the remaining window", which
-        // would refund almost everything at week two — exactly when the
+        // would refund almost everything at week two - exactly when the
         // client is angriest and least interested in the argument.
         assert_eq!(refund_fraction(91, 182), 0.25);
         assert_eq!(refund_fraction(60, 182), 0.5);

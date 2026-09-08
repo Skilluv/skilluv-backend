@@ -16,7 +16,7 @@ This project adheres to the [Contributor Covenant Code of Conduct](CODE_OF_CONDU
 
 ### Proposing features
 
-- Open a "Feature request" issue first — discuss before coding
+- Open a "Feature request" issue first - discuss before coding
 - Explain the use case, not just the solution
 - Larger features may require a design discussion before a PR is accepted
 
@@ -51,17 +51,17 @@ Example: `feat(auth): add magic link expiration configuration`
 
 ## Pull request expectations
 
-- **One logical change per PR** — do not bundle unrelated fixes
+- **One logical change per PR** - do not bundle unrelated fixes
 - **Tests required** for new features and bug fixes
 - **CI must pass** before review
-- **Discussion in issues before large changes** — avoid surprise refactors
-- **AI-assisted contributions are welcome and encouraged** — disclose the assistance level in the PR description (see AI Policy below)
+- **Discussion in issues before large changes** - avoid surprise refactors
+- **AI-assisted contributions are welcome and encouraged** - disclose the assistance level in the PR description (see AI Policy below)
 
 ## AI policy
 
 Skilluv is AI-friendly. You may use any AI coding assistant (Copilot, Cursor, ChatGPT, etc.) to write, review, or refactor code. We only ask that you:
 
-- **Verify** the code works as intended — you own the PR
+- **Verify** the code works as intended - you own the PR
 - **Disclose** significant AI assistance in the PR description (a single sentence is enough)
 - **Refactor** AI-generated code so it fits the project's style and is maintainable
 - **Never** paste secrets, private keys, or proprietary data into an AI prompt
@@ -84,7 +84,7 @@ Run these locally before pushing.
 - **GitHub Discussions** for questions and ideas
 - **GitHub Issues** for bugs and concrete feature requests
 - **Discord** (link in README) for real-time chat
-- Please be patient — this is a small maintainer team
+- Please be patient - this is a small maintainer team
 
 ## Licensing
 
@@ -96,7 +96,7 @@ Contributors are listed automatically via GitHub. Significant contributors may b
 
 Merci pour ta contribution !
 
-## Secret hygiene — pre-commit hook (SE-01)
+## Secret hygiene - pre-commit hook (SE-01)
 
 Install a gitleaks pre-commit hook so a secret never reaches a push in the
 first place:

@@ -1,11 +1,11 @@
-// BE-P1-CONTRACT — silence pre-existing deprecation warnings from the
+// BE-P1-CONTRACT - silence pre-existing deprecation warnings from the
 // `elliptic-curve` crate (generic-array 0.14). Upgrade path deferred.
 #![allow(deprecated)]
-//! Enterprise B2B SSO — OIDC config storage, encryption, discovery cache.
+//! Enterprise B2B SSO - OIDC config storage, encryption, discovery cache.
 //!
 //! The IdP client_secret is stored encrypted at-rest in AES-256-GCM with a
 //! dedicated 32-byte key (`SSO_ENCRYPTION_KEY` env var). Rotation of the key
-//! invalidates all existing configs — plan a re-encrypt migration if you rotate.
+//! invalidates all existing configs - plan a re-encrypt migration if you rotate.
 //!
 //! The actual OIDC flow (authorize URL, code exchange, ID token verification)
 //! lives in `routes::enterprise_sso` where the `openidconnect` crate types
@@ -202,7 +202,7 @@ fn discovery_cache_key(issuer: &str) -> String {
 }
 
 /// Cache the raw discovery document (JSON). The OIDC client re-parses it on
-/// each use — cheap compared to a network round-trip to the IdP.
+/// each use - cheap compared to a network round-trip to the IdP.
 pub async fn cache_discovery(
     redis: &mut ConnectionManager,
     issuer: &str,
@@ -264,7 +264,7 @@ pub async fn consume_login_state(
 ///
 /// Contracts:
 /// - `email_verified` on the IdP claim must be true (caller enforces).
-/// - `auto_provision` gating is enforced by the caller — this helper always
+/// - `auto_provision` gating is enforced by the caller - this helper always
 ///   creates the user if missing and the caller decides whether to invoke it.
 pub async fn provision_from_sso(
     db: &PgPool,

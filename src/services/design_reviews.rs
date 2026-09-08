@@ -5,7 +5,7 @@
 //! That module implements the code workflow: a reviewer picks up a CI-green
 //! slice, holds it exclusively, then approves or rejects. Design has neither
 //! half of that. There is no CI signal telling anyone the work is ready to
-//! look at, and the verdict is not binary — the ordinary outcome of a design
+//! look at, and the verdict is not binary - the ordinary outcome of a design
 //! review is "go one more round".
 //!
 //! ```text
@@ -223,7 +223,7 @@ fn run_auto_checks_in_background(db: &PgPool, slice_id: Uuid, artifact_url: &str
     let url = artifact_url.to_string();
     tokio::spawn(async move {
         // The round this version will be reviewed as. The decision journal's
-        // trigger numbers rounds on insert, and no decision exists yet — so
+        // trigger numbers rounds on insert, and no decision exists yet - so
         // the next one is one past the highest recorded.
         let round: i16 = sqlx::query_scalar(
             "SELECT COALESCE(MAX(round), 0::SMALLINT) + 1
@@ -234,7 +234,7 @@ fn run_auto_checks_in_background(db: &PgPool, slice_id: Uuid, artifact_url: &str
         .await
         .unwrap_or(1);
 
-        // A sixth version cannot be reviewed — the ceiling is five — and the
+        // A sixth version cannot be reviewed - the ceiling is five - and the
         // results table says so too. Nothing to record.
         if !(1..=5).contains(&round) {
             return;
@@ -253,7 +253,7 @@ fn run_auto_checks_in_background(db: &PgPool, slice_id: Uuid, artifact_url: &str
 /// Addressed to the trade's own reviewers plus the domain wildcard, rather
 /// than to everybody holding any design capability: a type designer being
 /// pinged about a motion brief is how a queue gets muted. No email by
-/// default — a reviewer opens the queue on purpose.
+/// default - a reviewer opens the queue on purpose.
 ///
 /// A slice with no trade reaches nobody, which is correct: it is the
 /// condition `review()` refuses on, and inventing a recipient would only
@@ -432,7 +432,7 @@ pub async fn review(
         })?;
         // The literal is cast: `round` is SMALLINT, and an uncast `1` makes
         // PostgreSQL widen the whole COALESCE to INT4, which then refuses to
-        // decode into `i16` — a 500 on the round that approves the work.
+        // decode into `i16` - a 500 on the round that approves the work.
         let rounds: i16 = sqlx::query_scalar(
             "SELECT COALESCE(MAX(round), 1::SMALLINT)
                FROM slice_validation_decisions WHERE slice_id = $1",
@@ -447,7 +447,7 @@ pub async fn review(
 
         // Outside the transaction: an attestation that fails to write is a
         // re-runnable problem, whereas a half-written validation is not. The
-        // proof — the deliverable — is already committed.
+        // proof - the deliverable - is already committed.
         if let (Some(deliverable_id), Some(url)) =
             (deliverable_id, state.published_artifact_url.as_deref())
         {
@@ -501,7 +501,7 @@ pub async fn review(
 
     // A critique nobody reads is a round nobody takes. The designer cannot
     // act until they have read it, and the reviewer cannot finish until the
-    // designer does — so both verdicts travel, and `iterate` is the one that
+    // designer does - so both verdicts travel, and `iterate` is the one that
     // buzzes.
     if let Some(designer) = state.claimed_by_user_id {
         let kind = match input.verdict {
@@ -637,7 +637,7 @@ pub struct ReviewRound {
     pub decided_at: chrono::DateTime<chrono::Utc>,
 }
 
-/// The whole trail, oldest first — the order the story reads in.
+/// The whole trail, oldest first - the order the story reads in.
 pub async fn history(db: &PgPool, slice_id: Uuid) -> Result<Vec<ReviewRound>, AppError> {
     let rounds = sqlx::query_as::<_, ReviewRound>(
         r#"
@@ -749,7 +749,7 @@ mod unit {
 ///
 /// The URL comes from the decision row rather than from the slice: the slice
 /// carries only the current version, and reading the trail from it would show
-/// the same file at every round — the exact thing this endpoint exists to
+/// the same file at every round - the exact thing this endpoint exists to
 /// disprove.
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow, utoipa::ToSchema)]
 pub struct VersionAtRound {
@@ -779,7 +779,7 @@ pub struct Comparison {
     pub diff_strategy: Option<String>,
     pub from: VersionAtRound,
     pub to: VersionAtRound,
-    /// The critiques that ran between the two, in order — the reason the
+    /// The critiques that ran between the two, in order - the reason the
     /// second version looks the way it does.
     pub critiques_between: Vec<ReviewRound>,
 }
@@ -872,7 +872,7 @@ pub async fn compare(
 ///
 /// The most convincing thing on a design profile is not the final image, it
 /// is the distance between the first version and the last one. A first
-/// attempt that was approved immediately says less — so this reads only the
+/// attempt that was approved immediately says less - so this reads only the
 /// work that was argued about and still got there.
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow, utoipa::ToSchema)]
 pub struct IterationStory {

@@ -1,4 +1,4 @@
-# Ops — production access, confidentiality, and on-call
+# Ops - production access, confidentiality, and on-call
 
 What Skilluv requires before a mission touches somebody's production
 infrastructure, what it puts in writing, and where it stops and a lawyer
@@ -20,7 +20,7 @@ each one has a legal consequence:
 
 1. **the work runs.** A Terraform apply changes something that exists.
    Reviewing it afterwards is reviewing the aftermath;
-2. **it requires access.** Not a fork, not read access — credentials on
+2. **it requires access.** Not a fork, not read access - credentials on
    somebody's production estate, usually with more permission than the task
    strictly needs, because scoping it precisely is work nobody wants to do at
    the start;
@@ -60,8 +60,8 @@ is learnt about somebody's rate, their availability or their difficulties on
 a mission does not leave the platform.
 
 **Publication.** The default is that a contributor may say a mission
-happened, name the type of work, and publish anonymised figures — "a cloud
-bill reduced by 60%" — without naming the client. Anything narrower is a
+happened, name the type of work, and publish anonymised figures - "a cloud
+bill reduced by 60%" - without naming the client. Anything narrower is a
 negotiated exception with a stated end date, because a contributor who cannot
 say what they did cannot build the portfolio this platform exists for.
 
@@ -81,7 +81,7 @@ who removes it. "When someone remembers" is the state most engagements are
 actually in, and it is how a former contractor's key stays live for a year.
 
 **Audited.** The client's own audit log is the record. The contributor should
-ask, at the start, whether their actions are logged — not because they intend
+ask, at the start, whether their actions are logged - not because they intend
 anything, but because an unlogged estate makes it impossible to prove they
 did not do the thing that broke.
 
@@ -94,8 +94,8 @@ clear.
 
 A read-only key to a client's observability stack looks like a lesser thing
 than a production credential, and it is not. It carries the service map, the
-dependency graph, the incident history, the traffic volumes, and — because
-logs and traces carry user identifiers — personal data. That is the same list
+dependency graph, the incident history, the traffic volumes, and - because
+logs and traces carry user identifiers - personal data. That is the same list
 this section exists to protect, obtained more quietly.
 
 So the platform reads **only what the operator already published to the whole
@@ -104,7 +104,7 @@ an authentication prompt stays declared, sourced and reviewed by a person, and
 what is read publicly is shown beside the claim rather than in place of it.
 
 If an enterprise ever asks for the authenticated integration, the answer is
-not automatically no — but it is a conversation with a real case in front of
+not automatically no - but it is a conversation with a real case in front of
 it, a data-processing agreement, and someone who can say who rotates the key
 and who is accountable if it leaks. Until then the feature does not exist, and
 its absence is a position rather than a gap.
@@ -128,8 +128,8 @@ brief, so a contributor knows before applying rather than after being
 refused. Claiming more than that would be selling an assurance nobody here
 can stand behind.
 
-Where personal data is involved — and incident data usually is, because logs
-carry user identifiers — the mission is a data-processing arrangement and
+Where personal data is involved - and incident data usually is, because logs
+carry user identifiers - the mission is a data-processing arrangement and
 needs the corresponding agreement. That is a lawyer's document, not this one.
 
 ---
@@ -147,7 +147,7 @@ What an on-call clause has to state:
   different things three time zones apart, and this domain is remote by
   default;
 - **the response time.** How long after a page the contributor must
-  acknowledge. Acknowledge, not resolve — a clause promising resolution in
+  acknowledge. Acknowledge, not resolve - a clause promising resolution in
   thirty minutes is a clause nobody can honour;
 - **what counts as a page.** Which alerts justify waking somebody. Without
   this, an alert added later quietly widens the obligation;
@@ -192,5 +192,5 @@ exist:
 - a data-processing agreement template for missions touching incident data.
 
 Until then, ops missions run on artefacts a contributor builds in their own
-environment — modules, charts, dashboards, runbooks — which is most of the
+environment - modules, charts, dashboards, runbooks - which is most of the
 domain and all of the portfolio-building half of it.

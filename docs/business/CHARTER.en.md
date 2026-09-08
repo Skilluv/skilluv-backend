@@ -26,13 +26,13 @@ What it forbids, concretely:
 
 **Paid mentoring.** One talent pays another. Skilluv takes a commission on the
 transaction. That is not access to an opportunity, it is buying somebody's
-time — and the mentor is on the other side of the same rule: they are paid.
+time - and the mentor is on the other side of the same rule: they are paid.
 
 **The creator marketplace.** A talent sells what they made. Skilluv takes a
 commission. Again the talent is the seller, not a buyer of access.
 
-If either line became a disguised toll — mandatory mentoring to be visible, a
-marketplace where you must buy to be seen — it would have to go. That is the
+If either line became a disguised toll - mandatory mentoring to be visible, a
+marketplace where you must buy to be seen - it would have to go. That is the
 test.
 
 ---
@@ -80,7 +80,7 @@ reference rate, not at a house rate with a margin inside it.
 many clicks. An option ticked by default is an option nobody chose.
 
 **No lock-in.** A talent's data belongs to them and is exportable. An
-attestation stays verifiable even if the person deletes their account — it is
+attestation stays verifiable even if the person deletes their account - it is
 a proof that was issued, not a feature being rented.
 
 **Opt-in for data.** No personal data is licensed without the explicit consent
@@ -102,7 +102,7 @@ What that is not, and why the distinction matters:
 
 **Not a job board.** A job board sells visibility to adverts. Skilluv sells
 access to people whose work can be checked, which presupposes that the
-checking exists — that is the product, not the packaging.
+checking exists - that is the product, not the packaging.
 
 **Not a school.** A school sells a diploma and its credit rests on its
 reputation. Skilluv issues attestations backed by a public artefact only: the
@@ -121,5 +121,5 @@ it. That is a constraint, not a defect to be fixed.
 ## 6. What this charter commits us to
 
 A product decision that contradicts a rule in this document is either a
-mistake or a modification of this document — never a silent exception. The
+mistake or a modification of this document - never a silent exception. The
 modification is public and dated, like the rest.

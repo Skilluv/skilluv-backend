@@ -1,4 +1,4 @@
-//! AZ-03 — the admin 2FA gate holds.
+//! AZ-03 - the admin 2FA gate holds.
 //!
 //! THREAT_MODEL: an administrator with no second factor is refused at the
 //! admin portal (`AdminTwoFaSetupRequired`), not merely nagged. The `AdminGate`
@@ -8,14 +8,14 @@
 //!
 //! The check is a DB lookup, so it holds regardless of the connection's
 //! privileges (unlike the audit-log REVOKE, which a superuser test role
-//! bypasses — see AZ-04's note).
+//! bypasses - see AZ-04's note).
 
 use crate::common::TestApp;
 use serde_json::Value;
 
 const GATED_ROUTE: &str = "/api/admin/challenges"; // list_all_challenges, `_gate: AdminGate`
 
-/// An admin with the capability but no second factor — register_admin without
+/// An admin with the capability but no second factor - register_admin without
 /// the passkey it normally inserts to satisfy the gate.
 async fn admin_without_2fa(app: &TestApp, username: &str) {
     let r = app.register_user(username).await;
@@ -36,7 +36,7 @@ async fn admin_without_2fa(app: &TestApp, username: &str) {
     .execute(&app.db)
     .await
     .expect("grant admin capability");
-    // Deliberately no webauthn_credentials row and no totp — no second factor.
+    // Deliberately no webauthn_credentials row and no totp - no second factor.
     app.login(username).await;
 }
 

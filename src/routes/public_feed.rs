@@ -1,4 +1,4 @@
-//! The public feed — reading it, and choosing whether to be on it.
+//! The public feed - reading it, and choosing whether to be on it.
 //!
 //! The read endpoint is the only one on the platform with no authentication
 //! and no rate-limit exemption: it is what a landing page polls every thirty
@@ -50,7 +50,7 @@ pub struct FeedQuery {
     /// Opaque cursor from the previous page's `next_cursor`. base64url, so it
     /// goes into a URL unchanged. The pattern is in the contract because a
     /// cursor the handler cannot decode is refused rather than read as "from
-    /// the beginning" — a caller has to be able to tell a malformed cursor
+    /// the beginning" - a caller has to be able to tell a malformed cursor
     /// from the end of the feed.
     #[param(pattern = r"^[A-Za-z0-9_-]+$", max_length = 100)]
     pub after: Option<String>,
@@ -69,7 +69,7 @@ fn default_limit() -> i64 {
 /// What has come out of the forge, newest first.
 ///
 /// Public, unauthenticated, and every line carries a URL a stranger can open.
-/// `live` says whether there is enough here to be worth a pulsing dot — the
+/// `live` says whether there is enough here to be worth a pulsing dot - the
 /// caller is expected to honour it, because a live badge over a two-day-old
 /// first line is the fabricated social proof this replaced.
 #[utoipa::path(

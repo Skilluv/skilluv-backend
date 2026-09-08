@@ -1,4 +1,4 @@
-//! Service `deliverables` — création, vérification, propagation des skills.
+//! Service `deliverables` - création, vérification, propagation des skills.
 //!
 //! Phase P2.1 : implémente le workflow G.1 "PR mergée → deliverable auto-vérifié".
 //! Voir docs/challenges-target-model-and-roadmap.md partie G.1 pour les 14 étapes.
@@ -22,7 +22,7 @@ pub const AI_DISCLOSURE_WINDOW_DAYS: i64 = 7;
 
 pub struct DeliverablesService;
 
-/// P10.4 — Un contributeur d'une team submission avec son rôle et sa part de fragments.
+/// P10.4 - Un contributeur d'une team submission avec son rôle et sa part de fragments.
 ///
 /// Utilisé pour matérialiser dans `deliverables.artifact_metadata.contributors`
 /// qui a participé et comment les fragments ont été répartis (proportionnel au
@@ -60,7 +60,7 @@ pub struct PrMergedParams {
 pub enum PrMergedOutcome {
     /// Deliverable créé et vérifié automatiquement.
     Verified { deliverable_id: Uuid },
-    /// PR authored by ≠ claimed_by — deliverable créé en pending_manual_review.
+    /// PR authored by ≠ claimed_by - deliverable créé en pending_manual_review.
     PendingManualReview { deliverable_id: Uuid },
     /// Aucune slice matchée pour cette PR. Rien créé, la PR reste "libre".
     NoMatchingSlice,
@@ -98,7 +98,7 @@ pub struct ChallengeSubmissionInput<'a> {
     ///
     /// The deliverable is then written `pending` rather than `verified`, and a
     /// `verify_deliverable` task is queued alongside it. Fragments are not
-    /// awarded here in that case — `ReviewsService::apply_verified_side_effects`
+    /// awarded here in that case - `ReviewsService::apply_verified_side_effects`
     /// awards them if and when the verdict is `approve` (SKI-361).
     pub awaiting_review: bool,
 }
@@ -171,14 +171,14 @@ impl DeliverablesService {
 
         tx.commit().await?;
 
-        // SKI-44 — attach undisclosed AI companion interactions to the new
+        // SKI-44 - attach undisclosed AI companion interactions to the new
         // artifact. Covers both freshly-created outcomes: a PR held for
         // manual review still had AI help behind it, and the reviewer is
         // precisely who needs to know.
         let new_deliverable_id = match outcome {
             PrMergedOutcome::Verified { deliverable_id }
             | PrMergedOutcome::PendingManualReview { deliverable_id } => Some(deliverable_id),
-            // AlreadyProcessed is idempotent replay — the disclosure ran on
+            // AlreadyProcessed is idempotent replay - the disclosure ran on
             // the first pass.
             _ => None,
         };
@@ -196,7 +196,7 @@ impl DeliverablesService {
             );
         }
 
-        // P19.2 — Best-effort recompute proof engines si le deliverable est
+        // P19.2 - Best-effort recompute proof engines si le deliverable est
         // devenu verified via cet event (author_match). Le hook est async pour
         // ne pas bloquer le webhook GitHub.
         if matches!(outcome, PrMergedOutcome::Verified { .. }) {
@@ -418,7 +418,7 @@ impl DeliverablesService {
             }
         }
 
-        // Méthode (c) : best-effort — une seule slice claimed par l'auteur sur ce projet
+        // Méthode (c) : best-effort - une seule slice claimed par l'auteur sur ce projet
         let candidate: Option<crate::models::ProjectSlice> = sqlx::query_as(
             "SELECT ps.* FROM project_slices ps
              JOIN github_connections gc ON gc.user_id = ps.claimed_by_user_id
@@ -603,7 +603,7 @@ impl DeliverablesService {
     // P8.5a : dual-write challenge_submissions → deliverables
     // ═══════════════════════════════════════════════════════════════════
 
-    // (struct ChallengeSubmissionInput défini au niveau module — voir plus bas)
+    // (struct ChallengeSubmissionInput défini au niveau module - voir plus bas)
 
     /// Crée le deliverable d'une `challenge_submissions` finalisée.
     ///
@@ -611,9 +611,9 @@ impl DeliverablesService {
     /// deliverable pointe vers le challenge (pas de slice).
     ///
     /// Deux formes selon `awaiting_review` :
-    ///   - `false` — un évaluateur automatique avait tranché : `verified`,
+    ///   - `false` - un évaluateur automatique avait tranché : `verified`,
     ///     `verifiable_by='automated_diff'`, fragments déjà attribués.
-    ///   - `true` — rien n'a su trancher : `pending`,
+    ///   - `true` - rien n'a su trancher : `pending`,
     ///     `verifiable_by='human_review'`, zéro fragment, et une task
     ///     `verify_deliverable` posée dans la même transaction. C'est le seul
     ///     chemin pour un domaine sans évaluateur depuis SKI-361 ; avant, cent
@@ -682,7 +682,7 @@ impl DeliverablesService {
         };
 
         // One transaction so a deliverable that needs a reviewer never exists
-        // without the task that puts it in front of one — the failure mode
+        // without the task that puts it in front of one - the failure mode
         // being a submission that waits forever in a queue nobody can see.
         let mut tx = db.begin().await?;
         let inserted: Option<Uuid> = sqlx::query_scalar(
@@ -736,7 +736,7 @@ impl DeliverablesService {
         tx.commit().await?;
 
         if let Some(id) = inserted {
-            // SKI-44 — attach any undisclosed AI companion interactions from
+            // SKI-44 - attach any undisclosed AI companion interactions from
             // the preceding window to this artifact. Done inline rather than
             // in the spawned task below: an undisclosed interaction is the
             // one thing this feature exists to prevent, so it must not be
@@ -750,7 +750,7 @@ impl DeliverablesService {
                 );
             }
 
-            // P19.2 — Best-effort recompute proof engines pour ce user.
+            // P19.2 - Best-effort recompute proof engines pour ce user.
             let db_clone = db.clone();
             tokio::spawn(async move {
                 let _ =
@@ -781,7 +781,7 @@ impl DeliverablesService {
     /// avec en plus la matérialisation des contributeurs dans artifact_metadata.
     ///
     /// Le deliverable est rattaché au *team leader* (créateur de la team) comme
-    /// `user_id` primaire — les autres contributeurs vivent dans les metadata.
+    /// `user_id` primaire - les autres contributeurs vivent dans les metadata.
     /// Cette convention permet de garder l'invariant `deliverables.user_id NOT NULL`
     /// tout en traçant l'auteur collectif.
     #[allow(clippy::too_many_arguments)]

@@ -40,7 +40,7 @@ pub struct Pagination {
 
 /// Paginated notifications response. Note: this endpoint historically
 /// returned `data + pagination + meta` at the top level (not the usual
-/// `ApiResponse<T>` envelope) — kept as-is to avoid breaking the front.
+/// `ApiResponse<T>` envelope) - kept as-is to avoid breaking the front.
 #[derive(Debug, Serialize, ToSchema)]
 pub struct NotificationsListResponse {
     pub data: Vec<Notification>,
@@ -197,7 +197,7 @@ pub async fn mark_all_read(
     ))))
 }
 
-/// Cheap unread-badge counter — served from Redis with a DB fallback
+/// Cheap unread-badge counter - served from Redis with a DB fallback
 /// when the cache is cold.
 #[utoipa::path(
     get,

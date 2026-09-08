@@ -47,7 +47,7 @@ pub struct SkillTreeResponse {
     pub tree: Vec<DomainBranch>,
 }
 
-/// GET /api/skills/tree — the caller's own skill tree.
+/// GET /api/skills/tree - the caller's own skill tree.
 #[utoipa::path(
     get,
     path = "/api/skills/tree",
@@ -65,7 +65,7 @@ pub async fn my_skill_tree(
     skill_tree_for_user(&state, auth.user_id).await
 }
 
-/// GET /api/skills/tree/{user_id} — public skill tree of another user.
+/// GET /api/skills/tree/{user_id} - public skill tree of another user.
 #[utoipa::path(
     get,
     path = "/api/skills/tree/{user_id}",
@@ -178,7 +178,7 @@ pub struct HeatmapResponse {
     pub summary: HeatmapSummary,
 }
 
-/// GET /api/activity/heatmap — 12-month activity heatmap for the
+/// GET /api/activity/heatmap - 12-month activity heatmap for the
 /// caller. Front renders it as a GitHub-style contribution grid.
 #[utoipa::path(
     get,
@@ -197,7 +197,7 @@ pub async fn my_heatmap(
     heatmap_for_user(&state, auth.user_id).await
 }
 
-/// GET /api/activity/heatmap/{user_id} — public heatmap of another user.
+/// GET /api/activity/heatmap/{user_id} - public heatmap of another user.
 #[utoipa::path(
     get,
     path = "/api/activity/heatmap/{user_id}",

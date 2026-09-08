@@ -39,7 +39,7 @@ async fn setup_scim(app: &crate::common::TestApp, slug_input: &str) -> String {
 }
 
 fn scim_client() -> Client {
-    // Fresh client — the SCIM API is stateless and cookie-less.
+    // Fresh client - the SCIM API is stateless and cookie-less.
     Client::builder().build().unwrap()
 }
 
@@ -94,7 +94,7 @@ async fn scim_delete(app: &crate::common::TestApp, token: &str, path: &str) -> r
 #[tokio::test]
 async fn test_scim_bearer_auth_required() {
     let app = crate::common::TestApp::spawn().await;
-    // No token — all endpoints must 401.
+    // No token - all endpoints must 401.
     let resp = scim_get(&app, "invalid-token", "/api/scim/v2/Users").await;
     assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
 
@@ -222,7 +222,7 @@ async fn test_scim_user_lifecycle() {
             .unwrap();
     assert!(revoked.0.is_some());
 
-    // DELETE /Users/{id} — idempotent soft delete
+    // DELETE /Users/{id} - idempotent soft delete
     let del = scim_delete(&app, &token, &format!("/api/scim/v2/Users/{user_id}")).await;
     assert_eq!(del.status(), StatusCode::NO_CONTENT);
 }
@@ -350,7 +350,7 @@ async fn test_group_role_mapping_promotes_and_demotes_members() {
     let app = crate::common::TestApp::spawn().await;
     let token = setup_scim(&app, "RoleMapCorp").await;
 
-    // Provision a user (starts as recruiter — the default_role from setup_scim).
+    // Provision a user (starts as recruiter - the default_role from setup_scim).
     let u = scim_post(
         &app,
         &token,
@@ -408,7 +408,7 @@ async fn test_group_role_mapping_promotes_and_demotes_members() {
         .unwrap();
     assert_eq!(role.0, "enterprise");
 
-    // Clear the mapping — user falls back to config default (recruiter).
+    // Clear the mapping - user falls back to config default (recruiter).
     let unmap = app
         .client
         .put(format!(
@@ -523,7 +523,7 @@ async fn test_token_rotation_grace_period() {
         StatusCode::OK
     );
 
-    // Owner rotates by POSTing again — a new token is minted, the old one is
+    // Owner rotates by POSTing again - a new token is minted, the old one is
     // supposed to still work for 24h.
     let rotate = app.post("/api/enterprise/sso/scim/token", &json!({})).await;
     assert_eq!(rotate.status(), StatusCode::OK);
@@ -547,7 +547,7 @@ async fn test_token_rotation_grace_period() {
         StatusCode::OK
     );
 
-    // Simulate the grace period expiring — force previous_token_expires_at
+    // Simulate the grace period expiring - force previous_token_expires_at
     // into the past and the old token must stop working.
     sqlx::query(
         "UPDATE enterprise_sso_configs SET previous_scim_token_expires_at = NOW() - INTERVAL '1 hour'

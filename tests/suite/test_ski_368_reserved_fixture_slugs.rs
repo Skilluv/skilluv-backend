@@ -1,4 +1,4 @@
-//! SKI-368 — a fixture cannot be written into the public catalogue.
+//! SKI-368 - a fixture cannot be written into the public catalogue.
 //!
 //! Four orientations named `e2e-orient-<id>` were created on production
 //! through `POST /admin/orientations` by a suite with no teardown. They were
@@ -7,7 +7,7 @@
 //! 37 code orientations where 33 were real.
 //!
 //! The guard is on the write, not on the read. `is_curated` and `is_archived`
-//! were behaving exactly as designed — teaching the public catalogue to
+//! were behaving exactly as designed - teaching the public catalogue to
 //! recognise test data would put that knowledge in the wrong place.
 
 use crate::common::TestApp;
@@ -41,7 +41,7 @@ async fn no_real_trade_lives_in_the_reserved_space() {
         assert!(
             clashing.is_empty(),
             "`{prefix}` is reserved for fixtures but the catalogue already \
-             ships {clashing:?} — reserving it makes a real trade uncreatable"
+             ships {clashing:?} - reserving it makes a real trade uncreatable"
         );
     }
 }
@@ -50,7 +50,7 @@ async fn no_real_trade_lives_in_the_reserved_space() {
 ///
 /// The suite runs with `environment = "test"`, so the guard stands down here.
 /// That is also what proves it reads the environment rather than refusing
-/// unconditionally — a guard that refused everywhere would pass the negative
+/// unconditionally - a guard that refused everywhere would pass the negative
 /// test above and be useless.
 #[tokio::test]
 async fn the_suite_can_still_create_a_fixture() {

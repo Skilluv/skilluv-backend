@@ -2,7 +2,7 @@
 //!
 //! Generic mentorship matching asks "who is available and knows this area".
 //! That is not enough: thirty-three code trades and ten AI ones mean "knows
-//! this area" can be true and useless — a kernel engineer is not the right
+//! this area" can be true and useless - a kernel engineer is not the right
 //! person to review somebody's first React component, an MLOps engineer is
 //! not the right person to read an alignment experiment, and both pairs would
 //! find that out an hour into a paid session.
@@ -11,8 +11,8 @@
 //!
 //! Everything that decides the ordering is domain-agnostic: shared families,
 //! shared tools, the score gap, the timezone, the load. What differs is a
-//! handful of strings — which domain to score, which answer key holds the
-//! tools, how many mentees is too many — so they are a [`DomainRules`] value
+//! handful of strings - which domain to score, which answer key holds the
+//! tools, how many mentees is too many - so they are a [`DomainRules`] value
 //! rather than a second copy of four hundred lines that would drift within a
 //! month.
 //!
@@ -22,8 +22,8 @@
 //!   useful at all.
 //! * **Language.** A bonus rather than a requirement: a good mentor in a
 //!   neighbouring language beats a mediocre one in the same.
-//! * **Distance.** A mentor should be well ahead, not adjacent — somebody a
-//!   hundred points above you has nothing to teach yet — and not so far ahead
+//! * **Distance.** A mentor should be well ahead, not adjacent - somebody a
+//!   hundred points above you has nothing to teach yet - and not so far ahead
 //!   that the conversation has no common ground.
 //! * **Timezone.** Three hours is roughly the widest window where two people
 //!   can find an hour that is not the middle of somebody's night.
@@ -52,7 +52,7 @@ pub struct DomainRules {
     /// The `skill_domain` whose craft score and profile answers are read.
     pub domain: &'static str,
     /// The key in `user_domain_profiles.answers` holding what somebody works
-    /// with — languages for code, frameworks for AI. Both are arrays, because
+    /// with - languages for code, frameworks for AI. Both are arrays, because
     /// nobody uses exactly one.
     pub tools_key: &'static str,
     /// The key holding what they picked to work on. `preferred_families` for
@@ -66,8 +66,8 @@ pub struct DomainRules {
     /// tes langages" reads wrong to somebody who answered PyTorch.
     pub tools_label: &'static str,
     /// Whether the wizard stores trade slugs where the mentor side stores
-    /// reviewer families. Design's wizard asks which trades interest you —
-    /// `design-brand-identity` — while a mentor is known by the family behind
+    /// reviewer families. Design's wizard asks which trades interest you -
+    /// `design-brand-identity` - while a mentor is known by the family behind
     /// it, `brand`. Where this is set the answers are resolved through
     /// `orientations.reviewer_group` before anything is compared; where it is
     /// not, the two sides already speak the same words.
@@ -124,8 +124,8 @@ pub const AUDIO: DomainRules = DomainRules {
 /// slower and more attentive than reading a diff; a designer carrying five is
 /// carrying them badly.
 ///
-/// `main_tool` is the one answer here that is a string rather than an array —
-/// the wizard asks which tool you work in, singular — and the query below
+/// `main_tool` is the one answer here that is a string rather than an array -
+/// the wizard asks which tool you work in, singular - and the query below
 /// reads either shape.
 pub const DESIGN: DomainRules = DomainRules {
     domain: "design",
@@ -142,7 +142,7 @@ pub const DESIGN: DomainRules = DomainRules {
 /// than to critiquing an artefact.
 ///
 /// `quality_tools` is open text, so the overlap it produces is a bonus and
-/// never a filter — somebody who lists "axe" and somebody who lists "axe
+/// never a filter - somebody who lists "axe" and somebody who lists "axe
 /// DevTools" are the same answer, and a filter would separate them.
 pub const QUALITY: DomainRules = DomainRules {
     domain: "quality",
@@ -167,7 +167,7 @@ pub const LEADERSHIP: DomainRules = DomainRules {
 };
 
 /// Four. A communication mentee usually arrives with a draft rather than an
-/// emergency, and reading a draft properly is an hour — slower than a diff,
+/// emergency, and reading a draft properly is an hour - slower than a diff,
 /// faster than listening to a mix twice.
 pub const COMMUNICATION: DomainRules = DomainRules {
     domain: "communication",
@@ -179,7 +179,7 @@ pub const COMMUNICATION: DomainRules = DomainRules {
 };
 
 /// Three. An education session is a conversation about somebody else's
-/// learners — what went wrong in a cohort, why a lesson lost the room — and it
+/// learners - what went wrong in a cohort, why a lesson lost the room - and it
 /// does not compress. Three is what a working trainer can carry.
 pub const EDUCATION: DomainRules = DomainRules {
     domain: "education",
@@ -192,7 +192,7 @@ pub const EDUCATION: DomainRules = DomainRules {
 
 /// Three. A security mentoring session is somebody reading a report that did
 /// not land, or sitting with a junior who has been stuck on the same box for a
-/// week — and both of those are an hour that does not compress. Three is what a
+/// week - and both of those are an hour that does not compress. Three is what a
 /// working practitioner can carry.
 ///
 /// `security_tools` is open text, so the overlap it produces is a bonus and
@@ -271,7 +271,7 @@ struct Candidate {
 /// Hours east of UTC, from an offset string like `+02:00` or `-05:00`.
 ///
 /// Deliberately narrow: this reads what the onboarding stores, and anything
-/// else — an IANA name, a city — answers `None` rather than a guess. A wrong
+/// else - an IANA name, a city - answers `None` rather than a guess. A wrong
 /// offset would suggest mentors in the wrong half of the planet, which is
 /// worse than suggesting nobody.
 pub fn utc_offset_hours(timezone: &str) -> Option<i32> {
@@ -329,7 +329,7 @@ pub fn score_candidate(
         Some(gap) if gap <= MAX_TIMEZONE_GAP_HOURS => score += 60 - 15 * gap,
         // Further than that, still possible and much harder to schedule.
         Some(_) => score -= 40,
-        // Unknown. Neither rewarded nor punished — most people have not
+        // Unknown. Neither rewarded nor punished - most people have not
         // filled it in, and punishing them would hide good mentors.
         None => {}
     }
@@ -520,7 +520,7 @@ pub async fn matches_for(
             let mut because = Vec::new();
             if !shared_families.is_empty() {
                 because.push(format!(
-                    "Travaille dans {} — la même famille que toi.",
+                    "Travaille dans {} - la même famille que toi.",
                     shared_families.join(", ")
                 ));
             }
@@ -577,7 +577,7 @@ pub async fn matches_for(
 /// Whether somebody looks stuck enough that suggesting a mentor is worth it.
 ///
 /// Three pieces of work handed in for review in this domain and none of them
-/// validated. Not a judgement about the person — it is the shape of somebody
+/// validated. Not a judgement about the person - it is the shape of somebody
 /// repeating a mistake nobody has named for them yet, which is the one thing
 /// a mentor fixes faster than another attempt does.
 ///
@@ -587,7 +587,7 @@ pub async fn matches_for(
 ///
 /// The slice types are read from `slice_types` rather than named here, so a
 /// domain that gains a surface gains it in this signal too. Types with no
-/// domain — a repository issue, a piece of documentation — belong to every
+/// domain - a repository issue, a piece of documentation - belong to every
 /// domain and are deliberately excluded: failing to get a doc fix merged says
 /// nothing about somebody's design.
 pub async fn could_use_a_mentor(
@@ -713,7 +713,7 @@ mod tests {
     #[test]
     fn the_two_domains_differ_only_where_they_should() {
         // If a third domain is added and this fails, the thing to change is
-        // the constant — not to copy the module.
+        // the constant - not to copy the module.
         assert_ne!(CODE.domain, AI.domain);
         assert_ne!(CODE.tools_key, AI.tools_key);
         // AI carries fewer mentees per mentor: reading somebody's training

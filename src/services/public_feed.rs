@@ -5,7 +5,7 @@
 //! Showing, on the most public surface the product has, what actually comes
 //! out of it. Every line points at something a stranger can open and check:
 //! a merged pull request, a verification page, a published package. That is
-//! the whole argument — a feed of points proves nothing to anybody, and a
+//! the whole argument - a feed of points proves nothing to anybody, and a
 //! feed of invented people proves less than nothing.
 //!
 //! ## Two rules that are not negotiable
@@ -26,7 +26,7 @@ use uuid::Uuid;
 
 use crate::errors::AppError;
 
-/// Everything the feed admits. Mirrors the CHECK in migration 0203 — a kind
+/// Everything the feed admits. Mirrors the CHECK in migration 0203 - a kind
 /// added here without the migration is refused by the database, which is the
 /// right way round.
 pub const KINDS: &[&str] = &[
@@ -42,7 +42,7 @@ pub const KINDS: &[&str] = &[
 /// delivered says the work happened, not what it paid.
 pub const MONETARY_KINDS: &[&str] = &["bounty_paid"];
 
-/// A page of the feed. Deliberately small — this is a landing page, and
+/// A page of the feed. Deliberately small - this is a landing page, and
 /// nobody scrolls a ticker.
 pub const DEFAULT_PAGE: i64 = 20;
 pub const MAX_PAGE: i64 = 100;
@@ -171,7 +171,7 @@ pub async fn emit(db: &PgPool, event: Emission<'_>) -> Result<Option<Uuid>, AppE
 ///
 /// Keyset rather than an offset: the feed is ordered by time and new rows
 /// arrive at the front, so an offset skips or repeats items exactly when the
-/// feed is busy — which is the only time anybody paginates it.
+/// feed is busy - which is the only time anybody paginates it.
 #[derive(Debug, Clone, Copy)]
 pub struct Cursor {
     pub occurred_at: chrono::DateTime<chrono::Utc>,
@@ -182,7 +182,7 @@ impl Cursor {
     /// `<rfc3339>|<uuid>`, base64url without padding.
     ///
     /// The encoding is not decoration. An RFC3339 timestamp carries a `+`
-    /// before its offset, and a `+` in a query string decodes as a space — so
+    /// before its offset, and a `+` in a query string decodes as a space - so
     /// a caller who takes `next_cursor` and puts it in a URL, which is the
     /// only thing anybody does with it, gets a cursor the server cannot read
     /// and a 400 on the second page. base64url has no character a URL treats
@@ -325,7 +325,7 @@ pub async fn preferences_for(db: &PgPool, user_id: Uuid) -> Result<Vec<Preferenc
 ///
 /// Retroactive on purpose. Somebody who turns this off is asking to be taken
 /// off the page, and answering "only from now on" would leave their name up
-/// there — which is the thing they just objected to.
+/// there - which is the thing they just objected to.
 pub async fn set_preference(
     db: &PgPool,
     user_id: Uuid,
@@ -427,7 +427,7 @@ mod tests {
         // The only thing anybody does with `next_cursor` is put it in a query
         // string. The first version of this encoding was `<rfc3339>|<uuid>`,
         // and an RFC3339 offset carries a `+`, which a query string decodes as
-        // a space — so the second page answered 400 to a cursor the server had
+        // a space - so the second page answered 400 to a cursor the server had
         // just handed out.
         let cursor = Cursor {
             occurred_at: chrono::DateTime::parse_from_rfc3339("2026-08-17T10:30:00+02:00")
@@ -463,7 +463,7 @@ mod tests {
     }
 
     // Both sides are constants, so this is decided at compile time rather
-    // than by running a test — which is the right place for it: a default
+    // than by running a test - which is the right place for it: a default
     // above the maximum should never build.
     const _: () = assert!(DEFAULT_PAGE <= MAX_PAGE);
     const _: () = assert!(DEFAULT_PAGE <= 50, "nobody scrolls a ticker");

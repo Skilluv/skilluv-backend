@@ -1,4 +1,4 @@
-# RLS enforcement — activation prod
+# RLS enforcement - activation prod
 
 **Statut au 2026-07-14** : POC livré en P14.2 (migration 0083),
 helpers Rust en P22.1 (`src/services/rls.rs`). Enforcement OFF par
@@ -46,7 +46,7 @@ attacher/detacher policies.
 postgres://skilluv_app:$PASSWORD@host:5432/skilluv
 ```
 
-Les migrations gardent l'ancien URL `skilluv:...` — configurable via
+Les migrations gardent l'ancien URL `skilluv:...` - configurable via
 `SQLX_MIGRATIONS_URL` séparé.
 
 ### 3. Wrapper chaque code path tenant-scoped dans une transaction
@@ -91,7 +91,7 @@ Créer `tests/test_rls_enforcement.rs` :
 - Migrations sqlx doivent être annotées sur les tables tenant-scoped.
 - Pooling connections plus tricky (session state via
   `set_config(..., false)` scope à la session, `SET LOCAL` scope à la
-  tx — on utilise le premier pour éviter tx obligatoire).
+  tx - on utilise le premier pour éviter tx obligatoire).
 
 ## Reco stratégique
 
@@ -99,5 +99,5 @@ Créer `tests/test_rls_enforcement.rs` :
 explicitement** (contrat de compliance).
 
 Pour du multi-tenant SaaS standard, les triggers auto-tag (P14.1) +
-filtres applicatifs sur `tenant_id` suffisent en pratique — le POC RLS
+filtres applicatifs sur `tenant_id` suffisent en pratique - le POC RLS
 sert de plan B / preuve de conformité SOC2/ISO27001.

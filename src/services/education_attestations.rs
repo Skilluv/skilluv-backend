@@ -16,7 +16,7 @@
 //! are not members, are sometimes minors, and never asked to be evidence in
 //! somebody's portfolio. A cohort report with twenty names in it cannot be
 //! published however good the teaching was. So nothing is attested until the
-//! author has stated that no identifiable learner remains — the declaration
+//! author has stated that no identifiable learner remains - the declaration
 //! migration 0523 added, on the model of audio's source list in 0410. It is a
 //! statement rather than an inferred check for the reason 0410 gave: a report
 //! with no names and a declaration, and a report nobody looked at, have the
@@ -70,7 +70,7 @@ fn basis_for_subtype(subtype: &str) -> Option<&'static str> {
 /// attested.
 ///
 /// One. The basis says "authored and adopted", and the fact worth attesting
-/// is that the author is not the only person who trusted it — which is true
+/// is that the author is not the only person who trusted it - which is true
 /// at one and does not become more true at three. The badge of migration 0522
 /// is where a higher bar belongs, because a badge can be rewritten without
 /// reissuing what anybody was already told.
@@ -198,7 +198,7 @@ async fn announce(
             subject_type: "user",
             subject_id: user_id,
             subject_label: &username,
-            headline: format!("{title} — {username}"),
+            headline: format!("{title} - {username}"),
             artifact_url: url,
             repository: None,
             amount: None,
@@ -255,8 +255,8 @@ async fn evidence_for(db: &PgPool, slice_id: Uuid) -> Result<Option<Evidence>, A
 /// Whether this basis may only be issued once the learner data is declared
 /// clear.
 ///
-/// The two that report on real learners. A workshop's materials — slides,
-/// exercises, solutions — contain nobody by nature, and gating them would
+/// The two that report on real learners. A workshop's materials - slides,
+/// exercises, solutions - contain nobody by nature, and gating them would
 /// make the declaration a formality people click through, which is how a gate
 /// stops meaning anything.
 fn needs_learner_data_declaration(subtype: &str) -> bool {
@@ -266,7 +266,7 @@ fn needs_learner_data_declaration(subtype: &str) -> bool {
 /// Issue whatever the verified work on this slice earns.
 ///
 /// Returns the bases actually issued, which is empty on a second pass and
-/// empty for work that earns none — both normal, neither an error.
+/// empty for work that earns none - both normal, neither an error.
 pub async fn issue_for_slice(db: &PgPool, slice_id: Uuid) -> Result<Vec<String>, AppError> {
     let Some(ev) = evidence_for(db, slice_id).await? else {
         return Ok(Vec::new());
@@ -336,7 +336,7 @@ pub async fn issue_for_slice(db: &PgPool, slice_id: Uuid) -> Result<Vec<String>,
 /// person attesting has to have led it, it has to have been concluded rather
 /// than abandoned, and enough of the learners have to have finished with
 /// somebody recording it. The threshold itself is
-/// `education_cohort_meets_threshold` (migration 0531) — a policy, kept in the
+/// `education_cohort_meets_threshold` (migration 0531) - a policy, kept in the
 /// schema where an operator can read and move it.
 async fn cohort_is_attestable(
     db: &PgPool,
@@ -436,8 +436,8 @@ async fn issue_curriculum(
 ///
 /// Called from the proof orchestrator rather than from the point a slice is
 /// verified, and deliberately: the learner-data declaration, the cohort's
-/// conclusion and the first adoption all arrive *after* verification — a
-/// curriculum is published before anybody runs it — and hooking the
+/// conclusion and the first adoption all arrive *after* verification - a
+/// curriculum is published before anybody runs it - and hooking the
 /// verification alone would leave every one of them permanently unattested,
 /// which is the dormant-engine failure P19 exists to end.
 ///

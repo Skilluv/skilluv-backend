@@ -121,7 +121,7 @@ struct AuditEntry {
     details: Option<serde_json::Value>,
     ip_address: Option<String>,
     created_at: chrono::DateTime<chrono::Utc>,
-    /// `admin_audit_log` or `audit_log` — which of the two journals this
+    /// `admin_audit_log` or `audit_log` - which of the two journals this
     /// row came from. Additive; see [`audit_log`] for why there are two.
     source: String,
 }
@@ -130,7 +130,7 @@ struct AuditEntry {
 
 /// One row of `GET /admin/users`.
 ///
-/// SKI-111 — lifted out of the handler body and given `ToSchema` so the
+/// SKI-111 - lifted out of the handler body and given `ToSchema` so the
 /// spec describes the row instead of an empty object. The field the ticket
 /// calls out is `is_banned`: the admin table read `banned` at one point,
 /// and nothing in an untyped schema could catch the mismatch.
@@ -166,7 +166,7 @@ pub struct AdminUserListResponse {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SKI-111 — response schemas
+// SKI-111 - response schemas
 // ═══════════════════════════════════════════════════════════════════
 
 /// Who filed a report.
@@ -344,7 +344,7 @@ pub async fn list_users(
         cnt_query = cnt_query.bind(banned);
     }
     if let Some(ref q) = query.q {
-        // As typed. The ` & ` join this used to build was not an escape —
+        // As typed. The ` & ` join this used to build was not an escape -
         // every operator character survived it untouched.
         db_query = db_query.bind(q.clone());
         cnt_query = cnt_query.bind(q.clone());
@@ -370,7 +370,7 @@ pub async fn list_users(
 
 /// Moderation view of one account.
 ///
-/// SKI-111 — the security posture fields (`totp_enabled`,
+/// SKI-111 - the security posture fields (`totp_enabled`,
 /// `email_2fa_enabled`, `webauthn_credentials_count`) were missing from
 /// the response at one point and nothing caught it, because the schema was
 /// an empty object. They are part of the type now.
@@ -444,7 +444,7 @@ pub async fn get_user(
             .fetch_one(&state.db)
             .await?;
 
-    // Trello xHnNZa5G + gWSCzyz0 + RXEWNI6y — expose 2FA + passkey posture
+    // Trello xHnNZa5G + gWSCzyz0 + RXEWNI6y - expose 2FA + passkey posture
     // to admin panel so we can see who is/isn't secured without SQL access.
     let webauthn_count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM webauthn_credentials WHERE user_id = $1")
@@ -819,7 +819,7 @@ pub async fn handle_report(
     }))))
 }
 
-/// The admin audit log — both journals, one listing.
+/// The admin audit log - both journals, one listing.
 ///
 /// SKI-299. There are two audit tables and they were never reconciled:
 /// `admin_audit_log` (0014), written by the legacy admin handlers and the
@@ -829,8 +829,8 @@ pub async fn handle_report(
 ///
 /// New instrumentation writes to the hardened one, which meant the newly
 /// audited moderation actions would have been invisible on the screen an
-/// operator actually opens. Rather than write every entry twice — two
-/// copies that can disagree is worse than one gap — the listing reads both
+/// operator actually opens. Rather than write every entry twice - two
+/// copies that can disagree is worse than one gap - the listing reads both
 /// and labels each row with its `source`.
 ///
 /// The projection is unchanged for existing consumers: `metadata` is

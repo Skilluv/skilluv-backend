@@ -1,7 +1,7 @@
-# Quality — legal and confidentiality
+# Quality - legal and confidentiality
 
 Backlog: quality/L-01. Shares a counsel review with the security, design, game
-and leadership charters — the questions overlap and paying four times to be
+and leadership charters - the questions overlap and paying four times to be
 told the same thing is not a budget this project has.
 
 Nothing here is legal advice. It is the position the platform takes and the
@@ -62,7 +62,7 @@ Two clauses that matter more than they look:
   so up front avoids a fight at the end.
 
 **For counsel:** whether an authorisation signed by a client covers a system the
-client does not own — a hosted service, a third-party integration — and what
+client does not own - a hosted service, a third-party integration - and what
 the tester has to verify before starting.
 
 ## 4. Defects found under NDA
@@ -79,7 +79,7 @@ reproduction, or the product.
 That is the same call the security and leadership domains make, and it is the
 only way a contributor working under NDA can build a public record at all.
 
-**For counsel:** the boundary of the anonymised claim — how much can be said
+**For counsel:** the boundary of the anonymised claim - how much can be said
 about a defect before the description identifies the client.
 
 ## 5. Intellectual property in test artefacts
@@ -91,7 +91,7 @@ The contributor keeps:
 
 - the right to state that the work happened, at the level of abstraction in
   section 4;
-- the right to reuse **technique** — a fixture pattern, a page object
+- the right to reuse **technique** - a fixture pattern, a page object
   structure, a triage workflow. A method is not a deliverable.
 
 The contributor does not keep the right to reuse the suite itself, or the

@@ -15,7 +15,7 @@
 //!
 //! Because that is what the review loop runs on. `challenge_templates` has a
 //! community-proposal flow already, and the design catalogue seeds a hundred
-//! and thirty of them — but those are exercises with a rubric and no critique
+//! and thirty of them - but those are exercises with a rubric and no critique
 //! rounds. A brief needs an orientation, a subtype, a reviewer family and a
 //! round count, none of which a template has.
 //!
@@ -23,7 +23,7 @@
 //!
 //! Anybody with a completed profile. Not a new capability: `issue_proposer`
 //! already means "has had community proposals published", and it is *earned*
-//! by proposing — gating proposals on it would mean nobody could ever earn it.
+//! by proposing - gating proposals on it would mean nobody could ever earn it.
 //!
 //! The gate is at publication, where it belongs, and it is a person reading
 //! the brief.
@@ -37,7 +37,7 @@ use crate::models::DesignSubtype;
 /// What a published brief pays its author.
 ///
 /// Setting work for other people leaves no deliverable, earns no craft score
-/// and is invisible on a profile — which is exactly how a community runs out
+/// and is invisible on a profile - which is exactly how a community runs out
 /// of briefs. Twenty fragments is not a wage; it is an acknowledgement that
 /// the hour existed.
 pub const FRAGMENTS_ON_PUBLICATION: i32 = 20;
@@ -107,7 +107,7 @@ pub const FORMATS: &[&str] = &["individual", "contest"];
 ///
 /// Two hundred characters. Not a style rule: a brief shorter than this cannot
 /// carry a context, a constraint and a deliverable list, and answers to it
-/// diverge — after which the reviewer is arbitrating on taste, which is the
+/// diverge - after which the reviewer is arbitrating on taste, which is the
 /// failure the whole grid system exists to prevent.
 pub const MIN_BRIEF_CHARS: usize = 200;
 
@@ -194,7 +194,7 @@ pub async fn propose(
 pub async fn queue(db: &PgPool, limit: i64) -> Result<Vec<Proposal>, AppError> {
     // The projection is written out in each of the three readers rather than
     // composed from a constant: sqlx refuses a query built with `format!`, and
-    // it is right to — a projection that can be interpolated is a projection
+    // it is right to - a projection that can be interpolated is a projection
     // that will be, eventually, with something that came from a request.
     let rows = sqlx::query_as::<_, Proposal>(
         r#"

@@ -1,7 +1,7 @@
-//! GitHub OAuth + sync — Phase 2 Sprint 5.
+//! GitHub OAuth + sync - Phase 2 Sprint 5.
 //!
 //! - OAuth tokens are stored encrypted at-rest using ChaCha20-Poly1305 with a key derived
-//!   from `JWT_SECRET` via HMAC-SHA256 (so rotating JWT_SECRET also invalidates tokens — a
+//!   from `JWT_SECRET` via HMAC-SHA256 (so rotating JWT_SECRET also invalidates tokens - a
 //!   feature, not a bug).
 //! - Sync pulls public repos only (scope `read:user`, `public_repo`).
 
@@ -145,7 +145,7 @@ pub async fn exchange_code(
         .map_err(|e| AppError::Internal(format!("github token decode failed: {e}")))?;
     if let Some(err) = body.error {
         return Err(AppError::Validation(format!(
-            "github oauth error: {} — {}",
+            "github oauth error: {} - {}",
             err,
             body.error_description.unwrap_or_default()
         )));
@@ -195,7 +195,7 @@ pub struct GitHubRepo {
     created_at: Option<DateTime<Utc>>,
 }
 
-/// P26 v2 SKI-75 — fork `{owner}/{repo}` to the authenticated user's account.
+/// P26 v2 SKI-75 - fork `{owner}/{repo}` to the authenticated user's account.
 /// Idempotent on GitHub's side: forking a repo the user already forked
 /// returns the existing fork (HTTP 202). Returns the HTML URL of the fork.
 pub async fn fork_repo_for_user(
@@ -300,7 +300,7 @@ pub struct PrFile {
 /// `HELLO.md` on a tracked starter fork.
 ///
 /// The endpoint returns at most 30 files per page by default; we cap at
-/// 3 pages (90 files) to bound work — a Bonjour Skilluv PR should only
+/// 3 pages (90 files) to bound work - a Bonjour Skilluv PR should only
 /// touch 1-2 files, so a paginated fetch of the whole diff is overkill.
 ///
 /// See https://docs.github.com/en/rest/pulls/pulls#list-pull-requests-files
@@ -535,7 +535,7 @@ pub async fn fork_repo(access_token: &str, source_full_name: &str) -> Result<For
     let status = resp.status();
     if !status.is_success() {
         let body = resp.text().await.unwrap_or_default();
-        // 202 Accepted is actually valid — GitHub returned the fork data before
+        // 202 Accepted is actually valid - GitHub returned the fork data before
         // it's fully created. But `is_success()` covers 200-299, so we should
         // never enter this branch on 202. This handles 4xx/5xx.
         return Err(AppError::Internal(format!(

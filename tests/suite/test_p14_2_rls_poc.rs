@@ -1,7 +1,7 @@
 //! Tests d'intégration P14.2 : RLS POC.
 //!
 //! Contexte : le rôle `skilluv` utilisé par les tests locaux a `rolsuper=true`
-//! + `rolbypassrls=true` — donc RLS ne s'applique jamais à lui, y compris avec
+//! + `rolbypassrls=true` - donc RLS ne s'applique jamais à lui, y compris avec
 //!   FORCE. En prod, le compte applicatif doit être créé sans ces attributs.
 //!
 //! Ces tests documentent le POC via des queries qui reproduisent la logique
@@ -104,7 +104,7 @@ async fn set_tenant_context_sets_the_guc() {
         .expect("get");
     assert_eq!(current, tenant.to_string());
 
-    // Skip db.close() — it deadlocks when a PoolConnection (`conn`) is
+    // Skip db.close() - it deadlocks when a PoolConnection (`conn`) is
     // still alive in the same scope. cleanup_test_db runs
     // pg_terminate_backend anyway.
     drop(conn);
@@ -132,7 +132,7 @@ async fn policies_are_installed_and_rls_can_be_enabled() {
         "2 policies POC attendues (deliverables + attestations)"
     );
 
-    // ALTER + FORCE ne raise pas — même si RLS ne s'applique pas au superuser,
+    // ALTER + FORCE ne raise pas - même si RLS ne s'applique pas au superuser,
     // les commandes doivent réussir en préparation du déploiement prod.
     sqlx::query("ALTER TABLE deliverables ENABLE ROW LEVEL SECURITY")
         .execute(&db)
@@ -232,7 +232,7 @@ async fn policy_filter_isolates_correctly() {
     .expect("v3");
     assert_eq!(b_visible, 2);
 
-    // Drop conn ; skip db.close() (deadlock — see first test).
+    // Drop conn ; skip db.close() (deadlock - see first test).
     drop(conn);
     cleanup_test_db(&name).await;
 }
@@ -259,7 +259,7 @@ async fn create_user(db: &PgPool, tenant: Option<Uuid>) -> Uuid {
 }
 
 async fn create_challenge(db: &PgPool, tenant: Option<Uuid>) -> Uuid {
-    // title_i18n gets a `fr` key inline — migration 0104 added
+    // title_i18n gets a `fr` key inline - migration 0104 added
     // challenge_templates_title_i18n_min_locale which rejects an empty
     // JSONB. Description + instructions have no such constraint, so the
     // default `{}` on their i18n columns is fine.

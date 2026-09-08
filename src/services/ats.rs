@@ -1,7 +1,7 @@
 //! The applicant tracker (migration 0530).
 //!
-//! A company opens a position, candidates arrive — from their own inbound or
-//! pushed across from a Skilluv shortlist — and move through stages until
+//! A company opens a position, candidates arrive - from their own inbound or
+//! pushed across from a Skilluv shortlist - and move through stages until
 //! somebody is hired or told no.
 //!
 //! ## What this module holds that nothing else here does
@@ -166,7 +166,7 @@ pub struct Chosen {
 /// The free tier is active the moment it is chosen: there is nothing to pay,
 /// and making a company wait for a payment of zero would be theatre. A paid
 /// plan lands `pending` and is activated by `fulfilment` when the money
-/// arrives — an upgrade takes effect when it is paid for and not a moment
+/// arrives - an upgrade takes effect when it is paid for and not a moment
 /// earlier, which is the only version a company can dispute.
 ///
 /// Idempotent on the enterprise: one tracker per company, because two would
@@ -424,7 +424,7 @@ pub async fn add_candidate(
             .is_none_or(|n| n.trim().is_empty())
     {
         return Err(AppError::Validation(
-            "a candidate is a Skilluv account or a name — a row with neither is \
+            "a candidate is a Skilluv account or a name - a row with neither is \
              somebody nobody can contact"
                 .into(),
         ));
@@ -579,13 +579,13 @@ pub async fn move_candidate(
 /// What the opening does not say, said where the recruiter is looking.
 ///
 /// Only one entry today: an opening with no salary range. The range is
-/// optional, and it stays optional — the opening is private, so forcing a
+/// optional, and it stays optional - the opening is private, so forcing a
 /// number into a box no candidate can see would be theatre rather than
 /// transparency. What is not optional is noticing.
 ///
 /// So the gap is surfaced next to the pipeline, at the moment somebody is
 /// deciding who to talk to. It is a note, not a block, and the day an opening
-/// can be published the range stops being optional on the published version —
+/// can be published the range stops being optional on the published version -
 /// at that point it reaches a candidate, and pay opacity is the mechanism by
 /// which the people this platform exists for get underpaid.
 #[derive(Debug, Clone, Serialize)]
@@ -608,7 +608,7 @@ pub async fn gaps(db: &PgPool, opening_id: Uuid) -> Result<Vec<OpeningGap>, AppE
     if has_range == Some(false) {
         gaps.push(OpeningGap {
             code: "no_salary_range",
-            note: "Aucune fourchette de rémunération n'est renseignée. Ce poste                    n'est visible que par vous, donc rien ne l'exige — mais un                    candidat qui négocie sans fourchette négocie en aveugle, et                    c'est ce qui fait qu'on paie moins les gens qui viennent de                    loin.",
+            note: "Aucune fourchette de rémunération n'est renseignée. Ce poste                    n'est visible que par vous, donc rien ne l'exige - mais un                    candidat qui négocie sans fourchette négocie en aveugle, et                    c'est ce qui fait qu'on paie moins les gens qui viennent de                    loin.",
         });
     }
     Ok(gaps)

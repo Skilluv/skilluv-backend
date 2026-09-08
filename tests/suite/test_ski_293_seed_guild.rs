@@ -1,4 +1,4 @@
-//! SKI-293 point 4 — `skilluv-seed-guild` provisions an owner-side guild.
+//! SKI-293 point 4 - `skilluv-seed-guild` provisions an owner-side guild.
 //!
 //! Founding a guild through the API requires exactly three co-founders, so a
 //! single e2e account cannot create one. Without a seed, `/guilds` is an
@@ -6,7 +6,7 @@
 //! revocation are never exercised end to end.
 //!
 //! These tests run the real binary as a subprocess against a migrated
-//! database rather than re-implementing its SQL — re-implementing it would
+//! database rather than re-implementing its SQL - re-implementing it would
 //! test the copy, not the thing that ships.
 
 use crate::common::TestApp;
@@ -19,7 +19,7 @@ use uuid::Uuid;
 /// machine that compiled it. CI now builds the suite once into a nextest
 /// archive and runs it on twelve other runners, where that path does not
 /// exist. nextest ships non-test binaries inside the archive and publishes
-/// their relocated path in `NEXTEST_BIN_EXE_<name>` — hyphens become
+/// their relocated path in `NEXTEST_BIN_EXE_<name>` - hyphens become
 /// underscores. The compile-time path stays as the fallback, which is what a
 /// plain `cargo test` on a developer machine uses.
 fn seed_binary() -> String {
@@ -115,7 +115,7 @@ async fn running_it_twice_changes_nothing() {
     let (second, _, err2) = run_seed(&app, &["--email", "twice@seed.test"]);
     assert!(
         second,
-        "a second run must succeed — this is provisioning, it will be \
+        "a second run must succeed - this is provisioning, it will be \
          re-run on every deploy: {err2}"
     );
 

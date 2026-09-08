@@ -62,12 +62,18 @@ pub fn newsletter_routes() -> Router<AppState> {
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct SubscribeBody {
-    #[schema(max_length = 320)]
+    /// The constraints are declared, not only enforced.
+    ///
+    /// They carried only `max_length` at first, so an empty string was
+    /// schema-compliant and the API refused it - which a contract fuzzer
+    /// reads, correctly, as the API rejecting valid data. A refusal the
+    /// schema does not predict is a contract that lies.
+    #[schema(min_length = 3, max_length = 320, format = Email)]
     pub email: String,
     /// `fr`, `en` or `ar`. Anything else is refused rather than silently
     /// defaulted, so a client with a stale locale list finds out.
     #[serde(default = "default_locale")]
-    #[schema(max_length = 5)]
+    #[schema(pattern = "^(fr|en|ar)$", max_length = 5)]
     pub locale: String,
     /// Where the address came from, so a list can be explained later.
     #[serde(default = "default_source")]
@@ -129,7 +135,7 @@ pub async fn subscribe(
     State(state): State<AppState>,
     headers: HeaderMap,
     Json(body): Json<SubscribeBody>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<(axum::http::StatusCode, Json<Value>), AppError> {
     let email = body.email.trim().to_lowercase();
     if !looks_like_an_address(&email) {
         return Err(AppError::Validation("that is not an email address".into()));
@@ -213,7 +219,13 @@ pub async fn subscribe(
         }
     }
 
-    Ok(Json(build_response(json!({ "message": SAME_ANSWER }))))
+    // 202 rather than 200, which is what the annotation already promised and
+    // what the flow means: the address is accepted, nothing is subscribed
+    // until somebody clicks the link in the mail.
+    Ok((
+        axum::http::StatusCode::ACCEPTED,
+        Json(build_response(json!({ "message": SAME_ANSWER }))),
+    ))
 }
 
 /// The confirmation mail, in the locale the form was in.

@@ -189,7 +189,7 @@ jobs:
         run: cargo test --features discord-bot --bin skilluv-discord-bot
 
       - name: Install cargo-machete
-        uses: taiki-e/install-action@37f7c5781271959fb65b6b35224e28652ff2b63d  # v2
+        uses: taiki-e/install-action@7b8d4719ee4aaa279bdf55df38dacb9ebfe12a6c  # v2
         with:
           tool: cargo-machete
 
@@ -215,7 +215,7 @@ jobs:
         # cargo-deny supersets cargo-audit : same RustSec advisory DB PLUS
         # license compliance PLUS banned/duplicate crate detection. Config
         # in `deny.toml` at repo root.
-        uses: taiki-e/install-action@37f7c5781271959fb65b6b35224e28652ff2b63d  # v2
+        uses: taiki-e/install-action@7b8d4719ee4aaa279bdf55df38dacb9ebfe12a6c  # v2
         with:
           tool: cargo-deny
       - name: Run cargo deny
@@ -289,7 +289,7 @@ jobs:
       - name: Install sqlx-cli
         # Prebuilt rather than `cargo install`, which is a four-minute compile
         # for a job whose whole point is to answer faster than the suite does.
-        uses: taiki-e/install-action@37f7c5781271959fb65b6b35224e28652ff2b63d  # v2
+        uses: taiki-e/install-action@7b8d4719ee4aaa279bdf55df38dacb9ebfe12a6c  # v2
         with:
           tool: sqlx-cli
       - name: Apply migrations and check invariants
@@ -572,7 +572,7 @@ jobs:
           restore-keys: ${{ runner.os }}-cargo-test-
 
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@37f7c5781271959fb65b6b35224e28652ff2b63d  # v2
+        uses: taiki-e/install-action@7b8d4719ee4aaa279bdf55df38dacb9ebfe12a6c  # v2
         with:
           tool: cargo-nextest
 

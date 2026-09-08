@@ -366,10 +366,10 @@ fn spawn_credential_expiry_worker(state: skilluv_backend::AppState) {
 /// holding that decision - the argument `sweep_embargoes` makes in full.
 /// Deletes proof uploads no report references, once a day.
 ///
-/// Uploads happen before a report is submitted - that is the shape of the form
-/// - so an abandoned draft leaves files behind. A bucket that only grows is one
-/// that eventually holds somebody's proof of a vulnerability they never
-/// reported, which is the worst thing in it to be keeping.
+/// Uploads happen before a report is submitted - that is the shape of the
+/// form - so an abandoned draft leaves files behind. A bucket that only grows
+/// is one that eventually holds somebody's proof of a vulnerability they
+/// never reported, which is the worst thing in it to be keeping.
 ///
 /// Thirty days, so that a report started on a Friday and finished a fortnight
 /// later still finds its screenshots.

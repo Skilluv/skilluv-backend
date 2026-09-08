@@ -1,8 +1,8 @@
 //! The education craft score (migration 0525).
 //!
 //! The fifth domain to score. The formula, the tiers, the cap and the
-//! assembly are shared — [`craft_score::assemble`] was extracted when audio
-//! became the third — and what is domain-specific is the measuring, and only
+//! assembly are shared - [`craft_score::assemble`] was extracted when audio
+//! became the third - and what is domain-specific is the measuring, and only
 //! the measuring.
 //!
 //! ## What the score counts, and the figure it refuses to count at face value
@@ -317,7 +317,7 @@ pub struct EducationProfile {
     pub username: String,
     pub craft_score: i32,
     /// `apprentice`, `contributor`, `engineer`, `senior`, `staff`,
-    /// `principal` — the same six every domain uses, so somebody can compare
+    /// `principal` - the same six every domain uses, so somebody can compare
     /// their own two profiles.
     pub tier: String,
     pub tier_name: String,

@@ -2,8 +2,8 @@
 //!
 //! Regression coverage for a 500 the contract fuzzer found and no test had:
 //! the query was joined with ` & ` and handed to `to_tsquery`, which parses
-//! its argument as a query expression. Every tsquery operator — `&`, `|`,
-//! `!`, `(`, `)`, `:` — therefore reached the parser as syntax, and anything
+//! its argument as a query expression. Every tsquery operator - `&`, `|`,
+//! `!`, `(`, `)`, `:` - therefore reached the parser as syntax, and anything
 //! that did not happen to form a valid expression raised
 //! `syntax error in tsquery` and became a database error at the client.
 //!
@@ -70,7 +70,7 @@ async fn a_search_box_accepts_what_a_search_box_receives() {
 ///
 /// The fix swaps `to_tsquery` for `websearch_to_tsquery`, which is a different
 /// parser and not merely a more forgiving one. Bare words still AND together,
-/// so a two-word search still narrows rather than widens — without this, "no
+/// so a two-word search still narrows rather than widens - without this, "no
 /// 500" could be bought by matching nothing at all.
 #[tokio::test]
 async fn two_words_still_narrow_the_search() {

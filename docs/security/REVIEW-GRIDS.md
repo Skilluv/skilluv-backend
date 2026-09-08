@@ -5,7 +5,7 @@ review without a family. Six criteria each, because the other nine domains
 settled on six and a grid twice as long as its neighbours gets skimmed.
 
 **These are published before anybody submits.** They are rows in `review_grids`
-and readable at `GET /api/security/reference` — that is the authoritative copy,
+and readable at `GET /api/security/reference` - that is the authoritative copy,
 and this page is the readable one.
 
 What is deliberately absent from all of them: tool inventories. A finding is not
@@ -14,40 +14,40 @@ because the SIEM was expensive.
 
 ---
 
-## The floor — any security work
+## The floor - any security work
 
 Read when a submission arrives without a family, or in a trade added later.
 
 | Criterion | What it looks like |
 |---|---|
-| **There was permission** | The target was in a written scope before anything was sent to it. A finding on something out of scope is refused however real it is — this is the whole difference between the trade and the offence it resembles. |
+| **There was permission** | The target was in a written scope before anything was sent to it. A finding on something out of scope is refused however real it is - this is the whole difference between the trade and the offence it resembles. |
 | **A stranger reaches the same result** | Steps precise enough that a reviewer who has never seen the system gets there. "I fuzzed it and it broke" is a story. |
-| **Impact is stated, not implied** | What an attacker could do on *this* system — not the worst thing the vulnerability class has caused elsewhere. |
+| **Impact is stated, not implied** | What an attacker could do on *this* system - not the worst thing the vulnerability class has caused elsewhere. |
 | **Nothing was taken that was not needed** | Enough data to prove it and no more, nothing persistent left behind, nothing broken to show it could be. |
 | **Uncertainty is written down** | What was not checked, what could not be reproduced, what rests on an assumption. A report with no unknowns has usually stopped looking. |
 | **AI use is declared** | A model used to draft, explain or generate a payload is named. Accepted; a report whose reproduction nobody ran is not. |
 
 ---
 
-## Red team — offensive work
+## Red team - offensive work
 
 | Criterion | What it looks like |
 |---|---|
 | **The exploit replays** | The reviewer follows the steps and sees the same thing. Binary, and checked first: nothing else matters if it fails. |
 | **The proof proves the claim** | The evidence shows the specific consequence claimed, not an error page. |
 | **Severity is argued from a vector** | A CVSS vector with defensible choices, or an explicit argument why it understates. A bare adjective is not a severity. |
-| **The root cause is named** | Which check is missing and where — not which request returns the wrong thing. |
+| **The root cause is named** | Which check is missing and where - not which request returns the wrong thing. |
 | **Scope was respected under pressure** | No pivot to what was interesting but out of scope, no denial of service, no third-party account. Where the boundary was reached, the report says so. |
 | **Readable by whoever has to fix it** | A developer with no offensive background can follow it to the line. |
 
 ---
 
-## Blue team — defensive work
+## Blue team - defensive work
 
 | Criterion | What it looks like |
 |---|---|
 | **The conclusion follows from the artefact** | Every claim points at a line, a packet or an offset in the material. An analysis needing knowledge the artefact lacks has guessed. |
-| **The detection fires, and stays quiet** | Triggers on the sample; silent on ordinary traffic. **Both halves shown** — a rule tested only on the positive case is a hypothesis. |
+| **The detection fires, and stays quiet** | Triggers on the sample; silent on ordinary traffic. **Both halves shown** - a rule tested only on the positive case is a hypothesis. |
 | **The timeline is ordered and sourced** | Events in sequence, each with its source, timezone stated once, clock skew called out. |
 | **Observation apart from inference** | "The account authenticated from this address" and "the account was compromised" are different sentences, and the second says what makes it likely. |
 | **It says what to do next** | Containment, eradication, and the control that would have caught it earlier. |
@@ -55,7 +55,7 @@ Read when a submission arrives without a family, or in a trade added later.
 
 ---
 
-## Code security — reading code
+## Code security - reading code
 
 | Criterion | What it looks like |
 |---|---|
@@ -68,7 +68,7 @@ Read when a submission arrives without a family, or in a trade added later.
 
 ---
 
-## Governance — documents and controls
+## Governance - documents and controls
 
 | Criterion | What it looks like |
 |---|---|
@@ -81,7 +81,7 @@ Read when a submission arrives without a family, or in a trade added later.
 
 ---
 
-## Purple team — exercises
+## Purple team - exercises
 
 | Criterion | What it looks like |
 |---|---|
@@ -97,7 +97,7 @@ Read when a submission arrives without a family, or in a trade added later.
 ## How a grid is used
 
 A reviewer scores each criterion and the average lands in `review_grid_scores`,
-which feeds the domain's craft score — `review_grid_average`, counted from 3 out
+which feeds the domain's craft score - `review_grid_average`, counted from 3 out
 of 5, and **skipped rather than zeroed** for somebody nobody has reviewed.
 
 A score without a comment is worth very little, and a reviewer who disagrees

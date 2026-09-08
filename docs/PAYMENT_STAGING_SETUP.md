@@ -1,4 +1,4 @@
-# Payment flows — staging setup & end-to-end test (SKI-35)
+# Payment flows - staging setup & end-to-end test (SKI-35)
 
 Guide pour créer les comptes staging Stripe Connect + Mobile Money, puis
 runner les scripts `scripts/test-payment-stripe.sh` / `test-payment-momo.sh`
@@ -16,7 +16,7 @@ qui font un vrai payout aller-retour de faible montant.
 
 ### 1.1. Créer le compte Stripe test
 
-1. https://dashboard.stripe.com/register — si pas déjà fait
+1. https://dashboard.stripe.com/register - si pas déjà fait
 2. En haut à droite : bascule sur "Test mode" (le toggle Test → Live). Tout ce qui suit est en test.
 3. Menu → Developers → API keys → copier **Secret key** commence par `sk_test_...`
 
@@ -131,7 +131,7 @@ Une fois les happy paths OK, vérifier :
 
 ## 4. Runbook incident
 
-Voir `docs/PAYMENT_INCIDENT_RESPONSE.md` (à créer post-run — dépend des cas rencontrés).
+Voir `docs/PAYMENT_INCIDENT_RESPONSE.md` (à créer post-run - dépend des cas rencontrés).
 
 En résumé pour un vrai incident prod :
 1. Chercher la transaction dans `talent_wallet_transactions` par `stripe_transfer_id` ou `momo_reference_id`

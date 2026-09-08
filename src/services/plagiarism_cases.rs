@@ -4,7 +4,7 @@
 //!
 //! The outcome of an upheld case is a disqualification, a confiscated prize
 //! and a public record. Deciding that without hearing the person accused is
-//! not a decision, it is a verdict — and the platform's whole argument is that
+//! not a decision, it is a verdict - and the platform's whole argument is that
 //! its judgements can be checked.
 //!
 //! Seventy-two hours: long enough to find the file, the timestamps, the client
@@ -104,7 +104,7 @@ pub async fn flag(
     let reason = input.reason_md.trim();
     if reason.chars().count() < MIN_REASON {
         return Err(AppError::Validation(format!(
-            "say what was copied and from where, in at least {MIN_REASON} characters — the \
+            "say what was copied and from where, in at least {MIN_REASON} characters - the \
              person accused has three days to answer this"
         )));
     }
@@ -233,7 +233,7 @@ pub async fn open_cases(db: &PgPool, limit: i64) -> Result<Vec<Case>, AppError> 
 
 /// Decide a case.
 ///
-/// Upholding it disqualifies the entry — marked, never deleted. Deleting it
+/// Upholding it disqualifies the entry - marked, never deleted. Deleting it
 /// would erase the fact that it was entered at all, and the other entrants
 /// moved up: a ranking whose gaps are unexplained is a ranking nobody can
 /// check.
@@ -251,7 +251,7 @@ pub async fn decide(
     let decision = decision_md.trim();
     if decision.chars().count() < MIN_DECISION {
         return Err(AppError::Validation(format!(
-            "say why in at least {MIN_DECISION} characters — the person accused reads this, \
+            "say why in at least {MIN_DECISION} characters - the person accused reads this, \
              and so does anybody who later asks what happened"
         )));
     }
@@ -319,13 +319,13 @@ pub async fn decide(
     // `award` puts a prize in `pending` rather than `available` and says why:
     // "the release window is what makes a contested result recoverable". This
     // is the only thing that ever contests one, and until now it disqualified
-    // the entry and left the money — so a contest could hold a winner who was
+    // the entry and left the money - so a contest could hold a winner who was
     // disqualified and paid at the same time, in the same person.
     //
     // After the commit, and deliberately. The decision is the thing that must
     // not be lost: it has been written, the accused can read it, and the
     // ledger posting carries an idempotency key so a repeat is safe. A prize
-    // that cannot be taken back — already released, already withdrawn — is a
+    // that cannot be taken back - already released, already withdrawn - is a
     // debt to recover through people, and it must not turn a decided case
     // back into an open one.
     if let Some((tournament_id, participant_id)) = confiscate_from {
@@ -340,7 +340,7 @@ pub async fn decide(
             Err(err) => {
                 tracing::error!(
                     case = %case_id, tournament = %tournament_id, %err,
-                    "plagiarism upheld but the prize could not be taken back — recover this by hand"
+                    "plagiarism upheld but the prize could not be taken back - recover this by hand"
                 );
                 metrics::counter!("skilluv_prize_manual_confiscation_needed_total").increment(1);
             }

@@ -18,7 +18,7 @@ Two rules the list follows:
 
 ---
 
-## Ranges — where to practise
+## Ranges - where to practise
 
 | Tool | Cost | Note |
 |---|---|---|
@@ -27,7 +27,7 @@ Two rules the list follows:
 | **OWASP Juice Shop** | Free | One container, no account. The most-used vulnerable application in the world. |
 | **DVWA** | Free | Narrower, and the clearest place to see one injection class at four difficulty levels. |
 | **TryHackMe** | Freemium | Guided rooms with hints. Where to start if a bare machine with no instructions is discouraging. |
-| **Hack The Box** | Freemium | Machines with no instructions. Retired ones have community write-ups, which makes them the ones to learn on — and they need a subscription. |
+| **Hack The Box** | Freemium | Machines with no instructions. Retired ones have community write-ups, which makes them the ones to learn on - and they need a subscription. |
 | **VulnHub** | Free | Downloadable vulnerable machines. Runs entirely offline, which matters where bandwidth is the constraint. |
 | **CyberDefenders** | Freemium | Blue-team labs: a real artefact and questions. |
 | **Malware Traffic Analysis** | Free | Years of real captures with exercises and answers. The best free source of traffic that looks like an infection. |
@@ -39,7 +39,7 @@ Two rules the list follows:
 
 | Tool | Cost | What the free edition does |
 |---|---|---|
-| **Burp Suite Community** | Free | Interception, repeater, manual testing — which is the work. No active scanner; the intruder is throttled to a demonstration. Neither is needed to learn. |
+| **Burp Suite Community** | Free | Interception, repeater, manual testing - which is the work. No active scanner; the intruder is throttled to a demonstration. Neither is needed to learn. |
 | **OWASP ZAP** | Free, Apache 2.0 | Genuinely free including the active scan, and scriptable. The one to automate with. |
 | **nmap** | Free | Host and service discovery, plus a scripting engine. Scanning anything you lack permission to scan is the line this whole domain is about. |
 | **ffuf** | Free | Content and parameter discovery. Most of what an engagement finds starts with a path nobody linked to. |
@@ -74,14 +74,14 @@ Two rules the list follows:
 | **Volatility 3** | Free | Memory images. Needs a symbol table for the image's operating system, which is the usual first obstacle. |
 | **Autopsy / The Sleuth Kit** | Free | Disk images, deleted content, timelines. |
 | **YARA** | Free | How a triage conclusion becomes something another team can run across their estate. |
-| **CyberChef** | Free | Decoding and converting in a browser. Runs client-side — read that twice before pasting a client's data anywhere. |
+| **CyberChef** | Free | Decoding and converting in a browser. Runs client-side - read that twice before pasting a client's data anywhere. |
 
 ## Emulation and validation
 
 | Tool | Cost | Note |
 |---|---|---|
 | **Atomic Red Team** | Free | Single-technique tests mapped to ATT&CK, each with cleanup. Run them somewhere you are allowed to break. |
-| **MITRE Caldera** | Free | Automated chains on a schedule. Needs an environment of its own — never point it at production. |
+| **MITRE Caldera** | Free | Automated chains on a schedule. Needs an environment of its own - never point it at production. |
 
 ## Governance
 
@@ -101,7 +101,7 @@ severity is an adjective.
 
 ## Bounty platforms
 
-**HackerOne**, **Bugcrowd**, **Intigriti**, **YesWeHack** — all free to join.
+**HackerOne**, **Bugcrowd**, **Intigriti**, **YesWeHack** - all free to join.
 Reputation gates access to some programmes on the largest of them, which is why
 the first few reports matter more than their bounties.
 

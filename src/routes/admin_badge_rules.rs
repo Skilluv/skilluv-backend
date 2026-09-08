@@ -1,8 +1,8 @@
-//! ADM-M3.2 — Admin CRUD sur badge_rules (proof engine editor).
+//! ADM-M3.2 - Admin CRUD sur badge_rules (proof engine editor).
 //!
-//! - POST  /admin/badge-rules                    — crée
-//! - PATCH /admin/badge-rules/{slug}             — édite (rejet si admin_editable=false ou déprécié)
-//! - POST  /admin/badge-rules/{slug}/deprecate   — soft delete (deprecated_at = NOW)
+//! - POST  /admin/badge-rules                    - crée
+//! - PATCH /admin/badge-rules/{slug}             - édite (rejet si admin_editable=false ou déprécié)
+//! - POST  /admin/badge-rules/{slug}/deprecate   - soft delete (deprecated_at = NOW)
 
 use axum::extract::{Path, Query, State};
 use axum::routing::{patch, post};
@@ -145,7 +145,7 @@ struct CreateRuleBody {
 /// Admin: create a new badge_rule (proof engine editor).
 /// A badge rule as echoed by create and patch.
 ///
-/// SKI-111 — both handlers build this shape independently (one in Rust,
+/// SKI-111 - both handlers build this shape independently (one in Rust,
 /// one via `jsonb_build_object`), so a single schema is also the only
 /// thing keeping them describable as the same resource.
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
@@ -354,12 +354,12 @@ pub async fn patch_rule(
 
     if !admin_editable {
         return Err(AppError::Validation(
-            "badge_rule is admin_editable=false — core rule protected".into(),
+            "badge_rule is admin_editable=false - core rule protected".into(),
         ));
     }
     if deprecated_at.is_some() {
         return Err(AppError::Validation(
-            "badge_rule is deprecated — create a new slug instead".into(),
+            "badge_rule is deprecated - create a new slug instead".into(),
         ));
     }
     if let Some(ot) = body.output_type.as_ref()

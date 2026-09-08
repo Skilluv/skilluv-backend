@@ -1,17 +1,17 @@
 //! Routes HTTP pour seasons + stewards (Phase P6).
 //!
 //! Endpoints seasons :
-//!   GET  /api/seasons                          — liste (public)
-//!   GET  /api/seasons/current                  — saison active (public)
-//!   GET  /api/seasons/{slug}                   — détail (public)
-//!   POST /api/seasons                          — création (admin)
-//!   POST /api/seasons/{slug}/activate          — activate (admin)
+//!   GET  /api/seasons                          - liste (public)
+//!   GET  /api/seasons/current                  - saison active (public)
+//!   GET  /api/seasons/{slug}                   - détail (public)
+//!   POST /api/seasons                          - création (admin)
+//!   POST /api/seasons/{slug}/activate          - activate (admin)
 //!
 //! Endpoints stewards :
-//!   GET    /api/projects/{project_id}/stewards           — liste (public)
-//!   POST   /api/projects/{project_id}/stewards           — add (project owner ou admin)
-//!   DELETE /api/projects/{project_id}/stewards/{user_id}/{role} — remove
-//!   GET    /api/users/me/stewardships                    — mes projets
+//!   GET    /api/projects/{project_id}/stewards           - liste (public)
+//!   POST   /api/projects/{project_id}/stewards           - add (project owner ou admin)
+//!   DELETE /api/projects/{project_id}/stewards/{user_id}/{role} - remove
+//!   GET    /api/users/me/stewardships                    - mes projets
 
 use axum::extract::{Path, State};
 use axum::routing::{delete, get, post};

@@ -1,10 +1,10 @@
-// LO-02 — realistic load scenario.
+// LO-02 - realistic load scenario.
 //
 // smoke.js proves the endpoints answer under nominal traffic; this models the
 // real shape. The maths (from the ticket): 1M signups × ~3-5% active/day is a
 // few tens of requests/second at peak. This ramps to that and a bit past it, on
-// the read paths that dominate a browsing session — feed, search, discovery,
-// leaderboards — so a regression in the DB pool or a hot query shows up as
+// the read paths that dominate a browsing session - feed, search, discovery,
+// leaderboards - so a regression in the DB pool or a hot query shows up as
 // latency, not a mystery.
 //
 //   k6 run tests/load/realistic.js
@@ -58,7 +58,7 @@ const BAG = PATHS.flatMap((e) => Array(e.weight).fill(e.path));
 
 function pick(iter) {
   // Deterministic per-VU/iteration spread without Math.random dependence on
-  // wall clock — good enough to distribute the mix.
+  // wall clock - good enough to distribute the mix.
   return BAG[(iter + __VU) % BAG.length];
 }
 

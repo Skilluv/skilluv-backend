@@ -1,11 +1,11 @@
-//! P22.1 — Helpers pour RLS enforcement (Row-Level Security tenant isolation).
+//! P22.1 - Helpers pour RLS enforcement (Row-Level Security tenant isolation).
 //!
 //! Les policies RLS ont été livrées en P14.2 (mig 0083) avec `set_tenant_context()`
 //! côté PostgreSQL. En dev les policies sont ATTACHÉES mais NON ENFORCED
 //! (le rôle `skilluv` est superuser et bypass RLS).
 //!
 //! Ce module fournit les helpers Rust pour appeler `set_tenant_context` au bon
-//! endroit dans les transactions applicatives — préparation à l'activation prod
+//! endroit dans les transactions applicatives - préparation à l'activation prod
 //! quand un rôle NOSUPERUSER NOBYPASSRLS sera en place.
 //!
 //! ## Contrat d'usage prod
@@ -43,7 +43,7 @@
 //!
 //! Le pattern d'activation :
 //! 1. Passer `SKILLUV_RLS_ENFORCED=1` en staging
-//! 2. Faire tourner la suite d'integration — tous les tests deliverables/
+//! 2. Faire tourner la suite d'integration - tous les tests deliverables/
 //!    attestations vont echouer (0 rows visibles ou insert refuse selon les
 //!    policies)
 //! 3. Patcher chaque site en ajoutant `rls::set_tenant_context_on_tx` en tete

@@ -6,7 +6,7 @@
 //!
 //! That is not an optimisation. Five gigabytes through an axum handler holds a
 //! connection and a buffer for as long as somebody's connection takes, and it
-//! does so for every concurrent upload — one designer on a rural line would
+//! does so for every concurrent upload - one designer on a rural line would
 //! degrade the API for everybody.
 
 use axum::extract::{Path, Query, State};
@@ -150,7 +150,7 @@ pub async fn complete(
 
 /// A URL to PUT the preview to.
 ///
-/// Required for the subtypes a browser cannot open — a scene file, a project
+/// Required for the subtypes a browser cannot open - a scene file, a project
 /// file, an audio master. Nothing here renders one: the person who made the
 /// file picks the frame that represents it, which is a better frame than any
 /// heuristic would find and costs no render farm.

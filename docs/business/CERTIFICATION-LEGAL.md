@@ -1,4 +1,4 @@
-# Labels Skilluv — cadre juridique
+# Labels Skilluv - cadre juridique
 
 Skilluv vend six labels : relecteur certifié, partenaire bronze / argent /
 or, studio certifié, compétence sécurité d'équipe. Chacun est une phrase que
@@ -33,7 +33,7 @@ côté du constat :
 
 La seule exception est l'instance gouvernementale
 (`white_label_deployments.official_recognition_scope`), où la reconnaissance
-vient de l'État et pas de nous — et où la base exige une convention signée
+vient de l'État et pas de nous - et où la base exige une convention signée
 avant de laisser écrire quoi que ce soit.
 
 ## 2. Ce que le code garantit déjà
@@ -48,7 +48,7 @@ Un label n'existe pas sans :
 - **un seul label vivant** par sujet et par programme.
 
 Payer ne certifie pas. Un audit échoué laisse les frais engagés et ne donne
-pas le label — c'est la seule version du produit qui vaut quelque chose, et
+pas le label - c'est la seule version du produit qui vaut quelque chose, et
 c'est aussi ce qui nous protège : un label acheté est une déclaration
 trompeuse, et la personne trompée est le contributeur qui a accepté le poste à
 cause de lui.
@@ -58,7 +58,7 @@ cause de lui.
 À déposer, dans cet ordre :
 
 1. **« Skilluv »**, marque verbale, classes 35 (services de recrutement et de
-   publicité), 41 (formation) et 42 (services informatiques) — OAPI pour la
+   publicité), 41 (formation) et 42 (services informatiques) - OAPI pour la
    zone franc, puis EUIPO ;
 2. **le logo**, une fois stabilisé ;
 3. **« Skilluv Certified » / « Certifié Skilluv »**, marque verbale, même
@@ -89,7 +89,7 @@ Le contrat de certification dit :
 Skilluv peut retirer un label quand les faits qui l'ont fondé ne sont plus
 vrais. Le retrait :
 
-- **est motivé par écrit** — la base l'exige ;
+- **est motivé par écrit** - la base l'exige ;
 - **est notifié** au titulaire avant d'être public ;
 - **laisse trente jours** pour retirer les affichages ;
 - **n'est pas remboursé** : l'audit a eu lieu et le label a été porté.
@@ -109,7 +109,7 @@ Trois expositions, à connaître avant de vendre le premier label :
 contributeurs, et un contributeur qui accepte un poste à cause du label. C'est
 le risque principal, et c'est pourquoi l'audit est obligatoire et le retrait
 possible. Le contrat de certification n'exonère pas Skilluv vis-à-vis du
-contributeur — il n'y a pas de contrat entre eux — mais un audit documenté et
+contributeur - il n'y a pas de contrat entre eux - mais un audit documenté et
 un retrait rapide sont ce qui distingue une erreur d'une négligence.
 
 **La contestation d'un refus.** Une entreprise recalée qui estime l'audit
@@ -124,6 +124,6 @@ dont on peut montrer les pièces est un audit défendable.
 - déposer les marques (section 3) ;
 - rédiger le contrat de certification à partir de
   [CONTRACT-CLAUSES.md](CONTRACT-CLAUSES.md) section 7 ;
-- écrire la grille d'audit publique de chaque programme — le seuil est
+- écrire la grille d'audit publique de chaque programme - le seuil est
   publié, les critères ne le sont pas encore ;
 - décider qui, chez Skilluv, peut signer un retrait.

@@ -1,8 +1,8 @@
-//! P26 v2 SKI-123 — challenger diary for a slice.
+//! P26 v2 SKI-123 - challenger diary for a slice.
 //!
 //! Endpoints:
 //!   POST /api/slices/{id}/diary          (auth, current claimer only)
-//!   GET  /api/slices/{id}/diary          (public — filters is_public=false for non-owners)
+//!   GET  /api/slices/{id}/diary          (public - filters is_public=false for non-owners)
 //!
 //! Design notes:
 //! - Body markdown length is CHECKed in DB (1..4000). We echo the same
@@ -30,7 +30,7 @@ pub fn slice_diary_routes() -> Router<AppState> {
 }
 
 /// Cookie-based auth extraction that does NOT fail on missing/invalid.
-/// Same shape as the extractor the recruiter search used to carry — kept
+/// Same shape as the extractor the recruiter search used to carry - kept
 /// duplicated locally rather than exported publicly (small helper,
 /// less coupling).
 fn peek_user(headers: &HeaderMap, jwt_secret: &str) -> Option<Uuid> {
@@ -53,10 +53,10 @@ fn peek_user(headers: &HeaderMap, jwt_secret: &str) -> Option<Uuid> {
 #[serde(deny_unknown_fields)]
 #[schema(as = SliceDiaryCreateEntryBody)]
 pub struct CreateEntryBody {
-    /// Markdown, 1..4000 chars. Longer entries are rejected — the diary
+    /// Markdown, 1..4000 chars. Longer entries are rejected - the diary
     /// is a running log, not an essay.
     pub body_markdown: String,
-    /// Default true — most entries are shared with the community.
+    /// Default true - most entries are shared with the community.
     #[serde(default = "default_true")]
     pub is_public: bool,
 }
@@ -115,7 +115,7 @@ pub async fn create(
 
     // Only the current claimer of the slice may post. Past claimers
     // (who have since been rewound to `claimed` or moved on) do NOT
-    // qualify — diary is a live log of the CURRENT attempt.
+    // qualify - diary is a live log of the CURRENT attempt.
     let is_current_claimer: bool = sqlx::query_scalar(
         r#"
         SELECT EXISTS(
@@ -147,7 +147,7 @@ pub async fn create(
     .fetch_one(&state.db)
     .await?;
 
-    // SKI-286 — @username mentions. Private entries record their mentions
+    // SKI-286 - @username mentions. Private entries record their mentions
     // too, but the inbox only surfaces them to the author, so a mention in
     // a private diary never reaches the person named.
     crate::services::mentions::record_and_notify(
@@ -191,7 +191,7 @@ pub async fn list(
         "#,
     )
     .bind(slice_id)
-    // Bind Uuid::nil() when unauth — no row will ever match it.
+    // Bind Uuid::nil() when unauth - no row will ever match it.
     .bind(viewer.unwrap_or(Uuid::nil()))
     .fetch_all(&state.db)
     .await?;

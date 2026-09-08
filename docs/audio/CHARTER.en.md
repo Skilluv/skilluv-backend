@@ -35,7 +35,7 @@ The difference is not difficulty. It is verifiability.
 ## 2. Four non-negotiable requirements
 
 **Declared provenance.** Every sample, loop or library used is declared with
-its licence — or everything is original and that is written down. **This is the
+its licence - or everything is original and that is written down. **This is the
 strictest requirement in the domain, and the only one that can make a delivery
 unusable on its own**: an untraced source exposes the client to a takedown and
 the author to a claim, months after delivery.
@@ -68,7 +68,7 @@ before the recording, not after.
 
 **Portfolio use is the default.** A creator who cannot show what they made
 cannot prove they made it, and that is the only currency on this platform. A
-clause that forbids it exists — `buyout` — and it is visible, separate, and
+clause that forbids it exists - `buyout` - and it is visible, separate, and
 paid for.
 
 ## 4. Four licence scopes, and why the question is asked
@@ -76,10 +76,10 @@ paid for.
 Ownership and licence are two different questions, and in music they almost
 always have two different answers. Every audio mission must say which applies:
 
-- **sync only** — use to picture, in the named work;
-- **limited commercial** — one medium, one territory, one duration;
-- **worldwide commercial** — no territorial or time limit;
-- **exclusive** — the client alone may use the work, and that is paid for.
+- **sync only** - use to picture, in the named work;
+- **limited commercial** - one medium, one territory, one duration;
+- **worldwide commercial** - no territorial or time limit;
+- **exclusive** - the client alone may use the work, and that is paid for.
 
 A commission with no stated scope is the first cause of dispute in this trade:
 the client assumes "worldwide" and the composer assumes "that game".
@@ -104,7 +104,7 @@ refuses most firmly. See [VOICE-RIGHTS.en.md](./VOICE-RIGHTS.en.md).
 
 The family's review grid, public and readable before you submit: composition,
 sound design, voice, implementation. It is applied by a reviewer holding the
-matching capability — `audio_reviewer:composition`,
+matching capability - `audio_reviewer:composition`,
 `audio_reviewer:sound-design`, `audio_reviewer:voice`,
 `audio_reviewer:implementation`.
 
@@ -114,8 +114,8 @@ attestation asserts.
 
 ## 7. The documents that go with this
 
-- [LICENSING.en.md](./LICENSING.en.md) — samples, registration, sync.
-- [VOICE-RIGHTS.en.md](./VOICE-RIGHTS.en.md) — voice rights, non-compete,
+- [LICENSING.en.md](./LICENSING.en.md) - samples, registration, sync.
+- [VOICE-RIGHTS.en.md](./VOICE-RIGHTS.en.md) - voice rights, non-compete,
   cloning.
 - Brief and writeup templates are served by the API
   (`/api/guides?domain=audio`) rather than kept in this repository: they are

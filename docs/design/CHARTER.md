@@ -45,8 +45,8 @@ commune, et pas seulement aux métiers d'interface. Un contraste insuffisant
 sur une affiche exclut autant que sur un écran. Ce n'est pas une spécialité,
 c'est une condition.
 
-**La paternité.** Ce que vous rendez est de vous. Les éléments repris —
-photographie, police, illustration, modèle 3D — sont nommés avec leur licence.
+**La paternité.** Ce que vous rendez est de vous. Les éléments repris -
+photographie, police, illustration, modèle 3D - sont nommés avec leur licence.
 Une reprise déclarée est normale ; une reprise tue.
 
 **Le raisonnement.** Une proposition se défend. Pourquoi cette direction,
@@ -95,8 +95,8 @@ Ils ne sont pas interdits, ils sont **déclarés**. Un livrable produit avec un
 outil génératif le dit, et dit à quel endroit.
 
 La raison n'est pas morale, elle est pratique : ce qui est validé ici est censé
-être ce que vous savez refaire. Une soutenance en temps réel — expliquer les
-choix, reprendre une direction devant quelqu'un — est ce qui tranche, et elle
+être ce que vous savez refaire. Une soutenance en temps réel - expliquer les
+choix, reprendre une direction devant quelqu'un - est ce qui tranche, et elle
 tranche de la même façon pour un travail fait à la main.
 
 Ce qui est refusé, c'est le rendu génératif présenté comme une conception, et
@@ -108,8 +108,8 @@ Un travail repris est retiré, l'attestation est révoquée, et le compte est
 signalé. Il n'y a pas de deuxième version de cette règle : tout le reste de la
 plateforme repose sur le fait qu'une preuve appartient à qui elle dit.
 
-Les cas limites — un hommage, une reprise de style, une commande dont le
-brief imposait une référence — se règlent en le disant avant, pas après.
+Les cas limites - un hommage, une reprise de style, une commande dont le
+brief imposait une référence - se règlent en le disant avant, pas après.
 
 ## 7. Ce sur quoi vous êtes jugé
 

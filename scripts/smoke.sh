@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SKI-28 (Hygiène pré-prod HYG-01) — smoke test suite.
+# SKI-28 (Hygiène pré-prod HYG-01) - smoke test suite.
 #
 # Hits the critical endpoints of a running Skilluv backend and exits
 # non-zero on the first failure. Used by CI after a Coolify deploy to
@@ -10,9 +10,9 @@
 #   ./scripts/smoke.sh http://localhost:3001     # local dev
 #
 # Exit codes:
-#   0  — all checks passed
-#   1  — at least one endpoint failed
-#   2  — misuse (missing base URL)
+#   0  - all checks passed
+#   1  - at least one endpoint failed
+#   2  - misuse (missing base URL)
 
 set -euo pipefail
 
@@ -23,7 +23,7 @@ if [[ -z "$BASE_URL" ]]; then
 fi
 BASE_URL="${BASE_URL%/}"  # strip trailing slash
 
-# Retry wrapper — the API can be re-warming after a Coolify swap.
+# Retry wrapper - the API can be re-warming after a Coolify swap.
 # 5 tries × 3s = 15s total ceiling; enough for cold-start without
 # masking a real outage.
 retry_curl() {
@@ -63,7 +63,7 @@ check_json_key() {
 }
 
 echo "═══════════════════════════════════════════════════════════"
-echo "  Skilluv backend smoke test — $BASE_URL"
+echo "  Skilluv backend smoke test - $BASE_URL"
 echo "═══════════════════════════════════════════════════════════"
 
 FAILED=0
@@ -79,7 +79,7 @@ echo "• /api/openapi.json (contract still served)"
 retry_curl "$BASE_URL/api/openapi.json" "200" || FAILED=$((FAILED + 1))
 
 echo "• /metrics (observability up)"
-# 200 (public) OR 401 (gated by METRICS_TOKEN — still means backend is alive)
+# 200 (public) OR 401 (gated by METRICS_TOKEN - still means backend is alive)
 metrics_status=$(curl -sS -o /dev/null -w "%{http_code}" \
     --max-time 10 "$BASE_URL/metrics" || echo "000")
 if [[ "$metrics_status" != "200" ]] && [[ "$metrics_status" != "401" ]]; then
@@ -92,7 +92,7 @@ register_status=$(curl -sS -o /dev/null -w "%{http_code}" \
     -X POST -H "Content-Type: application/json" -d '{}' \
     --max-time 10 "$BASE_URL/api/auth/register" || echo "000")
 # 400/422 = validation working (422 = well-formed JSON, missing fields),
-# 429 = rate-limited (also fine — proves middleware alive)
+# 429 = rate-limited (also fine - proves middleware alive)
 if [[ "$register_status" != "400" ]] && [[ "$register_status" != "422" ]] && [[ "$register_status" != "429" ]]; then
     echo "  FAIL POST /api/auth/register → HTTP $register_status (expected 400, 422, or 429)" >&2
     FAILED=$((FAILED + 1))

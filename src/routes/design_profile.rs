@@ -1,4 +1,4 @@
-//! The design profile — one request, everything a reader needs to judge
+//! The design profile - one request, everything a reader needs to judge
 //! somebody's work without taking the platform's word for it.
 //!
 //! Same order as the code profile, for the same reasons: the score first
@@ -8,7 +8,7 @@
 //!
 //! One thing is here that has no code equivalent: the iteration trail. A
 //! design deliverable validated at the fifth round is a better story than one
-//! validated at the first, and the profile says so — it is the single piece
+//! validated at the first, and the profile says so - it is the single piece
 //! of evidence that separates somebody who can take a critique from somebody
 //! who has only ever been agreed with.
 
@@ -197,7 +197,7 @@ pub async fn design_profile(
     .await?;
 
     // Paid work: how much, of what kind, and how it was rated. No client
-    // names and no figures — what a piece of work paid is the contractor's
+    // names and no figures - what a piece of work paid is the contractor's
     // business, and the client is often under an agreement Skilluv is not
     // party to.
     let missions: Vec<(String, i64)> = sqlx::query_as(
@@ -241,7 +241,7 @@ pub async fn design_profile(
     // finished image cannot.
     //
     // Shown, never ranked. Needing more rounds is not an achievement and not
-    // a failure — it is how somebody learned, and a leaderboard of it would
+    // a failure - it is how somebody learned, and a leaderboard of it would
     // teach people to iterate for the leaderboard.
     let stories: Vec<(uuid::Uuid, String, i16, Value)> = sqlx::query_as(
         r#"
@@ -274,7 +274,7 @@ pub async fn design_profile(
     .fetch_all(&state.db)
     .await?;
 
-    // What they say they are open to. A declaration, never a credential —
+    // What they say they are open to. A declaration, never a credential -
     // and separated from everything above it for that reason.
     #[derive(sqlx::FromRow)]
     struct Availability {
@@ -366,7 +366,7 @@ pub async fn recompute_mine(
 #[serde(deny_unknown_fields)]
 pub struct AvailabilityBody {
     /// The "open to missions" badge. Every field is set as sent, so omitting
-    /// one clears it — this is the whole availability state, not a patch.
+    /// one clears it - this is the whole availability state, not a patch.
     pub available_for_missions: bool,
     /// What kind of work, in the person's words. Optional.
     pub looking_for: Option<String>,
@@ -376,7 +376,7 @@ pub struct AvailabilityBody {
     pub available_from: Option<chrono::NaiveDate>,
 }
 
-/// Set your mission availability — the badge, the rate range, the next-free
+/// Set your mission availability - the badge, the rate range, the next-free
 /// date (SKI-315). Touching `updated_at` is what keeps the badge honest: a
 /// client greys a declaration that has not been refreshed in months rather than
 /// the server presenting a stale "available" as current.
@@ -428,7 +428,7 @@ pub async fn set_availability(
     }))))
 }
 
-/// GET /design/tiers — the ladder, and the formula behind it.
+/// GET /design/tiers - the ladder, and the formula behind it.
 ///
 /// Published because a score whose rules are private is a ranking nobody can
 /// argue with, and the whole point of storing the weights as rows was that

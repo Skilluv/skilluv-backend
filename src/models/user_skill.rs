@@ -45,7 +45,7 @@ pub struct UserSkill {
 impl UserSkill {
     /// Calcule le proficiency_level à partir du weighted_proven_count.
     ///
-    /// Formule : `min(5, ceil(log2(WPC + 1)))` — voir partie G.2 du doc pour
+    /// Formule : `min(5, ceil(log2(WPC + 1)))` - voir partie G.2 du doc pour
     /// le rationale (progression lente au haut du spectre, récompense la profondeur
     /// autant que la répétition).
     pub fn proficiency_level_for(weighted_proven_count: i32) -> i16 {

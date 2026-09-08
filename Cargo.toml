@@ -2,11 +2,11 @@
 name = "skilluv-backend"
 version = "0.1.0"
 edition = "2024"
-description = "Skilluv — Plateforme gamifiée de démonstration de compétences"
+description = "Skilluv - Plateforme gamifiée de démonstration de compétences"
 license = "AGPL-3.0-or-later"
 default-run = "skilluv-backend"
 
-# cargo-machete false-positive ignores. Each entry has a written reason —
+# cargo-machete false-positive ignores. Each entry has a written reason -
 # do NOT add to this list without checking that the crate is actually
 # unused. To verify: `cargo tree -p <crate>` shows the transitive path.
 [package.metadata.cargo-machete]
@@ -17,7 +17,7 @@ ignored = [
     # push_sender.rs) so machete can't see the direct usage.
     "elliptic-curve",
     # Build-only crates (tonic codegen + protobuf compiler). Referenced
-    # only in build.rs — cargo-machete's source scanner doesn't traverse
+    # only in build.rs - cargo-machete's source scanner doesn't traverse
     # build scripts.
     "protox",
     "tonic-build",
@@ -30,7 +30,7 @@ ignored = [
 
 [features]
 default = []
-# SKI-116 — pulls in serenity for the Discord gateway bot binary.
+# SKI-116 - pulls in serenity for the Discord gateway bot binary.
 # Not linked by the HTTP backend, the auxiliary binaries or the
 # integration tests, so `cargo test` and the smaller CI jobs stay
 # under the GitHub Actions linker memory budget.
@@ -82,7 +82,7 @@ reqwest = { version = "0.13", features = ["json", "form"] }
 # SMTP transport (used for local dev via Mailpit; production still uses Brevo HTTP API)
 lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "tokio1-rustls-tls", "builder"] }
 
-# WebAuthn / passkeys — relies on system OpenSSL (see .cargo/config.toml on Windows).
+# WebAuthn / passkeys - relies on system OpenSSL (see .cargo/config.toml on Windows).
 webauthn-rs = { version = "0.5", features = ["danger-allow-state-serialisation"] }
 url = "2"
 
@@ -128,7 +128,7 @@ sentry-tracing = "0.49"
 zip = { version = "8", default-features = false, features = ["deflate"] }
 
 # QR code generation for SKI-118 PDF attestations. Pure-Rust, no external
-# service call — the QR is embedded as inline SVG in the PDF's HTML.
+# service call - the QR is embedded as inline SVG in the PDF's HTML.
 qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 
 # i18n (FR/EN bundled)
@@ -137,16 +137,16 @@ rust-i18n = "4"
 # Authenticated encryption for at-rest secrets (GitHub OAuth tokens, etc.)
 chacha20poly1305 = "0.11"
 
-# Web push VAPID natif (pure Rust, sans OpenSSL) — RFC 8291 + 8292
+# Web push VAPID natif (pure Rust, sans OpenSSL) - RFC 8291 + 8292
 p256 = { version = "0.14", features = ["ecdh", "ecdsa", "pkcs8"] }
 aes-gcm = "0.11"
 hkdf = "0.13"
 
-# OIDC B2B SSO (enterprise) — discovery, PKCE, JWKS rotation, ID token verify.
+# OIDC B2B SSO (enterprise) - discovery, PKCE, JWKS rotation, ID token verify.
 openidconnect = "4"
 elliptic-curve = { version = "0.14", features = ["sec1"] }
 
-# SKI-116 Discord bot v2 — gateway connection, slash commands,
+# SKI-116 Discord bot v2 - gateway connection, slash commands,
 # welcome DM, account linking. Used only by src/bin/discord_bot.rs
 # (the main HTTP backend never touches it). rustls_backend keeps us
 # off OpenSSL to match the rest of the workspace.
@@ -219,13 +219,13 @@ required-features = ["discord-bot"]
 
 # Debug info is the single largest thing this repository writes to disk. 184
 # integration test binaries each statically link the whole dependency graph,
-# and with full DWARF that is tens of gigabytes of `target/` — more than a
+# and with full DWARF that is tens of gigabytes of `target/` - more than a
 # GitHub runner has. Every CI shard died while linking: three with ENOSPC and
 # the fourth with a SIGBUS from the linker writing through a mapping on a full
 # disk, which is the same failure wearing a different hat.
 #
-# `line-tables-only` keeps what a backtrace actually needs — file and line per
-# frame — and drops the variable and type descriptions only a debugger reads.
+# `line-tables-only` keeps what a backtrace actually needs - file and line per
+# frame - and drops the variable and type descriptions only a debugger reads.
 # A failing test still names the line it failed on. Attaching gdb to a dev
 # build is the case that loses, and one flag on the command line brings it
 # back.
@@ -247,7 +247,7 @@ totp-rs = { version = "5", features = ["gen_secret", "otpauth"] }
 # Mock OIDC IdP for enterprise SSO integration tests.
 rsa = { version = "0.9", features = ["sha2"] }
 rand = "0.10"
-# Property testing — thousands of generated cases against the pure parsers and
+# Property testing - thousands of generated cases against the pure parsers and
 # decision tables (tests/prop_pure_parsers.rs). The locally-runnable half of the
 # FZ/MU backlog: the cargo-fuzz targets in fuzz/ wrap the same functions for the
 # nightly CI amplifier, which needs libFuzzer + nightly and does not run on

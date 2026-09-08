@@ -13,7 +13,7 @@
 //!   ex `https://github.com/{owner}/{repo}/blob/{ref}/{path}`. Sinon on
 //!   utilise la convention standard `{username}/{username}/README.md`.
 //! - Un token GitHub service-account (SKILLUV_BOT_GITHUB_TOKEN) est utilise
-//!   pour eviter le rate limit anonyme de 60 req/h. Optionnel — le fetch
+//!   pour eviter le rate limit anonyme de 60 req/h. Optionnel - le fetch
 //!   fonctionne aussi sans token, juste plus limite.
 //!
 //! Non wire dans un cron : appelable depuis un endpoint admin ou un worker
@@ -154,7 +154,7 @@ fn parse_github_url(url: &str) -> Option<(String, String)> {
         .strip_prefix("https://github.com/")
         .or_else(|| url.strip_prefix("https://raw.githubusercontent.com/"))?;
     let (owner, rest) = stripped.split_once('/')?;
-    // On veut juste owner/repo — le path suit apres /blob/{ref}/ ou /{ref}/.
+    // On veut juste owner/repo - le path suit apres /blob/{ref}/ ou /{ref}/.
     let (repo, after) = rest.split_once('/')?;
     // Skippe le segment blob (github.com) ou pas (raw).
     let path = if let Some(after_blob) = after.strip_prefix("blob/") {
@@ -192,7 +192,7 @@ async fn fetch_readme(
             }
         },
         None => {
-            // Fetch anonyme via raw.githubusercontent — pas de rate limit token
+            // Fetch anonyme via raw.githubusercontent - pas de rate limit token
             // mais plus limite (60 req/h par IP).
             let url = format!("https://raw.githubusercontent.com/{repo_full_name}/HEAD/{path}");
             let resp = reqwest::Client::new()

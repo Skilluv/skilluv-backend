@@ -2,8 +2,8 @@
 //!
 //! `quality_practice::import_test_run` took the figures as input: a member
 //! typed how many tests ran and how many failed, and a public link stood as
-//! the proof a reviewer could check. That is the platform's usual shape —
-//! declared, then verified by a human — and for most things it is the right
+//! the proof a reviewer could check. That is the platform's usual shape -
+//! declared, then verified by a human - and for most things it is the right
 //! one.
 //!
 //! It is the wrong one here, for a reason specific to this domain. The figure
@@ -20,8 +20,8 @@
 //! ## Why the format is parsed by hand
 //!
 //! The summary lives in the attributes of one or two element types, and
-//! everything else in the file — every individual case, every captured stdout
-//! line, every stack trace — is ignored. A general XML parser would read all
+//! everything else in the file - every individual case, every captured stdout
+//! line, every stack trace - is ignored. A general XML parser would read all
 //! of it into memory to let this take six numbers off the top.
 //!
 //! The parser is deliberately narrow about what it will accept, and says so
@@ -55,14 +55,14 @@ pub struct Summary {
 ///
 /// A `<testsuites>` root carries totals across its children. Many writers
 /// emit a bare `<testsuite>` with no wrapper, and some emit a wrapper whose
-/// totals are absent or wrong — pytest-xdist has shipped both. So the suites
+/// totals are absent or wrong - pytest-xdist has shipped both. So the suites
 /// are always summed, and the root's own totals are used only to check the
 /// sum rather than to replace it: when they disagree the report is refused,
 /// because one of the two numbers is wrong and this module cannot tell which.
 pub fn parse(xml: &str) -> Result<Summary, AppError> {
     if !xml.contains("<testsuite") {
         return Err(AppError::Validation(
-            "that does not look like a JUnit report — no `<testsuite>` anywhere in it. \
+            "that does not look like a JUnit report - no `<testsuite>` anywhere in it. \
              If your runner writes a different format, export JUnit XML: every runner \
              this platform has met can."
                 .into(),
@@ -109,7 +109,7 @@ pub fn parse(xml: &str) -> Result<Summary, AppError> {
 
     if summary.tests_failed + summary.tests_skipped > summary.tests_total {
         return Err(AppError::Validation(format!(
-            "the report says {} failed and {} skipped out of {} — more outcomes than \
+            "the report says {} failed and {} skipped out of {} - more outcomes than \
              tests",
             summary.tests_failed, summary.tests_skipped, summary.tests_total
         )));
@@ -149,7 +149,7 @@ fn elements_named<'a>(xml: &'a str, name: &'a str) -> impl Iterator<Item = &'a s
 
 /// The value of one attribute of one tag.
 fn attr<'a>(element: &'a str, name: &str) -> Option<&'a str> {
-    // ` name="` — the leading space is what stops `skipped` matching inside
+    // ` name="` - the leading space is what stops `skipped` matching inside
     // another attribute's value, and `tests` matching `tests_total`.
     for quote in ['"', '\''] {
         let needle = format!(" {name}={quote}");

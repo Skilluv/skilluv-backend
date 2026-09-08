@@ -1,4 +1,4 @@
-# Modèles de brief — ops
+# Modèles de brief - ops
 
 Cinq modèles, un par famille de relecture. Un brief ops qui ne remplit pas ces
 champs produit une mission où personne ne sait quand elle est finie.
@@ -9,7 +9,7 @@ n'a dit ce que marcher veut dire.
 
 ---
 
-## 1. Infra — module, chart, pipeline
+## 1. Infra - module, chart, pipeline
 
 ```
 Titre :
@@ -33,7 +33,7 @@ Comment on saura que c'est fait :
 Ce qui reste hors périmètre :
 ```
 
-## 2. Fiabilité — objectif de service, runbook, résilience
+## 2. Fiabilité - objectif de service, runbook, résilience
 
 ```
 Titre :
@@ -46,7 +46,7 @@ Objectif proposé :
   - mesuré par : (la source, nommée, accessible au relecteur)
 
 Ce qui casse aujourd'hui :
-  (les incidents connus, ou l'absence d'historique — dire lequel)
+  (les incidents connus, ou l'absence d'historique - dire lequel)
 
 Comment on saura que c'est fait :
   - la cible est mesurée en continu et lisible sans demander à personne
@@ -57,7 +57,7 @@ Astreinte : incluse | non incluse
   (si incluse : plage horaire, délai de réponse, rémunération)
 ```
 
-## 3. Cloud — conception, coûts, région
+## 3. Cloud - conception, coûts, région
 
 ```
 Titre :
@@ -83,7 +83,7 @@ Comment on saura que c'est fait :
   - un test de reprise joué et documenté
 ```
 
-## 4. Observabilité — instrumentation, alertes, tableaux
+## 4. Observabilité - instrumentation, alertes, tableaux
 
 ```
 Titre :
@@ -106,7 +106,7 @@ Comment on saura que c'est fait :
 Rétention décidée : ____ jours, parce que ____
 ```
 
-## 5. Données — migration, réglage, réplication
+## 5. Données - migration, réglage, réplication
 
 ```
 Titre :
@@ -133,13 +133,13 @@ Retour en arrière :
 
 ## Les trois champs que personne ne remplit et qui coûtent le plus
 
-**« Ce qui existe aujourd'hui »** — sauté parce que le client le connaît. Le
+**« Ce qui existe aujourd'hui »** - sauté parce que le client le connaît. Le
 contributeur ne le connaît pas, et découvre à mi-mission que la moitié est
 faite à la main.
 
-**« Ce qui reste hors périmètre »** — sauté parce qu'il semble négatif. C'est
+**« Ce qui reste hors périmètre »** - sauté parce qu'il semble négatif. C'est
 le champ qui évite la conversation où le périmètre a grandi sans que personne
 ne l'ait décidé.
 
-**« Comment on saura que c'est fait »** — sauté parce que ça paraît évident.
+**« Comment on saura que c'est fait »** - sauté parce que ça paraît évident.
 Ce n'est jamais évident, et sans lui la fin de mission est une négociation.

@@ -4,7 +4,7 @@
 //! ## Why a task-local and not a request extension
 //!
 //! The obvious design is `req.extensions_mut().insert(ResearchMode)`, and it
-//! does not work here. `RateLimiter::check` is not a layer — it is a function
+//! does not work here. `RateLimiter::check` is not a layer - it is a function
 //! called from inside a hundred and some handlers, with the arguments the
 //! handler chose, and it never sees the request. Making it see one would have
 //! meant editing every call site to thread an extractor through, which is a
@@ -13,15 +13,15 @@
 //!
 //! A task-local works because axum runs each request's handler inside the
 //! future this middleware wraps, so a value scoped here is visible to anything
-//! that runs underneath — including a plain function nobody passed anything to.
+//! that runs underneath - including a plain function nobody passed anything to.
 //! Outside a scope it reads as absent rather than panicking, which is what
 //! makes the limiter behave identically in tests and in the workers.
 //!
 //! ## What it deliberately does not do
 //!
 //! It does not authenticate. A valid token identifies a person for the audit
-//! trail and grants nothing, and an invalid one is ignored rather than refused
-//! — answering 401 to a bad token would turn this header into an oracle for
+//! trail and grants nothing, and an invalid one is ignored rather than refused -
+//! answering 401 to a bad token would turn this header into an oracle for
 //! which tokens exist.
 
 use axum::extract::{Request, State};
@@ -47,8 +47,8 @@ tokio::task_local! {
 
 /// Whether the request being handled right now is declared research.
 ///
-/// Reads as `None` outside a request — in a worker, in a test that calls a
-/// service directly — which is the correct answer there.
+/// Reads as `None` outside a request - in a worker, in a test that calls a
+/// service directly - which is the correct answer there.
 pub fn current() -> Option<ResearchMode> {
     RESEARCH_MODE.try_with(|m| *m).ok().flatten()
 }

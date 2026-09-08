@@ -1,4 +1,4 @@
-//! Integration tests — OSS Bounties (P9.2 : project_slices comme source unique).
+//! Integration tests - OSS Bounties (P9.2 : project_slices comme source unique).
 
 use crate::common::TestApp;
 use serde_json::{Value, json};

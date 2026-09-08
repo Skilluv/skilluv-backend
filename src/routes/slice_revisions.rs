@@ -4,7 +4,7 @@
 //!
 //! It was. Migration 0412 built `slice_revision_rounds` with the round kinds
 //! and the per-domain ceiling as rows, and the three handlers that used it
-//! read `revision_round_limits` through the slice's own `primary_domain` —
+//! read `revision_round_limits` through the slice's own `primary_domain` -
 //! they were domain-agnostic from the first line. Only the URL was not.
 //!
 //! Communication would have made that a second copy, education a third, and
@@ -15,7 +15,7 @@
 //!
 //! Opening a round is for whoever commissioned the work rather than whoever
 //! did it: a round the maker can open is a round the maker can spend. Closing
-//! one is for the person who opened it, for the same reason — a counter one
+//! one is for the person who opened it, for the same reason - a counter one
 //! side can run down alone is not a count both sides agree on.
 
 use axum::extract::{Path, State};
@@ -83,7 +83,7 @@ pub async fn list_revisions(
     .await?;
 
     // The ceiling belongs to the slice's domain, and a domain with no row has
-    // no ceiling — which is not the same as a ceiling of zero.
+    // no ceiling - which is not the same as a ceiling of zero.
     let allowed: Option<i16> = sqlx::query_scalar(
         "SELECT l.max_rounds FROM project_slices ps
            JOIN revision_round_limits l ON l.skill_domain = ps.primary_domain
@@ -122,7 +122,7 @@ pub async fn request_revision(
 ) -> Result<Json<ApiResponse<serde_json::Value>>, AppError> {
     if body.notes_md.trim().is_empty() {
         return Err(AppError::Validation(
-            "a round has to say what to change — a rejection with no statement \
+            "a round has to say what to change - a rejection with no statement \
              cannot be acted on"
                 .into(),
         ));

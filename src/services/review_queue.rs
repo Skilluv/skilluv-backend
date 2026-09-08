@@ -1,4 +1,4 @@
-//! Service `review_queue` — file d'attente de review humaine (Phase P2.2).
+//! Service `review_queue` - file d'attente de review humaine (Phase P2.2).
 //!
 //! Voir docs/challenges-target-model-and-roadmap.md partie H.2.
 //!

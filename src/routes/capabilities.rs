@@ -1,4 +1,4 @@
-//! P18.4 — API capabilities.
+//! P18.4 - API capabilities.
 //!
 //! Endpoints :
 //!   - `GET /api/users/{id}/capabilities`         (public : capabilities actives)
@@ -192,7 +192,7 @@ pub async fn admin_grant_capability(
     .execute(&state.db)
     .await?;
 
-    // SKI-299 — granting a capability is how someone becomes able to ban,
+    // SKI-299 - granting a capability is how someone becomes able to ban,
     // revoke or moderate. `granted_by` sits on the row, but the row is
     // mutable and the journal is not.
     crate::services::audit::record(
@@ -328,12 +328,12 @@ pub struct CatalogueEntry {
     pub description: String,
     /// True when the orientations trigger of migration 0404 maintains the row.
     /// Those appear in no migration and change when a trade is added or moves
-    /// family — which is why a client cannot hold this list as a constant.
+    /// family - which is why a client cannot hold this list as a constant.
     pub is_derived: bool,
     /// True when `services::capabilities_engine` grants and re-grants it.
     /// Still grantable by hand; revoking it is what does not stick.
     pub engine_managed: bool,
-    /// How many people hold it right now — not revoked, not expired. An
+    /// How many people hold it right now - not revoked, not expired. An
     /// operator about to grant `security_reviewer:red-team` wants to know
     /// whether anybody already reviews red team work.
     pub held_by: i64,
@@ -348,7 +348,7 @@ pub struct CatalogueEntry {
 /// `orientations` behind it: adding a trade with a review family makes
 /// `{domain}_reviewer:{family}` grantable in the same statement, and no
 /// migration has to remember. So the set is a function of the trade catalogue,
-/// and any copy of it is correct until somebody adds an orientation — then
+/// and any copy of it is correct until somebody adds an orientation - then
 /// wrong, and wrong silently.
 ///
 /// The admin panel held such a copy, anchored to a CHECK that no longer
@@ -361,7 +361,7 @@ pub struct CatalogueEntry {
 /// You cannot. `user_capabilities.capability` is a foreign key to this table
 /// since 0404, so an invented string is refused by the database rather than
 /// stored and silently never matched. That was worth checking rather than
-/// assuming — it is the difference between a stale list and an open door.
+/// assuming - it is the difference between a stale list and an open door.
 #[utoipa::path(
     get, path = "/api/admin/capabilities",
     operation_id = "adminCapabilityCatalogue", tag = "admin",

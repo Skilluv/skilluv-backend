@@ -1,4 +1,4 @@
-//! SKI-42 (Post-MVP T2-03) — external reputation signals.
+//! SKI-42 (Post-MVP T2-03) - external reputation signals.
 //!
 //! See migration 0145 for the isolation guarantee. This module deliberately
 //! imports nothing from `ranks`, `badge_engine`, `capabilities_engine` or
@@ -17,8 +17,8 @@
 //!   * it keeps the stored value inside a known set of hosts, so nothing
 //!     downstream is tempted to fetch an arbitrary URL later.
 //!
-//! `conf_ref` is the one open provider — conference talks live wherever the
-//! conference lives — so it only gets the generic scheme and shape checks.
+//! `conf_ref` is the one open provider - conference talks live wherever the
+//! conference lives - so it only gets the generic scheme and shape checks.
 
 use serde::Serialize;
 use sqlx::PgPool;
@@ -34,7 +34,7 @@ pub const PROVIDER_CONF_REF: &str = "conf_ref";
 // Design portfolios (migration 0515). Declared and reviewed, never imported:
 // Behance's public API was withdrawn in 2020 and Dribbble's needs a
 // partnership, so an "import" would mean fetching arbitrary user-supplied
-// URLs from the backend — and an imported portfolio must not count for
+// URLs from the backend - and an imported portfolio must not count for
 // anything anyway.
 pub const PROVIDER_BEHANCE: &str = "behance";
 pub const PROVIDER_DRIBBBLE: &str = "dribbble";
@@ -207,7 +207,7 @@ pub async fn create(
         .await?;
     if count >= MAX_SIGNALS_PER_USER {
         return Err(AppError::Validation(format!(
-            "at most {MAX_SIGNALS_PER_USER} external signals — remove one first"
+            "at most {MAX_SIGNALS_PER_USER} external signals - remove one first"
         )));
     }
 

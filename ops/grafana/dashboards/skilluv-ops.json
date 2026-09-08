@@ -45,7 +45,7 @@
   "templating": {"list": []},
   "time": {"from": "now-6h", "to": "now"},
   "timezone": "browser",
-  "title": "Skilluv — Ops",
+  "title": "Skilluv - Ops",
   "uid": "skilluv-ops",
   "version": 1
 }

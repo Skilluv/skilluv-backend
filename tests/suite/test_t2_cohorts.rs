@@ -1,4 +1,4 @@
-//! Integration tests for SKI-40 — time-boxed study cohorts.
+//! Integration tests for SKI-40 - time-boxed study cohorts.
 //!
 //! Focus is on the invariants that a CHECK constraint cannot express:
 //! capacity, lifecycle freezing, organizer continuity, and the visibility
@@ -353,7 +353,7 @@ async fn archived_cohort_is_frozen_but_readable() {
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 
-    // Still readable — the archive is the point.
+    // Still readable - the archive is the point.
     let resp = app.get(&format!("/api/cohorts/{cohort_id}")).await;
     assert_eq!(resp.status(), StatusCode::OK);
     let body: Value = app

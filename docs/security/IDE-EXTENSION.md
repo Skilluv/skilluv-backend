@@ -13,8 +13,8 @@ finding" button; and tooltips on risky patterns linking to a Skilluv write-up.
 ## Why it is not built
 
 **The API is the extension.** Everything the sidebar would show is one
-authenticated GET — `/api/security/reports`, `/api/users/me/next-challenges`,
-`/api/users/me/missions` — and everything the commands would do is one POST.
+authenticated GET - `/api/security/reports`, `/api/users/me/next-challenges`,
+`/api/users/me/missions` - and everything the commands would do is one POST.
 The extension is a client, and writing it before anybody has asked for it is
 writing a client for a workflow nobody has yet.
 
@@ -52,10 +52,10 @@ Nothing new, which is the point. For the record, if it is built:
 | Answer a round | `POST /api/security/reports/{id}/answer-round` |
 | Suggested challenges | `GET /api/users/me/next-challenges?domain=security` |
 | The vocabulary | `GET /api/security/reference` |
-| The scope | `GET /api/security/scope` — unauthenticated |
+| The scope | `GET /api/security/scope` - unauthenticated |
 
 Authentication would be an API key (`/api/users/me/api-keys`) rather than a
-session cookie, and it would need a scope narrower than the existing keys have —
+session cookie, and it would need a scope narrower than the existing keys have -
 which is the one genuine platform change the extension implies, and a reason to
 design it when somebody is actually writing one.
 

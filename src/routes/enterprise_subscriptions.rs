@@ -1,4 +1,4 @@
-//! Enterprise subscriptions endpoints — Phase 4.6 (finalisation).
+//! Enterprise subscriptions endpoints - Phase 4.6 (finalisation).
 //!
 //! POST /api/enterprise/subscriptions/subscribe   {plan_slug}   → checkout Stripe
 //! GET  /api/enterprise/subscriptions/current                   statut + prochaine facture
@@ -86,7 +86,7 @@ pub struct CancelSubscriptionResponse {
 
 /// Kick off a Stripe checkout for a subscription pack. Refuses if the
 /// enterprise already has an active subscription (returns the current
-/// plan info instead — front routes to the manage-subscription screen).
+/// plan info instead - front routes to the manage-subscription screen).
 #[utoipa::path(
     post,
     path = "/api/enterprise/subscriptions/subscribe",
@@ -105,7 +105,7 @@ pub async fn subscribe_to_pipeline(
     auth: AuthUser,
     Json(body): Json<SubscribeBody>,
 ) -> Result<Json<ApiResponse<SubscribeResponse>>, AppError> {
-    // SKI-66 — owner-only gate. Was previously `current_enterprise_for`
+    // SKI-66 - owner-only gate. Was previously `current_enterprise_for`
     // which admitted any enterprise MEMBER; that caused non-owner
     // enterprise members to hit these endpoints, get a 401 downstream,
     // and see the front redirect them to /auth/login instead of a clean
@@ -181,7 +181,7 @@ pub async fn current_subscription(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<ApiResponse<CurrentSubscriptionResponse>>, AppError> {
-    // SKI-66 — owner-only gate. Was previously `current_enterprise_for`
+    // SKI-66 - owner-only gate. Was previously `current_enterprise_for`
     // which admitted any enterprise MEMBER; that caused non-owner
     // enterprise members to hit these endpoints, get a 401 downstream,
     // and see the front redirect them to /auth/login instead of a clean
@@ -228,7 +228,7 @@ pub async fn cancel_subscription(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<ApiResponse<CancelSubscriptionResponse>>, AppError> {
-    // SKI-66 — owner-only gate. Was previously `current_enterprise_for`
+    // SKI-66 - owner-only gate. Was previously `current_enterprise_for`
     // which admitted any enterprise MEMBER; that caused non-owner
     // enterprise members to hit these endpoints, get a 401 downstream,
     // and see the front redirect them to /auth/login instead of a clean

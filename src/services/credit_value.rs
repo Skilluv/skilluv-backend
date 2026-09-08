@@ -11,7 +11,7 @@
 //!   * Unset meant zero, so the payout silently did not happen while the
 //!     slice was still stamped as paid.
 //!   * A rate in an environment variable, changed by hand, is foreign
-//!     exchange — a regulated activity, and not one we perform.
+//!     exchange - a regulated activity, and not one we perform.
 //!
 //! Neither is what is actually going on. A credit is prepaid at a fixed
 //! published price, so converting it back is not an exchange: it is the
@@ -19,8 +19,8 @@
 //! the pack definitions, in code, reviewable, with no runtime knob that can
 //! be wrong.
 //!
-//! When Skilluv genuinely needs to convert between currencies — paying a
-//! euro balance out in francs — that is done by the payout provider at the
+//! When Skilluv genuinely needs to convert between currencies - paying a
+//! euro balance out in francs - that is done by the payout provider at the
 //! rate of the day, not here. See `services::payout`.
 
 use bigdecimal::BigDecimal;
@@ -45,7 +45,7 @@ pub const CREDIT_VALUE_XOF: i64 = 656;
 
 /// Fragments awarded per credit of bounty reward.
 ///
-/// Gamification, not money — fragments buy nothing and cannot be withdrawn.
+/// Gamification, not money - fragments buy nothing and cannot be withdrawn.
 /// It lived in `BOUNTY_CREDIT_TO_FRAGMENTS` with a default of 500, which was
 /// less dangerous than the currency rate (an unset variable still awarded
 /// something) but wrong for the same reason: how generous the platform is
@@ -63,7 +63,7 @@ pub fn to_currency(credits: &BigDecimal, currency: Currency) -> BigDecimal {
     match currency {
         // No minor unit: whole francs only.
         Currency::Xof => converted.with_scale(0),
-        // Two decimals, rounding half away from zero — the same rule a bank
+        // Two decimals, rounding half away from zero - the same rule a bank
         // statement uses.
         Currency::Eur => converted.round(2),
     }

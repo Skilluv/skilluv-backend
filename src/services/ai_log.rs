@@ -1,4 +1,4 @@
-//! IA-D — Helper best-effort pour logger les appels gRPC vers skilluv-ai.
+//! IA-D - Helper best-effort pour logger les appels gRPC vers skilluv-ai.
 //!
 //! Usage typique dans un handler :
 //! ```ignore
@@ -14,7 +14,7 @@
 //! ).await;
 //! ```
 //!
-//! Le helper est **best-effort** — si l'insert échoue (DB down), on log via
+//! Le helper est **best-effort** - si l'insert échoue (DB down), on log via
 //! `tracing::warn!` mais on ne propage jamais l'erreur au caller.
 
 use sqlx::PgPool;

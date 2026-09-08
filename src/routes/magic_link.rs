@@ -1,4 +1,4 @@
-//! Magic link authentication — Phase 4.17.
+//! Magic link authentication - Phase 4.17.
 //!
 //! Endpoints:
 //!   POST /api/auth/magic-link/request  {email}
@@ -72,7 +72,7 @@ pub struct MagicLinkRequestBody {
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct MagicLinkRequestResponse {
-    /// Always `true` on success — the endpoint never leaks whether the
+    /// Always `true` on success - the endpoint never leaks whether the
     /// email exists, so this flag is symbolic (200 = "we attempted").
     pub sent: bool,
     /// TTL of the emailed link, in minutes.
@@ -81,7 +81,7 @@ pub struct MagicLinkRequestResponse {
 
 /// Request a passwordless login link by email. Rate-limited to 5/min
 /// per IP. Always returns 200 (anti-enumeration) even when the email
-/// send fails silently — the front should not branch on this response
+/// send fails silently - the front should not branch on this response
 /// beyond confirming the user to check their inbox.
 #[utoipa::path(
     post,
@@ -105,7 +105,7 @@ pub async fn request_link(
     if !email.contains('@') || email.len() < 5 || email.len() > 255 {
         return Err(AppError::Validation("invalid email".into()));
     }
-    // Reject invalid intent explicitement — le schema declare
+    // Reject invalid intent explicitement - le schema declare
     // pattern ^(login|signup)$, donc tout autre string est schema-invalide.
     // Anciennement on faisait un fallback silencieux sur "login" mais
     // schemathesis negative_data_rejection flaggait car un input schema-
@@ -119,7 +119,7 @@ pub async fn request_link(
             ));
         }
     };
-    // Generate a 128-bit token, base32 encoded — 26 chars, no padding.
+    // Generate a 128-bit token, base32 encoded - 26 chars, no padding.
     let raw1 = Uuid::new_v4().as_u128().to_be_bytes();
     let token = base32::encode(base32::Alphabet::Rfc4648 { padding: false }, &raw1);
     let token_hash = hash_token(&token);
@@ -154,7 +154,7 @@ pub async fn request_link(
     let _ = state
         .email
         // We deliberately don't have a user row here yet ; use a synthetic display name.
-        .send_direct(&email, "Skilluv", "Skilluv — Ton lien de connexion", &html)
+        .send_direct(&email, "Skilluv", "Skilluv - Ton lien de connexion", &html)
         .await;
 
     metrics::counter!("skilluv_magic_link_requested_total").increment(1);
@@ -174,14 +174,14 @@ pub struct MagicLinkConsumeBody {
 #[derive(Debug, Serialize, ToSchema)]
 pub struct MagicLinkConsumeResponse {
     pub user_id: Uuid,
-    /// Always `"magic_link"` — echoed so the front can tag the session
+    /// Always `"magic_link"` - echoed so the front can tag the session
     /// with the auth method without decoding the JWT.
     pub login_method: String,
 }
 
 /// Consume a magic-link token: rotates cookies and mints a session
 /// labeled `magic_link`. Refuses accounts that have TOTP or email 2FA
-/// enabled — those must go through the classic password flow so the
+/// enabled - those must go through the classic password flow so the
 /// second factor is not bypassed. Creates the user on the fly when the
 /// original intent was `signup` and no matching account exists.
 #[utoipa::path(
@@ -191,7 +191,7 @@ pub struct MagicLinkConsumeResponse {
     request_body = MagicLinkConsumeBody,
     responses(
         (status = 200, description = "Session issued via magic link", body = ApiResponse<MagicLinkConsumeResponse>),
-        (status = 400, description = "Account has 2FA — magic link refused", body = crate::api_response::ErrorResponse),
+        (status = 400, description = "Account has 2FA - magic link refused", body = crate::api_response::ErrorResponse),
         (status = 401, description = "Token invalid, expired, or already consumed", body = crate::api_response::ErrorResponse),
     ),
 )]
@@ -232,7 +232,7 @@ pub async fn consume_link(
     .bind(&email)
     .fetch_optional(&state.db)
     .await?;
-    // Magic link cannot bypass 2FA — if the account has TOTP/email-2FA enabled,
+    // Magic link cannot bypass 2FA - if the account has TOTP/email-2FA enabled,
     // the user must go through the classic password + 2FA flow. Otherwise anyone
     // with access to the mailbox would defeat 2FA.
     if let Some((_, _, totp_enabled, email_2fa_enabled)) = &user
@@ -281,7 +281,7 @@ pub async fn consume_link(
         }
     };
 
-    // Clicking the magic link is proof of email possession — flip email_verified
+    // Clicking the magic link is proof of email possession - flip email_verified
     // to true if it wasn't already. Without this, a candidate/enterprise who
     // signed up but never verified stays locked out of the write endpoints
     // and /enterprise/* even though they've now proven they own the address.

@@ -12,7 +12,7 @@ use crate::errors::AppError;
 use crate::services::collect::{Checkout, CollectionProvider, CollectionRequest, Method};
 use crate::services::ledger::Currency;
 
-/// Stripe Checkout — cards, in a currency Stripe settles.
+/// Stripe Checkout - cards, in a currency Stripe settles.
 pub struct StripeCollect {
     pub cfg: crate::services::stripe::StripeConfig,
 }
@@ -65,7 +65,7 @@ impl CollectionProvider for StripeCollect {
             .and_then(|v| v.as_str())
             .ok_or_else(|| {
                 AppError::Internal(
-                    "stripe checkout has no url — the payer has nowhere to go".into(),
+                    "stripe checkout has no url - the payer has nowhere to go".into(),
                 )
             })?
             .to_string();
@@ -86,8 +86,8 @@ impl CollectionProvider for StripeCollect {
     ) -> Result<String, AppError> {
         let minor = amount.map(|a| to_minor_units(a, currency)).transpose()?;
         // Stripe accepts three reasons and nothing else, so ours travels as
-        // `requested_by_customer` — which a dispute settled for the payer
-        // is — and the detail stays in our own records.
+        // `requested_by_customer` - which a dispute settled for the payer
+        // is - and the detail stays in our own records.
         let _ = reason;
         let refund = crate::services::stripe::create_refund(
             &self.cfg,
@@ -100,7 +100,7 @@ impl CollectionProvider for StripeCollect {
     }
 }
 
-/// FedaPay — Mobile Money and local cards across the franc zone.
+/// FedaPay - Mobile Money and local cards across the franc zone.
 ///
 /// The reason this module exists. Stripe cannot take Mobile Money in Benin,
 /// and Mobile Money is how most people there hold money.
@@ -126,7 +126,7 @@ impl CollectionProvider for FedaPayCollect {
         // Côte d'Ivoire one, and the payer is sent to the wrong operator.
         let country = request.payer_country.ok_or_else(|| {
             AppError::Validation(
-                "a country is required to pay by Mobile Money — it decides which operator".into(),
+                "a country is required to pay by Mobile Money - it decides which operator".into(),
             )
         })?;
         let phone = request.payer_phone.ok_or_else(|| {
@@ -172,7 +172,7 @@ impl CollectionProvider for FedaPayCollect {
         // books say refunded and the payer was never credited, which is the
         // one accounting error a customer notices before we do.
         Err(AppError::Internal(format!(
-            "fedapay exposes no refund API — refund transaction {provider_reference} from the \
+            "fedapay exposes no refund API - refund transaction {provider_reference} from the \
              FedaPay dashboard, then mark the payment refunded"
         )))
     }
@@ -189,7 +189,7 @@ fn to_minor_units(amount: &BigDecimal, currency: Currency) -> Result<i64, AppErr
         Currency::Xof => {
             if amount.fractional_digit_count() > 0 && amount != &amount.with_scale(0) {
                 return Err(AppError::Validation(
-                    "XOF has no minor unit — amount must be a whole number of francs".into(),
+                    "XOF has no minor unit - amount must be a whole number of francs".into(),
                 ));
             }
             amount.clone()

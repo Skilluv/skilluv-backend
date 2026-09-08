@@ -81,7 +81,7 @@ async fn all_seed_orientations_have_valid_primary_domain() {
     let (db, name) = setup_test_db().await;
     // Against the catalogue, not against a list written here. This one had
     // gone stale without `audio`, so the five audio trades were reported as
-    // seeded with an invalid domain — the test's own copy was the thing that
+    // seeded with an invalid domain - the test's own copy was the thing that
     // was wrong, which is the failure mode a copy always has.
     let bad: Vec<String> = sqlx::query_scalar(
         "SELECT slug FROM orientations o

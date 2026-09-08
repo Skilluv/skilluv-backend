@@ -1,4 +1,4 @@
-//! Multi-provider OAuth — Phase 3.1 + 3.2.
+//! Multi-provider OAuth - Phase 3.1 + 3.2.
 //!
 //! Unified linking + login logic across GitHub, Google, LinkedIn.
 //! Each provider is a thin adapter that returns a normalised `OAuthProfile`.
@@ -138,8 +138,8 @@ pub async fn upsert_link(
     // Discord carries a second effect: the snowflake lands on `users` as well.
     //
     // `users.discord_user_id` has existed since migration 0138 with a unique
-    // index, and nothing had ever written it. The bot reads it — `/skilluv me`
-    // and the role reconciliation both match on it — so until this line
+    // index, and nothing had ever written it. The bot reads it - `/skilluv me`
+    // and the role reconciliation both match on it - so until this line
     // existed, every Discord member was a stranger to the platform and every
     // role the setup script creates stayed empty.
     //
@@ -160,9 +160,9 @@ pub async fn upsert_link(
 /// Refuse a Discord identity that already belongs to somebody else, in words.
 ///
 /// One Discord account belongs to at most one Skilluv account. Two constraints
-/// already say so — the unique index of migration 0138 on
+/// already say so - the unique index of migration 0138 on
 /// `users.discord_user_id`, and `user_oauth_providers`' own index on (provider,
-/// provider_user_id) — and both are right: roles are derived from proof, so
+/// provider_user_id) - and both are right: roles are derived from proof, so
 /// letting two accounts share a Discord identity would let somebody wear a rank
 /// they did not earn.
 ///
@@ -245,7 +245,7 @@ pub async fn unlink(db: &PgPool, user_id: Uuid, provider: &str) -> Result<(), Ap
         // cleared, so the worker computes an empty set of desired roles and
         // takes back everything it had granted. Unlinking while keeping
         // `@Doyen` on the server would leave an authority the platform no
-        // longer backs — and nobody would notice, because the person it points
+        // longer backs - and nobody would notice, because the person it points
         // at is no longer connected to any account.
         sqlx::query("UPDATE users SET discord_user_id = NULL WHERE id = $1")
             .bind(user_id)
@@ -495,7 +495,7 @@ pub mod linkedin {
 ///
 /// `users.discord_user_id` has existed since migration 0138 and nothing has
 /// ever written it. Two of the bot's commands read it, so `/skilluv me` has
-/// always answered "your Discord account is not linked yet" — to everybody,
+/// always answered "your Discord account is not linked yet" - to everybody,
 /// permanently. And no role can be granted on the server, because the platform
 /// cannot tell which Discord member is which account. Every role
 /// `scripts/discord-setup.py` creates is empty for that reason.
@@ -506,7 +506,7 @@ pub mod linkedin {
 ///
 /// `identify` only. Not `email`: Discord's email is unverified as far as this
 /// platform is concerned, and taking it would make this a sign-up route, which
-/// it is not — somebody links Discord to an account they already have.
+/// it is not - somebody links Discord to an account they already have.
 /// `guilds.join` is deliberately absent too; adding people to a server without
 /// them clicking Join is the kind of thing that reads as an invasion.
 pub mod discord {

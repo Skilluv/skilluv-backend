@@ -5,12 +5,12 @@
 //! **No bound at all.** The weekly digest read every active account into a
 //! `Vec` before sending anything. It works until it does not, and the day
 //! it stops working is the day the table is large enough that the process
-//! is killed mid-run — so nobody gets a digest, and the logs show a restart
+//! is killed mid-run - so nobody gets a digest, and the logs show a restart
 //! rather than a cause.
 //!
 //! **A bound that truncates silently.** Worse, and three jobs had one. The
 //! drip sequences selected `LIMIT 500`. The five-hundred-and-first eligible
-//! person never received the day-one email — not late, never — and nothing
+//! person never received the day-one email - not late, never - and nothing
 //! anywhere said so. A cap that looks like it works is how a system lies to
 //! the person operating it.
 //!
@@ -18,7 +18,7 @@
 //!
 //! Keyset pagination: order by a unique key, remember the last one seen,
 //! ask for the next page. Constant memory, no `OFFSET` scan that gets
-//! slower every page, and — unlike `OFFSET` — correct when rows are
+//! slower every page, and - unlike `OFFSET` - correct when rows are
 //! inserted while the walk is running.
 //!
 //! A per-run ceiling still exists, because a job that runs every hour
@@ -48,7 +48,7 @@ pub enum Ending {
 /// A walk in progress.
 ///
 /// Kept as a struct rather than three loose variables so a job cannot
-/// forget to advance the cursor — the bug that turns a paginated loop into
+/// forget to advance the cursor - the bug that turns a paginated loop into
 /// an infinite one sending the same email forever.
 pub struct Walk {
     /// Last key seen. `None` starts at the beginning.
@@ -113,7 +113,7 @@ impl Walk {
                 job = self.label,
                 seen = self.seen,
                 ceiling = self.ceiling,
-                "batch stopped at its per-run ceiling — the rest resumes next run, \
+                "batch stopped at its per-run ceiling - the rest resumes next run, \
                  but if this repeats the ceiling is too low for the volume"
             );
             return Ending::Truncated;

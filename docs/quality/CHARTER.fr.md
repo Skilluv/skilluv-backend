@@ -1,4 +1,4 @@
-# Skilluv Qualité — charte
+# Skilluv Qualité - charte
 
 Traduction de `CHARTER.md`, qui fait foi. Le dépôt écrit désormais en anglais
 par défaut ; cette version existe parce que la communauté à qui la charte
@@ -11,7 +11,7 @@ Publiée sur `skill-uv.com/quality/charter`.
 ## 1. La qualité est un métier, pas une étape
 
 Ce qu'on dit le plus souvent du test, c'est qu'il vient *après*. Après la
-fonctionnalité, après le design, après la construction — un portail par lequel
+fonctionnalité, après le design, après la construction - un portail par lequel
 on passe en allant livrer.
 
 Cette description ne produit qu'une seule sorte de travail de qualité :
@@ -74,7 +74,7 @@ score d'outil, et ce n'est pas une impression sur le niveau d'agacement.
 Celui qui signale annonce une gravité. Le relecteur peut en annoncer une autre,
 et dans ce cas **les deux sont conservées**. Nous n'écrasons pas le chiffre de
 l'auteur, parce qu'une tendance à systématiquement surévaluer est une
-information qu'un mentor doit pouvoir voir — et parce qu'une échelle sur
+information qu'un mentor doit pouvoir voir - et parce qu'une échelle sur
 laquelle personne ne peut se tromper n'est pas une échelle.
 
 Le score d'artisanat lit le chiffre relu, et rien d'autre.
@@ -127,7 +127,7 @@ avec lui. Un constat utilisé par une équipe est crédité comme l'est une
 contribution fusionnée.
 
 Quand les termes d'une mission interdisent de nommer le client, l'attestation
-dit quel type de système, ce qui a été trouvé et à quelle échelle — pas qui. La
+dit quel type de système, ce qui a été trouvé et à quelle échelle - pas qui. La
 compétence reste démontrable sans trahir l'engagement.
 
 ## 9. L'IA

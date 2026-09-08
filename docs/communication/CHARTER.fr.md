@@ -46,7 +46,7 @@ chaque exemple a été exécuté tel qu'il est écrit.
 
 **Tout emprunt est attribué.** Texte, captures, données, extraits de code,
 figures. Avec un lien atteignable. Un paragraphe non attribué n'est pas une
-production plus faible — c'est une production que la plateforme ne peut pas
+production plus faible - c'est une production que la plateforme ne peut pas
 publier, de la même façon qu'un échantillon non tracé rend un livrable audio
 inutilisable.
 
@@ -67,7 +67,7 @@ jour.
 Une ressource qu'une partie de votre public ne peut pas consommer n'a pas été
 publiée pour ce public. Sur une plateforme construite pour un continent où la
 plupart des gens lisent sur un téléphone avec une connexion irrégulière, ce
-n'est pas un aménagement — c'est le cas principal.
+n'est pas un aménagement - c'est le cas principal.
 
 ## 4. Outils génératifs
 
@@ -100,7 +100,7 @@ traduction.
 
 Vous gardez les droits sur ce que vous écrivez, sauf si une commande en
 dispose autrement, par écrit et avant le début du travail. Une mission énonce
-son périmètre de licence — ce que le client a le droit d'en faire —
+son périmètre de licence - ce que le client a le droit d'en faire -
 séparément de ses conditions de propriété intellectuelle, parce qu'un auteur
 qui garde son droit d'auteur doit quand même savoir si le client peut
 syndiquer le texte ou le publier sous la signature de quelqu'un d'autre.
@@ -116,6 +116,6 @@ devriez.
 
 Ce qu'une validation affirme est étroit et exact : cette personne a produit
 cet artefact, et un lecteur compétent du métier l'a jugé solide. Elle ne dit
-pas que la production a eu du succès, et elle ne le dira jamais — un chiffre
+pas que la production a eu du succès, et elle ne le dira jamais - un chiffre
 d'audience est une entrée de portfolio, marquée comme récupérée ou déclarée,
 et ce n'est pas ce sur quoi repose une attestation.

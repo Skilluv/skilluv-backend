@@ -195,7 +195,7 @@ pub async fn generate_export(
             &fetch_table(&db, "plagiarism_cases", user_id, "accused_id").await?,
             options,
         )?;
-        // Connections to design tools — the metadata only. Exporting the
+        // Connections to design tools - the metadata only. Exporting the
         // encrypted tokens would put a live credential in a zip file that
         // travels by e-mail, which is worse than not exporting it.
         write_json(
@@ -252,7 +252,7 @@ pub async fn generate_export(
     let elapsed_ms = started.elapsed().as_millis();
     tracing::info!(%user_id, size_bytes, elapsed_ms, "data export generated");
 
-    // Email user with the link (best-effort — failure not fatal for the export itself)
+    // Email user with the link (best-effort - failure not fatal for the export itself)
     let html = format!(
         r#"
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -279,7 +279,7 @@ pub async fn generate_export(
                     user_id,
                     to_email: &to_email,
                     to_name: &display_name,
-                    subject: "Skilluv — Ton export de données est prêt",
+                    subject: "Skilluv - Ton export de données est prêt",
                     html: &html,
                     kind: "data_export",
                 },
@@ -343,8 +343,8 @@ async fn fetch_table(
 
 /// Connections to design tools, without their tokens.
 ///
-/// `fetch_table` is `SELECT *`, which here would put a live credential —
-/// encrypted, but a credential — into a zip file that travels by e-mail. The
+/// `fetch_table` is `SELECT *`, which here would put a live credential -
+/// encrypted, but a credential - into a zip file that travels by e-mail. The
 /// person is entitled to know the connection exists, not to be handed the key
 /// in a format anybody who intercepts the mail can keep.
 /// One connection, without its token.

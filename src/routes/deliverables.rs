@@ -1,12 +1,12 @@
 //! Routes HTTP pour les `deliverables` (Phase P2.1).
 //!
 //! Endpoints publics :
-//!   GET   /api/deliverables/{id}                  — détail d'un deliverable
-//!   GET   /api/users/{user_id}/deliverables       — portfolio public d'un user
+//!   GET   /api/deliverables/{id}                  - détail d'un deliverable
+//!   GET   /api/users/{user_id}/deliverables       - portfolio public d'un user
 //!
 //! Endpoint webhook :
 //!   POST  /api/webhooks/github/slices/{project_id}
-//!         — reçoit les événements pull_request.closed merged=true et crée le
+//!         - reçoit les événements pull_request.closed merged=true et crée le
 //!           deliverable auto-vérifié (workflow G.1)
 //!
 //! Voir docs/challenges-target-model-and-roadmap.md partie G.1 pour le workflow détaillé.
@@ -147,7 +147,7 @@ pub async fn github_slices_webhook(
         .filter(|s| !s.is_empty())
     else {
         tracing::warn!(
-            "GitHub slices webhook received but GITHUB_WEBHOOK_SECRET not set — acking silently"
+            "GitHub slices webhook received but GITHUB_WEBHOOK_SECRET not set - acking silently"
         );
         return Ok(Json(build_response(
             json!({ "outcome": "acked_not_configured" }),

@@ -9,7 +9,7 @@
 //! A payout recorded as initiated that never happened is the worst failure
 //! this codebase can have. The contributor sees money on its way, the
 //! reconciliation shows an outstanding transfer, and nobody finds out until
-//! somebody asks where their fee went — weeks later, with a transaction id
+//! somebody asks where their fee went - weeks later, with a transaction id
 //! that no provider has ever heard of.
 //!
 //! So the shape is inverted. A provider with credentials makes the call. A
@@ -21,7 +21,7 @@
 //!
 //! Every request carries a key derived from the payout it settles, so a
 //! retried call after a timeout does not send the money twice. Providers
-//! differ in how they take it — a header, a field — which is why each
+//! differ in how they take it - a header, a field - which is why each
 //! implementation names its own rather than sharing one.
 //!
 //! ## Compliance
@@ -267,7 +267,7 @@ async fn read_response(
         .and_then(|v| v.as_str())
         .ok_or_else(|| {
             AppError::Internal(format!(
-                "{} accepted the payout but returned no reference — it cannot be \
+                "{} accepted the payout but returned no reference - it cannot be \
                  reconciled, so it is treated as failed",
                 provider.as_str()
             ))

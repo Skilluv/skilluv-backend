@@ -250,7 +250,7 @@ async fn pr_merged_with_closes_marker_creates_verified_deliverable() {
         project_id,
         &github_login,
         7,
-        "Fixes #42 — the description here.",
+        "Fixes #42 - the description here.",
         "abc123def456sha",
     );
 

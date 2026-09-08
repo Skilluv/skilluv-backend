@@ -1,11 +1,11 @@
-//! Bonjour Skilluv — onboarding flow endpoints.
+//! Bonjour Skilluv - onboarding flow endpoints.
 //!
 //! Flow overview (see content strategy doc §9):
-//!   1. `POST /api/onboarding/bonjour-skilluv/start` — auto-selects starter template
+//!   1. `POST /api/onboarding/bonjour-skilluv/start` - auto-selects starter template
 //!      based on user's primary orientation, calls GitHub API to fork the template
 //!      onto the user's account, persists tracking in `onboarding_bonjour_skilluv`.
 //!   2. User clones locally, edits HELLO.md, commits, opens PR on their own fork.
-//!   3. `GET /api/onboarding/bonjour-skilluv/status` — user polls to see where they
+//!   3. `GET /api/onboarding/bonjour-skilluv/status` - user polls to see where they
 //!      are in the flow (or the frontend uses WebSocket for real-time updates).
 //!   4. Webhook handler (not this file) marks `status = completed` when PR is
 //!      opened and touches HELLO.md, unlocks the "Bonjour Skilluv" badge, and
@@ -57,7 +57,7 @@ pub struct OnboardingProgress {
     /// `fork` or `submission`. Every field below that is `None` for one form
     /// is `None` because of this one.
     pub rite_form: RiteForm,
-    /// The `is_domain_rite` template the gesture is against — the brief a
+    /// The `is_domain_rite` template the gesture is against - the brief a
     /// person reads, and for a `submission` rite the challenge to submit to.
     pub challenge_id: Option<Uuid>,
     /// `None` on every rite that is not a fork.
@@ -80,7 +80,7 @@ pub struct OnboardingProgress {
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct StartNextSteps {
-    /// `git@github.com:owner/repo.git` — hand it to the user for cloning.
+    /// `git@github.com:owner/repo.git` - hand it to the user for cloning.
     /// `None` on every rite that is not a fork.
     pub clone_url: Option<String>,
     /// What to hand in, in the words of the trade. Straight from the rite
@@ -103,7 +103,7 @@ pub struct RiteDescriptor {
     /// One line: what the person does.
     pub gesture: String,
     pub expected_artifact: String,
-    /// Where this trade continues once the rite is passed — the design
+    /// Where this trade continues once the rite is passed - the design
     /// critique, the playtest verdicts, the disclosure programme.
     ///
     /// The rite itself is read in the generic review queue whatever the
@@ -114,7 +114,7 @@ pub struct RiteDescriptor {
     /// exactly one of the twelve.
     pub requires_github: bool,
     /// The published `is_domain_rite` template, when the domain has one.
-    /// `None` means the brief has not been published for that domain — the
+    /// `None` means the brief has not been published for that domain - the
     /// front should not offer the gesture.
     pub challenge_id: Option<Uuid>,
     pub challenge_title: Option<String>,
@@ -127,7 +127,7 @@ pub struct RitesCatalogueResponse {
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct StartBonjourResponse {
-    /// True when a fork already exists — the response echoes the
+    /// True when a fork already exists - the response echoes the
     /// existing tracking row instead of calling GitHub again.
     pub already_started: bool,
     pub onboarding: OnboardingProgress,
@@ -143,7 +143,7 @@ pub struct StatusBonjourResponse {
     /// `None` when `started == false`.
     pub onboarding: Option<OnboardingProgress>,
     /// What the rite asks of this caller: the gesture, what to hand in, who
-    /// reads it. Present whether or not they have started — it is what the
+    /// reads it. Present whether or not they have started - it is what the
     /// "first gesture" screen renders, and answering it only after the fact
     /// is what forced the front to hardcode eleven shapes (SKI-362).
     ///
@@ -180,7 +180,7 @@ fn row_to_progress(row: &OnboardingRow) -> OnboardingProgress {
 ///
 /// Three sources, in order. A per-slug exception wins, because a handful of
 /// trades want something their family does not. Otherwise the trade's
-/// `reviewer_group` decides — a family of trades shares a terrain, and 150
+/// `reviewer_group` decides - a family of trades shares a terrain, and 150
 /// orientations against 15 starters was never going to be a per-slug list.
 /// `None` is the honest answer for a trade neither knows, and it is what
 /// `every_curated_orientation_resolves_to_a_starter` fails on.
@@ -226,7 +226,7 @@ fn starter_for_family(primary_domain: &str, reviewer_group: &str) -> Option<&'st
         // ── design
         // Svelte is the Skilluv-signature UI environment, and its
         // docs/getting-started is the first terrain a designer can contribute
-        // to — assets, animation, motion tokens.
+        // to - assets, animation, motion tokens.
         ("design", "game" | "immersive") => "starter-game-godot",
         ("design", "mobile") => "starter-mobile-react-native",
         ("design", _) => "starter-frontend-svelte",
@@ -242,7 +242,7 @@ fn starter_for_family(primary_domain: &str, reviewer_group: &str) -> Option<&'st
         ("ops", _) => "starter-devops",
 
         // ── security : the Node fullstack app exposes the classic web attack
-        // surface these families learn to audit — JWT, upload, session.
+        // surface these families learn to audit - JWT, upload, session.
         ("security", _) => "starter-fullstack-node",
 
         // ── quality : the thing under test is a web app, except for the
@@ -266,7 +266,7 @@ fn starter_for_family(primary_domain: &str, reviewer_group: &str) -> Option<&'st
 /// `None` if the orientation has no explicit mapping.
 ///
 /// Every orientation slug declared in migration `0002_initial_content.sql`
-/// (plus additions in 0105, 0106) is explicitly mapped here — no orientation
+/// (plus additions in 0105, 0106) is explicitly mapped here - no orientation
 /// falls through today. Coverage is enforced by unit test
 /// `every_db_orientation_maps_to_a_known_starter`.
 ///
@@ -276,7 +276,7 @@ fn starter_for_family(primary_domain: &str, reviewer_group: &str) -> Option<&'st
 /// See content strategy annex G for the full list of 15 starters.
 fn explicit_starter_for_orientation(orientation_slug: &str) -> Option<&'static str> {
     Some(match orientation_slug {
-        // ── Fullstack — Rust default (Skilluv signature)
+        // ── Fullstack - Rust default (Skilluv signature)
         "dev-fullstack" | "dev-backend" | "systems-programmer" => "starter-fullstack-rust",
 
         // ── Frontend
@@ -286,7 +286,7 @@ fn explicit_starter_for_orientation(orientation_slug: &str) -> Option<&'static s
         "mobile-android" => "starter-mobile-kotlin",
         "mobile-cross" => "starter-mobile-react-native",
         "mobile-ios" => "starter-mobile-react-native", // Swift starter not day-1
-        // Mobile designers land on RN — closest ecosystem where design ↔ code
+        // Mobile designers land on RN - closest ecosystem where design ↔ code
         // dialogue happens naturally (Figma → RN component).
         "mobile-designer" => "starter-mobile-react-native",
 
@@ -314,30 +314,30 @@ fn explicit_starter_for_orientation(orientation_slug: &str) -> Option<&'static s
         // ── Soft skills / misc
         "tech-writer" | "open-source-maintainer" => "starter-frontend-htmx",
 
-        // ── Design roles (illustrator, motion) — Svelte starter is the
+        // ── Design roles (illustrator, motion) - Svelte starter is the
         // Skilluv-signature UI environment, and its docs/getting-started is
         // le premier terrain naturel où un·e designer peut contribuer
         // (assets SVG, animations d'illustration, motion tokens).
         "illustrator" | "motion-designer" => "starter-frontend-svelte",
 
-        // ── Security (web, engineer, SOC) — Node fullstack expose la surface
+        // ── Security (web, engineer, SOC) - Node fullstack expose la surface
         // d'attaque web classique (Express/Nest + JWT + upload) que ces
         // profils apprennent à auditer. Doc OWASP + secrets management y sont
         // les mieux documentés côté écosystème.
         "pentester-web" | "security-engineer" | "soc-analyst" => "starter-fullstack-node",
 
-        // ── Pentester mobile — RN pour le même raisonnement côté surface
+        // ── Pentester mobile - RN pour le même raisonnement côté surface
         // d'attaque mobile (JS bridge, storage, in-app deep links).
         "pentester-mobile" => "starter-mobile-react-native",
 
-        // ── Smart contracts — toolchain Solidity mainstream (Hardhat/Foundry)
+        // ── Smart contracts - toolchain Solidity mainstream (Hardhat/Foundry)
         // vit dans l'écosystème Node. Le starter Node offre donc le hors-code
         // le plus proche (package.json + scripts npm) sans imposer une chaîne
         // blockchain complète day-1.
         "smart-contract-dev" => "starter-fullstack-node",
 
         // ── Fallback : future-added orientations. Aujourd'hui aucune ne
-        // devrait passer par ici — test unitaire dédié.
+        // devrait passer par ici - test unitaire dédié.
         _ => return None,
     })
 }
@@ -349,7 +349,7 @@ fn explicit_starter_for_orientation(orientation_slug: &str) -> Option<&'static s
 #[derive(Debug, Deserialize, IntoParams)]
 pub struct StartQuery {
     /// Optional override for the starter slug. If omitted, we auto-select from
-    /// the user's primary orientation. Meaningful only on the `code` rite —
+    /// the user's primary orientation. Meaningful only on the `code` rite -
     /// it is the only one that forks anything.
     #[serde(default)]
     pub starter: Option<String>,
@@ -388,7 +388,7 @@ struct OnboardingRow {
 /// `services::onboarding_rite`, so the endpoint has no per-domain branch
 /// beyond the two forms.
 ///
-/// Idempotent — calling twice returns what already exists, whichever form it
+/// Idempotent - calling twice returns what already exists, whichever form it
 /// took.
 #[utoipa::path(
     post,
@@ -397,7 +397,7 @@ struct OnboardingRow {
     params(StartQuery),
     responses(
         (status = 200, description = "Started (or already started)", body = ApiResponse<StartBonjourResponse>),
-        (status = 400, description = "Unknown domain, no domain to infer, invalid starter slug, or — on the code rite only — GitHub not connected", body = crate::api_response::ErrorResponse),
+        (status = 400, description = "Unknown domain, no domain to infer, invalid starter slug, or - on the code rite only - GitHub not connected", body = crate::api_response::ErrorResponse),
         (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
         (status = 404, description = "The domain has no published rite template", body = crate::api_response::ErrorResponse),
     ),
@@ -444,7 +444,7 @@ pub async fn start_bonjour_skilluv(
     // Not bureaucracy: the trade is what picks the starter to fork, what the
     // playlist and the recommendations read, and what a reviewer is matched
     // on. Starting the rite without one meant forking the broad-appeal default
-    // and then being recommended nothing in particular — the platform meeting
+    // and then being recommended nothing in particular - the platform meeting
     // somebody for the first time and having nothing specific to say to them.
     //
     // One is required, three are allowed (`MAX_ACTIVE_ORIENTATIONS`). One is
@@ -531,7 +531,7 @@ pub async fn start_bonjour_skilluv(
 ///
 /// The only path that needs a GitHub token, and the reason it is a function
 /// rather than a branch left inline: what used to be the endpoint's first act
-/// — and therefore every domain's first wall — is now one of twelve leaves.
+/// - and therefore every domain's first wall - is now one of twelve leaves.
 async fn start_fork_rite(
     state: &AppState,
     user_id: Uuid,
@@ -552,7 +552,7 @@ async fn start_fork_rite(
         validate_starter_slug(&explicit)?;
         explicit
     } else {
-        // The trade, its family and its domain — the family is what resolves
+        // The trade, its family and its domain - the family is what resolves
         // the starter for all but the two dozen legacy slugs.
         let orientation: Option<(String, Option<String>, String)> = sqlx::query_as(
             r#"
@@ -635,7 +635,7 @@ pub async fn get_bonjour_skilluv_status(
 ) -> Result<Json<ApiResponse<StatusBonjourResponse>>, AppError> {
     let row = load_row(&state.db, auth.user_id).await?;
 
-    // The row's own domain once there is one — a caller who started their rite
+    // The row's own domain once there is one - a caller who started their rite
     // under `design` must keep being told about `design` even if they later
     // change their declared domain.
     let domain: Option<String> = match &row {
@@ -773,7 +773,7 @@ fn validate_starter_slug(slug: &str) -> Result<(), AppError> {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Webhook handler — called from bounties.rs::handle_pull_request_event
+// Webhook handler - called from bounties.rs::handle_pull_request_event
 // ═══════════════════════════════════════════════════════════════════
 
 /// Handle a `pull_request` event on a fork we're tracking for Bonjour Skilluv.
@@ -790,7 +790,7 @@ fn validate_starter_slug(slug: &str) -> Result<(), AppError> {
 ///   3. Insert a hello_wall_entries row so the user's Hello Wall page renders
 ///   4. Log the event for observability
 ///
-/// Badge unlock is NOT triggered here — that's the proof engine's job (P17-P19),
+/// Badge unlock is NOT triggered here - that's the proof engine's job (P17-P19),
 /// which reads the transition and unlocks the "Bonjour Skilluv" badge based on
 /// a badge_rules entry (to be seeded separately).
 ///
@@ -843,7 +843,7 @@ pub async fn handle_bonjour_skilluv_pr_event(
     .await?;
 
     let Some((user_id, current_status, skill_domain, tracked_challenge)) = onboarding else {
-        // Not a tracked Bonjour Skilluv fork — nothing to do.
+        // Not a tracked Bonjour Skilluv fork - nothing to do.
         return Ok(());
     };
 
@@ -869,14 +869,14 @@ pub async fn handle_bonjour_skilluv_pr_event(
         .iter()
         .any(|f| f.filename == "HELLO.md" && matches!(f.status.as_str(), "added" | "modified"));
     if !hello_touched {
-        // User opened a PR unrelated to HELLO.md — legitimate, but not a
+        // User opened a PR unrelated to HELLO.md - legitimate, but not a
         // completion trigger. We could store an intermediate state, but keep
         // it simple: no-op.
         tracing::info!(
             user_id = %user_id,
             pr_number,
             fork_full_name,
-            "Bonjour Skilluv PR opened but HELLO.md not touched — skipping"
+            "Bonjour Skilluv PR opened but HELLO.md not touched - skipping"
         );
         return Ok(());
     }
@@ -976,7 +976,7 @@ pub async fn handle_bonjour_skilluv_pr_event(
     // in the same review queue as the other eleven rites (SKI-362).
     //
     // Until this, the code rite stopped at `pr_opened` and nothing moved it on
-    // — while `badge_rules.bonjour_skilluv` fires on `completed_at IS NOT
+    // - while `badge_rules.bonjour_skilluv` fires on `completed_at IS NOT
     // NULL`. The founding badge was unreachable on the one path that shipped.
     // Opening a pull request is a real gesture but it is not a verdict: it
     // proves somebody pushed a branch, not that a person read what is on it,
@@ -999,7 +999,7 @@ pub async fn handle_bonjour_skilluv_pr_event(
     };
 
     // `hello_hash` is already the SHA-256 of the HELLO.md content, which is
-    // what `deliverables` deduplicates on — so a redelivered webhook finds the
+    // what `deliverables` deduplicates on - so a redelivered webhook finds the
     // row rather than writing a second one.
     let deliverable_id: Option<Uuid> = sqlx::query_scalar(
         r#"
@@ -1057,7 +1057,7 @@ pub async fn handle_bonjour_skilluv_pr_event(
         fork_full_name,
         hello_hash = %hello_hash,
         deliverable_id = ?deliverable_id,
-        "Bonjour Skilluv pull request detected — status pr_opened, Hello Wall entry created, queued for review"
+        "Bonjour Skilluv pull request detected - status pr_opened, Hello Wall entry created, queued for review"
     );
 
     Ok(())

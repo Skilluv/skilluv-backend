@@ -1,7 +1,7 @@
 //! SCIM 2.0 provisioning endpoints for enterprise SSO.
 //!
 //! Scope: Users + Groups + service provider discovery.
-//! Auth: `Authorization: Bearer <scim_token>` — one active token per enterprise.
+//! Auth: `Authorization: Bearer <scim_token>` - one active token per enterprise.
 //! PATCH ops supported: `replace` on `active`, `name.givenName`, `name.familyName`,
 //! `displayName`, and `members` (on Groups).
 //!
@@ -138,7 +138,7 @@ pub async fn create_scim_token(
     Ok(Json(json!({
         "data": {
             "token": cleartext,
-            "message": "Store this token securely — it will not be shown again.",
+            "message": "Store this token securely - it will not be shown again.",
             "scim_base_url": format!("{}/api/scim/v2", state.config.base_url),
         },
         "meta": {
@@ -608,7 +608,7 @@ pub async fn patch_user(
                 scim::update_user_name(&state.db, id, None, None, display).await?;
             }
             None => {
-                // Bulk replace object — accept { active, name, displayName }.
+                // Bulk replace object - accept { active, name, displayName }.
                 if let Some(b) = op.value.get("active").and_then(|v| v.as_bool()) {
                     scim::set_user_active(&state.db, scim.enterprise_id, id, b).await?;
                 }

@@ -8,7 +8,7 @@ pub enum AppError {
     #[error("Resource not found: {0}")]
     NotFound(String),
 
-    /// 409 Conflict — la requete est valide (payload OK) mais l'operation
+    /// 409 Conflict - la requete est valide (payload OK) mais l'operation
     /// est refusee parce que l'etat courant du serveur l'interdit. Usage
     /// typique : duplicate email/username au register, tentative de
     /// creer une resource qui existe deja, tentative de modifier une
@@ -34,16 +34,16 @@ pub enum AppError {
     #[error("TOTP setup required for this account")]
     TotpSetupRequired,
 
-    /// BE-A — admin sans TOTP ni WebAuthn tentant d'accéder à une route admin.
+    /// BE-A - admin sans TOTP ni WebAuthn tentant d'accéder à une route admin.
     /// Le login lui-même reste possible (soft flag), mais toute route
     /// `/api/admin/*` est bloquée par le middleware `require_admin_2fa`
     /// tant que l'admin n'a pas activé un second facteur.
     #[error("Admin 2FA (TOTP or passkey) setup required before accessing admin surfaces")]
     AdminTwoFaSetupRequired,
 
-    /// BE-C — requête vers `/api/admin/*` depuis une origin non autorisée.
+    /// BE-C - requête vers `/api/admin/*` depuis une origin non autorisée.
     /// Défense en profondeur en plus du CORS.
-    #[error("Admin origin required — request rejected")]
+    #[error("Admin origin required - request rejected")]
     AdminOriginRequired,
 
     #[error("SSO login is required for this account")]
@@ -187,7 +187,7 @@ impl IntoResponse for AppError {
 
         // A 5xx is our fault and has to leave a trace on our side. Until now
         // nothing here logged, so a failing endpoint produced one line from
-        // tower_http saying a request had failed with a 500 — and the only
+        // tower_http saying a request had failed with a 500 - and the only
         // description of *what* failed went to the caller, in the response
         // body. That is exactly backwards, and it is why a database error in
         // CI could be seen but not diagnosed.

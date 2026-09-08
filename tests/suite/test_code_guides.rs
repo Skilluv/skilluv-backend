@@ -110,7 +110,7 @@ async fn the_listing_answers_in_the_requested_language() {
 ///
 /// The chain is requested → English → French. Before it was widened, the
 /// listing filtered on the requested locale exactly, so a domain seeded in
-/// one language only was missing entirely from the other's list — and the
+/// one language only was missing entirely from the other's list - and the
 /// list looked complete.
 #[tokio::test]
 async fn a_guide_with_no_row_in_your_language_is_still_served() {
@@ -368,7 +368,7 @@ async fn a_verified_artefact_with_nothing_declared_is_asked() {
             .unwrap();
     assert!(counted, "the window has not closed yet");
 
-    // Past the deadline with nothing declared, it stops counting — and it is
+    // Past the deadline with nothing declared, it stops counting - and it is
     // not revoked, because somebody on holiday is not somebody hiding
     // something.
     sqlx::query("UPDATE deliverables SET ai_disclosure_deadline_at = NOW() - INTERVAL '1 day' WHERE id = $1")

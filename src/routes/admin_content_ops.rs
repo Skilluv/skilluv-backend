@@ -1,4 +1,4 @@
-//! Content ops admin endpoints — declencheurs manuels des services background.
+//! Content ops admin endpoints - declencheurs manuels des services background.
 //!
 //! Priorite basse strategy doc : donner a l'admin panel un moyen de forcer
 //! l'execution des services habituellement lances en cron (mirror hello wall,
@@ -70,7 +70,7 @@ pub struct BadgeRecomputeReport {
 }
 
 /// Reused wrapper for the 3 content-ops responses: legacy shape kept
-/// `{ ok: true, data: ... }` — front branches on `ok` to distinguish
+/// `{ ok: true, data: ... }` - front branches on `ok` to distinguish
 /// success vs the ApiResponse envelope other endpoints use. Kept as-is
 /// to avoid breaking the admin panel.
 #[derive(Debug, Serialize, ToSchema)]
@@ -83,7 +83,7 @@ pub struct AdminOpsEnvelope<T: ToSchema> {
 ///
 /// Prend les entrees `hello_wall_entries` `mirrored_at IS NULL` et pousse
 /// chacune vers `skilluv-community/hello-wall/entries/{username}.md`.
-/// Necessite `SKILLUV_BOT_GITHUB_TOKEN` en env — sans lui, renvoie 503.
+/// Necessite `SKILLUV_BOT_GITHUB_TOKEN` en env - sans lui, renvoie 503.
 #[utoipa::path(
     post,
     path = "/api/admin/hello-wall/mirror-run",
@@ -104,7 +104,7 @@ pub async fn hello_wall_mirror_run(
 
     let token = std::env::var("SKILLUV_BOT_GITHUB_TOKEN").map_err(|_| {
         AppError::Internal(
-            "SKILLUV_BOT_GITHUB_TOKEN env var manquant — mirror impossible. Configurez la variable dans l'environnement backend.".into(),
+            "SKILLUV_BOT_GITHUB_TOKEN env var manquant - mirror impossible. Configurez la variable dans l'environnement backend.".into(),
         )
     })?;
 
@@ -138,7 +138,7 @@ pub async fn hello_wall_mirror_run(
 /// POST /api/admin/profile-readme/sync-run
 ///
 /// Sync les README GitHub des users en mode `github_sync`.
-/// `SKILLUV_BOT_GITHUB_TOKEN` est optionnel — sans lui, fetch anonyme via
+/// `SKILLUV_BOT_GITHUB_TOKEN` est optionnel - sans lui, fetch anonyme via
 /// raw.githubusercontent (rate limit 60/h par IP).
 #[utoipa::path(
     post,
@@ -224,6 +224,6 @@ pub async fn recompute_badges_for_user(
     }))
 }
 
-// Silence unused-import — ApiResponse is not used here (legacy envelope).
+// Silence unused-import - ApiResponse is not used here (legacy envelope).
 #[allow(dead_code)]
 type _ApiResponseTouch = ApiResponse<()>;

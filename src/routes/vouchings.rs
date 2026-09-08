@@ -1,11 +1,11 @@
-//! SKI-46 (Post-MVP T3-03) — reputation staking endpoints.
+//! SKI-46 (Post-MVP T3-03) - reputation staking endpoints.
 //!
 //! Endpoints:
 //!   POST   /api/vouchings                        (auth, Doyen)
 //!   GET    /api/users/{id}/vouchings             (public if profile is)
-//!   GET    /api/users/me/vouchings               (auth — what I back)
-//!   DELETE /api/vouchings/{id}                   (voucher — withdraw)
-//!   GET    /api/moderation/vouchings            (moderator — the queue)
+//!   GET    /api/users/me/vouchings               (auth - what I back)
+//!   DELETE /api/vouchings/{id}                   (voucher - withdraw)
+//!   GET    /api/moderation/vouchings            (moderator - the queue)
 //!   POST   /api/moderation/vouchings/{id}/break  (moderator)
 //!
 //! Breaking a vouching costs the voucher a rank for three months, so it is
@@ -55,7 +55,7 @@ fn wrap(data: serde_json::Value) -> serde_json::Value {
 #[serde(deny_unknown_fields)]
 pub struct CreateVouchingBody {
     pub vouched_id: Uuid,
-    /// 30..365. Defaults to 180 — six months, the ticket's window.
+    /// 30..365. Defaults to 180 - six months, the ticket's window.
     #[serde(default)]
     pub window_days: Option<i64>,
     /// `rank_temporary` (default) puts the voucher's rank at stake;
@@ -187,7 +187,7 @@ pub async fn withdraw(
 #[serde(deny_unknown_fields)]
 #[schema(as = VouchingBreakBody)]
 pub struct BreakBody {
-    /// At least 8 characters — this costs someone their rank.
+    /// At least 8 characters - this costs someone their rank.
     pub reason: String,
 }
 
@@ -213,7 +213,7 @@ pub async fn break_vouching(
     capabilities::require_any_capability(&state.db, auth.user_id, MODERATOR_CAPS).await?;
     let report = vouchings::break_vouching(&state.db, id, auth.user_id, &body.reason).await?;
 
-    // SKI-299 — this costs the voucher a rank for ninety days. `broken_by`
+    // SKI-299 - this costs the voucher a rank for ninety days. `broken_by`
     // records who, but only on the row itself, which the same moderator can
     // keep editing; the append-only journal is what makes the decision
     // reviewable afterwards by someone who was not in the room.
@@ -260,7 +260,7 @@ pub struct QueueQuery {
     pub offset: Option<i64>,
 }
 
-/// SKI-297 — the queue the break endpoint always needed.
+/// SKI-297 - the queue the break endpoint always needed.
 ///
 /// Same gate as the break itself: a moderator who may end a vouching may
 /// read the list of them, and splitting the two would mean granting the

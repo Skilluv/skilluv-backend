@@ -2,7 +2,7 @@
 //!
 //! Same machinery as `craft_score`: weights are rows, tiers are rows, and the
 //! breakdown is returned with the number so a profile can show "3 identités
-//! livrées — 360 points" rather than a total nobody can argue with.
+//! livrées - 360 points" rather than a total nobody can argue with.
 //!
 //! ## Why this is a second module and not a branch
 //!
@@ -34,7 +34,7 @@ use crate::errors::AppError;
 use crate::services::craft_score::{CraftScore, Term, points_for};
 
 /// The ceiling. Lower than code's, because design has fewer public counters
-/// to accumulate — not because a designer is worth less. A ceiling that
+/// to accumulate - not because a designer is worth less. A ceiling that
 /// nobody can reach measures nothing at the top.
 pub const CAP: i32 = 8_000;
 

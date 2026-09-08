@@ -1,4 +1,4 @@
-//! FedaPay HTTP client — Mobile Money payouts in West Africa.
+//! FedaPay HTTP client - Mobile Money payouts in West Africa.
 //!
 //! Exists because Stripe cannot pay out to Benin, Togo, Burkina, Niger or
 //! Guinea at all, and our own Mobile Money adapters talk to one operator
@@ -65,7 +65,7 @@ pub struct FedaPayPayout {
 /// on. Naming the operator is only worth it once we have a reason to
 /// override that detection.
 pub struct Transfer<'a> {
-    /// In the currency's smallest unit — XOF has none, so whole francs.
+    /// In the currency's smallest unit - XOF has none, so whole francs.
     pub amount: i64,
     pub currency_iso: &'a str,
     /// E.164, as the operator knows the wallet.
@@ -128,7 +128,7 @@ pub async fn send_payout(
 
     // Created but not started is money that never leaves. If this call
     // fails the payout stays `pending` on FedaPay's side, which the caller
-    // reverses — and the id is in the error so it can be found there.
+    // reverses - and the id is in the error so it can be found there.
     let started: Value = put(
         &client,
         cfg,
@@ -220,7 +220,7 @@ pub async fn create_checkout(
         .and_then(Value::as_str)
         .ok_or_else(|| {
             AppError::Internal(format!(
-                "fedapay: transaction {id} has no payment url — the payer has nowhere to go: {tokenised}"
+                "fedapay: transaction {id} has no payment url - the payer has nowhere to go: {tokenised}"
             ))
         })?
         .to_string();
@@ -254,7 +254,7 @@ pub async fn payout_status(cfg: &FedaPayConfig, id: &str) -> Result<String, AppE
 ///
 /// The call that makes a lost response recoverable. `merchant_reference` is
 /// ours and is sent when the transaction is created, so this works in
-/// exactly the situation where their id never reached us — which is the
+/// exactly the situation where their id never reached us - which is the
 /// situation a closed browser tab produces.
 pub async fn transaction_by_merchant_reference(
     cfg: &FedaPayConfig,
@@ -274,7 +274,7 @@ pub async fn transaction_status(cfg: &FedaPayConfig, id: &str) -> Result<String,
 ///
 /// Two calls after the transaction exists: a token, then a push to the
 /// operator's prompt on the payer's phone. `mode` is FedaPay's own name for
-/// the rail — `mtn_open`, `moov`, `celtiis`, `togocel`, ... — and comes from
+/// the rail - `mtn_open`, `moov`, `celtiis`, `togocel`, ... - and comes from
 /// the `payment_methods` table rather than from a match here, because the
 /// list grows.
 pub async fn charge_inline(
@@ -412,7 +412,7 @@ async fn decode(resp: reqwest::Response, path: &str) -> Result<Value, AppError> 
     let status = resp.status();
     let text = resp.text().await.unwrap_or_default();
     if !status.is_success() {
-        // The body carries the reason — a phone number the operator does not
+        // The body carries the reason - a phone number the operator does not
         // know, a balance too low. Losing it leaves nothing to act on.
         return Err(AppError::Internal(format!(
             "fedapay {path} failed {status}: {text}"

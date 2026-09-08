@@ -1,4 +1,4 @@
-# Modèles de brief — domaine Code
+# Modèles de brief - domaine Code
 
 Huit modèles, un par famille de métier. À utiliser pour rédiger l'énoncé d'un
 challenge.
@@ -38,7 +38,7 @@ minimale à supporter, environnement de déploiement.
 ### 3. Livrables
 
 Toujours les trois : **code**, **tests**, **documentation**. Dire où ils
-atterrissent — un dépôt, une contribution en amont, un paquet publié.
+atterrissent - un dépôt, une contribution en amont, un paquet publié.
 
 ### 4. Critères d'acceptation
 
@@ -60,7 +60,7 @@ celle qui évite le plus de travail perdu.
 
 ---
 
-## 1. Application web — `web`
+## 1. Application web - `web`
 
 *frontend, backend, fullstack, performance, web3-frontend*
 
@@ -73,18 +73,18 @@ Préciser en plus :
 Pour le web3 : réseau visé, comportement attendu si l'utilisateur refuse la
 signature, et ce qui se passe en cas de réorganisation de chaîne.
 
-## 2. Application mobile — `mobile`
+## 2. Application mobile - `mobile`
 
 *iOS, Android, cross-platform*
 
 Préciser en plus :
 - versions d'OS minimales ;
-- comportement hors-ligne attendu — c'est la question qui distingue un
+- comportement hors-ligne attendu - c'est la question qui distingue un
   travail mobile sérieux ;
 - permissions demandées et conduite à tenir en cas de refus définitif ;
 - si la publication en magasin fait partie du livrable.
 
-## 3. Bureau et logiciel d'entreprise — `devtools-media`
+## 3. Bureau et logiciel d'entreprise - `devtools-media`
 
 *desktop, enterprise, lowcode*
 
@@ -94,18 +94,18 @@ Préciser en plus :
 - pour l'entreprise : mode d'authentification, cloisonnement des données,
   exigences de traçabilité.
 
-## 4. Systèmes et embarqué — `systems`
+## 4. Systèmes et embarqué - `systems`
 
 *systems-programmer, kernel, firmware, robotique, critique*
 
 Préciser en plus :
 - matériel cible, ou simulateur accepté à défaut ;
 - contraintes de mémoire et d'énergie, chiffrées ;
-- comportement attendu à la défaillance — un système embarqué qui n'a pas de
+- comportement attendu à la défaillance - un système embarqué qui n'a pas de
   mode dégradé défini n'est pas terminé ;
 - pour le critique : la norme applicable et le niveau visé.
 
-## 5. Blockchain — `blockchain`
+## 5. Blockchain - `blockchain`
 
 *smart contracts, protocoles*
 
@@ -117,7 +117,7 @@ Préciser en plus :
 - **rappel systématique** : un déploiement ne se corrige pas. Le brief doit
   dire ce qui est irréversible.
 
-## 6. Compilation et méthodes formelles — `compilers`
+## 6. Compilation et méthodes formelles - `compilers`
 
 *compilateurs, langages, preuves*
 
@@ -128,7 +128,7 @@ Préciser en plus :
   n'aide personne, et cela se juge ;
 - jeu de programmes de test fourni ou à construire.
 
-## 7. Données et systèmes distribués — `data`
+## 7. Données et systèmes distribués - `data`
 
 *moteurs de base, recherche, distribué, flux*
 
@@ -138,13 +138,13 @@ Préciser en plus :
 - pannes à supporter, et comportement attendu sous chacune ;
 - ce qui est mesuré : percentiles hauts, pas moyenne.
 
-## 8. Calcul scientifique et GPU — `scientific`
+## 8. Calcul scientifique et GPU - `scientific`
 
 *scientifique, GPU, quantitatif*
 
 Préciser en plus :
 - référence de validation : solution analytique, jeu de données connu ;
-- exigence de reproductibilité — graines, environnement figé ;
+- exigence de reproductibilité - graines, environnement figé ;
 - matériel de référence pour les mesures de performance ;
 - pour le quantitatif : coûts de transaction et biais à éviter dans un
   backtest.
@@ -156,4 +156,4 @@ Préciser en plus :
 Les briefs publiés le sont dans la langue du challenge. La structure ci-dessus
 se traduit sans adaptation : *Problem, Technical constraints, Deliverables,
 Acceptance criteria, Licence, Out of scope*. Les exemples chiffrés, eux, ne se
-traduisent pas — ils se recalculent pour le contexte visé.
+traduisent pas - ils se recalculent pour le contexte visé.

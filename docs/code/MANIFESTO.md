@@ -13,7 +13,7 @@ gens savent faire**.
 
 Un CV est une déclaration. Un certificat atteste qu'un examen a été passé, pas
 qu'un travail a été livré. Une plateforme d'exercices mesure la capacité à
-résoudre des exercices — ce qui est une compétence réelle, et pas celle qu'on
+résoudre des exercices - ce qui est une compétence réelle, et pas celle qu'on
 achète quand on recrute.
 
 Nous partons de l'autre bout : **l'artefact d'abord**. Ce qui compte est ce
@@ -53,7 +53,7 @@ essai soit meilleur, pas de trier au premier.
 
 Une personne fait du web et du jeu, du système et de l'IA. Le catalogue
 compte trente-trois métiers du code parce que « développeur backend » désigne
-une famille et non un métier — mais rien n'oblige à en choisir un seul, et
+une famille et non un métier - mais rien n'oblige à en choisir un seul, et
 passer de l'un à l'autre n'est pas de la dispersion.
 
 ### 5. Les tests font partie du travail
@@ -61,7 +61,7 @@ passer de l'un à l'autre n'est pas de la dispersion.
 Pas un supplément. Un livrable sans test décrit une intention ; avec des
 tests, il décrit un comportement.
 
-Nous valorisons les tests qui survivent au remaniement — ceux qui décrivent ce
+Nous valorisons les tests qui survivent au remaniement - ceux qui décrivent ce
 que le code doit faire, pas comment il est écrit aujourd'hui.
 
 ### 6. La documentation est obligatoire

@@ -1,4 +1,4 @@
-//! skilluv-backup — Postgres backup management for Skilluv.
+//! skilluv-backup - Postgres backup management for Skilluv.
 //!
 //! Run via cron / systemd timer / Docker scheduler. See
 //! `docs/runbooks/backup-restore.md` for operational details.
@@ -41,7 +41,7 @@ enum Cmd {
     /// SKI-29 drill: run a fresh backup, then immediately restore-test it,
     /// and produce a signed JSON report ready to archive as evidence.
     /// Meant to be run monthly (cron / manual) to prove the backup chain
-    /// is actually restorable — a backup nobody has ever restored is not
+    /// is actually restorable - a backup nobody has ever restored is not
     /// a backup.
     DrillReport,
 }
@@ -126,7 +126,7 @@ async fn cmd_restore(cfg: &BackupConfig, backup_key: &str, target_db: &str) -> R
     Ok(())
 }
 
-/// SKI-29 — end-to-end backup drill.
+/// SKI-29 - end-to-end backup drill.
 ///
 /// Runs a fresh backup, then a restore-test immediately after, and
 /// serialises both reports into a single JSON that operators archive
@@ -151,7 +151,7 @@ async fn cmd_drill_report(cfg: &BackupConfig) -> Result<()> {
     println!("{pretty}");
 
     let message = format!(
-        "backup drill OK: backup {} restored + verified (users={}, challenges={}, submissions={}) — {}s total",
+        "backup drill OK: backup {} restored + verified (users={}, challenges={}, submissions={}) - {}s total",
         restore_report.backup_key,
         restore_report.counts.users,
         restore_report.counts.challenges,

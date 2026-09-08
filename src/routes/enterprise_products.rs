@@ -2,7 +2,7 @@
 //!
 //! Two audiences. An administrator records and reads engagements across every
 //! company; an enterprise reads its own. The same table answers both, and the
-//! difference is one predicate — which is the point of having the table at
+//! difference is one predicate - which is the point of having the table at
 //! all.
 
 use axum::extract::{Path, Query, State};
@@ -214,7 +214,7 @@ pub async fn record_product(
     // first, in words the person filling in the form can act on.
     if recurring && body.renews_at.is_none() {
         return Err(AppError::Validation(format!(
-            "{label} renews — say when, or it lapses because nobody was told to ask"
+            "{label} renews - say when, or it lapses because nobody was told to ask"
         )));
     }
     if let Some(notes) = &body.notes {
@@ -290,7 +290,7 @@ pub async fn set_status(
         .filter(|s| !s.is_empty());
     if body.status == "cancelled" && reason.is_none() {
         return Err(AppError::Validation(
-            "stopping early requires a reason — the next person needs it exactly then".into(),
+            "stopping early requires a reason - the next person needs it exactly then".into(),
         ));
     }
 
@@ -399,7 +399,7 @@ pub async fn renewals(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// The registry — one route for twenty buttons
+// The registry - one route for twenty buttons
 // ═══════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Deserialize, IntoParams)]
@@ -440,20 +440,20 @@ struct RegistryRow {
 /// Twenty-one admin write routes carry an `{id}` that nothing let an
 /// administrator obtain. `POST /admin/engagements/{id}/start`,
 /// `/sponsorships/{id}/sign`, `/consultations/{id}/deliver`,
-/// `/placements/{id}/end` — the buttons existed, the lists did not.
+/// `/placements/{id}/end` - the buttons existed, the lists did not.
 ///
 /// The cause was one thing repeated twelve times: everything an enterprise
 /// buys is listed only under `/api/enterprise/*`, behind `require_enterprise`,
 /// which resolves the **caller's** company and filters on it. Skilluv staff,
 /// who have to service those contracts, are nobody's enterprise. So they had
 /// the verbs and no nouns, and the only way to reach one was an id pasted out
-/// of psql — which SKI-337 already described as the problem, not the fix.
+/// of psql - which SKI-337 already described as the problem, not the fix.
 ///
 /// ## Why this is one route and not twenty
 ///
 /// Because the table was built for it. `enterprise_products` carries a row for
 /// every product any module sells, and `sales_pipeline.rs` says so in its own
-/// comment: *"every product registers itself in `enterprise_products` — which
+/// comment: *"every product registers itself in `enterprise_products` - which
 /// is the reason that table exists."* Ten modules insert into it, each with
 /// `source_table` and `source_id`, and a CHECK guarantees the pair travels
 /// together.
@@ -463,7 +463,7 @@ struct RegistryRow {
 ///
 /// ## Why not just widen `renewals`
 ///
-/// That one exists to answer a different question — what is about to lapse —
+/// That one exists to answer a different question - what is about to lapse -
 /// and it filters `status = 'active' AND renews_at IS NOT NULL` to answer it.
 /// A registry that inherited those filters would hide precisely the rows an
 /// administrator is looking for: a `pending` product waiting to be activated
@@ -490,8 +490,8 @@ pub async fn registry(
     let offset = (page - 1) * per_page;
 
     // The predicates are written out twice rather than built once and
-    // interpolated. `format!` into a query is refused at compile time here —
-    // the SQL-injection lint the threat-model gate rests on — and it is right
+    // interpolated. `format!` into a query is refused at compile time here -
+    // the SQL-injection lint the threat-model gate rests on - and it is right
     // to refuse: the day somebody interpolates a sort column instead of a
     // constant, nothing would have complained. Two literals that must be kept
     // in step is the cheaper problem, and the count disagreeing with the page

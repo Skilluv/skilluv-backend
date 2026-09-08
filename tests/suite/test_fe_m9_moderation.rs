@@ -1,4 +1,4 @@
-//! Tests FE-M9 — routes modération inline (require_any_capability).
+//! Tests FE-M9 - routes modération inline (require_any_capability).
 
 use crate::common::TestApp;
 use serde_json::json;

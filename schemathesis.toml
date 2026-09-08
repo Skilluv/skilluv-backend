@@ -13,7 +13,7 @@
 # Do not generate NUL inside strings.
 #
 # JSON Schema's `string` admits `\0`; a PostgreSQL `text` column does not, at
-# all. So the API refuses a request carrying one, with a 400 saying so — which
+# all. So the API refuses a request carrying one, with a 400 saying so - which
 # is the correct answer and which the generic "schema-compliant input must be
 # accepted" check reads as a bug.
 #
@@ -28,7 +28,7 @@ allow-x00 = false
 # Schemathesis sends a POST with no body and no `Content-Type`, and axum's
 # `Json` extractor answers 415 Unsupported Media Type. The check's default set
 # of statuses that mean "properly rejected" is 400, 401, 403, 404, 405, 406,
-# 409, 422, 428 and 5xx — 415 is not among them, so every endpoint taking a
+# 409, 422, 428 and 5xx - 415 is not among them, so every endpoint taking a
 # JSON body was reported as having accepted a schema-violating request when it
 # had done the exact opposite.
 #
@@ -37,8 +37,8 @@ allow-x00 = false
 # settle a disagreement about one status code, and it is the check that would
 # notice an endpoint quietly accepting nonsense.
 #
-# The 415 is documented on every operation with a request body — see
-# `openapi::spec()` — so a client reading the contract is not surprised by it
+# The 415 is documented on every operation with a request body - see
+# `openapi::spec()` - so a client reading the contract is not surprised by it
 # either. That half was a real gap and is fixed in code; this half is the
 # fuzzer's list being narrower than HTTP.
 expected-statuses = ["400", "401", "403", "404", "405", "406", "409", "415", "422", "428", "5XX"]
@@ -47,7 +47,7 @@ expected-statuses = ["400", "401", "403", "404", "405", "406", "409", "415", "42
 include-name = "GET /api/feed/public"
 
 # `positive_data_acceptance` requires that anything matching the schema is
-# accepted. `after` is a keyset cursor — a token the server issued — and no
+# accepted. `after` is a keyset cursor - a token the server issued - and no
 # JSON Schema can say "a value I minted". The fuzzer generates a random string
 # matching the pattern, the handler cannot decode it, and 400 is the right
 # answer: treating an unreadable cursor as "from the beginning" makes a client
@@ -72,8 +72,8 @@ include-name = "GET /api/cohorts"
 
 # `offset` and `limit` are nullable integers, and for a nullable query
 # parameter schemathesis sends the literal string `null`, which is not a
-# number. The 400 is correct — a page offset that is not a number cannot
-# be honoured — and the positive path is covered by test_t2_cohorts.
+# number. The 400 is correct - a page offset that is not a number cannot
+# be honoured - and the positive path is covered by test_t2_cohorts.
 [operations.checks.positive_data_acceptance]
 enabled = false
 
@@ -92,7 +92,7 @@ include-name = "GET /api/design/slices/{id}/versions/{round}"
 
 # `round` is an `i16` path segment; a value past 32767 cannot be parsed into
 # it and is refused at the router. Schema-valid as a JSON integer, out of
-# range for the type — the fuzzer cannot know the bound and the 400 is
+# range for the type - the fuzzer cannot know the bound and the 400 is
 # correct.
 [operations.checks.positive_data_acceptance]
 enabled = false
@@ -111,7 +111,7 @@ enabled = false
 include-name = "GET /api/quality/reports"
 
 # `target_domain` is a nullable domain filter, and the fuzzer sends the string
-# `null`, which names no domain. Refusing it is correct — the alternative,
+# `null`, which names no domain. Refusing it is correct - the alternative,
 # treating an unreadable filter as no filter, hides a client bug. The
 # positive path is covered by test_quality_domain.
 [operations.checks.positive_data_acceptance]
@@ -130,7 +130,7 @@ enabled = false
 include-name = "GET /api/verify/{hash}/pdf"
 
 # Rendering a certificate needs PDF_RENDERER_URL, which is deliberately unset
-# in the contract job — there is no renderer to call. The 503 is the honest,
+# in the contract job - there is no renderer to call. The 503 is the honest,
 # documented answer; neither a 2xx (positive_data_acceptance) nor a non-5xx
 # (not_a_server_error) is reachable without the external service.
 [operations.checks.positive_data_acceptance]
@@ -142,7 +142,7 @@ enabled = false
 include-name = "POST /maintainer-digest/subscribe"
 
 # The fuzzer sends an empty email and a repo that is not `owner/name`. Those
-# are semantic constraints — a blank address, a malformed repo — that no
+# are semantic constraints - a blank address, a malformed repo - that no
 # JSON Schema for a plain string expresses, and the handler is right to
 # refuse them.
 [operations.checks.positive_data_acceptance]
@@ -167,7 +167,7 @@ include-name = "POST /api/stripe/webhook"
 # rather than the endpoint.
 #
 # Each verifies a provider signature, and each acks with 200
-# `acked_not_configured` when its secret is unset — deliberately, so that a
+# `acked_not_configured` when its secret is unset - deliberately, so that a
 # provider does not retry forever against a deployment that cannot process
 # what it sends (see the comment at src/routes/bounties.rs:615). The contract
 # job leaves those secrets unset, so a bodyless POST reaches the ack branch
@@ -178,7 +178,7 @@ include-name = "POST /api/stripe/webhook"
 # verification, which is the behaviour that matters and which no unsigned
 # fuzzer can reach. Excluded here rather than changed: making the handler
 # reject a missing body before deciding it is unconfigured would trade a real
-# property — never make a provider retry — for a green check in an
+# property - never make a provider retry - for a green check in an
 # environment that does not exist anywhere else.
 #
 # `POST /webhooks/linear` above is the same shape, and answers 503 instead;

@@ -183,9 +183,9 @@ pub async fn reports(db: &PgPool) -> Result<Vec<Report>, AppError> {
 /// Deliver a report, and book what it was sold for.
 ///
 /// Refused when the population it rests on is too small to publish. The
-/// commercial pressure runs the other way — a client asking for "Cotonou,
+/// commercial pressure runs the other way - a client asking for "Cotonou,
 /// backend, three years' experience" wants exactly the slice that names four
-/// people — so the check is here and not in a style guide.
+/// people - so the check is here and not in a style guide.
 pub async fn deliver_report(
     db: &PgPool,
     id: Uuid,
@@ -229,7 +229,7 @@ pub async fn deliver_report(
              VALUES ('intelligence_report', NULL, $1, 10000, $2)",
         )
         .bind(&report.fee)
-        .bind(format!("{} — {}", report.client_org, report.title))
+        .bind(format!("{} - {}", report.client_org, report.title))
         .execute(&mut *tx)
         .await?;
     }
@@ -490,7 +490,7 @@ pub async fn settle_period(
             &(BigDecimal::from(100) - &contract.talents_share_percent),
         ))
         .bind(format!(
-            "licence {} — {} à {}",
+            "licence {} - {} à {}",
             contract.licensee_org, period_start, period_end
         ))
         .execute(db)
@@ -595,7 +595,7 @@ pub async fn provision(db: &PgPool, input: DeploymentInput) -> Result<Deployment
         let m = e.to_string();
         if m.contains("only_a_government_recognises_officially") {
             AppError::Validation(
-                "only a government partner can recognise anything officially — a \
+                "only a government partner can recognise anything officially - a \
                  bootcamp saying so is a claim, not a recognition"
                     .into(),
             )

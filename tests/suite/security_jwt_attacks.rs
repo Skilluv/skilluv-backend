@@ -1,4 +1,4 @@
-//! DA-05 — the JWT verifier rejects the classic forgeries.
+//! DA-05 - the JWT verifier rejects the classic forgeries.
 //!
 //! We issue session tokens, so the token is a direct attack surface. The
 //! verifier uses `Validation::default()` (HS256 + exp), which should refuse an
@@ -61,14 +61,14 @@ async fn forged_jwts_are_refused_and_a_valid_one_is_accepted() {
 
     use reqwest::StatusCode;
 
-    // alg:none — the header claims no signature is needed.
+    // alg:none - the header claims no signature is needed.
     assert_eq!(
         get_with_token(&app, &alg_none_token(&uid)).await,
         StatusCode::UNAUTHORIZED,
         "an alg:none token was accepted"
     );
 
-    // Key confusion — a well-formed HS256 token signed with the wrong secret.
+    // Key confusion - a well-formed HS256 token signed with the wrong secret.
     let wrong_key = AuthService::generate_access_token(
         uid.parse().unwrap(),
         "user",
@@ -81,7 +81,7 @@ async fn forged_jwts_are_refused_and_a_valid_one_is_accepted() {
         "a token signed with the wrong key was accepted"
     );
 
-    // Expired — correctly signed but past its exp.
+    // Expired - correctly signed but past its exp.
     assert_eq!(
         get_with_token(&app, &expired_token(&uid)).await,
         StatusCode::UNAUTHORIZED,

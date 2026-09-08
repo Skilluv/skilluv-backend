@@ -2,7 +2,7 @@
 //!
 //! The claim under test is the narrow one: an admin surface over missions is
 //! not a way of running them. The only write is the case the round loop
-//! cannot reach — a client who will not accept and a designer who will not
+//! cannot reach - a client who will not accept and a designer who will not
 //! hand in again, with the money sitting in escrow between them.
 
 use crate::common::TestApp;
@@ -290,7 +290,7 @@ async fn a_mission_nobody_may_read_answers_not_found() {
     app.login("am_wrong_curator").await;
 
     // 403, because the mission exists and this person may not read it. The
-    // 404 is reserved for a mission that is not there — which is what
+    // 404 is reserved for a mission that is not there - which is what
     // `am-nope` below is.
     assert_eq!(app.get("/api/admin/missions/am-hidden").await.status(), 403);
     assert_eq!(app.get("/api/admin/missions/am-nope").await.status(), 404);
@@ -667,7 +667,7 @@ async fn a_cancellation_does_not_claw_back_what_was_already_released() {
 /// `POST /api/missions/{slug}/status` lets the owning enterprise make any
 /// transition that table allows. So the edge opened for the one party it must
 /// never be open to. Cancelling is what returns the escrow, and it returns it
-/// to the client — accept the work, cancel the mission, take the payment back,
+/// to the client - accept the work, cancel the mission, take the payment back,
 /// with the refund added in the same commit doing the taking.
 ///
 /// Asserted against `set_status` rather than through the route, because that

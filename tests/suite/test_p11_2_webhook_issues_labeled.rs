@@ -387,7 +387,7 @@ async fn labels_that_disagree_type_nothing() {
     map_label(&app, project, "good-first-issue", "web-frontend-developer").await;
     map_label(&app, project, "area/kernel", "kernel-driver-developer").await;
 
-    // The trigger label is curated but unmapped, so the rest has to answer —
+    // The trigger label is curated but unmapped, so the rest has to answer -
     // and it contradicts itself. Silence beats a coin toss.
     let mut payload =
         make_issue_labeled_payload("acme", "disagree", 10, "Unclear", "help wanted", false);

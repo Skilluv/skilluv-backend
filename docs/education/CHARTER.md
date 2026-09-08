@@ -30,7 +30,7 @@ Not admissible:
 - a curriculum nobody has run;
 - anything that names a learner.
 
-The difference is not difficulty. It is verifiability — and, in this domain,
+The difference is not difficulty. It is verifiability - and, in this domain,
 whether it can be published at all.
 
 ## 2. Somebody has to have learned something
@@ -55,12 +55,12 @@ published as submitted, whatever the teaching was worth.
 
 The rules, and they are not negotiable:
 
-- **Anonymise at source.** Not before publishing — before writing. A document
+- **Anonymise at source.** Not before publishing - before writing. A document
   that had names in it and had them removed is one where somebody has to be
   sure they got all of them.
 - **Aggregate.** A completion figure is a count. A row is never one person.
 - **Consent, in writing, for anything attributed.** A testimonial without it
-  cannot be stored — the platform's schema refuses it, rather than trusting
+  cannot be stored - the platform's schema refuses it, rather than trusting
   anybody to remember.
 - **Minors: nothing.** No name, no image, no voice, no work sample, no
   assessment. Under-18 learners appear in a delivery as a number and in no

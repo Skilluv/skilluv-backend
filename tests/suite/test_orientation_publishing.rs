@@ -4,7 +4,7 @@
 //!
 //! Migration 0239 seeded 130 design challenges as drafts, and said why: a
 //! challenge nobody has read must not be handed to somebody who is learning.
-//! The ticket adds a second rule that matters as much — **no trade is opened
+//! The ticket adds a second rule that matters as much - **no trade is opened
 //! without somebody who can review a submission to it**. A challenge you can
 //! submit and nobody can judge is worse than a challenge that is not there:
 //! the first wastes a week of somebody's work, the second wastes nothing.
@@ -250,7 +250,7 @@ async fn a_written_and_reviewable_trade_opens_as_a_block() {
 }
 
 /// Curating one domain is enough. Nobody has to be a global admin to open
-/// their own trade — but somebody with no curation at all is refused.
+/// their own trade - but somebody with no curation at all is refused.
 #[tokio::test]
 async fn opening_a_trade_needs_the_domains_curation() {
     let app = TestApp::spawn().await;

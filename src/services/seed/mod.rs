@@ -27,7 +27,7 @@
 //! It is not alphabetical and it is not arbitrary. The admin account owns the
 //! projects; the projects are what the season deliverables attach challenges
 //! to; the badge rule is what the onboarding challenges award. A step that runs
-//! before what it needs does not fail loudly — it inserts nothing, which is the
+//! before what it needs does not fail loudly - it inserts nothing, which is the
 //! failure this module exists to end. So the list is written once, here, in the
 //! order the data depends on itself.
 //!
@@ -37,7 +37,7 @@
 //! bumps for the ones written in Rust. Change the content and the version
 //! moves, so the next deployment applies the step again rather than leaving the
 //! database on the old content for ever. Every step is still individually
-//! idempotent — the ledger saves the work, it does not make re-running safe.
+//! idempotent - the ledger saves the work, it does not make re-running safe.
 //! That was already true and it stays true.
 //!
 //! ## What is deliberately not here
@@ -68,7 +68,7 @@ enum Body {
     ///
     /// Textual rather than bound because several of these files hold more than
     /// one statement, and a parameterised query may not. The substituted value
-    /// is a [`Uuid`], so there is nothing a caller could put in it — the type
+    /// is a [`Uuid`], so there is nothing a caller could put in it - the type
     /// is the check, not an escaping routine.
     Sql(&'static str),
     /// A function, with a version its author maintains.
@@ -217,8 +217,8 @@ pub struct Report {
     pub applied: usize,
     pub skipped: usize,
     /// True when at least one step could not run for want of the admin
-    /// account. Not an error — a deployment with no `SEED_ADMIN_PASSWORD` is a
-    /// deployment that has not been told who the administrator is yet — but
+    /// account. Not an error - a deployment with no `SEED_ADMIN_PASSWORD` is a
+    /// deployment that has not been told who the administrator is yet - but
     /// the caller is told, because a half-seeded database should not be
     /// discovered later.
     pub blocked_on_owner: bool,
@@ -268,7 +268,7 @@ async fn owner(db: &PgPool) -> Result<Option<Uuid>, AppError> {
     }
 
     // Otherwise the oldest administrator. Oldest rather than any, so two runs
-    // against the same database agree on who owns what — a seed whose owner
+    // against the same database agree on who owns what - a seed whose owner
     // changes between deployments rewrites `owner_id` on every project it
     // touches.
     Ok(sqlx::query_scalar(
@@ -282,7 +282,7 @@ async fn owner(db: &PgPool) -> Result<Option<Uuid>, AppError> {
 ///
 /// Safe to call on every boot and on every replica: the ledger row is written
 /// with the step, so two processes starting together do the work twice at
-/// worst — which every step already tolerates — and never leave a step
+/// worst - which every step already tolerates - and never leave a step
 /// half-recorded.
 pub async fn run(db: &PgPool) -> Result<Report, AppError> {
     let applied: HashMap<String, String> =
@@ -299,7 +299,7 @@ pub async fn run(db: &PgPool) -> Result<Report, AppError> {
         blocked_on_owner: false,
     };
 
-    // Resolved once, then again after `admin_account` — which is the step that
+    // Resolved once, then again after `admin_account` - which is the step that
     // may have created it.
     let mut owner_id = owner(db).await?;
 
@@ -325,7 +325,7 @@ pub async fn run(db: &PgPool) -> Result<Report, AppError> {
             });
             tracing::warn!(
                 step = step.name,
-                "seed step skipped — no admin account. Set SEED_ADMIN_PASSWORD and restart, \
+                "seed step skipped - no admin account. Set SEED_ADMIN_PASSWORD and restart, \
                  or run `skilluv-seed-admin`."
             );
             continue;
@@ -430,7 +430,7 @@ mod tests {
     fn only_the_steps_that_own_nothing_may_run_without_an_owner() {
         // Almost every step writes rows owned by somebody, and one that
         // claimed otherwise would run against an empty database and insert
-        // nothing — the failure this module was written to end.
+        // nothing - the failure this module was written to end.
         //
         // Two are genuinely exempt, and they are named rather than counted so
         // that a third has to be added here deliberately:
@@ -472,7 +472,7 @@ mod tests {
     ///
     /// The assertions below are about executable SQL, not about prose. Each of
     /// these files carries a header explaining what it replaced, and that
-    /// header quotes the old broken lookup verbatim — so a naive `contains`
+    /// header quotes the old broken lookup verbatim - so a naive `contains`
     /// matches the explanation and fails on a file that is correct.
     fn executable_sql(sql: &str) -> String {
         sql.lines()

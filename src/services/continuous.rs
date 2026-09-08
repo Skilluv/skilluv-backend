@@ -5,7 +5,7 @@
 //!
 //! Onboarding is paid for by an employer and delivered to their new hire. The
 //! person is not the customer, and the whole product is three months of
-//! somebody's attention on them — so it does not start until they agree, and
+//! somebody's attention on them - so it does not start until they agree, and
 //! nothing is recorded about how long they stayed if they never did.
 //!
 //! ## The last one runs the other way
@@ -29,7 +29,7 @@ use crate::services::ledger;
 ///
 /// The majority, because they do the three months. The rest is Skilluv
 /// designing the run, holding the monthly check-ins and chasing the ones that
-/// go quiet — which is real, and is not most of it.
+/// go quiet - which is real, and is not most of it.
 pub const MENTOR_SHARE: f64 = 60.0;
 
 /// What Skilluv takes when a team's own proposal turns into a contract.
@@ -571,7 +571,7 @@ pub async fn judge_contribution(
 /// Divide a month's pool between the accepted contributions and pay it out.
 ///
 /// A quiet month pays the few people who showed up more, rather than leaving
-/// money unspent — which is the point of a pool rather than a per-item rate.
+/// money unspent - which is the point of a pool rather than a per-item rate.
 pub async fn settle_month(
     db: &PgPool,
     lab_id: Uuid,
@@ -631,7 +631,7 @@ pub async fn settle_month(
     )
     .bind(lab.enterprise_id)
     .bind(&lab.monthly_fee)
-    .bind(format!("living lab {} — {month}", lab.product_name))
+    .bind(format!("living lab {} - {month}", lab.product_name))
     .execute(db)
     .await?;
 

@@ -34,10 +34,10 @@ rate_limit:
 
 # Email templates (subjects only, body in HTML templates)
 emails:
-  verify_subject: "Skilluv — Verify your email"
-  password_reset_subject: "Skilluv — Reset your password"
-  data_export_subject: "Skilluv — Your data archive is ready"
-  digest_subject: "Your Skilluv week — {challenges_completed} challenges / {fragments_earned} fragments"
+  verify_subject: "Skilluv: verify your email"
+  password_reset_subject: "Skilluv: reset your password"
+  data_export_subject: "Skilluv: your data archive is ready"
+  digest_subject: "Your Skilluv week: {challenges_completed} challenges / {fragments_earned} fragments"
 
 # System messages
 system:
@@ -403,7 +403,7 @@ notification:
       cta: "Back to the workshop"
     last_chance:
       title: "The last email in this series"
-      body: "A month without news. We are stopping here — your account and your proofs stay exactly as they are, and you come back whenever you want. If there is a reason you did not, reply to this email: we read all of them."
+      body: "A month without news. We are stopping here. Your account and your proofs stay exactly as they are, and you come back whenever you want. If there is a reason you did not, reply to this email: we read all of them."
       cta: "Come back anyway"
     enterprise_welcome:
       title: "How to read a proof"
@@ -521,7 +521,7 @@ digest:
 #
 # The community is francophone and anglophone both, and the bot used to be
 # neither on purpose: mostly English with four French strings that had drifted
-# in. Every message it sends now goes through here, resolved per person —
+# in. Every message it sends now goes through here, resolved per person -
 # their stored `preferred_language` when the account is linked, otherwise the
 # locale Discord attaches to the interaction.
 discord:
@@ -530,8 +530,8 @@ discord:
 
     Sign in at {frontend}, then go to **Settings -> Linked accounts -> Discord**. Your roles arrive within the minute, and they follow your profile from then on.
 
-    Tip: declare your trades first. They are what open your domain's channels — without them there is not much to give you.
-  linked: "**{display_name}** — {frontend}/@{username}{profile}"
+    Tip: declare your trades first. They are what open your domain's channels. Without them there is not much to give you.
+  linked: "**{display_name}**: {frontend}/@{username}{profile}"
   trades: "Trades: {list}"
   welcome: |-
     Your Discord account is linked to **{username}**.
@@ -544,13 +544,13 @@ discord:
   no_contests: "No contest is open right now."
   no_featured: "Nobody has been featured here yet."
   no_profile: "No public profile called `{username}`."
-  # Slash command descriptions. Registered in both languages at once —
-  # `description_localized("fr", ...)` — so `/skilluv craft` explains itself in
+  # Slash command descriptions. Registered in both languages at once -
+  # `description_localized("fr", ...)` - so `/skilluv craft` explains itself in
   # French in the Discord menu without anybody switching a setting.
   #
   # Discord's 100-character limit applies to EVERY localisation, not only the
   # default. French runs 15-20% longer than English, so a translation that fits
-  # in English can still fail the whole registration — and `set_commands`
+  # in English can still fail the whole registration - and `set_commands`
   # replaces the entire tree, so one long string takes all of it down. That is
   # not hypothetical: it happened on this bot two days ago and left it serving
   # three subcommands out of nine. `every_command_description_fits_discord`
@@ -561,7 +561,7 @@ discord:
   join_welcome: |-
     Welcome to Skilluv, **{name}**!
 
-    This is the community around {frontend} — a compagnonnage platform where open source contributions become verifiable attestations.
+    This is the community around {frontend}, a compagnonnage platform where open source contributions become verifiable attestations.
 
     Getting started:
     - Post an intro in the channel of your trade
@@ -569,7 +569,7 @@ discord:
     - Sign in at {frontend}, declare your trades, then link Discord from **Settings -> Linked accounts**. Your roles and your channels open by themselves.
 
     See you around!
-  leaderboard_head: "**{domain}** — craft leaderboard"
+  leaderboard_head: "**{domain}**: craft leaderboard"
   leaderboard_you: "You: **#{rank}** with {score} ({username})"
   leaderboard_empty: "Nobody has a craft score in `{domain}` yet. It is computed from validated work."
   findings_head: |-

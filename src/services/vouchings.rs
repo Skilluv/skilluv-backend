@@ -1,4 +1,4 @@
-//! SKI-46 (Post-MVP T3-03) — reputation staking.
+//! SKI-46 (Post-MVP T3-03) - reputation staking.
 //!
 //! See migration 0148 for the schema and for why the rank penalty is a
 //! layer over the derived rank rather than a write into it.
@@ -8,7 +8,7 @@
 //! The ticket flags abuse potential, so the limits are explicit and all in
 //! one place:
 //!
-//!   * only Doyen may vouch — the top rank, which takes 50 verified
+//!   * only Doyen may vouch - the top rank, which takes 50 verified
 //!     deliverables, 5 attestations and the mentor capability to reach, so
 //!     a sock-puppet voucher is not a realistic attack;
 //!   * [`MAX_LIVE_VOUCHINGS`] caps how many people one senior can back at
@@ -99,7 +99,7 @@ pub async fn create(
     }
 
     // Effective rank, so a voucher already serving a penalty cannot keep
-    // vouching — which would let one bad call cascade into more.
+    // vouching - which would let one bad call cascade into more.
     let rank = ranks::effective_rank(db, voucher_id).await?;
     if rank != MIN_VOUCHER_RANK {
         return Err(AppError::Forbidden);
@@ -124,7 +124,7 @@ pub async fn create(
     .await?;
     if live >= MAX_LIVE_VOUCHINGS {
         return Err(AppError::Validation(format!(
-            "at most {MAX_LIVE_VOUCHINGS} live vouchings — a vouching you cannot \
+            "at most {MAX_LIVE_VOUCHINGS} live vouchings - a vouching you cannot \
              stand behind is worth nothing"
         )));
     }
@@ -155,7 +155,7 @@ pub async fn create(
     }
 }
 
-/// Live vouchings backing a user — what a recruiter sees on the profile.
+/// Live vouchings backing a user - what a recruiter sees on the profile.
 pub async fn list_for_vouched(db: &PgPool, vouched_id: Uuid) -> Result<Vec<Vouching>, AppError> {
     let rows: Vec<Vouching> = sqlx::query_as(
         "SELECT * FROM vouchings
@@ -181,8 +181,8 @@ pub async fn list_for_voucher(db: &PgPool, voucher_id: Uuid) -> Result<Vec<Vouch
 /// A vouching with both parties resolved.
 ///
 /// SKI-301: `voucher_display_name` alone was unusable. Skilluv profiles are
-/// addressed by username — a link built from a display name 404s on the
-/// first space, accent or homonym — so the one thing a caution is for,
+/// addressed by username - a link built from a display name 404s on the
+/// first space, accent or homonym - so the one thing a caution is for,
 /// going to check who gave it, was the one thing the payload did not allow.
 ///
 /// Usernames are nullable because the join is a LEFT JOIN: the FK cascades
@@ -201,7 +201,7 @@ pub struct VouchingWithVoucher {
     pub at_stake_kind: String,
 }
 
-/// Live vouchings backing a user, with the voucher resolved — the profile
+/// Live vouchings backing a user, with the voucher resolved - the profile
 /// section a recruiter reads.
 pub async fn list_for_vouched_resolved(
     db: &PgPool,
@@ -235,7 +235,7 @@ pub async fn list_for_vouched_resolved(
 /// Which side "other" means depends on the bucket: on `given` it is the
 /// person backed, on `received` it is the backer. Resolving it here rather
 /// than returning raw `Vouching` rows is what makes a "my cautions" page
-/// renderable at all — it used to show two UUIDs.
+/// renderable at all - it used to show two UUIDs.
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 pub struct VouchingWithParty {
     // `sqlx(flatten)` maps `v.*` onto the struct; `serde(flatten)` keeps the
@@ -309,11 +309,11 @@ pub async fn live_count(db: &PgPool, vouched_id: Uuid) -> Result<i64, AppError> 
     Ok(count)
 }
 
-/// SKI-297 (T3-03b) — the moderation queue.
+/// SKI-297 (T3-03b) - the moderation queue.
 ///
 /// `POST /moderation/vouchings/{id}/break` shipped without any way to find
 /// the id it takes. The only reads were "vouchings backing user X" and
-/// "mine", so a moderator had to already know which mentee to look at —
+/// "mine", so a moderator had to already know which mentee to look at -
 /// which is backwards: the trigger is a fraud finding, and the question it
 /// raises is "who put their rank behind this person".
 ///
@@ -339,7 +339,7 @@ pub struct VouchingQueueRow {
     pub vouched_id: Uuid,
     pub vouched_username: Option<String>,
     pub vouched_display_name: Option<String>,
-    /// True when the backed user is already under suspicion — a revoked
+    /// True when the backed user is already under suspicion - a revoked
     /// deliverable or a multi-account flag. This is the column that turns a
     /// listing into a queue: it is what a moderator sorts on.
     pub vouched_user_flagged: bool,
@@ -503,7 +503,7 @@ pub struct BreakReport {
 /// mechanism depends on that call being made by a person.
 ///
 /// Applies the penalty only for `at_stake_kind = 'rank_temporary'`. The
-/// penalty is a window on `user_ranks`, not a rewrite of the rank — see
+/// penalty is a window on `user_ranks`, not a rewrite of the rank - see
 /// migration 0148.
 pub async fn break_vouching(
     db: &PgPool,
@@ -514,7 +514,7 @@ pub async fn break_vouching(
     let reason = reason.trim();
     if reason.chars().count() < 8 {
         return Err(AppError::Validation(
-            "break_reason must be at least 8 characters — this costs someone a rank".into(),
+            "break_reason must be at least 8 characters - this costs someone a rank".into(),
         ));
     }
 
@@ -531,7 +531,7 @@ pub async fn break_vouching(
     }
     if vouching.active_until <= chrono::Utc::now() {
         return Err(AppError::Conflict(
-            "vouching has expired — nothing is at stake anymore".into(),
+            "vouching has expired - nothing is at stake anymore".into(),
         ));
     }
 

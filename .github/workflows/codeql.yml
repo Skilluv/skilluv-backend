@@ -8,7 +8,7 @@ name: CodeQL (SAST)
 # Rust support is in preview but works well for detecting most CWE patterns.
 
 on:
-  # Removed push:master + PR triggers — CodeQL is expensive (autobuild
+  # Removed push:master + PR triggers - CodeQL is expensive (autobuild
   # recompiles everything) and rarely surfaces new findings between two
   # code changes. Weekly scan + on-demand dispatch is the sweet spot on
   # a free GHA tier.

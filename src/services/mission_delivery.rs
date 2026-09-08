@@ -8,7 +8,7 @@
 //!
 //! A design mission is not shaped like that. A brand identity is handed in,
 //! the client says the mark does not survive one colour, it is handed in
-//! again. Two or three rounds is the normal case — the same thing the
+//! again. Two or three rounds is the normal case - the same thing the
 //! challenge loop already models. Without somewhere to record them, "not yet"
 //! could only be expressed by cancelling the mission or by arguing over
 //! e-mail, and both lose the trail an arbitration would need.
@@ -22,7 +22,7 @@
 //! ## Ratings are blind
 //!
 //! A rating one side can read before writing their own is not a rating, it is
-//! a negotiation. Both are written blind and revealed together — or after
+//! a negotiation. Both are written blind and revealed together - or after
 //! [`RATING_REVEAL_DAYS`], so a client who never rates cannot suppress a
 //! designer's rating for ever by staying silent.
 
@@ -61,14 +61,14 @@ pub struct Delivery {
     pub decision_reason: Option<String>,
     pub decided_at: Option<chrono::DateTime<chrono::Utc>>,
     /// True when this round is past what the brief said it included. Not a
-    /// refusal — a fact an arbitration can read.
+    /// refusal - a fact an arbitration can read.
     pub beyond_agreed_rounds: bool,
 }
 
 /// Hand in a round.
 ///
 /// Only the person the mission is assigned to, only while it is in progress,
-/// and only when the previous round has been answered — otherwise a designer
+/// and only when the previous round has been answered - otherwise a designer
 /// could bury a request for changes under a new delivery.
 pub async fn deliver(
     db: &PgPool,
@@ -323,7 +323,7 @@ pub async fn request_changes(
 
 /// The round waiting for an answer, if the caller is entitled to answer it.
 ///
-/// Entitlement is membership of the enterprise that published the mission —
+/// Entitlement is membership of the enterprise that published the mission -
 /// not the person who happened to click publish, who may have left.
 async fn waiting_round(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
@@ -357,7 +357,7 @@ async fn waiting_round(
     .ok_or_else(|| AppError::Conflict("no round is waiting for an answer".into()))
 }
 
-/// Every round of a mission, oldest first — the trail an arbitration reads.
+/// Every round of a mission, oldest first - the trail an arbitration reads.
 pub async fn rounds_of(db: &PgPool, mission_id: Uuid) -> Result<Vec<Delivery>, AppError> {
     let rows = sqlx::query_as::<_, Delivery>(
         r#"
@@ -418,7 +418,7 @@ pub async fn rate(
 
     if !matches!(status.as_str(), "delivered" | "closed") {
         return Err(AppError::Conflict(
-            "a mission is rated once it has been delivered — rating work still being argued \
+            "a mission is rated once it has been delivered - rating work still being argued \
              about is a lever, not an opinion"
                 .into(),
         ));
@@ -433,7 +433,7 @@ pub async fn rate(
     // the enterprise, which is not necessarily who clicked publish.
     let (direction, rated_id) = if rater_id == talent {
         let counterpart: Option<Uuid> = sqlx::query_scalar(
-            // The longest-standing active member, by invitation date —
+            // The longest-standing active member, by invitation date -
             // `enterprise_members` records when somebody was invited, not a
             // generic `created_at`. Owner first, because the owner is the
             // person a talent is really rating.
@@ -581,7 +581,7 @@ mod tests {
     use super::*;
 
     /// Both ends derived from one instant. An earlier version called
-    /// `Utc::now()` twice — once for `now`, once inside the helper — so the
+    /// `Utc::now()` twice - once for `now`, once inside the helper - so the
     /// fourteen-day case came out a few microseconds short of fourteen days
     /// and `num_days` truncated it to thirteen.
     fn window(days_ago: i64) -> (chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>) {

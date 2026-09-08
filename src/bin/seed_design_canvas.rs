@@ -1,4 +1,4 @@
-//! skilluv-seed-design-canvas — design work on Skilluv's own surfaces.
+//! skilluv-seed-design-canvas - design work on Skilluv's own surfaces.
 //!
 //! The briefs live in `services::seed::design_canvas`, because the server
 //! seeds itself on boot and a binary's private constant is not reachable from
@@ -74,7 +74,7 @@ async fn main() -> Result<()> {
 
     println!();
     println!("═══════════════════════════════════════════════════════════");
-    println!("  Design canvas seeded — {detail}");
+    println!("  Design canvas seeded - {detail}");
     println!("═══════════════════════════════════════════════════════════");
 
     Ok(())

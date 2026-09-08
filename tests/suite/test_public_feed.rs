@@ -113,7 +113,7 @@ async fn nothing_reaches_the_feed_twice() {
     let user = a_user(&app, "feed_once").await;
     let deliverable = a_verified_artifact(&app, user, "pr_merged").await;
 
-    // Verified again by another code path — a webhook and a poller arriving
+    // Verified again by another code path - a webhook and a poller arriving
     // together is the normal case, not the rare one.
     sqlx::query("UPDATE deliverables SET verification_status = 'pending' WHERE id = $1")
         .bind(deliverable)
@@ -238,7 +238,7 @@ async fn turning_a_kind_off_takes_down_what_is_already_up() {
             .is_empty()
     );
 
-    // And turning it back on restores it — the row was never deleted.
+    // And turning it back on restores it - the row was never deleted.
     app.post(
         "/api/users/me/public-feed-preferences",
         &json!({"kind": "pr_merged_upstream", "visible": true}),

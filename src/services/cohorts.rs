@@ -1,15 +1,15 @@
-//! SKI-40 (Post-MVP T2-01) — time-boxed study cohorts.
+//! SKI-40 (Post-MVP T2-01) - time-boxed study cohorts.
 //!
 //! See migration 0143 for why a cohort is neither a team nor a guild, and
 //! why the group chat is its own table rather than a widened DM.
 //!
 //! This module owns the rules that a CHECK constraint cannot express:
 //!
-//!   * capacity — a join must not exceed `max_members`, and the check has
+//!   * capacity - a join must not exceed `max_members`, and the check has
 //!     to be race-free (two simultaneous joins on the last seat);
-//!   * lifecycle — an archived or finished cohort accepts no new joins,
+//!   * lifecycle - an archived or finished cohort accepts no new joins,
 //!     messages or milestone edits;
-//!   * organizer continuity — the last organizer cannot walk out and leave
+//!   * organizer continuity - the last organizer cannot walk out and leave
 //!     a cohort nobody can administer.
 
 use serde::Serialize;
@@ -136,7 +136,7 @@ pub async fn assert_organizer(
 
 /// Reject writes to a cohort that is archived or already over.
 ///
-/// A finished cohort stays fully readable — the archive is the point —
+/// A finished cohort stays fully readable - the archive is the point -
 /// but accepting new messages into a cycle that ended would blur the
 /// boundary that makes a cohort different from a guild.
 fn assert_writable(cohort: &Cohort) -> Result<(), AppError> {
@@ -317,7 +317,7 @@ pub async fn leave(db: &PgPool, cohort_id: Uuid, user_id: Uuid) -> Result<(), Ap
         .await?;
         if organizers <= 1 {
             return Err(AppError::Conflict(
-                "promote another organizer before leaving — a cohort cannot be left \
+                "promote another organizer before leaving - a cohort cannot be left \
                  without one"
                     .into(),
             ));

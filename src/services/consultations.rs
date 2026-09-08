@@ -19,8 +19,8 @@
 //! nothing is delivered to the client until everybody assessed has seen what
 //! was concluded about them.
 //!
-//! The commercial pressure runs the other way — the client wants the report
-//! on their date — which is why the gate is in the database.
+//! The commercial pressure runs the other way - the client wants the report
+//! on their date - which is why the gate is in the database.
 
 use bigdecimal::BigDecimal;
 use bigdecimal::num_traits::ToPrimitive;
@@ -49,7 +49,7 @@ pub const VERDICTS: &[&str] = &["approve", "approve_with_concerns", "concerns", 
 /// Lower on advisory, where the product is an introduction and an hour in a
 /// calendar. Higher on a review, where Skilluv assembles the panel, holds the
 /// deadline against several people at once and writes the synthesis the
-/// client actually bought — the experts' comments are the working.
+/// client actually bought - the experts' comments are the working.
 pub fn commission_for(kind: &str) -> f64 {
     match kind {
         "architecture_review" => 40.0,
@@ -67,7 +67,7 @@ pub const EXPERT_MIN_RANK: &str = "maitre";
 ///
 /// The fee less the platform's share, divided between the people who actually
 /// submitted. Somebody who was invited and did not write anything is not in
-/// the division — the fee buys the opinion, not the availability — and the
+/// the division - the fee buys the opinion, not the availability - and the
 /// last person absorbs the rounding rather than the platform.
 pub fn split_between_experts(
     fee: &BigDecimal,
@@ -303,7 +303,7 @@ pub async fn experts(db: &PgPool, consultation_id: Uuid) -> Result<Vec<Expert>, 
     Ok(rows)
 }
 
-/// Invite an expert. Checks the rank, and stops there — the answer is theirs.
+/// Invite an expert. Checks the rank, and stops there - the answer is theirs.
 pub async fn invite_expert(
     db: &PgPool,
     consultation_id: Uuid,
@@ -497,7 +497,7 @@ pub async fn deliver(
     .bind(consultation.enterprise_id)
     .bind(&commission)
     .bind(ledger::percent_to_bps(&consultation.commission_percent))
-    .bind(format!("{} — {}", consultation.kind, consultation.topic))
+    .bind(format!("{} - {}", consultation.kind, consultation.topic))
     .execute(&mut *tx)
     .await?;
 
@@ -787,7 +787,7 @@ pub async fn deliver_audit(
     )
     .bind(audit.enterprise_id)
     .bind(&audit.fee)
-    .bind(format!("audit de compétences — {}", audit.scope))
+    .bind(format!("audit de compétences - {}", audit.scope))
     .execute(&mut *tx)
     .await?;
 

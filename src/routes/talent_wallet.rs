@@ -1,4 +1,4 @@
-//! P13.1 — Endpoints wallet talent.
+//! P13.1 - Endpoints wallet talent.
 //!
 //! - GET /api/users/me/wallet : solde EUR + XOF + statut providers.
 //! - GET /api/users/me/wallet/transactions?limit=20 : ledger récent.
@@ -25,13 +25,13 @@ pub fn talent_wallet_routes() -> Router<AppState> {
         .route("/users/me/wallet", get(my_wallet))
         .route("/users/me/wallet/transactions", get(my_wallet_transactions))
         .route("/users/me/wallet/residency", post(set_my_residency))
-        // P13.2 — Stripe Connect
+        // P13.2 - Stripe Connect
         .route("/users/me/wallet/stripe/onboard", post(stripe_onboard))
         .route("/users/me/wallet/withdraw", post(withdraw))
         .route("/webhooks/stripe-connect", post(stripe_connect_webhook))
-        // P13.3 — Mobile Money (Orange, MTN, Wave)
+        // P13.3 - Mobile Money (Orange, MTN, Wave)
         .route("/users/me/wallet/momo/phone", post(register_momo_phone))
-        // P13.5 — Compliance : limites journalières/mensuelles + statement CSV
+        // P13.5 - Compliance : limites journalières/mensuelles + statement CSV
         .route("/users/me/wallet/statement.csv", get(wallet_statement_csv))
 }
 
@@ -109,7 +109,7 @@ pub async fn set_my_residency(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// P13.2 — Stripe Connect Express (talent payout channel EU/international)
+// P13.2 - Stripe Connect Express (talent payout channel EU/international)
 // ═══════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Deserialize)]
@@ -220,7 +220,7 @@ pub async fn stripe_connect_webhook(
     // silencieusement 200. Best-practice pour webhooks externes.
     let Some(cfg) = crate::services::stripe::StripeConfig::from_env() else {
         tracing::warn!(
-            "Stripe Connect webhook received but STRIPE_* env not configured — acking silently"
+            "Stripe Connect webhook received but STRIPE_* env not configured - acking silently"
         );
         return Ok(Json(json!({ "status": "acked_not_configured" })));
     };
@@ -293,7 +293,7 @@ pub async fn stripe_connect_webhook(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// P13.5 — Compliance : limites journalière / mensuelle + statement CSV
+// P13.5 - Compliance : limites journalière / mensuelle + statement CSV
 // ═══════════════════════════════════════════════════════════════════
 
 /// Vérifie qu'un débit projeté ne dépasse pas la limite configurée pour la
@@ -329,7 +329,7 @@ async fn enforce_limit(
 
 /// GET /api/users/me/wallet/statement.csv
 ///
-/// Export CSV du ledger complet du user — obligation fiscale + audit personnel.
+/// Export CSV du ledger complet du user - obligation fiscale + audit personnel.
 /// Export the wallet ledger as CSV.
 #[utoipa::path(
     get, path = "/api/users/me/wallet/statement.csv", tag = "wallet",
@@ -357,21 +357,21 @@ pub async fn wallet_statement_csv(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// P13.3 — Mobile Money (channel Africa-first)
+// P13.3 - Mobile Money (channel Africa-first)
 // ═══════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Deserialize)]
 struct RegisterMomoBody {
     /// Format E.164, ex "+22507xxxxxxxx".
     phone: String,
-    /// P13.3 placeholder — trusts the client to have run OTP verification.
+    /// P13.3 placeholder - trusts the client to have run OTP verification.
     /// Optional with a default of `true` (matching the current permissive
     /// stance) so the front doesn't 422 when it just sends `{ phone,
     /// provider }`. **TODO P15**: replace with a real OTP round-trip via
     /// `services::otp::verify` and drop the default.
     #[serde(default = "default_true")]
     verified: bool,
-    /// "orange" | "mtn" | "wave" — optional today (single-provider
+    /// "orange" | "mtn" | "wave" - optional today (single-provider
     /// dispatch via env), tracked so we can route per-provider in P15.
     #[serde(default)]
     #[allow(dead_code)]
@@ -464,8 +464,8 @@ struct WithdrawBody {
 
 /// Withdraw available funds.
 ///
-/// One endpoint for every rail. There used to be two — `/withdraw/stripe`
-/// and `/withdraw/momo` — each with its own idea of what happens when a
+/// One endpoint for every rail. There used to be two - `/withdraw/stripe`
+/// and `/withdraw/momo` - each with its own idea of what happens when a
 /// provider refuses, and each carrying a copy of the limit checks. Which
 /// rail reaches a recipient is a routing question answered by
 /// `payout_routes`, not something a client should know or a URL encode.
@@ -557,7 +557,7 @@ pub async fn withdraw(
 
     let destination = destination.ok_or_else(|| {
         AppError::Validation(
-            "no destination on file for this rail — register a Mobile Money \
+            "no destination on file for this rail - register a Mobile Money \
              number or complete Stripe onboarding first"
                 .into(),
         )
@@ -567,7 +567,7 @@ pub async fn withdraw(
         Rail::MobileMoney => {
             if !momo_verified {
                 return Err(AppError::Validation(
-                    "Phone not verified — complete the SMS OTP first".into(),
+                    "Phone not verified - complete the SMS OTP first".into(),
                 ));
             }
             use num_traits::ToPrimitive;

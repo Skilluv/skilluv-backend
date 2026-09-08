@@ -1,12 +1,12 @@
-//! SKI-39 (Post-MVP T1-04) — profile timeline.
+//! SKI-39 (Post-MVP T1-04) - profile timeline.
 //!
 //! Writing is handled entirely by the database triggers installed in
-//! migration 0142 — see that file for why triggers rather than Rust hooks.
+//! migration 0142 - see that file for why triggers rather than Rust hooks.
 //! This module owns the two things SQL triggers cannot do on their own:
 //!
-//!   * [`list_for_user`] — the paginated read path, with the visibility
+//!   * [`list_for_user`] - the paginated read path, with the visibility
 //!     rule applied.
-//!   * [`backfill`] — a replayable rebuild. Migration 0142 backfills once
+//!   * [`backfill`] - a replayable rebuild. Migration 0142 backfills once
 //!     at deploy time, but a migration cannot be re-run; this can, which
 //!     matters if triggers are ever dropped during maintenance or a bulk
 //!     import bypasses them (`COPY` fires row triggers, but a restore with
@@ -141,7 +141,7 @@ impl BackfillReport {
 /// `only_user` scopes the rebuild to a single profile (used by the admin
 /// endpoint); `None` rebuilds everyone (used by the CLI).
 ///
-/// Counts reflect rows actually inserted — a second run over unchanged
+/// Counts reflect rows actually inserted - a second run over unchanged
 /// data reports all zeros, which is the cheapest possible confirmation
 /// that the timeline is already complete.
 pub async fn backfill(db: &PgPool, only_user: Option<Uuid>) -> Result<BackfillReport, AppError> {

@@ -1,4 +1,4 @@
-//! Service `stewards` — gouvernance humaine des projets (Phase P6).
+//! Service `stewards` - gouvernance humaine des projets (Phase P6).
 //!
 //! Voir docs/challenges-target-model-and-roadmap.md sections B.13, 9.5, 9.7.
 //!

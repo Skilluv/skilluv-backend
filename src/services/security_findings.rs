@@ -2,8 +2,8 @@
 //!
 //! ## The one rule the whole module is built around
 //!
-//! A finding is only a finding if it was in scope. Everything else here —
-//! triage, severity, embargo, deduplication — is secondary to that, and it is
+//! A finding is only a finding if it was in scope. Everything else here -
+//! triage, severity, embargo, deduplication - is secondary to that, and it is
 //! checked first, at submission, against a list this module owns. A report
 //! against something nobody authorised is refused rather than triaged, because
 //! accepting it would make this platform the place that received an
@@ -11,7 +11,7 @@
 //!
 //! ## The state machine, and why it is here rather than in the database
 //!
-//! Postgres enforces what a row may *say* — migration 0547 has fourteen
+//! Postgres enforces what a row may *say* - migration 0547 has fourteen
 //! constraints on that. What it cannot enforce is who may change it and in
 //! which order, because both depend on capabilities and on the actor. So the
 //! transitions live in [`allowed_transition`], one table, with a test that
@@ -30,7 +30,7 @@
 //!
 //! Four things, in one transaction: the status moves, a `deliverables` row is
 //! created, fragments are credited, and the embargo clock starts. The
-//! deliverable is the part that matters structurally — it is what makes a
+//! deliverable is the part that matters structurally - it is what makes a
 //! vulnerability count towards a rank exactly as a merged pull request does,
 //! which is what one cross-domain rank means (F-06).
 //!
@@ -53,7 +53,7 @@ use crate::services::cvss;
 /// the document is wrong.
 ///
 /// Overridable with `SKILLUV_SECURITY_SCOPE_HOSTS` (comma-separated) so that a
-/// staging deployment can widen or narrow it without a release — the same
+/// staging deployment can widen or narrow it without a release - the same
 /// mechanism the rate-limit allow-list uses.
 const DEFAULT_SCOPE_HOSTS: &[&str] = &[
     "api.skill-uv.com",
@@ -118,7 +118,7 @@ pub fn parse_scope(override_list: Option<&str>) -> Vec<String> {
     // A blank or punctuation-only override ("", "   ", ",") parses to nothing.
     // Fall back to the defaults rather than return an empty scope: scope_hosts()
     // gates submission (see the "not in the published scope" rejection below),
-    // and an empty scope would reject every finding — a silent availability
+    // and an empty scope would reject every finding - a silent availability
     // lockout from one malformed env var.
     if hosts.is_empty() { defaults() } else { hosts }
 }
@@ -128,7 +128,7 @@ pub fn parse_scope(override_list: Option<&str>) -> Vec<String> {
 /// `Actor` is the coarsest thing that decides: the reporter, somebody with the
 /// triage capability, somebody who can review the domain, or an administrator.
 /// A finer model would be a permission per transition, and there are eleven of
-/// them — the cost of that precision is a table nobody reads.
+/// them - the cost of that precision is a table nobody reads.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Actor {
     Reporter,
@@ -239,7 +239,7 @@ pub struct SubmitInput {
     #[serde(default)]
     pub affected_endpoint: Option<String>,
     /// A CVSS 3.1 vector. When present the severity is computed from it and
-    /// `severity_tier` is ignored — a vector is an argument and a tier is an
+    /// `severity_tier` is ignored - a vector is an argument and a tier is an
     /// assertion.
     #[serde(default)]
     pub cvss_vector: Option<String>,
@@ -289,7 +289,7 @@ pub async fn submit(
     let title = input.title.trim();
     if title.chars().count() < 5 {
         return Err(AppError::Validation(
-            "a title of at least five characters — 'bug' is not one".into(),
+            "a title of at least five characters - 'bug' is not one".into(),
         ));
     }
     crate::validators::check_max_len(title, "title", 200)?;
@@ -354,7 +354,7 @@ pub async fn submit(
             ) {
                 return Err(AppError::Validation(
                     "severity is one of critical, high, medium, low, informational \
-                     — or send a CVSS vector instead"
+                     - or send a CVSS vector instead"
                         .into(),
                 ));
             }
@@ -483,7 +483,7 @@ async fn resolve_target(
                 return Err(AppError::Validation(format!(
                     "'{host}' is not in the published scope. The scope is at \
                      /security, and a report against something outside it \
-                     cannot be accepted — that is what the safe harbour \
+                     cannot be accepted - that is what the safe harbour \
                      covers and what it does not"
                 )));
             }
@@ -532,7 +532,7 @@ async fn resolve_target(
             Ok((None, Some(project_id), input.target_host.clone()))
         }
         other => Err(AppError::Validation(format!(
-            "'{other}' is not a target kind — platform, mission or project"
+            "'{other}' is not a target kind - platform, mission or project"
         ))),
     }
 }
@@ -811,7 +811,7 @@ async fn confirm(
     let fragments = fragments_for(severity);
 
     // The deliverable. This is what makes a vulnerability count towards a rank
-    // exactly as a merged contribution does — see the module header, and F-06.
+    // exactly as a merged contribution does - see the module header, and F-06.
     let inserted: Option<Uuid> = sqlx::query_scalar(
         r#"
         INSERT INTO deliverables (
@@ -836,8 +836,8 @@ async fn confirm(
     .fetch_optional(&mut **tx)
     .await?;
 
-    // Fragments only when the deliverable is new. A second confirmation — a
-    // status corrected and re-applied — must not pay twice.
+    // Fragments only when the deliverable is new. A second confirmation - a
+    // status corrected and re-applied - must not pay twice.
     if inserted.is_some() && fragments > 0 {
         sqlx::query(
             "UPDATE users SET total_fragments = total_fragments + $1, updated_at = NOW()
@@ -869,7 +869,7 @@ pub struct SeverityOverride {
 
 /// Change the severity of a finding, on the record.
 ///
-/// The reported tier is never overwritten — migration 0547 keeps it — so the
+/// The reported tier is never overwritten - migration 0547 keeps it - so the
 /// disagreement stays readable. A reason is required by the database as well as
 /// here: an unexplained override is what researchers leave a platform over.
 pub async fn override_severity(
@@ -897,7 +897,7 @@ pub async fn override_severity(
         }
         None => {
             let tier = input.severity_tier.as_deref().ok_or_else(|| {
-                AppError::Validation("a vector or a tier — one of the two".into())
+                AppError::Validation("a vector or a tier - one of the two".into())
             })?;
             if !matches!(
                 tier,
@@ -961,7 +961,7 @@ pub async fn override_severity(
 #[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct RoundRequest {
-    /// A slug from `revision_round_kinds` — `sec_repro_insufficient` and the
+    /// A slug from `revision_round_kinds` - `sec_repro_insufficient` and the
     /// five others migration 0547 seeded.
     pub kind: String,
     pub notes_md: String,
@@ -1155,7 +1155,7 @@ pub async fn resolve_round(
 ///
 /// Two signals, both cheap:
 ///
-///   * the same weakness class on the same endpoint of the same target — which
+///   * the same weakness class on the same endpoint of the same target - which
 ///     in practice is most real duplicates;
 ///   * a similar title, by trigram similarity, which catches the case where two
 ///     people described the same thing in different words.
@@ -1405,7 +1405,7 @@ pub async fn withhold(
 /// What the embargo worker found.
 #[derive(Debug, Default, serde::Serialize)]
 pub struct EmbargoSweep {
-    /// Findings whose clock has run out. Not published — flagged for an
+    /// Findings whose clock has run out. Not published - flagged for an
     /// administrator, because publication is a decision somebody signs.
     pub expired: Vec<Uuid>,
     /// Findings whose clock runs out soon, by how soon.
@@ -1522,7 +1522,7 @@ pub async fn mine(db: &PgPool, user_id: Uuid) -> Result<Vec<serde_json::Value>, 
 
 /// The public card: what a stranger may read about a finding.
 ///
-/// Everything that identifies the defect is withheld until publication — no
+/// Everything that identifies the defect is withheld until publication - no
 /// reproduction, no endpoint, no proof. What is shown is what a coordinated
 /// disclosure shows from outside: that somebody found something of this
 /// severity, in this weakness class, on this date. That is the claim an

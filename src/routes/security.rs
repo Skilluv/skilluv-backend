@@ -12,14 +12,14 @@
 //!
 //! Not `require_admin`, except for the one transition that publishes. A finding
 //! is triaged by `security_triager`, judged by `security_reviewer:{family}` and
-//! published by an administrator — the routing 0404's derived capabilities were
+//! published by an administrator - the routing 0404's derived capabilities were
 //! built for, and the reason the admin surface of this domain
 //! (`routes::admin_security`) is not gated on `admin` alone.
 //!
 //! ## The upload that comes before the report
 //!
 //! Proof files are uploaded first and referenced by key in the submission. That
-//! is the shape of the form — you screenshot the exploit while you have it —
+//! is the shape of the form - you screenshot the exploit while you have it -
 //! and it is why an orphan sweep exists.
 
 use axum::extract::{Multipart, Path, Query, State};
@@ -199,8 +199,8 @@ pub async fn submit_report(
     // A session **or** an API key carrying `security:report`.
     //
     // A cookie is a browser thing. An editor extension, a CLI or a CI job has
-    // none, so this route — the one a researcher most wants to call from where
-    // they found the defect — was unreachable by anything but a browser.
+    // none, so this route - the one a researcher most wants to call from where
+    // they found the defect - was unreachable by anything but a browser.
     // That, and not the extension itself, was the missing half of SKI-172.
     //
     // The rate limit below is keyed on the person either way, so a key does
@@ -409,7 +409,7 @@ pub async fn upload_proof(
 }
 
 /// A one-hour link to a proof, for whoever is allowed to see it.
-/// The object key of a proof file — a bucket path such as
+/// The object key of a proof file - a bucket path such as
 /// `security-proofs/{uploader}/{uuid}.png`. A query parameter rather than a
 /// path segment because it contains slashes: an axum path capture would need a
 /// `{*key}` wildcard, which OpenAPI cannot describe as a normal parameter, and
@@ -497,7 +497,7 @@ pub async fn submit_flag(
 
             // Twice, on purpose, and the two are not the same message.
             //
-            // Globally, because a first blood is community news — the only
+            // Globally, because a first blood is community news - the only
             // thing in this domain broadcast rather than kept between a
             // reporter and a reviewer.
             state
@@ -574,7 +574,7 @@ pub async fn submit_answers(
 /// A one-day link to the artefact of a defensive lab.
 ///
 /// Authenticated, because the link is minted for whoever asked and expires:
-/// the artefact is not secret — it was redacted and published to be analysed —
+/// the artefact is not secret - it was redacted and published to be analysed -
 /// but a permanent public URL to a capture is a mirror somebody else hosts, and
 /// then a lab this platform cannot revise.
 ///
@@ -662,7 +662,7 @@ pub async fn hall_of_fame(
 /// The trust centre's figures (T-10).
 ///
 /// The same rows the hall of fame reads, plus what the platform says about
-/// itself. One source, so two pages cannot quote different numbers — which is
+/// itself. One source, so two pages cannot quote different numbers - which is
 /// the failure a trust page most needs to avoid.
 #[utoipa::path(
     get, path = "/api/trust/summary", tag = "security",
@@ -838,7 +838,7 @@ pub async fn issue_token(
         "details": view,
         "header": crate::middleware::security_research::TOKEN_HEADER,
         "note": "Shown once. It raises your rate limit and grants nothing \
-                 else — denial of service stays out of scope.",
+                 else - denial of service stays out of scope.",
     }))))
 }
 
@@ -877,7 +877,7 @@ pub async fn revoke_token(
 /// Claim a bounty earned on another platform.
 ///
 /// It arrives claimed and stays claimed until a reviewer opens the public
-/// disclosure — the same shape as a declared certification, and for the same
+/// disclosure - the same shape as a declared certification, and for the same
 /// reason: the person filing it is the person it belongs to.
 #[utoipa::path(
     post, path = "/api/security/external-bounties/claims",

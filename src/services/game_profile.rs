@@ -2,7 +2,7 @@
 //!
 //! Another domain scored on the shared machine. The formula, the tiers, the
 //! cap and the assembly all live in [`craft_score`]; what is here is the
-//! measuring, and only the measuring — the fourteen game terms, each counting
+//! measuring, and only the measuring - the fourteen game terms, each counting
 //! something a stranger can go and check.
 //!
 //! ## What a game score rests on
@@ -10,7 +10,7 @@
 //! Attestations with a basis, jam standings a finaliser wrote into
 //! `tournament_participants.rank`, mods a reviewer confirmed, playtests a
 //! creator gave to someone else, missions closed. The one figure the platform
-//! cannot fetch — a mod's download count — is a number the reviewer confirmed
+//! cannot fetch - a mod's download count - is a number the reviewer confirmed
 //! against the hosting page when the mod was validated, not a self-report the
 //! score takes on trust.
 //!
@@ -34,7 +34,7 @@ pub const DOMAIN: &str = "game";
 /// tiers): a tier is a position on a scale, and each scale is its own weights.
 pub const CAP: i32 = craft_score::CAP;
 
-/// A confirmed mod is "viral" past this many downloads — the figure a reviewer
+/// A confirmed mod is "viral" past this many downloads - the figure a reviewer
 /// checked against the hosting page, per the `mods_viral` weight in 0576.
 const VIRAL_DOWNLOADS: i32 = 1000;
 

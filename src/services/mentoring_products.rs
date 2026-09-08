@@ -7,7 +7,7 @@
 //! and referral commissions their own tables, indexes and comments. Nothing
 //! read or wrote any of it: only `paid_session` was ever connected. A mode a
 //! mentor can choose and that then does nothing is worse than a mode that
-//! does not exist — the mentor who picked `paid_monthly` believes they are
+//! does not exist - the mentor who picked `paid_monthly` believes they are
 //! earning.
 //!
 //! This module connects the rest.
@@ -296,12 +296,12 @@ pub async fn record_volunteer_hours(
 
     // Only free modes accumulate. Recording volunteer hours while charging
     // for them is the double-dip the rule exists to stop, and it has to be
-    // refused at the point of recording rather than at the point of paying —
+    // refused at the point of recording rather than at the point of paying -
     // by then the hours are in the table and look genuine.
     if !matches!(mode.as_str(), "volunteer" | "hybrid") {
         return Err(AppError::Validation(format!(
             "you work {mode}. Volunteer hours are hours given free, and the placement \
-             commission rewards exactly that — recording paid hours here would claim \
+             commission rewards exactly that - recording paid hours here would claim \
              the reward for something already charged for."
         )));
     }
@@ -610,7 +610,7 @@ pub async fn enrol(
     }
     if program.kind == "premium_cohort" && mentee_user_id.is_none() {
         return Err(AppError::Validation(
-            "a premium cohort enrols Skilluv accounts — the mentee pays for it \
+            "a premium cohort enrols Skilluv accounts - the mentee pays for it \
              themselves and needs somewhere to be paid from and reviewed"
                 .into(),
         ));
@@ -686,7 +686,7 @@ pub async fn enrol(
         .bind(program.enterprise_id)
         .bind(BigDecimal::from(platform_cents) / BigDecimal::from(100))
         .bind(ledger::percent_to_bps(&program.commission_percent))
-        .bind(format!("{} — {}", program.kind, program.title))
+        .bind(format!("{} - {}", program.kind, program.title))
         .execute(db)
         .await?;
     }

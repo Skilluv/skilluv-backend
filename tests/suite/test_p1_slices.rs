@@ -125,7 +125,7 @@ async fn setup_project_with_open_slice(db: &PgPool) -> (Uuid, Uuid, Uuid) {
 
 // ═══════════════════════════════════════════════════════════════════
 // Migration 0062 : curated_labels sur projects.
-// (Le volet oss_bounties.slice_id de 0062 est obsolète depuis P9.2 —
+// (Le volet oss_bounties.slice_id de 0062 est obsolète depuis P9.2 -
 //  la table oss_bounties est droppée en mig 0074.)
 // ═══════════════════════════════════════════════════════════════════
 
@@ -178,7 +178,7 @@ async fn migration_0062_adds_curated_labels_on_projects() {
     cleanup_test_db(&db_name).await;
 }
 
-// (Le test du backfill 0063 est retiré en P9.2 — oss_bounties est droppée
+// (Le test du backfill 0063 est retiré en P9.2 - oss_bounties est droppée
 // en mig 0074, on ne peut plus insérer dans cette table pour re-jouer 0063.
 // Les invariants qu'il vérifiait sont désormais couverts par test_phase5_bounties
 // via l'API bounties qui écrit directement dans project_slices.)

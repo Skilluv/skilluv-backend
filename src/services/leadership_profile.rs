@@ -20,7 +20,7 @@
 //! Confidential artefacts are counted and never displayed. That is the point
 //! of the redaction state: somebody who has spent five years writing internal
 //! strategy has a score that says so, and a profile that shows what it is
-//! allowed to. The alternative — refusing to count what cannot be shown — is
+//! allowed to. The alternative - refusing to count what cannot be shown - is
 //! a platform where only the unemployed can build a record.
 //!
 //! Anonymised artefacts are displayed only once a reviewer has confirmed the
@@ -49,7 +49,7 @@ pub struct LeadershipProfile {
     /// reviewer has confirmed.
     pub artefacts: Vec<serde_json::Value>,
     /// What confidential work exists, said in the abstract. What kind, at
-    /// what scale, in what industry — and never what or where.
+    /// what scale, in what industry - and never what or where.
     pub confidential_summary: Vec<serde_json::Value>,
     /// Cohorts led to their end, with the numbers that make the claim
     /// checkable: how many joined, how many finished.
@@ -81,7 +81,7 @@ struct Measurements {
 }
 
 /// The nine bases this domain issues. A constant of this module, and the only
-/// thing interpolated into the SQL below — everything a caller supplies is
+/// thing interpolated into the SQL below - everything a caller supplies is
 /// bound.
 const BASES: &str = "'leadership_roadmap_validated', 'leadership_decision_recorded', \
      'leadership_rfc_accepted', 'leadership_retrospective_facilitated', \
@@ -130,7 +130,7 @@ async fn measure(db: &PgPool, user_id: Uuid) -> Result<Measurements, AppError> {
             --
             -- `::BIGINT`, and it is not decoration. `sum()` over a bigint
             -- returns NUMERIC in PostgreSQL, every other figure in this row is
-            -- a `count(*)` and therefore bigint, and sqlx does not widen — one
+            -- a `count(*)` and therefore bigint, and sqlx does not widen - one
             -- numeric here made the whole row undecodable and the endpoint
             -- answered 500 to every call. `ops_profile` documents the same
             -- outage from the opposite direction, an `::INT` narrowing.
@@ -299,7 +299,7 @@ pub async fn build(db: &PgPool, username: &str) -> Result<LeadershipProfile, App
     .await?;
 
     // The abstract claim, and nothing else. No title, no URL, no domain of
-    // the client — the context object is what the author agreed could be
+    // the client - the context object is what the author agreed could be
     // said, and a title is often enough to identify a product.
     let confidential_summary: Vec<serde_json::Value> = sqlx::query_scalar(
         "SELECT jsonb_build_object(

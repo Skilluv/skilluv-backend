@@ -1,4 +1,4 @@
-//! P26 v2 SKI-120 — public routes for maintainer digest subscribe /
+//! P26 v2 SKI-120 - public routes for maintainer digest subscribe /
 //! confirm / unsubscribe. All unauthenticated; mounted OUTSIDE `/api`.
 
 use axum::extract::{Path, State};
@@ -31,7 +31,7 @@ pub struct SubscribeBody {
 }
 
 /// Ask for the maintainer digest. Nothing is sent until the mailed link
-/// is followed — the address is not taken at its word.
+/// is followed - the address is not taken at its word.
 #[utoipa::path(
     // Mounted at the root, not under `/api`: public and self-serve. The
     // document claimed `/api/maintainer-digest/...` for all three of these,
@@ -72,7 +72,7 @@ pub async fn subscribe(
     )
     .await?;
 
-    // Don't echo the tokens in the response — those are for the email.
+    // Don't echo the tokens in the response - those are for the email.
     Ok((
         StatusCode::ACCEPTED,
         Json(json!({

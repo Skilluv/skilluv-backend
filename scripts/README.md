@@ -1,4 +1,4 @@
-# scripts/ — outils, pas des seeds
+# scripts/ - outils, pas des seeds
 
 Les seeds de contenu **ne vivent plus ici**. Ils sont dans
 `src/services/seed/`, appliqués automatiquement par le serveur après ses
@@ -25,7 +25,7 @@ version y figure déjà, et applique le reste. Sur une base à jour, c'est un se
 `SELECT`.
 
 Donc : **première mise en production, base supprimée et recréée, restauration
-d'un dump** — le catalogue se remet en place tout seul.
+d'un dump** - le catalogue se remet en place tout seul.
 
 Les dix étapes, dans l'ordre où les données dépendent les unes des autres :
 
@@ -53,7 +53,7 @@ SEED_ADMIN_EMAIL=...      # défaut : admin@skill-uv.com
 
 Sans elle, le serveur démarre quand même, saute les étapes qui ont besoin d'un
 propriétaire, et le dit très fort dans les logs. On pose la variable, on
-redémarre, et le catalogue se rattrape — rien de déjà appliqué n'est refait.
+redémarre, et le catalogue se rattrape - rien de déjà appliqué n'est refait.
 
 `SKILLUV_SEED_ON_BOOT=0` désactive le seed au démarrage : pour une réplique qui
 ne doit pas courir contre la primaire, ou pour une restauration qu'on veut

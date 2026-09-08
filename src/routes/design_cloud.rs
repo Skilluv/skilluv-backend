@@ -131,7 +131,7 @@ pub struct InspectResponse {
     /// Null when the URL is not a design tool link at all.
     pub source: Option<design_cloud::CloudSource>,
     /// A code, not a sentence, so the client renders it in the reader's
-    /// language — this endpoint is public and serves an FR/EN audience, and a
+    /// language - this endpoint is public and serves an FR/EN audience, and a
     /// French warning is worst exactly when an English reader has to act on it
     /// (SKI-311). `"unrecognised_link"` | `"needs_public_sharing"`, or null.
     pub warning_code: Option<&'static str>,

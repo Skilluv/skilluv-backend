@@ -145,7 +145,7 @@ async fn a_sprint_is_one_contest_with_no_category() {
             "/api/admin/series",
             &json!({
                 "slug": "sprint-2027-w06",
-                "name": "Sprint du week-end — thème imposé",
+                "name": "Sprint du week-end - thème imposé",
                 "kind": "sprint",
                 "skill_domain": "design",
                 "starts_at": "2027-02-05T17:00:00Z",

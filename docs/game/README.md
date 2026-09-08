@@ -10,7 +10,7 @@ Twenty-one trades, one rank, and proof a stranger can check.
 Skilluv is a compagnonnage platform: you do real work, somebody who ships games
 reads it, and what comes out is an attestation with a verification code rather
 than a certificate with your name in a serif font. The game domain works like
-the other ten — same rank, same badges, same craft score — with one thing no
+the other ten - same rank, same badges, same craft score - with one thing no
 other domain has: **a game slice is not validated until real players have
 touched it.** Three playtests, an average fun score of three, and a reviewer's
 sign-off. "It runs and I like it" is not enough here.
@@ -29,7 +29,7 @@ is read against and which reviewer can sign it off.
 | **Web3 (experimental)** | web3 game developer |
 
 Pick up to three at `PUT /api/users/me/orientations`. Each family has its own
-onboarding — `GET /api/domains/game/guides`. The web3 trade is shown as
+onboarding - `GET /api/domains/game/guides`. The web3 trade is shown as
 experimental and carries two hard lines (see the charter).
 
 ## Where to practise
@@ -54,7 +54,7 @@ each with its own table and its own attestation basis:
 
 | Object | What it is | Attestation |
 |---|---|---|
-| **Playtest** | One player's verdict on a slice — fun, clarity, would-return | — (gates validation) |
+| **Playtest** | One player's verdict on a slice - fun, clarity, would-return | - (gates validation) |
 | **Jam** | A themed weekend, community-voted across axes | `game_jam_winner`, `game_jam_participant` |
 | **Mod** | Content in someone else's game, hosted elsewhere, confirmed | `game_mod_published` |
 | **Shipped title** | A game that reached players, confirmed by a reviewer | `game_shipped_title` |
@@ -66,7 +66,7 @@ A validated slice earns `game_artifact_validated`; a merged upstream PR earns
 
 ## How a slice becomes proof
 
-1. Make a game slice — a build, an asset, an animation, a level, a design
+1. Make a game slice - a build, an asset, an animation, a level, a design
    document, a mod package. Set its playable URL.
 2. Open a playtest recruitment (`POST /api/game/slices/{id}/playtests/recruit`).
    The floor is three testers.
@@ -77,7 +77,7 @@ A validated slice earns `game_artifact_validated`; a merged upstream PR earns
    verified deliverable, credits the fragments, propagates the skills, and
    issues `game_artifact_validated`.
 5. The proof engine recomputes: badges, the game craft score, the cross-domain
-   rank — in the same pass.
+   rank - in the same pass.
 
 ## The craft score
 
@@ -94,13 +94,13 @@ Read yours at `GET /api/game/profile`.
 ## The badges
 
 Twenty (migration 0577). Eleven read proof types every domain shares; nine are
-the game engine's own — the five family-expert badges (`game_family_reviews`),
+the game engine's own - the five family-expert badges (`game_family_reviews`),
 solo and team ship, the full multi-craft game (`game_multi_artefact_ship`), and
 organising a jam (`game_jam_organized`).
 
 ## For reviewers
 
-You hold `game_reviewer:{family}` — or `game_reviewer:all`. You read work
+You hold `game_reviewer:{family}` - or `game_reviewer:all`. You read work
 against your family's grid, you sign off a validation once its playtests are in,
 and for the community family you confirm mods against three things: the URL is
 real, the mod is theirs, the vendor's terms were kept. See

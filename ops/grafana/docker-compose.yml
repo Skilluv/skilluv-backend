@@ -1,13 +1,13 @@
-# SKI-31 (Hygiène pré-prod HYG-04) — Grafana + Prometheus stack for
+# SKI-31 (Hygiène pré-prod HYG-04) - Grafana + Prometheus stack for
 # Skilluv observability. Deploy on Coolify as a separate app.
 #
 # Usage :
 #   docker compose -f ops/grafana/docker-compose.yml up -d
 #
 # Env vars (see .env.example.grafana) :
-#   GRAFANA_ADMIN_PASSWORD  — set on first boot only (change via UI after)
-#   SKILLUV_BACKEND_URL     — where Prometheus scrapes /metrics
-#   METRICS_TOKEN           — bearer token that gates /metrics (see backend
+#   GRAFANA_ADMIN_PASSWORD  - set on first boot only (change via UI after)
+#   SKILLUV_BACKEND_URL     - where Prometheus scrapes /metrics
+#   METRICS_TOKEN           - bearer token that gates /metrics (see backend
 #                             AppConfig). Prometheus scrape config uses it.
 services:
   prometheus:

@@ -20,7 +20,7 @@
 //!
 //! Learners. Every artefact here is about real people who are not members,
 //! are sometimes minors, and never asked to be evidence in somebody's
-//! portfolio — so the endpoints that touch them are the ones with the
+//! portfolio - so the endpoints that touch them are the ones with the
 //! strictest rules on the platform:
 //!
 //!   * an outcome row is written by the teacher and readable in full by the
@@ -104,7 +104,7 @@ pub struct OutcomeRow {
     pub post_assessment: serde_json::Value,
     /// Read from `cohort_members.graduated_at`, not from this table.
     /// Finishing is a fact about somebody's participation, and the outcome
-    /// row is about what changed for them — migration 0532 separated the two
+    /// row is about what changed for them - migration 0532 separated the two
     /// when both domains that run cohorts turned out to record it twice.
     pub completed: bool,
     pub satisfaction: Option<i16>,
@@ -278,7 +278,7 @@ pub async fn record_outcome(
 
         if updated.rows_affected() == 0 && completed {
             return Err(AppError::Validation(
-                "that person left this cohort — record the departure differently \
+                "that person left this cohort - record the departure differently \
                  before marking them as having finished"
                     .into(),
             ));
@@ -292,7 +292,7 @@ pub async fn record_outcome(
 ///
 /// The moment the attestation generator waits for. A cohort past its end date
 /// that nobody concluded is one that fell apart, and that is worth being able
-/// to tell apart from one that ran to the end — so concluding is an act
+/// to tell apart from one that ran to the end - so concluding is an act
 /// rather than a date passing.
 #[utoipa::path(
     post, path = "/api/education/cohorts/{cohort_id}/conclude",
@@ -344,7 +344,7 @@ pub async fn conclude_cohort(
 
 /// State that no identifiable learner remains in this artefact.
 ///
-/// This is the statement the attestation generators read — not a row count,
+/// This is the statement the attestation generators read - not a row count,
 /// because a report with no names and a declaration and a report nobody
 /// looked at have the same row count, and those two must not read the same to
 /// something about to publish.

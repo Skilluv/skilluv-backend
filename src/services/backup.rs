@@ -89,7 +89,7 @@ impl BackupConfig {
         let minio_mirror_prefix = std::env::var("BACKUP_MINIO_PREFIX")
             .unwrap_or_else(|_| "skilluv/minio-avatars/".into());
 
-        // Source MinIO config. Fall back to MINIO_* if BACKUP_MINIO_SOURCE_* not set —
+        // Source MinIO config. Fall back to MINIO_* if BACKUP_MINIO_SOURCE_* not set -
         // both the backend and the backup tool talk to the same MinIO in most deployments.
         let minio_source = {
             let endpoint = std::env::var("BACKUP_MINIO_SOURCE_ENDPOINT")

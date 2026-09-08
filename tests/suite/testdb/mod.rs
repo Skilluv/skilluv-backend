@@ -2,8 +2,8 @@
 //! database connection (rather than going through `common::TestApp`).
 //!
 //! These suites used to hardcode `localhost:5433`. That port is easy to
-//! shadow: anything else bound to `127.0.0.1:5433` — an SSH tunnel to a
-//! remote database, most plausibly — silently wins over the Docker
+//! shadow: anything else bound to `127.0.0.1:5433` - an SSH tunnel to a
+//! remote database, most plausibly - silently wins over the Docker
 //! container, and every one of these suites issues `CREATE DATABASE` /
 //! `DROP DATABASE` on whatever answers. Pointing the suite somewhere
 //! explicit must not require editing source.

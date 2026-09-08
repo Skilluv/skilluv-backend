@@ -18,7 +18,7 @@ Admissible:
 - a model published at an address where it can be downloaded and run;
 - a dataset published with its card;
 - an agent system in service, with its evaluations;
-- a paper — preprint or conference — with the code behind it;
+- a paper - preprint or conference - with the code behind it;
 - a public benchmark result somebody else has re-run;
 - a safety finding reproduced and disclosed properly.
 
@@ -37,10 +37,10 @@ The difference is not difficulty. It is verifiability.
 **An honest evaluation.** The test set is separate from training and
 resembles what the model will actually see. The score announced is the test
 score, not the best attempt. **Data leakage is the most common error in this
-domain and the least visible** — it is the first thing looked for.
+domain and the least visible** - it is the first thing looked for.
 
 **Reproducibility.** Seeds, library versions and data pinned. A reader runs it
-again and gets the same figures — or the expected variation is written down
+again and gets the same figures - or the expected variation is written down
 before anybody asks.
 
 **Data provenance.** Where it came from, under which licence, with what
@@ -83,8 +83,8 @@ Using an assistant is **accepted and declared**. The submission states the
 level of assistance. Concealing it is a separate offence from using it, and
 it is the concealment that is sanctioned.
 
-Defending the work live — explaining why that learning rate, showing what
-breaks when an assumption changes — is what settles it.
+Defending the work live - explaining why that learning rate, showing what
+breaks when an assumption changes - is what settles it.
 
 ## 6. Validation
 
@@ -93,7 +93,7 @@ public and readable before submitting.
 
 A refusal names its reason among those the platform can state: insufficient
 evaluation, missing reproducibility, unclear data provenance, a safety
-problem — or one of the reasons common to every domain. A refusal with no
+problem - or one of the reasons common to every domain. A refusal with no
 actionable reason is not a valid refusal.
 
 Five passes at most. Beyond that the work is no longer what is wrong: the
@@ -110,7 +110,7 @@ to rule out: the platform refuses it, whatever rights you hold.
 A validated artefact can be revoked: leakage discovered, a dataset withdrawn
 over licensing, a result that cannot be reproduced, plagiarism.
 
-Revocation removes the artefact from every count — rank, badges, attestations
+Revocation removes the artefact from every count - rank, badges, attestations
 that rested on it. It does not erase the history: what was revoked stays
 visible as revoked.
 

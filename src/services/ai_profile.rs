@@ -1,7 +1,7 @@
 //! The AI craft score (migration 0300).
 //!
 //! The second domain to score, and deliberately a second module rather than a
-//! branch in [`crate::services::craft_score`] — which is what that module
+//! branch in [`crate::services::craft_score`] - which is what that module
 //! says should happen. The formula, the tiers and the storage are shared and
 //! keyed by domain; only the measuring differs, because it reads different
 //! tables.
@@ -9,8 +9,8 @@
 //! ## What is stored and what is not
 //!
 //! The number and its tier, in `craft_scores`, so a recruiter listing can
-//! sort without recomputing fourteen counts per row. Everything else —
-//! including the breakdown — is derived on read, and the endpoint recomputes
+//! sort without recomputing fourteen counts per row. Everything else -
+//! including the breakdown - is derived on read, and the endpoint recomputes
 //! rather than reading the stored figure: a profile page showing a score an
 //! hour out of date is showing a revoked attestation still counting.
 //!
@@ -319,7 +319,7 @@ pub struct AiProfile {
     pub username: String,
     pub craft_score: i32,
     /// `apprentice`, `contributor`, `engineer`, `senior`, `staff`,
-    /// `principal` — the same six every domain uses, so somebody can compare
+    /// `principal` - the same six every domain uses, so somebody can compare
     /// their own two profiles.
     pub tier: String,
     pub tier_name: String,

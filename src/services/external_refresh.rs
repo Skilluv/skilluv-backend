@@ -1,13 +1,13 @@
-//! P26 v2 SKI-111 — external repo refresh poller.
+//! P26 v2 SKI-111 - external repo refresh poller.
 //!
 //! Covers 4 gaps that only exist when the ingested slice lives on a
 //! GitHub repo we don't control (no webhook installable, no `pull_request`
 //! event, no `issues.closed` event):
 //!
-//!   G13 — upstream issue edited (title/body/labels) → our slice is stale
-//!   G14 — upstream issue closed → our slice keeps status='open'/'claimed'
-//!   G3  — upstream PR merged → validated slice never advances to `merged`
-//!   G5  — upstream PR closed without merge → challenger's PR is dead but
+//!   G13 - upstream issue edited (title/body/labels) → our slice is stale
+//!   G14 - upstream issue closed → our slice keeps status='open'/'claimed'
+//!   G3  - upstream PR merged → validated slice never advances to `merged`
+//!   G5  - upstream PR closed without merge → challenger's PR is dead but
 //!         the slice stays `submitted`/`ci_green`/`pending_validation`
 //!
 //! The poller is a single-writer for each transition so a webhook and
@@ -46,13 +46,13 @@ pub const REFRESH_MIN_AGE_MINUTES: i64 = 5;
 /// Cap slices inspected per tick. Bounds GitHub API traffic.
 pub const POLL_MAX_PER_TICK: i64 = 50;
 
-// ─── Decision layer (pure — testable without a DB) ────────────────
+// ─── Decision layer (pure - testable without a DB) ────────────────
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RefreshAction {
     /// Nothing changed upstream.
     NoOp,
-    /// Body/labels/title changed upstream — re-apply the enricher.
+    /// Body/labels/title changed upstream - re-apply the enricher.
     UpdateFields,
     /// Upstream issue is closed; slice was never claimed → mark `closed`.
     CloseSlice,
@@ -96,11 +96,11 @@ pub struct PrState {
 
 /// Decide the ONE action to apply for this slice. Precedence matters:
 ///   1. Merge/reject signals win over body edits (a merged PR is the
-///      terminal outcome — no point re-applying enricher on a dead slice).
+///      terminal outcome - no point re-applying enricher on a dead slice).
 ///   2. `close_slice` only fires when the slice is still claimable and
 ///      the upstream issue closed; if the challenger already submitted,
 ///      we let the PR lifecycle drive.
-///   3. `update_fields` is the least urgent — pure freshness.
+///   3. `update_fields` is the least urgent - pure freshness.
 pub fn decide_action(slice: &SliceSnapshot, upstream: &UpstreamState) -> RefreshAction {
     if let Some(pr) = &upstream.pr_state {
         if pr.merged && slice.status == "validated" {
@@ -135,7 +135,7 @@ pub fn decide_action(slice: &SliceSnapshot, upstream: &UpstreamState) -> Refresh
 }
 
 /// Stable signature of a labels list (order-insensitive). Used both when
-/// building `SliceSnapshot` from DB rows and `UpstreamState` from GitHub —
+/// building `SliceSnapshot` from DB rows and `UpstreamState` from GitHub -
 /// same routine on both sides so `labels_changed` can't false-positive
 /// on ordering alone.
 pub fn labels_signature(labels: &[String]) -> String {
@@ -513,7 +513,7 @@ pub async fn refresh_once(db: &PgPool, bot_token: &str) -> Result<usize, AppErro
         if action != RefreshAction::NoOp {
             applied += 1;
         }
-        // Slot Ignored project_id use — keep field to prove intent for
+        // Slot Ignored project_id use - keep field to prove intent for
         // future per-project rate limiting; suppress dead_code warning.
         let _ = c.project_id;
     }
@@ -615,7 +615,7 @@ mod tests {
     #[test]
     fn upstream_issue_closed_after_claim_does_not_close_slice() {
         // Once claimed and the challenger has a PR, the PR lifecycle
-        // drives — don't close the slice just because the issue closed
+        // drives - don't close the slice just because the issue closed
         // (maintainer often closes the issue via "closes #N" in the PR).
         let mut snap = base_snapshot();
         snap.status = "submitted".into();
@@ -678,7 +678,7 @@ mod tests {
     #[test]
     fn merge_takes_precedence_over_body_change() {
         // If the PR merged AND the body was edited in the same window,
-        // we honor the terminal state — don't waste an UPDATE on fields.
+        // we honor the terminal state - don't waste an UPDATE on fields.
         let mut snap = base_snapshot();
         snap.status = "validated".into();
         snap.submitted_pr_url = Some("x".into());

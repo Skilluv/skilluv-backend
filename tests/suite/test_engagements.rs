@@ -2,7 +2,7 @@
 //!
 //! The tests worth having here are the ones about money and consent. A
 //! milestone that pays without being reviewed, a set of shares that quietly
-//! underpays everybody, a person put on paid work without agreeing — each is
+//! underpays everybody, a person put on paid work without agreeing - each is
 //! silent in production and obvious in a test.
 
 use crate::common::TestApp;
@@ -226,7 +226,7 @@ async fn a_studio_whose_shares_do_not_total_a_hundred_cannot_open() {
     add_studio_member(&app, studio, a, "45.00").await;
     add_studio_member(&app, studio, b, "45.00").await;
 
-    // Ninety per cent does not leave a tenth unallocated — it quietly pays
+    // Ninety per cent does not leave a tenth unallocated - it quietly pays
     // everybody ninety per cent of what they agreed, on every engagement the
     // studio ever takes.
     let resp = app
@@ -619,7 +619,7 @@ async fn nothing_reaches_the_client_unreviewed() {
     let (engagement, milestone, _a, _b) = a_running_engagement(&app, "Unreviewedco", "unrev").await;
 
     // The company's username is derived from its name, so it is
-    // `unreviewedco` — `unrevco` is the prefix and the suffix stuck together,
+    // `unreviewedco` - `unrevco` is the prefix and the suffix stuck together,
     // and no such account exists. The login answered 401 and the assertion
     // below then read as an authorisation bug in the milestone route.
     app.login("unreviewedco").await;

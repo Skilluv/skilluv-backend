@@ -1,4 +1,4 @@
-//! Where a talent's money goes — not how much of it there is.
+//! Where a talent's money goes - not how much of it there is.
 //!
 //! This used to be a ledger: two balance columns and an append-only
 //! `talent_transactions` table with a hash chain. Migration 0153 replaced
@@ -172,7 +172,7 @@ pub async fn list_movements(
 /// Net amount withdrawn in a rolling window, for the daily and monthly caps.
 ///
 /// A refused payout nets out against its reversal, so it does not consume
-/// someone's limit — being told "no" by a provider should not cost you your
+/// someone's limit - being told "no" by a provider should not cost you your
 /// daily allowance.
 pub async fn withdrawn_within(
     db: &PgPool,

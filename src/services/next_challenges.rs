@@ -5,8 +5,8 @@
 //! The design backlog asked for `GET /users/me/design/next-suggestions`, with
 //! a scoring function built from declared trades, families, format preference,
 //! difficulty and deadline urgency. Every one of those exists for code, for AI
-//! and for cybersecurity too — `reviewer_group` is a column on every
-//! orientation, not a design idea — so a design-shaped twin would have been
+//! and for cybersecurity too - `reviewer_group` is a column on every
+//! orientation, not a design idea - so a design-shaped twin would have been
 //! copied four times and diverged three.
 //!
 //! The domain is a parameter. A design request scores design work because the
@@ -21,7 +21,7 @@
 //!
 //! ## Why the scores are small integers
 //!
-//! Nothing here is learned, and pretending otherwise would be dishonest — a
+//! Nothing here is learned, and pretending otherwise would be dishonest - a
 //! confidence of 0.87 implies a model that does not exist. These are a handful
 //! of stated preferences added up, and the reason each point was awarded is
 //! returned beside the total, so a reader can disagree with it.
@@ -34,7 +34,7 @@ use crate::errors::AppError;
 
 /// How long a suggestion list stays fresh.
 ///
-/// An hour. The inputs — declared trades, tier, what is open — move over days,
+/// An hour. The inputs - declared trades, tier, what is open - move over days,
 /// and a list that changed on every page load would stop reading as advice.
 pub const CACHE_TTL_SECONDS: u64 = 60 * 60;
 
@@ -56,7 +56,7 @@ pub enum Format {
     /// The engine could not see these at all. `open_challenges` is named for
     /// challenges and reads `project_slices`, so the entire published
     /// challenge catalogue was invisible to the one surface whose job is to
-    /// answer "what do I do next" — which is why finishing the entry rite led
+    /// answer "what do I do next" - which is why finishing the entry rite led
     /// nowhere even once a catalogue existed.
     Exercise,
 }
@@ -91,7 +91,7 @@ pub struct Suggestion {
     pub slug: Option<String>,
     pub title: String,
     pub format: Format,
-    /// What the target is — `"slice"` or `"tournament"`. Derived from `format`
+    /// What the target is - `"slice"` or `"tournament"`. Derived from `format`
     /// and returned so a client never infers the target's nature from the URL
     /// convention (SKI-313): a third format, or a route that moves, would
     /// otherwise send a click somewhere wrong in silence. Owned rather than
@@ -220,8 +220,8 @@ fn score(candidate: &mut Suggestion, profile: &Profile) {
     }
 
     // Variety is scored against what they last finished rather than against
-    // the rest of this list: the complaint the ticket describes — five
-    // contests in a row — is about a habit, not about one page.
+    // the rest of this list: the complaint the ticket describes - five
+    // contests in a row - is about a habit, not about one page.
     if let Some(last) = profile.last_format
         && last != candidate.format
     {
@@ -396,7 +396,7 @@ async fn open_challenges(
 /// Published trade exercises somebody has not passed yet and is eligible for.
 ///
 /// Eligibility is the same statement `TracksService::check_eligibility` makes
-/// on `/start` — every required prerequisite has a verified deliverable — so
+/// on `/start` - every required prerequisite has a verified deliverable - so
 /// the list cannot suggest something the next click would refuse. Recommended
 /// prerequisites do not block, there as here.
 ///

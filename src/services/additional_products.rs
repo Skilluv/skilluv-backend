@@ -1,6 +1,6 @@
 //! Long placements, corporate learning seats, and open calls for proposals.
 //!
-//! Four of section 12's seven products needed no table at all — the
+//! Four of section 12's seven products needed no table at all - the
 //! newsletter is an audience plan, rank-as-a-service is a scope on the
 //! existing metered API, consulting is a third kind of consultation, and
 //! media sponsorship is sponsored content with a null event. What is here is
@@ -42,7 +42,7 @@ pub const END_REASONS: &[&str] = &[
 ///
 /// Only when the person left or was dismissed, and only inside the window. A
 /// company that restructured has not been let down, and a completed contract
-/// has not either — charging Skilluv for those would make the guarantee a
+/// has not either - charging Skilluv for those would make the guarantee a
 /// refund clause for anything at all.
 pub fn guarantee_applies(reason: &str, months_elapsed: i64, guarantee_months: i64) -> bool {
     if months_elapsed >= guarantee_months {
@@ -114,7 +114,7 @@ pub async fn propose_placement(
 ) -> Result<Placement, AppError> {
     if !input.annual_salary_declared.is_positive() {
         return Err(AppError::Validation(
-            "the declared salary has to be a figure — the fees rest on it".into(),
+            "the declared salary has to be a figure - the fees rest on it".into(),
         ));
     }
 
@@ -177,7 +177,7 @@ pub async fn placements_for_enterprise(
 
 /// A placement as the junior meets it: the same figures, plus who is offering
 /// it and who would mentor. The enterprise id and mentor id alone do not let a
-/// person decide — an anonymous job offer is not one (SKI-331, the shape
+/// person decide - an anonymous job offer is not one (SKI-331, the shape
 /// SKI-301 gave the cautions).
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 pub struct JuniorPlacement {
@@ -200,7 +200,7 @@ pub struct JuniorPlacement {
 }
 
 /// The placements offered to one person, the ones still waiting on their answer
-/// first. The read that was missing entirely — a junior had the `respond`
+/// first. The read that was missing entirely - a junior had the `respond`
 /// endpoint but no way to find the id to give it (SKI-331).
 pub async fn placements_for_junior(
     db: &PgPool,
@@ -281,7 +281,7 @@ pub async fn bill_monitoring_month(
     let placement = placement(db, placement_id).await?;
     if placement.status != "active" {
         return Err(AppError::Validation(format!(
-            "this placement is {} — a month that was not monitored is not billed",
+            "this placement is {} - a month that was not monitored is not billed",
             placement.status
         )));
     }
@@ -339,7 +339,7 @@ pub async fn bill_monitoring_month(
         .bind(mentor)
         .bind(placement.enterprise_id)
         .bind(&platform)
-        .bind(format!("suivi mensuel — {month}"))
+        .bind(format!("suivi mensuel - {month}"))
         .execute(db)
         .await?;
     }
@@ -469,7 +469,7 @@ pub async fn subscribe_learning(
     )
     .bind(enterprise_id)
     .bind(&total)
-    .bind(format!("{seats} sièges — {plan}"))
+    .bind(format!("{seats} sièges - {plan}"))
     .execute(db)
     .await?;
 

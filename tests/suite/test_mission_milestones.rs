@@ -34,7 +34,7 @@ async fn a_milestone_mission(
 
     // Answering a round is a membership, not an ownership: `waiting_round`
     // reads `enterprise_members`, so an owner with no membership row is
-    // refused — correctly, since that is how a colleague answers too.
+    // refused - correctly, since that is how a colleague answers too.
     sqlx::query(
         "INSERT INTO enterprise_members (enterprise_id, user_id, role, status)
          VALUES ($1, $2, 'owner', 'active')",
@@ -216,7 +216,7 @@ async fn an_accepted_round_releases_only_what_the_client_has_paid() {
     select_applicant(&app, application, client).await;
 
     // The enterprise funds the first instalment and nothing else. A captured
-    // invoice has to name a payment that exists — the foreign key is what
+    // invoice has to name a payment that exists - the foreign key is what
     // stops "paid" from being a word somebody typed.
     let payment: Uuid = sqlx::query_scalar(
         "INSERT INTO payments (subject_type, subject_id, provider, method, amount,
@@ -334,7 +334,7 @@ async fn an_unfunded_round_is_accepted_without_releasing_anything() {
 /// something rather than inserting nothing.
 ///
 /// The first version of these two selected from an empty `enterprises`, which
-/// inserts zero rows and succeeds — a test that proved the opposite of what it
+/// inserts zero rows and succeeds - a test that proved the opposite of what it
 /// claimed.
 async fn a_client(app: &TestApp, prefix: &str) -> (Uuid, Uuid) {
     app.register_user(prefix).await;

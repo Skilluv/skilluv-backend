@@ -6,7 +6,7 @@ it deleted.
 **Status: written by the people who built the platform. No lawyer has reviewed
 it.** See `docs/security/LEGAL.md` for what that means and what a review would
 settle first. This document is also an audit exercise in the security
-catalogue — a platform that publishes a privacy notice and does not want it read
+catalogue - a platform that publishes a privacy notice and does not want it read
 is publishing decoration.
 
 Last substantive change: with the security domain, 2026.
@@ -27,14 +27,14 @@ this section changes and the change is in the git history.
 
 | What | Basis | Article |
 |---|---|---|
-| Your account, your work, your attestations | Performance of a contract — you asked us to run this for you | 6(1)(b) |
-| Security, fraud prevention, rate limiting, audit logs | Legitimate interest — a platform that cannot tell an attack from a user cannot protect either | 6(1)(f) |
+| Your account, your work, your attestations | Performance of a contract - you asked us to run this for you | 6(1)(b) |
+| Security, fraud prevention, rate limiting, audit logs | Legitimate interest - a platform that cannot tell an attack from a user cannot protect either | 6(1)(f) |
 | Recruiter access to your public profile | Legitimate interest, and you can turn the profile off | 6(1)(f) |
 | Analytics, marketing email, dataset licensing | Consent, per purpose, revocable | 6(1)(a) |
 | Invoices and accounting records | Legal obligation | 6(1)(c) |
 
 The consent purposes are rows in `data_purposes` and each is opt-in
-separately — public score API, academic research, commercial licensing, unified
+separately - public score API, academic research, commercial licensing, unified
 profile. `GET /api/legal/consent-version` says which version you agreed to;
 `POST /api/legal/consent` changes it. Withdrawing consent stops the processing
 and does not delete the account.
@@ -42,7 +42,7 @@ and does not delete the account.
 ## What is collected
 
 **Because you created an account:** email address, username, display name,
-password hash (Argon2id — never the password), and whatever you chose to put on
+password hash (Argon2id - never the password), and whatever you chose to put on
 your profile.
 
 **Because you did work here:** your submissions, deliverables, reviews you gave
@@ -55,13 +55,13 @@ counters in Redis (which expire on their own), and error reports.
 
 **If you are paid through the platform:** the identity documents required for
 payouts, held in a private object store, and payment records. Card details are
-never seen by this platform — Stripe holds those.
+never seen by this platform - Stripe holds those.
 
 **If you file a security report:** the report, the proof files you upload, and
 the address the requests came from if you declared a research token. Proof files
 are covered separately below.
 
-**If you connect something:** a GitHub token, a portfolio handle, a Discord id —
+**If you connect something:** a GitHub token, a portfolio handle, a Discord id -
 each only after you link it, and each removable.
 
 **What is never collected:** your location beyond a country you typed, anything
@@ -88,7 +88,7 @@ purposes.
 | Account and work | While the account exists |
 | Sessions | 30 days after last use, then deleted |
 | Rate-limit counters | Minutes to an hour. Redis expires them |
-| Audit log of administrative actions | 3 years — it exists to answer "who did that" |
+| Audit log of administrative actions | 3 years - it exists to answer "who did that" |
 | Invoices and accounting records | 10 years, as French law requires |
 | Identity documents for payouts | 5 years after the last payout, as anti-money-laundering rules require |
 | Security proof files | 30 days after nothing references them, then deleted by a daily sweep |
@@ -104,9 +104,9 @@ Everything else about you goes.
 
 | Right | How |
 |---|---|
-| **Access and portability** | `POST /api/auth/me/data-export` — a machine-readable archive of everything, emailed to you |
+| **Access and portability** | `POST /api/auth/me/data-export` - a machine-readable archive of everything, emailed to you |
 | **Rectification** | Edit your profile, or ask |
-| **Erasure** | `DELETE /api/auth/me` — requires your password again. Deletes every row naming you, except the published records above |
+| **Erasure** | `DELETE /api/auth/me` - requires your password again. Deletes every row naming you, except the published records above |
 | **Restriction and objection** | Withdraw a consent purpose, or turn off the public profile |
 | **Complaint** | The CNIL, in France, and you do not have to talk to us first |
 
@@ -121,7 +121,7 @@ worth saying plainly.
 ### Proof files can contain other people's data
 
 A screenshot proving an IDOR contains somebody else's record. That is
-unavoidable — it is the proof — so:
+unavoidable - it is the proof - so:
 
 - proofs go to the **private** object store, never the public one;
 - download links are minted per request and expire in an hour;

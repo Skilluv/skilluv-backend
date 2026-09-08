@@ -1,7 +1,7 @@
 //! Tests P19.2 : intégration hook depuis review verdict Approve →
 //! recompute automatique badges + rank + capabilities.
 //!
-//! Le hook est async via tokio::spawn — on lui laisse un court moment pour
+//! Le hook est async via tokio::spawn - on lui laisse un court moment pour
 //! s'exécuter avant d'observer les side-effects.
 
 use sqlx::postgres::{PgPool, PgPoolOptions};

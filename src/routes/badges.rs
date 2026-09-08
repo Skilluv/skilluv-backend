@@ -1,4 +1,4 @@
-//! P17.5 — API polymorphique badges.
+//! P17.5 - API polymorphique badges.
 //!
 //! Contrat frontend :
 //!   `GET /api/users/{id}/badges` retourne un objet regroupant toutes les
@@ -58,7 +58,7 @@ pub struct UserBadgesResponse {
     pub rank: RankRow,
     pub skill_patches: Vec<BadgeItem>,
     pub medals: Vec<BadgeItem>,
-    /// Aggregated count (not the full list — challenge seals can be
+    /// Aggregated count (not the full list - challenge seals can be
     /// numerous, front pages them separately).
     pub challenge_seals_count: usize,
     pub event_stamps_count: usize,
@@ -66,7 +66,7 @@ pub struct UserBadgesResponse {
     pub total_badges: usize,
 }
 
-/// Polymorphic badges endpoint — returns every badge family the user
+/// Polymorphic badges endpoint - returns every badge family the user
 /// has earned, plus their current rank. Falls back to a stub
 /// `apprenti` rank for accounts predating the P18 auto-creation
 /// trigger so the front contract stays stable.

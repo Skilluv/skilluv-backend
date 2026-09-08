@@ -2,8 +2,8 @@
 //!
 //! Two behaviours, and they are deliberately not the same one. An email
 //! that fails is **retried**, because the cause is usually transient. A
-//! push that fails is **not** retried — a stale device token does not heal,
-//! and asking again gets the same answer forever — but a transactional one
+//! push that fails is **not** retried - a stale device token does not heal,
+//! and asking again gets the same answer forever - but a transactional one
 //! takes another road instead.
 
 use crate::common::TestApp;
@@ -79,7 +79,7 @@ async fn a_queued_message_waits_for_its_backoff() {
     queue_one(&app, user, Channel::Email, false).await;
 
     // The first attempt is a minute out, so an immediate drain must not
-    // pick it up — retrying instantly is how a failing provider gets
+    // pick it up - retrying instantly is how a failing provider gets
     // hammered by its own error.
     let report = outbox::drain(&app.db, &mailer()).await.unwrap();
     assert_eq!(report.attempted, 0);
@@ -100,7 +100,7 @@ async fn the_queue_cannot_hold_a_row_the_worker_cannot_interpret() {
     queue_one(&app, user, Channel::Email, false).await;
 
     // A row naming a channel nothing implements would be attempted, fail
-    // for a reason no operator can act on, and eventually be abandoned —
+    // for a reason no operator can act on, and eventually be abandoned -
     // six times over, for a typo. It cannot exist.
     let bad = sqlx::query("UPDATE notification_outbox SET channel = 'nonsense' WHERE user_id = $1")
         .bind(user)
@@ -168,7 +168,7 @@ async fn a_fallback_is_recorded_as_one() {
 
     // A fallback ignores the recipient's preference for its channel, which
     // is only ever done for a transactional kind. Recording it makes that
-    // auditable instead of implicit — someone will ask why they received an
+    // auditable instead of implicit - someone will ask why they received an
     // email they had turned off, and the answer has to exist.
     let is_fallback: bool =
         sqlx::query_scalar("SELECT is_fallback FROM notification_outbox WHERE user_id = $1")

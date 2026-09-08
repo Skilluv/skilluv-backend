@@ -4,14 +4,14 @@
 //!
 //! The toolkit, the onboarding guides, the brief templates and the writeup
 //! templates. They are `content_guides` rows and `/api/guides?domain=audio`
-//! already serves them — a second endpoint would be the mistake
+//! already serves them - a second endpoint would be the mistake
 //! `routes::guides` was written to undo.
 //!
 //! The challenge catalogue, the contests, the missions and the badges are the
 //! platform's own, keyed by domain. Audio adds rows to them and no routes.
 //!
 //! The revision rounds and the external portfolios were here and are not any
-//! more. Both read tables that carry a domain of their own — 0412 and 0415 —
+//! more. Both read tables that carry a domain of their own - 0412 and 0415 -
 //! and both had the domain inlined in a query rather than taken from the row.
 //! They are `routes::slice_revisions` and `routes::portfolios`, at
 //! `/api/slices/{id}/revisions` and `/api/portfolios`, and they serve every
@@ -40,7 +40,7 @@ use crate::services::{audio_attestations, audio_files, audio_profile};
 
 /// The largest single file this endpoint accepts, in bytes.
 ///
-/// Two gigabytes, which is the adaptive-music budget of migration 0509 —
+/// Two gigabytes, which is the adaptive-music budget of migration 0509 -
 /// there is no point accepting a file no delivery may keep. The per-delivery
 /// budget is the one that actually decides, and it is a row.
 const MAX_UPLOAD_BYTES: usize = 2 * 1024 * 1024 * 1024;
@@ -431,7 +431,7 @@ pub async fn declare_source(
 
     // Adding a source after saying the list was complete makes it incomplete
     // again. Clearing the declaration is the honest consequence, and it costs
-    // one click to redo — where leaving it would mean an attestation resting
+    // one click to redo - where leaving it would mean an attestation resting
     // on a statement that is no longer true.
     sqlx::query(
         "UPDATE project_slices
@@ -447,7 +447,7 @@ pub async fn declare_source(
 
 /// State that the source list is complete.
 ///
-/// This is the statement the attestation generators read — not the row count,
+/// This is the statement the attestation generators read - not the row count,
 /// because a wholly original track has no rows and is not undeclared.
 #[utoipa::path(
     post, path = "/api/audio/slices/{slice_id}/sources/complete", tag = "audio",
@@ -580,7 +580,7 @@ pub async fn open_casting(
 
     if body.audition_deadline <= chrono::Utc::now() {
         return Err(AppError::Validation(
-            "the deadline has to be in the future — a casting that closed before \
+            "the deadline has to be in the future - a casting that closed before \
              it opened wastes everybody who reads it"
                 .into(),
         ));
@@ -624,7 +624,7 @@ pub async fn open_casting(
 )]
 pub async fn get_casting(
     State(state): State<AppState>,
-    // Public, and stays public — but a signed-in opener is told the take is
+    // Public, and stays public - but a signed-in opener is told the take is
     // theirs to decide on, so the front need not infer it from the slice.
     OptionalAuth(auth): OptionalAuth,
     Path(casting_id): Path<Uuid>,
@@ -685,13 +685,13 @@ pub async fn get_casting(
     for (i, t) in takes.into_iter().enumerate() {
         // Something to listen to, without ever leaking who made it while blind.
         //
-        // A platform file is stored under `audio/{slice}/{uuid}` — an opaque
-        // key with no name in it — so a short signed URL to it is safe even
+        // A platform file is stored under `audio/{slice}/{uuid}` - an opaque
+        // key with no name in it - so a short signed URL to it is safe even
         // during a blind casting. An actor's own hosted link can carry their
         // identity (a personal site, a named upload), so it is withheld until
         // the casting is no longer blind. A blind casting with actor-hosted
         // takes therefore stays unlistenable for those takes, which is what
-        // blindness costs — never a leak.
+        // blindness costs - never a leak.
         let listen_url = match (&t.audition_storage_key, &t.audition_url, hide_names) {
             (Some(key), _, _) => Some(
                 state
@@ -725,7 +725,7 @@ pub async fn get_casting(
     }))))
 }
 
-/// The TTL to advertise alongside a take's listen URL — only when the URL is a
+/// The TTL to advertise alongside a take's listen URL - only when the URL is a
 /// signed one we minted (a platform file). An actor's own link does not expire
 /// on our schedule, so no figure is claimed for it.
 fn listen_url_ttl_if_signed(storage_key: &Option<String>) -> Option<u32> {
@@ -894,7 +894,7 @@ pub async fn select_voice(
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CreditBody {
-    /// Where the credit appears — a store page, an end-titles screenshot, a
+    /// Where the credit appears - a store page, an end-titles screenshot, a
     /// podcast description. Stored on the attestation so a reader can follow
     /// it too.
     pub evidence_url: String,
@@ -977,7 +977,7 @@ pub struct CreditRow {
 /// entire point of a credit.
 ///
 /// Reads `work_credits` (migration 0523), which excludes revoked attestations
-/// and revoked deliverables — a credit the platform has retracted leaves the
+/// and revoked deliverables - a credit the platform has retracted leaves the
 /// page it was printed on, without anybody editing the page.
 #[utoipa::path(
     get, path = "/api/projects/{slug}/credits", tag = "audio",

@@ -18,7 +18,7 @@
 //!
 //! Because it is the half that pays off immediately. A designer pastes a
 //! Figma link today; knowing that it *is* a Figma link, and which file and
-//! frame it points at, decides whether a reviewer can open it — which is the
+//! frame it points at, decides whether a reviewer can open it - which is the
 //! difference between a review queue that moves and one that does not. None
 //! of that needs a token.
 
@@ -57,7 +57,7 @@ impl Provider {
             "miro" => Ok(Self::Miro),
             "webflow" => Ok(Self::Webflow),
             other => Err(AppError::Validation(format!(
-                "'{other}' has no OAuth flow to connect to — paste its URL on the deliverable \
+                "'{other}' has no OAuth flow to connect to - paste its URL on the deliverable \
                  instead"
             ))),
         }
@@ -108,12 +108,12 @@ impl Provider {
         match (id, secret) {
             (Some(id), Some(secret)) => Ok((id, secret)),
             (None, _) => Err(AppError::ServiceUnavailable(format!(
-                "{} is not configured — the {} integration is not set up on this deployment",
+                "{} is not configured - the {} integration is not set up on this deployment",
                 id_var,
                 self.as_str()
             ))),
             (_, None) => Err(AppError::ServiceUnavailable(format!(
-                "{} is not configured — the {} integration is not set up on this deployment",
+                "{} is not configured - the {} integration is not set up on this deployment",
                 secret_var,
                 self.as_str()
             ))),
@@ -149,14 +149,14 @@ pub struct CloudSource {
     ///
     /// Always false for the tools that require an account. Said out loud
     /// because a review queue full of links nobody can open is a queue nobody
-    /// works — and the person submitting is the only one who can fix it, at
+    /// works - and the person submitting is the only one who can fix it, at
     /// the moment they submit.
     pub opens_without_account: bool,
 }
 
 /// Read a pasted URL.
 ///
-/// Returns `None` for anything that is not a design tool link — a GitHub URL
+/// Returns `None` for anything that is not a design tool link - a GitHub URL
 /// pasted into a design deliverable is a mistake worth surfacing, not a
 /// source to record.
 pub fn read_url(url: &str) -> Option<CloudSource> {
@@ -167,7 +167,7 @@ pub fn read_url(url: &str) -> Option<CloudSource> {
     let lower = trimmed.to_ascii_lowercase();
 
     // Figma: /file/KEY/name, /design/KEY/name, /proto/KEY/name, with an
-    // optional ?node-id=1-2. All four shapes are current — Figma renamed
+    // optional ?node-id=1-2. All four shapes are current - Figma renamed
     // `/file/` to `/design/` and kept both working, so a parser that knows
     // only one will start failing on links people paste tomorrow.
     if lower.contains("figma.com/") {
@@ -259,7 +259,7 @@ fn segment_after(url: &str, markers: &[&str]) -> Option<String> {
     None
 }
 
-/// One query parameter, undecoded beyond `%3A` — which is the only escape
+/// One query parameter, undecoded beyond `%3A` - which is the only escape
 /// Figma actually puts in a node id.
 fn query_value(url: &str, name: &str) -> Option<String> {
     let query = url.split('?').nth(1)?;
@@ -322,7 +322,7 @@ pub async fn store(
 
     // Reconnecting replaces rather than adds. Two live tokens for one
     // provider would leave no rule saying which a fetch should use, and the
-    // partial unique index refuses it anyway — better a deliberate
+    // partial unique index refuses it anyway - better a deliberate
     // replacement than a constraint violation surfacing as a 500.
     sqlx::query(
         "UPDATE design_cloud_connections
@@ -384,7 +384,7 @@ pub async fn revoke(db: &PgPool, user_id: Uuid, provider: Provider) -> Result<bo
 
 /// The URL somebody is sent to in order to approve a connection.
 ///
-/// Built even when the secret is missing — only the client id is needed, and
+/// Built even when the secret is missing - only the client id is needed, and
 /// failing here would hide a misconfiguration behind a button that does
 /// nothing.
 pub fn authorize_url(

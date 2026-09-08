@@ -17,7 +17,7 @@ use skilluv_backend::services::portfolio_sync::SYNCABLE;
 /// Two workers read `user_external_portfolios`, and the column says which one
 /// owns a platform. Before it existed they overlapped in both directions:
 /// `portfolio_sync` selected the forges and handed them to a `match` with no
-/// arm for them, and `code_portfolio` selected everything — stamping
+/// arm for them, and `code_portfolio` selected everything - stamping
 /// `last_synced_at` on a dev.to row it could not read, so the module that
 /// could never saw it come due.
 #[tokio::test]
@@ -98,7 +98,7 @@ async fn an_api_that_exists_is_not_an_api_that_is_read() {
 
 /// Every domain a member can belong to can hold a portfolio.
 ///
-/// Leadership and quality had no rows at all until 0537 — the two domains
+/// Leadership and quality had no rows at all until 0537 - the two domains
 /// this branch opened were the two whose members could not declare anything.
 /// The four rows with no domain serve everybody, so a domain is covered by
 /// its own rows or by those.
@@ -142,7 +142,7 @@ async fn every_open_domain_has_somewhere_to_declare() {
 ///
 /// The platforms added by 0537 are all manual: LinkedIn closed its
 /// endorsements API, and neither HackerOne nor Bugcrowd publishes somebody
-/// else's disclosures. That is fine — a disclosed report's proof is the link.
+/// else's disclosures. That is fine - a disclosed report's proof is the link.
 /// What is not fine is a figure somebody typed being counted as one that was
 /// read, and `figures_are_declared` is the column that separates them.
 #[tokio::test]

@@ -5,8 +5,8 @@
 //!
 //! Every byte goes to the private bucket and comes back through a short-lived
 //! presigned URL. Unreleased work for a paying client is the normal case in
-//! this domain — a game's main theme leaking six months before the game is a
-//! real harm to a real person — and a bucket that serves everything
+//! this domain - a game's main theme leaking six months before the game is a
+//! real harm to a real person - and a bucket that serves everything
 //! anonymously cannot hold it. The cost is that a profile page has to ask for
 //! a URL per track, which is cheap.
 //!
@@ -25,7 +25,7 @@
 //! because a sidecar tool was missing would be down for everybody rather than
 //! degraded for one field.
 //!
-//! The reverse — accepting the uploader's declared loudness instead — is what
+//! The reverse - accepting the uploader's declared loudness instead - is what
 //! the schema refuses, and the review grid explains why: the declared figure
 //! is the one they aimed at.
 
@@ -50,14 +50,14 @@ pub const PREVIEW_SECONDS: u32 = 30;
 ///
 /// Four hundred. A waveform is drawn a few hundred pixels wide at most, and a
 /// peak per pixel is the point past which extra resolution is bytes nobody
-/// renders — stored on every master of every delivery, then sent again on
+/// renders - stored on every master of every delivery, then sent again on
 /// every profile page that draws one.
 pub const WAVEFORM_PEAKS: usize = 400;
 
 /// Containers this service will accept, and whether the analysis can read them.
 ///
-/// `zip`, `pdf` and `md` are accepted as parts of a delivery — an FMOD project,
-/// a usage sheet — and are never analysed, which is what `skipped` means for
+/// `zip`, `pdf` and `md` are accepted as parts of a delivery - an FMOD project,
+/// a usage sheet - and are never analysed, which is what `skipped` means for
 /// them rather than a failure.
 fn container_is_audio(container: &str) -> bool {
     matches!(
@@ -139,7 +139,7 @@ pub async fn add_file(
         "master" | "stem" | "project_archive" | "documentation"
     ) {
         return Err(AppError::Validation(
-            "role must be one of: master, stem, project_archive, documentation — \
+            "role must be one of: master, stem, project_archive, documentation - \
              a preview is generated, not uploaded"
                 .into(),
         ));
@@ -147,7 +147,7 @@ pub async fn add_file(
 
     let container = container_from_filename(file.original_filename).ok_or_else(|| {
         AppError::Validation(
-            "unrecognised file type — expected wav, flac, aiff, mp3, ogg, opus, m4a, zip, pdf or md"
+            "unrecognised file type - expected wav, flac, aiff, mp3, ogg, opus, m4a, zip, pdf or md"
                 .into(),
         )
     })?;
@@ -210,7 +210,7 @@ pub async fn add_file(
     .await
     .inspect_err(|_| {
         // The row is what makes the object findable. Without it the bytes are
-        // unreachable and unbilled to anybody, so they are worth removing —
+        // unreachable and unbilled to anybody, so they are worth removing -
         // but the caller's error is the insert's, not the cleanup's.
         tracing::warn!(%key, "audio file uploaded but not registered");
     })?;
@@ -268,8 +268,8 @@ pub struct Measured {
 
 /// Pull the stream facts out of `ffprobe`'s JSON.
 ///
-/// Separated from running the process so the parsing — which is where the
-/// mistakes are — is testable without ffprobe installed.
+/// Separated from running the process so the parsing - which is where the
+/// mistakes are - is testable without ffprobe installed.
 pub fn parse_ffprobe(json: &str) -> Measured {
     let mut out = Measured::default();
     let Ok(v) = serde_json::from_str::<serde_json::Value>(json) else {
@@ -324,7 +324,7 @@ pub fn parse_ebur128(stderr: &str) -> Measured {
         // `ends_with`, not `starts_with`: ffmpeg prefixes every line the
         // filter emits with `[Parsed_ebur128_0 @ 0x…]`, so the summary marker
         // never begins a line in real output. With `starts_with` the parser
-        // never entered the summary and returned NULL for every figure — the
+        // never entered the summary and returned NULL for every figure - the
         // test below carries the real shape and was catching it.
         if line.ends_with("Summary:") {
             in_summary = true;
@@ -553,7 +553,7 @@ pub async fn record_measurement(
 /// Measure everything waiting, and give every master a preview.
 ///
 /// Runs as a sweep rather than inside the upload request. Loudness is measured
-/// by decoding the whole file, which on a five-minute master is seconds — long
+/// by decoding the whole file, which on a five-minute master is seconds - long
 /// enough that doing it in the request would make uploading feel broken, and
 /// short enough that a sweep clears a backlog quickly.
 ///

@@ -1,4 +1,4 @@
-//! IA-A.2 — Client gRPC pour skilluv-ai v2 (package `skilluv.ai.v2`).
+//! IA-A.2 - Client gRPC pour skilluv-ai v2 (package `skilluv.ai.v2`).
 //!
 //! Le contrat est défini par `proto/skilluv_ai.proto` (byte-identical avec
 //! `skilluv-ia/proto/skilluv_ai.proto`, voir `docs/BACKEND-INTEGRATION.md`).
@@ -43,7 +43,7 @@ pub struct AiClient {
 }
 
 impl AiClient {
-    /// Connect to the AI service. Returns `None` if URL parse or handshake fails —
+    /// Connect to the AI service. Returns `None` if URL parse or handshake fails -
     /// le backend continue de tourner sans IA (fallback documenté dans les callers).
     pub async fn connect(url: &str) -> Option<Self> {
         let channel = Channel::from_shared(url.to_string())
@@ -97,7 +97,7 @@ impl AiClient {
     }
 
     /// IA-A.2 : Generate a variant of an existing challenge (harder/easier/…).
-    /// L'IA est stateless — le backend fournit le `original` inline (voir §6.1).
+    /// L'IA est stateless - le backend fournit le `original` inline (voir §6.1).
     pub async fn generate_variant(
         &self,
         req: GenerateVariantRequest,
@@ -142,7 +142,7 @@ impl AiClient {
 
     // ─── LearningCompanionService ──────────────────────────────────
 
-    /// SKI-44 — ask the learning companion.
+    /// SKI-44 - ask the learning companion.
     ///
     /// One RPC for all four interaction types; see the proto for why.
     /// A worker that has not implemented it yet answers `Unimplemented`,

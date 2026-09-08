@@ -1,12 +1,12 @@
-# The security domain — what it is and what it refuses to be
+# The security domain - what it is and what it refuses to be
 
 ## Why this domain is on a learning platform at all
 
 Because the entry to it is broken. The trade asks for a certification that
 costs between three hundred and eight thousand euros, or experience nobody will
 give you without one, and the result is a profession that recruits from people
-who could afford to wait. Meanwhile the work itself — reading a log, tracing an
-injection path, writing a policy somebody can comply with — needs a laptop, a
+who could afford to wait. Meanwhile the work itself - reading a log, tracing an
+injection path, writing a policy somebody can comply with - needs a laptop, a
 container, and somebody willing to read what you produced.
 
 The second list is what this platform can supply. The first is not our business.
@@ -24,7 +24,7 @@ holding it could see.
 The corollary is uncomfortable and load-bearing: **a certification you paste in
 moves no score.** It is shown on your profile, marked *declared* until somebody
 opens the issuer's page, and it counts for nothing in a rank or a craft score.
-Not because it is worthless — an OSCP is a real thing — but because the platform
+Not because it is worthless - an OSCP is a real thing - but because the platform
 did not see you earn it and will not pretend otherwise.
 
 ## The one rule above the others
@@ -57,7 +57,7 @@ the answers were planted, and a scheme that paid for finding them would fill
 profiles with evidence of practice and none of work.
 
 For the same reason, a captured flag and a passed lab produce an attestation
-and **no `deliverables` row** — which means they move no rank. A weekend on a
+and **no `deliverables` row** - which means they move no rank. A weekend on a
 range must not outrank a year of merged contributions.
 
 ## What this domain will not do
@@ -90,7 +90,7 @@ because that is true.
 
 Read the grid before the submission. There is one per trade, they are public
 before anybody submits, and every one of them has a line the reviewer is meant
-to check rather than be convinced of — a replay, a query that fires, a path a
+to check rather than be convinced of - a replay, a query that fires, a path a
 reader can follow, evidence an auditor would take.
 
 And write the reason. Every refusal here carries one, by constraint. A reporter
@@ -104,8 +104,8 @@ Three things, and only the third is unusual.
 2. Argue the severity from a vector, not an adjective.
 3. **Say what you did not do.** Where you stopped, what you did not touch, what
    you believed was on the other side. It is the most valuable habit in this
-   trade and the only one nothing can measure — a scope respected leaves no
-   evidence — which is why the one badge nothing awards automatically is for it.
+   trade and the only one nothing can measure - a scope respected leaves no
+   evidence - which is why the one badge nothing awards automatically is for it.
 
 ## Where this document is wrong
 

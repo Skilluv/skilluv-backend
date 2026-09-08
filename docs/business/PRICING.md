@@ -1,6 +1,6 @@
 # Grille tarifaire
 
-**Version 2 — chiffres cibles, à valider par le marché.**
+**Version 2 - chiffres cibles, à valider par le marché.**
 
 Aucun de ces prix n'a encore été payé par personne. Ils sont écrits pour
 pouvoir être discutés, pas parce qu'ils sont établis. Le seul chiffre qui ait
@@ -8,7 +8,7 @@ pouvoir être discutés, pas parce qu'ils sont établis. Le seul chiffre qui ait
 
 Trois monnaies, parce que trois marchés : **XOF** pour l'Afrique de l'Ouest,
 **EUR** pour l'Europe, **USD** pour le reste. Les montants ne sont pas des
-conversions les uns des autres — un tarif européen converti en XOF est un
+conversions les uns des autres - un tarif européen converti en XOF est un
 tarif que personne à Cotonou ne paiera.
 
 ---
@@ -67,7 +67,7 @@ perdre le second client.
 ### Primes
 
 **8 % pour l'entreprise qui pose la prime.** Le contributeur reçoit le montant
-annoncé — c'est le point : une prime de 50 000 XOF est une prime de 50 000
+annoncé - c'est le point : une prime de 50 000 XOF est une prime de 50 000
 XOF, et la commission est visible côté payeur.
 
 À réévaluer. 8 % couvre le coût de traitement et le risque de litige, sans
@@ -84,13 +84,13 @@ lisible en novembre.
 Une équipe permanente, réservée par son nom. **Marge 25 %.**
 
 Plus élevée que la sous-traitance parce que le client achète une équipe déjà
-constituée, avec un historique et la coordination incluse — pas une liste de
+constituée, avec un historique et la coordination incluse - pas une liste de
 gens disponibles cette semaine-là.
 
 ### Sous-traitance
 
 Du travail confié à Skilluv et réparti entre contributeurs assemblés pour
-l'occasion. **Marge 15 %** — plus basse que Studios parce que la coordination
+l'occasion. **Marge 15 %** - plus basse que Studios parce que la coordination
 est plus légère.
 
 En dessous de 15 % la coordination n'est pas payée et se fait mal. Au-dessus
@@ -103,11 +103,11 @@ modifié en dehors de cette bande casse la compilation des tests.
 Trois formes de la même prestation, au même taux que la sous-traitance. Ce
 qui change est la forme, pas la marge :
 
-- **cadrage** — 2 à 6 semaines, bornées. Le livrable est une recommandation,
+- **cadrage** - 2 à 6 semaines, bornées. Le livrable est une recommandation,
   et la borne existe pour qu'une exploration ouverte ne devienne pas une
   facture ouverte ;
-- **sprint** — 1 à 12 semaines, cohorte fixe ;
-- **placement fractionné** — une personne, 0,5 à 4 jours par semaine, sur
+- **sprint** - 1 à 12 semaines, cohorte fixe ;
+- **placement fractionné** - une personne, 0,5 à 4 jours par semaine, sur
   plusieurs mois.
 
 ### Programmes de test
@@ -117,7 +117,7 @@ retour accepté, plus un forfait d'organisation facturé séparément.**
 
 Les deux montants restent distincts et visibles : le client doit voir ce qui
 va aux testeurs et ce qui va à la plateforme. Le forfait est comptabilisé à
-la clôture, pas à l'ouverture — il est gagné en livrant le rapport, et un
+la clôture, pas à l'ouverture - il est gagné en livrant le rapport, et un
 programme annulé la première semaine n'en a rien gagné.
 
 Le devis annonce le maximum (récompenses × testeurs demandés + forfait), pas
@@ -143,7 +143,7 @@ grille : remettre la remise dans la grille réécrirait l'histoire de tous les
 autres sponsors de la même formule.
 
 Contrat annuel : jusqu'à **30 % de remise** selon le nombre d'événements
-engagés, et seulement sur un contrat signé — la remise paye l'engagement, pas
+engagés, et seulement sur un contrat signé - la remise paye l'engagement, pas
 l'intention. Au-delà de 30 % le contrat coûte plus à servir que les
 événements couverts ne rapportent.
 
@@ -155,7 +155,7 @@ pièce et la base refuse une pièce sans elle.
 Campagne de lancement : **frais d'organisation 3 à 10 k€**, plus une cagnotte
 que le client met pour les contributeurs. Deux montants distincts et visibles.
 Chaque contribution passe d'abord par notre contrôle qualité, ensuite par la
-décision du sponsor — dans cet ordre, sinon une critique honnête se fait
+décision du sponsor - dans cet ordre, sinon une critique honnête se fait
 refuser au nom de la « qualité ».
 
 Programme ambassadeurs : **activation 5 à 15 k€**, gestion **1 à 3 k€ par
@@ -242,7 +242,7 @@ vendu à quelqu'un qui n'en a pas les moyens.
 
 ## 7. Consultation
 
-**Conseil : 350 000 XOF / 530 EUR la journée.** Deux jours minimum — en
+**Conseil : 350 000 XOF / 530 EUR la journée.** Deux jours minimum - en
 dessous, le temps de compréhension du contexte mange la prestation.
 
 **Onboarding accompagné : compris** dans les programmes annuels, 600 000 XOF /

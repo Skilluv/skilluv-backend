@@ -2,14 +2,14 @@
 //!
 //! Six shapes in the backlog, one table, because they differ in exactly one
 //! thing: what happens to the winner. Three of them end in paid work, and
-//! paid work is an engagement — so the outcome is a foreign key rather than
+//! paid work is an engagement - so the outcome is a foreign key rather than
 //! three more tables.
 //!
 //! ## What the entrants were told
 //!
 //! A recruiting contest pays in interviews. That is not a smaller version of
 //! a prize, it is a different offer, and the code refuses to attach a cash
-//! prize to one — otherwise the thing people entered would not be the thing
+//! prize to one - otherwise the thing people entered would not be the thing
 //! that ran.
 //!
 //! ## The rank is for everybody
@@ -40,7 +40,7 @@ pub const MODES: &[&str] = &["self_serve", "managed"];
 /// What a recruiting contest costs the client.
 ///
 /// Self-serve is a setup fee plus a charge for each shortlisted person the
-/// company actually talks to. Managed is a flat campaign fee — Skilluv does
+/// company actually talks to. Managed is a flat campaign fee - Skilluv does
 /// the sourcing, and charging per contact on top would bill twice for the
 /// same work.
 ///
@@ -63,7 +63,7 @@ pub fn contest_cost(
 ///
 /// The first prize is stated; what remains is split evenly between the rest
 /// of the shortlist. Evenly rather than by a curve because a curve is a
-/// negotiation and this is a default — a contest wanting something else
+/// negotiation and this is a default - a contest wanting something else
 /// states every prize.
 ///
 /// The last place absorbs the rounding, for the same reason it does when a
@@ -205,7 +205,7 @@ fn shape_error(e: sqlx::Error) -> AppError {
     for (marker, said) in [
         (
             "a_recruiting_contest_says_how_it_is_run",
-            "say whether this is self-serve or managed — the two are billed \
+            "say whether this is self-serve or managed - the two are billed \
              differently, and a contest that says neither cannot be invoiced at all",
         ),
         (
@@ -221,7 +221,7 @@ fn shape_error(e: sqlx::Error) -> AppError {
         ),
         (
             "a_migration_contest_names_both_stacks",
-            "say what you are migrating from and to — an approach cannot be proposed \
+            "say what you are migrating from and to - an approach cannot be proposed \
              against a blank",
         ),
         (
@@ -265,7 +265,7 @@ pub async fn open(
     }
     if input.title.trim().is_empty() || input.brief_md.trim().is_empty() {
         return Err(AppError::Validation(
-            "a contest needs a title and a brief — people are being asked to spend \
+            "a contest needs a title and a brief - people are being asked to spend \
              days on this"
                 .into(),
         ));
@@ -291,7 +291,7 @@ pub async fn open(
             .await?;
         if resolved.is_none() {
             return Err(AppError::Validation(format!(
-                "'{target}' is not a trade Skilluv knows — a contest aimed at nobody \
+                "'{target}' is not a trade Skilluv knows - a contest aimed at nobody \
                  reaches nobody"
             )));
         }
@@ -544,7 +544,7 @@ pub async fn submit(
     }
     if !deliverable_url.starts_with("https://") {
         return Err(AppError::Validation(
-            "the entry has to be reachable over https — a judge cannot open a link \
+            "the entry has to be reachable over https - a judge cannot open a link \
              that is not there"
                 .into(),
         ));
@@ -691,7 +691,7 @@ async fn attest_shortlist(db: &PgPool, contest: &Contest) -> Result<(), AppError
             user_id,
             contest,
             "contest_finalist",
-            &format!("Finaliste — {}", contest.title),
+            &format!("Finaliste - {}", contest.title),
             &format!(
                 "Retenu parmi les {} finalistes du concours « {} », organisé par \
                  {company}.",
@@ -761,7 +761,7 @@ pub async fn record_hire(
     }
     if !annual_salary.is_positive() {
         return Err(AppError::Validation(
-            "the declared salary has to be a figure — the fee is a share of it".into(),
+            "the declared salary has to be a figure - the fee is a share of it".into(),
         ));
     }
 
@@ -837,7 +837,7 @@ pub async fn record_hire(
         talent_user_id,
         &contest,
         "contest_hired",
-        &format!("Recruté — {}", contest.title),
+        &format!("Recruté - {}", contest.title),
         &format!(
             "Recruté à l'issue du concours « {} », après entretien.",
             contest.title
@@ -865,7 +865,7 @@ pub async fn conclude(db: &PgPool, contest_id: Uuid) -> Result<BigDecimal, AppEr
     if unjudged > 0 {
         return Err(AppError::Validation(format!(
             "{unjudged} entries have no verdict. Concluding now would leave people who \
-             spent days on this with nothing to show for it — not even a rank."
+             spent days on this with nothing to show for it - not even a rank."
         )));
     }
 

@@ -3,7 +3,7 @@
 //! ## Why the transitions are here and not left to the caller
 //!
 //! Migration 0200 states which states need which dates, and a CHECK can only
-//! refuse an inconsistent row — it cannot refuse an inconsistent *move*. That
+//! refuse an inconsistent row - it cannot refuse an inconsistent *move*. That
 //! a finding must be notified before it can be embargoed, and embargoed
 //! before it is published, is a rule about order, and order lives here.
 //!
@@ -159,7 +159,7 @@ pub async fn record_report(
     require_worked_on(&state, auth.user_id, slice_id).await?;
 
     // The database refuses successes above attempts and empty prose. What it
-    // cannot say is that zero successes is not a finding — it is a model
+    // cannot say is that zero successes is not a finding - it is a model
     // behaving, which is worth knowing and is not this table.
     if body.successes == 0 {
         return Err(AppError::Validation(

@@ -9,13 +9,13 @@
 //!
 //! ## Why it is not corporate
 //!
-//! The frontend does not ship a colour scheme, it ships five worlds — the
+//! The frontend does not ship a colour scheme, it ships five worlds - the
 //! smith's workshop, the lantern-lit night, the tournament, the copyist's
 //! desk, the cherry blossom season. Someone chose one. A grey transactional
 //! email afterwards reads like a different company wrote it.
 //!
 //! So the frame carries the world: its palette, a rule under the wordmark in
-//! its accent, and its tagline. Not decoration — it is what tells a reader
+//! its accent, and its tagline. Not decoration - it is what tells a reader
 //! at a glance that this came from the place they picked that world in.
 //!
 //! ## Why it looks like 2005 HTML
@@ -186,7 +186,7 @@ pub fn render(email: Email<'_>) -> String {
           <tr>
             <td style="padding:30px 34px 0;text-align:{align};">
               <span style="font-family:Georgia,'Times New Roman',serif;font-size:21px;font-weight:bold;color:{text};letter-spacing:-0.4px;">skill<span style="color:{accent};">uv</span></span>
-              <span style="font-family:Georgia,'Times New Roman',serif;font-size:13px;font-style:italic;color:{muted};padding-{align_side}:10px;">— {tagline}</span>
+              <span style="font-family:Georgia,'Times New Roman',serif;font-size:13px;font-style:italic;color:{muted};padding-{align_side}:10px;">- {tagline}</span>
             </td>
           </tr>
 

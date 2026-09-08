@@ -3,7 +3,7 @@
 //! Before this, `release::dispute` had no caller: the seven-day window was
 //! seven days during which nothing could be done, and every hold released
 //! on schedule whatever had happened. These tests hold the flow to the
-//! shape it claims — the payer raises, the recipient answers, and only a
+//! shape it claims - the payer raises, the recipient answers, and only a
 //! real disagreement reaches a human.
 
 use crate::common::TestApp;
@@ -290,7 +290,7 @@ async fn a_disputed_hold_is_never_released_by_the_sweep() {
     .await
     .unwrap();
 
-    // Make the window long past. The sweep must still not touch it —
+    // Make the window long past. The sweep must still not touch it -
     // releasing money that is being argued over is the failure this whole
     // flow exists to prevent.
     sqlx::query("UPDATE pending_releases SET release_at = NOW() - INTERVAL '30 days'")

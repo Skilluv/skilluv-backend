@@ -9,7 +9,7 @@
 //! in a way nobody notices until somebody is out of pocket:
 //!
 //!   * the commission is frozen when the mission is published, not read at
-//!     payout time — changing the platform rate must not rewrite terms
+//!     payout time - changing the platform rate must not rewrite terms
 //!     somebody already agreed to;
 //!   * a rejection carries a reason. Somebody who spent an hour on an
 //!     application is owed a sentence.
@@ -191,7 +191,7 @@ pub struct CreateMissionInput {
     ///
     /// Defaults to `mutual_standard` when an agreement is required and none is
     /// named, because a mission that says "you must sign" and names nothing is
-    /// what `nda_required` was for eighteen months — advice with no document
+    /// what `nda_required` was for eighteen months - advice with no document
     /// behind it.
     #[serde(default)]
     pub nda_template: Option<String>,
@@ -245,7 +245,7 @@ pub struct CreateMissionInput {
     #[serde(default)]
     pub target_platforms: Vec<String>,
     /// Whether the person is expected to be reachable. True requires a
-    /// window, a response time and a monthly retainer — the schema refuses
+    /// window, a response time and a monthly retainer - the schema refuses
     /// anything else, because unpaid availability is the most common way this
     /// trade is exploited.
     #[serde(default)]
@@ -271,13 +271,13 @@ pub struct CreateMissionInput {
     /// This field was missing until communication opened, and its absence was
     /// a live bug rather than a gap: migration 0413 made the column compulsory
     /// for audio missions, so from that migration until this one an audio
-    /// mission could not be created through the API at all — the insert was
+    /// mission could not be created through the API at all - the insert was
     /// refused by a constraint naming a column the request had no way to set.
     #[serde(default)]
     pub licensing_scope: Option<String>,
 
     /// Education: `beginner`, `junior`, `mid`, `senior` or `mixed`.
-    /// Compulsory for an education mission — without it an applicant cannot
+    /// Compulsory for an education mission - without it an applicant cannot
     /// tell whether they are the right trainer.
     #[serde(default)]
     pub target_audience: Option<String>,
@@ -319,7 +319,7 @@ pub async fn create(
     crate::validators::check_max_len(&input.description, "description", 20_000)?;
     if input.acceptance_criteria.trim().is_empty() {
         return Err(AppError::Validation(
-            "acceptance_criteria is required — a mission without one ends in an argument about scope"
+            "acceptance_criteria is required - a mission without one ends in an argument about scope"
                 .into(),
         ));
     }
@@ -403,7 +403,7 @@ pub async fn create(
 
     // An agreement that is required names itself. The standard one unless the
     // client picked otherwise, which is the constraint of 0560 met with a
-    // default rather than with a refusal — refusing would break every existing
+    // default rather than with a refusal - refusing would break every existing
     // caller that set the flag and knew nothing about templates.
     let nda_template = match (input.nda_required, input.nda_template.as_deref()) {
         (false, _) => None,
@@ -416,7 +416,7 @@ pub async fn create(
             }
             if t == "client_custom" && input.nda_document_url.is_none() {
                 return Err(AppError::Validation(
-                    "a client's own agreement says where it is — and it has to be                      uploaded here rather than linked, because an agreement this                      platform cannot read is one it cannot hash"
+                    "a client's own agreement says where it is - and it has to be                      uploaded here rather than linked, because an agreement this                      platform cannot read is one it cannot hash"
                         .into(),
                 ));
             }
@@ -650,7 +650,7 @@ pub async fn list_open(
 /// mission, which means `delivered -> cancelled`; the client must not, because
 /// cancelling is what returns the escrow and the client is who it returns to.
 /// Opening that edge for everybody would let somebody accept the work, cancel
-/// the mission and take the money back — with the refund this codebase has
+/// the mission and take the money back - with the refund this codebase has
 /// just gained doing the taking.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Decider {
@@ -735,7 +735,7 @@ pub async fn set_status_as(
     // money withdrawable. Doing it here rather than in the route means it
     // happens whichever way the mission is closed.
     // A mission opening for applications is the one status change the room
-    // wants to hear about — the rest are between the client and one person.
+    // wants to hear about - the rest are between the client and one person.
     if to == "published"
         && let Ok(Some((domain, slug, title))) = sqlx::query_as::<_, (String, String, String)>(
             "SELECT skill_domain, slug, title FROM missions WHERE id = $1",
@@ -749,7 +749,7 @@ pub async fn set_status_as(
 
     // Cancelling gives back what was captured and never released. Here rather
     // than in the route for the same reason the release is: it has to happen
-    // whichever way the mission is cancelled, and it did not — a mission
+    // whichever way the mission is cancelled, and it did not - a mission
     // cancelled from `in_progress` with paid invoices left the escrow with
     // nothing to release it and nobody to notice, which is the shape this
     // codebase keeps finding and removing.
@@ -762,7 +762,7 @@ pub async fn set_status_as(
         crate::services::mission_billing::release_all(db, mission_id).await?;
 
         // A delivered mission on the public feed, with no figure: the work
-        // happening is public, what it paid is not. Best-effort — a feed
+        // happening is public, what it paid is not. Best-effort - a feed
         // line must never fail a closure that genuinely happened.
         if let Err(err) = announce_delivery(db, mission_id).await {
             tracing::warn!(%err, mission = %mission_id, "mission not announced on the public feed");
@@ -775,7 +775,7 @@ pub async fn set_status_as(
 /// Put a delivered mission on the public feed.
 ///
 /// One writer, in code that already knows the wording, so this is emitted
-/// here rather than by a trigger — unlike the two kinds that are written from
+/// here rather than by a trigger - unlike the two kinds that are written from
 /// half a dozen places.
 ///
 /// The figure is deliberately absent. That the work happened is public; what
@@ -813,7 +813,7 @@ async fn announce_delivery(db: &PgPool, mission_id: Uuid) -> Result<(), AppError
             subject_type: "user",
             subject_id: user_id,
             subject_label: &username,
-            headline: format!("mission livrée — {kind_name} : {title}"),
+            headline: format!("mission livrée - {kind_name} : {title}"),
             artifact_url: url,
             repository: None,
             amount: None,
@@ -956,7 +956,7 @@ pub async fn apply(
 ) -> Result<Application, AppError> {
     if input.cover_letter.trim().is_empty() {
         return Err(AppError::Validation(
-            "a cover letter is required — an application with nothing in it cannot be compared"
+            "a cover letter is required - an application with nothing in it cannot be compared"
                 .into(),
         ));
     }
@@ -1031,7 +1031,7 @@ pub async fn apply(
     // The three gates a mission may set, checked here rather than left to the
     // enterprise to notice after selection.
     //
-    // All three are generic — any domain may set them — and all three arrived
+    // All three are generic - any domain may set them - and all three arrived
     // with security, which is where a mission that says "OSCP, artisan or
     // above, sign the NDA first" is ordinary rather than exotic.
     check_application_gates(db, mission_id, user_id).await?;
@@ -1079,7 +1079,7 @@ pub async fn apply(
 /// The rank, the credentials and the confidentiality agreement.
 ///
 /// Refused here, at application, and never later. A gate checked after
-/// selection is a gate that costs the applicant the mission — which is the
+/// selection is a gate that costs the applicant the mission - which is the
 /// argument the on-call question above already makes.
 ///
 /// ## Why a declared credential is enough
@@ -1088,7 +1088,7 @@ pub async fn apply(
 /// somebody verified it. Verification is a separate act with its own queue, and
 /// refusing every applicant whose OSCP nobody has got round to checking would
 /// make the filter a filter on this platform's own backlog. What the enterprise
-/// sees on the application is which of the two it is — declared or verified —
+/// sees on the application is which of the two it is - declared or verified -
 /// so the decision stays theirs.
 async fn check_application_gates(
     db: &PgPool,
@@ -1155,7 +1155,7 @@ async fn check_application_gates(
 
         if !missing.is_empty() {
             return Err(AppError::Validation(format!(
-                "this mission asks for {}. Declare it on your profile first —                  declared is enough to apply, and the enterprise is told which                  of your credentials anybody has checked",
+                "this mission asks for {}. Declare it on your profile first -                  declared is enough to apply, and the enterprise is told which                  of your credentials anybody has checked",
                 missing.join(", ")
             )));
         }
@@ -1237,7 +1237,7 @@ pub async fn decide(
     let reason = reason.map(str::trim).filter(|s| !s.is_empty());
     if status == "rejected" && reason.is_none() {
         return Err(AppError::Validation(
-            "a rejection carries a reason — somebody spent an hour on this".into(),
+            "a rejection carries a reason - somebody spent an hour on this".into(),
         ));
     }
 
@@ -1257,7 +1257,7 @@ pub async fn decide(
         && !matches!(mission_status.as_str(), "published" | "applications_closed")
     {
         return Err(AppError::Validation(format!(
-            "this mission is {mission_status} — somebody is already on it"
+            "this mission is {mission_status} - somebody is already on it"
         )));
     }
 
@@ -1362,7 +1362,7 @@ mod tests {
         // from cancelling a mission nobody started.
         //
         // This is a money rule before it is a workflow rule. Cancelling is
-        // what returns the escrow, and it returns it to the client — so a
+        // what returns the escrow, and it returns it to the client - so a
         // client who could cancel after delivery would accept the work, cancel
         // the mission and take the payment back. An arbiter can, through
         // `Decider::Arbiter`; nobody reaching this table can.

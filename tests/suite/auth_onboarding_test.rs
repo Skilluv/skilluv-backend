@@ -1,4 +1,4 @@
-//! Pattern C onboarding — SSO/magic-link signups start incomplete and must go through
+//! Pattern C onboarding - SSO/magic-link signups start incomplete and must go through
 //! `/auth/complete-profile` before touching write endpoints.
 
 use reqwest::StatusCode;
@@ -61,7 +61,7 @@ async fn test_magic_link_signup_reports_profile_incomplete() {
 async fn test_guarded_endpoint_rejects_incomplete_profile() {
     let (app, client) = signup_via_magic_link("guarded@test.com").await;
 
-    // AuthUserComplete runs BEFORE handler body/path resolution, so a fake UUID is fine —
+    // AuthUserComplete runs BEFORE handler body/path resolution, so a fake UUID is fine -
     // the extractor rejects first with 403 AUTH_PROFILE_INCOMPLETE.
     let fake_id = uuid::Uuid::new_v4();
     let resp = client

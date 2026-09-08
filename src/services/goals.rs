@@ -1,8 +1,8 @@
-//! SKI-38 (Post-MVP T1-03) — measurable personal goals.
+//! SKI-38 (Post-MVP T1-03) - measurable personal goals.
 //!
 //! A goal stores only a target. Progress is derived on every read from the
 //! same tables the proof engine writes, so a goal can never disagree with
-//! the profile it describes — there is no counter to drift.
+//! the profile it describes - there is no counter to drift.
 //!
 //! ## Progress model
 //!
@@ -11,7 +11,7 @@
 //!
 //! * `artifact_count` and `skill_level` have a single criterion, so the
 //!   percentage is that one ratio.
-//! * `capability` is inherently binary — you hold it or you don't — so it
+//! * `capability` is inherently binary - you hold it or you don't - so it
 //!   reports 0 or 100. Showing "62% of the way to mentor" would be a lie:
 //!   nothing about the grant is incremental.
 //! * `rank` is a composite (verified deliverables + attestations, plus the
@@ -29,7 +29,7 @@
 //!
 //! * A user with no output in the window has no pace, so the ETA is
 //!   `None` rather than infinity or a fabricated number.
-//! * When a goal has several unmet criteria, the ETA is the slowest one —
+//! * When a goal has several unmet criteria, the ETA is the slowest one -
 //!   the goal completes when the last criterion does, not the first.
 //! * The `mentor` requirement for `doyen` has no pace at all (it is
 //!   granted, not accumulated), so a `doyen` goal for a non-mentor
@@ -130,7 +130,7 @@ pub async fn validate_target(
     validate_kind(kind)?;
     match kind {
         "rank" => {
-            // `apprenti` is granted at signup — targeting it is a no-op goal.
+            // `apprenti` is granted at signup - targeting it is a no-op goal.
             if ranks::rank_position(target_value).unwrap_or(0) == 0 {
                 return Err(AppError::Validation(format!(
                     "target_value must be a rank above apprenti, one of: {}",
@@ -170,7 +170,7 @@ pub async fn validate_target(
                     "target_skill_id is only valid for kind=skill_level".into(),
                 ));
             }
-            // Read from the catalogue, not from a hardcoded list — and no
+            // Read from the catalogue, not from a hardcoded list - and no
             // longer by pattern-matching the text of a CHECK constraint.
             // Migration 0404 made the capabilities rows and dropped
             // `user_capabilities_capability_check`, so that lookup answered
@@ -212,7 +212,7 @@ pub async fn validate_target(
 
 /// The user-state snapshot every progress computation reads from.
 ///
-/// Fetched once per request and shared across all of a user's goals —
+/// Fetched once per request and shared across all of a user's goals -
 /// listing ten goals must not mean forty round trips.
 #[derive(Debug, Clone, Copy)]
 struct UserSnapshot {
@@ -384,7 +384,7 @@ async fn progress_for(
                 current: i64::from(held),
                 required: 1,
             };
-            // A capability is granted, not accumulated — no pace exists.
+            // A capability is granted, not accumulated - no pace exists.
             let eta = if held { Some(0) } else { None };
             (vec![c], eta)
         }
@@ -506,7 +506,7 @@ pub struct ArchivalReport {
 pub async fn run_archival_sweep(db: &PgPool) -> Result<ArchivalReport, AppError> {
     let mut report = ArchivalReport::default();
 
-    // Only users with at least one live goal — no point recomputing the
+    // Only users with at least one live goal - no point recomputing the
     // whole table every week.
     let user_ids: Vec<Uuid> =
         sqlx::query_scalar("SELECT DISTINCT user_id FROM user_goals WHERE archived_at IS NULL")
@@ -549,7 +549,7 @@ const DEFAULT_ARCHIVAL_INTERVAL_SECS: u64 = 60 * 60 * 24 * 7;
 
 /// Background task running [`run_archival_sweep`].
 ///
-/// Env-gated exactly like `proof_hooks::start_proof_sweep_task` — off by
+/// Env-gated exactly like `proof_hooks::start_proof_sweep_task` - off by
 /// default so a dev machine doesn't mutate goal state in the background:
 ///   - `SKILLUV_GOAL_ARCHIVAL_ENABLED=1` to enable
 ///   - `SKILLUV_GOAL_ARCHIVAL_INTERVAL_SECS` (default 604800)
@@ -603,7 +603,7 @@ mod unit {
         assert_eq!(crit(0, 4).ratio(), 0.0);
         assert_eq!(crit(2, 4).ratio(), 0.5);
         assert_eq!(crit(4, 4).ratio(), 1.0);
-        // Surplus never exceeds 1 — otherwise it would mask a sibling
+        // Surplus never exceeds 1 - otherwise it would mask a sibling
         // criterion sitting at 0.
         assert_eq!(crit(80, 4).ratio(), 1.0);
         assert_eq!(crit(0, 0).ratio(), 1.0);
@@ -619,7 +619,7 @@ mod unit {
         assert_eq!(eta_for(5, 90), Some(5));
         // 45 in 90 days = 0.5/day, so 5 items take 10 days.
         assert_eq!(eta_for(5, 45), Some(10));
-        // Always rounds up — a partial day still needs the day.
+        // Always rounds up - a partial day still needs the day.
         assert_eq!(eta_for(1, 45), Some(2));
     }
 

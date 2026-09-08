@@ -54,7 +54,7 @@ async fn a_brief_of_two_lines_is_refused() {
     app.login("brief_short").await;
 
     // Below two hundred characters a brief carries no context, no constraint
-    // and no deliverable list — after which the reviewer arbitrates on taste,
+    // and no deliverable list - after which the reviewer arbitrates on taste,
     // which is the failure the whole grid system exists to prevent.
     let mut short = a_brief();
     short["brief_md"] = json!("Fais-moi un logo sympa.");
@@ -130,7 +130,7 @@ async fn a_published_brief_becomes_something_somebody_can_claim() {
         .as_str()
         .expect("the brief says what it became");
 
-    // A slice of the right shape, open, in the trade the brief named — which
+    // A slice of the right shape, open, in the trade the brief named - which
     // is what the review loop can actually run on.
     let (slice_type, status, subtype, rounds): (String, String, Option<String>, Option<i16>) =
         sqlx::query_as(
@@ -323,7 +323,7 @@ async fn a_brief_nobody_has_read_can_be_taken_back() {
 /// publish a design brief, so handing somebody that one job handed them
 /// curation of every domain's community surfaces (SKI-334). `domain_curator:design`
 /// is the capability whose own description is "its challenges, its contests,
-/// its featurings" — a brief becoming a slice is that sentence — and it is
+/// its featurings" - a brief becoming a slice is that sentence - and it is
 /// scoped to the one domain.
 ///
 /// No `design_curator` capability was created. It would be a second name for

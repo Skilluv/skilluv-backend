@@ -2,7 +2,7 @@
 //!
 //! The restraints, all of them enforced below or in the schema:
 //!
-//!   * an invitation-only contest returns 404 to anybody not invited — a
+//!   * an invitation-only contest returns 404 to anybody not invited - a
 //!     private hiring search must not confirm its own existence to somebody
 //!     who guessed the slug;
 //!   * judging ranks the whole judged field, not only the shortlist;

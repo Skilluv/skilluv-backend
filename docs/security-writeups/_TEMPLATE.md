@@ -2,7 +2,7 @@
 finding_id: 00000000-0000-0000-0000-000000000000
 severity: high            # critical | high | medium | low | informational
 cwe: CWE-89
-reporter: username        # or "Anonyme #123" — ask, never assume
+reporter: username        # or "Anonyme #123" - ask, never assume
 confirmed_at: 2026-01-01
 published_at: 2026-01-01
 ---
@@ -22,7 +22,7 @@ never seen this codebase needs this paragraph to make sense of the next one.
 ## The defect
 
 The technical description, with the code as it was. Name the assumption that
-turned out to be false — that is the part that transfers to other codebases.
+turned out to be false - that is the part that transfers to other codebases.
 
 ## Reproduction
 
@@ -43,7 +43,7 @@ The code as it is now, with the commit and the pull request.
 
 The honest part, and the reason to publish at all:
 
-- what let the defect exist — a missing check, an assumption, a review that
+- what let the defect exist - a missing check, an assumption, a review that
   looked at the wrong thing;
 - what now catches the whole class rather than this one instance: a test, a
   lint rule, a guard, a script in CI.

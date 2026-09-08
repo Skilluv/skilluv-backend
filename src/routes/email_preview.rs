@@ -2,7 +2,7 @@
 //!
 //! There are nine locale-and-theme combinations for every kind in the
 //! catalogue, and the only way to look at one used to be to trigger the
-//! event that sends it — register an account and wait a day for the drip,
+//! event that sends it - register an account and wait a day for the drip,
 //! or move real money for a receipt. So nobody looked, which is how an
 //! email ships interpolating `{title}` from a column that does not exist.
 //!
@@ -153,7 +153,7 @@ pub async fn preview(
 
     let Some((_category, transactional, cta_path)) = known else {
         return Err(AppError::Validation(format!(
-            "unknown kind '{}' — see /api/admin/email-preview/index",
+            "unknown kind '{}' - see /api/admin/email-preview/index",
             query.kind
         )));
     };

@@ -5,8 +5,8 @@
 //! Ticket W-04 asked for a `cvss_score` column that a reporter fills in. That
 //! is a number somebody typed, and in a domain where severity decides a payout
 //! it is the one number nobody should be allowed to type. What a reporter
-//! supplies is the *vector* — eight metrics, each an explicit claim about the
-//! defect — and the score follows from it by a published formula.
+//! supplies is the *vector* - eight metrics, each an explicit claim about the
+//! defect - and the score follows from it by a published formula.
 //!
 //! The difference is not pedantry. A disagreement about a score is
 //! unresolvable ("I think it is a 9"); a disagreement about a vector is a
@@ -26,8 +26,8 @@
 //!
 //! CVSS 3.1 defines its own `Roundup`, and it is not "round to one decimal".
 //! `4.02` becomes `4.1`, not `4.0`. Getting that wrong shifts scores across
-//! tier boundaries — 6.9 against 7.0 is medium against high, and in a bounty
-//! programme that is money — so it is implemented as the specification writes
+//! tier boundaries - 6.9 against 7.0 is medium against high, and in a bounty
+//! programme that is money - so it is implemented as the specification writes
 //! it, on integers, rather than with floating-point rounding.
 
 use serde::Serialize;
@@ -98,7 +98,7 @@ pub struct Scored {
 ///
 /// `informational` rather than `none` for zero: the platform's severity
 /// vocabulary says informational, and a finding scoring zero is still a
-/// finding worth recording — a missing header, a version disclosed.
+/// finding worth recording - a missing header, a version disclosed.
 pub fn tier_for_score(score: f64) -> &'static str {
     if score >= 9.0 {
         "critical"
@@ -125,7 +125,7 @@ pub fn score_vector(raw: &str) -> Result<Scored, String> {
     let prefix = parts.next().unwrap_or_default();
     if !prefix.eq_ignore_ascii_case("CVSS:3.1") {
         return Err(format!(
-            "expected a CVSS:3.1 vector, found '{prefix}' — only version 3.1 \
+            "expected a CVSS:3.1 vector, found '{prefix}' - only version 3.1 \
              is scored here"
         ));
     }
@@ -166,7 +166,7 @@ pub fn score_vector(raw: &str) -> Result<Scored, String> {
             ("C", v) => c = Some(impact_from(v, "C")?),
             ("I", v) => i = Some(impact_from(v, "I")?),
             ("A", v) => a = Some(impact_from(v, "A")?),
-            // Temporal and environmental metrics. Accepted and not scored —
+            // Temporal and environmental metrics. Accepted and not scored -
             // see the module header.
             ("E" | "RL" | "RC", _)
             | ("CR" | "IR" | "AR", _)
@@ -390,7 +390,7 @@ mod tests {
         assert_eq!(roundup(4.02), 4.1);
         assert_eq!(roundup(4.00), 4.0);
         assert_eq!(roundup(6.9000), 6.9);
-        // Anything at all above 6.9 becomes 7.0 — which is medium becoming
+        // Anything at all above 6.9 becomes 7.0 - which is medium becoming
         // high. This is the boundary the specification's appendix exists for.
         assert_eq!(roundup(6.91), 7.0);
         assert_eq!(roundup(6.9001), 7.0);

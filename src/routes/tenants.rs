@@ -1,4 +1,4 @@
-//! White-label tenants — Phase 5.9.
+//! White-label tenants - Phase 5.9.
 //!
 //! Endpoints d'administration (création/config tenant) + résolution du tenant
 //! courant depuis le sous-domaine ou l'en-tête `X-Skilluv-Tenant`. La stratégie
@@ -101,7 +101,7 @@ async fn tenant_id_by_subdomain(
 
 // ─── Types de réponse ────────────────────────────────────────────
 
-/// Public projection of a tenant (theming + branding only — no admin
+/// Public projection of a tenant (theming + branding only - no admin
 /// fields like max_users or contact_email).
 #[derive(Debug, Serialize, ToSchema)]
 pub struct PublicTenant {
@@ -278,7 +278,7 @@ pub struct CohortCreatedResponse {
     tag = "enterprise",
     responses(
         (status = 200, description = "Current tenant (public projection)", body = ApiResponse<PublicTenant>),
-        (status = 404, description = "Tenant not found (should never happen — root is a fallback)", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "Tenant not found (should never happen - root is a fallback)", body = crate::api_response::ErrorResponse),
     ),
 )]
 pub async fn get_current_tenant(

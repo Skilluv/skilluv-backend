@@ -1,7 +1,7 @@
 //! The communication domain: the catalogue, the rights, and the rules the
 //! schema enforces rather than trusts.
 //!
-//! What is asserted here is what would be expensive to discover later — a
+//! What is asserted here is what would be expensive to discover later - a
 //! trade nobody can review, a badge whose condition nothing implements, a
 //! translation attested by the person who wrote it.
 
@@ -96,7 +96,7 @@ async fn the_communication_domain_is_active() {
 ///
 /// The failure this catches is the one migration 0305 documented: the
 /// capability name is assembled from an orientation row, so a missing value
-/// does not fail to compile — it produces a grant the database refuses.
+/// does not fail to compile - it produces a grant the database refuses.
 #[tokio::test]
 async fn every_communication_review_capability_is_grantable() {
     let app = TestApp::spawn().await;
@@ -491,7 +491,7 @@ async fn declaring_a_review_language_is_open_but_not_free_text() {
 /// This asserted that a French reader got English rows, which was true while
 /// the French translations did not exist and was never the thing worth
 /// asserting. Migration 0535 wrote them, so the French reader now gets French
-/// — and the fallback is checked with a locale that genuinely has no rows,
+/// - and the fallback is checked with a locale that genuinely has no rows,
 /// which is what the test was always about.
 #[tokio::test]
 async fn a_guide_reaches_a_reader_in_every_locale() {
@@ -546,7 +546,7 @@ async fn only_a_curator_puts_an_opportunity_on_the_board() {
         "slug": "someconf-2027-cfp",
         "kind": "conference_cfp",
         "skill_domain": "communication",
-        "title": "SomeConf 2027 — call for papers",
+        "title": "SomeConf 2027 - call for papers",
         "organisation": "SomeConf",
         "url": "https://example.test/cfp",
         "is_remote": true,
@@ -602,7 +602,7 @@ async fn only_a_curator_puts_an_opportunity_on_the_board() {
 /// A communication attestation counts towards the platform rank like any other.
 ///
 /// Ticket F-07 asked for a check that it does. It does because the rank
-/// counts attestations without looking at what they rest on — which is the
+/// counts attestations without looking at what they rest on - which is the
 /// right design and the kind of thing that gets broken by somebody adding a
 /// domain filter for a reason that seemed good at the time.
 #[tokio::test]

@@ -70,7 +70,7 @@ Un biais mesuré se divulgue **même quand c'est gênant**, y compris pour un
 partenaire de Skilluv. La condition est la même que pour le reste : protocole
 écrit, sous-populations nommées, écart mesuré, tiers capable de rejouer.
 
-Un résultat de biais non reproductible n'est pas divulgué — pas par prudence
+Un résultat de biais non reproductible n'est pas divulgué - pas par prudence
 politique, parce qu'il n'est pas établi.
 
 ## 6. Le double usage

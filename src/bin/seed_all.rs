@@ -1,4 +1,4 @@
-//! skilluv-seed-all — apply every seed this database has not had.
+//! skilluv-seed-all - apply every seed this database has not had.
 //!
 //! The same thing the server does after its migrations on every boot, as a
 //! command, for the times you want it without a restart: after restoring a
@@ -96,7 +96,7 @@ async fn main() -> Result<()> {
     println!();
     println!("═══════════════════════════════════════════════════════════");
     println!(
-        "  Seed complete — {} applied, {} already up to date",
+        "  Seed complete - {} applied, {} already up to date",
         report.applied, report.skipped
     );
     println!("═══════════════════════════════════════════════════════════");

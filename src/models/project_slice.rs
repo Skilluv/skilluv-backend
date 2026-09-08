@@ -14,7 +14,7 @@ use uuid::Uuid;
 /// Generalizes the pattern established by `oss_bounties` (see migration 0042). A
 /// bounty is now just a slice with `credits_reward > 0`.
 ///
-/// Workflow (P26 v2, decision 2026-08-06 — see migration 0119):
+/// Workflow (P26 v2, decision 2026-08-06 - see migration 0119):
 ///
 /// ```text
 /// draft → open → claimed → in_progress → submitted → ci_green
@@ -32,7 +32,7 @@ use uuid::Uuid;
 /// required for the challenge to count as a success.
 ///
 /// Terminal statuses: `merged`, `closed`, `expired`.
-// SKI-111 — `ToSchema` so the admin slice endpoints can describe what they
+// SKI-111 - `ToSchema` so the admin slice endpoints can describe what they
 // return instead of an empty object. `credits_reward` is a `BigDecimal`,
 // which utoipa has no built-in mapping for; it serialises as a JSON number,
 // so that is what the schema declares.
@@ -130,7 +130,7 @@ pub struct ProjectSlice {
     // ── Per-domain shape ────────────────────────────────────────────
     // Every domain adds the columns its artefacts need and leaves the others
     // NULL. They are surfaced here because a client that cannot read them
-    // cannot render a design brief, a model card or a package listing — the
+    // cannot render a design brief, a model card or a package listing - the
     // rows existed since migrations 0214, 0181 and 0231 and nothing exposed
     // them.
     /// Code: what the finished artefact is (migration 0181).
@@ -300,14 +300,14 @@ impl DesignSubtype {
 
     /// How two versions of this kind of artefact can usefully be compared.
     ///
-    /// The backend does not compute the diff — it has neither the pixels nor
+    /// The backend does not compute the diff - it has neither the pixels nor
     /// the fonts, and rendering a Figma node server-side would mean holding
     /// somebody's design account. What it does own is the subtype, so it
     /// answers the question the subtype decides: *which* comparison is
     /// meaningful here.
     ///
     /// Without this the client has to keep its own copy of the twelve
-    /// subtypes and guess. It would guess wrong on the interesting ones —
+    /// subtypes and guess. It would guess wrong on the interesting ones -
     /// an icon set is SVG and an illustration set is not, and both are
     /// "images" to anybody reading the names.
     pub fn diff_strategy(&self) -> DiffStrategy {
@@ -322,7 +322,7 @@ impl DesignSubtype {
             // Time-based: there is no honest still-frame diff, so the two run
             // side by side and a person judges.
             Self::Motion | Self::Video | Self::Sound => DiffStrategy::SideBySide,
-            // Mixed bags — a brand kit is marks, type and a document; a
+            // Mixed bags - a brand kit is marks, type and a document; a
             // research document is prose with images. Neither has one right
             // comparison, and pretending otherwise hides half of what changed.
             Self::BrandKit | Self::ResearchDocument => DiffStrategy::SideBySide,

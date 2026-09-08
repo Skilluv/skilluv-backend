@@ -75,7 +75,7 @@ pub struct PlatformRow {
     pub items_label: Option<String>,
     /// What `reach_count` counts here. Superseded by `reach_label_key`.
     pub reach_label: Option<String>,
-    /// A language-neutral key for `items_label` — `"downloads"`, `"stars"`,
+    /// A language-neutral key for `items_label` - `"downloads"`, `"stars"`,
     /// `"repositories"` (migration 0591). This endpoint is public and serves an
     /// FR/EN audience, so the label to show is the reader's to translate, not
     /// the server's to pick (SKI-311).
@@ -169,12 +169,12 @@ pub async fn my_portfolios(
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct DeclarePortfolioBody {
-    /// One of the rows of `portfolio_platforms` — see
+    /// One of the rows of `portfolio_platforms` - see
     /// `GET /api/portfolio-platforms`.
     pub platform: String,
     pub handle: String,
     pub profile_url: String,
-    /// Repositories, tracks, articles, videos, courses — whatever the
+    /// Repositories, tracks, articles, videos, courses - whatever the
     /// platform's `items_label` says.
     pub items_count: Option<i32>,
     /// Stars, plays, views, enrolments, where the platform shows them.

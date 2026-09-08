@@ -1,4 +1,4 @@
-# BE-P1-CONTRACT — Contract testing complet (utoipa + schemathesis)
+# BE-P1-CONTRACT - Contract testing complet (utoipa + schemathesis)
 
 **Statut** : en cours · branche `feat/be-p1-contract`
 **Effort estimé** : 30-40h · plusieurs sessions
@@ -6,15 +6,15 @@
 
 ---
 
-## 1. Contexte — pourquoi cette tâche existe
+## 1. Contexte - pourquoi cette tâche existe
 
-Le backend Skilluv (Rust axum) sert 3 fronts (skilluv-frontend, skilluv-admin, skilluv-ai) qui consomment ~593 endpoints. Aujourd'hui **aucun contrat OpenAPI machine-lisible n'existe** — les divergences payload back↔front sont découvertes en runtime (voir l'audit BE-P0-01..14 de fin juillet 2026, qui a mis à jour 20 tickets Trello).
+Le backend Skilluv (Rust axum) sert 3 fronts (skilluv-frontend, skilluv-admin, skilluv-ai) qui consomment ~593 endpoints. Aujourd'hui **aucun contrat OpenAPI machine-lisible n'existe** - les divergences payload back↔front sont découvertes en runtime (voir l'audit BE-P0-01..14 de fin juillet 2026, qui a mis à jour 20 tickets Trello).
 
 L'objectif de BE-P1-CONTRACT :
 
 1. **Générer un OpenAPI 3.1** exhaustif à partir d'annotations `#[utoipa::path]` sur chaque handler
 2. **Servir cet OpenAPI** à `GET /api/openapi.json` + une UI interactive à `GET /api/docs`
-3. **Fuzzer le contrat** en CI via [schemathesis](https://schemathesis.readthedocs.io/) — property-based testing qui envoie des requêtes conformes au schéma et vérifie que les réponses matchent
+3. **Fuzzer le contrat** en CI via [schemathesis](https://schemathesis.readthedocs.io/) - property-based testing qui envoie des requêtes conformes au schéma et vérifie que les réponses matchent
 
 Résultat attendu : plus jamais un `field: content` côté front qui trouve un `field: body` côté back sans que la CI le détecte immédiatement.
 
@@ -25,8 +25,8 @@ Résultat attendu : plus jamais un `field: content` côté front qui trouve un `
 - **Repo** : `git@github.com:skilluv/skilluv-backend.git` (org Skilluv, GitHub)
 - **Répertoire local** : le dev le clone où il veut
 - **Branche de travail** : `feat/be-p1-contract` (déjà créée, l'infra est committée dessus)
-- **Base** : `master` — rebase régulier recommandé
-- **Ne PAS push tant que 100% terminé** — voir §11
+- **Base** : `master` - rebase régulier recommandé
+- **Ne PAS push tant que 100% terminé** - voir §11
 
 Vérification initiale :
 
@@ -67,8 +67,8 @@ Contient la struct `ApiDoc` avec `#[derive(OpenApi)]` + les tags par domaine + l
 
 ### 3.3 Endpoints exposés
 
-- `GET /api/openapi.json` — retourne le schéma OpenAPI 3.1 en JSON
-- `GET /api/docs` — Swagger UI
+- `GET /api/openapi.json` - retourne le schéma OpenAPI 3.1 en JSON
+- `GET /api/docs` - Swagger UI
 
 Aujourd'hui le schéma est **vide** (0 chemins). L'objectif de cette tâche : y arriver à **593/593** chemins.
 
@@ -86,25 +86,25 @@ let router = openapi::attach(router);
 
 ---
 
-## 4. Scope exact — ce qu'il faut faire
+## 4. Scope exact - ce qu'il faut faire
 
 ### 4.1 Ampleur
 
 - **593 handlers async** dans `src/routes/*.rs` (86 fichiers) à annoter avec `#[utoipa::path(...)]`
-- **~155 handlers** renvoient `Json<serde_json::Value>` (JSON construit à la main via `json!({})`) — ils doivent **être refactorisés** en structs typées avant annotation (sinon zéro valeur contrat)
-- **~438 handlers** renvoient déjà des structs typées — annotation directe
+- **~155 handlers** renvoient `Json<serde_json::Value>` (JSON construit à la main via `json!({})`) - ils doivent **être refactorisés** en structs typées avant annotation (sinon zéro valeur contrat)
+- **~438 handlers** renvoient déjà des structs typées - annotation directe
 - Toutes les structs request/response doivent porter `#[derive(utoipa::ToSchema)]`
 - Toutes les paths, params, query params, request bodies, responses (statuts + bodies) doivent être documentés
 
 ### 4.2 Ne pas oublier
 
-- **Workflow CI** `.github/workflows/contract-test.yml` — schemathesis contre l'API démarrée
-- **Documentation** dans `docs/API-ROUTES.md` — noter que le canonique est désormais `/api/docs` (Swagger)
-- **Rate-limiting sur `/api/docs`** — la protéger côté prod (soit auth-gated, soit désactivée en prod via env flag `SKILLUV_EXPOSE_SWAGGER=1`)
+- **Workflow CI** `.github/workflows/contract-test.yml` - schemathesis contre l'API démarrée
+- **Documentation** dans `docs/API-ROUTES.md` - noter que le canonique est désormais `/api/docs` (Swagger)
+- **Rate-limiting sur `/api/docs`** - la protéger côté prod (soit auth-gated, soit désactivée en prod via env flag `SKILLUV_EXPOSE_SWAGGER=1`)
 
 ### 4.3 Hors scope
 
-- **Ne pas** refactorer la logique métier des handlers — juste leur signature de retour
+- **Ne pas** refactorer la logique métier des handlers - juste leur signature de retour
 - **Ne pas** modifier les migrations, les services, les modèles DB
 - **Ne pas** toucher aux tests d'intégration existants (ils doivent continuer à passer verbatim)
 - **Ne pas** ajouter de dépendances autres que utoipa (déjà présentes)
@@ -113,7 +113,7 @@ let router = openapi::attach(router);
 
 ## 5. Méthodologie handler-par-handler
 
-### 5.1 Cas facile — handler avec response typée existante
+### 5.1 Cas facile - handler avec response typée existante
 
 Exemple, `src/routes/badges.rs` :
 
@@ -150,7 +150,7 @@ async fn list_user_badges(
    async fn list_user_badges(...) { ... }
    ```
 
-3. Enregistrer le handler dans `src/openapi.rs` — ajouter à `paths(...)` :
+3. Enregistrer le handler dans `src/openapi.rs` - ajouter à `paths(...)` :
    ```rust
    #[openapi(
        paths(
@@ -164,9 +164,9 @@ async fn list_user_badges(
    )]
    ```
 
-4. `cargo check` — doit passer.
+4. `cargo check` - doit passer.
 
-### 5.2 Cas dur — handler avec `Json<serde_json::Value>`
+### 5.2 Cas dur - handler avec `Json<serde_json::Value>`
 
 Exemple, `src/routes/profile.rs::public_profile` :
 
@@ -300,7 +300,7 @@ struct FeedQuery {
 )]
 ```
 
-### 5.5 Réponses d'erreur — struct `ErrorResponse` réutilisable
+### 5.5 Réponses d'erreur - struct `ErrorResponse` réutilisable
 
 À définir dans `src/errors/codes.rs` (à côté de `AppError`) puis dériver `ToSchema` dessus. Chaque handler référence `ErrorResponse` dans ses réponses non-2xx.
 
@@ -369,7 +369,7 @@ Suivre cet ordre pour :
 | Phase | Fichiers | Effort | Priorité |
 |---|---|---|---|
 | 1 | `src/routes/auth.rs` (25 handlers, 19 en Json<Value>) | 4-5h |  critique |
-| 2 | `src/errors/codes.rs` — ajouter `ErrorResponse` réutilisable | 30min | bloquant |
+| 2 | `src/errors/codes.rs` - ajouter `ErrorResponse` réutilisable | 30min | bloquant |
 | 3 | `src/routes/webauthn.rs`, `magic_link.rs`, `oauth.rs` (auth suite) | 3h | élevée |
 | 4 | `src/routes/profile.rs`, `user_profile.rs`, `profile_extras.rs` | 3h | élevée |
 | 5 | `src/routes/challenges.rs`, `slices.rs`, `challenge_teams.rs`, `challenge_tags.rs` | 4h | élevée |
@@ -385,7 +385,7 @@ Suivre cet ordre pour :
 | 15 | `src/routes/i18n.rs`, `geo.rs`, `email_prefs.rs`, `legal.rs`, `legal_well_known.rs`, `metrics.rs`, `enterprise_pipeline.rs`, `enterprise_dashboard.rs`, `orientation.rs`, `deliverable.rs`, `review_queue.rs`, `season.rs`, `portfolio.rs`, `openapi.rs`, `public_api.rs`, `talent_search_v2.rs`, `talent_search_v3.rs`, `health.rs` | 3-4h | balance |
 | 16 | Workflow CI `contract-test.yml` + doc `README` (section OpenAPI) + `docs/API-ROUTES.md` màj | 1-2h | final |
 
-**Total réaliste : 42-50h** avec les vraies inconnues comptées. Le carnet initial disait 30-40h — sous-estimé.
+**Total réaliste : 42-50h** avec les vraies inconnues comptées. Le carnet initial disait 30-40h - sous-estimé.
 
 ---
 
@@ -449,9 +449,9 @@ jobs:
 ```
 
 Notes :
-- `--hypothesis-max-examples=25` — plafond bas pour respecter le quota GHA (chaque endpoint fuzzé 25 fois max)
-- `--exitfirst` — stoppe au premier échec pour économiser du CI
-- Le workflow tourne uniquement sur les PR qui touchent `src/**` — pas sur les changements de docs
+- `--hypothesis-max-examples=25` - plafond bas pour respecter le quota GHA (chaque endpoint fuzzé 25 fois max)
+- `--exitfirst` - stoppe au premier échec pour économiser du CI
+- Le workflow tourne uniquement sur les PR qui touchent `src/**` - pas sur les changements de docs
 - Aucun test contre `/api/docs` (Swagger UI est purement front)
 
 ---
@@ -484,13 +484,13 @@ schemathesis run http://localhost:3001/api/openapi.json --checks all --hypothesi
 
 ## 9. Anti-patterns à éviter
 
-- FAIL Annoter un handler qui renvoie `Json<serde_json::Value>` **sans refactor typé** — utoipa documentera `type: object` (any) et schemathesis ne pourra rien vérifier. Aucune valeur.
-- FAIL Créer une struct de réponse générique `type Response = serde_json::Value` — même problème.
-- FAIL Utiliser `ToSchema` sur un enum sans configurer explicitement les variants — utoipa ne devine pas la sérialisation serde. Toujours `#[schema(as = ...)]` ou `#[schema(example = ...)]`.
-- FAIL Oublier d'ajouter le handler à `paths(...)` dans `src/openapi.rs` — le handler compile mais n'apparaîtra pas dans le schéma.
-- FAIL Copier-coller les mêmes descriptions partout — utoipa exige `description` explicite sur chaque réponse. Prendre le temps de rédiger des messages qui documentent vraiment.
-- FAIL Toucher aux middlewares axum (`admin_gate`, `ensure_admin_2fa`, etc.) — hors scope.
-- FAIL Regrouper trop de handlers dans un seul commit — voir §10.
+- FAIL Annoter un handler qui renvoie `Json<serde_json::Value>` **sans refactor typé** - utoipa documentera `type: object` (any) et schemathesis ne pourra rien vérifier. Aucune valeur.
+- FAIL Créer une struct de réponse générique `type Response = serde_json::Value` - même problème.
+- FAIL Utiliser `ToSchema` sur un enum sans configurer explicitement les variants - utoipa ne devine pas la sérialisation serde. Toujours `#[schema(as = ...)]` ou `#[schema(example = ...)]`.
+- FAIL Oublier d'ajouter le handler à `paths(...)` dans `src/openapi.rs` - le handler compile mais n'apparaîtra pas dans le schéma.
+- FAIL Copier-coller les mêmes descriptions partout - utoipa exige `description` explicite sur chaque réponse. Prendre le temps de rédiger des messages qui documentent vraiment.
+- FAIL Toucher aux middlewares axum (`admin_gate`, `ensure_admin_2fa`, etc.) - hors scope.
+- FAIL Regrouper trop de handlers dans un seul commit - voir §10.
 
 ---
 
@@ -499,7 +499,7 @@ schemathesis run http://localhost:3001/api/openapi.json --checks all --hypothesi
 **Un commit par fichier route annoté**, avec message clair :
 
 ```
-feat(openapi): annotate src/routes/auth.rs — 25 handlers documented
+feat(openapi): annotate src/routes/auth.rs - 25 handlers documented
 
 - Refactored 19 Json<Value> handlers to typed responses
 - Added ToSchema on LoginRequest, LoginResponse, TotpEnableResponse, ...
@@ -507,7 +507,7 @@ feat(openapi): annotate src/routes/auth.rs — 25 handlers documented
 - Added ErrorResponse component for non-2xx documentation
 ```
 
-**Ne pas mettre de co-auteur** dans les commits (règle explicite de Jérémie — voir sa mémoire `feedback_verify_before_done`).
+**Ne pas mettre de co-auteur** dans les commits (règle explicite de Jérémie - voir sa mémoire `feedback_verify_before_done`).
 
 Vérification pré-commit :
 
@@ -522,7 +522,7 @@ Si un des 4 échoue : **fix avant de commit**. La règle "pas de dette reportée
 
 ---
 
-## 11. Règles push / PR — TRÈS IMPORTANT
+## 11. Règles push / PR - TRÈS IMPORTANT
 
 **Ne PAS push tant que 100% des 593 handlers sont annotés et testés.** Raison : le user a une contrainte quota GitHub Actions et veut UNE seule PR batchée pour cette énorme tâche.
 
@@ -542,7 +542,7 @@ Quand tout ça est OK :
 git push -u origin feat/be-p1-contract
 ```
 
-**Ne pas ouvrir la PR** — laisser Jérémie le faire (il veut valider l'état final avant que la CI ne tourne, à cause du quota GHA storage à 90%).
+**Ne pas ouvrir la PR** - laisser Jérémie le faire (il veut valider l'état final avant que la CI ne tourne, à cause du quota GHA storage à 90%).
 
 Prévenir Jérémie via WhatsApp / DM que la branche est prête à review.
 
@@ -562,12 +562,12 @@ Tu peux ouvrir la PR.
 ## 12. Si tu es bloqué
 
 Contactable :
-- Jérémie Zitti (fondateur, tech lead) — jeremiezitti@gmail.com
+- Jérémie Zitti (fondateur, tech lead) - jeremiezitti@gmail.com
 - Réponse sous 24h max en semaine
 
 Blockers légitimes qui méritent un ping :
 - Un handler renvoie un type que utoipa refuse (rare, mais possible sur des enums serde avec `#[serde(untagged)]`)
-- Une struct existante ne peut pas dériver `ToSchema` (dep externe qui ne le fournit pas — solution : wrapper)
+- Une struct existante ne peut pas dériver `ToSchema` (dep externe qui ne le fournit pas - solution : wrapper)
 - Un design choice te bloque plus de 30 minutes (ex: option A vs B pour `ApiResponse<T>` en §5.2.3)
 
 Blockers non-légitimes (à débrouiller seul avec la doc) :
@@ -584,10 +584,10 @@ Docs utiles :
 
 ## 13. Références internes
 
-- **Audit initial** : commits sur `master` autour de fin juillet 2026 — BE-P0-01..14 + BE-P0-34..40 (20 tickets Trello) qui documentent des divergences payload que ce contract testing aurait détectées automatiquement
-- **Trello card** : `TATOA267` (BE-P1-CONTRACT) — mettre à jour le statut au fur et à mesure (En cours pendant le travail, PR ouverte quand poussé)
+- **Audit initial** : commits sur `master` autour de fin juillet 2026 - BE-P0-01..14 + BE-P0-34..40 (20 tickets Trello) qui documentent des divergences payload que ce contract testing aurait détectées automatiquement
+- **Trello card** : `TATOA267` (BE-P1-CONTRACT) - mettre à jour le statut au fur et à mesure (En cours pendant le travail, PR ouverte quand poussé)
 - **CLAUDE.md** : conventions du repo (règle "pas de co-auteur", "vérifier avant de dire fait", "pas de dette reportée")
-- **CI existant** : `.github/workflows/ci.yml` (build & lint + integration tests) — le nouveau `contract-test.yml` s'ajoute en parallèle sans modifier celui-ci
+- **CI existant** : `.github/workflows/ci.yml` (build & lint + integration tests) - le nouveau `contract-test.yml` s'ajoute en parallèle sans modifier celui-ci
 
 ---
 
@@ -603,7 +603,7 @@ Docs utiles :
 - [ ] `cargo check --all-targets` OK
 - [ ] `cargo clippy --all-targets --all-features -- -D warnings` OK
 - [ ] `cargo fmt --check` OK
-- [ ] `cargo test --lib` OK (les tests unitaires — les tests d'intégration Postgres ne sont pas cassés)
+- [ ] `cargo test --lib` OK (les tests unitaires - les tests d'intégration Postgres ne sont pas cassés)
 - [ ] `curl /api/openapi.json | jq '.paths | length' >= 590`
 - [ ] `curl /api/openapi.json | jq '.components.schemas | length' >= 250` (estimation basse)
 - [ ] Smoke local schemathesis : `schemathesis run ... --hypothesis-max-examples=3` passe sans erreur fatale
@@ -615,4 +615,4 @@ Docs utiles :
 
 *Fin du brief · Bonne route*
 
-*— Jérémie · rédigé le 2026-07-28*
+*- Jérémie · rédigé le 2026-07-28*

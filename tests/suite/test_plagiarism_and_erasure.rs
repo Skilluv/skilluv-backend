@@ -61,7 +61,7 @@ async fn an_entry(app: &TestApp, slug: &str, author: Uuid) -> Uuid {
     .await
     .unwrap();
 
-    // A trigger refuses a submission from somebody who never registered —
+    // A trigger refuses a submission from somebody who never registered -
     // correctly, since an entry from a non-entrant is an entry in nothing.
     sqlx::query(
         "INSERT INTO tournament_participants
@@ -428,7 +428,7 @@ async fn nobody_is_banned_by_a_second_strike() {
 
     // The count is surfaced so a human can see it. Banning on it would ban
     // somebody, one Tuesday, on an accusation a tired reviewer upheld in four
-    // minutes — so the ban stays a decision a human takes and signs.
+    // minutes - so the ban stays a decision a human takes and signs.
     let banned: bool = sqlx::query_scalar("SELECT is_banned FROM users WHERE id = $1")
         .bind(author)
         .fetch_one(&app.db)
@@ -683,7 +683,7 @@ async fn tournament_of(app: &TestApp, submission: Uuid) -> Uuid {
 /// and says why in as many words: "the release window is what makes a
 /// contested result recoverable". Upholding a plagiarism case is the only
 /// thing that ever contests one, and it disqualified the entry and left the
-/// money — so a contest could hold, in one person, a winner who was
+/// money - so a contest could hold, in one person, a winner who was
 /// disqualified and a winner who was paid.
 #[tokio::test]
 async fn upholding_a_case_takes_the_prize_back() {
@@ -735,7 +735,7 @@ async fn upholding_a_case_takes_the_prize_back() {
     // runner-up, because both of those are decisions and neither belongs in a
     // function nobody is reading.
     // `ledger_balance` is the raw signed figure and an escrow is a liability,
-    // so money held reads negative — the same convention `ledger_user_balance`
+    // so money held reads negative - the same convention `ledger_user_balance`
     // hides for user accounts. Negated here rather than asserted at -450,
     // because a reader should not have to know that to read the test.
     let escrow: BigDecimal = sqlx::query_scalar("SELECT -ledger_balance($1)")

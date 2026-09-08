@@ -3,17 +3,17 @@
 //! Two listings, both keyed on the domain rather than written once per
 //! domain:
 //!
-//!   * `GET /api/domains/{domain}/toolkit`  — the curated tools, courses and
+//!   * `GET /api/domains/{domain}/toolkit`  - the curated tools, courses and
 //!     communities, each with what it costs to reach.
-//!   * `GET /api/domains/{domain}/terrains` — upstream projects somebody
+//!   * `GET /api/domains/{domain}/terrains` - upstream projects somebody
 //!     researched as good places to contribute, and whether one has a steward.
 //!
 //! ## Why these were not reachable before
 //!
 //! `external_resources` had two endpoints, `/ai/toolkit` and `/ops/toolkit`,
 //! each with its domain written into the SQL. Six other domains had rows in
-//! that table and no way to read them. `terrain_proposals` — twenty rows
-//! across three domains — had no endpoint at all: the seed migrations were
+//! that table and no way to read them. `terrain_proposals` - twenty rows
+//! across three domains - had no endpoint at all: the seed migrations were
 //! written, the listing never was, and nothing failed because nothing looked.
 //!
 //! ## Adoption is a decision, not a listing
@@ -216,7 +216,7 @@ pub struct TerrainQuery {
 ///
 /// A shortlist somebody researched, not a claim that any of it is staffed.
 /// `adopted_project_id` is null until a steward takes one on, and that is the
-/// moment the terrain becomes real — until then the honest answer is "here is
+/// moment the terrain becomes real - until then the honest answer is "here is
 /// what looks promising and why".
 #[utoipa::path(
     get, path = "/api/domains/{domain}/terrains", tag = "public",
@@ -320,7 +320,7 @@ pub async fn adopt(
         .await?;
     let project_id = project_id.ok_or_else(|| {
         AppError::NotFound(format!(
-            "no project `{}` — adopt a terrain onto a project somebody owns, \
+            "no project `{}` - adopt a terrain onto a project somebody owns, \
              because owning it is what adoption means",
             body.project_slug
         ))
@@ -384,7 +384,7 @@ pub async fn decline(
     let reason = body.reason.trim();
     if reason.is_empty() {
         return Err(AppError::Validation(
-            "say why — a proposal turned down without a reason gets proposed again".into(),
+            "say why - a proposal turned down without a reason gets proposed again".into(),
         ));
     }
     crate::validators::check_max_len(reason, "reason", 500)?;

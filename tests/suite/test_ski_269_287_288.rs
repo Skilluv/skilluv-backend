@@ -1,8 +1,8 @@
 //! Integration tests for three contract fixes found on staging:
 //!
-//! * SKI-288 — attestation verification reachable under `/api`.
-//! * SKI-269 — detaching a GitHub repo from a project actually works.
-//! * SKI-287 — email preferences on the path the front end calls, with a
+//! * SKI-288 - attestation verification reachable under `/api`.
+//! * SKI-269 - detaching a GitHub repo from a project actually works.
+//! * SKI-287 - email preferences on the path the front end calls, with a
 //!   strict PUT and a one-click unsubscribe link.
 
 use crate::common::TestApp;
@@ -19,7 +19,7 @@ fn user_id_of(register_body: &Value) -> Uuid {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SKI-288 — /api/verify/{hash}
+// SKI-288 - /api/verify/{hash}
 // ═══════════════════════════════════════════════════════════════════
 
 #[tokio::test]
@@ -63,7 +63,7 @@ async fn verify_under_api_rejects_a_malformed_hash_without_500() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SKI-269 — detaching a GitHub repo
+// SKI-269 - detaching a GitHub repo
 // ═══════════════════════════════════════════════════════════════════
 
 /// Create a project through the admin API and return its slug.
@@ -83,7 +83,7 @@ async fn create_project_with_repo(app: &TestApp, slug: &str, owner_id: Uuid) -> 
             }),
         )
         .await;
-    // The handler answers 200, not the 201 its utoipa annotation claims —
+    // The handler answers 200, not the 201 its utoipa annotation claims -
     // one of the spec drifts SKI-111 exists to surface. Accept the real
     // behaviour here rather than couple this fix to that one.
     assert!(
@@ -126,7 +126,7 @@ async fn explicit_null_detaches_the_repo() {
     let (owner, name) = repo_of(&app, &slug).await;
     assert!(
         owner.is_none() && name.is_none(),
-        "the repo must actually be detached — the old COALESCE answered 200 \
+        "the repo must actually be detached - the old COALESCE answered 200 \
          while leaving it wired, so ingestion kept running"
     );
 }
@@ -211,7 +211,7 @@ async fn rewiring_to_another_repo_still_works() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SKI-287 — email preferences
+// SKI-287 - email preferences
 // ═══════════════════════════════════════════════════════════════════
 
 #[tokio::test]
@@ -231,7 +231,7 @@ async fn preferences_return_defaults_for_an_untouched_account() {
     assert_eq!(body["data"]["streak_reminder"], true);
     assert_eq!(
         body["data"]["marketing"], false,
-        "marketing is opt-in — GDPR requires explicit consent"
+        "marketing is opt-in - GDPR requires explicit consent"
     );
 
     // Reading must not have created a row: consent is recorded when given,

@@ -1,4 +1,4 @@
-//! Projects routes — Phase 2 Sprint 5.
+//! Projects routes - Phase 2 Sprint 5.
 
 use axum::extract::{Path, Query, State};
 use axum::http::HeaderMap;
@@ -30,18 +30,18 @@ pub fn project_routes() -> Router<AppState> {
             delete(remove_contributor),
         )
         .route("/projects/{slug}/archive", post(archive))
-        // P26 v2 SKI-122 — public: how many Skilluvers are active on this
+        // P26 v2 SKI-122 - public: how many Skilluvers are active on this
         // repo in the last N days (default 30).
         .route("/projects/{slug}/active-skilluvers", get(active_skilluvers))
         .route("/u/{username}/projects", get(by_user))
         .route("/guilds/{slug}/projects", get(by_guild_slug))
         .route("/admin/projects/{slug}/curated", post(admin_set_curated))
-        // P12.1 — recommandations projets pour le user courant
+        // P12.1 - recommandations projets pour le user courant
         .route(
             "/users/me/recommendations/projects",
             get(my_project_recommendations),
         )
-        // P12.2 — marque d'intérêt (onboarding + feed)
+        // P12.2 - marque d'intérêt (onboarding + feed)
         .route(
             "/users/me/interests/projects",
             get(list_my_project_interests).post(mark_projects_interested),
@@ -164,7 +164,7 @@ pub async fn by_slug(
 
 /// Payload of `GET /api/u/{username}/projects`.
 ///
-/// SKI-291 — the route is not paginated: a user owns a handful of projects,
+/// SKI-291 - the route is not paginated: a user owns a handful of projects,
 /// and the profile page renders all of them at once.
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct UserProjectsData {
@@ -180,7 +180,7 @@ pub struct UserProjectsResponse {
 /// List projects owned by a specific user (by username). Public.
 ///
 /// A user who exists and owns nothing answers 200 with an empty list. 404 is
-/// reserved for a username that really has no account — otherwise the front
+/// reserved for a username that really has no account - otherwise the front
 /// cannot tell "no projects" from "no such user".
 #[utoipa::path(
     get,
@@ -196,7 +196,7 @@ pub async fn by_user(
     State(state): State<AppState>,
     Path(username): Path<String>,
 ) -> Result<Json<Value>, AppError> {
-    // SKI-291 — visibility is `profile_hidden`, matching `GET
+    // SKI-291 - visibility is `profile_hidden`, matching `GET
     // /api/profile/{username}`. This route used to gate on `profile_active`,
     // which only records whether onboarding was cleared: every account that
     // had signed up without completing a challenge answered 200 on the
@@ -371,7 +371,7 @@ pub async fn admin_set_curated(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// P12.1 — Recommandations projets
+// P12.1 - Recommandations projets
 // ═══════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
@@ -409,7 +409,7 @@ pub async fn my_project_recommendations(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// P12.2 — Marque d'intérêt user → project
+// P12.2 - Marque d'intérêt user → project
 // ═══════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
@@ -497,7 +497,7 @@ pub async fn unmark_project_interested(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// P26 v2 SKI-122 — active Skilluvers on a project
+// P26 v2 SKI-122 - active Skilluvers on a project
 // ═══════════════════════════════════════════════════════════════════
 
 #[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
@@ -509,7 +509,7 @@ pub struct ActiveWindowQuery {
 
 /// GET /api/projects/{slug}/active-skilluvers?days=30
 ///
-/// Public — anyone can see the "community pulse" on a repo. Returns:
+/// Public - anyone can see the "community pulse" on a repo. Returns:
 ///   { count: N, users: [{username, avatar, last_activity}] }
 ///
 /// A user is "active" if in the window they either claimed a slice on

@@ -13,10 +13,10 @@
 //!
 //! ## Three roads, one destination
 //!
-//! * The **webhook**, when it arrives — fast, and not to be relied on.
+//! * The **webhook**, when it arrives - fast, and not to be relied on.
 //! * The **poller**, which asks the provider about anything still pending.
 //!   It runs on a timer and does not care whether a browser is open.
-//! * The **return page**, if the payer does come back — which triggers a
+//! * The **return page**, if the payer does come back - which triggers a
 //!   check rather than performing the delivery itself, so a forged
 //!   `?status=approved` buys nothing.
 //!
@@ -53,8 +53,8 @@ pub async fn settle_and_deliver(
     provider_reference: Option<&str>,
 ) -> Result<bool, AppError> {
     // Claim the delivery with the update itself. Two callers arriving
-    // together — a webhook and the poller, which is the normal case rather
-    // than the rare one — race here, and exactly one wins.
+    // together - a webhook and the poller, which is the normal case rather
+    // than the rare one - race here, and exactly one wins.
     let claimed: Option<Paid> = sqlx::query_as(
         "UPDATE payments
             SET status = 'succeeded',
@@ -89,7 +89,7 @@ pub async fn settle_and_deliver(
             payment = %payment_id,
             subject = %paid.subject_type,
             error = %e,
-            "payment succeeded but delivery failed — unstamped so the sweep retries"
+            "payment succeeded but delivery failed - unstamped so the sweep retries"
         );
         return Err(e);
     }
@@ -118,7 +118,7 @@ async fn deliver(db: &PgPool, paid: &Paid) -> Result<(), AppError> {
         "mentorship_session" => {
             // No `updated_at`: the table has never had that column, and
             // writing it meant every mentorship payment succeeded and then
-            // failed to deliver — money taken, session left pending, and
+            // failed to deliver - money taken, session left pending, and
             // the row handed to the sweep to retry forever.
             sqlx::query(
                 "UPDATE mentorship_sessions
@@ -143,7 +143,7 @@ async fn deliver(db: &PgPool, paid: &Paid) -> Result<(), AppError> {
 
             // A certification sale never reached the books. The platform is
             // the seller and nobody else is owed anything, which is why it
-            // was skipped — and why it should not have been: this is the
+            // was skipped - and why it should not have been: this is the
             // account an accountant reads first, and it was understated by
             // every certification ever sold.
             //
@@ -267,7 +267,7 @@ async fn deliver(db: &PgPool, paid: &Paid) -> Result<(), AppError> {
         }
 
         "ats_subscription" => {
-            // The subject is the subscription row, chosen before checkout —
+            // The subject is the subscription row, chosen before checkout -
             // the same shape as every other recurring product here. A plan
             // change takes effect when it is paid for and not a moment
             // earlier, which is the only version a company can dispute.
@@ -333,7 +333,7 @@ async fn deliver(db: &PgPool, paid: &Paid) -> Result<(), AppError> {
             // money taken for nothing, and the only way anyone finds out is
             // if this says so.
             Err(AppError::Internal(format!(
-                "payment for '{other}' has no delivery — money was taken and nothing was given"
+                "payment for '{other}' has no delivery - money was taken and nothing was given"
             )))
         }
     }

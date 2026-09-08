@@ -27,14 +27,14 @@ Ce que cela interdit, concrètement :
 
 **Le mentorat payant.** Un talent paie un autre talent. Skilluv prend une
 commission sur la transaction. Ce n'est pas un accès à une opportunité, c'est
-l'achat du temps de quelqu'un — et le mentor est de l'autre côté de la même
+l'achat du temps de quelqu'un - et le mentor est de l'autre côté de la même
 règle : il est payé.
 
 **La marketplace des créateurs.** Un talent vend ce qu'il a produit. Skilluv
 prend une commission. Là encore le talent est vendeur, pas acheteur d'accès.
 
-Si l'une de ces deux lignes devenait un péage déguisé — un mentorat obligatoire
-pour être visible, une place de marché où il faut acheter pour être vu — elle
+Si l'une de ces deux lignes devenait un péage déguisé - un mentorat obligatoire
+pour être visible, une place de marché où il faut acheter pour être vu - elle
 serait à supprimer. C'est le test.
 
 ---
@@ -84,7 +84,7 @@ choisie.
 
 **Pas d'enfermement.** Les données d'un talent lui appartiennent et sont
 exportables. Une attestation reste vérifiable même si la personne supprime son
-compte — c'est une preuve émise, pas une fonctionnalité louée.
+compte - c'est une preuve émise, pas une fonctionnalité louée.
 
 **Opt-in pour les données.** Aucune donnée nominative ne fait l'objet d'une
 licence sans consentement explicite de la personne concernée, avec une part
@@ -105,7 +105,7 @@ Ce que cela n'est pas, et pourquoi la distinction compte :
 
 **Pas un site d'annonces.** Un site d'annonces vend de la visibilité à des
 offres. Skilluv vend l'accès à des gens dont le travail est vérifiable, ce qui
-suppose que la vérification existe — c'est le produit, pas l'emballage.
+suppose que la vérification existe - c'est le produit, pas l'emballage.
 
 **Pas une école.** Une école vend un diplôme et son crédit repose sur sa
 réputation. Skilluv n'émet que des attestations adossées à un artefact
@@ -124,5 +124,5 @@ passe. C'est une contrainte, pas un défaut à corriger.
 ## 6. Ce que cette charte engage
 
 Une décision produit qui contredit une règle de ce document est soit une
-erreur, soit une modification de ce document — jamais une exception
+erreur, soit une modification de ce document - jamais une exception
 silencieuse. La modification est publique et datée, comme le reste.

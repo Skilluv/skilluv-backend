@@ -1,4 +1,4 @@
-# Skilluv Leadership — charter
+# Skilluv Leadership - charter
 
 Published at `skill-uv.com/leadership/charter`.
 
@@ -10,7 +10,7 @@ Published at `skill-uv.com/leadership/charter`.
 ## 1. Leadership is a trade, and it has artefacts
 
 The usual claim about leadership is that it cannot be evidenced. That it is
-about presence, judgement, the room — things you either have or do not, and
+about presence, judgement, the room - things you either have or do not, and
 which show up on a CV as a title and a headcount.
 
 That claim is convenient for whoever already has the title. It is also false.
@@ -29,14 +29,14 @@ it.
 
 Concretely, one of these:
 
-- A **roadmap**, **delivery plan**, **product spec** or **OKR document** —
+- A **roadmap**, **delivery plan**, **product spec** or **OKR document** -
   what a period is for, and what it is not for.
-- A **decision record** — the alternatives, the trade-off, and what would make
+- A **decision record** - the alternatives, the trade-off, and what would make
   it the wrong call.
-- A **retrospective** — and, three months later, its action items.
-- A **playbook** — how a team does a recurring thing, written so they keep
+- A **retrospective** - and, three months later, its action items.
+- A **playbook** - how a team does a recurring thing, written so they keep
   doing it after its author leaves.
-- A **career ladder**, **hiring process** or **team health audit** — a
+- A **career ladder**, **hiring process** or **team health audit** - a
   structure other people are assessed or grown inside.
 - A **curriculum**, and the cohort that ran on it.
 
@@ -64,7 +64,7 @@ those can be disputed, and all of them are common.
 
 So the rule here is stricter than anywhere else on the platform: a claim about
 people comes with **what was measured, of how many, and when**. Not downgraded
-when it is missing — refused.
+when it is missing - refused.
 
 That is not scepticism about the work. It is the only thing that makes the
 work worth something to somebody reading a stranger's profile.
@@ -77,11 +77,11 @@ people who did not choose to be written about.
 
 Every artefact here declares how much of it can be shown:
 
-- **Public** — it was already publishable.
-- **Anonymised** — rewritten so that the organisation, the teams and the people
+- **Public** - it was already publishable.
+- **Anonymised** - rewritten so that the organisation, the teams and the people
   in it cannot be identified. **A second person confirms this before anything
   is published.** Not the author.
-- **Confidential** — shown to nobody. What is attested is the shape: what kind
+- **Confidential** - shown to nobody. What is attested is the shape: what kind
   of artefact, at what scale, in what industry.
 
 A confidential artefact counts towards the score and appears on no profile.
@@ -89,7 +89,7 @@ That is deliberate: a platform that only counted what could be published would
 be a platform where only the unemployed can build a leadership record.
 
 **We do not claim to anonymise anything automatically.** No system can reliably
-strip identity from prose — remove the company name and the product name is
+strip identity from prose - remove the company name and the product name is
 still there, the office city, the head count, the three customers in paragraph
 four. What we record is that a human read it and said nobody is identifiable.
 That is a smaller claim, and it is one we can actually make.
@@ -116,7 +116,7 @@ within ninety days. Facilitating the hour is easy; the three months of chasing
 people afterwards is the part nobody does, and it is the part we count.
 
 Dropping an action counts as resolving it. Deciding not to do something, in
-writing, with a reason, is a decision — and a rule that punished it would teach
+writing, with a reason, is a decision - and a rule that punished it would teach
 people to leave items open forever instead.
 
 ## 8. Coordination is agreed, not announced
@@ -126,7 +126,7 @@ have said so.
 
 Every commitment a leadership artefact makes on another project is recorded,
 and the project's steward can acknowledge it. The acknowledgement is the only
-term in this domain's score that **cannot be produced alone at a desk** — it is
+term in this domain's score that **cannot be produced alone at a desk** - it is
 the closest thing leadership has to a merged contribution, and it is weighted
 as such.
 
@@ -140,7 +140,7 @@ who stayed. That figure improves every time somebody gives up, which makes it
 reward exactly the failure it should detect.
 
 Here the denominator is **everybody who joined**. The one exception is somebody
-who left because they found work — that is the outcome the cohort existed for,
+who left because they found work - that is the outcome the cohort existed for,
 and they are removed rather than counted as a loss.
 
 The reasons people leave are recorded, because four people leaving over the
@@ -155,7 +155,7 @@ with credit, and claiming sole authorship of a document a team wrote is the
 thing that costs standing here.
 
 Where a mission's terms prevent naming a client, the attestation says what kind
-of organisation, at what scale, and what was produced — never who. The skill is
+of organisation, at what scale, and what was produced - never who. The skill is
 demonstrable without breaching the engagement.
 
 ## 11. AI

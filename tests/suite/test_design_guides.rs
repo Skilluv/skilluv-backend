@@ -7,7 +7,7 @@
 //! endpoint that answered an empty list (SKI-186).
 //!
 //! Nothing failed. A guide catalogue with a hole in it looks exactly like a
-//! guide catalogue, from the backend's side — which is why the last test here
+//! guide catalogue, from the backend's side - which is why the last test here
 //! is written against **every** domain rather than against design, and is the
 //! one that matters going forward.
 
@@ -134,7 +134,7 @@ async fn a_designer_arriving_is_served_something_in_their_language() {
     let app = TestApp::spawn().await;
 
     // These rows are English. The route falls back "asked for, then English,
-    // then French", so a French reader gets the page rather than nothing —
+    // then French", so a French reader gets the page rather than nothing -
     // which is the whole reason seeding one locale is acceptable.
     let resp = app
         .client
@@ -155,7 +155,7 @@ async fn a_designer_arriving_is_served_something_in_their_language() {
 /// The invariant that would have caught this, and will catch the next one.
 ///
 /// Written against every open domain rather than against design, because the
-/// failure was not that design was special — it was that nothing asked the
+/// failure was not that design was special - it was that nothing asked the
 /// question. A domain can be opened, seeded with challenges, given reviewer
 /// capabilities and a review grid, and still have no guide telling anybody how
 /// to start. Nothing errors; the pages are just empty.
@@ -163,7 +163,7 @@ async fn a_designer_arriving_is_served_something_in_their_language() {
 async fn no_open_domain_is_left_without_an_onboarding_guide() {
     let app = TestApp::spawn().await;
 
-    // A domain counts as open once it has live orientations — that is what
+    // A domain counts as open once it has live orientations - that is what
     // lets somebody declare the trade and hand work in.
     let domains: Vec<String> = sqlx::query_scalar(
         "SELECT DISTINCT primary_domain FROM orientations
@@ -196,7 +196,7 @@ async fn no_open_domain_is_left_without_an_onboarding_guide() {
     );
 }
 
-/// SKI-239 — design award categories exist, so `/design/awards` is not an
+/// SKI-239 - design award categories exist, so `/design/awards` is not an
 /// empty page rendered against a working endpoint.
 ///
 /// Migration 0590 gave `award_categories` its `skill_domain` and said the
@@ -230,7 +230,7 @@ async fn design_has_award_categories_and_they_are_scoped_to_design() {
     }
 
     // The endpoint the front reads, filtered the way `/design/awards` filters
-    // it — the `domain` parameter migration 0590 added the column for.
+    // it - the `domain` parameter migration 0590 added the column for.
     let body: Value = app
         .get("/api/awards/categories?domain=design")
         .await
@@ -243,7 +243,7 @@ async fn design_has_award_categories_and_they_are_scoped_to_design() {
         "the categories endpoint serves nothing for design: {body}"
     );
     // The filter returns design's own and the cross-cutting ones, never
-    // another family's — an awards page showing code categories is worse than
+    // another family's - an awards page showing code categories is worse than
     // an empty one.
     assert!(
         listed

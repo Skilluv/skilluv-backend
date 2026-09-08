@@ -7,7 +7,7 @@
 //! backlog proposed a formula in Rust and a `craft_score_qa` column; both were
 //! declined for the reason the ops profile gives: a weight written in code is
 //! one nobody outside the team can argue with, and a stored score is wrong
-//! from the moment the next attestation lands — worse, it keeps its points
+//! from the moment the next attestation lands - worse, it keeps its points
 //! when a proof is revoked, unless somebody remembers to recompute.
 //!
 //! This module contributes the one thing that cannot be a row: what each term
@@ -26,7 +26,7 @@
 //! `critical_bugs_confirmed` counts the reviewer's severity, not the
 //! reporter's. Self-rated severity is a self-service multiplier, and every bug
 //! bounty programme has already found that out. A report nobody has reviewed
-//! counts towards `bugs_confirmed` and not towards this one — its severity is
+//! counts towards `bugs_confirmed` and not towards this one - its severity is
 //! a claim until somebody has read it.
 //!
 //! ## `review_grid_average` is skipped, not zeroed
@@ -98,7 +98,7 @@ const BASES: &str = "'quality_test_plan_validated', 'quality_test_strategy_valid
 
 async fn measure(db: &PgPool, user_id: Uuid) -> Result<Measurements, AppError> {
     // The basis list is interpolated because it is a compile-time constant of
-    // this module — no request data reaches it. Everything a caller supplies
+    // this module - no request data reaches it. Everything a caller supplies
     // is bound.
     let sql = format!(
         r#"
@@ -125,7 +125,7 @@ async fn measure(db: &PgPool, user_id: Uuid) -> Result<Measurements, AppError> {
 
             -- Read from the reports rather than from the attestations. The
             -- attestation is issued once per slice; a slice can hold one
-            -- report, so the two agree — and this way the severity below
+            -- report, so the two agree - and this way the severity below
             -- comes from the same rows as the count above it.
             (SELECT count(*) FROM quality_bug_reports
               WHERE reporter_user_id = $1
@@ -263,7 +263,7 @@ pub async fn compute(db: &PgPool, user_id: Uuid) -> Result<CraftScore, AppError>
 ///
 /// Nothing here is private by accident: it reads the same rows the person's
 /// own dashboard reads, minus anything unverified. A report nobody reviewed, a
-/// fix nobody confirmed and a test run nobody checked are all absent — a
+/// fix nobody confirmed and a test run nobody checked are all absent - a
 /// public profile is where a stranger forms a judgement, and it must only
 /// carry what a stranger could confirm.
 ///

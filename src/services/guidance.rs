@@ -7,7 +7,7 @@
 //! closing the tab.
 //!
 //! It is not the answer. Every resource here is a link somebody else hosts,
-//! and finding the way through it is still the learner's work — what is
+//! and finding the way through it is still the learner's work - what is
 //! removed is the half-hour of guessing which words to type, which selects for
 //! people who already knew how to search rather than for people who can do the
 //! work.
@@ -35,7 +35,7 @@ pub struct Resource {
     pub kind: String,
     pub title: String,
     pub url: String,
-    /// The language the resource itself is in — not the caller's. A French
+    /// The language the resource itself is in - not the caller's. A French
     /// reader has to be able to see which of these they can actually read.
     pub language: String,
     pub summary: String,
@@ -100,7 +100,7 @@ fn budget_for(rank: &str) -> Option<usize> {
 /// The guidance for one challenge and one caller.
 ///
 /// `user_id` is `None` for an anonymous reader, who is shown what an apprenti
-/// would get — a challenge page has to make sense before anybody signs up.
+/// would get - a challenge page has to make sense before anybody signs up.
 pub async fn for_challenge(
     db: &PgPool,
     challenge_id: Uuid,
@@ -134,7 +134,7 @@ pub async fn for_challenge(
 
     // Ordered by the curator, then by whether the caller can read it. A
     // French reader sees the French resources first and the English ones
-    // after — never instead: most of what is worth linking is in English, and
+    // after - never instead: most of what is worth linking is in English, and
     // hiding it would be a worse service than showing it second.
     let mut resources: Vec<Resource> = sqlx::query_as(
         "SELECT kind, title, url, language, summary, access_note, attribution

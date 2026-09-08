@@ -6,7 +6,7 @@
 //! keyed by `mission_types.skill_domain`. Design needed rows, not a mechanism,
 //! and got twelve of them. A design mission is a mission with
 //! `skill_domain = 'design'`, so a design admin surface is this one with a
-//! filter — and the same surface serves security, code and the four others
+//! filter - and the same surface serves security, code and the four others
 //! without a second implementation to keep in step.
 //!
 //! ## What an admin is for here
@@ -46,7 +46,7 @@ pub fn admin_mission_routes() -> Router<AppState> {
 /// point of the scope.
 ///
 /// An arbiter reads any of them, because deciding a case means opening it
-/// first — and because the alternative is an arbiter who can end a mission
+/// first - and because the alternative is an arbiter who can end a mission
 /// and then cannot see what they did.
 async fn require_reader(state: &AppState, auth: &AuthUser, domain: &str) -> Result<(), AppError> {
     crate::middleware::capabilities::require_any_capability(
@@ -89,7 +89,7 @@ pub struct ListQuery {
     /// read their own; optional for an admin.
     #[param(max_length = 30)]
     pub skill_domain: Option<String>,
-    /// A `mission_types` slug — `brand_identity_design`, `website_design`…
+    /// A `mission_types` slug - `brand_identity_design`, `website_design`…
     #[param(max_length = 60)]
     pub mission_type: Option<String>,
     #[param(max_length = 30)]
@@ -148,7 +148,7 @@ pub struct AdminMissionRow {
 ///
 /// `{data, pagination, meta}` rather than `ApiResponse<Vec<_>>`: SKI-58 settled
 /// that convention and `tests/test_admin_listing_convention.rs` holds it. This
-/// endpoint was the exception, and the cost was concrete — with no `total`, the
+/// endpoint was the exception, and the cost was concrete - with no `total`, the
 /// admin pager could only ever offer one more page when the current one came
 /// back full, which is a guess about whether there is anything on it.
 #[derive(Debug, Serialize, ToSchema)]
@@ -382,7 +382,7 @@ pub async fn detail(
 ///
 /// Split out so an arbiter can be handed the result of their own decision.
 /// Calling the handler again would re-check a permission that has just been
-/// established, and refuse the arbiter their own outcome — which is exactly
+/// established, and refuse the arbiter their own outcome - which is exactly
 /// what it did.
 async fn load_detail(
     state: &AppState,
@@ -490,8 +490,8 @@ async fn load_detail(
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ArbitrateBody {
-    /// `accepted` — the delivery stands and the money is released.
-    /// `cancelled` — the mission ends and the escrow goes back.
+    /// `accepted` - the delivery stands and the money is released.
+    /// `cancelled` - the mission ends and the escrow goes back.
     #[schema(max_length = 20)]
     pub outcome: String,
     /// Read by both sides, one of whom has just lost. Eighty characters
@@ -503,7 +503,7 @@ pub struct ArbitrateBody {
 
 /// Decide a mission neither side will end.
 ///
-/// Both outcomes already exist in the mission's own vocabulary — this endpoint
+/// Both outcomes already exist in the mission's own vocabulary - this endpoint
 /// does not invent a third. What it adds is the record that the outcome was
 /// decided rather than agreed, and by whom: a mission accepted by arbitration
 /// and one accepted by a happy client look identical in `missions`, and they
@@ -542,7 +542,7 @@ pub async fn arbitrate(
     let reason = body.reason_md.trim();
     if reason.chars().count() < 80 {
         return Err(AppError::Validation(
-            "say why in at least eighty characters — both sides read this, and one of them \
+            "say why in at least eighty characters - both sides read this, and one of them \
              has just lost"
                 .into(),
         ));
@@ -569,7 +569,7 @@ pub async fn arbitrate(
     // this endpoint is called at all.
     if !matches!(status.as_str(), "in_progress" | "delivered") {
         return Err(AppError::Conflict(format!(
-            "a {status} mission has no delivery to arbitrate — this decides a round \
+            "a {status} mission has no delivery to arbitrate - this decides a round \
              neither side will settle, and there is none"
         )));
     }
@@ -605,7 +605,7 @@ pub async fn arbitrate(
     .await?;
 
     if written.rows_affected() == 0 {
-        // Already arbitrated — but the mission is still open, which the state
+        // Already arbitrated - but the mission is still open, which the state
         // check above just established. So the decision was written and the
         // settlement behind it did not finish: the provider refund failed, the
         // process died between the two, something.
@@ -614,7 +614,7 @@ pub async fn arbitrate(
         // the work is done, the money is still where it was, and there is no
         // second call that can finish it because every one of them 409s. So a
         // repeat finishes the settlement instead, provided it asks for the
-        // same outcome — the ledger's idempotency keys make the money part
+        // same outcome - the ledger's idempotency keys make the money part
         // safe to repeat, and `set_status` returns early when the status is
         // already right.
         let decided: Option<String> =
@@ -626,7 +626,7 @@ pub async fn arbitrate(
         if decided.as_deref() != Some(body.outcome.as_str()) {
             return Err(AppError::Conflict(format!(
                 "this mission was already arbitrated as {}, and a decision is not re-taken \
-                 — reopening it is a new mission",
+                 - reopening it is a new mission",
                 decided.unwrap_or_else(|| "unknown".into())
             )));
         }
@@ -661,7 +661,7 @@ pub async fn arbitrate(
     // moved: releasing the escrow and returning it both live in `set_status`,
     // so a raw UPDATE set the word and skipped the transfer. The doc-comment
     // above says "the money is released" and "the escrow goes back", and
-    // neither happened — an arbitration that reads as settled with the funds
+    // neither happened - an arbitration that reads as settled with the funds
     // still sitting where they were.
     //
     // `accepted` goes all the way to `closed` rather than stopping at
@@ -715,7 +715,7 @@ pub struct TakeDownBody {
 ///
 /// ## Why an admin needs this at all
 ///
-/// Nothing reviews a mission before it is published. That is deliberate — the
+/// Nothing reviews a mission before it is published. That is deliberate - the
 /// control is the KYC an enterprise clears before it can post anything, which
 /// checks *who* may publish once instead of *what* is published every time,
 /// and a per-mission gate would put a person between a paying client and their
@@ -730,7 +730,7 @@ pub struct TakeDownBody {
 ///
 /// An arbitration decides a case between two parties who both still want
 /// something. This decides that the platform will not carry the listing, which
-/// is not a judgement between them — it is a judgement about them, and it is
+/// is not a judgement between them - it is a judgement about them, and it is
 /// answered for by whoever answers for the platform.
 ///
 /// ## Why a delivered mission is refused
@@ -775,7 +775,7 @@ pub async fn take_down(
     let reason = body.reason.trim();
     if reason.chars().count() < 20 {
         return Err(AppError::Validation(
-            "say why in at least twenty characters — the enterprise and whoever \
+            "say why in at least twenty characters - the enterprise and whoever \
              was working on it both read this, and it is the only account they get"
                 .into(),
         ));
@@ -814,14 +814,14 @@ pub async fn take_down(
     }
     // The transition table refuses `delivered -> cancelled` for everybody but
     // an arbiter, and would say so. It is caught here to say *why*, and to
-    // name the endpoint that does handle it — the alternative is an
+    // name the endpoint that does handle it - the alternative is an
     // administrator reading "a delivered mission cannot become cancelled" and
     // concluding nothing can be done about it.
     if status == "delivered" {
         return Err(AppError::Conflict(
             "the work on this one has been handed in. Cancelling it would take the \
              escrow back from whoever did it, which is a decision between the two \
-             parties — use the arbitration endpoint, which records it as one"
+             parties - use the arbitration endpoint, which records it as one"
                 .into(),
         ));
     }

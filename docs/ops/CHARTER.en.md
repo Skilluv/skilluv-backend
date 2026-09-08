@@ -29,13 +29,13 @@ reads a Helm chart and has no useful opinion on a query plan.
 
 Not a pull request. In this domain, proof is:
 
-- **a reusable artefact** — a module, a chart, a pipeline, a dashboard, a
+- **a reusable artefact** - a module, a chart, a pipeline, a dashboard, a
   runbook. Judged on one question: can somebody else use it without its
   author in the room;
-- **an objective held** — a target announced, a window, a figure reached, and
+- **an objective held** - a target announced, a window, a figure reached, and
   the source of the figure;
-- **an incident led** — with both durations and a published post-mortem;
-- **a cost reduction** — both amounts, what was changed, and confirmation
+- **an incident led** - with both durations and a published post-mortem;
+- **a cost reduction** - both amounts, what was changed, and confirmation
   that the service still stands.
 
 Each of these is recorded with what it rests on. "Reliable" is not a proof;
@@ -64,7 +64,7 @@ post-mortem practice from an archive of post-mortems.
 
 An objective closes with a figure its own author typed, and an address where
 that figure can be checked. The obvious way to automate the checking would be
-an API key to the client's monitoring — Datadog, Instana, a private Grafana.
+an API key to the client's monitoring - Datadog, Instana, a private Grafana.
 **Skilluv will not do that.**
 
 Such a key does not give "was the service up". It gives the map of their
@@ -86,7 +86,7 @@ What is read publicly does not replace the declared figure and does not claim
 to: a status page shows only the outages its operator chose to publish. What
 it gives a reviewer is the other half of the conversation. Somebody announcing
 99.99% over a window in which their own public page shows eleven hours of
-major outage has not lied to a machine — they have written something a reader
+major outage has not lied to a machine - they have written something a reader
 can now see does not add up.
 
 ## 5. Cost is a skill
@@ -115,7 +115,7 @@ three in the morning, without its author.
 ## 7. What Skilluv owes
 
 **Bounded access.** An ops mission grants access to production
-infrastructure. That access is temporary, logged, and removed at the end —
+infrastructure. That access is temporary, logged, and removed at the end -
 not when somebody remembers.
 
 **Paid on-call.** Being reachable is work. A mission that includes on-call

@@ -3,9 +3,9 @@
 //!
 //! ## One table for what two backlogs asked for twice
 //!
-//! Communication's ticket T-02 asked for `external_devrel_opportunities` —
+//! Communication's ticket T-02 asked for `external_devrel_opportunities` -
 //! conference CFPs and meetup speaker slots. Education's ticket T-03 asked for
-//! `external_education_platforms` — bootcamps and coding schools hiring
+//! `external_education_platforms` - bootcamps and coding schools hiring
 //! trainers. They are the same three facts: an organisation, a deadline and a
 //! link, with a domain saying who it is for.
 //!
@@ -19,7 +19,7 @@
 //! exactly like an open one until somebody applies. Seeding a list in a
 //! migration would have shipped a file that was wrong before the first reader
 //! saw it. Rows come from a curator, who is accountable for the deadline being
-//! right, and `withdrawn_at` takes one down without deleting it — somebody who
+//! right, and `withdrawn_at` takes one down without deleting it - somebody who
 //! applied has a right to still find what they applied to.
 //!
 //! ## Why the default listing hides what has closed
@@ -321,7 +321,7 @@ pub async fn withdraw_opportunity(
 ) -> Result<Json<ApiResponse<serde_json::Value>>, AppError> {
     if body.reason.trim().is_empty() {
         return Err(AppError::Validation(
-            "a withdrawal has to say why — a row that disappears is not \
+            "a withdrawal has to say why - a row that disappears is not \
              something an applicant can act on"
                 .into(),
         ));

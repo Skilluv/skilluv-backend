@@ -1,6 +1,6 @@
 # The cyber community on Discord
 
-What SKI-180 asked for, and what was built instead — with the reasons, because
+What SKI-180 asked for, and what was built instead - with the reasons, because
 the differences are deliberate and someone will otherwise "fix" them back.
 
 ## The short version
@@ -19,11 +19,11 @@ exist; if it is, the script creates it and records the id.
 | --- | --- |
 | `security-general` | Everything, and the room a newcomer lands in |
 | `security-help` | Stuck on something, ask here |
-| `security-red` | Offensive work — pentest, exploitation, CTF |
-| `security-blue` | Defensive work — detection, forensics, incident response |
+| `security-red` | Offensive work - pentest, exploitation, CTF |
+| `security-blue` | Defensive work - detection, forensics, incident response |
 | `security-purple` | The two together, which is where most real work sits |
 | `security-code-audit` | Reading code for vulnerabilities |
-| `security-governance` | Policy, compliance, risk — the unglamorous half |
+| `security-governance` | Policy, compliance, risk - the unglamorous half |
 | `security-ranges` | The practice targets, and how to reach them |
 | `security-tooling` | What people run, and what it is worth |
 | `security-triage` | Reviewers coordinating on the disclosure queue |
@@ -39,7 +39,7 @@ Voice: **Purple Session**, **Range Cowork Live**.
 The ticket wrote `#cyber-*`. The domain is called `security` in the database,
 in `SKILL_DOMAINS`, in every capability (`security_reviewer:*`), in every route
 and in the other ten domains' channel names. Two words for one thing is a debt
-that gets paid every time somebody has to remember which context they are in —
+that gets paid every time somebody has to remember which context they are in -
 and the bot would have to translate between them on every command.
 
 ### `security-hall-of-fame`
@@ -58,7 +58,7 @@ profile: they change when trades, rank or capabilities change.
 | `Security Researcher` | Having declared a trade in this domain |
 | `Security Reviewer` | Capability `security_reviewer:*` |
 | `Security Triager` | Capability `security_triager`, **manually** |
-| `Mentor` | Capability `mentor` — one role across all domains |
+| `Mentor` | Capability `mentor` - one role across all domains |
 
 Reconciliation is a **diff**, not an addition: a role the profile no longer
 justifies is removed. `services::discord_roles::diff` only ever touches roles
@@ -88,7 +88,7 @@ The ticket asked for four. Two were built, and they cover three of the four.
 | --- | --- | --- |
 | `/skilluv leaderboard cyber` | `/skilluv leaderboard <domain>` | Generic. Covers every domain, including the twelfth |
 | `/skilluv cyber-me` | the same command | It ends with where *you* stand in that domain |
-| `/skilluv cyber` | `/skilluv findings` | The hall of fame — stats, top reporters, latest published |
+| `/skilluv cyber` | `/skilluv findings` | The hall of fame - stats, top reporters, latest published |
 | `/skilluv finding <hash>` | **not built** | See below |
 
 ### Why not a `cyber` subcommand
@@ -103,7 +103,7 @@ list every validator reads.
 
 Findings have no hash. They are identified by a UUID, and what is public about
 a published one is its `writeup_url`. The `<hash>` in the ticket is the shape of
-`/skilluv verify <hash>`, which looks up an **attestation** — a different object
+`/skilluv verify <hash>`, which looks up an **attestation** - a different object
 with a real content hash.
 
 A per-finding lookup is reasonable and would need a public read route that does

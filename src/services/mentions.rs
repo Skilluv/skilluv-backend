@@ -1,13 +1,13 @@
-//! SKI-286 — @username mentions across the four writing surfaces.
+//! SKI-286 - @username mentions across the four writing surfaces.
 //!
 //! Extraction itself lives in [`crate::services::social::parse_mentions`],
 //! which already handles the tricky part (not matching email addresses).
 //! This module owns what turns those matches into an inbox:
 //!
-//!   * [`record`] — idempotent insertion, one row per (target, source,
+//!   * [`record`] - idempotent insertion, one row per (target, source,
 //!     author), so re-saving edited content adds only the genuinely new
 //!     mentions.
-//!   * [`list_for_user`] — the read path, which resolves each mention to
+//!   * [`list_for_user`] - the read path, which resolves each mention to
 //!     an excerpt and a front-end URL, and **enforces confidentiality**.
 //!
 //! ## Where confidentiality is enforced, and why there
@@ -56,7 +56,7 @@ pub struct Mention {
     /// Front-end path, built here so the client does not have to maintain
     /// its own type-to-route table that would drift on the next URL change.
     pub source_url: String,
-    /// Plain text around the mention — no markdown, no HTML.
+    /// Plain text around the mention - no markdown, no HTML.
     pub excerpt: String,
     pub author: MentionAuthor,
     pub read_at: Option<chrono::DateTime<chrono::Utc>>,
@@ -184,7 +184,7 @@ pub fn build_excerpt(body: &str, username: &str) -> String {
 
 /// Record mentions found in `body`, idempotently.
 ///
-/// Returns the users newly mentioned by this call — an edit that adds one
+/// Returns the users newly mentioned by this call - an edit that adds one
 /// `@username` returns just that user, so the caller can notify exactly
 /// the people who have not been told yet.
 ///
@@ -244,7 +244,7 @@ pub async fn record(
 /// notification row directly rather than going through a full
 /// [`crate::services::notify`] context, which additionally carries Redis and
 /// the WebSocket manager. The durable row is what
-/// `GET /api/notifications` reads, so nothing is lost — only the real-time
+/// `GET /api/notifications` reads, so nothing is lost - only the real-time
 /// push, which a mention does not need to be useful.
 ///
 /// Best-effort by design: a failure to notify must never fail the post,
@@ -309,9 +309,9 @@ pub async fn record_and_notify(
 /// One statement per source type, UNION-ed, because each carries its own
 /// access rule and its own body column:
 ///
-/// * `forum_post` / `comment` — public once not soft-deleted.
-/// * `slice_diary` — public entries only, unless the reader is the author.
-/// * `message` — direct messages: readable only by the two participants,
+/// * `forum_post` / `comment` - public once not soft-deleted.
+/// * `slice_diary` - public entries only, unless the reader is the author.
+/// * `message` - direct messages: readable only by the two participants,
 ///   so a mention of a third party never surfaces.
 async fn fetch_rows(
     db: &PgPool,

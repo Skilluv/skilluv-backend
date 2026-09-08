@@ -58,7 +58,7 @@ pub struct PendingReviewQuery {
 
 /// Response of `GET /admin/community/review`.
 ///
-/// SKI-111 — `EnrichedChallenge` already existed and derives `ToSchema`;
+/// SKI-111 - `EnrichedChallenge` already existed and derives `ToSchema`;
 /// only the envelope was missing.
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct PendingReviewResponse {
@@ -179,7 +179,7 @@ pub async fn approve_challenge(
 ) -> Result<Json<ApiResponse<AdminChallengeDecisionResponse>>, AppError> {
     require_admin(&state, &auth).await?;
 
-    // Trello hVImXbUS — pré-check business avant UPDATE.
+    // Trello hVImXbUS - pré-check business avant UPDATE.
     // Règle dure P3 (migration 0061 + trigger PG) : aucun challenge ne peut
     // passer status='published' sans project_id, sauf si is_training=TRUE.
     // Si on tente l'UPDATE sans respecter la règle, le trigger renvoie une
@@ -206,7 +206,7 @@ pub async fn approve_challenge(
     if !is_training && project_id.is_none() {
         return Err(AppError::Validation(
             "Community challenge must be linked to a project (project_id) \
-             or flagged as training (is_training=true) before approval — \
+             or flagged as training (is_training=true) before approval - \
              ask the creator to attach one, or set is_training via \
              PATCH /admin/challenges/{id}"
                 .into(),
@@ -243,7 +243,7 @@ pub async fn approve_challenge(
         .await?;
     }
 
-    // BE-F — audit log unifié.
+    // BE-F - audit log unifié.
     crate::services::audit::record(
         &state.db,
         crate::services::audit::AuditEntry {
@@ -320,7 +320,7 @@ pub async fn reject_challenge(
         .await?;
     }
 
-    // BE-F — audit log unifié.
+    // BE-F - audit log unifié.
     crate::services::audit::record(
         &state.db,
         crate::services::audit::AuditEntry {

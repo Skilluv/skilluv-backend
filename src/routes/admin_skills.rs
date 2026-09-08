@@ -1,9 +1,9 @@
-//! MVP.md §2.2 #14 — Admin CRUD sur skill_nodes.
+//! MVP.md §2.2 #14 - Admin CRUD sur skill_nodes.
 //!
 //! Endpoints :
-//!   - GET   /admin/skills                — liste paginée (filtres domain, parent_id)
-//!   - POST  /admin/skills                — crée un skill node
-//!   - PUT   /admin/skills/{id}           — édite (slug + domain + parent + is_skilluv_specific)
+//!   - GET   /admin/skills                - liste paginée (filtres domain, parent_id)
+//!   - POST  /admin/skills                - crée un skill node
+//!   - PUT   /admin/skills/{id}           - édite (slug + domain + parent + is_skilluv_specific)
 
 use axum::extract::{Path, Query, State};
 use axum::routing::{get, put};

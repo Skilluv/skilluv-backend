@@ -1,4 +1,4 @@
-//! Recruiter pipeline kanban — Phase 3.5.
+//! Recruiter pipeline kanban - Phase 3.5.
 
 use axum::extract::{Path, Query, State};
 use axum::http::header;

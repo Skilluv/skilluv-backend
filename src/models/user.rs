@@ -117,7 +117,7 @@ pub struct UserPrivate {
     pub first_name: String,
     pub last_name: String,
     pub display_name: String,
-    /// Global role — 'user', 'recruiter', 'enterprise', or 'admin'. The
+    /// Global role - 'user', 'recruiter', 'enterprise', or 'admin'. The
     /// frontend uses it to gate the enterprise layout (mandatory-TOTP) and to
     /// pick the right nav shell.
     pub role: String,
@@ -142,7 +142,7 @@ pub struct UserPrivate {
     pub totp_enabled: bool,
     pub email_2fa_enabled: bool,
     /// True once the user has cleared onboarding (first successful challenge).
-    /// Gates the listing surfaces — talent search, leaderboard, digest.
+    /// Gates the listing surfaces - talent search, leaderboard, digest.
     pub profile_active: bool,
     /// True when the user has opted out of their public profile page.
     /// Independent of `profile_active`.

@@ -178,7 +178,7 @@ async fn momo_withdraw_leaves_the_money_alone_when_the_operator_is_unreachable()
     assert_eq!(
         status, 500,
         "an operator that cannot be reached is a server-side failure, not a \
-         user error — body: {jv}"
+         user error - body: {jv}"
     );
 
     // The ledger is what a withdrawal moves, and nothing moved: the debit

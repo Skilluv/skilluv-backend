@@ -228,7 +228,7 @@ async fn a_forged_callback_is_stored_and_refused() {
 async fn an_event_about_an_unknown_payout_changes_nothing() {
     let app = TestApp::spawn().await;
 
-    // A callback naming a reference we never recorded — another
+    // A callback naming a reference we never recorded - another
     // environment sharing the credential, or money moved outside our books.
     let body = json!({ "status": "failed", "transaction_id": "txn-nobody-knows" }).to_string();
     let outcome = payment_webhooks::receive(&app.db, &source(), &body, Some(&sign(&body)))

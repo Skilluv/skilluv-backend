@@ -304,8 +304,8 @@ async fn the_design_badges_are_seeded_and_none_of_them_is_manual() {
     .fetch_one(&app.db)
     .await
     .unwrap();
-    // A floor. Design keeps adding rules — the brief-proposal badge from 0251
-    // is the fifteenth — and a pinned count turns each new one into an edit
+    // A floor. Design keeps adding rules - the brief-proposal badge from 0251
+    // is the fifteenth - and a pinned count turns each new one into an edit
     // here rather than into a badge somebody can earn.
     assert!(count >= 14, "got {count}");
 
@@ -330,7 +330,7 @@ async fn design_badge_rules_name_only_things_the_engine_can_read() {
     // can ever earn, and no test would otherwise notice.
     //
     // Read from the engine rather than copied. The copy went stale in the
-    // direction nobody expects — the engine grew `design_briefs_published`
+    // direction nobody expects - the engine grew `design_briefs_published`
     // and this list did not, so a correct rule was reported as naming
     // something unimplemented.
     let known = skilluv_backend::services::badge_engine::PROOF_TYPES;
@@ -421,7 +421,7 @@ async fn seeded_challenges_are_drafts_and_carry_their_grid() {
     //
     // Scoped past the onboarding challenge, which is published on purpose: the
     // domain's rite exists to be somebody's first, and it was reviewed. And
-    // past archived rows — migration 0607 retired the 2024 "Premier pas" seed
+    // past archived rows - migration 0607 retired the 2024 "Premier pas" seed
     // and an archived row reaches nobody, which is the whole point of the
     // status. The catalogue seeded here is what must stay in draft.
     let published_seeds: i64 = sqlx::query_scalar(

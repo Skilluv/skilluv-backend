@@ -1,10 +1,10 @@
-//! P26 v2 Phase D — validator candidacy (SKI-81) and admin invitation (SKI-82).
+//! P26 v2 Phase D - validator candidacy (SKI-81) and admin invitation (SKI-82).
 //!
 //! Two entry points to the `challenge_validator:{domain}` capability:
 //!
-//! - `apply` — user self-nominates for a domain; stats thresholds must be
+//! - `apply` - user self-nominates for a domain; stats thresholds must be
 //!   met (see `stats_ok`). Ends up as `pending` awaiting admin approval.
-//! - `invite` — admin creates a `pending` invitation the user must accept.
+//! - `invite` - admin creates a `pending` invitation the user must accept.
 //!
 //! Neither path grants the capability directly. `accept` (called by admin
 //! approval on candidacies, and by the invitee themselves on invitations)
@@ -57,7 +57,7 @@ fn validate_domain(domain: &str) -> Result<(), AppError> {
     crate::validators::validate_skill_domain(domain, "validator domain")
 }
 
-/// SKI-81 — self-nomination. Checks stats before inserting a `pending`
+/// SKI-81 - self-nomination. Checks stats before inserting a `pending`
 /// row. `Forbidden` if the user does not meet the bar.
 pub async fn apply(
     db: &PgPool,
@@ -79,7 +79,7 @@ pub async fn apply(
     .await
 }
 
-/// SKI-82 — admin invitation. No stats gate. Requires the caller to hold
+/// SKI-82 - admin invitation. No stats gate. Requires the caller to hold
 /// the `admin` capability (enforced in the route layer via AdminGate).
 pub async fn invite(
     db: &PgPool,
@@ -116,7 +116,7 @@ pub async fn accept(
 
     if app.status != "pending" {
         return Err(AppError::Validation(format!(
-            "Application is {} — cannot accept",
+            "Application is {} - cannot accept",
             app.status
         )));
     }

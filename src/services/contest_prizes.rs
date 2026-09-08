@@ -3,7 +3,7 @@
 //! ## The rule
 //!
 //! A contest promising money does not open until the money is held. That is
-//! enforced by a CHECK constraint (migration 0516), not here — the one time a
+//! enforced by a CHECK constraint (migration 0516), not here - the one time a
 //! handler is bypassed is the time it matters. This module is what moves the
 //! money into that escrow and out of it.
 //!
@@ -12,7 +12,7 @@
 //! A paid design contest is the most contested format in the trade: a brand
 //! publishes a brief, collects forty answers, pays for one, and thirty-nine
 //! people worked for nothing. Everything separating a legitimate contest from
-//! that is one question — was the money there before the brief was? Escrow is
+//! that is one question - was the money there before the brief was? Escrow is
 //! how the platform answers it without asking anybody to trust the sponsor.
 //!
 //! ## What the platform takes
@@ -27,7 +27,7 @@
 //! ## After the award
 //!
 //! Nothing new. The prize lands in the winners' `pending` accounts, and the
-//! existing release window, disputes and withdrawals take over unchanged — a
+//! existing release window, disputes and withdrawals take over unchanged - a
 //! contest prize behaves like every other sum somebody is owed.
 
 use bigdecimal::{BigDecimal, Signed, Zero};
@@ -59,7 +59,7 @@ pub struct PrizeShare {
 ///
 /// Pure, and tested: this is the part where a mistake is silent. A contest
 /// with two entrants pays first and second, and the third share goes back to
-/// the sponsor — the brief said 50/30/20, and inventing a redistribution
+/// the sponsor - the brief said 50/30/20, and inventing a redistribution
 /// would pay somebody more than the contest promised.
 ///
 /// The rounding remainder joins the first place rather than evaporating: the
@@ -108,7 +108,7 @@ pub fn split_for(pool: &BigDecimal, finishers: usize) -> (Vec<PrizeShare>, BigDe
 
 /// Record that a sponsor's money is held for this contest.
 ///
-/// Called once the payment has actually settled at the provider — this writes
+/// Called once the payment has actually settled at the provider - this writes
 /// the ledger entry, it does not take a card. Until it succeeds the contest
 /// cannot leave `upcoming`, so a payment that never lands simply means a
 /// contest nobody ever saw.
@@ -365,7 +365,7 @@ pub async fn refund(db: &PgPool, tournament_id: Uuid, reason: &str) -> Result<()
 ///
 /// This is the case `award` was written for. Its own comment says the prize
 /// lands in `pending` rather than `available` because "the release window is
-/// what makes a contested result recoverable" — and until now nothing
+/// what makes a contested result recoverable" - and until now nothing
 /// recovered one. `plagiarism_cases::decide` disqualified the submission and
 /// left the money exactly where it was, so a contest could have a
 /// disqualified winner and a paid one at the same time, in the same person.
@@ -379,7 +379,7 @@ pub async fn refund(db: &PgPool, tournament_id: Uuid, reason: &str) -> Result<()
 /// allow. So the money goes back to the pot it came from, where it is visible,
 /// balanced, and somebody's to decide about.
 ///
-/// Returns what was taken back. `None` when the winner had no prize — a free
+/// Returns what was taken back. `None` when the winner had no prize - a free
 /// contest, or a place that paid nothing.
 pub async fn confiscate(
     db: &PgPool,
@@ -402,7 +402,7 @@ pub async fn confiscate(
     // rounding and about how many places finished, and the entry that says
     // what was paid is right here.
     //
-    // Negated, because a claim is stored negative and the award credited it —
+    // Negated, because a claim is stored negative and the award credited it -
     // the same flip `ledger_user_balance` does.
     let awarded: Option<BigDecimal> = sqlx::query_scalar(
         "SELECT -SUM(e.amount)
@@ -427,11 +427,11 @@ pub async fn confiscate(
     // and may already be gone; taking it out of `pending` anyway would drive
     // the account negative and make the platform's books claim money that is
     // not there. A prize that has left is a debt to recover, not a ledger
-    // entry — and it is the reason the release window exists at all.
+    // entry - and it is the reason the release window exists at all.
     let still_pending = ledger::user_balance(db, user_id, State::Pending, currency).await?;
     if still_pending < amount {
         return Err(AppError::Conflict(format!(
-            "the prize has already been released — {still_pending} of {amount} is still held, \
+            "the prize has already been released - {still_pending} of {amount} is still held, \
              and the rest is a debt to recover rather than an entry to reverse"
         )));
     }
@@ -503,7 +503,7 @@ fn escrow_account(tournament_id: Uuid, currency: Currency) -> Account {
 
 /// Contests that ended and are still holding somebody's money.
 ///
-/// Each one owes an award or a refund. Nothing here decides which — a human
+/// Each one owes an award or a refund. Nothing here decides which - a human
 /// looks, because "nobody deserved the prize" and "nobody concluded the
 /// contest" look identical from the outside and have opposite answers.
 pub async fn outstanding(db: &PgPool) -> Result<Vec<(Uuid, String)>, AppError> {

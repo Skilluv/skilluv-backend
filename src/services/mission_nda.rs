@@ -101,7 +101,7 @@ pub async fn agreement_for(
             return Err(AppError::Validation(
                 "this mission's agreement is hosted somewhere this platform \
                  cannot read. It has to be uploaded here before anybody can \
-                 sign it — a record saying somebody accepted whatever was at a \
+                 sign it - a record saying somebody accepted whatever was at a \
                  URL is worth nothing in a dispute"
                     .into(),
             ));
@@ -222,7 +222,7 @@ pub async fn sign(
     {
         return Err(AppError::Conflict(
             "the agreement has changed since it was shown to you. Read it again \
-             — a signature has to name the text it agreed to, and this one would \
+             - a signature has to name the text it agreed to, and this one would \
              have named the wrong one"
                 .into(),
         ));
@@ -267,7 +267,7 @@ pub async fn sign(
     .bind(&agreement.template)
     // Bound as text and cast in SQL: the column is INET so that a range query
     // is possible if a signature is ever contested, and the `ipnetwork` sqlx
-    // feature is not enabled — one cast is cheaper than a dependency.
+    // feature is not enabled - one cast is cheaper than a dependency.
     //
     // `None` where the deployment had no trustworthy address. Migration 0557
     // says why that is better than a placeholder.

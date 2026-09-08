@@ -10,7 +10,7 @@
 //! nothing.
 //!
 //! The difference is what counts as evidence. In audio the gate is provenance:
-//! an untraced sample makes the work unusable. Here the gate is *reach* — not
+//! an untraced sample makes the work unusable. Here the gate is *reach* - not
 //! how far the work travelled, but whether a stranger can reach it at all.
 //!
 //! Four of the five bases claim something published: a talk with a recording,
@@ -20,13 +20,13 @@
 //! fabricated social proof this platform sells against.
 //!
 //! The two that are not gated on a URL are the two that land in somebody
-//! else's repository — a documentation change and a translation. Their
+//! else's repository - a documentation change and a translation. Their
 //! evidence is the merge, which `pr_url` carries, and demanding a second
 //! address would mean the author inventing one.
 //!
 //! ## Why a translation needs a bilingual reviewer, and how that is enforced
 //!
-//! Ticket W-04 asked for one review capability per language —
+//! Ticket W-04 asked for one review capability per language -
 //! `translator-fr`, `translator-pt`, and so on. That does not scale and does
 //! not survive: there are seven thousand languages, `capability_catalog`
 //! would grow a row per language anybody ever asks for, and a capability
@@ -34,8 +34,8 @@
 //!
 //! What is actually needed is narrower: at the moment a translation is
 //! attested, somebody who reads the target language has to have signed off.
-//! The reviewer holds `communication_reviewer:translation` — one capability,
-//! granted the normal way — and the language competence is a fact about the
+//! The reviewer holds `communication_reviewer:translation` - one capability,
+//! granted the normal way - and the language competence is a fact about the
 //! review, recorded when it happens. [`validate_translation`] is where both
 //! are checked, and it is the only door to the basis.
 
@@ -48,7 +48,7 @@ use crate::errors::AppError;
 ///
 /// `blog_post` and `video_content` map to the same basis. Both are a piece
 /// published at an address for an audience that could have left, and the
-/// review family that judges them is one family for the same reason —
+/// review family that judges them is one family for the same reason -
 /// inventing `communication_video_published` next to
 /// `communication_article_published` would split one count across two words
 /// for a distinction nobody hiring asks about.
@@ -146,7 +146,7 @@ async fn issue(
 
 /// Put the attestation on the public feed, if the work has somewhere to point.
 ///
-/// Best-effort and never fatal. The address is the one the work already had —
+/// Best-effort and never fatal. The address is the one the work already had -
 /// the published URL when the slice names one, the pull request otherwise. A
 /// feed line with nothing to open is the fabricated social proof migration
 /// 0203 exists to replace, and in this domain it would also be a claim about
@@ -203,7 +203,7 @@ async fn announce(
             subject_type: "user",
             subject_id: user_id,
             subject_label: &username,
-            headline: format!("{title} — {username}"),
+            headline: format!("{title} - {username}"),
             artifact_url: url,
             repository: None,
             amount: None,
@@ -257,7 +257,7 @@ async fn evidence_for(db: &PgPool, slice_id: Uuid) -> Result<Option<Evidence>, A
 /// Issue whatever the verified work on this slice earns.
 ///
 /// Returns the bases actually issued, which is empty on a second pass and
-/// empty for work that earns none — both normal, neither an error.
+/// empty for work that earns none - both normal, neither an error.
 pub async fn issue_for_slice(db: &PgPool, slice_id: Uuid) -> Result<Vec<String>, AppError> {
     let Some(ev) = evidence_for(db, slice_id).await? else {
         return Ok(Vec::new());
@@ -308,7 +308,7 @@ pub async fn issue_for_slice(db: &PgPool, slice_id: Uuid) -> Result<Vec<String>,
 ///
 /// Called from the proof orchestrator rather than from the point a slice is
 /// verified, and deliberately: the published address often arrives *after*
-/// verification — an article is reviewed, then it goes out — and hooking the
+/// verification - an article is reviewed, then it goes out - and hooking the
 /// verification alone would leave those permanently unattested, which is the
 /// dormant-engine failure P19 exists to end.
 ///
@@ -355,7 +355,7 @@ pub async fn issue_for_user(db: &PgPool, user_id: Uuid) -> Result<Vec<String>, A
 /// good translation from a fluent wrong one; the only instrument is a person
 /// who reads both languages, and this function records that they did.
 ///
-/// The caller is responsible for the capability check — this is reached
+/// The caller is responsible for the capability check - this is reached
 /// through an endpoint guarded by `communication_reviewer:translation`. What
 /// is checked *here* is the part a capability cannot express: that the
 /// reviewer declared the target language, that the slice is a translation,

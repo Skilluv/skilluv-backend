@@ -125,7 +125,7 @@ async fn security_is_an_open_domain_with_five_trades() {
     );
 
     // The four that were there are archived rather than deleted, so the people
-    // who chose one keep it in their history — and each says where it went.
+    // who chose one keep it in their history - and each says where it went.
     for legacy in [
         "security-engineer",
         "pentester-web",
@@ -161,7 +161,7 @@ async fn every_trade_makes_its_review_capability_grantable() {
     let app = TestApp::spawn().await;
 
     // Derived by the trigger of 0404 from the orientation rows, not written by
-    // hand — so a sixth trade added later becomes grantable without anybody
+    // hand - so a sixth trade added later becomes grantable without anybody
     // editing a list.
     for family in [
         "red-team",
@@ -244,7 +244,7 @@ async fn the_craft_score_counts_something_for_every_basis_worth_counting() {
     );
 
     // The tier slugs are what the talent search filters on, and they are shared
-    // across domains — a domain that renamed them would drop out of the filter.
+    // across domains - a domain that renamed them would drop out of the filter.
     let slugs: Vec<String> = sqlx::query_scalar(
         "SELECT slug FROM craft_score_tiers
           WHERE skill_domain = 'security' ORDER BY min_score",
@@ -717,7 +717,7 @@ async fn the_public_card_withholds_the_title_until_publication() {
     let body: Value = resp.json().await.unwrap();
     let card = &body["data"]["finding"];
 
-    // The severity and the class are quotable — that is what an attestation on
+    // The severity and the class are quotable - that is what an attestation on
     // this finding claims, so it has to be readable. The title is not: "SQL
     // injection in the export endpoint" is half the disclosure.
     assert_eq!(card["severity_tier"], "high");
@@ -779,7 +779,7 @@ async fn a_duplicate_earns_a_co_credit_and_no_deliverable() {
     assert_eq!(status, 200, "{body}");
 
     // A co-credit, which records the work without pretending it was the
-    // original — and no deliverable, because there is no fix to its name.
+    // original - and no deliverable, because there is no fix to its name.
     let co_credits: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM attestations
           WHERE security_finding_id = $1
@@ -1384,7 +1384,7 @@ async fn a_proof_key_from_somewhere_else_cannot_be_attached_to_a_report() {
     assert!(body.to_string().contains("upload"), "{body}");
 }
 
-/// FZ-02 — an expired embargo becomes `partially_disclosed`, never `public`.
+/// FZ-02 - an expired embargo becomes `partially_disclosed`, never `public`.
 ///
 /// The sweep flags a finding for an administrator when its clock runs out;
 /// publication stays a decision somebody signs. The invariant this holds is
@@ -1559,7 +1559,7 @@ async fn concurrent_withdraws_leave_exactly_one_winner() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Defensive labs — what a client is served (SKI-332)
+// Defensive labs - what a client is served (SKI-332)
 // ═══════════════════════════════════════════════════════════════════
 
 /// A defensive lab, created the only way one can be: by somebody who solved it.
@@ -1653,14 +1653,14 @@ async fn a_lab_serves_its_questions_without_its_answers_or_its_hints() {
         !serialised.contains("Sort by bytes sent"),
         "the hints were served before the first attempt: {serialised}"
     );
-    // The bucket key stays on the server — the download endpoint signs it.
+    // The bucket key stays on the server - the download endpoint signs it.
     assert!(
         !serialised.contains("blue-lab/"),
         "the artefact key was served: {serialised}"
     );
 
     // The same restraint on the list, which is the other place a template is
-    // serialised — the stripping is on the type, not on one handler.
+    // serialised - the stripping is on the type, not on one handler.
     let resp = app
         .get("/api/challenges?domain=security&security_kind=defensive_lab")
         .await;
@@ -1682,7 +1682,7 @@ async fn a_hint_is_what_a_wrong_answer_buys() {
     a_person(&app, "analyst").await;
     app.login("analyst").await;
 
-    // Answering with the ids the endpoint actually served — which is the whole
+    // Answering with the ids the endpoint actually served - which is the whole
     // point of serving them.
     let resp = app
         .post(
@@ -2021,7 +2021,7 @@ async fn the_token_listing_is_what_makes_revocation_reachable() {
     // The prefix is there, because it is what matches a log line.
     assert!(t["token_prefix"].as_str().unwrap().starts_with("srt_"));
 
-    // The id it returns is the one the revoke endpoint takes — which is the
+    // The id it returns is the one the revoke endpoint takes - which is the
     // whole point: before this, that id could only come out of psql.
     let id = t["id"].as_str().unwrap();
     let resp = app
@@ -2126,7 +2126,7 @@ async fn a_flag_challenge_says_where_its_target_is_and_what_a_flag_looks_like() 
     assert_eq!(c["security_flag_format"], "SKILLUV{lower_snake_case}");
 
     // The format in particular is what stops somebody burning their ten
-    // attempts an hour submitting a solved challenge in the wrong shape —
+    // attempts an hour submitting a solved challenge in the wrong shape -
     // `submit_flag` returns that as a hint on a wrong answer, and announcing
     // it up front is strictly better than teaching it by refusal.
     let serialised = body.to_string();
@@ -2158,8 +2158,8 @@ async fn a_flag_challenge_says_where_its_target_is_and_what_a_flag_looks_like() 
 ///
 /// `ctf_flag` and `defensive_lab` are machine-checked, and machine checking
 /// requires this platform to own the secret. Every target in the seeded
-/// catalogue belongs to somebody else — Juice Shop, WebGoat, PortSwigger,
-/// VulnHub — so there is no secret to hold, and a flag hash invented by a
+/// catalogue belongs to somebody else - Juice Shop, WebGoat, PortSwigger,
+/// VulnHub - so there is no secret to hold, and a flag hash invented by a
 /// migration author would produce a challenge nobody can ever pass.
 #[tokio::test]
 async fn the_machine_checked_kinds_are_never_seeded_and_the_others_always_are() {

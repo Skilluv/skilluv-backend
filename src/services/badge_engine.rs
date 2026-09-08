@@ -1,8 +1,8 @@
-//! P17.3 — Rules engine "proof-driven" pour badges.
+//! P17.3 - Rules engine "proof-driven" pour badges.
 //!
 //! Le principe : à partir des `badge_rules` (JSONB conditions) et des preuves
 //! immuables déjà en DB (`deliverables` verified, `attestations`), on calcule
-//! quels badges un user mérite. Pas de compteur pré-agrégé — tout se dérive.
+//! quels badges un user mérite. Pas de compteur pré-agrégé - tout se dérive.
 //!
 //! Grammar des conditions JSONB supportée en v1 :
 //!
@@ -80,7 +80,7 @@ use crate::errors::AppError;
 /// Every `proof_type` this engine knows how to count.
 ///
 /// A rule naming anything else is satisfied by nothing and awards its badge to
-/// nobody, forever, without an error — the failure is a badge that quietly does
+/// nobody, forever, without an error - the failure is a badge that quietly does
 /// not exist. `tests/test_design_catalogue.rs` checks the seeded rules against
 /// this list, and it lives here rather than in the test so that adding a proof
 /// type to the engine is one edit instead of two that drift.
@@ -109,7 +109,7 @@ pub const PROOF_TYPES: &[&str] = &[
 ];
 
 /// How many distinct game artefact subtypes make a shipped project a
-/// "multi-artefact" one — a game built from more than one craft (code and art
+/// "multi-artefact" one - a game built from more than one craft (code and art
 /// and a level, say), which is what the `game_multi_artefact_ship` proof and
 /// its badge in migration 0577 recognise. Kept here beside the engine that
 /// reads it rather than in the migration, which cannot express a HAVING count.
@@ -117,8 +117,8 @@ pub const MULTI_ARTEFACT_MIN: i64 = 3;
 
 /// Every `distinct_over` dimension this engine knows how to count.
 ///
-/// A rule naming anything else fails loudly rather than silently — the engine
-/// returns an error — but it fails at recompute time, on somebody's account,
+/// A rule naming anything else fails loudly rather than silently - the engine
+/// returns an error - but it fails at recompute time, on somebody's account,
 /// long after the migration that seeded it was merged. The list is public and
 /// asserted against the seeded rules by
 /// `tests/test_quality_domain.rs::every_seeded_rule_counts_something_real`,
@@ -148,33 +148,33 @@ struct RuleConditions {
     /// "three languages" is not "three deliverables".
     #[serde(default)]
     distinct_over: Option<String>,
-    /// What the attestation rests on — `ai_model_shipped`,
+    /// What the attestation rests on - `ai_model_shipped`,
     /// `code_library_published`. Only meaningful alongside the
     /// `attestation_received` proof type.
     ///
     /// This is what makes "shipped a model" countable rather than a
     /// judgement: the basis is a recorded value, so the engine reads it
     /// instead of an operator deciding. It carries the domain in its own
-    /// name, which is why `skill_domain` is not also applied to attestations
-    /// — they link deliverables, not challenges, and there is no domain on
+    /// name, which is why `skill_domain` is not also applied to attestations -
+    /// they link deliverables, not challenges, and there is no domain on
     /// them to filter by.
     #[serde(default)]
     attestation_basis: Option<String>,
-    /// Which game review family a reviewing badge counts in — `programming`,
+    /// Which game review family a reviewing badge counts in - `programming`,
     /// `design`, `art-animation`, `community`, `web3`. Only meaningful
     /// alongside the `game_family_reviews` proof type: a family-expert badge
     /// counts reviews made against that family's grid, not every game review.
     #[serde(default)]
     reviewer_group: Option<String>,
-    /// Which contest format a win has to be in — `audio_sound_battle`,
+    /// Which contest format a win has to be in - `audio_sound_battle`,
     /// `code_golf`. Only meaningful alongside the `contest_won` proof type.
     ///
     /// Without it "won a contest" counts a hackathon and a sound battle as the
     /// same thing, and a badge named after one would be awarded for the other.
     #[serde(default)]
     tournament_kind: Option<String>,
-    /// The engine never awards this one. Some distinctions are judgements —
-    /// "shipped an audited contract to mainnet" is not a row count — and
+    /// The engine never awards this one. Some distinctions are judgements -
+    /// "shipped an audited contract to mainnet" is not a row count - and
     /// inventing a rule for them would award them to the wrong people.
     #[serde(default)]
     manual: bool,
@@ -191,7 +191,7 @@ struct RuleConditions {
     /// alongside `security_finding_confirmed`.
     ///
     /// The severity read is `security_findings.severity_tier`, which is what a
-    /// validator settled — never `severity_reported_tier`, which is what the
+    /// validator settled - never `severity_reported_tier`, which is what the
     /// reporter claimed. A badge keyed to a self-rated severity is a badge you
     /// award yourself, and every bounty programme has already found that out.
     #[serde(default)]
@@ -311,7 +311,7 @@ async fn count_matching_proofs(
     if want_deliverable {
         // Counted and sampled separately. They used to be the same query
         // with `LIMIT 25`, which capped the count at twenty-five and made
-        // every rule above that threshold unreachable — the badge existed,
+        // every rule above that threshold unreachable - the badge existed,
         // the condition was met, and nothing ever fired.
         let matched: i64 = sqlx::query_scalar(
             r#"
@@ -330,7 +330,7 @@ async fn count_matching_proofs(
               -- behind it carries one. Reading `ct.skill_domain` alone was a
               -- silent undercount: work delivered against a project slice has
               -- no challenge, so every `skill_domain` badge counted only the
-              -- training catalogue and ignored the real artefacts — which are
+              -- training catalogue and ignored the real artefacts - which are
               -- the ones the platform exists to produce.
               AND ($4::VARCHAR IS NULL
                    OR ct.skill_domain = $4 OR dps.primary_domain = $4)
@@ -367,7 +367,7 @@ async fn count_matching_proofs(
               -- behind it carries one. Reading `ct.skill_domain` alone was a
               -- silent undercount: work delivered against a project slice has
               -- no challenge, so every `skill_domain` badge counted only the
-              -- training catalogue and ignored the real artefacts — which are
+              -- training catalogue and ignored the real artefacts - which are
               -- the ones the platform exists to produce.
               AND ($4::VARCHAR IS NULL
                    OR ct.skill_domain = $4 OR dps.primary_domain = $4)
@@ -483,7 +483,7 @@ async fn count_matching_proofs(
         //
         // `concluded`, not `completed`. The word is the one migration 0030
         // chose, and a rule spelled the other way counts nothing forever
-        // without ever failing — which is the whole class of bug the
+        // without ever failing - which is the whole class of bug the
         // reference tables in this branch exist to remove.
         let matched: i64 = sqlx::query_scalar(
             r#"
@@ -577,7 +577,7 @@ async fn count_matching_proofs(
 
     if want_attestation {
         // Counted and sampled separately. They used to be one query with
-        // `LIMIT 25`, and the count was the length of that page — so any rule
+        // `LIMIT 25`, and the count was the length of that page - so any rule
         // above twenty-five attestations was unreachable, the same bug 0177
         // fixed for deliverables.
         let matched: i64 = sqlx::query_scalar(
@@ -630,7 +630,7 @@ async fn count_matching_proofs(
     }
 
     if want_tournament_podium {
-        // A podium finish, read from `tournament_participants.rank` — the
+        // A podium finish, read from `tournament_participants.rank` - the
         // standing the finaliser wrote, not a badge somebody typed. `rank_at_most` is what separates "won" from
         // "placed": both are worth saying, and they are not the same thing.
         let matched: i64 = sqlx::query_scalar(
@@ -710,7 +710,7 @@ async fn count_matching_proofs(
         // That migration says, in its own words, that the stamp is awarded by
         // `badge_engine` consuming `user_event_participation` as proof of an
         // `output_type = 'event_stamp'`. The table shipped, the badge category
-        // shipped, and the proof type never did — so no event stamp has ever
+        // shipped, and the proof type never did - so no event stamp has ever
         // been awarded, and `stamp_earned` on `/users/me/events` could only
         // ever have answered "no".
         //
@@ -719,7 +719,7 @@ async fn count_matching_proofs(
         //
         // `contribution_ref IS NOT NULL` is the whole rule. A stamp is for
         // having done something at the event, and joining is not doing
-        // something — a hackathon anybody can collect by clicking Join is a
+        // something - a hackathon anybody can collect by clicking Join is a
         // hackathon whose stamp says nothing.
         let matched: i64 = sqlx::query_scalar(
             r#"
@@ -772,7 +772,7 @@ async fn count_matching_proofs(
 
     if want_security_finding {
         // Originals only, and the validator's severity. A duplicate is real
-        // work and it is not a second vulnerability — counting it here would
+        // work and it is not a second vulnerability - counting it here would
         // make the number of confirmed findings larger than the number of
         // findings.
         let floor = conds
@@ -831,7 +831,7 @@ async fn count_matching_proofs(
     if want_game_family_reviews {
         // Reviews this person made against a grid of the named family. A
         // family-expert badge counts the craft they actually reviewed, not
-        // every game review — a strong programming reviewer is not an art
+        // every game review - a strong programming reviewer is not an art
         // expert. The grid carries the family, so the count reads it.
         let matched: i64 = sqlx::query_scalar(
             r#"
@@ -874,7 +874,7 @@ async fn count_matching_proofs(
     if want_game_solo_ship {
         // A verified game deliverable on a project this person owns alone. The
         // rank already counts the deliverable; this proof is about who stood
-        // behind it — one name.
+        // behind it - one name.
         let matched: i64 = sqlx::query_scalar(
             r#"
             SELECT count(DISTINCT d.id)
@@ -954,7 +954,7 @@ async fn count_matching_proofs(
     // ── Game: a full, multi-craft game (game_multi_artefact_ship) ──────
     if want_game_multi_artefact_ship {
         // A project where this person shipped verified work across at least
-        // MULTI_ARTEFACT_MIN distinct artefact subtypes — code and art and a
+        // MULTI_ARTEFACT_MIN distinct artefact subtypes - code and art and a
         // level, not three builds. Counting projects, not deliverables.
         let matched: i64 = sqlx::query_scalar(
             r#"
@@ -1034,7 +1034,7 @@ async fn count_matching_proofs(
 /// How many distinct values of a dimension this user's verified work covers.
 ///
 /// The source proofs are the deliverables behind those values, capped like
-/// everywhere else — enough to audit the award, not the whole history.
+/// everywhere else - enough to audit the award, not the whole history.
 async fn count_distinct_dimension(
     db: &PgPool,
     user_id: Uuid,
@@ -1215,7 +1215,7 @@ async fn count_distinct_orientations(
 /// How many distinct domains this user's verified work was *aimed at*.
 ///
 /// Reads `project_slices.target_domain`, which migration 0450 added for the
-/// trades that work on somebody else's domain — quality and leadership. Work
+/// trades that work on somebody else's domain - quality and leadership. Work
 /// that carries no target is not counted: NULL means cross-domain there, and
 /// crediting a cross-domain artefact as one more domain would let a single
 /// piece of work satisfy a badge about breadth.

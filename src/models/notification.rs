@@ -9,7 +9,7 @@ pub struct Notification {
     /// Legacy name, kept because the front reads it. Equal to `kind` for
     /// anything written since the catalogue existed.
     pub notification_type: String,
-    /// Dotted catalogue identifier — `social.mention`, `payout.sent`. What
+    /// Dotted catalogue identifier - `social.mention`, `payout.sent`. What
     /// a client switches on to pick an icon or a destination. `None` only
     /// on rows written before the catalogue.
     pub kind: Option<String>,
@@ -23,7 +23,7 @@ pub struct Notification {
     /// folded into this line rather than filling the list.
     pub group_count: i32,
     /// The most recent distinct people involved, newest first, capped at
-    /// four. Rendered as "Fatou and 2 others" — the count comes from
+    /// four. Rendered as "Fatou and 2 others" - the count comes from
     /// `group_count`, not from the length of this list, because only the
     /// first few names are kept.
     pub group_actors: serde_json::Value,

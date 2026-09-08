@@ -4,17 +4,17 @@
 //! without one:
 //!
 //!   * "what do I install, and what can I reach without a credit card?"
-//!     — `GET /api/ai/toolkit`
+//!     - `GET /api/ai/toolkit`
 //!   * "what is worth entering right now, outside Skilluv?"
-//!     — `GET /api/ai/competitions`
+//!     - `GET /api/ai/competitions`
 //!   * "what have people here actually published?"
-//!     — `GET /api/ai/artifacts`
+//!     - `GET /api/ai/artifacts`
 //!   * "what has this person done in AI?"
-//!     — `GET /api/users/{username}/ai-profile`
+//!     - `GET /api/users/{username}/ai-profile`
 //!   * "who could teach me?"
-//!     — `GET /api/ai/mentors/for-me`
+//!     - `GET /api/ai/mentors/for-me`
 //!
-//! The prefix means the domain of work, not the assistant — that moved to
+//! The prefix means the domain of work, not the assistant - that moved to
 //! `/api/assistant` for exactly this reason.
 
 use axum::extract::{Path, Query, State};
@@ -64,7 +64,7 @@ pub struct ToolkitRow {
     pub category: String,
     pub url: String,
     pub summary: String,
-    /// What it takes to actually reach this — free tier, GPU needed, course
+    /// What it takes to actually reach this - free tier, GPU needed, course
     /// auditable without paying.
     pub access_note: String,
     pub orientation_slugs: Vec<String>,
@@ -167,7 +167,7 @@ pub struct ArtifactQuery {
     pub subtype: Option<String>,
     #[param(max_length = 60)]
     pub orientation: Option<String>,
-    /// `pytorch`, `jax`, `vllm` — matched against what the slice declares.
+    /// `pytorch`, `jax`, `vllm` - matched against what the slice declares.
     #[param(max_length = 40)]
     pub framework: Option<String>,
     #[serde(default = "default_limit")]

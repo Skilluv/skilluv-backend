@@ -1,11 +1,11 @@
-//! SKI-72 (P26 v2 B-01) — inbound webhook receiver for the internal-tracker
+//! SKI-72 (P26 v2 B-01) - inbound webhook receiver for the internal-tracker
 //! sync bot. See `src/services/linear_sync.rs` for the naming policy.
 //!
 //! Route: `POST /webhooks/linear` (mounted OUTSIDE `/api` so external
 //! webhook senders do not accidentally hit our API rate-limits, and so
 //! signature verification is not conflated with JWT auth).
 //!
-//! Env vars (soft-required — the endpoint returns 503 if either is missing):
+//! Env vars (soft-required - the endpoint returns 503 if either is missing):
 //!   LINEAR_WEBHOOK_SECRET      shared HMAC-SHA256 secret
 //!   SKILLUV_BOT_GITHUB_TOKEN   PAT / GitHub App token with `issues:write`
 //!                              on the four Skilluv repos.
@@ -40,7 +40,7 @@ fn required_env() -> Result<(String, String), AppError> {
 /// Linear webhook. HMAC-signed; an unsigned or mis-signed body is refused
 /// before anything is read from it.
 #[utoipa::path(
-    // Mounted at the root, not under `/api` — see the module note above. The
+    // Mounted at the root, not under `/api` - see the module note above. The
     // document claimed `/api/webhooks/linear`, which 404s.
     post, path = "/webhooks/linear",
     operation_id = "linearWebhookReceive",

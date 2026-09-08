@@ -1,4 +1,4 @@
-//! Contesting a payment — the endpoints the release window promised.
+//! Contesting a payment - the endpoints the release window promised.
 //!
 //! Every state change here notifies the other party, because a dispute is
 //! the one flow where silence is the failure mode: money is frozen, a clock

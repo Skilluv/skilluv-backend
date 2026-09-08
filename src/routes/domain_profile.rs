@@ -3,7 +3,7 @@
 //!
 //! ## Why the vocabulary is here and not in a CHECK
 //!
-//! Every answer is closed — a level is one of five values, not free text —
+//! Every answer is closed - a level is one of five values, not free text -
 //! and refusing an unknown one matters, because a recommender reading
 //! `"senior "` with a trailing space silently recommends nothing. But the
 //! list changes as the wizard is reworded, and a CHECK would make each
@@ -20,7 +20,7 @@
 //!
 //! The wizard collects a HuggingFace username, and does not import that
 //! account's models. Importing them would put artefacts on a profile with no
-//! verified deliverable behind them — a list somebody typed, which is exactly
+//! verified deliverable behind them - a list somebody typed, which is exactly
 //! what the charter refuses. The username is a link a reader can follow, and
 //! a model counts here when it arrives as work that was reviewed.
 
@@ -73,7 +73,7 @@ const GOALS: &[&str] = &[
 ];
 
 /// AI only. What somebody can actually run decides which challenges are
-/// worth showing them — recommending a seventy-billion-parameter fine-tune to
+/// worth showing them - recommending a seventy-billion-parameter fine-tune to
 /// someone on free Colab wastes their week.
 const COMPUTE: &[&str] = &[
     "none",         // free Colab or Kaggle, interrupted sessions
@@ -113,7 +113,7 @@ const AUDIO_DAWS: &[&str] = &[
 ];
 
 /// At most three. Somebody who selects everything has told us nothing while
-/// believing they answered — the same cap the code wizard uses.
+/// believing they answered - the same cap the code wizard uses.
 const MAX_SELECTIONS: usize = 3;
 
 /// One question the wizard asks, and what it accepts as an answer.
@@ -122,7 +122,7 @@ const MAX_SELECTIONS: usize = 3;
 /// typed body with an `Option<String>` per AI question and a comment saying
 /// "AI only" above each; the second domain to need three questions of its own
 /// would have made that struct a list of everybody's fields, each null for
-/// everybody else — which is the shape migration 0306 removed from the `users`
+/// everybody else - which is the shape migration 0306 removed from the `users`
 /// table for exactly the same reason.
 ///
 /// The wire format did not change: the body is still a flat object of the same
@@ -133,7 +133,7 @@ pub struct Question {
     pub key: &'static str,
     /// Several answers rather than one. Capped by [`MAX_SELECTIONS`].
     pub multi: bool,
-    /// The closed vocabulary, or empty for free text — a username on somebody
+    /// The closed vocabulary, or empty for free text - a username on somebody
     /// else's service, which we cannot enumerate.
     pub allowed: &'static [&'static str],
     /// Longest accepted free-text answer. Ignored when `allowed` is non-empty.
@@ -190,7 +190,7 @@ const fn free_text(key: &'static str, max_len: usize) -> Question {
 /// designer does not.
 ///
 /// So the three questions every domain asks are asked in each domain's own
-/// words. Which is not the same as each domain asking different questions —
+/// words. Which is not the same as each domain asking different questions -
 /// that is `questions_for`, below.
 const CODE_LEVELS: &[&str] = &["beginner", "junior", "mid", "senior", "staff"];
 const CODE_WEEKLY_HOURS: &[&str] = &["under_5", "5_to_15", "15_to_40", "fulltime"];
@@ -244,7 +244,7 @@ const AI_QUESTIONS: &[Question] = &[
 /// somebody who came here to practise.
 const CHALLENGE_PREFERENCES: &[&str] = &["individual", "contest", "both", "undecided"];
 
-/// What they work in. A bonus in the matching, never a filter — a good mentor
+/// What they work in. A bonus in the matching, never a filter - a good mentor
 /// in a neighbouring tool beats a mediocre one in the same.
 const DESIGN_TOOLS: &[&str] = &[
     "figma",
@@ -271,7 +271,7 @@ const CODE_QUESTIONS: &[Question] = &[
     closed("challenge_preference", CODE_CHALLENGE_PREFERENCES),
     // Open, where every other domain's tools question is closed, and on
     // purpose. A framework list and a DAW list are vocabularies the platform
-    // owns; the set of things a developer works in is not one — it includes
+    // owns; the set of things a developer works in is not one - it includes
     // Terraform and Elixir and whatever shipped last year. The sandbox keeps a
     // language catalogue, but it lists what a challenge can be *executed* in,
     // which is narrower than what somebody works in, and using it would refuse
@@ -307,7 +307,7 @@ const COMMUNICATION_FORMATS: &[&str] = &[
 /// teaches *about*.
 ///
 /// A domain slug rather than free text, because it is used to pick which
-/// challenges to show — somebody who documents infrastructure should not be
+/// challenges to show - somebody who documents infrastructure should not be
 /// handed a game-audio brief. `cross` is a real answer and the most common
 /// one among people who have done this for a while.
 const SUBJECT_DOMAINS: &[&str] = &[
@@ -417,7 +417,7 @@ const AUDIO_QUESTIONS: &[Question] = &[
 /// Asked because this domain receives more career changers than any other on
 /// the platform, and the first month of a developer moving into testing and of
 /// somebody arriving from support have almost nothing in common. It steers
-/// which guide is shown first and nothing else — it is a statement about a
+/// which guide is shown first and nothing else - it is a statement about a
 /// path, never about a level.
 const QUALITY_BACKGROUNDS: &[&str] = &[
     "developer_moving_across",
@@ -468,7 +468,7 @@ const LEADERSHIP_LEVELS: &[&str] = &[
 ];
 
 /// Leadership only. What kind of leading somebody is here to do. Not the same
-/// question as the trade — somebody can want `lead-tech` artefacts while
+/// question as the trade - somebody can want `lead-tech` artefacts while
 /// their situation only offers them community work.
 const LEADERSHIP_CONTEXTS: &[&str] = &[
     "employed_team", // they lead people at work
@@ -532,14 +532,14 @@ pub fn questions_for(domain: &str) -> &'static [Question] {
 ///
 /// One function because there are two callers: the wizard that validates the
 /// answer and the endpoint that publishes the choices. They used to hold a
-/// query each, and the queries disagreed — the endpoint offered design's
+/// query each, and the queries disagreed - the endpoint offered design's
 /// reviewer groups while the validator wanted design's trades, so a form built
 /// from what the API published was refused by the API that published it. Both
 /// were defensible alone, which is why nothing caught it until a test sent one
 /// through the other.
 pub async fn families_for(db: &sqlx::PgPool, domain: &str) -> Result<Vec<String>, AppError> {
     // Which vocabulary this domain's wizard speaks. Design asks which trades
-    // interest you — `design-brand-identity` — where the others ask for the
+    // interest you - `design-brand-identity` - where the others ask for the
     // reviewer family directly. The matcher reads the answer through the same
     // flag, so what the wizard accepts is what the matcher can use.
     let by_trade = crate::services::mentorship_matching::rules_for(domain)
@@ -572,7 +572,7 @@ pub async fn families_for(db: &sqlx::PgPool, domain: &str) -> Result<Vec<String>
 }
 
 /// The families a mentee wants to be matched in, per domain: reviewer groups,
-/// the same ones the guides and the review capabilities use — or trades, where
+/// the same ones the guides and the review capabilities use - or trades, where
 /// the domain asks in trades. See [`families_for`].
 ///
 /// Read by the mentor matching, which is why an unknown one is refused rather
@@ -585,7 +585,7 @@ async fn check_families(
 ) -> Result<(), AppError> {
     if families.len() > MAX_SELECTIONS {
         return Err(AppError::Validation(format!(
-            "at most {MAX_SELECTIONS} families — picking everything says nothing"
+            "at most {MAX_SELECTIONS} families - picking everything says nothing"
         )));
     }
     let by_trade = crate::services::mentorship_matching::rules_for(domain)
@@ -597,16 +597,16 @@ async fn check_families(
             // Only the offending value is named. The families are a list of
             // thirteen worth printing; the trades are twenty-six, and a
             // message that recites all of them buries the one thing the caller
-            // needs to see — including, if it happens to be in the list, the
+            // needs to see - including, if it happens to be in the list, the
             // value they got right.
             return Err(if by_trade {
                 AppError::Validation(format!(
-                    "'{family}' is not a {domain} trade — GET /api/orientations?domain={domain} \
+                    "'{family}' is not a {domain} trade - GET /api/orientations?domain={domain} \
                      lists them"
                 ))
             } else {
                 AppError::Validation(format!(
-                    "'{family}' is not a {domain} family — expected one of: {}",
+                    "'{family}' is not a {domain} family - expected one of: {}",
                     known.join(", ")
                 ))
             });
@@ -814,7 +814,7 @@ async fn link_declared_handles(
 /// `external_signals` is where portfolios on platforms Skilluv does not own
 /// live, and a row without `verified_at` is exactly what an unconfirmed one
 /// is: visible to a moderator, invisible to a recruiter search. The backend
-/// does not fetch the URL — fetching arbitrary user-supplied addresses is how
+/// does not fetch the URL - fetching arbitrary user-supplied addresses is how
 /// a server becomes somebody's proxy.
 async fn claim_portfolio_signal(
     db: &sqlx::PgPool,
@@ -862,7 +862,7 @@ async fn claim_portfolio_signal(
 ///
 /// Replaces the whole object rather than merging. A wizard sends every
 /// question it asked, and merging would keep an answer the person has just
-/// cleared — which is how somebody who lost access to a GPU keeps being shown
+/// cleared - which is how somebody who lost access to a GPU keeps being shown
 /// challenges they can no longer run.
 #[utoipa::path(
     put, path = "/api/users/me/domain-profile/{domain}", tag = "profile",
@@ -931,7 +931,7 @@ pub async fn put_profile(
                     .chain(std::iter::once("preferred_families"))
                     .collect();
                 AppError::Validation(format!(
-                    "the {domain} wizard does not ask '{key}' — it asks: {}",
+                    "the {domain} wizard does not ask '{key}' - it asks: {}",
                     known.join(", ")
                 ))
             })?;
@@ -940,7 +940,7 @@ pub async fn put_profile(
             let values = as_string_list(key, value)?;
             if values.len() > MAX_SELECTIONS {
                 return Err(AppError::Validation(format!(
-                    "at most {MAX_SELECTIONS} answers to '{key}' — picking everything says nothing"
+                    "at most {MAX_SELECTIONS} answers to '{key}' - picking everything says nothing"
                 )));
             }
             for v in &values {
@@ -1003,7 +1003,7 @@ pub async fn put_profile(
 ///
 /// Recorded separately from "answered nothing". Without the distinction the
 /// wizard reappears forever for exactly the people who least wanted it, and a
-/// missing key cannot carry that difference — which is why 0235 keeps these
+/// missing key cannot carry that difference - which is why 0235 keeps these
 /// two as columns while the answers stay a blob.
 #[utoipa::path(
     post, path = "/api/users/me/domain-profile/{domain}/skip", tag = "profile",
@@ -1045,7 +1045,7 @@ pub async fn skip_profile(
 #[derive(Debug, Serialize, ToSchema)]
 pub struct QuestionSpec {
     pub key: String,
-    /// `single`, `multi` or `text` — whether the answer is one value, several,
+    /// `single`, `multi` or `text` - whether the answer is one value, several,
     /// or typed.
     ///
     /// Read it together with `allowed`: `multi` with an empty `allowed` and a
@@ -1066,7 +1066,7 @@ pub struct QuestionSpec {
 /// What this domain's wizard asks.
 ///
 /// Exists so a front end renders the form from the platform rather than from
-/// its own copy of the list — the copy that goes stale the first time a domain
+/// its own copy of the list - the copy that goes stale the first time a domain
 /// adds a question and nobody tells the web team.
 ///
 /// `preferred_families` is included with its live vocabulary, read from the
@@ -1093,8 +1093,8 @@ pub async fn list_questions(
         .chain(questions_for(&domain).iter())
         .map(|q| QuestionSpec {
             key: q.key.to_string(),
-            // `multi` first. A question can be several-of-anything —
-            // `main_tools` is — and testing the vocabulary first called it
+            // `multi` first. A question can be several-of-anything -
+            // `main_tools` is - and testing the vocabulary first called it
             // `text`, which renders as one input, sends a string, and is
             // refused by the validator that wanted a list.
             //
@@ -1152,7 +1152,7 @@ pub struct MentorMatchQuery {
 /// thirteen-line wrapper around the same `matches_for`, and they had already
 /// drifted: some accepted a `limit` and some hardcoded ten, some answered a
 /// bare array and some an envelope, and the two domains added last had no
-/// endpoint at all — which is the failure mode a copy carries. What differs
+/// endpoint at all - which is the failure mode a copy carries. What differs
 /// between domains is the matching rules, and those live in one table of
 /// constants the matcher reads.
 ///
@@ -1179,7 +1179,7 @@ pub async fn mentor_matches(
 ) -> Result<Json<ApiResponse<serde_json::Value>>, AppError> {
     let rules = crate::services::mentorship_matching::rules_for(&domain).ok_or_else(|| {
         AppError::Validation(format!(
-            "no mentorship rules for domain `{domain}` — how many mentees somebody              can carry and what their tools are called differ per domain, and              guessing them would match people badly rather than not at all"
+            "no mentorship rules for domain `{domain}` - how many mentees somebody              can carry and what their tools are called differ per domain, and              guessing them would match people badly rather than not at all"
         ))
     })?;
 

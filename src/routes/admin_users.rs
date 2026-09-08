@@ -1,8 +1,8 @@
-//! ADM-M5 — Enrichissement admin sur users : proof recompute + rank override + orientations peek.
+//! ADM-M5 - Enrichissement admin sur users : proof recompute + rank override + orientations peek.
 //!
-//! - POST /admin/users/{id}/recompute-proofs   — wrap proof_hooks::recompute_all_for_user
-//! - POST /admin/users/{id}/rank-override      — force un rank + audit + rank_overrides row
-//! - GET  /users/{id}/orientations             — admin-scoped read (via admin_gate)
+//! - POST /admin/users/{id}/recompute-proofs   - wrap proof_hooks::recompute_all_for_user
+//! - POST /admin/users/{id}/rank-override      - force un rank + audit + rank_overrides row
+//! - GET  /users/{id}/orientations             - admin-scoped read (via admin_gate)
 
 use axum::extract::{Path, Query, State};
 use axum::routing::post;
@@ -51,7 +51,7 @@ pub struct DryRunQuery {
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct RecomputeBody {
-    /// `capabilities`, `badges`, `ranks`, `all` — currently accepted
+    /// `capabilities`, `badges`, `ranks`, `all` - currently accepted
     /// but forced to full recompute internally.
     #[serde(default)]
     #[schema(max_length = 10000)]
@@ -62,7 +62,7 @@ pub struct RecomputeBody {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SKI-111 — response schemas
+// SKI-111 - response schemas
 // ═══════════════════════════════════════════════════════════════════
 
 /// What a proof recompute changed for one user.
@@ -172,7 +172,7 @@ pub async fn admin_recompute_proofs(
         .fetch_one(&mut *tx)
         .await?;
 
-    // SKI-43 — live variant so an admin-triggered recompute reaches the
+    // SKI-43 - live variant so an admin-triggered recompute reaches the
     // user in real time, same as an organic promotion would.
     let mut redis = state.redis.clone();
     let report = crate::services::proof_hooks::recompute_all_for_user_live(
@@ -226,7 +226,7 @@ pub struct RankOverrideBody {
     /// One of `apprenti`, `ranger`, `artisan`, `maitre`, `doyen`.
     #[schema(max_length = 10000)]
     pub new_rank: String,
-    /// Audit reason — min 8 chars.
+    /// Audit reason - min 8 chars.
     #[schema(max_length = 10000)]
     pub reason: String,
 }

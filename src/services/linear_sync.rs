@@ -1,23 +1,23 @@
-//! SKI-72 (P26 v2 B-01) — internal-tracker → GitHub Issue bot.
+//! SKI-72 (P26 v2 B-01) - internal-tracker → GitHub Issue bot.
 //!
 //! When a ticket in our internal tracker is flagged with the trigger label
 //! `challenge-ready`, this service creates (or updates) a matching GitHub
 //! Issue in the target Skilluv repo with the label `skilluv-challenge`,
 //! which the P11 GitHubIngestor then materialises as a `project_slice`.
 //!
-//! Naming policy — the Skilluv repos are public. The vendor of our internal
+//! Naming policy - the Skilluv repos are public. The vendor of our internal
 //! tracker is intentionally NOT mentioned in the outbound GitHub Issue body
 //! (only an opaque upstream URL and identifier). Server-side identifiers
 //! keep the "linear_" prefix to help operators reconcile with the upstream
 //! ticket, but nothing that leaks to the public web references it.
 //!
-//! Target-repo mapping — phase 1 dogfooding: the target repo is derived
+//! Target-repo mapping - phase 1 dogfooding: the target repo is derived
 //! from labels of the form `repo:<slug>` present on the upstream ticket
 //! (e.g. `repo:backend` → `skilluv/skilluv-backend`). A ticket missing any
 //! `repo:*` label is skipped with a warning; a ticket carrying several is
 //! rejected (ambiguity → no silent misroute).
 //!
-//! Idempotence — first sync inserts a `linear_challenge_sync` row + creates
+//! Idempotence - first sync inserts a `linear_challenge_sync` row + creates
 //! a GitHub issue; subsequent syncs (title / body edits) `PATCH` the same
 //! GitHub issue.
 
@@ -48,7 +48,7 @@ const KNOWN_TARGETS: &[(&str, &str, &str)] = &[
 ];
 
 /// Minimal shape of the events we care about. The upstream tracker emits
-/// many event types — we only act on the ones that could change trigger
+/// many event types - we only act on the ones that could change trigger
 /// state or the sync payload.
 #[derive(Debug, Deserialize)]
 pub struct InboundEvent {
@@ -128,7 +128,7 @@ pub fn verify_signature(secret: &str, body: &[u8], signature_hex: &str) -> Resul
 }
 
 /// Resolve the target GitHub repo from the ticket labels. Returns
-/// `AmbiguousTarget` if 0 or >1 `repo:*` labels are set — silent misroute
+/// `AmbiguousTarget` if 0 or >1 `repo:*` labels are set - silent misroute
 /// would be much worse than a rejected ticket.
 pub fn resolve_target(labels: &[Label]) -> Result<(&'static str, &'static str), SyncDecision> {
     let matches: Vec<_> = KNOWN_TARGETS
@@ -184,7 +184,7 @@ pub async fn handle_event(
             tracing::warn!(
                 identifier = %data.identifier,
                 labels = ?data.labels.iter().map(|l| &l.name).collect::<Vec<_>>(),
-                "linear→github sync: ambiguous or missing repo:* label — skipping",
+                "linear→github sync: ambiguous or missing repo:* label - skipping",
             );
             return Ok(decision);
         }
@@ -250,7 +250,7 @@ pub async fn handle_event(
     })
 }
 
-// ─── GitHub API — thin wrappers ───────────────────────────────────
+// ─── GitHub API - thin wrappers ───────────────────────────────────
 
 #[derive(Debug, Deserialize)]
 struct GhCreated {
@@ -365,7 +365,7 @@ async fn close_github_issue(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SKI-73 (P26 v2 B-02) — reverse sync: GitHub Issue closed → tracker Done
+// SKI-73 (P26 v2 B-02) - reverse sync: GitHub Issue closed → tracker Done
 // ═══════════════════════════════════════════════════════════════════
 
 const LINEAR_GRAPHQL: &str = "https://api.linear.app/graphql";
@@ -404,14 +404,14 @@ pub struct RepoOwner {
 pub enum ReverseSyncDecision {
     /// Event is not `issues.closed`.
     NotAClose,
-    /// Issue does not carry the `skilluv-challenge` label — not one of ours.
+    /// Issue does not carry the `skilluv-challenge` label - not one of ours.
     NotOurs,
-    /// No matching row in `linear_challenge_sync` — the issue predates the
+    /// No matching row in `linear_challenge_sync` - the issue predates the
     /// bot or was created out-of-band.
     Untracked,
     /// Tracker state successfully advanced to Done.
     MovedToDone { linear_issue_id: String },
-    /// Row already marked closed — no tracker call issued.
+    /// Row already marked closed - no tracker call issued.
     AlreadyClosed { linear_issue_id: String },
 }
 
@@ -493,7 +493,7 @@ async fn move_linear_ticket_to_done(
 ) -> Result<(), AppError> {
     // Two-step: identifier ("SKI-72") is human-friendly but Linear's
     // issueUpdate takes the UUID id. Resolve via `issue(id: "SKI-72")`
-    // which accepts either — returns the UUID.
+    // which accepts either - returns the UUID.
     let query = r#"
         mutation UpdateByIdentifier($id: String!, $stateId: String!) {
           issueUpdate(id: $id, input: { stateId: $stateId }) { success }
@@ -615,7 +615,7 @@ mod tests {
     #[test]
     fn github_event_parses_minimal_shape() {
         // Sanity check that #[serde(default)] on `labels`/`state` lets the
-        // deserializer accept the real GitHub payload (which is huge — we
+        // deserializer accept the real GitHub payload (which is huge - we
         // only pull the 4 fields we care about, so `deny_unknown_fields`
         // is deliberately NOT used).
         let raw = serde_json::json!({

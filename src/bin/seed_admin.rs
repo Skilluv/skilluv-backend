@@ -1,4 +1,4 @@
-//! skilluv-seed-admin — provision or reset a Skilluv admin account.
+//! skilluv-seed-admin - provision or reset a Skilluv admin account.
 //!
 //! Idempotent: if the target email already exists we UPDATE it (fresh password
 //! hash, role forced to 'admin', email_verified forced to true) rather than
@@ -6,7 +6,7 @@
 //! CI provisioning, or a one-off manual command.
 //!
 //! Password is MANDATORY (via CLI arg or SEED_ADMIN_PASSWORD env). Minimum
-//! 12 characters — the binary refuses to run without one. No auto-generated
+//! 12 characters - the binary refuses to run without one. No auto-generated
 //! passwords: an operator must consciously choose a secret.
 //!
 //! Usage:
@@ -16,7 +16,7 @@
 //!
 //! Env vars (used only when the matching CLI arg is missing):
 //!   SEED_ADMIN_EMAIL       default: admin@skill-uv.com
-//!   SEED_ADMIN_PASSWORD    REQUIRED — no default (must be ≥12 chars)
+//!   SEED_ADMIN_PASSWORD    REQUIRED - no default (must be ≥12 chars)
 //!   SEED_ADMIN_USERNAME    default: admin
 //!   SEED_ADMIN_FIRST_NAME  default: Admin
 //!   SEED_ADMIN_LAST_NAME   default: Skilluv
@@ -94,7 +94,7 @@ async fn main() -> Result<()> {
     let first_name = resolve(cli.first_name, "SEED_ADMIN_FIRST_NAME", "Admin");
     let last_name = resolve(cli.last_name, "SEED_ADMIN_LAST_NAME", "Skilluv");
 
-    // Password is MANDATORY — no auto-generation. Force operators to
+    // Password is MANDATORY - no auto-generation. Force operators to
     // consciously choose a secret they will store.
     let password = resolve_password_or_fail(cli.password)?;
 
@@ -159,7 +159,7 @@ async fn main() -> Result<()> {
         Err(e) => tracing::warn!(
             %user_id,
             error = %e,
-            "recompute_capabilities_for_user failed — role=admin still applied via UPSERT, panel remains accessible"
+            "recompute_capabilities_for_user failed - role=admin still applied via UPSERT, panel remains accessible"
         ),
     }
 
@@ -172,7 +172,7 @@ async fn main() -> Result<()> {
     println!("═══════════════════════════════════════════════════════════");
     println!("  Email:    {email}");
     println!("  Username: {username}");
-    println!("  Password: (provided by caller — not echoed)");
+    println!("  Password: (provided by caller - not echoed)");
     println!("═══════════════════════════════════════════════════════════");
 
     Ok(())

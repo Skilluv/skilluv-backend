@@ -22,7 +22,7 @@ Alternatively, use GitHub's [Private Vulnerability Reporting](https://docs.githu
 
 ### What to expect
 
-These are the numbers the platform actually enforces, not aspirations — each one
+These are the numbers the platform actually enforces, not aspirations - each one
 is a constant or a worker, named so you can check it.
 
 - **Acknowledgement**: immediate and automated, on submission.
@@ -31,7 +31,7 @@ is a constant or a worker, named so you can check it.
   including a refusal.
 - **Coordinated disclosure**: **90 days** from confirmation by default, per
   finding (`disclosure_policy_days`). Reminders at 30, 7 and 1 days. Nothing is
-  published automatically at the end — the embargo sweep flags it for a person,
+  published automatically at the end - the embargo sweep flags it for a person,
   because publishing a vulnerability is irreversible and a cron job is the wrong
   thing to be holding that decision.
 - **Credit** on the public hall of fame, unless you ask for anonymity, which is
@@ -52,39 +52,39 @@ What it covers: no legal action, no complaint to your employer or your
 university, no report to a registrar or a hosting provider, and no attempt to
 identify you if you asked to stay anonymous.
 
-What it cannot cover: a third party's system you reached by pivoting — which is
-why the scope forbids pivoting — and behaviour that was not in good faith.
+What it cannot cover: a third party's system you reached by pivoting - which is
+why the scope forbids pivoting - and behaviour that was not in good faith.
 Deliberate destruction, extortion, or selling what you found are not
 disclosure, and the safe harbour is not a shield for them.
 
 This is our undertaking, following the [disclose.io](https://disclose.io/)
 baseline. It is written by the people who built the platform and **no lawyer has
-reviewed it** — see `docs/security/LEGAL.md`, which says so in the same words
+reviewed it** - see `docs/security/LEGAL.md`, which says so in the same words
 and lists what a review would settle first.
 
 ### Scope
 
-The full, current scope — the exact hosts, the vulnerability classes we want,
-the ones we do not, and the rules of engagement — is
+The full, current scope - the exact hosts, the vulnerability classes we want,
+the ones we do not, and the rules of engagement - is
 **[`docs/security/SCOPE.md`](docs/security/SCOPE.md)**, and in machine-readable
 form at `GET /api/security/scope` (no authentication: a researcher decides what
 to touch before they have an account).
 
 In summary. In scope:
 
-- `staging.skill-uv.com` — **the preferred target**, fake data, reset nightly
+- `staging.skill-uv.com` - **the preferred target**, fake data, reset nightly
 - `api.skill-uv.com`, `skill-uv.com`, `admin.skill-uv.com`
-- `ctf.skill-uv.com` — deliberately vulnerable; nothing found there is a finding
+- `ctf.skill-uv.com` - deliberately vulnerable; nothing found there is a finding
 - The source of the four public repositories, for reading
 
 Out of scope:
 
-- Third-party services (Stripe, GitHub, Cloudflare, Brevo, Judge0 upstream) —
+- Third-party services (Stripe, GitHub, Cloudflare, Brevo, Judge0 upstream) -
   report to them
 - **Denial of service of any kind**, including load testing. The one
   prohibition whose breach ends the relationship immediately
 - Social engineering, phishing, physical attacks
-- Missing security headers with no demonstrated impact — send them together as
+- Missing security headers with no demonstrated impact - send them together as
   hardening
 - A dependency advisory with no reachability shown here
 - Raw scanner output
@@ -97,7 +97,7 @@ refuses a submission.
 
 The limiter is tuned for a person signing up, not for a hundred payloads at one
 form. `POST /api/security/research-token` returns a token that multiplies your
-ceiling by ten and grants nothing else — see
+ceiling by ten and grants nothing else - see
 [`docs/security/RESEARCH-MODE.md`](docs/security/RESEARCH-MODE.md).
 
 It multiplies rather than removes, so denial of service stays out of scope in
@@ -111,7 +111,7 @@ attestation with a verification code when the finding is confirmed, and your
 name on the hall of fame when it is published.
 
 Proof files go first to `POST /api/security/reports/uploads`, which returns a
-key rather than a URL — proof of an unfixed vulnerability is not a public
+key rather than a URL - proof of an unfixed vulnerability is not a public
 document.
 
 What happens next, with the clocks and the state machine:
@@ -123,7 +123,7 @@ A confirmed finding earns, automatically:
 
 - an **attestation** with a verification code anybody can check without an
   account, naming the severity and the weakness class;
-- **fragments**, scaled by the severity a validator settled on — 1000 for a
+- **fragments**, scaled by the severity a validator settled on - 1000 for a
   critical, 5 for an informational, so there is no volume strategy;
 - a place on the **public hall of fame** (`GET /api/security/hall-of-fame`),
   unless you asked for anonymity;
@@ -137,7 +137,7 @@ a counter of its own.
 
 Two people who find the same thing: first-to-file decides the finding, and the
 second gets an **independent co-discovery** attestation with the timestamps that
-show it was not copied. Nothing is merged by a machine — a merge decides who is
+show it was not copied. Nothing is merged by a machine - a merge decides who is
 credited, and a similarity score does not get to.
 
 Thank you for helping keep Skilluv and its community safe.
@@ -189,7 +189,7 @@ The script checks :
 2. CycloneDX SBOM attestation is present
 3. SLSA L3 provenance is present
 
-Non-signed or non-attested images are rejected — the deploy pipeline exits non-zero.
+Non-signed or non-attested images are rejected - the deploy pipeline exits non-zero.
 
 #### Wiring the check in Coolify (BE-P2-OPS-DEPLOY)
 
@@ -200,7 +200,7 @@ To enforce this before every prod deploy :
    ```bash
    bash scripts/verify-image.sh "$COOLIFY_IMAGE_TAG" || exit 1
    ```
-   (Coolify exposes `$COOLIFY_IMAGE_TAG` — the specific tag it's about to pull.)
+   (Coolify exposes `$COOLIFY_IMAGE_TAG` - the specific tag it's about to pull.)
 3. Save + trigger a deploy. If the tag isn't signed, the deploy aborts and the previous healthy container stays live.
 
 **Test the guard once** by manually pushing an unsigned image with the same tag and observing the deploy refuses. Then never worry about it again unless the signing key rotates.
@@ -270,8 +270,8 @@ All in `.github/workflows/` :
 
 ## Threat model (summary)
 
-> The full model — the diagram, the assets ranked by what an attacker wants, the
-> STRIDE tables and the list of what is **not** mitigated — is
+> The full model - the diagram, the assets ranked by what an attacker wants, the
+> STRIDE tables and the list of what is **not** mitigated - is
 > [`THREAT_MODEL.md`](THREAT_MODEL.md). What follows is the summary that predates
 > it and stays because it is the operational view.
 
@@ -299,4 +299,4 @@ All in `.github/workflows/` :
 
 - Security reports : security@skill-uv.com
 - Maintainer : @jeremiezitti on GitHub
-- Public discussion : never — use private disclosure channels above
+- Public discussion : never - use private disclosure channels above

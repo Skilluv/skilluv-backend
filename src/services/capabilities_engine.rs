@@ -1,9 +1,9 @@
-//! P18.2 — Rules engine capabilities (auto-promotion sur activité mesurable).
+//! P18.2 - Rules engine capabilities (auto-promotion sur activité mesurable).
 //!
 //! Contrat : `recompute_capabilities_for_user(user_id)` évalue chaque règle
 //! auto-promotable et INSERT la capability si le seuil est atteint et qu'elle
 //! n'est pas déjà active. Ne révoque pas automatiquement (les capabilities
-//! restent gagnées, comme le rank — décision produit alignée avec P17.4).
+//! restent gagnées, comme le rank - décision produit alignée avec P17.4).
 //!
 //! Seuils par défaut (spec discussion produit, memory `project_p17_completion`) :
 //!   - challenger      : tout user inscrit
@@ -124,7 +124,7 @@ pub async fn recompute_capabilities_for_user(
     // enterprise, pas user). Pas de règle auto ici.
 
     // ═══════════════════════════════════════════════════════════════════
-    // P25.2 — Community moderator sub-caps (front-only, jamais admin panel)
+    // P25.2 - Community moderator sub-caps (front-only, jamais admin panel)
     // ═══════════════════════════════════════════════════════════════════
 
     // community_curator : 3+ challenges community publiés = même seuil que
@@ -229,7 +229,7 @@ pub async fn recompute_capabilities_for_user(
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // P26 — Sas compagnonnage débutant : verified_apprentice
+    // P26 - Sas compagnonnage débutant : verified_apprentice
     // ═══════════════════════════════════════════════════════════════════
     // Grant après N approbations distinctes (par template_id) du sas.
     // Seuil paramétrable via SKILLUV_APPRENTICE_SAS_THRESHOLD (default 3).

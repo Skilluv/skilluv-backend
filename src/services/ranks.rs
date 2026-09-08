@@ -1,4 +1,4 @@
-//! P17.4 — Rank system Apprenti → Doyen.
+//! P17.4 - Rank system Apprenti → Doyen.
 //!
 //! Le rank est **dérivé** des preuves : deliverables verified + attestations
 //! reçues. Progression unidirectionnelle (on ne rétrograde jamais).
@@ -10,7 +10,7 @@
 //!   maitre   : 26 deliverables + 3 attestations
 //!   doyen    : 50 deliverables + 5 attestations + users.role = 'mentor'
 //!
-//! Note : la contrainte mentor pour doyen est un stub — la vraie logique
+//! Note : la contrainte mentor pour doyen est un stub - la vraie logique
 //! "capabilities validées" arrivera en P18 (capabilities/personas).
 
 use sqlx::PgPool;
@@ -48,8 +48,8 @@ pub fn rank_position(rank: &str) -> Option<usize> {
 /// What a given rank costs, in the same units `compute_rank` checks.
 ///
 /// SKI-38 needs these to turn "reach Ranger" into a percentage rather than
-/// a boolean. Keeping them here — next to `compute_rank`, which is the
-/// only other place that knows the numbers — means the two cannot drift.
+/// a boolean. Keeping them here - next to `compute_rank`, which is the
+/// only other place that knows the numbers - means the two cannot drift.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RankThresholds {
     pub deliverables: i64,
@@ -178,7 +178,7 @@ pub async fn recompute_rank_for_user(
 
 /// A user's rank as the outside world should see it.
 ///
-/// SKI-46 — `user_ranks.rank` answers "what do the proofs say", and it is
+/// SKI-46 - `user_ranks.rank` answers "what do the proofs say", and it is
 /// unidirectional by design. A broken vouching needs to answer a different
 /// question: "what does this person currently get to trade on". That is
 /// this function.
@@ -277,7 +277,7 @@ mod unit {
         assert_eq!(demote_one(RANK_MAITRE), RANK_ARTISAN);
         assert_eq!(demote_one(RANK_ARTISAN), RANK_RANGER);
         assert_eq!(demote_one(RANK_RANGER), RANK_APPRENTI);
-        // Already at the bottom — a penalty cannot dig below it.
+        // Already at the bottom - a penalty cannot dig below it.
         assert_eq!(demote_one(RANK_APPRENTI), RANK_APPRENTI);
         // Unknown values floor rather than panic on live data.
         assert_eq!(demote_one("legende"), RANK_APPRENTI);

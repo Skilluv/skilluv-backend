@@ -7,10 +7,10 @@ decides which one you are writing.
 
 **Does this platform own the secret?**
 
-If yes — a range we host, an artefact we hold — the challenge is machine
+If yes - a range we host, an artefact we hold - the challenge is machine
 checked, and it is created through the API by somebody who has solved it.
 
-If no — Juice Shop, a retired machine, a published forensic dataset — the
+If no - Juice Shop, a retired machine, a published forensic dataset - the
 challenge is checked by a person reading a write-up, and it is seeded like every
 other domain's catalogue.
 
@@ -56,7 +56,7 @@ attacked. If that is not true, you are writing a `training_ground` challenge.
 Four things, in this order:
 
 1. **The objective**, in one sentence, behavioural. "Log in as the
-   administrator without knowing the password" — not "exploit the SQL injection
+   administrator without knowing the password" - not "exploit the SQL injection
    in the login form", which is the answer.
 2. **A progressive hint**, two or three sentences. Where to look, not what to
    do.
@@ -114,7 +114,7 @@ Between four and eight. Each one:
 - **With a hint**, shown only when the answer is wrong. This is what makes a
   failed attempt teach something instead of just failing.
 
-Answers are normalised — trimmed and lowercased — before hashing, unless the
+Answers are normalised - trimmed and lowercased - before hashing, unless the
 question is marked `case_sensitive`. Mark it when the answer is a payload or a
 hash; leave it alone when it is an address, a count or a tool name.
 
@@ -126,12 +126,12 @@ eight it is seven. Three attempts, then a day's cooling off.
 Everything above about objectives and calibration applies. What replaces the
 flag:
 
-- **`security_external_url`** — where the target lives. Linked, never rehosted:
+- **`security_external_url`** - where the target lives. Linked, never rehosted:
   their licence, and their maintenance.
-- **`security_attribution_md`** — whose material it is and under what terms.
+- **`security_attribution_md`** - whose material it is and under what terms.
   Several of the forensic datasets are CC-BY, which requires the attribution to
   travel with the use. An attribution in a migration comment travels nowhere.
-- **`security_writeup_required = TRUE`** — enforced by a constraint, because
+- **`security_writeup_required = TRUE`** - enforced by a constraint, because
   without it the challenge would be published with no verification at all.
 - **A brief** saying what a good write-up contains, from the templates in
   `content_guides`.

@@ -12,7 +12,7 @@ There are thousands of courses. The problem is that **nobody knows what
 people can actually do**.
 
 A CV is a claim. A certificate attests that an exam was passed, not that work
-was delivered. An exercise platform measures the ability to solve exercises —
+was delivered. An exercise platform measures the ability to solve exercises -
 a real skill, and not the one anybody buys when they hire.
 
 We start from the other end: **the artefact first**. What counts is what
@@ -51,7 +51,7 @@ attempt is better, not that the first one sorts people.
 
 One person does web and games, systems and AI. The catalogue names
 thirty-three code trades because "backend developer" describes a family rather
-than a trade — but nothing requires choosing only one, and moving between them
+than a trade - but nothing requires choosing only one, and moving between them
 is not a lack of focus.
 
 ### 5. Tests are part of the work
@@ -59,7 +59,7 @@ is not a lack of focus.
 Not an extra. A deliverable without tests describes an intention; with tests,
 it describes a behaviour.
 
-We value tests that survive a refactor — the ones that describe what the code
+We value tests that survive a refactor - the ones that describe what the code
 must do, not how it happens to be written today.
 
 ### 6. Documentation is required

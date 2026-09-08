@@ -1,4 +1,4 @@
-//! Tests ADM-M3.2 — CRUD admin sur badge_rules.
+//! Tests ADM-M3.2 - CRUD admin sur badge_rules.
 
 use crate::common::TestApp;
 use serde_json::json;

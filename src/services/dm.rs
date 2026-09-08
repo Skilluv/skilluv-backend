@@ -169,7 +169,7 @@ pub async fn send_message(
     .fetch_one(db)
     .await?;
 
-    // SKI-286 — @username mentions. The row is recorded whoever is named,
+    // SKI-286 - @username mentions. The row is recorded whoever is named,
     // but the inbox query only surfaces it to the two participants, so
     // naming a third party here never leaks the conversation to them.
     crate::services::mentions::record_and_notify(

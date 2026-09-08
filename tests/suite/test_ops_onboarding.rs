@@ -228,7 +228,7 @@ async fn a_guide_falls_back_rather_than_disappearing() {
     assert_eq!(resp.status(), 200);
 
     let jv: serde_json::Value = resp.json().await.unwrap();
-    // English, because the chain is asked-for, then English, then French —
+    // English, because the chain is asked-for, then English, then French -
     // English sits in the middle since it became the locale this content is
     // written in. This asserted French, which was right when French was the
     // fallback and silently wrong afterwards.

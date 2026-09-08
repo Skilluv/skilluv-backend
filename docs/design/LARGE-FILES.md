@@ -13,7 +13,7 @@ d'objets. À la fin, le serveur demande au stockage d'assembler.
 
 Ce n'est pas une optimisation. Cinq gigaoctets à travers l'API, c'est une
 connexion et un tampon mémoire immobilisés aussi longtemps que dure la mise en
-ligne — et pour chaque envoi simultané. Un seul designer sur une connexion
+ligne - et pour chaque envoi simultané. Un seul designer sur une connexion
 lente dégraderait la plateforme pour tout le monde.
 
 Effet de bord utile : **l'envoi est reprenable sans rien mémoriser**. Un
@@ -22,7 +22,7 @@ n'a aucun décalage d'octets à retenir.
 
 ## Le déroulé
 
-1. `POST /api/design/uploads` — vous annoncez le sous-type, le nom du fichier,
+1. `POST /api/design/uploads` - vous annoncez le sous-type, le nom du fichier,
    son type MIME et sa taille. Vous recevez une session, la taille de morceau,
    et une URL signée par morceau.
 2. Vous déposez chaque morceau par `PUT` à l'URL correspondante. Le stockage
@@ -56,7 +56,7 @@ réduire.
 
 Le refus arrive **avant** que les octets bougent, à partir de la taille que
 vous annoncez. La taille réelle est relue dans le stockage à l'assemblage : un
-client qui ment perd son envoi. Les deux contrôles sont nécessaires — le
+client qui ment perd son envoi. Les deux contrôles sont nécessaires - le
 premier évite le transfert inutile, le second évite d'être crédule.
 
 Un fichier qui dépasse sa limite est presque toujours un fichier dans le
@@ -73,12 +73,12 @@ déposer.
 
 **Pourquoi la plateforme ne le génère pas.** Le rendre côté serveur demanderait
 ffmpeg pour la vidéo, Blender sans interface pour la 3D, un générateur de
-vignettes pour le reste — trois binaires lourds et un accès au démon Docker,
+vignettes pour le reste - trois binaires lourds et un accès au démon Docker,
 sur une machine que ce projet ne peut pas se payer. Le tout pour produire une
 image fixe que la personne qui a fabriqué le fichier choisirait mieux que
 n'importe quelle heuristique.
 
-Le cahier des charges admettait déjà le principe pour After Effects — rien ne
+Le cahier des charges admettait déjà le principe pour After Effects - rien ne
 sait lire un `.aep`, donc un MP4 d'aperçu est exigé à côté. La règle est
 simplement étendue à tout ce qui est dans la même situation.
 
@@ -88,7 +88,7 @@ ne peut pas ouvrir est une file que personne ne traite.**
 ## Où ça vit, et qui peut le lire
 
 Dans le seau privé, jamais public. Un livrable design peut être sous accord de
-confidentialité — voir [Données personnelles](DATA-GOVERNANCE.md) — donc la
+confidentialité - voir [Données personnelles](DATA-GOVERNANCE.md) - donc la
 règle par défaut est « lisible seulement par une URL signée ».
 
 `GET /api/design/uploads/{id}/download-url` en fabrique une, valable une heure
@@ -102,14 +102,14 @@ facture que quelqu'un termine ou non ; sept jours laissent le temps de revenir
 de vacances sans transformer le seau en décharge.
 
 Le balayage tourne une fois par nuit, activé par variable d'environnement
-(`SKILLUV_DESIGN_UPLOAD_SWEEP_ENABLED`) — comme les autres, pour que « quelle
+(`SKILLUV_DESIGN_UPLOAD_SWEEP_ENABLED`) - comme les autres, pour que « quelle
 machine fait le ménage » soit une réponse explicite plutôt qu'un hasard.
 
 ## Ce que ça coûte
 
 Du stockage compatible S3 tourne autour de 15 $ le téraoctet et par mois. Cent
 designers actifs à 2 Go en moyenne, c'est 200 Go, soit environ 3 € par mois.
-Ce n'est pas le stockage qui coûte, c'est le calcul — raison de plus pour ne
+Ce n'est pas le stockage qui coûte, c'est le calcul - raison de plus pour ne
 pas générer d'aperçus.
 
 ---

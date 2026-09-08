@@ -1,8 +1,8 @@
-# Quality — Discord structure
+# Quality - Discord structure
 
 Backlog: quality/O-03. The rows that make the routing work live in
 `discord_channels`, which has held a foreign key onto `skill_domains` since
-migration 0440 — so a typo'd domain no longer routes an announcement nowhere.
+migration 0440 - so a typo'd domain no longer routes an announcement nowhere.
 
 ---
 
@@ -26,7 +26,7 @@ migration 0440 — so a typo'd domain no longer routes an announcement nowhere.
 | `#quality-game` | `qa-game` | `playtest` |
 | `#quality-lead` | `qa-lead` | `strategy` |
 
-Five channels for five trades, which is one per trade and unusual — the other
+Five channels for five trades, which is one per trade and unusual - the other
 domains group by reviewer family and end up with fewer rooms than trades. Here
 the two coincide, for the reason the review grids give: no two of these are
 read by the same person.
@@ -85,7 +85,7 @@ existed, and writing them as four would have made the next domain a fifth.
 | `/skilluv craft quality` | Your craft score in this domain, its tier, and how many attestations it rests on |
 | `/skilluv queue quality` | How much work is waiting on a reviewer here, split into picked up and not, with the age of the oldest unclaimed one |
 | `/skilluv cohorts quality` | Cohorts recruiting now, with places left |
-| `/skilluv contests quality` | Open contests in this domain — a bug bash is a contest, so this is where they appear |
+| `/skilluv contests quality` | Open contests in this domain - a bug bash is a contest, so this is where they appear |
 | `/skilluv featured quality` | Who is featured this week |
 | `/skilluv me` | Your linked profile, trades and craft score |
 | `/skilluv portfolio <username>` | Somebody's public profile |

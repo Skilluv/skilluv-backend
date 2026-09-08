@@ -5,7 +5,7 @@ use crate::config::AppConfig;
 /// Initialise Sentry (or any Sentry-API-compatible backend, e.g. self-hosted GlitchTip).
 ///
 /// Returns a [`sentry::ClientInitGuard`] that **must** stay alive for the lifetime of the
-/// process — drop it and Sentry stops flushing.
+/// process - drop it and Sentry stops flushing.
 ///
 /// When `SENTRY_DSN` is unset (typical local dev), returns `None` and Sentry is fully
 /// disabled with no overhead.
@@ -17,7 +17,7 @@ pub fn init_sentry(config: &AppConfig) -> Option<sentry::ClientInitGuard> {
     // Sentry 0.49 gates performance monitoring behind the `traces` feature
     // and moved the sample rate off `ClientOptions`. We keep the config
     // value in `AppConfig` for later re-enablement but silence the unused
-    // warning here — errors + panics still flow through unchanged.
+    // warning here - errors + panics still flow through unchanged.
     let _ = config.sentry_traces_sample_rate;
 
     // Sentry 0.49 marks ClientOptions #[non_exhaustive], so struct literals

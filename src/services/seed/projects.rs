@@ -36,7 +36,7 @@ struct SeedProject {
     /// listed but nothing is ingested from it yet.
     curated_labels: &'static [&'static str],
     /// Which trade an issue belongs to, by label. Written against whichever
-    /// slug the catalogue used — `resolve_orientation` follows a rename, so
+    /// slug the catalogue used - `resolve_orientation` follows a rename, so
     /// entries naming `dev-frontend` land on the trade that replaced it.
     label_orientations: &'static [(&'static str, &'static str)],
     /// False for our own repos: we own those rather than curate them.
@@ -99,7 +99,7 @@ const SKILLUV_REPOS: &[SeedProject] = &[
         // own repository, so the convention is ours to keep.
         //
         // Two mapped labels pointing at different trades leave the slice
-        // untyped by design — so an issue carries one area label, not three.
+        // untyped by design - so an issue carries one area label, not three.
         label_orientations: &[
             ("area/llm", "llm-engineer"),
             ("area/prompt", "prompt-engineer"),
@@ -141,7 +141,7 @@ const SKILLUV_REPOS: &[SeedProject] = &[
 /// the partnership conversation comes after there is something to show.
 ///
 /// The orientations are the ones the annexe assigns, written with the slugs
-/// it used — several were renamed in migration 0173, and the lineage handles
+/// it used - several were renamed in migration 0173, and the lineage handles
 /// that rather than this list drifting from the document it came from.
 const PARTNER_REPOS: &[SeedProject] = &[
     SeedProject {
@@ -371,8 +371,8 @@ const PARTNER_REPOS: &[SeedProject] = &[
 /// Large ecosystem projects, which take contributions across every trade.
 ///
 /// Listed with no curated labels on purpose: their issue volume is enormous,
-/// their contribution processes differ wildly — the Linux kernel does not use
-/// GitHub issues at all — and ingesting them blindly would bury the partner
+/// their contribution processes differ wildly - the Linux kernel does not use
+/// GitHub issues at all - and ingesting them blindly would bury the partner
 /// repos under thousands of tickets nobody vetted. They are here so the
 /// catalogue names them and an operator can enable one deliberately.
 const ECOSYSTEM_REPOS: &[SeedProject] = &[
@@ -506,7 +506,7 @@ const ECOSYSTEM_REPOS: &[SeedProject] = &[
 ///
 /// `label_orientations` is empty throughout, and that is the honest state
 /// rather than an unfinished one. On a repository we do not own, `good first
-/// issue` means "small", not "vision" — an issue so labelled on Transformers
+/// issue` means "small", not "vision" - an issue so labelled on Transformers
 /// is as likely to be documentation as a tokeniser fix. Guessing would credit
 /// somebody with a speciality they never worked in, and the mapping is
 /// per-project in the admin panel precisely so a maintainer relationship can
@@ -679,8 +679,8 @@ const AI_REPOS: &[SeedProject] = &[
 /// database engine all can.
 ///
 /// Documentation labels are curated as deliberately as code ones here. In
-/// this domain the documentation *is* the artefact half the time — a runbook
-/// that reads correctly at three in the morning is worth more than a patch —
+/// this domain the documentation *is* the artefact half the time - a runbook
+/// that reads correctly at three in the morning is worth more than a patch -
 /// and the review grid says so.
 const OPS_REPOS: &[SeedProject] = &[
     SeedProject {
@@ -961,7 +961,7 @@ pub async fn run(db: &PgPool, owner_id: Uuid) -> Result<String, AppError> {
                     slug = repo.slug,
                     label,
                     orientation = orientation_slug,
-                    "orientation not found — issues with this label will be ingested untyped"
+                    "orientation not found - issues with this label will be ingested untyped"
                 );
             }
         }

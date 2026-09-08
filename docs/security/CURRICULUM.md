@@ -1,7 +1,7 @@
 # Twelve weeks, from nothing
 
 A path from no security experience to one confirmed finding and one write-up a
-stranger can read. About ten hours a week. **Everything in it is free** —
+stranger can read. About ten hours a week. **Everything in it is free** -
 if a step needs money, it says so and gives the free alternative.
 
 This is not a course. It is the order in which the free material already out
@@ -21,23 +21,23 @@ difference between this trade and a criminal offence.
 
 ---
 
-## Weeks 1–2 — how the web actually works
+## Weeks 1–2 - how the web actually works
 
 **PortSwigger Web Security Academy**, the "Web security basics" material and
 the whole **access control** section. Free, labs included, and nothing else
 free is this thorough.
 
 Install Burp Suite Community or OWASP ZAP and browse ordinary sites through it
-for a week. Not for a tutorial — for familiarity. Most of what a beginner is
+for a week. Not for a tutorial - for familiarity. Most of what a beginner is
 missing is not a technique, it is knowing what normal traffic looks like.
 
 **By the end you can:** say what a session cookie is, what an authorisation
 check looks like when it is missing, and read a request without squinting.
 
-## Weeks 3–4 — a range, with notes
+## Weeks 3–4 - a range, with notes
 
 **OWASP Juice Shop** in one container. Work through the challenges of the
-`training_ground` catalogue here in order of tier — they are the same
+`training_ground` catalogue here in order of tier - they are the same
 objectives, described by what has to be achieved.
 
 Write up every solve, badly, in three lines: the request, what came back, and
@@ -50,7 +50,7 @@ is missing. That is the first of the four moments.
 
 **By the end you have:** ten short write-ups and two reviewed.
 
-## Weeks 5–6 — the other side of the same thing
+## Weeks 5–6 - the other side of the same thing
 
 **OWASP WebGoat**, which explains the defect before asking you to exploit it,
 and ships its own source. Read the vulnerable code, then the fix.
@@ -65,9 +65,9 @@ loud, and that is half of what a client is paying for.
 **By the end you can:** read a capture to a conclusion and say where in it the
 conclusion came from.
 
-## Weeks 7–8 — read real code
+## Weeks 7–8 - read real code
 
-Install **Semgrep**. Run it on `skilluv-backend` — this platform's source is
+Install **Semgrep**. Run it on `skilluv-backend` - this platform's source is
 public and its authors have asked to be audited.
 
 Then triage every hit: real, unreachable, or false positive, **with the
@@ -80,13 +80,13 @@ authorisation, file handling) and submit it. Second reviewed moment.
 **By the end you have:** one audit with its coverage stated, which is a thing
 most people with two years of experience have never written.
 
-## Weeks 9–10 — hunt
+## Weeks 9–10 - hunt
 
 Pick a piece of `staging.skill-uv.com` inside the published scope. One hour a
 day, two weeks.
 
 Most days you will find nothing. **That is the trade**, and it is the part no
-course prepares anybody for. Keep a log of what you looked at and ruled out —
+course prepares anybody for. Keep a log of what you looked at and ruled out -
 it is what stops you looking at the same thing twice, and it is the skeleton of
 the report if you find something.
 
@@ -98,7 +98,7 @@ what you checked and how. It earns no finding attestation and a reviewer will
 still read it, and a person who can say precisely what they ruled out is
 employable.
 
-## Week 11 — the report, or the write-up
+## Week 11 - the report, or the write-up
 
 If you found something: write it up with the finding template. Reproduction
 first, impact second, a CVSS vector third, and the section that says what you
@@ -112,7 +112,7 @@ instead, in your own words, saying which existing write-ups you read and when.
 
 **Third reviewed moment**, and the one that goes on your profile.
 
-## Week 12 — decide what you are
+## Week 12 - decide what you are
 
 You have now done a bit of all four trades. One of them was less tiring than the
 others; that is data.
@@ -132,7 +132,7 @@ others; that is data.
 - Ten to fifteen short write-ups, three of them reviewed.
 - One code audit with its coverage stated.
 - One defensive analysis ending in a detection with a false-positive figure.
-- One finding submitted — confirmed, duplicate, or refused with a reason, and
+- One finding submitted - confirmed, duplicate, or refused with a reason, and
   all three are a result.
 - Between two and five attestations with verification codes.
 - A rank, probably `ranger`, and a craft score you can explain line by line.

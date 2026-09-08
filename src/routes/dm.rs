@@ -1,4 +1,4 @@
-//! DM (direct messaging) routes — Phase 2 Sprint 2.
+//! DM (direct messaging) routes - Phase 2 Sprint 2.
 
 use axum::extract::{Path, Query, State};
 use axum::http::HeaderMap;
@@ -67,7 +67,7 @@ pub struct MessagesResponse {
     pub messages: Vec<DmMessage>,
 }
 
-/// `text` accepted as alias — the audit doc used to name the field `text` ;
+/// `text` accepted as alias - the audit doc used to name the field `text` ;
 /// keeping both means a stale client (or an SDK that trusted the doc) won't
 /// 422 while the front migrates.
 #[derive(Debug, Deserialize, ToSchema)]

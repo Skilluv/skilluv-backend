@@ -1,16 +1,16 @@
-//! P26 v2 SKI-108 — admin analytics on the validator population.
+//! P26 v2 SKI-108 - admin analytics on the validator population.
 //!
 //! Two endpoints powering sections 3 and 4 of the SKI-100 admin
 //! analytics dashboard :
 //!
-//!   * `GET /admin/validators/stats` — per-validator activity
+//!   * `GET /admin/validators/stats` - per-validator activity
 //!     (validations count, approve/reject ratio, time to decision,
 //!     active domains).
-//!   * `GET /admin/validators/collusion-matrix` — validator × claimant
+//!   * `GET /admin/validators/collusion-matrix` - validator × claimant
 //!     ratios, with a `flagged` flag when the ratio+count crosses a
 //!     configurable threshold.
 //!
-//! Both read-only. No automated action — this is visibility, admins
+//! Both read-only. No automated action - this is visibility, admins
 //! decide.
 
 use axum::extract::{Query, State};
@@ -44,7 +44,7 @@ fn wrap(data: Value) -> Value {
 struct WindowQuery {
     #[serde(default)]
     window_days: Option<i32>,
-    // SKI-115 (M-09) — pagination replaces the silent LIMIT 500.
+    // SKI-115 (M-09) - pagination replaces the silent LIMIT 500.
     #[serde(default)]
     page: Option<i64>,
     #[serde(default)]
@@ -52,7 +52,7 @@ struct WindowQuery {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SKI-111 — response schemas
+// SKI-111 - response schemas
 // ═══════════════════════════════════════════════════════════════════
 
 /// Minimal user identity embedded in the analytics payloads.
@@ -94,7 +94,7 @@ pub struct CollusionTarget {
     pub count: i64,
     /// Share of this validator's decisions aimed at this claimant, 0..=1.
     pub ratio: f64,
-    /// True past the flagging threshold — a signal to look, not a verdict.
+    /// True past the flagging threshold - a signal to look, not a verdict.
     pub flagged: bool,
 }
 
@@ -115,7 +115,7 @@ pub struct CollusionData {
     pub matrix: Vec<CollusionRow>,
 }
 
-/// SKI-108 endpoint 1 — activity per validator.
+/// SKI-108 endpoint 1 - activity per validator.
 ///
 /// SKI-114: approve_count / reject_count now come from the exact
 /// slice_validation_decisions journal (no more double-counting on
@@ -204,7 +204,7 @@ pub async fn validator_stats(
     .fetch_one(&state.db)
     .await?;
 
-    // Domain caps live in user_capabilities — one query batched by user.
+    // Domain caps live in user_capabilities - one query batched by user.
     // SKI-115: carry granted_at per domain so the admin roster stops
     // making an N+1 GET /users/{id}/capabilities.
     let caps: Vec<(Uuid, String, chrono::DateTime<chrono::Utc>)> = sqlx::query_as(
@@ -277,7 +277,7 @@ struct CollusionQuery {
     min_count: Option<i64>,
 }
 
-/// SKI-108 endpoint 2 — validator × claimant matrix.
+/// SKI-108 endpoint 2 - validator × claimant matrix.
 #[utoipa::path(
     get, path = "/api/admin/validators/collusion-matrix", tag = "admin",
     responses(

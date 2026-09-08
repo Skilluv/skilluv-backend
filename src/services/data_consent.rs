@@ -14,7 +14,7 @@
 //!
 //! ## Why the wording is copied
 //!
-//! A purpose's description will be improved — clearer, longer, more honest.
+//! A purpose's description will be improved - clearer, longer, more honest.
 //! Consent given to the old wording was not given to the new one, so the text
 //! agreed to is stored on the consent row. What can be shown back in an audit
 //! is what was actually on screen.
@@ -337,7 +337,7 @@ pub async fn set_partner(db: &PgPool, user_id: Uuid, input: PartnerInput) -> Res
     // consent to a use of something that does not exist yet.
     if input.allow && !allows(db, user_id, "identity_aggregation").await? {
         return Err(AppError::Validation(
-            "agree to the unified profile first — naming a partner for something you \
+            "agree to the unified profile first - naming a partner for something you \
              have not allowed is not a decision anybody could act on"
                 .into(),
         ));

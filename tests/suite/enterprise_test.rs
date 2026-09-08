@@ -51,7 +51,7 @@ async fn test_enterprise_webauthn_session_bypasses_totp_gate() {
     .await
     .unwrap();
     // The client's access token was minted with login_method='password' by the
-    // login helper — for the JWT claim to reflect the new session label we
+    // login helper - for the JWT claim to reflect the new session label we
     // rotate through /auth/refresh, which pulls the updated method.
     let refresh = app.post("/api/auth/refresh", &json!({})).await;
     assert_eq!(refresh.status(), StatusCode::OK);
@@ -66,7 +66,7 @@ async fn test_enterprise_webauthn_session_bypasses_totp_gate() {
 
 #[tokio::test]
 async fn test_enterprise_magic_link_session_still_needs_totp() {
-    // Magic link only proves email possession — it's a low-assurance factor
+    // Magic link only proves email possession - it's a low-assurance factor
     // and MUST NOT bypass the mandatory-TOTP gate on enterprise/recruiter
     // accounts. This test locks in the policy so a future "just add
     // 'magic_link' to the strong factors" refactor is caught.
@@ -131,7 +131,7 @@ async fn test_enterprise_routes_require_totp_setup() {
     let err: serde_json::Value = profile.json().await.unwrap();
     assert_eq!(err["error"]["code"], "AUTH_TOTP_SETUP_REQUIRED");
 
-    // Simulate a completed TOTP setup and retry — now allowed.
+    // Simulate a completed TOTP setup and retry - now allowed.
     sqlx::query("UPDATE users SET totp_enabled = TRUE WHERE username = 'notptcorp'")
         .execute(&app.db)
         .await
@@ -189,7 +189,7 @@ async fn test_invite_accept_email_match() {
         .to_string();
 
     // Owner sends an invite to the candidate's email. `register_user` above
-    // rewrote the cookie jar to the candidate's session — re-login as owner.
+    // rewrote the cookie jar to the candidate's session - re-login as owner.
     app.relogin_with_totp("invitematchcorp").await;
     let resp = app
         .post(

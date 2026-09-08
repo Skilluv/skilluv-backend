@@ -1,4 +1,4 @@
-//! P26 — Sas compagnonnage débutant : service de vérification asynchrone.
+//! P26 - Sas compagnonnage débutant : service de vérification asynchrone.
 //!
 //! Workflow (voir migration 0118 + discussion produit) :
 //!   1. Apprenti veut faire un challenge marqué `beginner_stage='sas'`.
@@ -15,7 +15,7 @@
 //! Ce que ce service NE fait PAS :
 //!   - Aucune permission check (routes/middleware s'en occupent).
 //!   - Aucun upload direct (storage.rs déjà en place, l'URL est passée en
-//!     paramètre — le service ne connaît que la string).
+//!     paramètre - le service ne connaît que la string).
 //!   - Aucune notif email/push (à câbler dans le hook plus tard si besoin).
 
 use chrono::{DateTime, Utc};
@@ -148,7 +148,7 @@ pub async fn pick_questions(
 }
 
 /// File des vérifications en attente, ordonnée FIFO. Aucun filtrage par
-/// compagnon (tous les compagnons se partagent la même file — le premier
+/// compagnon (tous les compagnons se partagent la même file - le premier
 /// arrivé rend le verdict).
 pub async fn list_pending(
     db: &PgPool,
@@ -316,7 +316,7 @@ pub struct VerdictPayload {
 }
 
 /// Rend le verdict compagnon sur une vérification pending. À `approved`,
-/// déclenche un recompute des capabilities de l'apprenti — c'est là que
+/// déclenche un recompute des capabilities de l'apprenti - c'est là que
 /// `verified_apprentice` est éventuellement accordée (voir P26.6 hook).
 pub async fn record_verdict(
     db: &PgPool,
@@ -329,7 +329,7 @@ pub async fn record_verdict(
         return Err(VerificationError::InvalidVerdict.into());
     }
 
-    // On lit la ligne pour valider qu'elle est pending — refuser un
+    // On lit la ligne pour valider qu'elle est pending - refuser un
     // second verdict (compagnon race condition).
     let current: Option<ApprenticeVerification> = sqlx::query_as(
         "SELECT id, apprentice_user_id, template_id, submission_id, reviewer_user_id,

@@ -4,7 +4,7 @@
 # Every change is tested twice: once on the pull request, and again on master
 # when the merge lands. The second run is the same compiler on the same bytes.
 # A merge that fast-forwards or squashes an up-to-date branch produces a commit
-# whose *tree* — the content hash of the whole working tree — is identical to
+# whose *tree* - the content hash of the whole working tree - is identical to
 # the head commit already tested. Git guarantees that: same tree object, same
 # files, byte for byte, including Cargo.lock and this workflow itself.
 #
@@ -15,7 +15,7 @@
 # Two guards keep this from becoming a hole:
 #
 #   1. The prior run must have CONCLUDED success, and every job we are about to
-#      skip must have concluded success in it — not skipped. A
+#      skip must have concluded success in it - not skipped. A
 #      documentation-only run greens with those jobs skipped, and its tree must
 #      never license a skip for a tree nobody tested. This is also what stops a
 #      licence being passed down a chain of runs that each skipped their way to
@@ -41,7 +41,7 @@ while read -r run_id head_sha; do
   other="$(gh api "repos/${repo}/commits/${head_sha}" --jq '.commit.tree.sha' 2>/dev/null || true)"
   [ "${other}" = "${tree}" ] || continue
 
-  # Guard 1: the work we would skip must have actually run in that run —
+  # Guard 1: the work we would skip must have actually run in that run -
   # every test shard, and the lint job that the shards and the image build
   # queue behind.
   #
@@ -63,7 +63,7 @@ while read -r run_id head_sha; do
     hit=true
     break
   fi
-  echo "run ${run_id} matches the tree but its shards/lint were '${verdict}' — not a licence to skip"
+  echo "run ${run_id} matches the tree but its shards/lint were '${verdict}' - not a licence to skip"
 done <<< "${runs}"
 
 echo "hit=${hit}" >> "${GITHUB_OUTPUT}"

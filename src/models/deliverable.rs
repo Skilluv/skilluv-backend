@@ -30,7 +30,7 @@ pub struct Deliverable {
     pub user_id: Uuid,
     pub team_id: Option<Uuid>,
 
-    /// Chain de supersede — un deliverable peut remplacer un précédent révoqué
+    /// Chain de supersede - un deliverable peut remplacer un précédent révoqué
     /// pour permettre une correction transparente sans réécrire l'historique.
     pub parent_deliverable_id: Option<Uuid>,
 
@@ -49,7 +49,7 @@ pub struct Deliverable {
     pub fragments_awarded: i32,
     pub credits_awarded: BigDecimal,
 
-    /// Politique IA — déclarée par le user à la soumission ou dans une fenêtre
+    /// Politique IA - déclarée par le user à la soumission ou dans une fenêtre
     /// de 7 jours post-vérification (voir partie G.1 étape 12).
     pub ai_assistance_level: Option<String>,
     pub ai_tools_used: Vec<String>,

@@ -23,7 +23,7 @@ GET /api/domains/security/guides?kind=onboarding
 ```
 
 or under the trade you chose in the interface. Five guides, and they share
-almost nothing — a red teamer's first week is a proxy and a range; a governance
+almost nothing - a red teamer's first week is a proxy and a range; a governance
 specialist's is a framework read properly, once.
 
 They are also readable in the repository as rows of migration 0562, if you would
@@ -47,8 +47,8 @@ trade:
 
 ## What not to do first
 
-**Do not buy a certification.** Not because they are worthless — an OSCP is a
-real thing — but because it is three hundred to eight thousand euros spent
+**Do not buy a certification.** Not because they are worthless - an OSCP is a
+real thing - but because it is three hundred to eight thousand euros spent
 before you know which of the five trades you want. Twelve weeks of the
 curriculum costs nothing and answers that.
 
@@ -64,7 +64,7 @@ it, which is false.
 ## Where to ask
 
 `#security-help` on Discord. Bring the request, the response, and what you
-expected — the same three things a report needs, which is not a coincidence.
+expected - the same three things a report needs, which is not a coincidence.
 
 For a mentor: `POST /api/users/me/mentorship/request-mentor`. Matching is on
 the trade you chose and the tools you named, capped at three mentees per mentor
@@ -73,10 +73,10 @@ not compress.
 
 ## The first thing worth submitting
 
-Not a finding. A **write-up of a range challenge** — two hundred words on one
+Not a finding. A **write-up of a range challenge** - two hundred words on one
 thing you solved on Juice Shop or WebGoat, with the request, the response, and
 the sentence saying which check was missing.
 
 A reviewer will read it and tell you what is missing from it. That feedback,
-early, is worth more than the first finding — because the first finding written
+early, is worth more than the first finding - because the first finding written
 without it usually gets refused for a reason nobody explained beforehand.

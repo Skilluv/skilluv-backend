@@ -1,4 +1,4 @@
-# Accueil d'une entreprise — déroulé
+# Accueil d'une entreprise - déroulé
 
 Écrit pour une équipe commerciale qui n'existe pas encore. C'est délibéré :
 un processus rédigé après coup décrit ce qu'on a fait, pas ce qu'on voulait
@@ -65,7 +65,7 @@ dit, sans le dire : ce n'est pas nous qui affirmons, c'est vérifiable.
 Ce qu'il ne faut pas faire :
 
 - montrer la liste des fonctionnalités ;
-- montrer un profil inventé pour la démonstration — c'est précisément le mode
+- montrer un profil inventé pour la démonstration - c'est précisément le mode
   de défaillance que le produit corrige ;
 - montrer une page vide en promettant qu'elle se remplira.
 
@@ -86,10 +86,10 @@ un accès recruteur compromis, c'est un carnet d'adresses entier.
 
 **Mise en place technique**, selon les cas :
 
-- authentification déléguée (SSO) — pour les entreprises qui la demandent ;
-- provisionnement des comptes (SCIM) — au-delà d'une dizaine de recruteurs ;
-- API et jetons — pour l'intégration à un outil existant ;
-- webhooks — pour recevoir les événements plutôt que d'interroger.
+- authentification déléguée (SSO) - pour les entreprises qui la demandent ;
+- provisionnement des comptes (SCIM) - au-delà d'une dizaine de recruteurs ;
+- API et jetons - pour l'intégration à un outil existant ;
+- webhooks - pour recevoir les événements plutôt que d'interroger.
 
 Compter une demi-journée avec un interlocuteur technique. Sans interlocuteur
 technique, ne pas proposer d'intégration : elle ne sera pas finie et laissera
@@ -102,7 +102,7 @@ le souvenir d'un produit compliqué.
 **Un objectif : que quelque chose de réel se produise dans les sept jours.**
 
 Une première recherche accompagnée, un premier contact envoyé, ou une première
-prime posée. Peu importe laquelle — ce qui compte est qu'ils aient fait une
+prime posée. Peu importe laquelle - ce qui compte est qu'ils aient fait une
 action complète, seuls, et qu'elle ait abouti.
 
 Une entreprise qui n'a rien fait dans les sept premiers jours ne fera rien.
@@ -116,7 +116,7 @@ seul.
 **Trente jours.** Ont-ils utilisé le produit sans nous ? Sinon, le problème
 est la mise en place, pas l'intérêt. Reprendre au §5.
 
-**Soixante jours.** Y a-t-il eu un résultat — un entretien, une livraison, une
+**Soixante jours.** Y a-t-il eu un résultat - un entretien, une livraison, une
 prime versée ? Sinon, comprendre où ça bloque : les profils, la démarche, le
 produit choisi.
 
@@ -145,16 +145,16 @@ Les chemins qui ont du sens :
 
 Quatre, courts. Un e-mail commercial long n'est pas lu.
 
-**Après le premier appel** — reformuler leur problème en une phrase, proposer
+**Après le premier appel** - reformuler leur problème en une phrase, proposer
 une chose, donner une date.
 
-**Après la démonstration** — le lien de vérification qui a été montré, rien
+**Après la démonstration** - le lien de vérification qui a été montré, rien
 d'autre. C'est la pièce qui travaille toute seule.
 
-**Sept jours sans action** — une question, pas une relance : « qu'est-ce qui
+**Sept jours sans action** - une question, pas une relance : « qu'est-ce qui
 vous a arrêté ? » On apprend plus de la réponse que de dix rendez-vous.
 
-**Avant une échéance** — trente jours avant, avec ce qui s'est passé pendant
+**Avant une échéance** - trente jours avant, avec ce qui s'est passé pendant
 la période. Un renouvellement demandé sans bilan est un renouvellement qu'on
 n'a pas mérité.
 

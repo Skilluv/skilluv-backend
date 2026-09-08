@@ -53,11 +53,11 @@ const BRIEFS: &[CanvasBrief] = &[
             un membre de la communauté, et souvent la première qu'il voit.\n\n\
             ## Problème\n\n\
             Elle affiche aujourd'hui un statut et une liste de champs. Un recruteur pressé n'y \
-            trouve pas la réponse à sa question — « est-ce que cette personne a vraiment fait ce \
-            travail » — et repart sans avoir cliqué sur la preuve.\n\n\
+            trouve pas la réponse à sa question - « est-ce que cette personne a vraiment fait ce \
+            travail » - et repart sans avoir cliqué sur la preuve.\n\n\
             ## Contraintes\n\n\
             Aucune authentification : la page doit se comprendre par quelqu'un qui ne connaît pas \
-            Skilluv. Elle doit fonctionner sans JavaScript pour l'essentiel, et être imprimable — \
+            Skilluv. Elle doit fonctionner sans JavaScript pour l'essentiel, et être imprimable - \
             une attestation finit parfois dans un dossier papier. Contraste AA obligatoire.\n\n\
             ## Livrables\n\n\
             Maquettes desktop et mobile des trois états (valide, révoquée, introuvable), la \
@@ -82,8 +82,8 @@ const BRIEFS: &[CanvasBrief] = &[
             personne revient.\n\n\
             ## Contraintes\n\n\
             L'illustration doit tenir en SVG léger et rester lisible en 320 px de large. Le texte \
-            doit dire quoi faire ensuite — élargir ses métiers, proposer un brief, regarder les \
-            concours — sans culpabiliser.\n\n\
+            doit dire quoi faire ensuite - élargir ses métiers, proposer un brief, regarder les \
+            concours - sans culpabiliser.\n\n\
             ## Livrables\n\n\
             L'illustration en SVG avec ses sources, les trois variantes de message, et la version \
             en mode sombre.",
@@ -110,7 +110,7 @@ const BRIEFS: &[CanvasBrief] = &[
             écran de 5 pouces et sur une connexion lente.\n\n\
             ## Livrables\n\n\
             Le parcours complet avec ses états (vide, erreur, sauté, repris), et le texte de \
-            chaque question — c'est le texte qui fait le travail ici, pas la mise en page.",
+            chaque question - c'est le texte qui fait le travail ici, pas la mise en page.",
         orientation: "design-product",
         subtype: "interface",
         difficulty: 3,
@@ -126,7 +126,7 @@ const BRIEFS: &[CanvasBrief] = &[
             son échelle de métier.\n\n\
             ## Problème\n\n\
             Elle liste aujourd'hui des lignes. Elle ne montre pas la seule chose que la plateforme \
-            a de particulier : la distance parcourue — un travail validé après trois tours de \
+            a de particulier : la distance parcourue - un travail validé après trois tours de \
             critique compte plus qu'un validé du premier coup, et ça ne se voit nulle part.\n\n\
             ## Contraintes\n\n\
             Le progrès doit se lire en trois secondes, sans que ça devienne un jeu de barres à \
@@ -176,7 +176,7 @@ const BRIEFS: &[CanvasBrief] = &[
             au reste.\n\n\
             ## Contraintes\n\n\
             Le contenu est dense et juridique par endroits : le travail est de le rendre \
-            parcourable sans le simplifier au point de le rendre faux. Illustration sobre — une \
+            parcourable sans le simplifier au point de le rendre faux. Illustration sobre - une \
             page de confiance qui a l'air d'une brochure perd son objet.\n\n\
             ## Livrables\n\n\
             La composition, le système de navigation interne, et les éléments graphiques en SVG.",
@@ -200,7 +200,7 @@ const BRIEFS: &[CanvasBrief] = &[
             ## Contraintes\n\n\
             A4 et Letter. Une seule page. Lisible en noir et blanc et à la photocopie. Le code de \
             vérification doit être trouvable en une seconde par quelqu'un qui veut le saisir. \
-            Polices libres de droits uniquement — une licence bureau ne se livre pas.\n\n\
+            Polices libres de droits uniquement - une licence bureau ne se livre pas.\n\n\
             ## Livrables\n\n\
             Les gabarits pour les trois types d'attestation, les polices retenues avec leur \
             licence, et une épreuve imprimée photographiée.",
@@ -222,7 +222,7 @@ const BRIEFS: &[CanvasBrief] = &[
             attestation, un tour de critique, un métier, un fragment. Les approximations actuelles \
             désignent autre chose.\n\n\
             ## Contraintes\n\n\
-            Quarante icônes, une grille tenue, une seule épaisseur de trait, lisibles à 16 px — \
+            Quarante icônes, une grille tenue, une seule épaisseur de trait, lisibles à 16 px - \
             c'est la taille qui décide, pas la vignette de présentation. Livrées en SVG optimisés \
             avec un viewBox commun.\n\n\
             ## Livrables\n\n\
@@ -243,7 +243,7 @@ const BRIEFS: &[CanvasBrief] = &[
             système. Les mêmes composants existent en deux variantes selon qui les a écrits.\n\n\
             ## Problème\n\n\
             Sans jetons ni composants documentés, chaque écran nouveau rouvre les mêmes questions, \
-            et l'accessibilité se joue à chaque fois — donc se perd une fois sur trois.\n\n\
+            et l'accessibilité se joue à chaque fois - donc se perd une fois sur trois.\n\n\
             ## Contraintes\n\n\
             Les jetons doivent être exportables en JSON exploitable par le frontend. Le pas \
             d'espacement et l'échelle typographique doivent être dérivés, pas listés à la main. \
@@ -269,7 +269,7 @@ const BRIEFS: &[CanvasBrief] = &[
             est le moment que toute la plateforme existe pour produire, et il passe sans que rien \
             ne le marque.\n\n\
             ## Contraintes\n\n\
-            Livré en Lottie. Moins de soixante calques et moins de cinq secondes — au-delà, le \
+            Livré en Lottie. Moins de soixante calques et moins de cinq secondes - au-delà, le \
             rendu coûte cher sur les téléphones d'entrée de gamme que beaucoup de nos \
             utilisateurs ont. Ce qui se passe quand la réduction de mouvement est activée fait \
             partie du livrable, pas d'une note en bas de page.\n\n\

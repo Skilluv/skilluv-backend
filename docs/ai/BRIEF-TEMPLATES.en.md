@@ -1,4 +1,4 @@
-# Brief templates — AI domain
+# Brief templates - AI domain
 
 Six templates, one per kind of artefact. Use them to write the statement of an
 AI challenge.
@@ -85,7 +85,7 @@ On top of the common structure:
 - **Sources and expected freshness**: where the data comes from, how often it
   must arrive, what lag is tolerable.
 - **Delivery semantics**: at-most-once, at-least-once, exactly-once. Say which
-  is required — not "reliable".
+  is required - not "reliable".
 - **Volume and growth**: today's figure and the projection, or the work is
   sized for the sample.
 - **Failure behaviour**: what must happen if the source disappears mid-load.
@@ -115,7 +115,7 @@ against the baseline, training that reproduces on another machine.
 On top of the common structure:
 
 - **Eval set**: the cases, including failure cases chosen on purpose. Supplied
-  by the brief, or to be built — and then it is a deliverable in its own right.
+  by the brief, or to be built - and then it is a deliverable in its own right.
 - **Tools available**, and what the agent must never be able to do.
 - **Behaviour when it does not know**: say so, or invent. The first is the only
   acceptable answer, and it is testable.
@@ -132,7 +132,7 @@ On top of the common structure:
 - **Capture conditions**: light, angle, resolution, blur. A model trained on
   clean images fails in production.
 - **Dataset composition** and subgroups to evaluate separately.
-- **Annotation**: supplied, or to be produced — and then with which protocol
+- **Annotation**: supplied, or to be produced - and then with which protocol
   and what inter-annotator agreement.
 - **Target hardware** and expected frames per second.
 - **People**: if the subject shows any, intended use and consent are settled in

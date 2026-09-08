@@ -1,4 +1,4 @@
-//! Service `seasons` — Phase P6.
+//! Service `seasons` - Phase P6.
 //!
 //! Voir docs/challenges-target-model-and-roadmap.md sections B.13, 9.4.
 

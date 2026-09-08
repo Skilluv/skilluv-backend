@@ -1,4 +1,4 @@
-//! The brand line — sponsors, campaigns, ambassadors, and the audience.
+//! The brand line - sponsors, campaigns, ambassadors, and the audience.
 //!
 //! Four products with one thing in common: a company pays for access to a
 //! community that did not sign up to be sold to. Every route here has a
@@ -964,7 +964,7 @@ pub struct Money {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Commissioned content — the list that was nowhere
+// Commissioned content - the list that was nowhere
 // ═══════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
@@ -989,7 +989,7 @@ type SponsoredRow = (
 
 /// Every commissioned piece, drafts included.
 ///
-/// The only one of the twelve product lines listed **nowhere** — not under
+/// The only one of the twelve product lines listed **nowhere** - not under
 /// admin, not under enterprise, not publicly. `POST /admin/sponsored-content`
 /// returns the id, so publishing straight after creating works; coming back
 /// the next day did not.

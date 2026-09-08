@@ -28,7 +28,7 @@ forty minutes in ends the event.
 
 ## Four weeks
 
-### S-4 — decide, and write the rules
+### S-4 - decide, and write the rules
 
 Format, theme, window, prizes. Write the rules *now*, not the week before: the
 document is what settles a contested score, and one written after the contest
@@ -38,19 +38,19 @@ The rules must say: the window in a named timezone, what counts as a valid
 submission, how ties break, when the scoreboard freezes, and how a dispute is
 raised. Five lines each.
 
-### S-3 — build, and have somebody else try it
+### S-3 - build, and have somebody else try it
 
 Challenges written, or the scope defined, or the environment built.
 
 Then the step that matters more than any other: **somebody who is not you
-solves every challenge from the instructions alone.** Not you re-reading them —
+solves every challenge from the instructions alone.** Not you re-reading them -
 somebody else, in a room you are not in.
 
 Every event that goes wrong goes wrong here. A challenge whose flag was
 regenerated after the hash was recorded is unanswerable, and nobody finds out
 until forty people are stuck on it.
 
-### S-2 — open registration, and announce
+### S-2 - open registration, and announce
 
 `status = 'registration_open'`. Announce in `#security-competitions`, and
 elsewhere if you want people who are not already here.
@@ -59,7 +59,7 @@ Say the prize in the announcement, including when it is nothing. "Fragments, a
 badge and a place on the hall of fame" is an honest offer; a vague hint at
 prizes is not.
 
-### S-1 — a dry run, and the moderators
+### S-1 - a dry run, and the moderators
 
 Run the platform side end to end with two accounts: register, submit, see the
 scoreboard move, see the badge land.
@@ -78,7 +78,7 @@ infrastructure.
 - **Freeze the scoreboard fifteen minutes before the end.** Contests are
   disputed in the last ten minutes and a frozen board is what settles them.
 
-### J+7 — finish it
+### J+7 - finish it
 
 Finalising awards fragments, badges and attestations from the recorded
 placings. Then:
@@ -120,7 +120,7 @@ A competition can carry `sponsor_enterprise_id`, which shows as "powered by"
 and can fund a cash prize held in escrow until the event concludes.
 
 What a sponsor may be offered: their name on the event, the write-ups if the
-authors agree, and a look at the profiles of the people who did well — the
+authors agree, and a look at the profiles of the people who did well - the
 same talent search any recruiting enterprise pays for.
 
 What a sponsor may not be offered: influence over the scoring, the participants'

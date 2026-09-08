@@ -18,7 +18,7 @@ Sont recevables :
 - un modèle publié à une adresse où on peut le télécharger et l'exécuter ;
 - un jeu de données publié avec sa fiche ;
 - un système d'agents en service, avec ses évaluations ;
-- un article paru — préprint ou conférence — avec le code qui le soutient ;
+- un article paru - préprint ou conférence - avec le code qui le soutient ;
 - un résultat de banc public qu'un tiers a rejoué ;
 - une trouvaille de sûreté reproduite et divulguée dans les règles.
 
@@ -41,7 +41,7 @@ plus fréquente du domaine et la moins visible** : c'est elle qui est cherchée
 en premier.
 
 **La reproductibilité.** Graines, versions de bibliothèques et données figées.
-Un lecteur relance et retrouve les mêmes chiffres — ou l'écart attendu est
+Un lecteur relance et retrouve les mêmes chiffres - ou l'écart attendu est
 écrit avant qu'on le lui demande.
 
 **La provenance des données.** D'où elles viennent, sous quelle licence, avec
@@ -86,8 +86,8 @@ L'usage d'un assistant est **accepté et déclaré**. La soumission indique le
 niveau d'assistance. Le camoufler est une faute distincte du fait de
 l'utiliser, et c'est celle-là qui est sanctionnée.
 
-La soutenance en temps réel — expliquer pourquoi ce taux d'apprentissage,
-montrer ce qui casse quand on change une hypothèse — est ce qui départage.
+La soutenance en temps réel - expliquer pourquoi ce taux d'apprentissage,
+montrer ce qui casse quand on change une hypothèse - est ce qui départage.
 
 ## 6. Validation
 
@@ -96,7 +96,7 @@ concernée, publique et consultable avant de soumettre.
 
 Un refus nomme son motif parmi ceux que la plateforme sait dire : évaluation
 insuffisante, reproductibilité manquante, provenance des données floue,
-problème de sûreté — ou l'un des motifs communs à tous les domaines. Un refus
+problème de sûreté - ou l'un des motifs communs à tous les domaines. Un refus
 sans motif exploitable n'est pas un refus valable.
 
 Cinq passages maximum. Au-delà, ce n'est plus le travail qui est en cause :
@@ -114,7 +114,7 @@ droits.
 Un artefact validé peut être révoqué : fuite de données découverte, jeu de
 données retiré pour licence, résultat non reproductible, plagiat.
 
-La révocation retire l'artefact du décompte — rang, badges, attestations qui
+La révocation retire l'artefact du décompte - rang, badges, attestations qui
 s'appuyaient dessus. Elle n'efface pas l'historique : ce qui a été révoqué
 reste visible comme tel.
 

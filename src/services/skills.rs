@@ -1,4 +1,4 @@
-//! Service `skills` — expose le skill graph aux profils, recherche recruteur,
+//! Service `skills` - expose le skill graph aux profils, recherche recruteur,
 //! et recommandations de slices (Phase P4).
 //!
 //! Voir docs/challenges-target-model-and-roadmap.md sections B.3, B.9, 8.3, 8.6.
@@ -36,7 +36,7 @@ pub struct SkillsService;
 /// Ordering options pour `list_user_skill_fragments_or_backfill`.
 ///
 /// Miroir les 3 ORDER BY différents utilisés par les consumers (gamification,
-/// profile, public_api) — chacun affiche les skills d'un user avec un tri
+/// profile, public_api) - chacun affiche les skills d'un user avec un tri
 /// spécifique et on préserve leur comportement historique.
 #[derive(Debug, Clone, Copy)]
 pub enum SkillFragmentOrder {
@@ -209,7 +209,7 @@ impl SkillsService {
 
     /// Best-effort : au succès d'un challenge legacy, tente de propager le proof
     /// vers `user_skills` en résolvant le `skill_id` depuis un slug matchant :
-    ///   1. `language` (ex: "python", "rust", "typescript") — matche une catégorie
+    ///   1. `language` (ex: "python", "rust", "typescript") - matche une catégorie
     ///      du skill graph seedé en 0057.
     ///   2. À défaut, `slug_hint` optionnel (ex: challenge tag futur).
     ///
@@ -386,7 +386,7 @@ impl SkillsService {
     /// Trouve les talents qui maîtrisent un skill donné à un niveau minimum.
     ///
     /// Trié par proficiency DESC, puis wpc DESC (le plus prouvé d'abord).
-    /// Ne retourne que les users avec `profile_active = TRUE` — les profils
+    /// Ne retourne que les users avec `profile_active = TRUE` - les profils
     /// non activés ne sont pas exposés aux recruteurs.
     pub async fn find_talents_by_skill(
         db: &PgPool,

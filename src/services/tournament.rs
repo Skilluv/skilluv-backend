@@ -1,4 +1,4 @@
-//! Seasons + tournaments service — Phase 2 Sprint 6.
+//! Seasons + tournaments service - Phase 2 Sprint 6.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -13,8 +13,8 @@ pub const VALID_PARTICIPANT_TYPES: &[&str] = &["user", "guild"];
 /// The end of the scale a format is won at.
 ///
 /// Read from the format's row rather than from a list here. Getting it wrong
-/// crowns the worst entry — a code golf sorted descending rewards the longest
-/// program — which is why it is never a caller's choice.
+/// crowns the worst entry - a code golf sorted descending rewards the longest
+/// program - which is why it is never a caller's choice.
 pub fn scoring_direction_for(spec: &crate::services::contest::KindSpec) -> &'static str {
     if spec.lower_is_better {
         "lower_is_better"
@@ -98,7 +98,7 @@ pub async fn close_season(db: &PgPool, season_id: Uuid) -> Result<SeasonCloseRep
         entries.sort_by_key(|e| std::cmp::Reverse(e.1));
         let n = entries.len();
         if n < 5 {
-            // Too small to ladder fairly — skip
+            // Too small to ladder fairly - skip
             continue;
         }
         let top_n = ((n as f64) * 0.20).ceil() as usize;
@@ -185,7 +185,7 @@ pub struct Tournament {
     pub updated_at: DateTime<Utc>,
     /// NULL means the contest is open to every domain.
     pub skill_domain: Option<String>,
-    /// What the contest asks for. Shape depends on `kind` — see
+    /// What the contest asks for. Shape depends on `kind` - see
     /// `contest::validate_rules`.
     pub rules: serde_json::Value,
     pub scoring_direction: String,
@@ -327,7 +327,7 @@ pub async fn create_tournament(
 #[derive(Debug, Default, Clone)]
 pub struct TournamentFilter<'a> {
     pub status: Option<&'a str>,
-    /// `code_golf`, `brief_contest`, `duel`… — see `contest::VALID_KINDS`.
+    /// `code_golf`, `brief_contest`, `duel`… - see `contest::VALID_KINDS`.
     pub kind: Option<&'a str>,
     /// A domain-scoped contest, plus the ones open to every domain: asking
     /// for design contests and being shown none of the cross-domain ones
@@ -348,7 +348,7 @@ pub struct TournamentFilter<'a> {
 ///
 /// Without `kind` and `skill_domain` the design contest page asked for two
 /// hundred rows and filtered them in the browser, which stops working at the
-/// two hundred and first tournament — silently, by dropping the oldest.
+/// two hundred and first tournament - silently, by dropping the oldest.
 pub async fn list_tournaments(
     db: &PgPool,
     filter: TournamentFilter<'_>,
@@ -459,7 +459,7 @@ pub async fn register_individual(
         .ok_or(AppError::NotFound("tournament not found".into()))?;
     // Stated the other way round on purpose. It used to allow `individual`
     // and `hackathon` and refuse everything else, so `marathon` and
-    // `defi_solitaire` — added in migration 0114 — could be created and never
+    // `defi_solitaire` - added in migration 0114 - could be created and never
     // joined: the endpoint answered "not open to individual registration"
     // about tournaments that take nothing but individuals.
     //
@@ -546,7 +546,7 @@ pub async fn register_guild(
 /// A podium that can only print UUIDs is not a podium, so the identity is
 /// joined here rather than left to N follow-up requests by the caller. Both
 /// joins are LEFT, and a participant whose account is gone comes back with
-/// null names instead of vanishing from the ranking — removing the line would
+/// null names instead of vanishing from the ranking - removing the line would
 /// change the standing of everybody below it.
 pub async fn leaderboard_of(
     db: &PgPool,
@@ -644,7 +644,7 @@ pub async fn conclude_tournament(
     let mut tx = db.begin().await?;
 
     // 1. Assign ranks, at the end of the scale this kind is won at. An
-    //    unscored participant sorts last either way — zero characters is not
+    //    unscored participant sorts last either way - zero characters is not
     //    a winning code golf entry, it is an absent one.
     let participants: Vec<(String, Uuid, i32)> = sqlx::query_as(
         r#"
@@ -742,7 +742,7 @@ pub async fn conclude_tournament(
 /// same event for everybody, and the podium is a second, rarer event that
 /// only three people get. `tournament.podium` already existed and already
 /// carries the place, so no `contest_winner` kind is invented for the same
-/// moment — that would mean two celebrations for one result.
+/// moment - that would mean two celebrations for one result.
 ///
 /// Guild entries are skipped: `Recipient` addresses people, and notifying a
 /// guild means notifying its members, which is `guild.*`'s business.

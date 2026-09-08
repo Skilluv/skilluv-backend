@@ -180,7 +180,7 @@ async fn the_engine_never_awards_a_judgement() {
         .unwrap();
 
     // A hundred deliverables earns the counted distinctions and none of the
-    // judged ones — "shipped an audited contract to mainnet" is not a
+    // judged ones - "shipped an audited contract to mainnet" is not a
     // quantity.
     assert!(holds(&app, user, "code-craft-legend").await);
     for slug in [
@@ -195,7 +195,7 @@ async fn the_engine_never_awards_a_judgement() {
     }
 
     // `code-multi-domain` was in this list until migration 0186 put a trade on
-    // the slice. It is a count now — of distinct trades, which these hundred
+    // the slice. It is a count now - of distinct trades, which these hundred
     // deliverables do not have, since none of them belongs to a slice.
     assert!(
         !holds(&app, user, "code-multi-domain").await,

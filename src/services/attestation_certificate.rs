@@ -10,7 +10,7 @@
 //! ## Why the sheet is SVG and not a rendered PDF
 //!
 //! The slice attestation's PDF posts HTML to an external renderer
-//! (`PDF_RENDERER_URL`), which is a second service to run, pay for and watch —
+//! (`PDF_RENDERER_URL`), which is a second service to run, pay for and watch -
 //! and which returns 503 today because nobody runs it.
 //!
 //! An A4 SVG is printed to PDF by the browser, losslessly, with the fonts and
@@ -30,8 +30,8 @@
 //! ## Two levels of detail
 //!
 //! The short sheet is what somebody staples to an application. The full one
-//! adds what the attestation was issued for — the description and the link to
-//! the thing itself — which matters most in security, where the title names
+//! adds what the attestation was issued for - the description and the link to
+//! the thing itself - which matters most in security, where the title names
 //! the weakness class and everything a reader wants is in the description.
 //! Nothing is redacted here: redaction happens at issue time, not at print
 //! time.
@@ -126,7 +126,7 @@ impl Presentation {
     /// precisely the line between [`Self::Artefact`] and [`Self::Recorded`],
     /// so it is read rather than restated.
     ///
-    /// `None` means the basis is not in the catalogue — an attestation issued
+    /// `None` means the basis is not in the catalogue - an attestation issued
     /// before its basis row, or a row since removed. Those present as
     /// [`Self::Artefact`], the conservative default: almost every basis in the
     /// schema requires a deliverable, so a new one almost certainly does too.
@@ -135,7 +135,7 @@ impl Presentation {
     /// listed, and the list went stale twice without anybody noticing:
     /// `featured_audio_creator` arrived with migration 0406 and
     /// `featured_communicator` with 0504, and both rendered as
-    /// `Artefact` — an editorial choice printed on a sheet that says a
+    /// `Artefact` - an editorial choice printed on a sheet that says a
     /// reviewer verified a deliverable, which is the one direction this enum
     /// must never get wrong.
     ///
@@ -144,7 +144,7 @@ impl Presentation {
     pub fn of(basis: &str, requires_deliverable: Option<bool>) -> Self {
         // Order matters. A ranking and a featuring both have
         // `requires_deliverable = FALSE` for some domains, and both say
-        // something more specific than "recorded" — so they are decided first.
+        // something more specific than "recorded" - so they are decided first.
         if basis.starts_with("featured_") {
             return Self::Editorial;
         }
@@ -161,9 +161,9 @@ impl Presentation {
     /// attestation wording itself.
     pub fn kicker(self) -> &'static str {
         match self {
-            Self::Artefact => "ATTESTATION — TRAVAIL VÉRIFIÉ",
-            Self::Contest => "ATTESTATION — CONCOURS REMPORTÉ",
-            Self::Recorded => "ATTESTATION — FAIT ENREGISTRÉ",
+            Self::Artefact => "ATTESTATION - TRAVAIL VÉRIFIÉ",
+            Self::Contest => "ATTESTATION - CONCOURS REMPORTÉ",
+            Self::Recorded => "ATTESTATION - FAIT ENREGISTRÉ",
             Self::Editorial => "MISE EN AVANT ÉDITORIALE",
         }
     }
@@ -193,7 +193,7 @@ impl Presentation {
                  propositions que chacun peut consulter."
             }
             Self::Recorded => {
-                "Cette attestation repose sur un fait que la plateforme a enregistré — \
+                "Cette attestation repose sur un fait que la plateforme a enregistré - \
                  une réponse vérifiée par empreinte, une participation, ou une \
                  reconnaissance obtenue ailleurs. Aucun relecteur n'a jugé de livrable."
             }
@@ -211,7 +211,7 @@ impl Presentation {
 /// demoting it would understate work that was genuinely verified. What has to
 /// change is one added sentence, because in several of the jurisdictions this
 /// platform serves "formateur certifié" and its equivalents are protected
-/// terms — a sheet that reads like a teaching qualification is a liability for
+/// terms - a sheet that reads like a teaching qualification is a liability for
 /// the platform and a false hope for the person holding it.
 fn education_disclaimer(basis: &str) -> Option<&'static str> {
     basis.starts_with("education_").then_some(
@@ -239,14 +239,14 @@ pub struct CertificateData {
     /// Where the thing this attests can be read: a finding's public card, a
     /// merged pull request, a credit roll. Shown only on the full sheet.
     pub evidence_url: Option<String>,
-    /// Already formatted for display — this module does no localisation.
+    /// Already formatted for display - this module does no localisation.
     pub issued_on: Option<String>,
     /// The ten characters somebody types into the verification page.
     pub verification_code: String,
     /// Where a reader goes to check it. Also what the QR code encodes.
     pub verify_url: String,
     /// True when the attestation has been taken back. A revoked attestation
-    /// still renders — somebody holding an old copy has to be able to find
+    /// still renders - somebody holding an old copy has to be able to find
     /// out that it no longer holds.
     pub revoked: bool,
 }
@@ -264,7 +264,7 @@ impl CertificateData {
 /// The short sheet is what somebody staples to an application: the claim, the
 /// holder, the code, the QR. One page, nothing to read.
 ///
-/// The full sheet adds what the attestation was issued *for* — the description
+/// The full sheet adds what the attestation was issued *for* - the description
 /// as written and the link to the thing itself. For most domains the title
 /// carries that already ("Identité complète pour une coopérative…"). For
 /// security it does not: `security_finding_confirmed` is titled by its
@@ -276,7 +276,7 @@ impl CertificateData {
 ///
 /// Nothing is redacted here, because nothing needs to be: redaction happens
 /// when the attestation is issued, not when it is printed. `security_attestations`
-/// says so at the top — an embargoed finding's evidence URL points at a public
+/// says so at the top - an embargoed finding's evidence URL points at a public
 /// card that shows severity, class, date and reporter and withholds the
 /// reproduction, and a confidential mission is issued titled by its type and
 /// its finding counts. The sheet prints what was issued. A sheet that decided
@@ -326,7 +326,7 @@ fn options() -> &'static usvg::Options<'static> {
 /// Escape the five characters that would otherwise break out of XML text or
 /// an attribute value.
 ///
-/// Every dynamic value here is user-controlled — a display name and an
+/// Every dynamic value here is user-controlled - a display name and an
 /// attestation title are whatever somebody typed. Interpolating one raw would
 /// let `</text>` inside a name rewrite the document.
 fn escape(input: &str) -> String {
@@ -589,8 +589,8 @@ pub fn build_certificate_svg(data: &CertificateData, detail: SheetDetail) -> Str
 /// The block the full sheet adds: what the attestation was issued for, and
 /// where to read it.
 ///
-/// Returns an empty string — and so leaves the short sheet's coordinates
-/// untouched — for [`SheetDetail::Short`], and for a full sheet on an
+/// Returns an empty string - and so leaves the short sheet's coordinates
+/// untouched - for [`SheetDetail::Short`], and for a full sheet on an
 /// attestation that carries neither a description nor an evidence link.
 fn build_evidence_svg(data: &CertificateData, detail: SheetDetail) -> String {
     if detail != SheetDetail::Full {
@@ -655,7 +655,7 @@ fn build_evidence_svg(data: &CertificateData, detail: SheetDetail) -> String {
 
 /// A QR code as inline SVG, sized to fit the sheet's corner.
 ///
-/// On failure — a payload too long for the largest version — the sheet keeps
+/// On failure - a payload too long for the largest version - the sheet keeps
 /// the printed URL and the code, and loses only the convenience. Better than
 /// a 500 on a document somebody is trying to print.
 fn qr_svg(payload: &str) -> String {
@@ -843,7 +843,7 @@ mod tests {
 
     #[test]
     fn an_unknown_basis_presents_as_an_artefact() {
-        // `None` is a basis with no catalogue row — issued before the row
+        // `None` is a basis with no catalogue row - issued before the row
         // existed, or after it was removed. Most bases require a deliverable,
         // so a new one almost certainly does too, and guessing that way
         // understates nothing.
@@ -940,8 +940,8 @@ mod tests {
     #[test]
     fn the_full_sheet_carries_what_the_short_one_cannot() {
         // The title names the weakness class. Everything a reader of a
-        // security attestation actually wants — the severity, the affected
-        // system, the disclosure state — is in the description, and the short
+        // security attestation actually wants - the severity, the affected
+        // system, the disclosure state - is in the description, and the short
         // sheet has never shown it.
         let data = a_confirmed_finding();
 

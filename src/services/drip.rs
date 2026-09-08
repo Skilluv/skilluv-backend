@@ -1,12 +1,12 @@
-//! Drip email sequences — onboarding and retention.
+//! Drip email sequences - onboarding and retention.
 //!
 //! Triggered hourly by a background task. Each send is recorded in
 //! `email_log`, so the same sequence never reaches the same person twice.
 //!
 //! What is here is *when*: which accounts are at the right age, and whether
-//! they have done the thing the message is about. Everything else — the
+//! they have done the thing the message is about. Everything else - the
 //! words, the language, the theme, the button, the unsubscribe link and
-//! whether this person consented at all — belongs to
+//! whether this person consented at all - belongs to
 //! [`crate::services::notify`].
 //!
 //! It did not, until now. Each sequence carried a French subject line and a
@@ -29,7 +29,7 @@ use std::sync::Arc;
 /// How many accounts one sequence walks per run.
 ///
 /// Each sequence targets a one-day-wide signup window and runs hourly, so
-/// this is only reachable on a day with more signups than that — which is
+/// this is only reachable on a day with more signups than that - which is
 /// a good problem, and one worth being told about rather than truncated
 /// through.
 const MAX_PER_SEQUENCE: usize = 50_000;
@@ -174,7 +174,7 @@ fn talent_sequences() -> Vec<TalentSeq> {
             delay_max_days: 15,
             require_inactive: true,
         },
-        // The last one. It says so, and it is the last one — after this the
+        // The last one. It says so, and it is the last one - after this the
         // sequence stops rather than nagging forever.
         TalentSeq {
             kind: "lifecycle.last_chance",
@@ -196,7 +196,7 @@ async fn run_sequence(
     let since_max = Utc::now() - ChronoDuration::days(seq.delay_min_days);
 
     // This selected `LIMIT 500` with no cursor. The 501st eligible account
-    // never received the message — not late, never — and nothing said so.
+    // never received the message - not late, never - and nothing said so.
     // The window is one day wide, so the ceiling is only reachable on a day
     // with more than that many signups, and hitting it is now logged.
     let mut walk = crate::services::batch::Walk::new("drip_talent", MAX_PER_SEQUENCE);

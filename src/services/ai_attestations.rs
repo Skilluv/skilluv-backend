@@ -11,9 +11,9 @@
 //!
 //! Migration 0198 added that type for exactly this shape of claim: it rests
 //! on a deliverable and names it, with `basis` saying what kind. The three
-//! older types each carry an invariant written for a different story —
-//! `gesture` and `skill` name one skill node, `compagnonnage` names a project
-//! — and filing a shipped model under any of them meant either inventing a
+//! older types each carry an invariant written for a different story -
+//! `gesture` and `skill` name one skill node, `compagnonnage` names a project -
+//! and filing a shipped model under any of them meant either inventing a
 //! skill node to point at or breaking a constraint.
 //!
 //! Skills stay optional and are attached when the slice already names them.
@@ -42,7 +42,7 @@ use crate::errors::AppError;
 /// Which basis an AI artefact supports, from what it is.
 ///
 /// `data_pipeline` is deliberately absent. A pipeline is real work and counts
-/// as a verified artefact, but none of the seven bases describes it — and
+/// as a verified artefact, but none of the seven bases describes it - and
 /// inventing `ai_pipeline_built` would mean an attestation whose evidence is
 /// a repository, which `code_project_shipped` already covers.
 fn basis_for_subtype(subtype: &str) -> Option<&'static str> {
@@ -129,7 +129,7 @@ async fn issue(
 /// lost because a landing-page projection failed. `emit` decides visibility
 /// from the person's own preferences, so nothing here overrides a withdrawal.
 ///
-/// The artefact URL is the one the slice already had to name — a feed line
+/// The artefact URL is the one the slice already had to name - a feed line
 /// with nothing to open is the fabricated social proof migration 0203 exists
 /// to replace.
 async fn announce(
@@ -184,7 +184,7 @@ async fn announce(
             subject_type: "user",
             subject_id: user_id,
             subject_label: &username,
-            headline: format!("{title} — {username}"),
+            headline: format!("{title} - {username}"),
             artifact_url: url,
             repository: None,
             amount: None,
@@ -206,7 +206,7 @@ async fn announce(
 /// Issue whatever the verified work on this slice earns.
 ///
 /// Called after a deliverable is verified. Returns the bases actually issued,
-/// which is empty on a second pass and empty for work that earns none — both
+/// which is empty on a second pass and empty for work that earns none - both
 /// normal, neither an error.
 pub async fn issue_for_slice(db: &PgPool, slice_id: Uuid) -> Result<Vec<String>, AppError> {
     // The verified, unrevoked deliverable is the evidence. Without one there
@@ -303,7 +303,7 @@ pub async fn issue_for_slice(db: &PgPool, slice_id: Uuid) -> Result<Vec<String>,
 ///
 /// Called from the proof orchestrator rather than from the point a slice is
 /// verified, and deliberately: two of the six bases are earned by events that
-/// happen *after* verification — a reviewer reproducing a benchmark, a vendor
+/// happen *after* verification - a reviewer reproducing a benchmark, a vendor
 /// agreeing a disclosure date. Hooking the verification alone would leave
 /// those permanently unissued, which is the dormant-engine failure P19 was
 /// written to end.
@@ -353,7 +353,7 @@ pub async fn issue_for_user(db: &PgPool, user_id: Uuid) -> Result<Vec<String>, A
 //
 // It does not fit this module's other generators, and that is the reason it
 // was missed. They write `skill` attestations, which need exactly one skill
-// node — and being put forward by the platform names no skill. So this one is
+// node - and being put forward by the platform names no skill. So this one is
 // an `artefact` attestation like its two siblings in the code and design
 // domains, and it goes through the shared door.
 
@@ -361,7 +361,7 @@ pub async fn issue_for_user(db: &PgPool, user_id: Uuid) -> Result<Vec<String>, A
 ///
 /// Only the one basis: everything else AI issues is a `skill` attestation
 /// with a skill node, written by the generators above. `artifact_bases` is
-/// empty because a featuring rests on nobody's deliverable — it rests on
+/// empty because a featuring rests on nobody's deliverable - it rests on
 /// somebody's judgement, and says so.
 const EDITORIAL: crate::services::artefact_attestations::Domain =
     crate::services::artefact_attestations::Domain {

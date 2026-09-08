@@ -28,7 +28,7 @@ echo "▶ Verifying image signature : ${IMAGE}"
 if cosign verify "${IMAGE}" \
     --certificate-identity-regexp="https://github.com/${REPO}/.*" \
     --certificate-oidc-issuer="${ISSUER}" > /dev/null 2>&1; then
-    echo "  OK signature verified — image built by our GH Actions workflow"
+    echo "  OK signature verified - image built by our GH Actions workflow"
 else
     echo "  FAIL signature verification FAILED" >&2
     echo "  This image was not signed by our CI. Refusing to deploy." >&2
@@ -44,7 +44,7 @@ if cosign verify-attestation "${IMAGE}" \
     echo "  OK SBOM attestation present"
 else
     echo "  WARN  SBOM attestation missing (image is signed but SBOM not attached)"
-    echo "  Not fatal — deploy will proceed. But investigate."
+    echo "  Not fatal - deploy will proceed. But investigate."
 fi
 
 echo ""
@@ -59,4 +59,4 @@ else
 fi
 
 echo ""
-echo "OK Image ${IMAGE} passed verification — safe to deploy."
+echo "OK Image ${IMAGE} passed verification - safe to deploy."

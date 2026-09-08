@@ -1,10 +1,10 @@
 //! Registering and confirming mods (migration 0583).
 //!
 //! A mod is content that lives inside someone else's game, on a platform we do
-//! not own — Nexus, the Steam Workshop, CurseForge. Skilluv never hosts the
+//! not own - Nexus, the Steam Workshop, CurseForge. Skilluv never hosts the
 //! package; it holds the proof and the metadata. A creator registers the mod
-//! with its hosting URL; a community reviewer confirms it against three things
-//! — the URL is real, the mod is theirs, the vendor's terms were kept — or
+//! with its hosting URL; a community reviewer confirms it against three things -
+//! the URL is real, the mod is theirs, the vendor's terms were kept - or
 //! refuses it with a reason.
 //!
 //! A confirmed mod becomes a deliverable so it counts toward the cross-domain
@@ -78,13 +78,13 @@ pub async fn register(
     let url = input.external_hosting_url.trim();
     if !url.starts_with("https://") {
         return Err(AppError::Validation(
-            "a mod's hosting URL must be a public https link — the proof is that page being real"
+            "a mod's hosting URL must be a public https link - the proof is that page being real"
                 .into(),
         ));
     }
     if input.description_md.trim().is_empty() {
         return Err(AppError::Validation(
-            "say what the mod does — a reviewer confirms against a description".into(),
+            "say what the mod does - a reviewer confirms against a description".into(),
         ));
     }
 
@@ -147,7 +147,7 @@ pub async fn confirm(
 ) -> Result<GameMod, AppError> {
     if reason.trim().is_empty() {
         return Err(AppError::Validation(
-            "a confirmation carries a reason — say what you checked".into(),
+            "a confirmation carries a reason - say what you checked".into(),
         ));
     }
 
@@ -209,7 +209,7 @@ pub async fn confirm(
 
     tx.commit().await?;
 
-    // Attest, then recompute — best-effort, like every proof hook: a failure
+    // Attest, then recompute - best-effort, like every proof hook: a failure
     // here is logged, never allowed to undo a confirmation that happened.
     if let Err(e) = crate::services::game_attestations::issue_for_mod(db, mod_id).await {
         tracing::warn!(mod_id = %mod_id, error = %e, "mod attestation failed after confirm");
@@ -231,7 +231,7 @@ pub async fn refuse(
 ) -> Result<GameMod, AppError> {
     if reason.trim().is_empty() {
         return Err(AppError::Validation(
-            "a refusal says why — the author has to know what to fix".into(),
+            "a refusal says why - the author has to know what to fix".into(),
         ));
     }
     let m: GameMod = sqlx::query_as("SELECT * FROM game_mods WHERE id = $1")
@@ -262,7 +262,7 @@ pub async fn refuse(
     .await?)
 }
 
-/// Update a confirmed mod's download count — the figure the `mods_viral`
+/// Update a confirmed mod's download count - the figure the `mods_viral`
 /// craft-score term reads. A reviewer sets it against the hosting page; the
 /// author cannot inflate their own score by editing it.
 pub async fn update_downloads(
@@ -290,7 +290,7 @@ pub async fn update_downloads(
     .await?
     .ok_or_else(|| AppError::NotFound("confirmed mod not found".into()))?;
 
-    // Crossing the viral threshold changes the craft score — recompute so the
+    // Crossing the viral threshold changes the craft score - recompute so the
     // profile does not wait for the next sweep.
     if let Err(e) = crate::services::game_profile::recompute(db, m.author_user_id).await {
         tracing::warn!(user = %m.author_user_id, error = %e, "game score recompute failed after downloads update");
@@ -318,7 +318,7 @@ pub async fn list_for_author(db: &PgPool, author_user_id: Uuid) -> Result<Vec<Ga
     .await?)
 }
 
-/// The mods waiting on a review, oldest first — a reviewer's queue.
+/// The mods waiting on a review, oldest first - a reviewer's queue.
 pub async fn list_pending(db: &PgPool, limit: i64) -> Result<Vec<GameMod>, AppError> {
     Ok(sqlx::query_as(
         "SELECT * FROM game_mods WHERE status = 'registered' ORDER BY registered_at ASC LIMIT $1",

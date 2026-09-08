@@ -1,4 +1,4 @@
-# Gitleaks configuration — extends the default ruleset with an allowlist for
+# Gitleaks configuration - extends the default ruleset with an allowlist for
 # our known false positives. Anything sensitive (real API keys, tokens, JWT
 # secrets) will still be caught.
 
@@ -8,7 +8,7 @@ useDefault = true
 [allowlist]
 description = "Known-safe placeholders and test fixtures"
 
-# Files that are ONLY placeholders / fixtures — never real secrets.
+# Files that are ONLY placeholders / fixtures - never real secrets.
 paths = [
     '''(?i)\.env\.example''',
     '''(?i)tests/common/mod\.rs''',
@@ -37,11 +37,11 @@ regexes = [
     '''srt_0{16,}''',
 ]
 
-# Individual commits to skip — use only for legacy leaks that have been rotated
+# Individual commits to skip - use only for legacy leaks that have been rotated
 # and cannot practically be scrubbed from history. Empty for now.
 commits = []
 
-# ── SE-01 — custom rules for OUR provider shapes ────────────────────────────
+# ── SE-01 - custom rules for OUR provider shapes ────────────────────────────
 # The default ruleset catches generic/AWS/high-entropy secrets. These add the
 # specific forms this project uses, so a real one is caught by shape even when
 # entropy alone would not flag it. Placeholders in .env.example / tests / docs

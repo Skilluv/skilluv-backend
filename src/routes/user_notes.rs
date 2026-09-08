@@ -1,14 +1,14 @@
-//! SKI-37 (Post-MVP T1-02) — private notes on any artifact a user has seen.
+//! SKI-37 (Post-MVP T1-02) - private notes on any artifact a user has seen.
 //!
 //! Endpoints:
-//!   PUT    /api/users/me/notes/{target_type}/{target_id}   (auth) — upsert
+//!   PUT    /api/users/me/notes/{target_type}/{target_id}   (auth) - upsert
 //!   GET    /api/users/me/notes/{target_type}/{target_id}   (auth)
 //!   DELETE /api/users/me/notes/{target_type}/{target_id}   (auth)
-//!   GET    /api/users/me/notes                             (auth) — list
+//!   GET    /api/users/me/notes                             (auth) - list
 //!
 //! Notes are private, always. There is no endpoint here that returns
 //! another user's notes, and every query is scoped by `user_id` from the
-//! JWT rather than from the path — a note is addressed by its target, and
+//! JWT rather than from the path - a note is addressed by its target, and
 //! the author is implicit.
 //!
 //! Anti-spam is two-layered: a 1000-char cap (mirrored by a DB CHECK) and
@@ -62,7 +62,7 @@ fn wrap(data: serde_json::Value) -> serde_json::Value {
 #[serde(deny_unknown_fields)]
 pub struct UpsertNoteBody {
     /// 1..1000 chars after trimming. An all-whitespace body is a 400, not
-    /// a silent delete — deleting is an explicit DELETE.
+    /// a silent delete - deleting is an explicit DELETE.
     pub body: String,
 }
 

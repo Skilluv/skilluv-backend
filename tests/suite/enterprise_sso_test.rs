@@ -135,7 +135,7 @@ async fn test_enforce_sso_blocks_password_login() {
         )
         .await;
 
-    // Register a user whose email domain matches — done via direct DB insert since
+    // Register a user whose email domain matches - done via direct DB insert since
     // the standard register helper uses @skilluv.test.
     let user_id = uuid::Uuid::new_v4();
     let password_hash =

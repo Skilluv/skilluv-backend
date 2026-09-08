@@ -1,4 +1,4 @@
-//! Integration tests for SKI-39 — profile timeline.
+//! Integration tests for SKI-39 - profile timeline.
 //!
 //! The timeline is written by database triggers (migration 0142), so most
 //! of these tests assert on what plain SQL writes produce, not on what a
@@ -365,7 +365,7 @@ async fn backfill_is_idempotent_and_rebuilds_dropped_rows() {
     .unwrap();
 
     // Everything is already there thanks to the triggers, so a backfill is
-    // a no-op — which is the cheapest possible completeness check.
+    // a no-op - which is the cheapest possible completeness check.
     let report = timeline::backfill(&app.db, Some(my_id)).await.unwrap();
     assert_eq!(report.total(), 0, "triggers already recorded everything");
 

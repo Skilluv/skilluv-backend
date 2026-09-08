@@ -9,13 +9,13 @@
 //!
 //! Juice Shop is the exception, and only because its flags are not arbitrary.
 //! The CTF extension derives each one from a single `ctfKey` and the
-//! challenge's name. Given the key, the twenty flags are computable — so they
+//! challenge's name. Given the key, the twenty flags are computable - so they
 //! can be seeded without anybody inventing anything.
 //!
 //! ## The trap, and what stops it
 //!
 //! The key is per instance. Recreate the container and it changes, and twenty
-//! challenges become unpassable **silently** — the platform still accepts
+//! challenges become unpassable **silently** - the platform still accepts
 //! submissions, it just never matches. That is worse than having no
 //! challenges, and it is exactly the failure 0558 is about.
 //!
@@ -254,7 +254,7 @@ pub fn declared() -> Option<String> {
 ///
 /// Isolated in one function on purpose. If this construction is ever wrong,
 /// every challenge is wrong the same way, and the fix is one line rather than
-/// twenty rows — which is also why the challenges are seeded as drafts, so
+/// twenty rows - which is also why the challenges are seeded as drafts, so
 /// somebody checks one before anybody is asked to solve twenty.
 pub fn flag_for(ctf_key: &str, challenge_name: &str) -> String {
     use hmac::{Hmac, KeyInit, Mac};
@@ -307,7 +307,7 @@ pub async fn run(db: &PgPool, owner: Uuid) -> Result<String, AppError> {
         .bind(c.what)
         .bind(format!(
             "The target is {url}. Find the flag, then submit it here.\n\n\
-             {}\n\nNothing you do to this instance affects anything else — it \
+             {}\n\nNothing you do to this instance affects anything else - it \
              is rebuilt regularly and it holds no real data.",
             c.what
         ))
@@ -329,7 +329,7 @@ pub async fn run(db: &PgPool, owner: Uuid) -> Result<String, AppError> {
     }
 
     Ok(format!(
-        "{written} CTF challenges derived for {url}, all draft — solve one and \
+        "{written} CTF challenges derived for {url}, all draft - solve one and \
          publish before announcing them"
     ))
 }
@@ -365,7 +365,7 @@ mod tests {
     #[test]
     fn a_flag_depends_on_both_the_key_and_the_challenge() {
         // The property the whole design rests on: two instances derive
-        // different flags, so a key rotation invalidates every one of them —
+        // different flags, so a key rotation invalidates every one of them -
         // which is why the ledger version is the key's fingerprint.
         let a = flag_for("key-one", "Login Admin");
         let b = flag_for("key-two", "Login Admin");
@@ -378,7 +378,7 @@ mod tests {
 
     #[test]
     fn the_fingerprint_moves_with_the_configuration() {
-        // Not a test of `declared()` — it reads process environment that every
+        // Not a test of `declared()` - it reads process environment that every
         // other test shares. This is the same computation, on values.
         let fp = |url: &str, key: &str| {
             let mut h = Sha256::new();

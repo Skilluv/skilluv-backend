@@ -8,7 +8,7 @@ quoi, et ce qui existe déjà côté backend pour l'alimenter.*
 ## Pourquoi mensuelle et pas hebdomadaire
 
 Une lettre hebdomadaire demande de la matière chaque semaine. Avec une
-communauté qui démarre, elle serait vide trois semaines sur quatre — et une
+communauté qui démarre, elle serait vide trois semaines sur quatre - et une
 lettre vide apprend à ne plus l'ouvrir.
 
 Mensuelle, avec quatre semaines de travaux validés derrière soi, il y a
@@ -27,7 +27,7 @@ version finale. **C'est la rubrique qui n'existe nulle part ailleurs.** Un
 portfolio classique montre le résultat ; ici on montre la distance parcourue,
 et elle est vérifiable.
 
-Source : `GET /api/design/users/{username}/iteration-stories` — les travaux
+Source : `GET /api/design/users/{username}/iteration-stories` - les travaux
 validés après trois tours ou plus.
 
 ### 2. La personne mise en avant
@@ -81,7 +81,7 @@ goût.
 
 **Ce qui manque côté backend :** un `kind` pour la lettre elle-même, et un
 travail périodique qui la compose. Ce n'est pas fait, parce qu'il n'y a pas
-encore de premier numéro — et écrire le générateur avant d'avoir écrit un
+encore de premier numéro - et écrire le générateur avant d'avoir écrit un
 numéro à la main produirait un gabarit calqué sur rien.
 
 L'ordre est : trois numéros à la main, puis on automatise ce qui s'est révélé

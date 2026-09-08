@@ -1,4 +1,4 @@
-//! Admin dashboard — Phase 4.15.
+//! Admin dashboard - Phase 4.15.
 //!
 //! Consolidated KPIs for platform ops : MRR, financial breakdown, moderation
 //! queue counts, current period funnels, ops health.

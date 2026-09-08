@@ -1,4 +1,4 @@
-//! Storing what a registry said — including when it said nothing.
+//! Storing what a registry said - including when it said nothing.
 
 use crate::common::TestApp;
 use skilluv_backend::services::artifact_registry::{PackageRef, PackageStats, record};

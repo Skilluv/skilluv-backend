@@ -5,21 +5,21 @@
 //! Most domains attest one thing: a verified deliverable on a slice. Game,
 //! like security, attests several genuinely different objects (migration 0574):
 //!
-//!   * a **slice** — a build, a design document, an asset, an animation, a
-//!     level — carried through review and three playtests. The ordinary case.
-//!   * a **jam** — a weekend's finished submission. Everyone who shipped one is
+//!   * a **slice** - a build, a design document, an asset, an animation, a
+//!     level - carried through review and three playtests. The ordinary case.
+//!   * a **jam** - a weekend's finished submission. Everyone who shipped one is
 //!     a participant; the top-ranked one is the winner. No slice.
-//!   * a **mod** — content hosted inside someone else's game, on a platform we
+//!   * a **mod** - content hosted inside someone else's game, on a platform we
 //!     do not own, confirmed by a reviewer (migration 0583).
-//!   * a **shipped title** and an **open-source contribution** — a game that
-//!     reached players, a pull request merged upstream — each confirmed by a
+//!   * a **shipped title** and an **open-source contribution** - a game that
+//!     reached players, a pull request merged upstream - each confirmed by a
 //!     reviewer against a deliverable the platform already holds.
-//!   * a **playtest milestone** — twenty playtests given to other creators.
+//!   * a **playtest milestone** - twenty playtests given to other creators.
 //!
 //! ## Why the evidence is always a public link
 //!
 //! `allows_stored_objects` is false. A game's proof is a playable URL, a store
-//! page, a repository, a hosting page with a download count — never a file in
+//! page, a repository, a hosting page with a download count - never a file in
 //! our own bucket. The whole domain is built on work that reached players, and
 //! a proof only we can serve is the opposite of that.
 
@@ -62,7 +62,7 @@ pub const PLAYTEST_HERO_THRESHOLD: i64 = 20;
 
 /// The one basis every game slice earns, whatever its subtype.
 ///
-/// Unlike security — where each trade's artefact earns a different basis — a
+/// Unlike security - where each trade's artefact earns a different basis - a
 /// game slice is a game slice: a validated build, document, asset, animation
 /// or level all attest the same thing, that a game deliverable was carried
 /// through review and playtesting. The subtype decides how it was reviewed,
@@ -80,7 +80,7 @@ pub fn basis_for_subtype(subtype: &str) -> Option<&'static str> {
 // ═══════════════════════════════════════════════════════════════════
 
 /// Issue what the verified work on this game slice earns. Empty on a second
-/// pass and empty for a slice that earns none — neither is an error.
+/// pass and empty for a slice that earns none - neither is an error.
 pub async fn issue_for_slice(db: &PgPool, slice_id: Uuid) -> Result<Vec<String>, AppError> {
     #[derive(sqlx::FromRow)]
     struct Ev {
@@ -206,7 +206,7 @@ pub async fn issue_for_mod(db: &PgPool, mod_id: Uuid) -> Result<Vec<String>, App
         return Ok(Vec::new());
     }
     let Some(deliverable_id) = m.deliverable_id else {
-        // Confirmed but no deliverable — confirm() creates it in the same
+        // Confirmed but no deliverable - confirm() creates it in the same
         // transaction, so this is a torn write to log, not to paper over.
         tracing::warn!(mod_id = %mod_id, "confirmed mod has no deliverable to attest");
         return Ok(Vec::new());
@@ -242,7 +242,7 @@ pub async fn issue_for_mod(db: &PgPool, mod_id: Uuid) -> Result<Vec<String>, App
 // Reviewer-confirmed: shipped titles and upstream contributions
 // ═══════════════════════════════════════════════════════════════════
 
-/// Issue `game_shipped_title` — a game that reached players, confirmed by a
+/// Issue `game_shipped_title` - a game that reached players, confirmed by a
 /// reviewer against a deliverable the person already has.
 ///
 /// The store or itch page is both the evidence link and the value of
@@ -279,7 +279,7 @@ pub async fn issue_shipped_title(
     .await
 }
 
-/// Issue `game_open_source_contribution` — a pull request merged into an engine
+/// Issue `game_open_source_contribution` - a pull request merged into an engine
 /// or an open-source game, confirmed against its merged-PR deliverable.
 pub async fn issue_open_source_contribution(
     db: &PgPool,
@@ -339,7 +339,7 @@ async fn members_of(
 
 /// Issue what a concluded jam earns: `game_jam_participant` to everyone who
 /// shipped a submission, and `game_jam_winner` to the members of the top-ranked
-/// one. Idempotent — safe to call again on the same concluded jam.
+/// one. Idempotent - safe to call again on the same concluded jam.
 ///
 /// The winner's basis rests on a deliverable, so one is created per member from
 /// the winning submission (a jam game is a `playable_build`). The participant's
@@ -421,7 +421,7 @@ pub async fn finalize_jam_attestations(db: &PgPool, jam_id: Uuid) -> Result<Vec<
                 continue;
             }
 
-            // The winner's basis rests on a deliverable — create it from the
+            // The winner's basis rests on a deliverable - create it from the
             // winning submission, one per member, verified because the jam
             // conclusion is the verification.
             let deliverable_id: Option<Uuid> = sqlx::query_scalar(
@@ -442,7 +442,7 @@ pub async fn finalize_jam_attestations(db: &PgPool, jam_id: Uuid) -> Result<Vec<
             .fetch_optional(db)
             .await?;
 
-            // Already there on a second pass — read it back.
+            // Already there on a second pass - read it back.
             let deliverable_id = match deliverable_id {
                 Some(id) => id,
                 None => {
@@ -493,7 +493,7 @@ pub async fn finalize_jam_attestations(db: &PgPool, jam_id: Uuid) -> Result<Vec<
 // ═══════════════════════════════════════════════════════════════════
 
 /// Issue `game_playtest_hero` once a person has given the threshold of
-/// playtests. No deliverable — it is recognition of service to the domain, and
+/// playtests. No deliverable - it is recognition of service to the domain, and
 /// it does not move a rank (migration 0574). Empty below the threshold or on a
 /// second pass.
 pub async fn issue_playtest_hero(db: &PgPool, user_id: Uuid) -> Result<Vec<String>, AppError> {
@@ -571,7 +571,7 @@ pub async fn featured_game_creator(
 /// the proof orchestrator, for the reason P19 wrote down: a mod is confirmed
 /// and a jam concludes well after the slice they started from was verified, and
 /// hooking only the moment of verification would leave the later halves
-/// unattested. Bounded — the next recompute reaches what this pass did not.
+/// unattested. Bounded - the next recompute reaches what this pass did not.
 pub async fn issue_for_user(db: &PgPool, user_id: Uuid) -> Result<Vec<String>, AppError> {
     let mut issued = Vec::new();
 

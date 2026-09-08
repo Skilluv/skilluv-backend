@@ -1,4 +1,4 @@
-//! skilluv-seed-guild — provision a guild whose founder is a given account.
+//! skilluv-seed-guild - provision a guild whose founder is a given account.
 //!
 //! SKI-289. Founding a guild through the API requires exactly three
 //! co-founders, which makes owner-side flows (Applications / Invitations
@@ -12,7 +12,7 @@
 //!
 //! The three-co-founder rule is a product rule enforced by
 //! `services::guild::create_guild`, not a database constraint. Seeding
-//! around it is deliberate and limited to non-production environments —
+//! around it is deliberate and limited to non-production environments -
 //! the binary refuses to run against a database whose URL does not look
 //! local unless `SEED_GUILD_ALLOW_REMOTE=1` is set.
 //!
@@ -144,7 +144,7 @@ async fn main() -> Result<()> {
             .fetch_optional(&db)
             .await?;
     let founder_id =
-        founder_id.with_context(|| format!("no user with email {email} — register it first"))?;
+        founder_id.with_context(|| format!("no user with email {email} - register it first"))?;
 
     let mut tx = db.begin().await?;
 
@@ -169,7 +169,7 @@ async fn main() -> Result<()> {
     .bind(founder_id)
     .fetch_one(&mut *tx)
     .await
-    .context("guild upsert failed — is the tag already taken by another guild?")?;
+    .context("guild upsert failed - is the tag already taken by another guild?")?;
 
     sqlx::query(
         r#"
@@ -183,7 +183,7 @@ async fn main() -> Result<()> {
     .execute(&mut *tx)
     .await?;
 
-    // SKI-293 — an owner with an empty guild exercises nothing. The
+    // SKI-293 - an owner with an empty guild exercises nothing. The
     // Applications and Invitations tabs, and revocation, all need a pending
     // row to act on. Two throwaway accounts carry them.
     let applicant_id = ensure_counterpart(&mut tx, "e2e_applicant", "Ada", "Applicant").await?;

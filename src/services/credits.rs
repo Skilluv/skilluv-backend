@@ -1,4 +1,4 @@
-//! Enterprise credits service — Phase 3 monétisation.
+//! Enterprise credits service - Phase 3 monétisation.
 //!
 //! Atomic balance operations. Every change is journaled in `credit_transactions`.
 //! Designed to be safe under concurrent spend (the spend path uses an atomic
@@ -176,7 +176,7 @@ pub async fn grant_signup_bonus(
             reason: "signup_bonus",
             related_payment_id: None,
             related_promo_code_id: None,
-            notes: Some("Welcome bonus — 1 free credit valid 30 days"),
+            notes: Some("Welcome bonus - 1 free credit valid 30 days"),
             actor_user_id: None,
             expires_at: Some(expires_at),
         },
@@ -224,7 +224,7 @@ pub async fn spend(db: &PgPool, input: SpendInput<'_>) -> Result<CreditTransacti
         Some((b,)) => b,
         None => {
             return Err(AppError::Validation(
-                "Insufficient credits — recharge the enterprise account before contacting talents."
+                "Insufficient credits - recharge the enterprise account before contacting talents."
                     .into(),
             ));
         }
@@ -357,7 +357,7 @@ pub fn balance_as_f64(b: &BigDecimal) -> f64 {
     b.to_f64().unwrap_or(0.0)
 }
 
-/// Background task — refund 50% of credits for interest_requests that stayed
+/// Background task - refund 50% of credits for interest_requests that stayed
 /// `pending` for more than 30 days.
 pub fn start_interest_timeout_refunder(db: PgPool) {
     tokio::spawn(async move {

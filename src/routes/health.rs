@@ -2,7 +2,7 @@
 //!
 //! - `GET /api/health` : process liveness (no dependency I/O). Used by Docker / k8s.
 //! - `GET /api/health/live` : alias of `/api/health`. Kept for Uptime Kuma backward compat.
-//! - `GET /api/health/deep` : exhaustive — Postgres + Redis + MinIO + Brevo + WS stats.
+//! - `GET /api/health/deep` : exhaustive - Postgres + Redis + MinIO + Brevo + WS stats.
 //!
 //! Sub-millisecond on the basic path. Up to ~3-5s on /deep when external deps are slow.
 
@@ -27,14 +27,14 @@ pub fn health_routes() -> Router<AppState> {
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct LivenessResponse {
-    /// Always `"live"` — the process is up and event-looping.
+    /// Always `"live"` - the process is up and event-looping.
     #[schema(example = "live")]
     pub status: &'static str,
     /// `Cargo.toml` package version, baked in at compile time.
     pub version: &'static str,
 }
 
-/// Cheap liveness check — no dependency I/O. Used by Docker / k8s /
+/// Cheap liveness check - no dependency I/O. Used by Docker / k8s /
 /// Uptime Kuma. Sub-millisecond. Also served on `/api/health/live`
 /// (undocumented alias kept for Uptime Kuma backward compat).
 #[utoipa::path(
@@ -54,7 +54,7 @@ pub async fn liveness() -> Json<LivenessResponse> {
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ServiceHealth {
-    /// `"ok"`, `"unreachable"`, `"configured"`, or `"disabled"` —
+    /// `"ok"`, `"unreachable"`, `"configured"`, or `"disabled"` -
     /// exact value depends on the service. Frontends should treat any
     /// value other than `"ok"` / `"configured"` as unhealthy.
     #[schema(example = "ok")]
@@ -91,7 +91,7 @@ pub struct DeepHealthResponse {
     pub websocket: WebsocketStats,
 }
 
-/// Exhaustive dependency check — Postgres + Redis + MinIO +
+/// Exhaustive dependency check - Postgres + Redis + MinIO +
 /// Brevo + WebSocket stats. Returns 200 when critical deps (postgres +
 /// redis) are OK, 503 otherwise. Takes up to ~3-5s when a dep is slow.
 #[utoipa::path(

@@ -5,7 +5,7 @@
 //! notification to buy resilience against a rare failure.
 //!
 //! What was missing is the other half. A 503 from the mail provider was
-//! logged and the message was gone — not late, gone, with nowhere to put it
+//! logged and the message was gone - not late, gone, with nowhere to put it
 //! and nothing to retry. This is that somewhere.
 //!
 //! ## Backoff, and when to stop
@@ -19,7 +19,7 @@
 //! ## Fallback is not retry
 //!
 //! A push that fails because the device token is stale will fail again
-//! forever — the person reinstalled the app, and asking the same question
+//! forever - the person reinstalled the app, and asking the same question
 //! louder does not help. So a failed push is never retried. Instead, for a
 //! transactional kind, an email is enqueued: a different road to the same
 //! person, taken only where the message is an obligation. Nobody needs an
@@ -106,7 +106,7 @@ pub async fn enqueue(db: &PgPool, queued: Queued<'_>) {
             kind = queued.kind,
             user = %queued.user_id,
             error = %e,
-            "could not queue a failed notification — this one really is lost"
+            "could not queue a failed notification - this one really is lost"
         ),
     }
 }
@@ -200,7 +200,7 @@ pub async fn drain(
                         user = %row.user_id,
                         attempts = next,
                         error = %e,
-                        "notification abandoned after every attempt — the recipient was never reached"
+                        "notification abandoned after every attempt - the recipient was never reached"
                     );
                 } else {
                     // Doubling: 1, 2, 4, 8, 16 minutes.
@@ -245,7 +245,7 @@ async fn attempt(
 
             let Some((address, display_name)) = address else {
                 // The address was disabled between the failure and the
-                // retry — a hard bounce, or a deletion request. Not an
+                // retry - a hard bounce, or a deletion request. Not an
                 // error, and retrying would be worse than not.
                 return Ok(());
             };
@@ -312,7 +312,7 @@ async fn attempt(
 
 /// Drain the queue on a timer.
 ///
-/// Every minute, which is the shortest backoff — a longer tick would make
+/// Every minute, which is the shortest backoff - a longer tick would make
 /// the first retry wait for the tick rather than for the backoff, and turn
 /// "one minute" into "up to five".
 pub fn start_outbox_worker(db: PgPool, email: std::sync::Arc<crate::services::EmailService>) {
@@ -333,7 +333,7 @@ pub fn start_outbox_worker(db: PgPool, email: std::sync::Arc<crate::services::Em
                 Ok(_) => {}
                 Err(e) => tracing::error!(
                     error = %e,
-                    "outbox drain failed — queued notifications stayed queued"
+                    "outbox drain failed - queued notifications stayed queued"
                 ),
             }
         }

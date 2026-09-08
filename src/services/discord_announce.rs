@@ -11,7 +11,7 @@
 //! ## What was there before
 //!
 //! `discord_notifications_queue` has existed since migration 0135 with a
-//! consumer that polls it every fifteen seconds. It had no producer at all —
+//! consumer that polls it every fifteen seconds. It had no producer at all -
 //! no trigger, no call site. This is that producer.
 //!
 //! ## Never fatal
@@ -58,7 +58,7 @@ impl Purpose {
 /// per domain configures seven, and both work without a code change.
 ///
 /// `None` when neither exists. The announcement is still enqueued, and the
-/// consumer posts it in its default channel — a message in the wrong room is
+/// consumer posts it in its default channel - a message in the wrong room is
 /// recoverable, a message nobody sent is not.
 pub async fn resolve_channel(
     db: &PgPool,
@@ -69,7 +69,7 @@ pub async fn resolve_channel(
     // so the primary key would not have to reason about NULL equality;
     // migration 0440 moved that uniqueness to an index over COALESCE so the
     // column could point at `skill_domains`, because a routing table with an
-    // unchecked domain does not fail on a typo — it routes the announcement
+    // unchecked domain does not fail on a typo - it routes the announcement
     // nowhere and nobody finds out.
     //
     // The ordering still prefers the domain's own room over the general one.
@@ -226,7 +226,7 @@ pub fn render(event_type: &str, payload: &Value, frontend: &str) -> String {
             let username = payload["username"].as_str().unwrap_or("quelqu'un");
             let title = payload["challenge_title"].as_str().unwrap_or("un défi");
             let hash = s("attestation_hash");
-            format!("**{username}** a validé **{title}** — vérifier : {frontend}/verify/{hash}")
+            format!("**{username}** a validé **{title}** - vérifier : {frontend}/verify/{hash}")
         }
         "slice_validated" => {
             let username = payload["username"].as_str().unwrap_or("quelqu'un");
@@ -239,13 +239,13 @@ pub fn render(event_type: &str, payload: &Value, frontend: &str) -> String {
             let slug = s("slug");
             // The prize is only mentioned when there is one.
             let prize = match payload["prize"].as_str() {
-                Some(p) if !p.is_empty() => format!(" — {p}"),
+                Some(p) if !p.is_empty() => format!(" - {p}"),
                 _ => String::new(),
             };
             let deadline = payload["ends_at"]
                 .as_str()
                 .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
-                .map(|d| format!(" — jusqu'au {}", d.format("%d/%m/%Y")))
+                .map(|d| format!(" - jusqu'au {}", d.format("%d/%m/%Y")))
                 .unwrap_or_default();
             format!("Nouveau concours : **{title}**{prize}{deadline}\n{frontend}/contests/{slug}")
         }
@@ -253,20 +253,20 @@ pub fn render(event_type: &str, payload: &Value, frontend: &str) -> String {
             let username = s("username");
             let title = s("title");
             let slug = s("slug");
-            format!("**{username}** remporte **{title}** — {frontend}/contests/{slug}")
+            format!("**{username}** remporte **{title}** - {frontend}/contests/{slug}")
         }
         "talent_featured" => {
             let username = s("username");
             let domain = s("skill_domain");
             format!(
-                "Cette semaine, mis en avant en **{domain}** : **{username}** — \
+                "Cette semaine, mis en avant en **{domain}** : **{username}** - \
                  {frontend}/@{username}"
             )
         }
         "mission_posted" => {
             let title = s("title");
             let slug = s("slug");
-            format!("Nouvelle mission rémunérée : **{title}** — {frontend}/missions/{slug}")
+            format!("Nouvelle mission rémunérée : **{title}** - {frontend}/missions/{slug}")
         }
 
         // An event type the bot does not know how to render is still posted,

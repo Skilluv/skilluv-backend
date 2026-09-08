@@ -162,7 +162,7 @@ async fn skipping_is_not_the_same_as_answering_nothing() {
         .await;
     // 204: the write touches `skipped_at` alone, so there is nothing true to
     // put in a body. It used to answer 200 with one it made up, reporting no
-    // answers and no completion whatever the row held — which told somebody
+    // answers and no completion whatever the row held - which told somebody
     // who had answered and then skipped that they had never answered.
     assert_eq!(resp.status().as_u16(), 204, "{:?}", resp.text().await);
 
@@ -318,7 +318,7 @@ async fn a_field_is_refused_on_a_domain_it_does_not_belong_to() {
     app.register_user("wiz_wrong_domain").await;
 
     // Stored, it would sit in an object read by a recommender that has no
-    // branch for it — a save that looks like it worked and does nothing.
+    // branch for it - a save that looks like it worked and does nothing.
     let design_field_on_ai = app
         .put(
             "/api/users/me/domain-profile/ai",
@@ -373,8 +373,8 @@ async fn the_rust_domain_list_mirrors_the_active_catalogue() {
     //
     // That check used to be a unit test reading a CHECK constraint out of a
     // migration. Migration 0400 made the domains rows, and a domain becomes
-    // active in whichever later migration gives it a catalogue — 0401 for
-    // audio — so no single file holds the answer any more. Only a migrated
+    // active in whichever later migration gives it a catalogue - 0401 for
+    // audio - so no single file holds the answer any more. Only a migrated
     // database does, which is why the check lives here.
     let app = TestApp::spawn().await;
 
@@ -392,7 +392,7 @@ async fn the_rust_domain_list_mirrors_the_active_catalogue() {
     assert_eq!(
         active, mirrored,
         "a domain was activated in the catalogue without being added to \
-         SKILL_DOMAINS, or the other way round — one of the two would then \
+         SKILL_DOMAINS, or the other way round - one of the two would then \
          accept what the other refuses"
     );
 

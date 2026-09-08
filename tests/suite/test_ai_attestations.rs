@@ -418,7 +418,7 @@ async fn an_ai_attestation_counts_towards_the_global_rank() {
     // The rank counts deliverables and attestations without asking which
     // domain they came from, which is the whole point of a rank: somebody
     // who ships models and somebody who ships libraries are both craftspeople
-    // here. Asserted rather than assumed — nothing else would have caught a
+    // here. Asserted rather than assumed - nothing else would have caught a
     // filter added to that query later.
     let counted: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM attestations

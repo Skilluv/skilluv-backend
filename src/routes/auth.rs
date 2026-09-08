@@ -30,7 +30,7 @@ use crate::services::{AuthService, LeaderboardService, SessionService};
 pub struct ListSessionsResponse {
     /// Every currently-active session for the authenticated user.
     pub sessions: Vec<SessionRow>,
-    /// ID of the session the caller is currently using — `None` when the
+    /// ID of the session the caller is currently using - `None` when the
     /// request arrived without a refresh cookie (e.g. mobile flows that
     /// only carry the access token).
     pub current_session_id: Option<Uuid>,
@@ -49,7 +49,7 @@ pub struct RankInfo {
 
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct TotpSetupResponse {
-    /// otpauth:// URL — feed it to `qrcode` on the front and render.
+    /// otpauth:// URL - feed it to `qrcode` on the front and render.
     #[schema(example = "otpauth://totp/Skilluv:user@example.com?secret=JBSW…&issuer=Skilluv")]
     pub otpauth_url: String,
     /// Base-32 encoded TOTP secret. Displayed as a fallback for users
@@ -62,20 +62,20 @@ pub struct TotpSetupResponse {
 pub struct TotpEnableResponse {
     pub message: String,
     /// One-time backup codes generated for this account. Formatted
-    /// `XXXX-XXXX`. Displayed **once** — the server keeps only hashes.
+    /// `XXXX-XXXX`. Displayed **once** - the server keeps only hashes.
     pub backup_codes: Vec<String>,
     pub backup_codes_note: String,
 }
 
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct RefreshResponse {
-    /// Always `true` on success — kept as a redundant flag because a few
+    /// Always `true` on success - kept as a redundant flag because a few
     /// legacy front-end callers still branch on `data.ok`.
     pub ok: bool,
-    /// Freshly minted CSRF token — the front must store it and send it
+    /// Freshly minted CSRF token - the front must store it and send it
     /// back as `X-CSRF-Token` on the next mutating request.
     pub csrf_token: String,
-    /// Same enumeration as `MeResponse.login_method` — preserved across
+    /// Same enumeration as `MeResponse.login_method` - preserved across
     /// rotation so downstream policy stays faithful.
     pub login_method: String,
 }
@@ -83,7 +83,7 @@ pub struct RefreshResponse {
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct CompleteProfileResponse {
     pub message: String,
-    /// Always `true` on success — mirrors `UserPrivate.profile_completed`
+    /// Always `true` on success - mirrors `UserPrivate.profile_completed`
     /// so the caller can update local state without a follow-up `/me`.
     pub profile_completed: bool,
 }
@@ -91,7 +91,7 @@ pub struct CompleteProfileResponse {
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct MeResponse {
     pub user: UserPrivate,
-    /// Which primary factor authenticated the current session — one of
+    /// Which primary factor authenticated the current session - one of
     /// `password`, `sso`, `webauthn`, `magic_link`. Frontends use it to
     /// skip the enterprise TOTP-setup redirect for non-password sessions.
     pub login_method: String,
@@ -144,10 +144,10 @@ pub fn auth_routes() -> Router<AppState> {
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct RegisterResponse {
     pub user: UserPrivate,
-    /// Fresh CSRF token — front sends it back as `X-CSRF-Token` on
+    /// Fresh CSRF token - front sends it back as `X-CSRF-Token` on
     /// subsequent mutating requests.
     pub csrf_token: String,
-    /// Always `"password"` for the register endpoint — the field is
+    /// Always `"password"` for the register endpoint - the field is
     /// echoed to match the shape of `/login` so the front can reuse
     /// the same store logic.
     pub login_method: String,
@@ -159,19 +159,19 @@ pub struct LoginSuccessResponse {
     pub user: UserPrivate,
     pub csrf_token: String,
     pub login_method: String,
-    /// True when the account has at least one WebAuthn credential —
+    /// True when the account has at least one WebAuthn credential -
     /// satisfies the enterprise/admin second-factor requirement even
     /// without TOTP.
     pub has_passkey: bool,
     /// True when the account is enterprise / recruiter / admin AND has
-    /// neither TOTP nor a passkey — front must route to the 2FA
+    /// neither TOTP nor a passkey - front must route to the 2FA
     /// enrolment wizard before allowing admin surfaces.
     pub requires_totp_setup: bool,
 }
 
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct LoginPending2faResponse {
-    /// Always `true` — signals the front should prompt for the email
+    /// Always `true` - signals the front should prompt for the email
     /// 2FA code and re-POST /login with it.
     pub requires_email_2fa: bool,
     pub user_id: Uuid,
@@ -179,7 +179,7 @@ pub struct LoginPending2faResponse {
 }
 
 /// The two possible shapes of a successful `/api/auth/login` (and
-/// `/api/auth/email-2fa/verify`) response. Serialized untagged — the
+/// `/api/auth/email-2fa/verify`) response. Serialized untagged - the
 /// front discriminates on the presence of `requires_email_2fa`. Utoipa
 /// renders it as `oneOf` in the generated schema, so schemathesis can
 /// fuzz both branches.
@@ -193,7 +193,7 @@ pub enum LoginOutcome {
 
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct DeleteAccountResponse {
-    /// Always `true` on success — the account row is already gone by
+    /// Always `true` on success - the account row is already gone by
     /// the time the client parses this.
     pub account_deleted: bool,
     /// RFC 3339 timestamp of the deletion. Currently equal to `now()`
@@ -205,14 +205,14 @@ pub struct DeleteAccountResponse {
 
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct DataExportResponse {
-    /// Always `"queued"` on success — kept as a discriminated field so
+    /// Always `"queued"` on success - kept as a discriminated field so
     /// clients don't parse the human-facing message.
     #[schema(example = "queued")]
     pub status: String,
     pub message: String,
 }
 
-/// Request a full RGPD data export (background job — user gets an email
+/// Request a full RGPD data export (background job - user gets an email
 /// with a signed download link). Rate-limited to 1/24h per account to
 /// prevent abuse of the archive generator.
 #[utoipa::path(
@@ -305,7 +305,7 @@ pub struct RegisterRequest {
     pub first_name: String,
     #[schema(min_length = 1, max_length = 50)]
     pub last_name: String,
-    /// One of the platform skill domains — the document lists them from
+    /// One of the platform skill domains - the document lists them from
     /// `validators::SKILL_DOMAINS`, which is what the handler checks.
     #[schema(schema_with = crate::validators::skill_domain_schema)]
     pub skill_domain: String,
@@ -314,7 +314,7 @@ pub struct RegisterRequest {
     pub country: Option<String>,
     #[schema(max_length = 100)]
     pub city: Option<String>,
-    /// Must be `true` — user acknowledges Terms of Service and Privacy Policy.
+    /// Must be `true` - user acknowledges Terms of Service and Privacy Policy.
     /// Custom deserializer ne laisse passer que `true` ; le schéma associé
     /// (schema_with) émet `{ type: boolean, const: true }` pour que
     /// schemathesis ne génère jamais `false`.
@@ -322,14 +322,14 @@ pub struct RegisterRequest {
     // le field 'required' dans le schema OpenAPI, donc schemathesis
     // l'inclut toujours dans ses payloads (avec value=true par le
     // const:true du schema). Un client qui omet le field recoit un 422
-    // serde 'missing field' — semantiquement correct (payload malforme).
+    // serde 'missing field' - semantiquement correct (payload malforme).
     // Un client qui envoie explicitement false recoit 400 via le check
     // metier serveur `if !body.terms_accepted`.
     #[schema(schema_with = terms_accepted_schema)]
     pub terms_accepted: bool,
 }
 
-/// Génère `{ type: boolean, enum: [true] }` — équivalent à `const: true`
+/// Génère `{ type: boolean, enum: [true] }` - équivalent à `const: true`
 /// que utoipa 5 n'a pas encore comme attribut direct. `enum_values` est une
 /// forme JSON Schema Draft 2020-12 pleinement supportée par schemathesis.
 pub fn terms_accepted_schema() -> utoipa::openapi::schema::Object {
@@ -338,7 +338,7 @@ pub fn terms_accepted_schema() -> utoipa::openapi::schema::Object {
         .schema_type(utoipa::openapi::schema::SchemaType::Type(Type::Boolean))
         .enum_values(Some(vec![serde_json::json!(true)]))
         .description(Some(
-            "Must be true — user acknowledges Terms of Service and Privacy Policy",
+            "Must be true - user acknowledges Terms of Service and Privacy Policy",
         ))
         .build()
 }
@@ -350,11 +350,11 @@ pub struct LoginRequest {
     pub identifier: String,
     #[schema(min_length = 1, max_length = 128)]
     pub password: String,
-    /// Live 6-digit TOTP code — required when the account has TOTP 2FA
+    /// Live 6-digit TOTP code - required when the account has TOTP 2FA
     /// enabled and no `backup_code` is provided.
     #[schema(pattern = r"^[0-9]{6}$")]
     pub totp_code: Option<String>,
-    /// Email 2FA code — required on the second call to /login when the
+    /// Email 2FA code - required on the second call to /login when the
     /// account has email 2FA enabled.
     #[schema(pattern = r"^[0-9]{6}$")]
     pub email_2fa_code: Option<String>,
@@ -416,7 +416,7 @@ pub struct ChangePasswordRequest {
 pub struct ChangeEmailRequest {
     #[schema(min_length = 1, max_length = 128)]
     pub current_password: String,
-    /// New email address — must not already be in use. A confirmation
+    /// New email address - must not already be in use. A confirmation
     /// email is sent there; the change only lands once the recipient
     /// clicks the confirmation link.
     #[schema(
@@ -430,18 +430,18 @@ pub struct ChangeEmailRequest {
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct CompleteProfileRequest {
-    /// One of the platform skill domains — same list, same source, as
+    /// One of the platform skill domains - same list, same source, as
     /// `RegisterRequest::skill_domain`.
     #[schema(schema_with = crate::validators::skill_domain_schema)]
     pub skill_domain: String,
-    /// Must be `true` — user acknowledges ToS + Privacy Policy. Voir
+    /// Must be `true` - user acknowledges ToS + Privacy Policy. Voir
     /// `deserialize_true_bool` + `terms_accepted_schema` sur RegisterRequest
     /// pour l'explication du couple serde/utoipa.
     // Pas de #[serde(default)] volontairement : sans lui, utoipa marque
     // le field 'required' dans le schema OpenAPI, donc schemathesis
     // l'inclut toujours dans ses payloads (avec value=true par le
     // const:true du schema). Un client qui omet le field recoit un 422
-    // serde 'missing field' — semantiquement correct (payload malforme).
+    // serde 'missing field' - semantiquement correct (payload malforme).
     // Un client qui envoie explicitement false recoit 400 via le check
     // metier serveur `if !body.terms_accepted`.
     #[schema(schema_with = terms_accepted_schema)]
@@ -469,8 +469,8 @@ pub struct TotpCodeRequest {
     pub code: String,
 }
 
-/// Disabling 2FA is a sensitive downgrade. We require BOTH factors — the
-/// current TOTP code AND the account password — so that a stolen session
+/// Disabling 2FA is a sensitive downgrade. We require BOTH factors - the
+/// current TOTP code AND the account password - so that a stolen session
 /// alone can't unlock the account. Modeled on GitHub / Google's flow.
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct TotpDisableRequest {
@@ -500,7 +500,7 @@ pub struct PasswordConfirmRequest {
 /// No password required. Enabling a second factor strengthens the account:
 /// someone holding a stolen session gains nothing by switching it on, since
 /// the codes go to the account's own address. Demanding re-authentication
-/// here only ever stopped legitimate users — the client sent no body at all
+/// here only ever stopped legitimate users - the client sent no body at all
 /// and got a 422.
 ///
 /// Disabling stays gated on the password: that one is a downgrade.
@@ -517,11 +517,11 @@ pub struct Email2faEnableRequest {
 pub struct DeleteAccountRequest {
     #[schema(min_length = 1, max_length = 128)]
     pub password: String,
-    /// Required when TOTP 2FA is enabled — otherwise ignored.
+    /// Required when TOTP 2FA is enabled - otherwise ignored.
     #[schema(pattern = r"^[0-9]{6}$")]
     pub totp_code: Option<String>,
     /// Free-text reason captured for the audit trail (RGPD compliance).
-    /// Optional — front sends it when the user filled the "why leaving?" prompt.
+    /// Optional - front sends it when the user filled the "why leaving?" prompt.
     #[schema(max_length = 2000)]
     pub reason: Option<String>,
 }
@@ -673,14 +673,14 @@ fn build_refresh_cookie_with_prefix(prefix: &str, session_id: Uuid, token: &str)
 }
 
 /// Back-compat shorthand used by the SSO/OAuth/magic-link handlers that haven't
-/// been migrated yet — they always emit public cookies.
+/// been migrated yet - they always emit public cookies.
 fn build_refresh_cookie(session_id: Uuid, token: &str) -> String {
     build_refresh_cookie_with_prefix("", session_id, token)
 }
 
 fn parse_refresh_cookie(headers: &axum::http::HeaderMap) -> Option<(Uuid, String)> {
     let raw = headers.get("cookie")?.to_str().ok()?;
-    // Prefer admin_ when present — an admin session should be the one we
+    // Prefer admin_ when present - an admin session should be the one we
     // revoke/rotate when both cookies happen to live in the same jar (rare
     // but possible: dev with two frontends open, or a user who logged in on
     // both apps intentionally). The AuthUser extractor uses the same rule.
@@ -747,7 +747,7 @@ fn login_pending_2fa_key(user_id: Uuid) -> String {
     tag = "auth",
     request_body = RegisterRequest,
     responses(
-        (status = 201, description = "Account created — verification email sent", body = ApiResponse<RegisterResponse>),
+        (status = 201, description = "Account created - verification email sent", body = ApiResponse<RegisterResponse>),
         (status = 400, description = "Validation error (email, username, password policy, terms not accepted, duplicate)", body = crate::api_response::ErrorResponse),
         (status = 429, description = "Rate limit hit (5/h per IP)", body = crate::api_response::ErrorResponse),
     ),
@@ -831,7 +831,7 @@ pub async fn register(
     //
     // The account row is already committed and the token is already in Redis,
     // so returning 500 here left a real account behind while telling the
-    // person their signup failed — they retry, and are told the email is
+    // person their signup failed - they retry, and are told the email is
     // taken. An unreachable SMTP host is an operational problem, and the
     // recovery path for it already exists: `POST /auth/resend-verification`.
     //
@@ -930,12 +930,12 @@ const LOGIN_LOCKOUT_MINUTES: i64 = 15;
 /// Authenticate with password + optional 2FA. Response is `oneOf` two
 /// shapes:
 ///
-/// - **Success** — cookies set, `LoginSuccessResponse` returned.
-/// - **Pending 2FA** — the account has email 2FA enabled and no
+/// - **Success** - cookies set, `LoginSuccessResponse` returned.
+/// - **Pending 2FA** - the account has email 2FA enabled and no
 ///   `email_2fa_code` was sent; the server sends the code by email and
 ///   returns `LoginPending2faResponse` so the front can prompt.
 ///
-/// TOTP is checked inline (never returns pending) — the front sends
+/// TOTP is checked inline (never returns pending) - the front sends
 /// `totp_code` or `backup_code` on the first call.
 #[utoipa::path(
     post,
@@ -1021,7 +1021,7 @@ pub async fn login(
         return Err(AppError::InvalidCredentials);
     }
 
-    // TOTP 2FA check — accepts either a live TOTP code OR a one-time backup code.
+    // TOTP 2FA check - accepts either a live TOTP code OR a one-time backup code.
     if user.totp_enabled {
         if let Some(code) = body.totp_code.as_deref() {
             let secret = user
@@ -1100,7 +1100,7 @@ pub async fn login(
         }
     }
 
-    // Successful password (and 2FA if any) — reset the failure counter and lock.
+    // Successful password (and 2FA if any) - reset the failure counter and lock.
     if user.failed_login_count > 0 || user.locked_until.is_some() {
         sqlx::query(
             "UPDATE users SET failed_login_count = 0, locked_until = NULL, updated_at = NOW() WHERE id = $1",
@@ -1148,7 +1148,7 @@ pub async fn login(
     )
     .await;
 
-    // Enterprise/recruiter accounts need SOME strong 2FA method — TOTP or a
+    // Enterprise/recruiter accounts need SOME strong 2FA method - TOTP or a
     // passkey. If neither is present, the frontend routes them into the
     // /enterprise/onboarding wizard where they pick and complete one.
     let has_passkey: bool =
@@ -1164,7 +1164,7 @@ pub async fn login(
         && !user.totp_enabled
         && !has_passkey;
     let user_private: UserPrivate = user.into();
-    // Origin-aware cookie namespace — admin.skill-uv.com → admin_* cookies,
+    // Origin-aware cookie namespace - admin.skill-uv.com → admin_* cookies,
     // everything else → the standard names.
     let prefix = cookie_prefix(&headers);
     let access_cookie = build_cookie(
@@ -1196,14 +1196,14 @@ pub async fn login(
 }
 
 /// Complete a login that was gated on email 2FA. Same success shape as
-/// `/api/auth/login` — the pending-2FA branch is never returned here.
+/// `/api/auth/login` - the pending-2FA branch is never returned here.
 #[utoipa::path(
     post,
     path = "/api/auth/email-2fa/verify",
     tag = "auth",
     request_body = Email2faVerifyRequest,
     responses(
-        (status = 200, description = "Login complete — cookies issued", body = ApiResponse<LoginSuccessResponse>),
+        (status = 200, description = "Login complete - cookies issued", body = ApiResponse<LoginSuccessResponse>),
         (status = 400, description = "Missing user_id or no pending 2FA", body = crate::api_response::ErrorResponse),
         (status = 401, description = "Code invalid or user not found", body = crate::api_response::ErrorResponse),
         (status = 403, description = "Account banned", body = crate::api_response::ErrorResponse),
@@ -1260,7 +1260,7 @@ pub async fn email_2fa_verify(
         SessionService::create(&state.db, user.id, Some(&ip), extract_ua(&headers)).await?;
 
     // Same 2FA-satisfaction check as the password login handler above:
-    // enterprise/recruiter needs TOTP OR a passkey — either counts.
+    // enterprise/recruiter needs TOTP OR a passkey - either counts.
     let has_passkey: bool =
         sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM webauthn_credentials WHERE user_id = $1)")
             .bind(user.id)
@@ -1329,7 +1329,7 @@ pub async fn refresh(
     }
 
     // Preserve the session's original login_method across refresh so the JWT
-    // claim stays faithful — otherwise a passkey / SSO / magic-link session
+    // claim stays faithful - otherwise a passkey / SSO / magic-link session
     // would silently downgrade to "password" on every refresh, losing the
     // enterprise TOTP-bypass semantics.
     let login_method: (String,) =
@@ -1344,7 +1344,7 @@ pub async fn refresh(
         &state.config.jwt_secret,
     )?;
 
-    // Preserve the caller's namespace on rotate — if they refreshed via the
+    // Preserve the caller's namespace on rotate - if they refreshed via the
     // admin app we want to re-emit `admin_*` cookies so the SPA doesn't lose
     // its handle mid-session.
     let prefix = cookie_prefix(&headers);
@@ -1378,7 +1378,7 @@ pub async fn refresh(
 /// reach the revocation code, leaving the DB row orphaned even though
 /// the client considers itself logged out. The refresh_token cookie
 /// carries a `session_id` we can trust structurally (uuid + opaque token)
-/// — we look the row up ourselves and revoke it, regardless of whether
+/// - we look the row up ourselves and revoke it, regardless of whether
 /// the JWT is still valid.
 #[utoipa::path(
     post,
@@ -1395,7 +1395,7 @@ pub async fn logout(
     if let Some((session_id, _)) = parse_refresh_cookie(&headers) {
         // Look up the owning user_id from the session row itself so we don't
         // need the JWT. `revoke_one` filters on user_id, so we must supply
-        // it — but no need to trust anything the client sent.
+        // it - but no need to trust anything the client sent.
         let owner: Option<(Uuid,)> = sqlx::query_as(
             "SELECT user_id FROM user_sessions WHERE id = $1 AND revoked_at IS NULL",
         )
@@ -1407,7 +1407,7 @@ pub async fn logout(
         }
     }
 
-    // Clear BOTH cookie namespaces on logout — we don't know which app the
+    // Clear BOTH cookie namespaces on logout - we don't know which app the
     // caller signed in on (or if both were set in the jar for whatever
     // reason), and leaving one orphaned would let a stale token linger.
     let clear_access = clear_cookie("access_token", "/");
@@ -1443,7 +1443,7 @@ pub async fn logout(
     responses(
         (status = 200, description = "Profile + rank + auth-method flags", body = ApiResponse<MeResponse>),
         (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
-        (status = 404, description = "User row missing (rare — stale JWT)", body = crate::api_response::ErrorResponse),
+        (status = 404, description = "User row missing (rare - stale JWT)", body = crate::api_response::ErrorResponse),
     ),
     security(("cookie_auth" = [])),
 )]
@@ -1586,7 +1586,7 @@ pub async fn resend_verification(
 }
 
 /// Kick off a password-reset email. Always returns 200 with the same message
-/// whether the account exists or not — anti-enumeration.
+/// whether the account exists or not - anti-enumeration.
 #[utoipa::path(
     post,
     path = "/api/auth/forgot-password",
@@ -1600,7 +1600,7 @@ pub async fn forgot_password(
     State(state): State<AppState>,
     Json(body): Json<ForgotPasswordRequest>,
 ) -> Result<Json<ApiResponse<SimpleMessage>>, AppError> {
-    // Valide d'abord le format email — schema-invalid input doit etre
+    // Valide d'abord le format email - schema-invalid input doit etre
     // rejete en 400 (RFC : negative_data_rejection). L'anti-enumeration
     // s'applique APRES : email format valide + user inexistant -> 200
     // silencieux. Email malforme (< 5 chars, pas d'@) -> 400, ne leake
@@ -1642,7 +1642,7 @@ pub async fn forgot_password(
 }
 
 /// Complete a password reset with the one-shot token. Revokes every
-/// existing session (all devices signed out) as a defensive measure —
+/// existing session (all devices signed out) as a defensive measure -
 /// mirrors GitHub / Google behaviour after credential reset.
 #[utoipa::path(
     post,
@@ -1650,7 +1650,7 @@ pub async fn forgot_password(
     tag = "auth",
     request_body = ResetPasswordRequest,
     responses(
-        (status = 200, description = "Password reset — all sessions revoked", body = ApiResponse<SimpleMessage>),
+        (status = 200, description = "Password reset - all sessions revoked", body = ApiResponse<SimpleMessage>),
         (status = 400, description = "Token invalid or password fails policy", body = crate::api_response::ErrorResponse),
     ),
 )]
@@ -1716,8 +1716,8 @@ pub async fn reset_password(
     ))))
 }
 
-/// Change the current password. Requires re-entering the existing one —
-/// even for a logged-in user — so a hijacked session alone can't rotate
+/// Change the current password. Requires re-entering the existing one -
+/// even for a logged-in user - so a hijacked session alone can't rotate
 /// credentials silently.
 #[utoipa::path(
     post,
@@ -1784,7 +1784,7 @@ pub async fn change_password(
     path = "/api/auth/totp/setup",
     tag = "auth",
     responses(
-        (status = 200, description = "TOTP secret staged — scan and confirm", body = ApiResponse<TotpSetupResponse>),
+        (status = 200, description = "TOTP secret staged - scan and confirm", body = ApiResponse<TotpSetupResponse>),
         (status = 400, description = "TOTP is already enabled", body = crate::api_response::ErrorResponse),
         (status = 401, description = "Unauthenticated", body = crate::api_response::ErrorResponse),
     ),
@@ -1828,7 +1828,7 @@ pub async fn totp_setup(
 }
 
 /// Confirm TOTP enrolment with a live code from the authenticator app.
-/// Issues a fresh set of backup codes — displayed **once**, since we
+/// Issues a fresh set of backup codes - displayed **once**, since we
 /// only persist their hashes.
 #[utoipa::path(
     post,
@@ -1836,7 +1836,7 @@ pub async fn totp_setup(
     tag = "auth",
     request_body = TotpCodeRequest,
     responses(
-        (status = 200, description = "TOTP enabled — save the backup codes", body = ApiResponse<TotpEnableResponse>),
+        (status = 200, description = "TOTP enabled - save the backup codes", body = ApiResponse<TotpEnableResponse>),
         (status = 400, description = "TOTP already enabled or setup not run first", body = crate::api_response::ErrorResponse),
         (status = 401, description = "TOTP code invalid or unauthenticated", body = crate::api_response::ErrorResponse),
     ),
@@ -1891,13 +1891,13 @@ pub async fn totp_enable(
     Ok(Json(ApiResponse::new(TotpEnableResponse {
         message: "TOTP 2FA enabled successfully".to_string(),
         backup_codes: codes,
-        backup_codes_note: "Store these codes somewhere safe — they will not be shown again."
+        backup_codes_note: "Store these codes somewhere safe - they will not be shown again."
             .to_string(),
     })))
 }
 
 /// Disable TOTP 2FA. Requires **both** the current password AND a live
-/// TOTP code — a stolen session alone can't drop the second factor.
+/// TOTP code - a stolen session alone can't drop the second factor.
 /// Deletes all backup codes as well so a leaked code sheet is neutralised.
 #[utoipa::path(
     post,
@@ -1936,7 +1936,7 @@ pub async fn totp_disable(
         return Err(AppError::Validation("TOTP 2FA is not enabled".to_string()));
     }
 
-    // Password check first — cheap and rate-limited by argon2 cost.
+    // Password check first - cheap and rate-limited by argon2 cost.
     if !AuthService::verify_password(&body.password, &user.password_hash)? {
         return Err(AppError::InvalidCredentials);
     }
@@ -1985,7 +1985,7 @@ pub async fn totp_disable(
 // ─── Email 2FA ───────────────────────────────────────────────────
 
 /// Enable email-based 2FA. Requires the account email to already be
-/// verified — otherwise the user could lock themselves out.
+/// verified - otherwise the user could lock themselves out.
 ///
 /// The body is optional. Turning a second factor **on** cannot be abused
 /// from a stolen session: the codes are delivered to the account's own
@@ -1996,7 +1996,7 @@ pub async fn totp_disable(
     post,
     path = "/api/auth/email-2fa/enable",
     tag = "auth",
-    request_body(content = Email2faEnableRequest, description = "Optional — a password is verified when supplied"),
+    request_body(content = Email2faEnableRequest, description = "Optional - a password is verified when supplied"),
     responses(
         (status = 200, description = "Email 2FA enabled", body = ApiResponse<SimpleMessage>),
         (status = 400, description = "Email not verified or already enabled", body = crate::api_response::ErrorResponse),
@@ -2163,7 +2163,7 @@ pub async fn delete_account(
     // Erased, not deleted.
     //
     // `DELETE FROM users` took the contest entries, the podium places, the
-    // validated deliverables and the attestations with it — destroying more
+    // validated deliverables and the attestations with it - destroying more
     // than the person asked for, and destroying other people's records in the
     // process: a contest where the second place vanished leaves first and
     // third unexplained, and the winner's own attestation cites a ranking
@@ -2235,7 +2235,7 @@ pub async fn delete_account(
 
 /// Complete the onboarding profile (skill_domain + ToS + optional
 /// geo) for users whose signup path didn't collect these fields
-/// (OAuth + magic link). Refuses to run twice — once the profile is
+/// (OAuth + magic link). Refuses to run twice - once the profile is
 /// complete the caller must go through `/change-*` endpoints instead.
 #[utoipa::path(
     post,
@@ -2267,7 +2267,7 @@ pub async fn complete_profile(
         .fetch_one(&state.db)
         .await?;
 
-    // Refuse if the profile is already complete — avoids retroactively rewriting the
+    // Refuse if the profile is already complete - avoids retroactively rewriting the
     // skill_domain once the user has started earning fragments.
     if user.skill_domain.is_some() && user.terms_accepted_at.is_some() {
         return Err(AppError::Validation("Profile is already complete".into()));
@@ -2432,7 +2432,7 @@ pub async fn request_email_change(
         .send_direct(
             &new_email,
             &user.display_name,
-            "Skilluv — Confirme ton nouvel email",
+            "Skilluv - Confirme ton nouvel email",
             &format!(
                 r#"<p>Salut {},</p><p>Confirme le changement d'email en cliquant : <a href="{link}">{link}</a></p><p>Ce lien expire dans 1h.</p>"#,
                 user.display_name
@@ -2458,7 +2458,7 @@ pub async fn request_email_change(
 }
 
 /// Confirm the email change with the one-shot token. Revokes every
-/// active session (all devices signed out) — the old email is no longer
+/// active session (all devices signed out) - the old email is no longer
 /// valid, so any credential-recovery flow keyed on it must fail closed.
 #[utoipa::path(
     get,
@@ -2525,7 +2525,7 @@ pub async fn confirm_email_change(
     let () = redis.del(email_change_token_lookup(&query.token)).await?;
     let () = redis.del(email_change_key(user_id)).await?;
 
-    // Revoke all sessions — force re-login with the new email
+    // Revoke all sessions - force re-login with the new email
     SessionService::revoke_all(&state.db, user_id).await?;
 
     Ok(Json(ApiResponse::new(SimpleMessage::new(
@@ -2559,7 +2559,7 @@ fn generate_backup_code() -> String {
 }
 
 async fn issue_backup_codes(db: &PgPool, user_id: Uuid) -> Result<Vec<String>, AppError> {
-    // Wipe any existing (used or not) — regenerate replaces the full set.
+    // Wipe any existing (used or not) - regenerate replaces the full set.
     sqlx::query("DELETE FROM totp_backup_codes WHERE user_id = $1")
         .bind(user_id)
         .execute(db)
@@ -2599,9 +2599,9 @@ async fn consume_backup_code(db: &PgPool, user_id: Uuid, presented: &str) -> Res
     Err(AppError::TotpInvalid)
 }
 
-// POST /api/auth/totp/backup-codes/regenerate — requires a valid live TOTP code.
+// POST /api/auth/totp/backup-codes/regenerate - requires a valid live TOTP code.
 /// Regenerate the set of one-time TOTP backup codes. Invalidates every
-/// previously-issued code — including unused ones — as a defensive
+/// previously-issued code - including unused ones - as a defensive
 /// rotation. TOTP code required to prove authenticator possession.
 #[utoipa::path(
     post,
@@ -2609,7 +2609,7 @@ async fn consume_backup_code(db: &PgPool, user_id: Uuid, presented: &str) -> Res
     tag = "auth",
     request_body = TotpCodeRequest,
     responses(
-        (status = 200, description = "Fresh backup codes — displayed once", body = ApiResponse<TotpEnableResponse>),
+        (status = 200, description = "Fresh backup codes - displayed once", body = ApiResponse<TotpEnableResponse>),
         (status = 400, description = "TOTP not enabled", body = crate::api_response::ErrorResponse),
         (status = 401, description = "TOTP code invalid or unauthenticated", body = crate::api_response::ErrorResponse),
     ),
@@ -2653,7 +2653,7 @@ pub async fn regenerate_backup_codes(
 
 // GET /api/auth/sessions
 /// List every active session for the caller (device management screen).
-/// The current session — the one making this request — is highlighted via
+/// The current session - the one making this request - is highlighted via
 /// `current_session_id` so the frontend can render "this device" badges
 /// without leaking cookie contents to JS.
 #[utoipa::path(
@@ -2681,7 +2681,7 @@ pub async fn list_sessions(
 }
 
 /// Revoke a specific session by ID. No-op (still 200) if the session
-/// already ended or belongs to another user — the query is scoped on
+/// already ended or belongs to another user - the query is scoped on
 /// `user_id`, so it silently ignores foreign IDs.
 #[utoipa::path(
     delete,
@@ -2707,7 +2707,7 @@ pub async fn revoke_session(
 
 /// Revoke every session except the current one (useful after a password
 /// change or when the user notices unfamiliar devices). If no refresh
-/// cookie is present, every session — including the current one — is
+/// cookie is present, every session - including the current one - is
 /// revoked.
 #[utoipa::path(
     post,

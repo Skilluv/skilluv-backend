@@ -1,4 +1,4 @@
-//! FX rate service — Phase 4.4.
+//! FX rate service - Phase 4.4.
 //!
 //! Reference rates fetched daily from the European Central Bank (public XML feed).
 //! Cached in Redis (24h) and mirrored in Postgres for cold-boot resilience.
@@ -99,8 +99,8 @@ pub async fn refresh_from_ecb(db: &PgPool) -> Result<(), AppError> {
 ///
 /// So `extract_attr` returned `None` on every line and this function returned
 /// an empty vector on every environment since it was written. Nothing said so,
-/// because zero parsed rates was reported as a successful refresh — see
-/// `refresh_from_ecb` — and because the unit test below rewrote a realistic
+/// because zero parsed rates was reported as a successful refresh - see
+/// `refresh_from_ecb` - and because the unit test below rewrote a realistic
 /// sample into the shape the broken parser expected.
 ///
 /// Both quote styles are accepted now, so a feed that changes its mind is not

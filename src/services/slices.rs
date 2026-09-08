@@ -1,4 +1,4 @@
-//! Service `project_slices` — unité de travail réelle sur un projet curated.
+//! Service `project_slices` - unité de travail réelle sur un projet curated.
 //!
 //! Phase P1 du refactor challenges (voir `docs/challenges-target-model-and-roadmap.md`
 //! partie C phase 1 et partie G.1 pour le workflow "PR mergée → deliverable").
@@ -18,7 +18,7 @@ use crate::models::ProjectSlice;
 /// Durée pendant laquelle un claim est exclusif (7 jours, aligné pattern bounties).
 pub const CLAIM_DURATION_DAYS: i64 = 7;
 
-/// P26 v2 SKI-78 — total order over the 5 P17 ranks. Any unknown value
+/// P26 v2 SKI-78 - total order over the 5 P17 ranks. Any unknown value
 /// returns 0 (apprenti) to fail closed on user data corruption rather than
 /// spuriously grant access.
 fn rank_ordinal(rank: &str) -> u8 {
@@ -37,7 +37,7 @@ pub fn rank_ordinal_public(rank: &str) -> u8 {
     rank_ordinal(rank)
 }
 
-/// P26 v2 SKI-113 — guard against submitting someone else's PR.
+/// P26 v2 SKI-113 - guard against submitting someone else's PR.
 ///
 /// Fetches the PR from GitHub with our bot token and checks that:
 ///   1. `pr.user.login` matches the challenger's `github_login`.
@@ -51,7 +51,7 @@ pub fn rank_ordinal_public(rank: &str) -> u8 {
 ///     verification, but the flow proceeds.
 ///   - `SKILLUV_BOT_GITHUB_TOKEN` is unset → dev/staging.
 ///
-/// Returns `AppError::Forbidden` on mismatch — deliberately the same
+/// Returns `AppError::Forbidden` on mismatch - deliberately the same
 /// discriminant as the rank/orientation gates, so the API response
 /// shape is consistent across all pre-flight refusals.
 async fn assert_pr_authored_by_user(
@@ -127,7 +127,7 @@ async fn assert_pr_authored_by_user(
 
     // Head repo check: the PR must come from a fork owned by the
     // challenger. Some maintainer flows push a branch to the base repo
-    // directly; that's not the Skilluv path — external contributors work
+    // directly; that's not the Skilluv path - external contributors work
     // on their own fork.
     if let Some(head_repo) = pr.head.repo {
         let expected_prefix = format!("{}/", login.to_lowercase());
@@ -147,13 +147,13 @@ async fn assert_pr_authored_by_user(
     Ok(())
 }
 
-/// P26 v2 SKI-119 — post a Skilluv attribution comment on the PR as the
+/// P26 v2 SKI-119 - post a Skilluv attribution comment on the PR as the
 /// challenger. Uses the user's own OAuth token (scope `public_repo`
-/// already grants `issues:write` on public repos — no re-consent needed).
+/// already grants `issues:write` on public repos - no re-consent needed).
 ///
 /// Idempotent: won't re-post if `announced_at` is already set (checked
 /// atomically as part of the UPDATE). Silent no-op when the user hasn't
-/// connected GitHub OAuth — no announcement is better than none.
+/// connected GitHub OAuth - no announcement is better than none.
 async fn try_announce_on_pr(
     db: &PgPool,
     jwt_secret: &str,
@@ -197,7 +197,7 @@ async fn try_announce_on_pr(
         )));
     }
 
-    // Stamp announced_at — this UPDATE races safely with any concurrent
+    // Stamp announced_at - this UPDATE races safely with any concurrent
     // duplicate call because the condition `announced_at IS NULL` filters
     // the second one out.
     sqlx::query(
@@ -223,7 +223,7 @@ fn parse_github_pr_url_parts(url: &str) -> Option<(String, String, i32)> {
     Some((parts[0].to_string(), parts[1].to_string(), n))
 }
 
-/// P26 v2 SKI-76 — accept only the canonical `https://github.com/{o}/{r}/pull/{n}`
+/// P26 v2 SKI-76 - accept only the canonical `https://github.com/{o}/{r}/pull/{n}`
 /// shape. Stricter than URL parsing on purpose: gh.io / api.github.com /
 /// enterprise hosts are rejected until we explicitly support them, so a
 /// typo can never silently associate a challenge with the wrong repo.
@@ -298,7 +298,7 @@ mod pr_url_tests {
 
 /// Service métier pour les slices.
 ///
-/// N'a pas d'état côté Rust — c'est un namespace de fonctions qui opèrent sur
+/// N'a pas d'état côté Rust - c'est un namespace de fonctions qui opèrent sur
 /// le PgPool. Suit la convention des autres services du projet.
 pub struct SlicesService;
 
@@ -320,7 +320,7 @@ impl SlicesService {
     /// Liste les slices `status='open'` avec filtres.
     ///
     /// Ordre : difficulty ASC puis created_at DESC (les plus faciles d'abord,
-    /// puis les plus récentes) — cohérent avec l'expérience d'entrée d'un
+    /// puis les plus récentes) - cohérent avec l'expérience d'entrée d'un
     /// nouveau contributeur qui cherche des tâches accessibles.
     pub async fn list_open(
         db: &PgPool,
@@ -367,7 +367,7 @@ impl SlicesService {
         Ok((slices, total))
     }
 
-    /// Récupère une slice par son id (peu importe le status — utile pour affichage).
+    /// Récupère une slice par son id (peu importe le status - utile pour affichage).
     pub async fn get(db: &PgPool, slice_id: Uuid) -> Result<ProjectSlice, AppError> {
         sqlx::query_as::<_, ProjectSlice>("SELECT * FROM project_slices WHERE id = $1")
             .bind(slice_id)
@@ -448,7 +448,7 @@ impl SlicesService {
         Ok(slice)
     }
 
-    /// P26 v2 SKI-76 — challenger declares the PR they've opened against
+    /// P26 v2 SKI-76 - challenger declares the PR they've opened against
     /// the target repo. Advances status from `claimed`/`in_progress` to
     /// `submitted`, stores the URL, and stamps `submitted_at`.
     ///
@@ -471,13 +471,13 @@ impl SlicesService {
             ));
         }
 
-        // P26 v2 SKI-113 — verify the PR was actually opened by this
+        // P26 v2 SKI-113 - verify the PR was actually opened by this
         // challenger. Prevents submitting someone else's PR to earn a
         // challenge. No-op silently when:
         //   - user has not connected GitHub OAuth (pre-P26 v2 flow,
         //     don't break existing tests / dev environments)
         //   - bot token is unset (dev / staging where verification isn't
-        //     wired yet — we log so operators see it in prod audits)
+        //     wired yet - we log so operators see it in prod audits)
         assert_pr_authored_by_user(db, user_id, pr_url).await?;
 
         let slice = sqlx::query_as::<_, ProjectSlice>(
@@ -499,7 +499,7 @@ impl SlicesService {
         .fetch_optional(db)
         .await
         .map_err(|e| {
-            // SKI-114 — partial UNIQUE `uq_slices_submitted_pr_url_active`
+            // SKI-114 - partial UNIQUE `uq_slices_submitted_pr_url_active`
             // fires when the same PR URL is submitted to a second active
             // slice. Return a stable 409 with an actionable message.
             if let sqlx::Error::Database(dbe) = &e
@@ -519,7 +519,7 @@ impl SlicesService {
             )
         })?;
 
-        // SKI-119 — opt-in public announcement. Fire-and-forget best-effort:
+        // SKI-119 - opt-in public announcement. Fire-and-forget best-effort:
         // any failure logs a warn but does NOT roll back the submission (the
         // challenger's claim of a PR is the primary outcome). Idempotent
         // via the `announced_at IS NULL` guard inside the spawned task.
@@ -541,7 +541,7 @@ impl SlicesService {
                     tracing::warn!(
                         slice_id = %slice_id_clone,
                         error = %e,
-                        "SKI-119 announcement failed — slice already submitted, no rollback"
+                        "SKI-119 announcement failed - slice already submitted, no rollback"
                     );
                 }
             });
@@ -550,13 +550,13 @@ impl SlicesService {
         Ok(slice)
     }
 
-    /// P26 v2 SKI-79 — orientation gate. Returns `Ok(())` when either:
+    /// P26 v2 SKI-79 - orientation gate. Returns `Ok(())` when either:
     ///   - the slice's `required_orientation_slugs` is empty (no restriction), or
     ///   - the user holds an active (`ended_at IS NULL`) user_orientation
     ///     whose orientation.slug matches one of the required slugs.
     ///
     /// Returns `AppError::Forbidden` otherwise. The message deliberately does
-    /// NOT enumerate the allowed orientations — that hint would let a curious
+    /// NOT enumerate the allowed orientations - that hint would let a curious
     /// user reverse-engineer the sensitivity policy. The slice detail view
     /// exposes the required slugs to the user as a first-class field so they
     /// can decide whether to add the orientation before retrying.
@@ -599,7 +599,7 @@ impl SlicesService {
         Ok(())
     }
 
-    /// P26 v2 SKI-78 — minimum-rank gate. Returns `Ok(())` when the slice
+    /// P26 v2 SKI-78 - minimum-rank gate. Returns `Ok(())` when the slice
     /// has no `min_rank` set or when the user's current rank is at or
     /// above it. Ordering: apprenti(0) < ranger(1) < artisan(2) < maitre(3)
     /// < doyen(4). A user with no `user_ranks` row is treated as apprenti(0).
@@ -666,10 +666,10 @@ impl SlicesService {
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // P11.4 : steward inbox — validation des drafts ingérées auto
+    // P11.4 : steward inbox - validation des drafts ingérées auto
     // ═══════════════════════════════════════════════════════════════════
 
-    /// Liste les slices en `status='draft'` pour un project — dashboard
+    /// Liste les slices en `status='draft'` pour un project - dashboard
     /// steward "voici ce que le poller GitHub / webhook a ingesté, à valider".
     ///
     /// L'appelant doit être steward du project (validation côté route).
@@ -727,7 +727,7 @@ impl SlicesService {
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // P10.1 : claim en team (persistent) — alternative au claim solo user
+    // P10.1 : claim en team (persistent) - alternative au claim solo user
     // ═══════════════════════════════════════════════════════════════════
 
     /// Claim une slice pour une team persistente. XOR avec le claim solo user.

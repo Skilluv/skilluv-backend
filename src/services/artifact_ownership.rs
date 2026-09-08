@@ -10,7 +10,7 @@
 //! What is checkable is narrower and worth doing exactly: a `github.com` URL
 //! names its owner in the first path segment, and the platform already knows
 //! every account's GitHub login. So a github.com URL in an entry can be
-//! required to be the entrant's own — which covers the artifact types a code
+//! required to be the entrant's own - which covers the artifact types a code
 //! contest actually uses.
 //!
 //! A deployed demo, a hosted design file or a video cannot be attributed from
@@ -28,7 +28,7 @@ const GITHUB_HOSTS: &[&str] = &["github.com", "www.github.com", "gist.github.com
 ///
 /// `https://github.com/octocat/hello` and `https://gist.github.com/octocat/1`
 /// both give `octocat`. `None` for any other host, and for a github.com URL
-/// with nothing after the host — which is not an artifact anybody submitted.
+/// with nothing after the host - which is not an artifact anybody submitted.
 pub fn github_owner(url: &str) -> Option<String> {
     let rest = url
         .trim()
@@ -49,7 +49,7 @@ pub fn github_owner(url: &str) -> Option<String> {
 ///
 /// Returns `true` when at least one URL was checked and all the checkable ones
 /// belong to `user_id`; `false` when nothing in the entry could be checked.
-/// Refuses outright when a github.com URL names somebody else — that is not an
+/// Refuses outright when a github.com URL names somebody else - that is not an
 /// unverifiable entry, it is a wrong one.
 pub async fn verify_entry_urls(
     db: &sqlx::PgPool,
@@ -72,7 +72,7 @@ pub async fn verify_entry_urls(
     let Some(login) = login else {
         return Err(AppError::Validation(
             "This entry points at GitHub, and no GitHub account is connected to \
-             yours — so nobody can tell it is your work. Connect one via \
+             yours - so nobody can tell it is your work. Connect one via \
              /api/github/oauth, or hand in something else."
                 .into(),
         ));
@@ -110,7 +110,7 @@ mod tests {
         );
     }
 
-    /// GitHub logins are case-insensitive, so the comparison has to be too —
+    /// GitHub logins are case-insensitive, so the comparison has to be too -
     /// otherwise `OctoCat` entering their own repository is refused.
     #[test]
     fn the_comparison_ignores_case() {

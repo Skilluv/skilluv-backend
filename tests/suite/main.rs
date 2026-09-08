@@ -3,14 +3,14 @@
 //! Every file directly under `tests/` is its own test target. This
 //! repository had 230 of them, so `cargo test` built and linked 230
 //! binaries that each statically link the whole crate and its
-//! dependencies — six gigabytes of near-identical executables, and the
+//! dependencies - six gigabytes of near-identical executables, and the
 //! reason a nextest archive could not be handed to CI runners.
 //!
 //! Declared as modules of one target, they link once.
 //!
 //! `common/` and `testdb/` live under this directory rather than beside it.
 //! They were reached through `#[path = "../common/mod.rs"]` at first, to keep
-//! the migration diff to one rename — and that put them outside the test
+//! the migration diff to one rename - and that put them outside the test
 //! target's own tree, where tooling that walks a target's directory cannot
 //! see them. `cargo machete` promptly reported `rsa` as an unused dependency
 //! when the only thing using it was `common/mock_oidc.rs`.

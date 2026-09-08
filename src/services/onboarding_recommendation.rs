@@ -17,7 +17,7 @@
 //!
 //! They were `services::code_onboarding`, which also owned its own storage on
 //! eight columns of `users`. The storage is now `user_domain_profiles` like
-//! every other domain's, and these rules moved here unchanged — the words a
+//! every other domain's, and these rules moved here unchanged - the words a
 //! senior developer reads are the words they read before.
 
 use serde::Serialize;
@@ -121,7 +121,7 @@ fn code(answers: &Value) -> Recommendation {
                 "Vise un dépôt du catalogue partenaire : les relations comptent autant que le \
                  code."
                     .to_string(),
-                "Envisage de relire le travail des autres — c'est la capability qui ouvre le \
+                "Envisage de relire le travail des autres - c'est la capability qui ouvre le \
                  plus de portes ici."
                     .to_string(),
             ],
@@ -141,7 +141,7 @@ fn code(answers: &Value) -> Recommendation {
         ),
         (false, "publish_library") => (
             "Publie quelque chose de petit, tôt.".to_string(),
-            "Une bibliothèque publiée, même minuscule, apprend la distribution — qui est la \
+            "Une bibliothèque publiée, même minuscule, apprend la distribution - qui est la \
              partie que personne n'apprend en écrivant du code."
                 .to_string(),
             vec![
@@ -240,7 +240,7 @@ fn design(answers: &Value) -> Recommendation {
         (false, "portfolio") => (
             "Un livrable validé avant la fin du mois.".to_string(),
             "C'est le chemin le plus court vers une pièce que tu peux montrer avec la trace de \
-             sa validation — ce qu'un Behance ne donne pas."
+             sa validation - ce qu'un Behance ne donne pas."
                 .to_string(),
             vec![
                 "Prends un défi individuel de ton métier, le plus petit.".to_string(),
@@ -255,7 +255,7 @@ fn design(answers: &Value) -> Recommendation {
         (false, _) => (
             "Trente jours, un livrable, jusqu'au bout de la critique.".to_string(),
             "Ce qui compte au début n'est pas le volume, c'est d'avoir traversé une fois le \
-             cycle complet — y compris le round où on te dit « pas encore »."
+             cycle complet - y compris le round où on te dit « pas encore »."
                 .to_string(),
             vec![
                 "Déclare un métier : sans lui, le catalogue ne peut rien te proposer.".to_string(),

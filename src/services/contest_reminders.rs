@@ -2,7 +2,7 @@
 //!
 //! ## Why this is a sweep and not a hook
 //!
-//! Every other contest notification answers something somebody did — an entry
+//! Every other contest notification answers something somebody did - an entry
 //! was handed in, a panel was invited, a ranking was published. A deadline is
 //! the opposite: it is the absence of an action, and nothing calls a function
 //! when nothing happens. So a job asks the question on a clock.
@@ -12,7 +12,7 @@
 //! A flag on the contest would answer "was the warning sent" rather than "to
 //! whom", and those differ the moment somebody enters an hour before the
 //! deadline: they have still never been warned. `contest_reminders_sent`
-//! records the pair, and the sweep is an anti-join against it — which also
+//! records the pair, and the sweep is an anti-join against it - which also
 //! makes running it twice harmless, the property that lets it be run by hand
 //! after an outage.
 //!
@@ -120,7 +120,7 @@ async fn warn_entrants(db: &PgPool) -> Result<u64, AppError> {
 /// The same warning for the panel, which is working to the same clock.
 ///
 /// A juror who declined is not reminded: they said no, and reminding them is
-/// how an invitation becomes nagging. One who has not answered still is —
+/// how an invitation becomes nagging. One who has not answered still is -
 /// silence is usually a missed notification, not a refusal.
 async fn warn_jurors(db: &PgPool) -> Result<u64, AppError> {
     let rows: Vec<(Uuid, String, String, Uuid, i64)> = sqlx::query_as(
@@ -240,7 +240,7 @@ async fn mark(db: &PgPool, tournament_id: Uuid, user_id: Uuid, moment: &str) {
     .await
     {
         // Worth a line: the consequence is a duplicate reminder next hour,
-        // which is annoying rather than dangerous — but it is also the first
+        // which is annoying rather than dangerous - but it is also the first
         // sign of a table nobody can write to.
         tracing::warn!(%tournament_id, %user_id, moment, error = %e, "reminder not recorded");
     }

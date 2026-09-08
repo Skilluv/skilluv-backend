@@ -1,4 +1,4 @@
-# Licences musicales — ce qu'il faut savoir avant de livrer
+# Licences musicales - ce qu'il faut savoir avant de livrer
 
 *Destiné à être publié sur `skill-uv.com/audio/licensing`.*
 
@@ -22,7 +22,7 @@ rétroactivement. Il n'en choisit aucune sans vous le faire payer.
 C'est pourquoi la plateforme demande une **déclaration de sources** avant de
 délivrer une attestation de composition ou de pack. La déclaration est une
 phrase que vous signez : *la liste est complète et exacte*. Une liste vide
-accompagnée de cette phrase est parfaitement valable — cela veut dire « tout est
+accompagnée de cette phrase est parfaitement valable - cela veut dire « tout est
 original ». Une liste vide sans la phrase veut dire « personne n'a rempli le
 formulaire », et ce n'est pas la même chose.
 
@@ -39,12 +39,12 @@ formulaire », et ce n'est pas la même chose.
 
 ### Creative Commons : gratuit ne veut pas dire libre
 
-- **BY** — crédit obligatoire, sous la forme exacte demandée par l'auteur.
+- **BY** - crédit obligatoire, sous la forme exacte demandée par l'auteur.
   Utiliser le son sans le crédit n'est pas un oubli, c'est une contrefaçon.
-- **BY-SA** — le crédit, **et** l'œuvre dérivée sous la même licence. Cela
+- **BY-SA** - le crédit, **et** l'œuvre dérivée sous la même licence. Cela
   contamine votre morceau : à éviter dans une commande client, sauf si le
   client sait et accepte.
-- **BY-NC** — pas d'usage commercial. **Une mission payée est un usage
+- **BY-NC** - pas d'usage commercial. **Une mission payée est un usage
   commercial**, y compris quand le jeu est gratuit et financé autrement.
 
 Freesound et OpenGameArt mélangent les trois. La licence est indiquée par
@@ -66,7 +66,7 @@ Déclarez la banque une fois, avec son numéro de licence si elle en a un.
 ## 3. Le dépôt : SACEM, ASCAP, BMI
 
 Déposer une œuvre auprès d'une société de gestion collective sert à percevoir
-des droits de diffusion — radio, télévision, plateformes, lieux publics. Cela
+des droits de diffusion - radio, télévision, plateformes, lieux publics. Cela
 **ne** remplace **pas** le contrat avec le client, et cela peut entrer en
 conflit avec lui.
 
@@ -90,11 +90,11 @@ obligé.
 
 Trois droits distincts, souvent confondus :
 
-- **Synchronisation** — associer une musique à une image ou à un logiciel.
+- **Synchronisation** - associer une musique à une image ou à un logiciel.
   C'est celui qui compte dans presque toute mission de cette plateforme.
-- **Mécanique** — reproduire l'œuvre sur un support. Concerne surtout les
+- **Mécanique** - reproduire l'œuvre sur un support. Concerne surtout les
   reprises.
-- **Exécution publique** — jouer l'œuvre en public ou la diffuser. C'est ce que
+- **Exécution publique** - jouer l'œuvre en public ou la diffuser. C'est ce que
   perçoit une société de gestion.
 
 Une mission Skilluv accorde d'ordinaire une **licence de synchronisation**,
@@ -103,7 +103,7 @@ d'étendue déclarée. Le champ `licensing_scope` de la mission est ce champ-là
 ### Les reprises
 
 Une reprise exige une licence mécanique du titulaire, et une reprise dans un
-jeu exige en plus une licence de synchronisation — que le titulaire peut
+jeu exige en plus une licence de synchronisation - que le titulaire peut
 refuser sans motif. En pratique : **n'acceptez pas une commande de reprise sans
 que le client ait obtenu les autorisations par écrit.**
 
@@ -111,8 +111,8 @@ que le client ait obtenu les autorisations par écrit.**
 
 Le statut juridique des sorties de Suno, Udio ou MusicGen n'est pas stable. En
 2026, selon les juridictions, elles peuvent n'être protégées par aucun droit
-d'auteur — donc être réutilisées par n'importe qui, y compris un concurrent du
-client — et faire l'objet de réclamations sur les données d'entraînement.
+d'auteur - donc être réutilisées par n'importe qui, y compris un concurrent du
+client - et faire l'objet de réclamations sur les données d'entraînement.
 
 Position de la plateforme :
 
@@ -126,11 +126,11 @@ Position de la plateforme :
 
 Cinq lignes, avant l'enregistrement :
 
-1. **Ce qui est livré** — formats, stems, délais.
-2. **Ce qui est cédé** — propriété, ou licence et son étendue.
-3. **Où et combien de temps** — territoire et durée.
+1. **Ce qui est livré** - formats, stems, délais.
+2. **Ce qui est cédé** - propriété, ou licence et son étendue.
+3. **Où et combien de temps** - territoire et durée.
 4. **Exclusif ou non.**
-5. **Portfolio** — oui par défaut ; si non, pourquoi et à quel prix.
+5. **Portfolio** - oui par défaut ; si non, pourquoi et à quel prix.
 
 Un modèle par étendue est servi avec les modèles de brief
 (`/api/guides?domain=audio&kind=brief_template`).

@@ -92,7 +92,7 @@ pub async fn propose(
     .await;
 
     // Tell the person it concerns. Without this the proposal sits at
-    // 'proposed' until somebody says it aloud — the whole failure SKI-331
+    // 'proposed' until somebody says it aloud - the whole failure SKI-331
     // named. Best-effort, like every notify: a delivery hiccup must not undo a
     // proposal that was recorded.
     let _ = crate::services::notify::send(
@@ -127,7 +127,7 @@ pub async fn my_placements(
     Ok(Json(build_response(json!({ "placements": placements }))))
 }
 
-/// The placements offered to me — the read a junior needs to find a proposal
+/// The placements offered to me - the read a junior needs to find a proposal
 /// and answer it (SKI-331). Proposed ones first, each naming the company and
 /// the mentor. `respond` stays the enterprise-view sibling's opposite number:
 /// only the targeted junior may take it.

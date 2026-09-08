@@ -145,7 +145,7 @@ pub async fn send_interest(
         return Err(AppError::AlreadyRequested);
     }
 
-    // Phase 3.9 — atomic credit gating. 1 credit per interest request.
+    // Phase 3.9 - atomic credit gating. 1 credit per interest request.
     // We insert first, then spend ; if spend fails, we roll the insert back.
     let mut tx = state.db.begin().await?;
     let request: InterestRequest = sqlx::query_as(
@@ -179,7 +179,7 @@ pub async fn send_interest(
     .await?;
     if spend_result.is_none() {
         return Err(AppError::Validation(
-            "Insufficient credits — recharge the enterprise account before contacting talents."
+            "Insufficient credits - recharge the enterprise account before contacting talents."
                 .into(),
         ));
     }
@@ -482,7 +482,7 @@ pub async fn decline_interest(
     .execute(&state.db)
     .await?;
 
-    // Phase 3.9 — refund 50% of the credit to the enterprise on decline
+    // Phase 3.9 - refund 50% of the credit to the enterprise on decline
     if let Some(spend_txn) = sqlx::query_as::<_, (Uuid,)>(
         "SELECT id FROM credit_transactions WHERE related_interest_request_id = $1 AND reason = 'spend_interest_request' LIMIT 1",
     )

@@ -55,7 +55,7 @@ fn build_response(data: Value) -> Value {
 /// Everything this company has with Skilluv, in one answer.
 ///
 /// One query rather than eighteen, because every product registers itself in
-/// `enterprise_products` — which is the reason that table exists.
+/// `enterprise_products` - which is the reason that table exists.
 #[utoipa::path(
     get, path = "/api/enterprise/overview", tag = "enterprise",
     responses(

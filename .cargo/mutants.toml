@@ -1,11 +1,11 @@
 # cargo-mutants scope (MU-01).
 #
-# A mutant is a deliberate bug — flip `<` to `>`, return Default, delete a `!` —
+# A mutant is a deliberate bug - flip `<` to `>`, return Default, delete a `!` -
 # that cargo-mutants introduces to check that *a test fails*. A mutant that
 # survives is a line the suite "covers" but does not actually test.
 #
 # Full-tree mutation on 160k lines is a nightly-only proposition. This scopes
-# the run to the ten modules whose correctness decides money, access, or proof —
+# the run to the ten modules whose correctness decides money, access, or proof -
 # the places where a survivor matters most. The nightly job mutates all of them
 # (fuzz-nightly.yml); the PR gate narrows to changed lines (mutants-pr.yml,
 # `--in-diff`).

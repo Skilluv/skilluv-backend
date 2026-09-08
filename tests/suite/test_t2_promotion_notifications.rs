@@ -1,4 +1,4 @@
-//! Integration tests for SKI-43 — rich notifications on promotion.
+//! Integration tests for SKI-43 - rich notifications on promotion.
 //!
 //! The central guarantee is that the durable channel always fires: the
 //! service-layer proof hooks only hold a `PgPool`, so a promotion reached
@@ -258,7 +258,7 @@ async fn achieved_goal_emits_a_milestone_notification() {
     let notifs = notifications_of(&app, my_id, "goal.reached").await;
     assert_eq!(notifs.len(), 1);
     // `goal_kind`, not `kind`: the notification already has a kind of its
-    // own — `goal.reached` — and two different things under one name in the
+    // own - `goal.reached` - and two different things under one name in the
     // same object is how a reader ends up asserting on the wrong one.
     assert_eq!(notifs[0]["data"]["goal_kind"], "artifact_count");
     assert_eq!(notifs[0]["data"]["target_value"], "2");

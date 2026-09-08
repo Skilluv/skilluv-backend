@@ -236,8 +236,8 @@ async fn the_window_only_counts_recent_withdrawals() {
     )
     .await
     .unwrap();
-    // Age it past the window. Entries are immutable by trigger — that is the
-    // point of them — so the guard is lifted for exactly this statement.
+    // Age it past the window. Entries are immutable by trigger - that is the
+    // point of them - so the guard is lifted for exactly this statement.
     // Travelling in time is the one thing a test legitimately needs to do
     // that production must never be able to.
     sqlx::query("ALTER TABLE ledger_entries DISABLE TRIGGER trg_ledger_entries_no_update")
@@ -370,7 +370,7 @@ async fn a_talent_sees_only_their_own_movements() {
     let csv = talent_wallet::statement_csv(&app.db, mine).await.unwrap();
     // The amount column, not the whole file. Searching the text for "999"
     // also searched `created_at.to_rfc3339()`, whose fractional seconds carry
-    // those three digits about once in three hundred rows — a test that failed
+    // those three digits about once in three hundred rows - a test that failed
     // on the clock rather than on a leak.
     let amounts: Vec<&str> = csv
         .lines()

@@ -1,7 +1,7 @@
-# Discord — the communication corner
+# Discord - the communication corner
 
 What to create, what to call it, and which channels have a rule of their own.
-The server-wide setup — webhooks, the notifier binary, env vars — is in
+The server-wide setup - webhooks, the notifier binary, env vars - is in
 [../DISCORD_SETUP.md](../DISCORD_SETUP.md); this is the communication
 structure that sits on top of it.
 
@@ -15,12 +15,12 @@ forty people. An empty room reads as an empty platform, and twenty of them
 read as an abandoned one.
 
 So the channels follow the **four review families**, which is how the trades
-are grouped everywhere else — the guides, the review grids, the capabilities.
+are grouped everywhere else - the guides, the review grids, the capabilities.
 Splitting a family when it gets busy is a Discord setting, not a rewrite.
 
 The per-language channels are the exception worth naming: they are not created
 in advance. A language gets a channel when **three people have declared they
-review in it** — the `user_review_languages` table is the count — and it is
+review in it** - the `user_review_languages` table is the count - and it is
 archived when it has been silent for six months. Creating `#comm-wolof` before
 anybody speaks Wolof here is not welcoming, it is a room with a sign on it.
 
@@ -89,7 +89,7 @@ existed, and writing them as four would have made the next domain a fifth.
 | `/skilluv craft communication` | Your craft score in this domain, its tier, and how many attestations it rests on |
 | `/skilluv queue communication` | How much work is waiting on a reviewer here, split into picked up and not, with the age of the oldest unclaimed one |
 | `/skilluv cohorts communication` | Cohorts recruiting now, with places left |
-| `/skilluv contests communication` | Open contests in this domain — docs jams and content sprints appear here |
+| `/skilluv contests communication` | Open contests in this domain - docs jams and content sprints appear here |
 | `/skilluv featured communication` | Who is featured this week |
 | `/skilluv me` | Your linked profile, trades and craft score |
 | `/skilluv portfolio <username>` | Somebody's public profile |

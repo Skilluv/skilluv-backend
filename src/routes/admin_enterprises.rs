@@ -1,9 +1,9 @@
-//! ADM-M4 — Admin management enterprises + type + type_config + agency_clients.
+//! ADM-M4 - Admin management enterprises + type + type_config + agency_clients.
 //!
-//! - GET   /admin/enterprises                          — liste paginée (filtres type, verified)
-//! - PATCH /admin/enterprises/{id}/type                — change enterprise_type (reset type_config)
-//! - GET   /admin/enterprises/{id}/type-config         — lit type_config JSONB
-//! - GET   /admin/enterprises/{id}/agency-clients      — liste clients (vide si non staffing)
+//! - GET   /admin/enterprises                          - liste paginée (filtres type, verified)
+//! - PATCH /admin/enterprises/{id}/type                - change enterprise_type (reset type_config)
+//! - GET   /admin/enterprises/{id}/type-config         - lit type_config JSONB
+//! - GET   /admin/enterprises/{id}/agency-clients      - liste clients (vide si non staffing)
 
 use axum::extract::{Path, Query, State};
 use axum::routing::{get, patch};
@@ -87,7 +87,7 @@ struct ListQuery {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SKI-111 — response schemas
+// SKI-111 - response schemas
 // ═══════════════════════════════════════════════════════════════════
 
 /// An enterprise as listed and fetched by the admin surface.

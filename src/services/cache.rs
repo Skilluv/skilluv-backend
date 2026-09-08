@@ -1,4 +1,4 @@
-//! Thin Redis cache helpers — Phase 4.16.
+//! Thin Redis cache helpers - Phase 4.16.
 //!
 //! Deliberately small : we don't need a full Redis-backed cache layer, just a couple
 //! of get/set-with-TTL helpers used by the hottest endpoints.

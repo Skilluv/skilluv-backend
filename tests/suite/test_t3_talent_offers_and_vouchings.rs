@@ -3,7 +3,7 @@
 //!
 //! They share a file because they share the mechanism that ties them
 //! together: a broken vouching drops the voucher's *effective* rank, which
-//! must immediately cost them the right to publish offers — without ever
+//! must immediately cost them the right to publish offers - without ever
 //! rewriting the derived rank the proof engine owns.
 
 use crate::common::TestApp;
@@ -58,7 +58,7 @@ async fn grant_capability(app: &TestApp, user_id: Uuid, capability: &str) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SKI-45 — talent offers
+// SKI-45 - talent offers
 // ═══════════════════════════════════════════════════════════════════
 
 #[tokio::test]
@@ -314,7 +314,7 @@ async fn a_demoted_author_drops_out_of_browse_without_any_cleanup() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SKI-46 — vouchings
+// SKI-46 - vouchings
 // ═══════════════════════════════════════════════════════════════════
 
 #[tokio::test]
@@ -459,7 +459,7 @@ async fn breaking_a_vouching_penalises_the_voucher_without_rewriting_their_rank(
         "the penalty is one step down"
     );
 
-    // The derived rank is untouched — it is what the proofs say, and the
+    // The derived rank is untouched - it is what the proofs say, and the
     // proofs have not changed.
     let raw_rank: String = sqlx::query_scalar("SELECT rank FROM user_ranks WHERE user_id = $1")
         .bind(senior_id)
@@ -481,7 +481,7 @@ async fn breaking_a_vouching_penalises_the_voucher_without_rewriting_their_rank(
     assert!(override_reason.contains("broken vouching"));
 
     // A penalised Doyen is an effective Maître, which is still above the
-    // Artisan bar — so offers keep working. The penalty is one step, not a
+    // Artisan bar - so offers keep working. The penalty is one step, not a
     // ban, and it bites where it is supposed to: vouching (asserted in
     // `a_penalised_voucher_cannot_keep_vouching`).
     app.login("breaksenior").await;
@@ -549,7 +549,7 @@ async fn a_penalised_artisan_loses_publishing_rights() {
     let body: Value = app.get("/api/talent-offers").await.json().await.unwrap();
     assert!(body["data"]["offers"].as_array().unwrap().is_empty());
 
-    // And the window expires on its own — no job has to lift it.
+    // And the window expires on its own - no job has to lift it.
     sqlx::query(
         "UPDATE user_ranks SET penalty_until = NOW() - INTERVAL '1 day' WHERE user_id = $1",
     )
@@ -667,7 +667,7 @@ async fn breaking_requires_a_moderator_capability() {
         .unwrap()
         .to_string();
 
-    // Even the voucher themselves cannot break it — that path is withdraw,
+    // Even the voucher themselves cannot break it - that path is withdraw,
     // which carries no penalty.
     let resp = app
         .post(

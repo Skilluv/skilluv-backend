@@ -1,4 +1,4 @@
-//! GitHub OAuth + sync + CV endpoints — Phase 2 Sprint 5.
+//! GitHub OAuth + sync + CV endpoints - Phase 2 Sprint 5.
 
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
@@ -100,7 +100,7 @@ pub struct CallbackQuery {
     pub state: String,
 }
 
-/// OAuth callback — exchanges code for token, kicks off first sync.
+/// OAuth callback - exchanges code for token, kicks off first sync.
 #[utoipa::path(
     get, path = "/api/auth/github/callback", tag = "auth",
     params(CallbackQuery),
@@ -285,7 +285,7 @@ pub async fn public_repos(
     Ok(Json(build_response(json!({ "repos": repos }))))
 }
 
-/// Public HTML CV page for a user (not JSON — served as text/html).
+/// Public HTML CV page for a user (not JSON - served as text/html).
 #[utoipa::path(
     get, path = "/api/u/{username}/cv", tag = "profile",
     params(("username" = String, Path)),
@@ -343,7 +343,7 @@ pub async fn cv_html(
     .fetch_all(&state.db)
     .await?;
 
-    // Top 3 skills (source user_skills — skill_fragments droppée en P8.7).
+    // Top 3 skills (source user_skills - skill_fragments droppée en P8.7).
     let top_skills =
         crate::services::SkillsService::list_user_top_skills(&state.db, user_id, 3).await?;
 
@@ -507,7 +507,7 @@ fn render_cv_html(c: CvContext) -> String {
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<title>CV — {display} ({username})</title>
+<title>CV - {display} ({username})</title>
 <meta name="robots" content="noindex">
 <style>
   :root {{ --accent: #6c5ce7; --text: #1a1a2e; --muted: #666; }}

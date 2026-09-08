@@ -1,7 +1,7 @@
 //! The audio craft score (migration 0514).
 //!
 //! The third domain to score. The formula, the tiers, the cap and the
-//! assembly are shared — [`craft_score::assemble`] was extracted when this
+//! assembly are shared - [`craft_score::assemble`] was extracted when this
 //! module was written, because three copies of the same loop is three places
 //! for the cap or the skip-on-zero to drift, and the drift would be invisible:
 //! a domain's score is only ever compared to itself.
@@ -13,7 +13,7 @@
 //! Every term counts something a stranger can go and check: an attestation
 //! with a basis, a mission closed, a review grid filled in. The exception is
 //! `portfolio_reach`, which counts plays on platforms this codebase cannot
-//! query — SoundCloud and Bandcamp publish no usable API — and where the
+//! query - SoundCloud and Bandcamp publish no usable API - and where the
 //! figures are often the person's own word.
 //!
 //! That is why declared figures are counted at a discount rather than
@@ -49,7 +49,7 @@ pub const CAP: i32 = craft_score::CAP;
 /// What a declared audience figure is worth against a fetched one.
 ///
 /// Applied before the logarithm, so it moves the term by a constant rather
-/// than by a proportion — a declared million lands where a verified half
+/// than by a proportion - a declared million lands where a verified half
 /// million would.
 const DECLARED_REACH_DISCOUNT: f64 = 0.5;
 
@@ -287,7 +287,7 @@ pub struct AudioHighlight {
     pub slice_id: Uuid,
     pub title: String,
     pub subtype: String,
-    /// What the work is for — a game, a montage, a podcast, an interface.
+    /// What the work is for - a game, a montage, a podcast, an interface.
     pub destination: Option<String>,
     /// Where it lives publicly, when the author named somewhere.
     pub external_url: Option<String>,
@@ -304,7 +304,7 @@ pub struct AudioProfile {
     pub username: String,
     pub craft_score: i32,
     /// `apprentice`, `contributor`, `engineer`, `senior`, `staff`,
-    /// `principal` — the same six every domain uses, so somebody can compare
+    /// `principal` - the same six every domain uses, so somebody can compare
     /// their own two profiles.
     pub tier: String,
     pub tier_name: String,

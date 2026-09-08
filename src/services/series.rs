@@ -4,7 +4,7 @@
 //!
 //! Two backlog items that looked like two formats: an annual awards edition
 //! with thirteen categories, and a weekend design sprint with an imposed
-//! theme. Neither is a format — an edition is thirteen contests judged in
+//! theme. Neither is a format - an edition is thirteen contests judged in
 //! parallel, a sprint is a contest with a very short window run again every
 //! few weeks. What both needed was a way to say *these contests are one
 //! thing*, and that is all this is.
@@ -106,7 +106,7 @@ pub async fn create(db: &PgPool, input: CreateSeries, by: Uuid) -> Result<Series
 
 /// Put a contest in a series, under a category.
 ///
-/// The category is what the contest is *for* inside the series — a family for
+/// The category is what the contest is *for* inside the series - a family for
 /// an awards edition, an editorial axis for a programme. A sprint's contest
 /// carries none, because it is the whole of its series.
 ///

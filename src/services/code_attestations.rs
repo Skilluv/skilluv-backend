@@ -11,10 +11,10 @@
 //!
 //! Three of the seven can be checked against a public API, and are:
 //!
-//!   * a merged pull request — the deliverable already carries the proof, and
+//!   * a merged pull request - the deliverable already carries the proof, and
 //!     the platform verified it before this is reachable;
-//!   * a published library — the registry is asked whether the package exists;
-//!   * an adopted devtool — the same figures, against a threshold.
+//!   * a published library - the registry is asked whether the package exists;
+//!   * an adopted devtool - the same figures, against a threshold.
 //!
 //! Three cannot be checked by a machine, and are reviewed by a person instead:
 //! an accepted RFC, a contribution to a standard, and a shipped project whose
@@ -40,7 +40,7 @@ use crate::errors::AppError;
 /// What this domain may issue, and under what rules.
 ///
 /// The issuing itself lives in `services::artefact_attestations`: a code artefact is a repository, so evidence must be a public https
-/// link — an `s3://` address would mean the proof is a copy we made of it.
+/// link - an `s3://` address would mean the proof is a copy we made of it.
 const DOMAIN: crate::services::artefact_attestations::Domain =
     crate::services::artefact_attestations::Domain {
         name: "code",
@@ -82,7 +82,7 @@ pub const DEVTOOL_ADOPTION_THRESHOLD: i64 = 500;
 /// Which standards body a URL belongs to, if any.
 ///
 /// Pure, and the part of `code_standard_contribution` worth testing: the rest
-/// is a human reading a link. Returns `None` rather than guessing — a
+/// is a human reading a link. Returns `None` rather than guessing - a
 /// contribution filed under the wrong body is a claim about a room the person
 /// was never in.
 pub fn standards_body(url: &str) -> Option<&'static str> {
@@ -143,8 +143,8 @@ pub use crate::services::artefact_attestations::{Evidence, Issued};
 /// Write the attestation.
 ///
 /// The single door: every generator ends here, so the rules that apply to all
-/// of them — the basis is one of the seven, an artefact basis names a
-/// deliverable, the code is unique — are checked once.
+/// of them - the basis is one of the seven, an artefact basis names a
+/// deliverable, the code is unique - are checked once.
 ///
 /// `attestation_type` is `artefact` for all of these (migration 0198). The
 /// type is what kind of statement it is; the basis is what it rests on. A
@@ -305,7 +305,7 @@ pub async fn rfc_accepted(
 ) -> Result<Issued, AppError> {
     if !is_proposal_url(rfc_url) {
         return Err(AppError::Validation(
-            "that URL does not look like a proposal — an RFC lives in the repository or \
+            "that URL does not look like a proposal - an RFC lives in the repository or \
              tracker where its community discusses them"
                 .into(),
         ));
@@ -341,7 +341,7 @@ pub async fn standard_contribution(
 ) -> Result<Issued, AppError> {
     let body = standards_body(contribution_url).ok_or_else(|| {
         AppError::Validation(
-            "that URL does not belong to a standards body Skilluv recognises — TC39, IETF, \
+            "that URL does not belong to a standards body Skilluv recognises - TC39, IETF, \
              W3C, WHATWG, Khronos, Unicode, ECMA or ISO"
                 .into(),
         )

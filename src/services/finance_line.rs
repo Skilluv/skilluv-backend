@@ -83,7 +83,7 @@ pub const ADVANCE_MIN_RANK: &str = "artisan";
 /// Whether somebody may take an advance, from facts rather than from a score.
 ///
 /// Kept as a function over plain values so the rule can be read, argued with
-/// and changed in one place — an eligibility rule spread across three queries
+/// and changed in one place - an eligibility rule spread across three queries
 /// is a rule nobody can state.
 pub fn eligibility(invoice_status: &str, rank: &str, written_off_advances: i64) -> Eligibility {
     if invoice_status != "issued" {
@@ -393,7 +393,7 @@ pub async fn record_decision(
         .or_else(|| monthly_premium.as_ref().map(|p| p * BigDecimal::from(12)))
         .ok_or_else(|| {
             AppError::Validation(
-                "an approval has to say what was granted — an amount or a premium".into(),
+                "an approval has to say what was granted - an amount or a premium".into(),
             )
         })?;
 
@@ -504,7 +504,7 @@ pub async fn request_advance(
         Eligibility::InvoiceNotAdvanceable => {
             return Err(AppError::Validation(format!(
                 "this invoice is {invoice_status}. An advance is money already owed on \
-                 work delivered — against anything else it would be a loan, which is \
+                 work delivered - against anything else it would be a loan, which is \
                  not what this is."
             )));
         }
@@ -518,7 +518,7 @@ pub async fn request_advance(
         Eligibility::OutstandingWriteOff => {
             return Err(AppError::Validation(
                 "you have an advance a client never paid. Advancing again into the same \
-                 situation helps nobody — talk to us instead."
+                 situation helps nobody - talk to us instead."
                     .into(),
             ));
         }
@@ -589,7 +589,7 @@ pub async fn disburse(db: &PgPool, advance_id: Uuid) -> Result<BigDecimal, AppEr
     let advance = advance(db, advance_id).await?;
     if advance.status != "requested" {
         return Err(AppError::Validation(format!(
-            "this advance is {} — only a new request can be paid out",
+            "this advance is {} - only a new request can be paid out",
             advance.status
         )));
     }
@@ -658,7 +658,7 @@ pub async fn mark_repaid(db: &PgPool, advance_id: Uuid) -> Result<(), AppError> 
 /// The client never paid.
 ///
 /// Skilluv carries it. The contributor keeps the money, which is the whole
-/// reason the fee exists — an advance the recipient has to give back on a
+/// reason the fee exists - an advance the recipient has to give back on a
 /// client's default is not an advance, it is a loan with extra steps.
 pub async fn write_off(db: &PgPool, advance_id: Uuid, reason: &str) -> Result<(), AppError> {
     if reason.trim().is_empty() {
@@ -735,7 +735,7 @@ pub async fn honour_guarantee(
 ) -> Result<BigDecimal, AppError> {
     if reason.trim().is_empty() {
         return Err(AppError::Validation(
-            "say what the dispute was about — the claim is the record we chase the \
+            "say what the dispute was about - the claim is the record we chase the \
              client with"
                 .into(),
         ));

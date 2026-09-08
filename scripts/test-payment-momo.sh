@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SKI-35 — Mobile Money payout end-to-end test.
+# SKI-35 - Mobile Money payout end-to-end test.
 #
 # Runs a real 1000 XOF payout via Orange/MTN/Wave sandbox.
 #
@@ -25,7 +25,7 @@ COOKIE_JAR=$(mktemp)
 trap 'rm -f "$COOKIE_JAR"' EXIT
 
 echo "═══════════════════════════════════════════════════════════"
-echo "  Momo payout test — $TEST_RUN_ID"
+echo "  Momo payout test - $TEST_RUN_ID"
 echo "  Base URL: $SKILLUV_BASE_URL"
 echo "  Provider: $SKILLUV_MOMO_PROVIDER  MSISDN: $SKILLUV_MOMO_MSISDN"
 echo "═══════════════════════════════════════════════════════════"
@@ -38,7 +38,7 @@ curl -sS -c "$COOKIE_JAR" -X POST "$SKILLUV_BASE_URL/api/auth/login" \
     > /dev/null
 
 # 2. Request payout
-echo "• Step 2/3: POST payout — 1000 XOF to $SKILLUV_MOMO_MSISDN"
+echo "• Step 2/3: POST payout - 1000 XOF to $SKILLUV_MOMO_MSISDN"
 payout_response=$(curl -sS -b "$COOKIE_JAR" -X POST \
     "$SKILLUV_BASE_URL/api/talent-wallet/payouts" \
     -H "Content-Type: application/json" \
@@ -72,14 +72,14 @@ for i in $(seq 1 12); do
         error=$(curl -sS -b "$COOKIE_JAR" \
             "$SKILLUV_BASE_URL/api/talent-wallet/transactions/$transaction_id" \
             | python3 -c "import sys,json; print(json.load(sys.stdin)['data'].get('error_code','no code'))")
-        echo "  FAIL transaction failed — error: $error" >&2
+        echo "  FAIL transaction failed - error: $error" >&2
         exit 1
     fi
     sleep 5
 done
 
 echo "═══════════════════════════════════════════════════════════"
-echo "  OK Momo payout test complete — run_id: $TEST_RUN_ID"
+echo "  OK Momo payout test complete - run_id: $TEST_RUN_ID"
 echo "═══════════════════════════════════════════════════════════"
 echo ""
 echo "Cleanup: DELETE FROM talent_wallet_transactions WHERE description LIKE '%$TEST_RUN_ID%';"

@@ -35,7 +35,7 @@ where
             Ok(Query(t)) => Ok(ValidatedQuery(t)),
             Err(rejection) => {
                 // QueryRejection expose un message user-friendly via
-                // Display — on le reformate en Validation pour que la
+                // Display - on le reformate en Validation pour que la
                 // reponse soit application/json.
                 let msg = match &rejection {
                     QueryRejection::FailedToDeserializeQueryString(e) => {

@@ -4,14 +4,14 @@
 //!
 //! Twenty-eight admin write routes carried an `{id}` that nothing let an
 //! administrator obtain. `POST /admin/engagements/{id}/start`,
-//! `/sponsorships/{id}/sign`, `/finance/advances/{id}/disburse` — the buttons
+//! `/sponsorships/{id}/sign`, `/finance/advances/{id}/disburse` - the buttons
 //! existed, the lists did not.
 //!
 //! One cause, repeated twelve times: everything an enterprise buys is listed
 //! only under `/api/enterprise/*`, behind `require_enterprise`, which resolves
 //! the **caller's** company and filters on it. Skilluv staff, who service those
 //! contracts, are nobody's enterprise. They had the verbs and no nouns, and the
-//! only way to reach one was an id pasted out of psql — which SKI-337 already
+//! only way to reach one was an id pasted out of psql - which SKI-337 already
 //! described as the problem, not the fix.
 //!
 //! These suites hold the two properties that make the fix real: the lists are
@@ -42,9 +42,9 @@ async fn an_admin(app: &TestApp, username: &str) -> Uuid {
 
 /// The whole point of the registry, asserted rather than assumed.
 ///
-/// `enterprise_products` was built to be this list — `sales_pipeline.rs` says
+/// `enterprise_products` was built to be this list - `sales_pipeline.rs` says
 /// so in its own comment: *"every product registers itself in
-/// `enterprise_products` — which is the reason that table exists."* Ten modules
+/// `enterprise_products` - which is the reason that table exists."* Ten modules
 /// insert into it with `source_table` and `source_id`, and `source_id` **is**
 /// the `{id}` those twenty write routes take. It was in the table; nothing
 /// served it.
@@ -110,7 +110,7 @@ async fn the_registry_serves_the_id_the_write_routes_take() {
 /// A draft is what an administrator came for, and it is what `renewals` hides.
 ///
 /// Widening `renewals` instead of adding this route would have inherited its
-/// `status = 'active' AND renews_at IS NOT NULL` filter — which excludes every
+/// `status = 'active' AND renews_at IS NOT NULL` filter - which excludes every
 /// row somebody needs to activate.
 #[tokio::test]
 async fn the_registry_shows_what_the_renewals_list_filters_out() {
@@ -191,7 +191,7 @@ async fn none_of_the_new_lists_are_reachable_without_the_admin_gate() {
 /// The finance queues answer, and put what is waiting first.
 ///
 /// `enterprise_products` does not cover these: an advance and a referral belong
-/// to a contributor, not to a company. The ordering is the point — an advance
+/// to a contributor, not to a company. The ordering is the point - an advance
 /// requested three weeks ago is the row somebody most needs to see, and a list
 /// sorted by date alone buries it under everything already settled.
 #[tokio::test]

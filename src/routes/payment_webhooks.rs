@@ -1,4 +1,4 @@
-//! `POST /api/webhooks/payments/{provider}` — one endpoint, every provider.
+//! `POST /api/webhooks/payments/{provider}` - one endpoint, every provider.
 //!
 //! The provider comes from the path rather than from the body: the body is
 //! the part an attacker controls, and picking a verifier from it would let
@@ -23,7 +23,7 @@ pub fn routes() -> Router<AppState> {
 /// Headers providers sign with, in the order we look for them.
 ///
 /// One list rather than one per source: a provider that changes its header
-/// name — which happens — should not need a code change to keep working.
+/// name - which happens - should not need a code change to keep working.
 const SIGNATURE_HEADERS: [&str; 5] = [
     "stripe-signature",
     "x-fedapay-signature",

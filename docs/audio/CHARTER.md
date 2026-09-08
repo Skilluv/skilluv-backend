@@ -37,7 +37,7 @@ La différence n'est pas la difficulté. C'est la vérifiabilité.
 ## 2. Quatre exigences non négociables
 
 **La provenance déclarée.** Chaque échantillon, boucle ou banque utilisé est
-déclaré avec sa licence — ou tout est original et c'est écrit. **C'est
+déclaré avec sa licence - ou tout est original et c'est écrit. **C'est
 l'exigence la plus stricte du domaine, et la seule qui rende une livraison
 inutilisable à elle seule** : une source non tracée expose le client à un
 retrait, et l'auteur à une réclamation, des mois après la livraison.
@@ -51,7 +51,7 @@ niveau visé et le niveau atteint est ce qu'un relecteur regarde.
 peut rien ajuster sans revenir vers l'auteur. Une composition livrée sans stems
 est incomplète, pas protégée.
 
-**Le service du propos.** Le son sert ce à quoi il est attaché — le jeu,
+**Le service du propos.** Le son sert ce à quoi il est attaché - le jeu,
 l'image, l'interface, le récit. Un travail qu'on remarque au détriment de ce
 qu'il accompagne a raté sa cible, même bien fait.
 
@@ -70,7 +70,7 @@ avant l'enregistrement, pas après.
 
 **Le portfolio est le cas par défaut.** Un créateur qui ne peut pas montrer ce
 qu'il a fait ne peut pas prouver qu'il l'a fait, et c'est la seule monnaie de
-cette plateforme. Une clause qui l'interdit existe — `buyout` — et elle est
+cette plateforme. Une clause qui l'interdit existe - `buyout` - et elle est
 visible, séparée, et se paie.
 
 ## 4. Quatre étendues de licence, et pourquoi la question est posée
@@ -79,10 +79,10 @@ Propriété et licence sont deux questions différentes, et en musique elles ont
 presque toujours deux réponses différentes. Toute mission audio doit dire
 laquelle s'applique :
 
-- **synchronisation seule** — usage à l'image dans l'œuvre nommée ;
-- **commercial limité** — un support, un territoire, une durée ;
-- **commercial mondial** — sans limite de territoire ni de durée ;
-- **exclusif** — le client est seul à pouvoir utiliser l'œuvre, et cela se
+- **synchronisation seule** - usage à l'image dans l'œuvre nommée ;
+- **commercial limité** - un support, un territoire, une durée ;
+- **commercial mondial** - sans limite de territoire ni de durée ;
+- **exclusif** - le client est seul à pouvoir utiliser l'œuvre, et cela se
   paie.
 
 Une commande sans étendue déclarée est le premier motif de litige du métier :
@@ -111,7 +111,7 @@ plateforme refuse le plus fermement. Voir
 
 La grille de revue de la famille, publique et lisible avant de soumettre :
 composition, design sonore, voix, intégration. Elle est appliquée par un
-relecteur qui a la capability correspondante — `audio_reviewer:composition`,
+relecteur qui a la capability correspondante - `audio_reviewer:composition`,
 `audio_reviewer:sound-design`, `audio_reviewer:voice`,
 `audio_reviewer:implementation`.
 
@@ -121,8 +121,8 @@ de ce que l'attestation affirme.
 
 ## 7. Les documents qui vont avec
 
-- [LICENSING.md](./LICENSING.md) — échantillons, dépôt, synchronisation.
-- [VOICE-RIGHTS.md](./VOICE-RIGHTS.md) — droits de la voix, non-concurrence,
+- [LICENSING.md](./LICENSING.md) - échantillons, dépôt, synchronisation.
+- [VOICE-RIGHTS.md](./VOICE-RIGHTS.md) - droits de la voix, non-concurrence,
   clonage.
 - Les modèles de brief et de rapport sont servis par l'API
   (`/api/guides?domain=audio`), pas par ce dépôt : ils sont traduits et édités

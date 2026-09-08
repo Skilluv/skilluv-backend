@@ -9,7 +9,7 @@
 //! says so.
 //!
 //! Declining rather than failing is the point. A first deployment that has not
-//! been told who the administrator is should still come up — the operator sets
+//! been told who the administrator is should still come up - the operator sets
 //! the variable and restarts, and the seed catches up on the next boot because
 //! the ledger has no row for any of it.
 //!

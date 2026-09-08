@@ -16,7 +16,7 @@
 //!
 //! Severity is `info`, `warning` or `error`, and none of them stops a
 //! submission or forces a verdict. A check that blocked would be a check that
-//! has to be right every time — and the first false positive on somebody's
+//! has to be right every time - and the first false positive on somebody's
 //! deliberate choice would teach the whole community to work around it.
 //!
 //! The reviewer reads them beside the work. `error` means "this is almost
@@ -37,8 +37,8 @@ use crate::errors::AppError;
 
 /// How large a fetched artefact may be before it is not worth reading.
 ///
-/// Two megabytes. Every check here works on text — SVG source, a Lottie
-/// document, a token file — and a text artefact past this size is not a token
+/// Two megabytes. Every check here works on text - SVG source, a Lottie
+/// document, a token file - and a text artefact past this size is not a token
 /// file, it is an export somebody mislabelled.
 const MAX_FETCH_BYTES: usize = 2 * 1024 * 1024;
 
@@ -81,7 +81,7 @@ impl Severity {
 /// Relative luminance, as WCAG 2 defines it.
 ///
 /// The gamma expansion is not decorative: a naive average of the channels
-/// gets the answer wrong on exactly the pairs people get wrong by eye — dark
+/// gets the answer wrong on exactly the pairs people get wrong by eye - dark
 /// blue on black, mid grey on white.
 fn relative_luminance(rgb: (u8, u8, u8)) -> f64 {
     fn channel(value: u8) -> f64 {
@@ -179,7 +179,7 @@ pub fn check_palette(palette: &[(String, String)]) -> Vec<CheckResult> {
         }
     }
 
-    // The useful question is not "does every pair pass" — it never does — but
+    // The useful question is not "does every pair pass" - it never does - but
     // "is there any pair somebody can set text in".
     let severity = if usable_pairs == 0 {
         Severity::Error
@@ -215,8 +215,8 @@ pub fn check_palette(palette: &[(String, String)]) -> Vec<CheckResult> {
 
 /// The spacing step a scale is expected to be built on.
 ///
-/// Four. Not a universal truth — some systems use 8, some use a modular
-/// scale — which is why a value off the step is a `warning` naming the step
+/// Four. Not a universal truth - some systems use 8, some use a modular
+/// scale - which is why a value off the step is a `warning` naming the step
 /// rather than an error. What it catches is the real failure: a scale that is
 /// 4, 8, 12, 16, 22, 24, where one value was typed rather than derived.
 const SPACING_STEP: i64 = 4;
@@ -329,7 +329,7 @@ fn flatten_tokens(prefix: &str, node: &Value, out: &mut Vec<(String, Value)>) {
 // ═══════════════════════════════════════════════════════════════════
 
 /// Past this many layers, a Lottie file is expensive to play on the phones
-/// most of our users have. Not a hard limit — a warning, and a number a
+/// most of our users have. Not a hard limit - a warning, and a number a
 /// reviewer can weigh against what the animation does.
 const LOTTIE_LAYER_BUDGET: usize = 60;
 /// Past this many seconds, an interface animation is not an interface
@@ -681,7 +681,7 @@ mod tests {
 
     #[test]
     fn a_pair_that_looks_fine_and_is_not() {
-        // Mid grey on white reads as comfortable and sits at 3.9 — under AA
+        // Mid grey on white reads as comfortable and sits at 3.9 - under AA
         // for body text. This is the pair the check exists for.
         let ratio = contrast_ratio((0x77, 0x77, 0x77), (0xFF, 0xFF, 0xFF));
         assert!(ratio < AA_NORMAL_TEXT, "{ratio}");

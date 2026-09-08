@@ -138,7 +138,7 @@ async fn test_decline_sets_cooldown() {
         .await;
     assert_eq!(decline_resp.status(), StatusCode::OK);
 
-    // Try to re-send interest — should be blocked by cooldown
+    // Try to re-send interest - should be blocked by cooldown
     app.login("declinecorp").await;
     let retry = app
         .post(
@@ -176,7 +176,7 @@ async fn test_block_enterprise() {
         .await;
     assert_eq!(block_resp.status(), StatusCode::OK);
 
-    // Enterprise tries to send interest — should be blocked
+    // Enterprise tries to send interest - should be blocked
     app.login("blockcorp").await;
     let interest = app
         .post(

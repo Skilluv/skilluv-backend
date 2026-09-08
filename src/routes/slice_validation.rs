@@ -1,4 +1,4 @@
-//! P26 v2 Phase D — routes for the validator workflow.
+//! P26 v2 Phase D - routes for the validator workflow.
 //!
 //! All endpoints require an authenticated user with the
 //! `challenge_validator:{domain}` capability matching the slice's
@@ -37,7 +37,7 @@ fn wrap(data: serde_json::Value) -> serde_json::Value {
     })
 }
 
-/// SKI-83 — POST /api/slices/{id}/validation/pickup
+/// SKI-83 - POST /api/slices/{id}/validation/pickup
 #[utoipa::path(
     post, path = "/api/slices/{id}/validation/pickup", tag = "slices",
     params(("id" = uuid::Uuid, Path, description = "The slice to pick up for validation")),
@@ -57,7 +57,7 @@ pub async fn pickup(
     Ok((StatusCode::OK, Json(wrap(json!({ "slice": slice })))))
 }
 
-/// SKI-84 — POST /api/slices/{id}/validation/approve
+/// SKI-84 - POST /api/slices/{id}/validation/approve
 #[utoipa::path(
     post, path = "/api/slices/{id}/validation/approve", tag = "slices",
     params(("id" = uuid::Uuid, Path)),
@@ -93,7 +93,7 @@ pub struct RejectBody {
     pub blocking_reason: String,
 }
 
-/// SKI-85 — POST /api/slices/{id}/validation/reject
+/// SKI-85 - POST /api/slices/{id}/validation/reject
 #[utoipa::path(
     post, path = "/api/slices/{id}/validation/reject",
     operation_id = "sliceValidationReject",
@@ -123,7 +123,7 @@ pub async fn reject(
     Ok((StatusCode::OK, Json(wrap(json!({ "slice": slice })))))
 }
 
-/// SKI-86 — GET /api/me/validation/queue
+/// SKI-86 - GET /api/me/validation/queue
 #[utoipa::path(
     get, path = "/api/me/validation/queue", tag = "slices",
     responses((status = 200, body = serde_json::Value)),

@@ -1,4 +1,4 @@
-//! Integration tests — Phase 5.9 White-label tenants.
+//! Integration tests - Phase 5.9 White-label tenants.
 
 use crate::common::TestApp;
 use serde_json::{Value, json};

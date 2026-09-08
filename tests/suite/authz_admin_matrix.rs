@@ -1,11 +1,11 @@
-//! AZ-01 (runtime half) — every admin route refuses a non-admin.
+//! AZ-01 (runtime half) - every admin route refuses a non-admin.
 //!
 //! The static gate (scripts/check-admin-guards.py) proves each admin handler
 //! *has* a guard; this proves the guard *works*, end to end, against the
 //! running app. It is generated from the source of truth: it fetches
 //! `/api/openapi.json`, enumerates every documented `/admin/*` (path, method),
-//! and sends each one as two actors who must never be let in — a logged-in
-//! non-admin and an anonymous client — asserting none receives a 2xx.
+//! and sends each one as two actors who must never be let in - a logged-in
+//! non-admin and an anonymous client - asserting none receives a 2xx.
 //!
 //! The test client carries `Origin: http://localhost:5174` by default (see
 //! tests/common/mod.rs), a dev admin origin, so `AdminGate`'s origin check
@@ -35,7 +35,7 @@ const DUMMY_ID: &str = "00000000-0000-0000-0000-000000000001";
 
 fn concrete_path(template: &str) -> String {
     // Replace every {param} with a value that forms a valid URL segment. The
-    // handler may then 404 on a missing row, which is still not a 2xx — and
+    // handler may then 404 on a missing row, which is still not a 2xx - and
     // authorization runs before the lookup anyway.
     let mut out = String::with_capacity(template.len());
     let mut in_param = false;
@@ -77,7 +77,7 @@ fn admin_paths(spec: &Value) -> Vec<(String, String)> {
 async fn no_non_admin_reaches_any_admin_route() {
     let app = TestApp::spawn().await;
 
-    // A plain, verified, logged-in user — not an admin, no capabilities.
+    // A plain, verified, logged-in user - not an admin, no capabilities.
     app.register_user("az_matrix_user").await;
     app.login("az_matrix_user").await;
 
@@ -147,7 +147,7 @@ async fn no_non_admin_reaches_any_admin_route() {
 
     assert!(
         reached.is_empty(),
-        "{} admin route(s) let a non-admin in — each is an escalation to fix or an \
+        "{} admin route(s) let a non-admin in - each is an escalation to fix or an \
          intentional exception to record in ALLOW:\n  {}",
         reached.len(),
         reached.join("\n  ")

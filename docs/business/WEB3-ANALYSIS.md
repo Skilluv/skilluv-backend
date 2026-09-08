@@ -1,4 +1,4 @@
-# Jetons, chaînes et attestations vérifiables — la décision
+# Jetons, chaînes et attestations vérifiables - la décision
 
 Ticket 16-06 demande une analyse et une décision. La voici, avec le
 raisonnement, parce qu'une décision sans raisonnement se rouvre tous les six
@@ -13,11 +13,11 @@ par une URL et une signature.**
 
 Trois idées circulent dès qu'une plateforme de preuves existe :
 
-1. **un jeton** — récompenser les contributions, financer la communauté,
+1. **un jeton** - récompenser les contributions, financer la communauté,
    aligner les intérêts ;
-2. **des attestations sur chaîne** — pour qu'une preuve survive à la
+2. **des attestations sur chaîne** - pour qu'une preuve survive à la
    plateforme qui l'a émise ;
-3. **une identité décentralisée** — pour que la personne possède son profil
+3. **une identité décentralisée** - pour que la personne possède son profil
    plutôt que nous.
 
 Les trois répondent à de vraies inquiétudes. C'est ce qui les rend difficiles
@@ -43,7 +43,7 @@ revenus, et donner à la communauté une part de ce qu'elle construit.
   travail est-il bon » pour devenir « quand est-ce que ça monte ».
 
 **Le point décisif** : Skilluv veut être une réponse à « qui sait faire quoi ».
-Un jeton ajoute une seconde question — « combien ça vaut aujourd'hui » — qui
+Un jeton ajoute une seconde question - « combien ça vaut aujourd'hui » - qui
 étouffe la première. Aucun des problèmes que le jeton résoudrait n'est plus
 grave que celui qu'il créerait.
 
@@ -64,11 +64,11 @@ signature.
 
 - **la vérité du contenu**. Une attestation fausse ancrée sur une chaîne est
   une attestation fausse, éternelle et impossible à corriger. Le problème
-  difficile n'est pas de prouver que nous avons signé — c'est de garantir que
+  difficile n'est pas de prouver que nous avons signé - c'est de garantir que
   ce que nous avons signé était vrai, et aucune chaîne ne le fait ;
 - **la révocabilité**. Une attestation retirée doit cesser d'être vérifiable.
   Une chaîne rend cela structurellement difficile, et les schémas de
-  révocation qui existent réintroduisent un serveur — c'est-à-dire nous ;
+  révocation qui existent réintroduisent un serveur - c'est-à-dire nous ;
 - **la lisibilité**. Un recruteur à Cotonou vérifie une attestation en
   cliquant sur un lien, pas en installant un portefeuille.
 
@@ -77,14 +77,14 @@ signature.
 - chaque attestation porte un **code de vérification** à 50 bits d'entropie et
   une page publique consultable sans compte ;
 - chaque attestation nomme **ce sur quoi elle repose** (`basis`) et pointe
-  vers l'artefact — une pull request fusionnée, un paquet publié, une place en
+  vers l'artefact - une pull request fusionnée, un paquet publié, une place en
   finale. La preuve principale est l'artefact, pas notre signature : il reste
   vérifiable si nous disparaissons ;
 - un **export complet** est déjà accessible à chacun, et
   [CHARTER.md](CHARTER.md) engage à le maintenir.
 
-C'est plus faible que l'ancrage cryptographique sur un point — la
-persistance — et plus fort sur les trois qui comptent davantage. Si un jour un
+C'est plus faible que l'ancrage cryptographique sur un point - la
+persistance - et plus fort sur les trois qui comptent davantage. Si un jour un
 standard d'attestation vérifiable s'impose auprès des employeurs que nos
 membres visent, nous signerons dans ce format en plus, sans jeton et sans
 chaîne propre.

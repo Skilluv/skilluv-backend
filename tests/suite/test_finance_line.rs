@@ -310,7 +310,7 @@ async fn an_advance_needs_an_issued_invoice_to_point_at() {
 
     // Cancelled rather than paid. What this test needs is an invoice that is
     // no longer issued; `paid` additionally means money moved, and 0194
-    // refuses that without naming the payment it moved through — money that
+    // refuses that without naming the payment it moved through - money that
     // moved leaves a trace of where it moved from. Cancelling needs a reason
     // for the same kind of reason.
     sqlx::query(

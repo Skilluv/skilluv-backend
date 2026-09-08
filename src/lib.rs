@@ -205,6 +205,7 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::talent_search_v4_routes())
         .nest("/api", routes::talent_list_routes())
         .nest("/api", routes::contact_routes())
+        .nest("/api", routes::newsletter_routes())
         .nest("/api", routes::notification_routes())
         .nest("/api", routes::enterprise_dashboard_routes())
         .nest("/api", routes::user_profile_routes())

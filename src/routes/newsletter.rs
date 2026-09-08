@@ -68,7 +68,19 @@ pub struct SubscribeBody {
     /// schema-compliant and the API refused it - which a contract fuzzer
     /// reads, correctly, as the API rejecting valid data. A refusal the
     /// schema does not predict is a contract that lies.
-    #[schema(min_length = 3, max_length = 320, format = Email)]
+    ///
+    /// `format = Email` was the second version of that same lie. It is a
+    /// hint, not a constraint: a generator reading it produced `0@com`, which
+    /// is schema-compliant and which this endpoint refuses, because a domain
+    /// with no dot cannot receive mail. The pattern says what is actually
+    /// required, and it is the same thing the column's CHECK requires: a
+    /// local part, a host, and a top level domain of at least two characters.
+    #[schema(
+        min_length = 6,
+        max_length = 320,
+        format = Email,
+        pattern = r"^[^@\s]{1,64}@[^@\s]{1,180}\.[^@\s.]{2,63}$"
+    )]
     pub email: String,
     /// `fr`, `en` or `ar`. Anything else is refused rather than silently
     /// defaulted, so a client with a stale locale list finds out.
@@ -104,20 +116,28 @@ fn opaque_token() -> String {
 
 /// Cheap shape check. Deliverability is decided by the confirmation mail
 /// arriving, not by a regular expression.
+///
+/// It has to refuse at least everything the column refuses. The CHECK on
+/// `newsletter_subscriptions.email` is `LIKE '%_@_%.__%'`, which wants two
+/// characters after the last dot; this accepted `a@b.c` with one, so an
+/// address the handler called valid met a constraint violation on the INSERT
+/// and left the caller a 500. A validator looser than its column does not
+/// validate, it postpones.
 fn looks_like_an_address(email: &str) -> bool {
-    let at = email.find('@');
-    match at {
-        Some(i) => {
-            let (local, domain) = email.split_at(i);
-            !local.is_empty()
-                && domain.len() > 3
-                && domain.contains('.')
-                && !domain.ends_with('.')
-                && !email.contains(' ')
-                && email.len() <= 320
-        }
-        None => false,
-    }
+    let Some(i) = email.find('@') else {
+        return false;
+    };
+    let (local, domain) = email.split_at(i);
+    let domain = &domain[1..];
+    let Some((host, tld)) = domain.rsplit_once('.') else {
+        return false;
+    };
+    !local.is_empty()
+        && !host.is_empty()
+        && tld.len() >= 2
+        && !tld.contains('@')
+        && !email.contains(' ')
+        && email.len() <= 320
 }
 
 /// POST /api/newsletter/subscriptions
@@ -413,6 +433,12 @@ mod tests {
             "trailing@dot.",
             "two words@example.com",
             "no-tld@localhost",
+            // The two a contract fuzzer found. `0@com` has no dot in its
+            // domain, and `a@b.c` has a one character top level domain that
+            // the column's CHECK refuses, so accepting it here only moved the
+            // refusal to the INSERT and turned a 400 into a 500.
+            "0@com",
+            "a@b.c",
         ] {
             assert!(!looks_like_an_address(bad), "{bad} should not pass");
         }

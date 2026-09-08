@@ -397,3 +397,31 @@ async fn refusing_marketing_does_not_unsubscribe_the_newsletter() {
          given separately and confirmed by clicking a link"
     );
 }
+
+/// The two shapes a contract fuzzer found, refused as 400 and not as 500.
+///
+/// `0@com` is what a generator produces from `format: email`, and the schema
+/// used to say no more than that, so schemathesis read the endpoint as
+/// rejecting valid data. `a@b.c` is worse: the handler accepted it and the
+/// column's CHECK did not, which is a 500 handed to somebody who typed an
+/// address slightly wrong. Both belong to the same mistake, a validator
+/// looser than the thing it validates for.
+#[tokio::test]
+async fn a_domain_without_a_real_tld_is_refused_before_the_insert() {
+    let app = TestApp::spawn().await;
+
+    for bad in ["0@com", "a@b.c"] {
+        let resp = subscribe(&app, bad).await;
+        assert_eq!(
+            resp.status(),
+            reqwest::StatusCode::BAD_REQUEST,
+            "{bad} must be refused by the handler, not by the column"
+        );
+    }
+
+    let stored: i64 = sqlx::query_scalar("SELECT count(*) FROM newsletter_subscriptions")
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
+    assert_eq!(stored, 0, "a refused address must leave nothing behind");
+}

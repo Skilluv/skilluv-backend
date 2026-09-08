@@ -1,4 +1,4 @@
-# Skilluv Quality — charter
+# Skilluv Quality - charter
 
 Published at `skill-uv.com/quality/charter`.
 
@@ -12,7 +12,7 @@ Published at `skill-uv.com/quality/charter`.
 ## 1. Quality is a trade, not a stage
 
 The most common thing said about testing is that it happens *after*. After the
-feature, after the design, after the build — a gate somebody walks through on
+feature, after the design, after the build - a gate somebody walks through on
 the way to shipping.
 
 That description produces exactly one kind of quality work: finding out too
@@ -69,7 +69,7 @@ is not a feeling about how annoying the defect was.
 Reporters state a severity. Reviewers may state a different one, and when they
 do, **both are kept**. We do not overwrite the reporter's figure, because a
 pattern of consistently over-rating is information a mentor should be able to
-see — and because a scale nobody can be wrong on is not a scale.
+see - and because a scale nobody can be wrong on is not a scale.
 
 The craft score reads the reviewed figure and nothing else.
 
@@ -119,7 +119,7 @@ Every defect report, study and audit has a named author, and that name travels
 with it. A finding used by a team is credited the way a merged contribution is.
 
 Where a mission's terms prevent naming the client, the attestation says what
-kind of system it was, what was found and at what scale — and not who. The
+kind of system it was, what was found and at what scale - and not who. The
 skill is demonstrable without breaching the engagement.
 
 ## 9. AI

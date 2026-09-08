@@ -44,7 +44,7 @@ impl GeoService {
 
     /// Directory holding the GeoNames dumps.
     ///
-    /// SKI-294 — `GEONAMES_DIR` overrides the default. The default is
+    /// SKI-294 - `GEONAMES_DIR` overrides the default. The default is
     /// relative to the process working directory, which is fine when running
     /// from a checkout and wrong everywhere else: the published image has no
     /// `data/` next to wherever it happens to be started from.
@@ -56,7 +56,7 @@ impl GeoService {
 
     /// Load the dumps, or fall back to an empty service.
     ///
-    /// SKI-294 — this used to be an `.expect()` at startup. Countries and
+    /// SKI-294 - this used to be an `.expect()` at startup. Countries and
     /// cities feed profile autocompletion; their absence is not a reason to
     /// refuse logins, moderation, payments and everything else. The image
     /// published to GHCR could not boot at all because of it.
@@ -67,7 +67,7 @@ impl GeoService {
                 tracing::warn!(
                     path = %data_dir.display(),
                     error = %e,
-                    "GeoNames data unavailable — country and city lookups will \
+                    "GeoNames data unavailable - country and city lookups will \
                      return empty results. Set GEONAMES_DIR to point at the \
                      dumps, or ignore this if autocompletion is not needed here."
                 );

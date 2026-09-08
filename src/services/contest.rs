@@ -1,19 +1,19 @@
-//! Contests — what each format asks for, and what a participant hands in.
+//! Contests - what each format asks for, and what a participant hands in.
 //!
 //! Five formats sit on top of the `tournaments` machinery (migrations 0189
 //! and 0235):
 //!
-//!   * a **hackathon** on code — a `hackathon` with `skill_domain = 'code'`,
+//!   * a **hackathon** on code - a `hackathon` with `skill_domain = 'code'`,
 //!     a theme, and a project plus a writeup at the end;
-//!   * **code golf** — the shortest working solution to a stated problem, one
+//!   * **code golf** - the shortest working solution to a stated problem, one
 //!     language at a time, ranked ascending;
-//!   * a **TDD contest** — the same problem for everybody, judged on the tests
+//!   * a **TDD contest** - the same problem for everybody, judged on the tests
 //!     as much as on the code that passes them;
-//!   * a **brief contest** — one written brief, N answers, a jury ranks them.
+//!   * a **brief contest** - one written brief, N answers, a jury ranks them.
 //!     Not a hackathon: nobody builds against a clock. Design uses it most,
 //!     but an agency briefing three copywriters is the same event, so the
 //!     kind carries no domain in its name;
-//!   * a **duel** — two people, one task, the room votes.
+//!   * a **duel** - two people, one task, the room votes.
 //!
 //! Rules live in a JSONB column rather than in columns of their own: the keys
 //! differ per format and a table with a `theme` column that is NULL for two
@@ -43,8 +43,8 @@ pub const VALID_SUBMISSION_STATUSES: &[&str] =
 
 /// What a contest format is, read from `tournament_kinds` (migration 0516).
 ///
-/// Three Rust constants used to hold these three answers — which kinds take a
-/// submission, which are measured, and which keys their rules must carry — and
+/// Three Rust constants used to hold these three answers - which kinds take a
+/// submission, which are measured, and which keys their rules must carry - and
 /// each had to agree with the database and with the other two. Migration 0228
 /// is the record of what happens when a list like that drifts: `code_golf`
 /// passed the Rust check and was refused by the database, with an error naming
@@ -185,8 +185,8 @@ pub struct Submission {
     pub measured_value: Option<i32>,
     /// Whether the platform checked the artifact belongs to the entrant.
     ///
-    /// Only a github.com URL can be checked — its owner segment against the
-    /// entrant's connected login — so this is FALSE for a deployed demo, a
+    /// Only a github.com URL can be checked - its owner segment against the
+    /// entrant's connected login - so this is FALSE for a deployed demo, a
     /// hosted design file or a video, which nobody can attribute from a URL.
     /// FALSE means unchecked, never rejected: a juror reads it as "take this
     /// one on trust".
@@ -243,7 +243,7 @@ pub async fn submit(
     // ranking is published and a late entry would rewrite it.
     if !matches!(status.as_str(), "active" | "registration") {
         return Err(AppError::Validation(format!(
-            "this contest is {status} — submissions are only taken while it runs"
+            "this contest is {status} - submissions are only taken while it runs"
         )));
     }
 
@@ -271,7 +271,7 @@ pub async fn submit(
         //
         // The message names the kind rather than the metric: code golf was the
         // only measured format when this was written, so it said "character
-        // count" to everybody — including, once the documentation jam arrived,
+        // count" to everybody - including, once the documentation jam arrived,
         // to somebody counting merged contributions.
         (true, None) => {
             return Err(AppError::Validation(format!(
@@ -286,7 +286,7 @@ pub async fn submit(
         // A number on a judged entry would look like a score and is not one.
         (false, Some(_)) => {
             return Err(AppError::Validation(format!(
-                "a {kind} is judged, not measured — leave measured_value empty"
+                "a {kind} is judged, not measured - leave measured_value empty"
             )));
         }
         _ => {}
@@ -461,7 +461,7 @@ pub enum Reader {
 /// A contest may declare a blind submission window (`blind_until_close`). It
 /// narrows *when*, not *whether*: while the window is open a reader sees only
 /// their own entry, and at the deadline the full field opens permanently. The
-/// result stays as contestable as before — what is withheld is the ability to
+/// result stays as contestable as before - what is withheld is the ability to
 /// read other people's work while there is still time to copy it, which is
 /// the format's known failure and not something contestability needed.
 pub async fn list_submissions(
@@ -578,7 +578,7 @@ pub async fn judge(
     let measured = load_kind(db, &kind).await?.is_measured;
     if measured && input.judge_score.is_some() {
         return Err(AppError::Validation(
-            "a code golf is ranked by its measured value — a judge score would contradict it"
+            "a code golf is ranked by its measured value - a judge score would contradict it"
                 .into(),
         ));
     }
@@ -662,7 +662,7 @@ pub async fn judge(
 /// Nobody submits anything to a marathon: the work is upstream contributions
 /// that were going to happen anyway, and asking somebody to also file them
 /// here would be asking twice. So the score is read from the deliverables,
-/// recomputed on demand rather than stored — which is what makes the
+/// recomputed on demand rather than stored - which is what makes the
 /// leaderboard live, and what stops a revoked contribution from continuing
 /// to count.
 ///
@@ -776,7 +776,7 @@ pub async fn grant_marathon_badges(
 // ═══════════════════════════════════════════════════════════════════
 //
 // `judged_by` on a submission records who scored one entry. It does not say
-// who was asked, who agreed, or who never answered — and a panel that never
+// who was asked, who agreed, or who never answered - and a panel that never
 // answered is the problem an organiser needs to see before the deadline
 // rather than after it.
 
@@ -795,7 +795,7 @@ pub struct JuryInvitation {
 ///
 /// A juried contest whose panel cannot judge the craft produces a result that
 /// means nothing, so the invitee has to hold review rights for the contest's
-/// domain. For a domain scoped by family — design is the only one so far —
+/// domain. For a domain scoped by family - design is the only one so far -
 /// that is checked against the trade the contest is about.
 pub async fn invite_juror(
     db: &PgPool,
@@ -870,7 +870,7 @@ pub async fn invite_juror(
     .await
     .map_err(map_guard_error)?;
 
-    // An invitation expires, so it travels further than the app — the same
+    // An invitation expires, so it travels further than the app - the same
     // reasoning `guild.invitation` follows. Failure to deliver is logged and
     // not raised: the invitation is recorded, and an organiser retrying it
     // would only produce a second row.
@@ -978,7 +978,7 @@ pub async fn require_accepted_juror(
 
 /// One vote per account per contest, moved rather than stacked.
 ///
-/// Eligibility — the account age floor, the self-vote, the withdrawn entry —
+/// Eligibility - the account age floor, the self-vote, the withdrawn entry -
 /// is enforced by the trigger from migration 0509, because a vote arrives
 /// from more places than this function.
 pub async fn cast_community_vote(
@@ -1429,8 +1429,8 @@ mod tests {
         assert_eq!(blended_score("populaire", 0.6, Some(80), 0, 10), 80);
     }
 
-    // The invariant that used to live here — no format defaults to both a
+    // The invariant that used to live here - no format defaults to both a
     // jury and the room, and neither is decided on entries it never collects
-    // — is a CHECK on `tournament_kinds` since migration 0438. A unit test
+    // - is a CHECK on `tournament_kinds` since migration 0438. A unit test
     // over a Rust constant could only ever have checked the copy.
 }

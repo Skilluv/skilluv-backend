@@ -2,7 +2,7 @@
 //!
 //! ## Why these are not under `/api/code`
 //!
-//! `content_guides` carries a `skill_domain` and always did — but the
+//! `content_guides` carries a `skill_domain` and always did - but the
 //! endpoint that served it was `/api/code/guides` and its query ignored the
 //! column. That was invisible while one domain had rows. The moment a second
 //! one did, an AI onboarding guide answered under the code path, and a
@@ -21,7 +21,7 @@
 //!
 //! The chain is: the locale asked for, then English, then French. English is
 //! in the middle rather than last because it is now the locale this content
-//! is authored in — the guides seeded from migration 0514 onwards have no
+//! is authored in - the guides seeded from migration 0514 onwards have no
 //! French row until somebody writes one, and the older ones have no English
 //! row. Either way a reader gets the page.
 
@@ -110,7 +110,7 @@ pub async fn list_guides(
     // This used to be `locale = $1`, which silently hid every guide that had
     // no row in the requested locale. It was invisible while the whole table
     // was French and every reader defaulted to French; the first English-only
-    // domain — communication, migration 0514 — would have been missing from
+    // domain - communication, migration 0514 - would have been missing from
     // a French reader's list entirely, and the list would have looked
     // complete.
     let guides = sqlx::query_as::<_, GuideSummary>(

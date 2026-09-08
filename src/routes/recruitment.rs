@@ -1,4 +1,4 @@
-//! Recruitment campaigns — briefing, sourcing, shortlist, hire.
+//! Recruitment campaigns - briefing, sourcing, shortlist, hire.
 //!
 //! Three audiences, and the split between them is the point:
 //!
@@ -39,7 +39,7 @@ pub fn recruitment_routes() -> Router<AppState> {
             "/enterprise/recruitment/campaigns/{id}/hired",
             post(confirm_hire),
         )
-        // Talent — their own answer, through their own session.
+        // Talent - their own answer, through their own session.
         .route("/recruitment/campaigns/{id}/respond", post(talent_response))
         .route("/users/me/recruitment-invitations", get(my_invitations))
 }
@@ -285,7 +285,7 @@ pub async fn talent_response(
 /// The campaigns somebody has been put forward for.
 ///
 /// What the brief says and who the client is, so the answer is informed. The
-/// alternative — asking somebody to agree to "an opportunity" — is how people
+/// alternative - asking somebody to agree to "an opportunity" - is how people
 /// stop answering.
 #[utoipa::path(
     get, path = "/api/users/me/recruitment-invitations", tag = "profile",

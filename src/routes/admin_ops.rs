@@ -1,8 +1,8 @@
-//! ADM-M5+ — Ops admin : sweep proof engine + gdpr-export admin-side.
+//! ADM-M5+ - Ops admin : sweep proof engine + gdpr-export admin-side.
 //!
-//! - POST /admin/proof-hooks/sweep?within_days=7   — recompute batch pour tous
+//! - POST /admin/proof-hooks/sweep?within_days=7   - recompute batch pour tous
 //!   les users ayant eu de l'activité récente (wrapper `sweep_active_users`).
-//! - POST /admin/users/{id}/gdpr-export             — déclenche l'export d'un
+//! - POST /admin/users/{id}/gdpr-export             - déclenche l'export d'un
 //!   user cible (background task) et envoie l'archive à son email.
 
 use axum::extract::{Path, Query, State};
@@ -37,12 +37,12 @@ pub fn admin_ops_routes() -> Router<AppState> {
             "/admin/users/{id}/gdpr-export",
             post(admin_trigger_gdpr_export),
         )
-        // MVP.md Annexe A #8 — CRUD event (Hacktoberfest, Skilluv Fest).
+        // MVP.md Annexe A #8 - CRUD event (Hacktoberfest, Skilluv Fest).
         .route(
             "/admin/events",
             get(admin_list_badge_events).post(admin_create_badge_event),
         )
-        // MVP.md §2.2 ligne 125 — recompute capabilities seul (scope réduit).
+        // MVP.md §2.2 ligne 125 - recompute capabilities seul (scope réduit).
         .route(
             "/admin/users/{id}/recompute-capabilities",
             post(admin_recompute_capabilities),
@@ -72,7 +72,7 @@ pub struct SweepQuery {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SKI-111 — response schemas
+// SKI-111 - response schemas
 // ═══════════════════════════════════════════════════════════════════
 
 /// Payload of `POST /admin/ops/sweep-proof-hooks`.
@@ -379,7 +379,7 @@ pub async fn admin_recompute_capabilities(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// GET /admin/events — liste paginée (filtres is_active + is_partner).
+// GET /admin/events - liste paginée (filtres is_active + is_partner).
 // ═══════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
@@ -477,7 +477,7 @@ pub async fn admin_list_badge_events(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// POST /admin/events — création d'un event (mig 0093).
+// POST /admin/events - création d'un event (mig 0093).
 // ═══════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
@@ -500,7 +500,7 @@ pub struct CreateEventBody {
     /// asks the least of everything else.
     #[serde(default)]
     pub event_type: Option<String>,
-    /// Which trades it is for. Empty means everybody — a real answer for a
+    /// Which trades it is for. Empty means everybody - a real answer for a
     /// meetup, a warning sign for a championship.
     #[serde(default)]
     pub domain_focus: Option<Vec<String>>,

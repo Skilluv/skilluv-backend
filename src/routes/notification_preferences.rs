@@ -1,14 +1,14 @@
-//! Notification settings — what a person is told, and how.
+//! Notification settings - what a person is told, and how.
 //!
 //! The one place a preference is stored. `/users/me/email-preferences`
-//! still answers in three words — digest, streak, marketing — because
+//! still answers in three words - digest, streak, marketing - because
 //! unsubscribe links already delivered speak them, but it is a view over
 //! these rows rather than a second table.
 //!
 //! Rows exist only where someone changed something, so the response merges
 //! the catalogue's defaults with the stored overrides. A caller therefore
 //! always sees the full picture without the database holding one row per
-//! user per kind per channel — tens of millions of rows saying "yes, the
+//! user per kind per channel - tens of millions of rows saying "yes, the
 //! default".
 
 use axum::extract::State;
@@ -41,7 +41,7 @@ pub fn notification_preferences_routes() -> Router<AppState> {
 ///
 /// Both bounds or neither, and a zone with them. Half a window is a window
 /// nobody can interpret, and a window with no zone cannot be placed in
-/// time — assuming UTC would silence a talent in Cotonou at the wrong
+/// time - assuming UTC would silence a talent in Cotonou at the wrong
 /// hours for half the year.
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
@@ -100,7 +100,7 @@ pub async fn set_quiet_hours(
 
         let Some(tz) = body.timezone.as_deref() else {
             return Err(AppError::Validation(
-                "a timezone is required — an hour with no zone cannot be placed in time".into(),
+                "a timezone is required - an hour with no zone cannot be placed in time".into(),
             ));
         };
         // Validated here rather than at delivery: a name we cannot parse
@@ -108,7 +108,7 @@ pub async fn set_quiet_hours(
         // like the feature not working.
         if tz.parse::<chrono_tz::Tz>().is_err() {
             return Err(AppError::Validation(format!(
-                "unknown timezone '{tz}' — use an IANA name such as Africa/Porto-Novo"
+                "unknown timezone '{tz}' - use an IANA name such as Africa/Porto-Novo"
             )));
         }
     }
@@ -262,7 +262,7 @@ pub async fn list_preferences(
 
     // Quiet hours ride along rather than getting an endpoint of their own.
     // They could be written and never read back, so a settings screen had
-    // no way to show the window someone had already set — it would offer
+    // no way to show the window someone had already set - it would offer
     // the defaults again and quietly overwrite their choice on save.
     let quiet: QuietHoursRow = sqlx::query_as(
         "SELECT quiet_hours_start, quiet_hours_end, timezone FROM users WHERE id = $1",
@@ -312,7 +312,7 @@ pub struct UpdateResult {
     pub rejected: Vec<String>,
 }
 
-/// Change some settings. Partial by design — a screen sends what the person
+/// Change some settings. Partial by design - a screen sends what the person
 /// touched, not the whole catalogue.
 #[utoipa::path(
     put,
@@ -353,7 +353,7 @@ pub async fn update_preferences(
             // then did not notice a failed payout would have a legitimate
             // grievance.
             rejected.push(format!(
-                "{}: this notification cannot be turned off — it tells you \
+                "{}: this notification cannot be turned off - it tells you \
                  about money or account access",
                 change.kind
             ));

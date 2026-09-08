@@ -1,6 +1,6 @@
 -- Priorite moyenne #4 strategy doc §15 : activer l'ingestion GitHub sur les
 -- 12 partenaires OSS (Annexe F). Le catalogue de "100+ micro-quetes" est
--- DYNAMIQUE — populate par le worker `bin/github_ingest.rs` qui lit les
+-- DYNAMIQUE - populate par le worker `bin/github_ingest.rs` qui lit les
 -- issues open avec au moins un des `curated_labels` sur chaque projet
 -- ayant `github_repo_owner` + `github_repo_name` + `slice_ingestion_mode`
 -- != 'manual_only'.

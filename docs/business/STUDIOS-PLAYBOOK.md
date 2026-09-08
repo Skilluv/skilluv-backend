@@ -1,4 +1,4 @@
-# Studios — comment on en monte un, et comment on le vend
+# Studios - comment on en monte un, et comment on le vend
 
 Un studio Skilluv est une équipe permanente qu'un client réserve par son nom.
 Ce document dit ce qu'il faut pour en constituer un, ce qui le distingue d'une
@@ -47,11 +47,11 @@ Le sujet le plus difficile, et celui qui casse les studios.
 
 **Trois répartitions qui marchent :**
 
-- **égale** — le plus simple, le plus solide, et ce que la plupart des petites
+- **égale** - le plus simple, le plus solide, et ce que la plupart des petites
   équipes devraient prendre. Trois personnes à 33,33 / 33,33 / 33,34 ;
-- **par rôle** — quand quelqu'un fait la relation client et le suivi en plus
+- **par rôle** - quand quelqu'un fait la relation client et le suivi en plus
   du travail technique. Une prime de 5 à 10 points, pas davantage ;
-- **par apport** — quand une personne apporte le client. Une part
+- **par apport** - quand une personne apporte le client. Une part
   supplémentaire sur cet engagement précis, pas sur tous.
 
 **Ce qui casse :** une part fondée sur l'ancienneté dans le studio, sur qui a
@@ -79,7 +79,7 @@ parce qu'un cadrage sans borne devient une facture sans borne.
 
 **Le point à ne pas rater** : quand un studio prend un engagement, ses membres
 et leurs parts sont recopiés automatiquement. C'est tout l'intérêt d'une
-équipe permanente — la répartition a été convenue une fois.
+équipe permanente - la répartition a été convenue une fois.
 
 ## 5. Les jalons et l'argent
 
@@ -97,7 +97,7 @@ jalon défini après coup est un jalon discuté, et c'est la personne qui a fait
 le travail qui perd la discussion.
 
 **Skilluv relit avant le client.** Un jalon ne peut pas atteindre le client
-sans être passé par là — la base le refuse. C'est ce que la marge achète, et
+sans être passé par là - la base le refuse. C'est ce que la marge achète, et
 c'est ce qui distingue un studio d'une place de marché de freelances.
 
 ## 6. Démarrer
@@ -117,7 +117,7 @@ manque, combien il manque, et pourquoi.
 ## 7. Dissoudre
 
 Un studio se dissout avec un motif écrit, et pas tant qu'un engagement tourne
-sous son nom — cela laisserait un client avec une équipe qui n'existe plus.
+sous son nom - cela laisserait un client avec une équipe qui n'existe plus.
 
 Le motif est demandé parce que des gens se sont construit une réputation sous
 ce nom, et qu'ils sont en droit de savoir ce qui a été enregistré.

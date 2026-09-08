@@ -3,7 +3,7 @@
 //! ## The two failures this sits between
 //!
 //! Delete everything, and a contest where the second place vanished leaves
-//! first and third unexplained — and the winner's own attestation cites a
+//! first and third unexplained - and the winner's own attestation cites a
 //! ranking that no longer adds up. Somebody else's proof was collateral.
 //!
 //! Delete nothing, and the request was refused.
@@ -28,7 +28,7 @@
 //! ## What this does not do
 //!
 //! It does not reach the object storage. Files uploaded by the person are
-//! removed by the storage lifecycle, not synchronously here — a request that
+//! removed by the storage lifecycle, not synchronously here - a request that
 //! could half-fail against a remote service is a request that leaves an
 //! account half-erased, and the half that matters is the database.
 
@@ -54,7 +54,7 @@ const PURELY_PERSONAL: &[(&str, &str)] = &[
     ("user_domain_profiles", "user_id"),
     ("user_languages", "user_id"),
     ("user_skills", "user_id"),
-    // Accounts on other services. The tokens above all — leaving one behind
+    // Accounts on other services. The tokens above all - leaving one behind
     // would leave Skilluv able to read somebody's Figma after they left.
     ("design_cloud_connections", "user_id"),
     ("user_code_portfolios", "user_id"),
@@ -90,7 +90,7 @@ pub async fn erase(db: &PgPool, user_id: Uuid) -> Result<bool, AppError> {
     //
     // The first version tried each DELETE and logged the failures. That does
     // not work: a statement that fails inside a transaction aborts it, and
-    // every statement after the first miss was refused — so the tombstone was
+    // every statement after the first miss was refused - so the tombstone was
     // never written and the caller saw "current transaction is aborted"
     // instead of a clear error. Checking first is the only way to be
     // tolerant of a missing table *and* atomic about the rest.
@@ -140,8 +140,8 @@ pub async fn erase(db: &PgPool, user_id: Uuid) -> Result<bool, AppError> {
                -- account before it gets here; this is what makes a path that
                -- forgot to refuse fail anyway.
                password_hash = 'erased',
-               -- `title` is left alone: it is the rank — apprenti, artisan,
-               -- maitre, legende — not an intitulé somebody typed. It says
+               -- `title` is left alone: it is the rank - apprenti, artisan,
+               -- maitre, legende - not an intitulé somebody typed. It says
                -- nothing about who they were.
                bio = NULL,
                avatar_url = NULL,

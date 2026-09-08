@@ -563,7 +563,7 @@ pub async fn record_signature(
 // contribution, and until now no route served those ids: submission is
 // write-only, `GET /labs` lists labs rather than their contributions, and
 // `settle` closes a whole month without ever naming one. It was the last
-// unreachable staff verb of the 308 — a button with no list, the same shape
+// unreachable staff verb of the 308 - a button with no list, the same shape
 // as SKI-337 and SKI-354.
 
 /// One contribution, with enough context to judge it without opening
@@ -579,7 +579,7 @@ pub struct LabContributionRow {
     pub activity_type: String,
     pub counts_for_month: chrono::NaiveDate,
     pub submitted_at: DateTime<Utc>,
-    /// `None` while nobody has judged it — which is the whole point of the
+    /// `None` while nobody has judged it - which is the whole point of the
     /// screen this feeds, so it is what the default ordering sorts on.
     pub accepted: Option<bool>,
     pub rejection_reason: Option<String>,
@@ -627,7 +627,7 @@ pub async fn list_lab_contributions(
     let offset = (q.page.unwrap_or(1).max(1) - 1) * per_page;
 
     // `accepted` is a nullable boolean, so "pending" is a third state rather
-    // than a value — spelled out here instead of left to the caller to encode.
+    // than a value - spelled out here instead of left to the caller to encode.
     let status = q.status.as_deref();
     if let Some(s) = status
         && !matches!(s, "pending" | "accepted" | "rejected")

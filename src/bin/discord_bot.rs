@@ -1,4 +1,4 @@
-//! skilluv-discord-bot (SKI-116) — v2 gateway bot.
+//! skilluv-discord-bot (SKI-116) - v2 gateway bot.
 //!
 //! Supersedes the v1 skilluv-discord-notifier by adding what a webhook
 //! process cannot do:
@@ -10,7 +10,7 @@
 //! rather than channel webhooks. This means only ONE Coolify app is
 //! needed for all Discord surfaces (queue + interactivity), and the
 //! queue's producer contract (rows in discord_notifications_queue)
-//! is unchanged from v1 — the backend keeps enqueuing the same events.
+//! is unchanged from v1 - the backend keeps enqueuing the same events.
 //!
 //! Deploy as a long-running Coolify app pointing at this binary. The
 //! gateway keeps a WebSocket connection open to Discord; if the process
@@ -38,7 +38,7 @@ const MAX_FAILED_ATTEMPTS: i16 = 10;
 /// A cohort as the listing reads it: name, slug, start, members, cap.
 ///
 /// Named rather than written inline because clippy's `type_complexity` is
-/// right about a five-element tuple — and because the first thing anybody
+/// right about a five-element tuple - and because the first thing anybody
 /// asks of that row is which element is the count and which is the cap.
 type CohortRow = (
     String,
@@ -68,7 +68,7 @@ impl EventHandler for Handler {
         // Set an activity so the bot's presence carries some intent.
         ctx.set_activity(Some(ActivityData::watching("skill-uv.com")));
 
-        // Register slash commands scoped to our single guild — instant
+        // Register slash commands scoped to our single guild - instant
         // availability vs. up-to-one-hour propagation for global commands.
         // Built from the list every validator reads, not copied beside it.
         // The copy that used to sit here named seven domains long after four
@@ -77,7 +77,7 @@ impl EventHandler for Handler {
         let domain_hint = domain_hint();
 
         // A `domain` argument, described by the trade list. Same in both
-        // languages — the values are slugs, and `code, design, game…` does not
+        // languages - the values are slugs, and `code, design, game…` does not
         // translate.
         let domain_arg = |required: bool| {
             CreateCommandOption::new(CommandOptionType::String, "domain", domain_hint.as_str())
@@ -141,7 +141,7 @@ impl EventHandler for Handler {
         // Second poller: the Discord half of the role loop.
         //
         // Separate from the notification tick because the two fail
-        // independently and at different rates — a rate-limited role write
+        // independently and at different rates - a rate-limited role write
         // must not stop an announcement from going out, and vice versa.
         let http2 = ctx.http.clone();
         let db2 = self.db.clone();
@@ -163,7 +163,7 @@ impl EventHandler for Handler {
         let locale =
             skilluv_backend::services::i18n::resolve(None, new_member.user.locale.as_deref());
         // This carried the same obsolete instruction the `/skilluv me` reply
-        // did — "reply here with your username" — from the months when linking
+        // did - "reply here with your username" - from the months when linking
         // was a moderator's job. It is a redirect now, and the message says so
         // in the order that makes it pay: trades first, then the link.
         let msg = t_with(
@@ -174,7 +174,7 @@ impl EventHandler for Handler {
                 ("frontend", &self.frontend_url),
             ],
         );
-        // Best-effort — a user with DMs disabled just doesn't get one.
+        // Best-effort - a user with DMs disabled just doesn't get one.
         if let Err(e) = new_member
             .user
             .direct_message(&ctx.http, CreateMessage::new().content(msg))
@@ -620,7 +620,7 @@ impl Handler {
     /// Which language to answer this person in.
     ///
     /// The community is francophone and anglophone both, so "the bot's
-    /// language" is not a thing that exists — only this person's.
+    /// language" is not a thing that exists - only this person's.
     ///
     /// Their stored `preferred_language` first, because somebody who set
     /// French on the platform meant it. Discord's interaction locale second:
@@ -670,7 +670,7 @@ impl Handler {
             }
             // This used to send people to a moderator, because linking was
             // manual and `users.discord_user_id` had no writer. It has one
-            // now, so the instruction changed with it — a message telling
+            // now, so the instruction changed with it - a message telling
             // somebody to queue for a human when a button exists is worse
             // than no message.
             None => t_with(
@@ -990,7 +990,7 @@ async fn apply_one(
 
     let Ok(member) = guild.member(http, discord_id).await else {
         // Linked the account but never joined the server, or has left it.
-        // Neither is an error worth ten retries — there is nobody there to
+        // Neither is an error worth ten retries - there is nobody there to
         // give a role to.
         mark_synced(db, row.id, &[], &[]).await;
         return Ok(false);
@@ -1049,7 +1049,7 @@ async fn apply_one(
             .map(|r| format!("**{r}**"))
             .collect::<Vec<_>>()
             .join(", ");
-        // No interaction to read a locale from — nobody typed anything, this
+        // No interaction to read a locale from - nobody typed anything, this
         // follows a browser redirect minutes ago. So the account's own
         // preference is the only signal, and `i18n::resolve` falls back for
         // the accounts that never set one.
@@ -1099,7 +1099,7 @@ async fn mark_synced(db: &PgPool, id: Uuid, added: &[String], removed: &[String]
 ///
 /// It applies to **every localisation**, not only the default one. That is the
 /// trap worth naming: French runs 15-20% longer than English, so a description
-/// that fits in the default can still fail on its translation — and
+/// that fits in the default can still fail on its translation - and
 /// `set_commands` replaces the whole command tree, so one long string takes
 /// all of it down and leaves whatever a previous build registered.
 const DESCRIPTION_LIMIT: usize = 100;
@@ -1140,7 +1140,7 @@ fn arg(option: CreateCommandOption, key: &str) -> CreateCommandOption {
 /// ## Why capping and not a shorter list
 ///
 /// Discord rejects any description over 100 characters, and `set_commands`
-/// replaces the whole command tree in one call — so one long string fails the
+/// replaces the whole command tree in one call - so one long string fails the
 /// entire registration. The bot then keeps whatever commands a previous build
 /// left behind, logs an error nobody is watching, and serves a stale command
 /// list. That is exactly what happened: the twelfth domain took the joined
@@ -1203,7 +1203,7 @@ fn extract_string(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Notification queue poller — parity with v1 notifier, posts via bot.
+// Notification queue poller - parity with v1 notifier, posts via bot.
 // ═══════════════════════════════════════════════════════════════════
 
 async fn queue_poll_loop(
@@ -1386,7 +1386,7 @@ mod tests {
         );
     }
 
-    /// The cap has to hold for a catalogue that keeps growing — that is the
+    /// The cap has to hold for a catalogue that keeps growing - that is the
     /// whole reason it exists rather than a hand-shortened list.
     #[test]
     fn the_hint_would_still_fit_with_far_more_domains() {
@@ -1414,7 +1414,7 @@ mod tests {
     /// sent in.
     ///
     /// An earlier attempt at this listed the strings by hand and every one of
-    /// them was subtly wrong — "Open contests" for "Open contests you can
+    /// them was subtly wrong - "Open contests" for "Open contests you can
     /// still enter". It passed and asserted nothing, because a copy of a
     /// literal is not a check on that literal. It was deleted.
     ///
@@ -1423,7 +1423,7 @@ mod tests {
     /// now: the limit applies per localisation, French runs longer than
     /// English, and `set_commands` fails as a whole. A translation four
     /// characters too long would take the entire command tree down and leave
-    /// the bot serving whatever a previous build registered — exactly what
+    /// the bot serving whatever a previous build registered - exactly what
     /// happened here two days ago, from the same limit and a different string.
     #[test]
     fn every_command_description_fits_discord() {

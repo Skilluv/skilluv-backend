@@ -26,7 +26,7 @@ identifiable.
 
 **Profils individuels : uniquement sur consentement explicite** de la personne
 concernée, avec une part des revenus pour elle (§4). Sans ce consentement,
-aucun profil ne sort — pas anonymisé, pas pseudonymisé, pas du tout.
+aucun profil ne sort - pas anonymisé, pas pseudonymisé, pas du tout.
 
 ### La quatrième catégorie, celle qui n'existe pas
 
@@ -42,14 +42,14 @@ refusée, même si chaque champ pris isolément est anodin.
 
 Pour tout ce qui touche à un profil individuel :
 
-- **explicite** — une case décochée par défaut, jamais un consentement déduit
+- **explicite** - une case décochée par défaut, jamais un consentement déduit
   de l'inscription ;
-- **informé** — la personne voit quelles données, à quel type d'acheteur, et
+- **informé** - la personne voit quelles données, à quel type d'acheteur, et
   ce qu'elle touche ;
 - **révocable à tout moment**, avec effet sur les licences en cours : un
   acheteur qui reçoit des mises à jour cesse de recevoir cette ligne, et
   s'engage contractuellement à la supprimer sous trente jours ;
-- **tracé** — chaque licence accordée est enregistrée et la personne concernée
+- **tracé** - chaque licence accordée est enregistrée et la personne concernée
   est notifiée.
 
 Le consentement à une licence de données n'est jamais une condition d'accès à
@@ -61,7 +61,7 @@ autre chose. Un talent qui refuse garde exactement les mêmes fonctionnalités.
 
 ### Acheteurs recevables
 
-- **Recherche académique et publique** — gratuitement, contre publication des
+- **Recherche académique et publique** - gratuitement, contre publication des
   résultats.
 - **Éditeurs de logiciels de recrutement**, pour enrichir un produit, sans
   revente.
@@ -73,12 +73,12 @@ autre chose. Un talent qui refuse garde exactement les mêmes fonctionnalités.
 
 Sans discussion possible, et la liste est dans le contrat :
 
-- **la surveillance de masse** — toute finalité de suivi de personnes non
+- **la surveillance de masse** - toute finalité de suivi de personnes non
   suspectes ;
-- **la discrimination** — toute utilisation visant à écarter sur une origine,
+- **la discrimination** - toute utilisation visant à écarter sur une origine,
   une nationalité, un genre, un âge, une santé, une orientation, une
   appartenance ;
-- **l'identification en vue d'une mesure coercitive** — police de
+- **l'identification en vue d'une mesure coercitive** - police de
   l'immigration, application d'une législation pénale à partir de données de
   compétences ;
 - **la revente**, sous quelque forme que ce soit ;
@@ -99,7 +99,7 @@ part est haute. Une statistique agrégée où une personne pèse un millième
 reverse peu ; un profil nommé dans un jeu de données de recrutement reverse
 davantage.
 
-Les montants sont petits — c'est honnête de le dire plutôt que de le présenter
+Les montants sont petits - c'est honnête de le dire plutôt que de le présenter
 comme un revenu. Ce qui compte n'est pas la somme, c'est que **la donnée de
 quelqu'un ne rapporte jamais uniquement à la plateforme.**
 
@@ -123,7 +123,7 @@ Concrètement :
   demande ;
 - l'attestation publique fait exception : c'est une preuve émise, dont la
   vérifiabilité est le sens. Elle peut être révoquée par son détenteur, ce qui
-  la rend invérifiable — mais pas rétroactivement effacée des endroits où elle
+  la rend invérifiable - mais pas rétroactivement effacée des endroits où elle
   a été montrée.
 
 ---
@@ -169,7 +169,7 @@ figure pas dans le jeu livré.
 **Un plancher de trente personnes.** Aucun rapport, aucune licence, aucune
 statistique ne peut être produite sur une population plus petite. Un graphique
 « écart de compétences à Cotonou » tiré de quatre personnes nomme ces quatre
-personnes, quel que soit son titre — et la pression commerciale va exactement
+personnes, quel que soit son titre - et la pression commerciale va exactement
 dans ce sens, ce qui est la raison pour laquelle le plancher est dans le code
 et pas dans un guide de style.
 
@@ -181,7 +181,7 @@ de 1 %, et la bande annoncée en section 4 reste 0,5 à 2 %. Le plafond existe
 pour qu'une négociation ne puisse pas écrire un nombre absurde, pas pour être
 atteint.
 
-**L'API publique ne dit rien de quelqu'un qui n'a rien accepté** — et répond
+**L'API publique ne dit rien de quelqu'un qui n'a rien accepté** - et répond
 « introuvable » plutôt que « privé ». Un annuaire construit à partir des refus
 serait un annuaire de toutes les personnes ayant refusé, ce qui est encore une
 information qu'elles n'ont pas acceptée de partager.

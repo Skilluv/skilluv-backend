@@ -1,7 +1,7 @@
-# Discord — the education corner
+# Discord - the education corner
 
 What to create, what to call it, and which channels have a rule of their own.
-The server-wide setup — webhooks, the notifier binary, env vars — is in
+The server-wide setup - webhooks, the notifier binary, env vars - is in
 [../DISCORD_SETUP.md](../DISCORD_SETUP.md); this is the education structure
 that sits on top of it.
 
@@ -13,8 +13,8 @@ Ticket O-03 asked for seven channels. Five, because two of the seven would
 have been the same room: `#edu-trainer` and `#edu-teacher` split people who
 answer each other's questions constantly, and both would have been quiet.
 
-The split that survives is the one used everywhere else — the **two review
-families** — plus the three channels that are about doing rather than about a
+The split that survives is the one used everywhere else - the **two review
+families** - plus the three channels that are about doing rather than about a
 trade.
 
 ### Text
@@ -58,7 +58,7 @@ object.
 
 Each cohort running on the platform gets a thread, opened when it starts and
 archived a month after it concludes. The thread is for the **educator's**
-questions about running it — pacing, an exercise that did not land, what to do
+questions about running it - pacing, an exercise that did not land, what to do
 about week three.
 
 It is not the cohort's own space. Learners talk in the cohort's own messaging
@@ -90,7 +90,7 @@ existed, and writing them as four would have made the next domain a fifth.
 | `/skilluv craft education` | Your craft score in this domain, its tier, and how many attestations it rests on |
 | `/skilluv queue education` | How much work is waiting on a reviewer here, split into picked up and not, with the age of the oldest unclaimed one |
 | `/skilluv cohorts education` | Cohorts recruiting now, with places left |
-| `/skilluv contests education` | Open contests in this domain — curriculum jams appear here |
+| `/skilluv contests education` | Open contests in this domain - curriculum jams appear here |
 | `/skilluv featured education` | Who is featured this week |
 | `/skilluv me` | Your linked profile, trades and craft score |
 | `/skilluv portfolio <username>` | Somebody's public profile |
@@ -105,7 +105,7 @@ count alone hides the difference.
 
 `/skilluv cohorts education` lists public cohorts only. A private cohort is
 reached by invitation, and putting one in a public channel would defeat what
-made it private — which in this domain sometimes means a cohort of people
+made it private - which in this domain sometimes means a cohort of people
 whose employer does not know they are retraining.
 
 ---

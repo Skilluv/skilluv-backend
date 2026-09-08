@@ -41,7 +41,7 @@ pub const MAX_TRADES: usize = 2;
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct WizardAnswers {
     pub level: String,
-    /// Trade slugs — `sre`, `cloud-architect`, and so on. Two at most.
+    /// Trade slugs - `sre`, `cloud-architect`, and so on. Two at most.
     pub trades: Vec<String>,
     pub cloud_experience: Vec<String>,
     pub weekly_hours: String,
@@ -69,7 +69,7 @@ pub struct Recommendation {
 pub fn validate(answers: &WizardAnswers) -> Result<(), AppError> {
     if !LEVELS.contains(&answers.level.as_str()) {
         return Err(AppError::Validation(format!(
-            "'{}' is not a level — expected one of: {}",
+            "'{}' is not a level - expected one of: {}",
             answers.level,
             LEVELS.join(", ")
         )));
@@ -94,7 +94,7 @@ pub fn validate(answers: &WizardAnswers) -> Result<(), AppError> {
     }
     if answers.trades.is_empty() {
         return Err(AppError::Validation(
-            "pick at least one trade — the guides and the playlist follow from it".into(),
+            "pick at least one trade - the guides and the playlist follow from it".into(),
         ));
     }
     if answers.trades.len() > MAX_TRADES {
@@ -199,7 +199,7 @@ pub fn recommend(answers: &WizardAnswers) -> Recommendation {
         (false, _) => (
             "Un artefact que quelqu'un d'autre peut lancer.".to_string(),
             "C'est le seul objectif court qui produise une trace vérifiable dans ce \
-             domaine. Un pipeline, un module ou un runbook — pas un tutoriel suivi, \
+             domaine. Un pipeline, un module ou un runbook - pas un tutoriel suivi, \
              une chose qui tourne."
                 .to_string(),
             vec![
@@ -222,7 +222,7 @@ pub fn recommend(answers: &WizardAnswers) -> Recommendation {
     if !oncall_ready {
         next_steps.push(
             "Tu n'as jamais été d'astreinte : aucune mission d'astreinte ne te sera \
-             proposée tant que tu ne l'auras pas demandé. Ce n'est pas un jugement — \
+             proposée tant que tu ne l'auras pas demandé. Ce n'est pas un jugement - \
              être joignable est une contrainte de vie, pas une compétence."
                 .to_string(),
         );
@@ -276,7 +276,7 @@ pub async fn complete(
     for trade in &answers.trades {
         if !known.contains(trade) {
             return Err(AppError::Validation(format!(
-                "'{trade}' is not an ops trade — expected one of: {}",
+                "'{trade}' is not an ops trade - expected one of: {}",
                 known.join(", ")
             )));
         }

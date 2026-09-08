@@ -8,7 +8,7 @@
 //! test suite into somebody's real Discord.
 //!
 //! But that left the rows living only in the database, applied by hand. Drop
-//! the database and the routing is gone — every announcement then falls back to
+//! the database and the routing is gone - every announcement then falls back to
 //! the default room, silently, because a missing row is not an error.
 //!
 //! ## Where they live instead

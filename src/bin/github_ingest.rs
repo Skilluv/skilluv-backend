@@ -1,11 +1,11 @@
-//! skilluv-github-ingest — Poll les issues GitHub avec labels curés et
+//! skilluv-github-ingest - Poll les issues GitHub avec labels curés et
 //! matérialise chaque nouvelle issue en `project_slice`.
 //!
 //! Design (P11.1) :
 //! - Se connecte à la DB via `DATABASE_URL`.
-//! - Appelle `services::slice_ingestion::poll_all_github_projects` — parcourt
+//! - Appelle `services::slice_ingestion::poll_all_github_projects` - parcourt
 //!   tous les projets avec `slice_ingestion_mode IN ('auto','curator_review')`.
-//! - Sort avec un rapport agrégé (JSON) sur stdout — utilisable en cron.
+//! - Sort avec un rapport agrégé (JSON) sur stdout - utilisable en cron.
 //! - Le mode `auto` publie direct (status='open') ; `curator_review` crée en
 //!   draft, attente validation steward (endpoint P11.4).
 //!
@@ -15,7 +15,7 @@
 //!
 //! Env :
 //!   DATABASE_URL   requis (postgres://…)
-//!   GITHUB_TOKEN   optionnel — augmente le rate-limit (5000/h vs 60/h anonyme)
+//!   GITHUB_TOKEN   optionnel - augmente le rate-limit (5000/h vs 60/h anonyme)
 
 use anyhow::{Context, Result};
 use sqlx::postgres::PgPoolOptions;
@@ -57,7 +57,7 @@ async fn main() -> Result<()> {
         "github ingestion cycle completed"
     );
 
-    // Rapport JSON sur stdout — utilisable par un wrapper de cron pour alerting.
+    // Rapport JSON sur stdout - utilisable par un wrapper de cron pour alerting.
     let summary = serde_json::json!({
         "projects_polled": projects,
         "slices_created": created,

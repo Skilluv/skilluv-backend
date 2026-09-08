@@ -1,10 +1,10 @@
 //! Routes HTTP pour les attestations (Phase P5 * LAUNCH).
 //!
 //! Endpoints :
-//!   GET  /api/users/{user_id}/attestations       — portfolio public (public)
-//!   GET  /api/attestations/verify/{code}         — vérification publique (public)
-//!   POST /api/attestations/compagnonnage         — émission steward (auth)
-//!   POST /api/attestations/{id}/revoke           — révocation admin (auth admin)
+//!   GET  /api/users/{user_id}/attestations       - portfolio public (public)
+//!   GET  /api/attestations/verify/{code}         - vérification publique (public)
+//!   POST /api/attestations/compagnonnage         - émission steward (auth)
+//!   POST /api/attestations/{id}/revoke           - révocation admin (auth admin)
 //!
 //! Voir docs/challenges-target-model-and-roadmap.md sections B.12, G.3, 6.3-6.5.
 
@@ -41,7 +41,7 @@ pub struct UserAttestationsResponse {
     pub attestations: Vec<Attestation>,
 }
 
-/// Verification result — one of the three shapes an attestation
+/// Verification result - one of the three shapes an attestation
 /// lookup can produce: valid, revoked, or not-found. Discriminated on
 /// `valid` + `reason`.
 #[derive(Debug, Serialize, ToSchema)]
@@ -214,10 +214,10 @@ pub async fn issue_compagnonnage(
     let recipient_id = params.user_id;
     let id = AttestationsService::issue_compagnonnage(&state.db, auth.user_id, params).await?;
 
-    // P20.1 — Best-effort recompute proof engines pour le récipiendaire.
+    // P20.1 - Best-effort recompute proof engines pour le récipiendaire.
     // Attestation reçue peut débloquer capability mentor (5 attestations) et
     // les rangs artisan/maitre/doyen (seuils attestations reçues).
-    // SKI-43 — live variant: this path has AppState, so the recipient gets
+    // SKI-43 - live variant: this path has AppState, so the recipient gets
     // the WebSocket / mobile push as well as the persisted notification.
     let db_clone = state.db.clone();
     let mut redis_clone = state.redis.clone();
@@ -380,7 +380,7 @@ async fn load_certificate(
 
 /// The share card: what a link to this attestation looks like when pasted.
 ///
-/// Public and unauthenticated — the callers are the crawlers of X, LinkedIn
+/// Public and unauthenticated - the callers are the crawlers of X, LinkedIn
 /// and Facebook, which follow `og:image` without cookies.
 ///
 /// An unknown code is a 404 here, unlike the slice card. The difference is
@@ -427,7 +427,7 @@ pub async fn verify_card(
 ///
 /// Printed to PDF by the browser, losslessly, with the vectors and the fonts
 /// intact. That is a better PDF than a rasterised one, and it needs no
-/// external renderer — the slice attestation's PDF path posts HTML to
+/// external renderer - the slice attestation's PDF path posts HTML to
 /// `PDF_RENDERER_URL`, which is a second service to run and which returns 503
 /// today because nobody runs it.
 ///
@@ -435,7 +435,7 @@ pub async fn verify_card(
 /// holding an old copy has to be able to find out that it no longer holds,
 /// and a 404 would leave them believing it.
 ///
-/// `?type=full` adds what the attestation was issued for — the description as
+/// `?type=full` adds what the attestation was issued for - the description as
 /// written and the link to the thing itself. It matters most in security,
 /// where the title carries the weakness class and the severity, the affected
 /// system and the disclosure state live in the description; a recruiter handed
@@ -444,7 +444,7 @@ pub async fn verify_card(
 /// when the attestation is issued.
 #[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
 pub struct CertificateQuery {
-    /// `short` (the default) or `full`. Anything else is read as `short` —
+    /// `short` (the default) or `full`. Anything else is read as `short` -
     /// this is a document somebody is trying to print, and a 400 on a typo
     /// hands them nothing.
     #[serde(default)]

@@ -20,12 +20,12 @@ pub fn challenge_team_routes() -> Router<AppState> {
         .route("/challenges/{id}/team/{team_id}/submit", post(submit_team))
         .route("/challenges/{id}/timer", get(get_timer))
         .route("/challenges/{id}/timer/extend", post(extend_timer))
-        // P10.1 — teams persistentes (indépendantes d'un challenge)
+        // P10.1 - teams persistentes (indépendantes d'un challenge)
         .route("/teams", post(create_persistent_team))
         .route("/teams/{team_id}", get(get_team).post(join_persistent_team))
         .route("/teams/{team_id}/disband", post(disband_team))
         .route("/users/me/teams", get(my_teams))
-        // P10.2 — role slots multidisciplinaires
+        // P10.2 - role slots multidisciplinaires
         .route(
             "/teams/{team_id}/slots",
             get(list_team_slots).post(create_team_slot),
@@ -43,9 +43,9 @@ pub fn challenge_team_routes() -> Router<AppState> {
             axum::routing::delete(delete_team_slot),
         )
         .route("/team-slots/open", get(list_open_slots_by_role))
-        // P15.3 — marketplace public : slots ouverts enrichis + notif skill-match
+        // P15.3 - marketplace public : slots ouverts enrichis + notif skill-match
         .route("/teams/marketplace", get(marketplace_slots))
-        // P10.5 — bridge Guild ↔ Team
+        // P10.5 - bridge Guild ↔ Team
         .route(
             "/teams/{team_id}/guild",
             post(attach_team_to_guild).delete(detach_team_from_guild),
@@ -70,7 +70,7 @@ struct CreateTeamRequest {
 
 #[derive(Debug, Deserialize)]
 struct SubmitTeamRequest {
-    /// Contenu de la submission — depuis P10.4 persisté dans le deliverable
+    /// Contenu de la submission - depuis P10.4 persisté dans le deliverable
     /// via `DeliverablesService::create_from_team_submission` (SHA-256 dans
     /// artifact_metadata.code_content).
     code: String,
@@ -86,7 +86,7 @@ struct ExtendTimerRequest {
     minutes: i32,
 }
 
-/// P10.3 — Format d'une entrée dans challenge_templates.team_composition JSONB.
+/// P10.3 - Format d'une entrée dans challenge_templates.team_composition JSONB.
 /// L'admin définit N slots par rôle : `count` détermine combien créer.
 #[derive(Debug, Deserialize)]
 struct CompositionSlot {
@@ -516,7 +516,7 @@ pub async fn submit_team(
     }))))
 }
 
-// GET /api/challenges/:id/timer — time remaining for current submission
+// GET /api/challenges/:id/timer - time remaining for current submission
 /// Get remaining timer for the current submission.
 #[utoipa::path(
     get, path = "/api/challenges/{id}/timer", tag = "challenges",
@@ -561,7 +561,7 @@ pub async fn get_timer(
     }))))
 }
 
-// POST /api/challenges/:id/timer/extend — admin OR team captain (BE-P0-37)
+// POST /api/challenges/:id/timer/extend - admin OR team captain (BE-P0-37)
 /// Extend the challenge timer (admin or team captain).
 #[utoipa::path(
     post, path = "/api/challenges/{id}/timer/extend", tag = "challenges",
@@ -629,7 +629,7 @@ pub async fn extend_timer(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// P10.1 — Teams persistentes (indépendantes d'un challenge)
+// P10.1 - Teams persistentes (indépendantes d'un challenge)
 // ═══════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Deserialize)]
@@ -835,7 +835,7 @@ pub async fn my_teams(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// P10.2 — Role slots multidisciplinaires
+// P10.2 - Role slots multidisciplinaires
 // ═══════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Deserialize)]
@@ -912,7 +912,7 @@ pub async fn create_team_slot(
         },
     )
     .await?;
-    // P15.3 — best-effort : notifie les users skill-matched. Ne bloque pas la
+    // P15.3 - best-effort : notifie les users skill-matched. Ne bloque pas la
     // réponse HTTP si la notification échoue.
     let slot_id = slot.id;
     let db_clone = state.db.clone();
@@ -1030,7 +1030,7 @@ pub async fn list_open_slots_by_role(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// P10.5 — Bridge Guild ↔ Team
+// P10.5 - Bridge Guild ↔ Team
 // ═══════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Deserialize)]
@@ -1075,7 +1075,7 @@ pub async fn attach_team_to_guild(
     Ok(Json(build_response(json!({
         "team_id": team_id,
         "guild_id": body.guild_id,
-        "message": "Team attached to guild — GP bonuses now flow collectively."
+        "message": "Team attached to guild - GP bonuses now flow collectively."
     }))))
 }
 

@@ -1,8 +1,8 @@
-//! OSS Bounties — flow (P9.2 : entirely backed by `project_slices`).
+//! OSS Bounties - flow (P9.2 : entirely backed by `project_slices`).
 //!
 //! Historique : originellement 2 tables dédiées `oss_bounties` + `oss_bounty_claims`
 //! (Phase 5.6). Depuis P9.2 les bounties sont un cas particulier de `project_slice`
-//! avec `funder_enterprise_id NOT NULL` et `credits_reward > 0` — les colonnes
+//! avec `funder_enterprise_id NOT NULL` et `credits_reward > 0` - les colonnes
 //! `pr_url/pr_number/pr_submitted_at/merged_at/paid_at` sur project_slices
 //! remplacent l'ancien oss_bounty_claims.
 //!
@@ -87,7 +87,7 @@ pub async fn resolve_or_create_project(
     }
 
     // Slug basé sur repo + suffixe court pour éviter collisions si plusieurs
-    // enterprises créent une bounty sur des forks du même owner/name — le slug
+    // enterprises créent une bounty sur des forks du même owner/name - le slug
     // est UNIQUE.
     let slug = format!(
         "{}-{}-{}",
@@ -147,12 +147,12 @@ fn meta_array(meta: &Value, key: &str) -> Vec<String> {
 pub struct ListQuery {
     // Contraintes declarees ET enforcees cote handler (validate_list_query).
     // Les #[param(...)] vivent dans le schema OpenAPI + servent aussi de
-    // reference pour les checks handler — les 2 doivent rester en sync.
+    // reference pour les checks handler - les 2 doivent rester en sync.
     //
     // deny_unknown_fields : rejette 400 les params inconnus. Aligne sur
     // schemathesis qui flag les 'object with unexpected properties'.
     // Contrainte deliberee : les integrations front ne doivent pas mixer
-    // utm/tracking params avec les params API — utiliser un canal
+    // utm/tracking params avec les params API - utiliser un canal
     // telemetrie separe.
     #[param(max_length = 50)]
     pub status: Option<String>,
@@ -400,7 +400,7 @@ pub async fn create_bounty(
 
     let mut tx = state.db.begin().await?;
 
-    // Résout (ou crée) le project miroir du repo GitHub — évite d'exiger que
+    // Résout (ou crée) le project miroir du repo GitHub - évite d'exiger que
     // l'admin ait pré-créé le project côté enterprise.
     let project_id =
         resolve_or_create_project(&mut tx, &body.repo_owner, &body.repo_name, auth.user_id).await?;
@@ -620,7 +620,7 @@ pub async fn github_webhook(
         .filter(|s| !s.is_empty())
     else {
         tracing::warn!(
-            "GitHub bounties webhook received but GITHUB_WEBHOOK_SECRET not set — acking silently"
+            "GitHub bounties webhook received but GITHUB_WEBHOOK_SECRET not set - acking silently"
         );
         return Ok(Json(json!({ "status": "acked_not_configured" })));
     };
@@ -680,7 +680,7 @@ pub async fn github_webhook(
     Ok(Json(build_response(json!({ "processed": true }))))
 }
 
-/// P11.2 — Handler `issues.labeled`. Quand un mainteneur GitHub ajoute un
+/// P11.2 - Handler `issues.labeled`. Quand un mainteneur GitHub ajoute un
 /// label curé (ex: 'good-first-issue') à une issue, on crée immédiatement une
 /// slice draft (curator_review) ou open (auto) sans attendre le prochain cycle
 /// de polling.
@@ -769,7 +769,7 @@ pub async fn handle_issues_event(state: &AppState, payload: &Value) -> Result<()
         })
         .unwrap_or_default();
 
-    // P26 v2 SKI-101 — enrich from labels + body (see services::slice_enrichment).
+    // P26 v2 SKI-101 - enrich from labels + body (see services::slice_enrichment).
     let default_domain = skill_domains
         .first()
         .cloned()
@@ -943,7 +943,7 @@ pub async fn handle_pull_request_event(state: &AppState, payload: &Value) -> Res
         return Ok(());
     }
 
-    // BE-P26 — Split fee Skilluv 8% (env override SKILLUV_BOUNTY_FEE_BPS,
+    // BE-P26 - Split fee Skilluv 8% (env override SKILLUV_BOUNTY_FEE_BPS,
     // default 800 basis points = 8%). Sur bounty 500 crédits :
     //   platform_share = 40, talent_share = 460.
     // Le talent voit talent_share × credit_to_frag en fragments et un montant
@@ -979,7 +979,7 @@ pub async fn handle_pull_request_event(state: &AppState, payload: &Value) -> Res
     .execute(&state.db)
     .await?;
 
-    // BE-P26 — Insert platform_revenues ligne pour la marge Skilluv.
+    // BE-P26 - Insert platform_revenues ligne pour la marge Skilluv.
     if platform_share_i64 > 0 {
         sqlx::query(
             r#"
@@ -1013,7 +1013,7 @@ pub async fn handle_pull_request_event(state: &AppState, payload: &Value) -> Res
     //
     // Two things were wrong here. The amount was converted from credits to
     // real money using a rate read from an environment variable, which
-    // parses to 0.0 when unset — so the whole block was skipped and the
+    // parses to 0.0 when unset - so the whole block was skipped and the
     // slice was stamped paid anyway. And that conversion was us doing
     // foreign exchange, which is a regulated activity we have no business
     // performing.
@@ -1119,8 +1119,8 @@ pub async fn handle_pull_request_event(state: &AppState, payload: &Value) -> Res
     }
 
     // `paid_at` records that the money moved, so it is only stamped when it
-    // did. The merge itself is a fact either way — the contribution is in the
-    // upstream repository regardless of whether our payout succeeded — so
+    // did. The merge itself is a fact either way - the contribution is in the
+    // upstream repository regardless of whether our payout succeeded - so
     // `status` and `merged_at` are unconditional. A NULL `paid_at` on a
     // merged slice is the queue of what still owes money.
     sqlx::query(

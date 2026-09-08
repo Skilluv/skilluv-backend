@@ -1,4 +1,4 @@
-//! Endpoints publics pour enfiler / interroger les jobs IA — Phase 5.
+//! Endpoints publics pour enfiler / interroger les jobs IA - Phase 5.
 //!
 //! POST /api/assistant/code-review       {submission_id, ...}       → job_id
 //! POST /api/assistant/recommendations   {user_snapshot, candidates} → job_id
@@ -6,7 +6,7 @@
 //! POST /api/admin/assistant/churn       {talents, horizon_days}     → job_id (admin)
 //! GET  /api/assistant/jobs/{job_id}                                 → result | pending
 //!
-//! Sous `/assistant` et non `/ai` : `ai` est le nom d'un domaine de métier —
+//! Sous `/assistant` et non `/ai` : `ai` est le nom d'un domaine de métier -
 //! dix orientations, des grilles de revue, des artefacts. L'assistant qui
 //! relit une soumission n'en fait pas partie, et les servir sous le même
 //! préfixe rendait l'API illisible pour qui la découvre.
@@ -47,7 +47,7 @@ pub struct CodeReviewBody {
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct AiJobEnqueuedResponse {
-    /// Opaque job id — poll `/api/assistant/jobs/{job_id}` until `status ==
+    /// Opaque job id - poll `/api/assistant/jobs/{job_id}` until `status ==
     /// "ready"` to fetch the result.
     pub job_id: String,
 }
@@ -133,7 +133,7 @@ pub async fn request_code_review(
 }
 
 /// Enqueue a personalised-recommendations job. Payload shape is
-/// front-defined (user snapshot + candidate list) — the backend
+/// front-defined (user snapshot + candidate list) - the backend
 /// spoofs the `user.user_id` field to the authenticated user's id.
 /// Kept as free-form JSON since the payload evolves quickly.
 #[utoipa::path(

@@ -1,10 +1,10 @@
-# Communication — rights, disclosure and generated content
+# Communication - rights, disclosure and generated content
 
 *Ticket L-01. To be reviewed by a lawyer before the first paid commission is
 published; what follows is the platform's position, written so the review has
 something to correct rather than something to invent.*
 
-The full legal review is shared with the other domains' L-01 tickets — the
+The full legal review is shared with the other domains' L-01 tickets - the
 questions overlap enough that four separate engagements would be four times
 the cost for one set of answers. This document is what this domain adds.
 
@@ -22,8 +22,8 @@ supports, and a mission with none is unpublishable.
 
 The one term that never transfers is the right to show the work existed. A
 commission may take the copyright; it may not take the author's ability to say
-they wrote it. Where a client genuinely needs that — ghostwriting is a real
-arrangement — it is `buyout` on the licensing scope, `permits_portfolio_use`
+they wrote it. Where a client genuinely needs that - ghostwriting is a real
+arrangement - it is `buyout` on the licensing scope, `permits_portfolio_use`
 is false, and the platform records that the work exists without saying what it
 is.
 
@@ -91,7 +91,7 @@ What is not:
 - a citation nobody opened;
 - a piece delivered to a paying client with generated content in it, where the
   client was not told and did not consent. This is contractual, not
-  stylistic — a client who commissioned a person and received a model's output
+  stylistic - a client who commissioned a person and received a model's output
   did not get what they paid for;
 - a generated likeness or voice of a real person, ever, without their written
   consent. The audio domain's rule (see `docs/audio/VOICE-RIGHTS.md`) applies
@@ -121,8 +121,8 @@ not compensated and not bounded is one the platform will not host.
 1. Does an attestation, as the platform issues it, create any warranty
    obligation towards a third party who relies on it?
 2. Where a commission's `licensing_scope` and the upstream project's licence
-   conflict — a client commissioning a documentation contribution to an
-   AGPL project — which governs, and what should the platform refuse to
+   conflict - a client commissioning a documentation contribution to an
+   AGPL project - which governs, and what should the platform refuse to
    publish?
 3. Cross-border: a Benin-registered platform, a member in Senegal, a client in
    Germany. Which law governs the commission by default, and what should the

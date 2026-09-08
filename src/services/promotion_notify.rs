@@ -1,4 +1,4 @@
-//! SKI-43 (Post-MVP T2-04) — rich, actionable notifications on promotion.
+//! SKI-43 (Post-MVP T2-04) - rich, actionable notifications on promotion.
 //!
 //! A user can currently reach Ranger without ever being told. This module
 //! turns each proof-engine outcome into a notification carrying a concrete
@@ -7,7 +7,7 @@
 //! ## Why the delivery context is optional here
 //!
 //! The proof engine entry point, `proof_hooks::recompute_all_for_user`,
-//! only has `db` — and most of its callers (`services::deliverables`,
+//! only has `db` - and most of its callers (`services::deliverables`,
 //! `services::reviews`, `services::slice_validation`) are service-layer
 //! functions with no access to `AppState` at all. Threading `AppState` down
 //! into them to deliver a notification would invert the dependency between
@@ -16,7 +16,7 @@
 //! So this builds a [`crate::services::notify::Ctx`] from whatever the
 //! caller has, and the delivery degrades explicitly:
 //!
-//! * The **database row is always written** — that is the durable channel,
+//! * The **database row is always written** - that is the durable channel,
 //!   the one `GET /api/notifications` reads, and it works with `db` alone.
 //! * The **live channels** (Redis unread counter, WebSocket push, mobile
 //!   push) are delivered when the caller can supply them via [`LiveChannel`],
@@ -59,7 +59,7 @@ struct Draft {
 /// Deliver one draft through the single notification entry point.
 ///
 /// This used to insert the row, bump the Redis counter, push over the
-/// WebSocket and call the mobile pusher itself — a third copy of the same
+/// WebSocket and call the mobile pusher itself - a third copy of the same
 /// sequence, with its text written in French at the call site. `notify`
 /// owns all of that now, including the recipient's language, their channel
 /// preferences and the email nobody was sending.
@@ -255,7 +255,7 @@ pub async fn notify_from_report(
         });
     }
 
-    // First verified deliverable — the single most important moment in a
+    // First verified deliverable - the single most important moment in a
     // new user's life on the platform, and one that no rank threshold
     // catches (rank stays `apprenti` until the fourth).
     if let Some(draft) = first_deliverable_draft(db, report.user_id).await? {

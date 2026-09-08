@@ -5,7 +5,7 @@
 //! A brand identity is one job, handed in three or four times, and the
 //! designer carries all of it unpaid until the client is happy with the last
 //! round. `fixed_price` says that and means it. `per_deliverable` is the near
-//! miss — but a round is not a deliverable, it is the same deliverable again,
+//! miss - but a round is not a deliverable, it is the same deliverable again,
 //! and calling four rounds four deliverables lets a client pay four times for
 //! one job.
 //!
@@ -15,8 +15,8 @@
 //! ## The invoices exist before the rounds do
 //!
 //! All of them are raised when the mission is assigned, not one at a time.
-//! A designer starting work needs to see the whole schedule — how much each
-//! round releases and how much is held to the end — and an enterprise needs
+//! A designer starting work needs to see the whole schedule - how much each
+//! round releases and how much is held to the end - and an enterprise needs
 //! to fund the whole job rather than be asked again every fortnight.
 //!
 //! ## Commission is settled when the second party is known
@@ -49,7 +49,7 @@ pub const DEFAULT_SPLIT: &[i32] = &[20, 20, 20, 40];
 ///
 /// The last share takes the remainder rather than its own percentage. Four
 /// roundings of a budget that does not divide cleanly leave a few cents
-/// stranded in escrow with nothing to release them — and nobody notices until
+/// stranded in escrow with nothing to release them - and nobody notices until
 /// the last mission of the year.
 pub fn amounts_for(budget: &BigDecimal, split: &[i32]) -> Vec<BigDecimal> {
     let hundred = BigDecimal::from(100);
@@ -114,7 +114,7 @@ pub async fn schedule_on_assignment(db: &PgPool, mission_id: Uuid) -> Result<usi
     };
 
     // Already scheduled. The schema cannot express "one schedule per
-    // mission" — invoices are legitimately many — so the check is here.
+    // mission" - invoices are legitimately many - so the check is here.
     let existing: i64 =
         sqlx::query_scalar("SELECT count(*) FROM mission_invoices WHERE mission_id = $1")
             .bind(mission_id)
@@ -146,7 +146,7 @@ pub async fn schedule_on_assignment(db: &PgPool, mission_id: Uuid) -> Result<usi
         let label = if round == rounds {
             "Solde à l'acceptation finale".to_string()
         } else {
-            format!("Jalon {round} — round accepté")
+            format!("Jalon {round} - round accepté")
         };
 
         sqlx::query(
@@ -174,7 +174,7 @@ pub async fn schedule_on_assignment(db: &PgPool, mission_id: Uuid) -> Result<usi
 ///
 /// Only what the client has already paid for: an invoice still `issued` is
 /// money nobody has put up, and releasing it would pay a designer out of the
-/// platform's pocket. The round is recorded either way — the
+/// platform's pocket. The round is recorded either way - the
 /// designer earned it, and an unfunded schedule is the enterprise's problem
 /// to fix rather than the designer's to discover at the end.
 pub async fn release_for_round(

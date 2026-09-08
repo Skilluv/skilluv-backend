@@ -80,7 +80,7 @@ pub fn metrics_routes() -> Router<AppState> {
         .route("/api/metrics/summary", get(metrics_summary))
 }
 
-/// Prometheus scrape endpoint (text format, not JSON — kept out of
+/// Prometheus scrape endpoint (text format, not JSON - kept out of
 /// the OpenAPI schema for that reason). If `METRICS_TOKEN` is set in
 /// env, requires `Authorization: Bearer <token>`. Otherwise public
 /// (dev convenience).
@@ -158,7 +158,7 @@ pub struct MetricsSummary {
 /// JSON summary of the same counters exposed via Prometheus, for
 /// internal dashboards that speak JSON.
 ///
-/// SKI-31 (2026-08-10) — was public per TODO, now gated behind the
+/// SKI-31 (2026-08-10) - was public per TODO, now gated behind the
 /// `admin` capability. Metabase / Grafana / any internal dashboard
 /// consumer must authenticate as an admin. Public Prometheus scrape
 /// keeps working via `/metrics` (still text/plain, gated by

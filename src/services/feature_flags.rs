@@ -1,4 +1,4 @@
-//! P26 v2 / Hygiène pré-prod SKI-33 — DB-backed feature flags with
+//! P26 v2 / Hygiène pré-prod SKI-33 - DB-backed feature flags with
 //! rollout percentage and in-process cache.
 //!
 //! Complements (does not replace) the existing
@@ -122,7 +122,7 @@ async fn lookup(db: &PgPool, key: &str) -> Result<Option<FeatureFlag>, AppError>
 ///   `sha256(flag_key + user_id.as_bytes())`.
 pub async fn is_enabled(db: &PgPool, key: &str, user_id: Option<Uuid>) -> bool {
     let Ok(Some(flag)) = lookup(db, key).await else {
-        // Unknown flag or DB error — always false. Only log when unknown
+        // Unknown flag or DB error - always false. Only log when unknown
         // to avoid spamming on DB outages.
         if let Ok(None) = lookup(db, key).await {
             tracing::warn!(
@@ -209,7 +209,7 @@ pub async fn upsert_flag(
             && dbe.constraint().is_some()
         {
             return AppError::Validation(format!(
-                "invalid key '{key}' — must match ^[a-z][a-z0-9_]{{0,62}}$"
+                "invalid key '{key}' - must match ^[a-z][a-z0-9_]{{0,62}}$"
             ));
         }
         AppError::Database(e)
@@ -246,7 +246,7 @@ mod tests {
         let uid = Uuid::nil();
         let a = bucket_percent("feed_v2", uid);
         let b = bucket_percent("admin_dashboard_v3", uid);
-        // Not requiring distinct — SHA256 output can collide modulo 100,
+        // Not requiring distinct - SHA256 output can collide modulo 100,
         // but we require both are in [0,100).
         assert!(a < 100);
         assert!(b < 100);

@@ -1,4 +1,4 @@
-//! Forum + Q&A routes — Phase 2 Sprint 3.
+//! Forum + Q&A routes - Phase 2 Sprint 3.
 
 use axum::extract::{Path, Query, State};
 use axum::http::HeaderMap;
@@ -135,7 +135,7 @@ pub struct CreatePostBody {
     /// The challenge this thread is about, when it is about one.
     ///
     /// What makes a question asked once readable by everybody who starts that
-    /// challenge afterwards — the guidance block on the challenge counts these
+    /// challenge afterwards - the guidance block on the challenge counts these
     /// and the front lists them. Refused if it names no published challenge,
     /// because a thread attached to nothing is worse than one attached to
     /// nowhere: it looks answered.
@@ -258,7 +258,7 @@ pub struct EditPostBody {
     pub body: String,
 }
 
-/// Edit a post — restricted to author or moderator+ role.
+/// Edit a post - restricted to author or moderator+ role.
 #[utoipa::path(
     put,
     path = "/api/forum/posts/{id}",
@@ -289,7 +289,7 @@ pub async fn edit_post(
     Ok(Json(build_response(json!({ "post": post }))))
 }
 
-/// Delete a post — restricted to author or moderator+ role.
+/// Delete a post - restricted to author or moderator+ role.
 #[utoipa::path(
     delete,
     path = "/api/forum/posts/{id}",
@@ -311,7 +311,7 @@ pub async fn delete_post(
 }
 
 /// Field renamed from `answer_comment_id` to the more concise `answer_id`
-/// (the accepted answer is more than "just" a comment — it's the
+/// (the accepted answer is more than "just" a comment - it's the
 /// canonical resolution of the question). Both legacy names are accepted
 /// as aliases so we can roll out the front migration (FE-P0-BE08) without
 /// coordinating a big-bang deploy.
@@ -390,7 +390,7 @@ pub struct TogglePinBody {
     pub pinned: bool,
 }
 
-/// Pin / unpin a post — moderator+ only.
+/// Pin / unpin a post - moderator+ only.
 #[utoipa::path(
     post,
     path = "/api/forum/posts/{id}/pin",
@@ -418,7 +418,7 @@ pub struct ToggleLockBody {
     pub locked: bool,
 }
 
-/// Lock / unlock a post — moderator+ only.
+/// Lock / unlock a post - moderator+ only.
 #[utoipa::path(
     post,
     path = "/api/forum/posts/{id}/lock",

@@ -1,8 +1,8 @@
 //! The three products that finish the talent line: entitlements, trial
 //! periods, and reverse recruitment.
 //!
-//! They share a file because they share a story — an enterprise engaging with
-//! a person before, during and instead of a hire — and because splitting
+//! They share a file because they share a story - an enterprise engaging with
+//! a person before, during and instead of a hire - and because splitting
 //! three small surfaces into three modules would mean three copies of the
 //! same enterprise gate.
 
@@ -22,7 +22,7 @@ use crate::services::{entitlements, reverse_recruitment, trials};
 
 pub fn talent_line_routes() -> Router<AppState> {
     Router::new()
-        // Entitlements — what a subscription includes.
+        // Entitlements - what a subscription includes.
         .route("/enterprise/entitlements", get(my_entitlements))
         // Trials.
         .route(
@@ -437,7 +437,7 @@ pub async fn browse_postings(
     // returns when it cannot resolve one. Both hide the list, and only one of
     // them is true: this surface exists and is not theirs. 404 here would say
     // the endpoint does not exist, which is the wrong thing to tell somebody
-    // whose employer might be reading over their shoulder — the reason the
+    // whose employer might be reading over their shoulder - the reason the
     // list is private in the first place.
     crate::routes::enterprise::require_enterprise(&state, &auth)
         .await
@@ -518,7 +518,7 @@ pub async fn my_pitches(
     let pitches = reverse_recruitment::pitches_for(&state.db, posting.id).await?;
 
     // Marked read as they are handed over. A company that spent credits is
-    // owed the knowledge that their argument was opened — which is not an
+    // owed the knowledge that their argument was opened - which is not an
     // answer, and is not presented as one.
     for pitch in &pitches {
         if pitch.status == "sent" {

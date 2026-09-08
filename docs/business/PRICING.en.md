@@ -1,6 +1,6 @@
 # Pricing
 
-**Version 2 — target figures, to be validated by the market.**
+**Version 2 - target figures, to be validated by the market.**
 
 None of these prices has yet been paid by anybody. They are written to be
 argued with, not because they are settled. The only figure implemented and
@@ -8,7 +8,7 @@ frozen in the code is the mission commission (§2).
 
 Three currencies, because three markets: **XOF** for West Africa, **EUR** for
 Europe, **USD** for elsewhere. The amounts are not conversions of one another
-— a European price converted into XOF is a price nobody in Cotonou will pay.
+- a European price converted into XOF is a price nobody in Cotonou will pay.
 
 ---
 
@@ -64,7 +64,7 @@ we did not do is a quick way to lose the second client.
 ### Bounties
 
 **8% for the enterprise posting it.** The contributor receives the amount
-announced — that is the point: a 50,000 XOF bounty is a 50,000 XOF bounty, and
+announced - that is the point: a 50,000 XOF bounty is a 50,000 XOF bounty, and
 the commission is visible on the payer's side.
 
 To be revisited. 8% covers processing and dispute risk and no more; defensible
@@ -81,13 +81,13 @@ November.
 A standing team, booked by name. **Margin 25%.**
 
 Higher than outsourcing because the client is buying an assembled team with a
-track record and management included — not a list of people who happened to be
+track record and management included - not a list of people who happened to be
 free that week.
 
 ### Outsourcing
 
 Work handed to Skilluv and distributed among contributors assembled for the
-occasion. **Margin 15%** — lower than Studios because the coordination is
+occasion. **Margin 15%** - lower than Studios because the coordination is
 lighter.
 
 Below 15% the coordination is unpaid and done badly. Above 30% we are a
@@ -100,11 +100,11 @@ fails the tests.
 Three shapes of the same engagement, at the outsourcing rate. What changes is
 the shape, not the margin:
 
-- **discovery** — 2 to 6 weeks, timeboxed. The deliverable is a
+- **discovery** - 2 to 6 weeks, timeboxed. The deliverable is a
   recommendation, and the box exists so an open-ended exploration does not
   become an open-ended bill;
-- **sprint** — 1 to 12 weeks, fixed cohort;
-- **fractional placement** — one person, 0.5 to 4 days a week, over months.
+- **sprint** - 1 to 12 weeks, fixed cohort;
+- **fractional placement** - one person, 0.5 to 4 days a week, over months.
 
 ### Beta programmes
 
@@ -113,7 +113,7 @@ feedback, plus a separate fee for running the programme.**
 
 The two amounts stay apart and visible: a client should see what goes to the
 testers and what goes to the platform. The fee is booked at closing rather
-than at opening — it is earned by delivering the report, and a programme
+than at opening - it is earned by delivering the report, and a programme
 cancelled in its first week has earned none of it.
 
 The quote states the maximum (rewards × testers wanted + fee), not the
@@ -139,7 +139,7 @@ grid: folding the discount back into the grid would rewrite history for every
 other sponsor at the same tier.
 
 Annual contract: up to **30% off**, by the number of events committed to, and
-only on a signed contract — the discount pays for the commitment, not the
+only on a signed contract - the discount pays for the commitment, not the
 intention. Past 30% the contract costs more to service than the events it
 covers bring in.
 
@@ -150,7 +150,7 @@ piece without it.
 
 Launch campaign: **a 3–10k EUR fee to run it**, plus a pot the client puts up
 for contributors. Two amounts, kept apart and visible. Every piece passes our
-quality check first and the sponsor's decision second — in that order, or
+quality check first and the sponsor's decision second - in that order, or
 honest criticism gets refused in the name of "quality".
 
 Ambassador programme: **activation 5–15k EUR**, management **1–3k EUR a
@@ -234,7 +234,7 @@ it.
 
 ## 7. Consultation
 
-**Advisory: 350,000 XOF / 530 EUR per day.** Two days minimum — below that,
+**Advisory: 350,000 XOF / 530 EUR per day.** Two days minimum - below that,
 understanding the context eats the engagement.
 
 **Guided onboarding: included** in annual programmes, 600,000 XOF / 900 EUR

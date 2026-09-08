@@ -1,4 +1,4 @@
-//! Service `attestations` — Killer feature de Skilluv (Phase P5 LAUNCH).
+//! Service `attestations` - Killer feature de Skilluv (Phase P5 LAUNCH).
 //!
 //! Voir docs/challenges-target-model-and-roadmap.md sections B.12, G.3, 6.3-6.5.
 //!
@@ -96,7 +96,7 @@ impl AttestationsService {
     /// One generator, in `artefact_attestations`.
     ///
     /// There were three copies of these five lines. They agreed, which is the
-    /// only reason nothing broke — and the day one of them had grown to
+    /// only reason nothing broke - and the day one of them had grown to
     /// twelve characters, half the attestations would have been unverifiable
     /// against a page expecting ten.
     pub(crate) fn generate_verification_code() -> String {
@@ -506,7 +506,7 @@ impl AttestationsService {
     }
 
     // The cascade that used to live here is a trigger since migration 0225.
-    // It was `pub`, written for exactly this, and called from nowhere — so a
+    // It was `pub`, written for exactly this, and called from nowhere - so a
     // deliverable revoked for plagiarism kept its attestation issued and the
     // record kept pointing at something withdrawn. A function nobody calls
     // does not become a rule by existing.

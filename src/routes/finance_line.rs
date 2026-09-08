@@ -395,7 +395,7 @@ pub async fn honour_guarantee(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// The finance queues — what the write routes act on
+// The finance queues - what the write routes act on
 // ═══════════════════════════════════════════════════════════════════
 //
 // Seven admin write routes above carry an `{id}` that nothing let an

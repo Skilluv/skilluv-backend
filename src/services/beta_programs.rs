@@ -1,4 +1,4 @@
-//! Paid beta testing — a hundred people paid a small fixed reward for an
+//! Paid beta testing - a hundred people paid a small fixed reward for an
 //! opinion.
 //!
 //! Not a team, and deliberately not modelled as one. A studio is a small
@@ -8,7 +8,7 @@
 //! `100 / n` and a milestone table nobody uses.
 //!
 //! Two amounts, kept apart on purpose: what goes to the testers, and what
-//! Skilluv charges for running it — recruiting the right people, structuring
+//! Skilluv charges for running it - recruiting the right people, structuring
 //! the feedback, and writing the report that makes a hundred opinions
 //! usable. A client should be able to see which is which.
 

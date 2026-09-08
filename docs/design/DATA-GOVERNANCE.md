@@ -66,7 +66,7 @@ public : l'attestation existe, la preuve compte pour le rang, et seule la
 démonstration publique est perdue.
 
 C'est le compromis honnête pour du travail sous NDA, et il vaut mieux que les
-deux mauvaises réponses habituelles — publier quand même, ou ne rien pouvoir
+deux mauvaises réponses habituelles - publier quand même, ou ne rien pouvoir
 prouver.
 
 ## 4. Ce qui se supprime, et ce qui ne se supprime pas
@@ -76,7 +76,7 @@ questionnaire, les comptes externes déclarés, les messages privés.
 
 Trois choses survivent, et il est plus honnête de le dire avant qu'après :
 
-1. **Le classement d'un concours conclu.** La ligne devient anonyme — le code
+1. **Le classement d'un concours conclu.** La ligne devient anonyme - le code
    la renvoie sans nom plutôt que de la faire disparaître, parce que la retirer
    réécrirait le classement de tous ceux qui étaient derrière.
 2. **Le fait d'une attestation révoquée.** Une révocation qui disparaît
@@ -101,7 +101,7 @@ Trois raisons, dans l'ordre :
 1. **Une preuve importée n'est pas une preuve.** Un score qu'on peut faire
    monter en connectant un compte cesse de vouloir dire « prouvé ici ».
 2. **La provenance juridique.** Importer une image, c'est la reproduire sur nos
-   serveurs — un acte de reproduction dont rien ne garantit qu'il est licite
+   serveurs - un acte de reproduction dont rien ne garantit qu'il est licite
    pour un travail commandé.
 3. **La minimisation.** Ne pas détenir une donnée est la seule façon sûre de ne
    pas la perdre.
@@ -119,8 +119,8 @@ d'adéquation de la Commission européenne.
 Conséquences à instruire avec un juriste :
 
 - quelle base légale pour le traitement des données d'utilisateurs européens ;
-- quel mécanisme de transfert — clauses contractuelles types, très
-  probablement — et quelle analyse d'impact ;
+- quel mécanisme de transfert - clauses contractuelles types, très
+  probablement - et quelle analyse d'impact ;
 - où sont hébergés les fichiers déposés, qui sont la donnée la plus sensible
   puisqu'ils peuvent contenir les données de clients de nos utilisateurs ;
 - qui est responsable de traitement quand un designer publie les données d'un

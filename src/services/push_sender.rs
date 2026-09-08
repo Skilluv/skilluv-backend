@@ -1,7 +1,7 @@
-// BE-P1-CONTRACT — silence pre-existing deprecation warnings from the
+// BE-P1-CONTRACT - silence pre-existing deprecation warnings from the
 // `elliptic-curve` crate (generic-array 0.14). Upgrade path deferred.
 #![allow(deprecated)]
-//! Web Push natif RFC 8291 (aes128gcm) + VAPID RFC 8292 — Phase 4.12.
+//! Web Push natif RFC 8291 (aes128gcm) + VAPID RFC 8292 - Phase 4.12.
 //!
 //! Implémentation pure-Rust (p256 + aes-gcm + hkdf), pas d'OpenSSL.
 //! Envoie effectivement les notifications aux endpoints des browsers.
@@ -79,7 +79,7 @@ pub async fn push_to_user(
     url: Option<&str>,
 ) -> Result<(usize, usize), AppError> {
     let Some(vapid) = VapidConfig::from_env() else {
-        tracing::debug!("VAPID not configured — skipping push");
+        tracing::debug!("VAPID not configured - skipping push");
         return Ok((0, 0));
     };
     let subs: Vec<(Uuid, String, String, String)> = sqlx::query_as(
@@ -213,7 +213,7 @@ fn encrypt_aes128gcm(
     let shared = ephemeral.diffie_hellman(client_pub);
     let ikm_raw = shared.raw_secret_bytes();
 
-    // 3. HKDF pass 1 — dériver "IKM" pour la clé de content encryption
+    // 3. HKDF pass 1 - dériver "IKM" pour la clé de content encryption
     // key_info = "WebPush: info\0" || ua_public(65) || as_public(65)
     let client_pub_bytes = client_pub.to_encoded_point(false).as_bytes().to_vec();
     let mut key_info = Vec::with_capacity(14 + 65 + 65);
@@ -231,7 +231,7 @@ fn encrypt_aes128gcm(
     h1.expand(&key_info, &mut prk_key_ikm)
         .map_err(|_| AppError::Internal("HKDF expand ikm".into()))?;
 
-    // 4. HKDF pass 2 — dériver CEK et nonce
+    // 4. HKDF pass 2 - dériver CEK et nonce
     let h2 = Hkdf::<Sha256>::new(Some(&salt), &prk_key_ikm);
     let mut cek = [0u8; AES128GCM_KEY_LEN];
     h2.expand(b"Content-Encoding: aes128gcm\0", &mut cek)

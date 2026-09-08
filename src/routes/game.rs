@@ -5,8 +5,8 @@
 //! Reading is open: the jams, a jam's detail, the composition of a project, the
 //! featured creators, a slice's playtest verdicts and where it stands against
 //! the validation gate. A programme nobody can read is a programme nobody
-//! joins. Everything that writes — submitting to a jam, voting, playtesting,
-//! registering a mod, recomputing your own score — needs a session, because
+//! joins. Everything that writes - submitting to a jam, voting, playtesting,
+//! registering a mod, recomputing your own score - needs a session, because
 //! each is a person's own act.
 //!
 //! Validation, confirmation and finalisation are not here: they are reviewer

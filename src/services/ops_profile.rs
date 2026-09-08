@@ -6,7 +6,7 @@
 //! backlog proposed a formula in Rust and a `craft_score_ops` column; both
 //! were declined for the same reason. A weight written in code is one nobody
 //! outside the team can argue with, and a stored score is wrong from the
-//! moment the next attestation lands — worse, it keeps its points when a
+//! moment the next attestation lands - worse, it keeps its points when a
 //! proof is revoked, unless somebody remembers to recompute.
 //!
 //! This module contributes the one thing that cannot be a row: what each term
@@ -26,7 +26,7 @@
 //! logarithmic term: a million saved is worth about twice a thousand, not a
 //! thousand times, because the second one is often just a bigger bill to
 //! start with. `review_grid_average` is counted from three out of five, and
-//! is skipped entirely for somebody nobody has reviewed — counting it as zero
+//! is skipped entirely for somebody nobody has reviewed - counting it as zero
 //! would subtract the whole baseline from their total.
 
 use bigdecimal::BigDecimal;
@@ -163,7 +163,7 @@ async fn measure(db: &PgPool, user_id: Uuid) -> Result<Measurements, AppError> {
             -- BIGINT, not INT. Every other figure here is a `count(*)`, which
             -- PostgreSQL returns as bigint, and the struct reads them all as
             -- `i64`. This one went through `date_part`, so the cast decided
-            -- the column's width — and `::INT` made it the one int4 in the
+            -- the column's width - and `::INT` made it the one int4 in the
             -- row. sqlx does not widen: it refused to decode the whole row,
             -- so `GET /users/{username}/ops-profile` answered 500 to every
             -- call it has ever received. One test reaches this endpoint,
@@ -238,7 +238,7 @@ pub async fn compute(db: &PgPool, user_id: Uuid) -> Result<CraftScore, AppError>
 /// Nothing here is private by accident: it reads the same rows the person's
 /// own dashboard reads, minus anything unverified. An objective still open,
 /// an incident with no post-mortem and a cost claim nobody checked are all
-/// absent — a public profile is the place a stranger forms a judgement, and
+/// absent - a public profile is the place a stranger forms a judgement, and
 /// it must only carry what a stranger could confirm.
 pub async fn build(db: &PgPool, username: &str) -> Result<OpsProfile, AppError> {
     let user: Option<(Uuid, String, Option<String>)> =

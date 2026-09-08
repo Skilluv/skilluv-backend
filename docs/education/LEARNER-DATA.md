@@ -1,4 +1,4 @@
-# Education — learner data, minors, and what an attestation is not
+# Education - learner data, minors, and what an attestation is not
 
 *Ticket L-01. To be reviewed by a lawyer before the first cohort runs; what
 follows is the platform's position, written so the review has something to
@@ -65,7 +65,7 @@ Where a programme is for minors:
 A testimonial is the only place a learner's own words reach a public surface,
 and it requires:
 
-- the learner writing it themselves — not the educator paraphrasing;
+- the learner writing it themselves - not the educator paraphrasing;
 - an explicit, timestamped consent, recorded as `testimonial_consent_at`;
 - a way to withdraw it that actually removes the text.
 
@@ -82,7 +82,7 @@ them.
 This has a consequence worth stating: **an attestation can stop being
 supported.** If enough learners erase their records that a cohort falls below
 the threshold, the fact the attestation claims is no longer evidenced. The
-attestation is not revoked automatically — the teaching happened — but the
+attestation is not revoked automatically - the teaching happened - but the
 figure behind it changes, and a reader following it sees what is actually
 there. This is the correct behaviour and the alternative is a cached number
 that nobody can check.
@@ -134,7 +134,7 @@ false hope for the member.
 3. What notice, if any, does a learner in an off-platform cohort need to be
    given before an educator records an aggregate figure derived from their
    results?
-4. Does §5 — an attestation surviving while its evidence shrinks — create any
+4. Does §5 - an attestation surviving while its evidence shrinks - create any
    misrepresentation exposure, and should the threshold be re-evaluated at
    read time rather than at issue time?
 5. In which of Benin, Senegal, Côte d'Ivoire, France and Germany is "formateur

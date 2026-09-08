@@ -7,7 +7,7 @@
 //! we send the digest" and never "does this person want to know, and how".
 //!
 //! Here, a caller says *what happened* and *to whom*. This module decides the
-//! language, the channels, and whether the recipient agreed — then delivers.
+//! language, the channels, and whether the recipient agreed - then delivers.
 //!
 //! ```ignore
 //! notify::send(&state, Recipient::User(mentor), "payout.sent")
@@ -29,7 +29,7 @@
 //! Channels are independent. A push that fails must not lose the in-app
 //! record, and an email that bounces must not fail the request that caused
 //! it. Each channel's outcome is reported separately in [`Delivery`], and a
-//! transactional notification that reaches nobody is logged at error level —
+//! transactional notification that reaches nobody is logged at error level -
 //! that one is a lost obligation, not a missed nudge.
 
 use serde_json::Value;
@@ -42,7 +42,7 @@ use crate::services::i18n;
 /// What delivering a notification needs.
 ///
 /// Built from an `AppState` where there is one, and from its parts where
-/// there is not — the proof engine and the mention recorder run with a
+/// there is not - the proof engine and the mention recorder run with a
 /// database handle and little else, and requiring the whole application
 /// state there would mean threading it through call chains that have no
 /// other use for it.
@@ -69,7 +69,7 @@ pub struct Ctx<'a> {
 /// The mail service and the URLs, installed once at startup.
 ///
 /// The proof engine, the mention recorder and the reconciliation sweep run
-/// with a `PgPool` and nothing else, by design — threading `AppState` down
+/// with a `PgPool` and nothing else, by design - threading `AppState` down
 /// into them would invert the dependency between the service and HTTP
 /// layers. But they emit kinds whose email is on by default, and a context
 /// with no mail service turned that into an error log and a message nobody
@@ -110,7 +110,7 @@ impl<'a> Ctx<'a> {
     ///
     /// Not email-less: the mail service falls back to what `main` installed,
     /// so a promotion reached from a background webhook sends the same
-    /// message as one reached from a request. Live channels stay absent —
+    /// message as one reached from a request. Live channels stay absent -
     /// a Redis connection and a WebSocket registry are per-process state
     /// this cannot borrow, and their loss costs immediacy rather than the
     /// message.
@@ -151,7 +151,7 @@ pub enum Recipient {
     /// events, which belong to the organisation rather than to whoever
     /// happened to click.
     Enterprise(Uuid),
-    /// Everyone holding a capability — `admin`, `kyc_reviewer`, … Used for
+    /// Everyone holding a capability - `admin`, `kyc_reviewer`, … Used for
     /// queues that someone has to work.
     Capability(&'static str),
     /// Everyone holding any one of several capabilities.
@@ -259,7 +259,7 @@ impl<'a> Builder<'a> {
         self
     }
 
-    /// Structured data for the client — ids to navigate to, not text.
+    /// Structured data for the client - ids to navigate to, not text.
     pub fn payload(mut self, payload: Value) -> Self {
         self.payload = Some(payload);
         self
@@ -268,7 +268,7 @@ impl<'a> Builder<'a> {
     /// A figure to show in the email, under the body.
     ///
     /// For the handful of notifications that are a shape rather than a
-    /// sentence — the weekly digest, and nothing else today. The label is
+    /// sentence - the weekly digest, and nothing else today. The label is
     /// a translation key, resolved in the recipient's language.
     pub fn stat(mut self, label_key: &str, value: impl Into<String>) -> Self {
         self.stats.push((label_key.to_string(), value.into()));
@@ -388,7 +388,7 @@ impl<'a> Builder<'a> {
                         "mobile push failed");
 
                     // For a transactional kind the push was the fast path
-                    // and nothing took its place. Another road, then —
+                    // and nothing took its place. Another road, then -
                     // ignoring the email preference, because the message is
                     // an obligation rather than a nudge.
                     if kind.transactional {
@@ -425,11 +425,11 @@ impl<'a> Builder<'a> {
                 Ok(false) => {}
                 Err(e) => {
                     // Queued rather than lost. A 503 from the provider used
-                    // to be logged and the message was gone — not late,
+                    // to be logged and the message was gone - not late,
                     // gone, with nowhere to put it.
                     delivery.failures.push(format!("email: {e}"));
                     tracing::warn!(kind = self.kind, user = %user_id, error = %e,
-                        "notification email failed — queued for retry");
+                        "notification email failed - queued for retry");
                     self.queue(
                         user_id,
                         &locale,
@@ -527,7 +527,7 @@ impl<'a> Builder<'a> {
     /// One-click unsubscribe link for a declinable email.
     ///
     /// Signed with the same secret `GET /api/email/unsubscribe/{token}`
-    /// verifies, so the link works without the reader logging in — which is
+    /// verifies, so the link works without the reader logging in - which is
     /// the whole point of one-click.
     fn unsubscribe_url(&self, user_id: Uuid) -> Option<String> {
         let base = self.ctx.frontend_url?.trim_end_matches('/');
@@ -541,7 +541,7 @@ impl<'a> Builder<'a> {
     ///
     /// `kind:target_type:target_id`, built from the payload the caller
     /// already passes. A kind whose payload names no subject has no
-    /// context, so it never groups — which is the right answer for
+    /// context, so it never groups - which is the right answer for
     /// anything carrying money or a decision.
     fn group_key(&self) -> Option<String> {
         let payload = self.payload.as_ref()?;
@@ -603,7 +603,7 @@ impl<'a> Builder<'a> {
         // The catalogue holds the path and `cta_url` fills its placeholders
         // from the payload, returning nothing rather than a broken link.
         // Doing it here means the in-app client and the email agree on where
-        // a notification leads — the client cannot resolve it on its own,
+        // a notification leads - the client cannot resolve it on its own,
         // since the catalogue is not something it can read.
         let mut stored = self.payload.clone();
         if let Some(href) = self.cta_url(kind_row) {
@@ -690,7 +690,7 @@ impl<'a> Builder<'a> {
     /// Fold this event into an open notification about the same context.
     ///
     /// Returns the absorbing row's id, or `None` when there is nothing open
-    /// to absorb it — a different context, an expired window, or one the
+    /// to absorb it - a different context, an expired window, or one the
     /// person has already read. Read is a boundary on purpose: merging into
     /// a line someone has seen would make it change under them, and they
     /// would never learn the second thing happened.
@@ -832,7 +832,7 @@ impl<'a> Builder<'a> {
         if title == title_key || body == body_key {
             tracing::debug!(
                 kind = self.kind,
-                "kind groups but has no grouped copy — falling back to the single-event wording"
+                "kind groups but has no grouped copy - falling back to the single-event wording"
             );
             return (
                 i18n::t_with(locale, &format!("notification.{}.title", self.kind), &args),
@@ -842,7 +842,7 @@ impl<'a> Builder<'a> {
         (title, body)
     }
 
-    /// Returns `false` when there is nobody to write to — an account with no
+    /// Returns `false` when there is nobody to write to - an account with no
     /// verified address, which is not a failure.
     async fn send_email(
         &self,
@@ -922,7 +922,7 @@ impl<'a> Builder<'a> {
             tracing::error!(
                 kind = self.kind,
                 user = %user_id,
-                "email channel requested but this context carries no email                  service — the message was not sent"
+                "email channel requested but this context carries no email                  service - the message was not sent"
             );
             return Ok(false);
         };
@@ -1002,7 +1002,7 @@ async fn load_kind(db: &PgPool, kind: &str) -> Result<KindRow, AppError> {
     .await?
     .ok_or_else(|| {
         AppError::Internal(format!(
-            "unknown notification kind '{kind}' — add it to notification_kinds \
+            "unknown notification kind '{kind}' - add it to notification_kinds \
              along with its translations"
         ))
     })
@@ -1038,7 +1038,7 @@ async fn wants(db: &PgPool, user_id: Uuid, kind: &str, channel: Channel, row: &K
 
 /// Does this person want this kind, without a loaded catalogue row.
 ///
-/// For callers outside a delivery — the settings screen projecting several
+/// For callers outside a delivery - the settings screen projecting several
 /// kinds onto one switch, a bulk job deciding whether to build an email at
 /// all. An unknown kind reads as "no": inventing consent for something the
 /// catalogue does not describe is the wrong direction to fail in.
@@ -1053,7 +1053,7 @@ pub async fn wants_kind(db: &PgPool, user_id: Uuid, kind: &str, channel: Channel
 ///
 /// Only push asks. A buzz at three in the morning is how an application
 /// gets its notifications revoked at the operating-system level, which is a
-/// decision nobody goes back on — and the in-app record and the email are
+/// decision nobody goes back on - and the in-app record and the email are
 /// waiting whenever they wake up.
 ///
 /// Unknown timezone means not enforced. Assuming UTC would silence a talent
@@ -1086,7 +1086,7 @@ async fn in_quiet_hours(db: &PgPool, user_id: Uuid) -> bool {
     };
 
     let Ok(zone) = tz.parse::<chrono_tz::Tz>() else {
-        tracing::warn!(user = %user_id, timezone = %tz, "unparseable timezone — quiet hours not enforced");
+        tracing::warn!(user = %user_id, timezone = %tz, "unparseable timezone - quiet hours not enforced");
         return false;
     };
 
@@ -1094,7 +1094,7 @@ async fn in_quiet_hours(db: &PgPool, user_id: Uuid) -> bool {
         use chrono::Timelike;
         chrono::Utc::now().with_timezone(&zone).hour() as i16
     };
-    // A window that wraps midnight — 22 to 7 — is the normal case, and the
+    // A window that wraps midnight - 22 to 7 - is the normal case, and the
     // one a naive range check gets wrong.
     if start <= end {
         hour >= start && hour < end

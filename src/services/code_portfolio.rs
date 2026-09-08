@@ -3,15 +3,15 @@
 //! ## The split, again
 //!
 //! Recognising a platform from a URL, deciding whether an account is
-//! countable, and knowing which forges answer which questions — all pure, all
+//! countable, and knowing which forges answer which questions - all pure, all
 //! tested here. Asking GitHub how many stars somebody has is a call to
 //! somebody else's service and sits behind [`fetch`], like the registry
 //! statistics it sits next to.
 //!
 //! ## Claimed against verified
 //!
-//! Anybody can type `torvalds`. Only an OAuth flow proves it. Both are stored
-//! — a Codeberg profile is worth showing on a page even unproved — and only
+//! Anybody can type `torvalds`. Only an OAuth flow proves it. Both are stored -
+//! a Codeberg profile is worth showing on a page even unproved - and only
 //! the proved one is countable. That rule lives in [`is_countable`] and in a
 //! partial unique index, so neither the API nor a direct INSERT can go round
 //! it.
@@ -46,7 +46,7 @@ pub const PLATFORMS: &[&str] = &[
     "homebrew",
 ];
 
-/// Forges — places code is written. The rest are registries, where it is
+/// Forges - places code is written. The rest are registries, where it is
 /// published.
 pub const FORGES: &[&str] = &["github", "gitlab", "codeberg", "sourcehut"];
 
@@ -77,7 +77,7 @@ pub fn is_countable(platform: &str, verified: bool) -> bool {
 /// Which platform a profile URL belongs to, and the handle on it.
 ///
 /// Registries are handed to the package parser, which already knows all ten
-/// of them — two parsers for the same URLs would drift within a month.
+/// of them - two parsers for the same URLs would drift within a month.
 pub fn identify_profile(url: &str) -> Option<(&'static str, String)> {
     let trimmed = url.trim();
     let rest = trimmed
@@ -129,7 +129,7 @@ pub fn forge_api(platform: &str, handle: &str) -> Option<String> {
         "codeberg" => Some(format!("https://codeberg.org/api/v1/users/{handle}")),
         // SourceHut's meta API needs a token even to read a public profile,
         // so there is nothing to call anonymously. Recognised, listed, not
-        // measured — the same answer the registries with no download figures
+        // measured - the same answer the registries with no download figures
         // get.
         "sourcehut" => None,
         _ => None,
@@ -163,7 +163,7 @@ pub struct Portfolio {
 pub async fn claim(db: &PgPool, user_id: Uuid, profile_url: &str) -> Result<Portfolio, AppError> {
     let (platform, handle) = identify_profile(profile_url).ok_or_else(|| {
         AppError::Validation(
-            "that URL is not a profile on a forge Skilluv knows — GitHub, GitLab, Codeberg \
+            "that URL is not a profile on a forge Skilluv knows - GitHub, GitLab, Codeberg \
              or SourceHut, and the profile page itself rather than one of its repositories"
                 .into(),
         )
@@ -223,7 +223,7 @@ pub async fn record_verified(
 ) -> Result<(), AppError> {
     if !VERIFIABLE_PLATFORMS.contains(&platform) {
         return Err(AppError::Internal(format!(
-            "{platform} has no way of proving ownership — recording one as verified would \
+            "{platform} has no way of proving ownership - recording one as verified would \
              make the distinction meaningless"
         )));
     }
@@ -290,7 +290,7 @@ pub struct ForgeProfile {
 ///
 /// Every field is a count from GitHub's search API and every one of them can
 /// be absent: search is the most aggressively rate-limited part of that API
-/// for anonymous callers — ten requests a minute — and a profile that was
+/// for anonymous callers - ten requests a minute - and a profile that was
 /// read successfully must not be thrown away because a follow-up was
 /// throttled. Absent means "not read", never "none".
 #[derive(Debug, Default, Serialize)]
@@ -300,7 +300,7 @@ pub struct ReviewWork {
     pub reviews_given: Option<i64>,
     /// Issues opened, anywhere public.
     pub issues_opened: Option<i64>,
-    /// Issues labelled `rfc` or `roadmap` that this account authored — the
+    /// Issues labelled `rfc` or `roadmap` that this account authored - the
     /// coordination trace leadership/P-02 names.
     pub proposals_authored: Option<i64>,
     /// When these were last read, so a reader can tell a stale zero from a
@@ -347,7 +347,7 @@ async fn github_review_work(client: &reqwest::Client, handle: &str) -> ReviewWor
 
 /// One search, for its count alone.
 ///
-/// `per_page=1` because the results are not wanted — only `total_count` is,
+/// `per_page=1` because the results are not wanted - only `total_count` is,
 /// and asking for thirty of them would move thirty issue bodies across the
 /// wire to be dropped.
 async fn github_search_count(client: &reqwest::Client, query: &str) -> Option<i64> {
@@ -595,7 +595,7 @@ pub fn longest_streak(days: &[(String, i32)]) -> i32 {
 
 /// Ask GitHub for a year of contributions.
 ///
-/// GraphQL, because this is the one thing the REST API does not expose — and
+/// GraphQL, because this is the one thing the REST API does not expose - and
 /// authenticated, because the calendar is not public over the API even for a
 /// public profile. So it is only available for somebody who connected their
 /// account, which is the same set of people it is countable for.
@@ -679,7 +679,7 @@ pub async fn sync_contribution_graph(
     };
 
     let Some(token) = crate::services::github::load_token(db, jwt_secret, user_id).await? else {
-        // Proved but the token is gone — disconnected, or revoked upstream.
+        // Proved but the token is gone - disconnected, or revoked upstream.
         // Not an error: there is simply nothing to ask with.
         return Ok(None);
     };
@@ -842,7 +842,7 @@ async fn sync_stale_profiles(db: &PgPool, client: &reqwest::Client) -> Result<u6
           WHERE p.sync_enabled = TRUE
             -- This module's rows only. It used to take every stale row, and
             -- `fetch` answered with an empty profile for anything that is not
-            -- a forge — which still wrote `last_synced_at = NOW()`. A dev.to
+            -- a forge - which still wrote `last_synced_at = NOW()`. A dev.to
             -- account was therefore marked freshly synced by the module that
             -- cannot read dev.to, and `portfolio_sync` never saw it come due.
             AND pf.synced_by = 'code_portfolio'

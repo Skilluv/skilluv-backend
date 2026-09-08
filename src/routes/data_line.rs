@@ -12,7 +12,7 @@
 //!
 //! **The consent routes are the person's own session only.** No admin route
 //! grants consent on somebody's behalf, and there is no import path. If that
-//! ever needs to exist, it should be hard to add — which is why it is absent
+//! ever needs to exist, it should be hard to add - which is why it is absent
 //! rather than present and guarded.
 
 use axum::extract::{Path, State};
@@ -233,7 +233,7 @@ async fn caller(
     api_metering::authorise(&state.db, presented).await
 }
 
-/// One person's public figures — if they agreed to be readable.
+/// One person's public figures - if they agreed to be readable.
 #[utoipa::path(
     get, path = "/api/public/v1/talent-score/{username}", tag = "public",
     params(("username" = String, Path, description = "Skilluv username")),
@@ -263,7 +263,7 @@ pub async fn talent_score(
         "meta": {
             "attribution_required": key.attribution_required,
             "attribution": if key.attribution_required {
-                Some("Données fournies par Skilluv — skill-uv.com")
+                Some("Données fournies par Skilluv - skill-uv.com")
             } else {
                 None
             },

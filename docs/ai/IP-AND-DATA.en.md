@@ -1,4 +1,4 @@
-# Ownership, licences and data — AI domain
+# Ownership, licences and data - AI domain
 
 *To be published at `skill-uv.com/ai/ip`.*
 
@@ -38,7 +38,7 @@ gap matters:
 
 **Skilluv rule**: the base model's licence is named in the card, and the
 derivative's licence is compatible with it. A deliverable whose licence chain
-is incoherent is refused — not out of formalism, but because it is unusable
+is incoherent is refused - not out of formalism, but because it is unusable
 by anybody who picks it up.
 
 Terms change. **Check the licence as at the training date**, and record that
@@ -70,7 +70,7 @@ The practical consequence is upstream, not downstream:
 
 - do not put personal data in a training set without an explicit legal basis;
 - anonymise before, not after;
-- for a dataset containing people — faces, voices, identifying text —
+- for a dataset containing people - faces, voices, identifying text -
   document consent in the card.
 
 A model you could not correct if somebody withdrew is a model whose weights
@@ -81,10 +81,10 @@ you do not publish.
 When work is paid for by a third party, four splits are possible and the
 contract names one:
 
-- **full transfer** — weights and code pass to the client;
-- **open model** — the client keeps their usage rights, the model is published;
-- **commercial licence** — the client may exploit it, nobody else;
-- **weights to the client, code to the author** — the most common, and the
+- **full transfer** - weights and code pass to the client;
+- **open model** - the client keeps their usage rights, the model is published;
+- **commercial licence** - the client may exploit it, nobody else;
+- **weights to the client, code to the author** - the most common, and the
   worst written.
 
 **No mission starts before the split is written down.** The ambiguity only
@@ -93,12 +93,12 @@ surfaces once the work has value, which is the worst possible moment.
 ## 6. European regulation
 
 The EU AI Act classifies uses by risk level and imposes increasing
-transparency obligations. Skilluv is not subject to most of them today — we do
-not place an AI system on the European market — but work published here may be
+transparency obligations. Skilluv is not subject to most of them today - we do
+not place an AI system on the European market - but work published here may be
 placed there by whoever picks it up.
 
 The position: **write down what a downstream user needs in order to comply.**
-That is exactly what the model card already asks for — intended use, data,
+That is exactly what the model card already asks for - intended use, data,
 limits, evaluation. Work documented to the charter's standard is work on which
 compliance is possible.
 
@@ -114,7 +114,7 @@ What Skilluv applies:
 
 - the models and LoRAs used are cited, with their licences;
 - a style imitating an identifiable living person is not published without
-  their agreement — regardless of what the law permits;
+  their agreement - regardless of what the law permits;
 - the generative nature of the artefact is declared.
 
 ## 8. What causes a revocation

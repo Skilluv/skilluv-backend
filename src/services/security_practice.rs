@@ -4,10 +4,10 @@
 //!
 //! A flag is one secret compared by hash; a lab is several. Both are graded
 //! without a human, both are capped so they cannot be brute-forced, both record
-//! the attempt and neither records what was submitted in plaintext — an attempt
+//! the attempt and neither records what was submitted in plaintext - an attempt
 //! log of near-miss guesses is a hint, and hints leak.
 //!
-//! The write-up kinds — walkthroughs, training grounds, audit exercises — are
+//! The write-up kinds - walkthroughs, training grounds, audit exercises - are
 //! not here. They are graded by somebody reading a submission, which is the
 //! deliverable and review machinery every domain already has.
 //!
@@ -68,7 +68,7 @@ pub struct FlagOutcome {
     pub fragments_awarded: i32,
     /// The verification code of the attestation, when one was issued.
     pub attestation_code: Option<String>,
-    /// What to say. Not a translated string — the caller renders — but the
+    /// What to say. Not a translated string - the caller renders - but the
     /// distinction the client needs: a wrong flag and a wrong *format* are
     /// different mistakes and the second one is worth telling somebody about.
     pub hint: Option<String>,
@@ -109,7 +109,7 @@ pub async fn submit_flag(
     if c.kind.as_deref() != Some("ctf_flag") {
         return Err(AppError::Validation(
             "that challenge is not verified by a flag. Look at what it asks for \
-             — most of this catalogue is graded by somebody reading a write-up"
+             - most of this catalogue is graded by somebody reading a write-up"
                 .into(),
         ));
     }
@@ -135,7 +135,7 @@ pub async fn submit_flag(
     if recent >= FLAG_ATTEMPTS_PER_HOUR {
         return Err(AppError::Validation(format!(
             "{FLAG_ATTEMPTS_PER_HOUR} attempts an hour on one challenge. A flag \
-             is not something to guess — if the format is the problem, it is on \
+             is not something to guess - if the format is the problem, it is on \
              the challenge page"
         )));
     }
@@ -282,7 +282,7 @@ pub async fn submit_flag(
 /// A very rough shape check, used only to tell somebody their format is wrong.
 ///
 /// Compares the fixed prefix of the declared format up to the first brace or
-/// colon. Never used to decide correctness — a flag is correct when its hash
+/// colon. Never used to decide correctness - a flag is correct when its hash
 /// matches and not otherwise.
 fn looks_like(candidate: &str, format: &str) -> bool {
     let prefix: String = format
@@ -362,7 +362,7 @@ async fn attestation_code_for(db: &PgPool, user_id: Uuid, challenge_id: Uuid) ->
 /// lab artefact is a redacted capture this platform published on purpose for
 /// several hundred people to analyse. What the expiry buys here is that the
 /// link in a group chat stops working, so the download is attributable to the
-/// account that asked for it — not secrecy, which the artefact does not have.
+/// account that asked for it - not secrecy, which the artefact does not have.
 pub const LAB_ARTIFACT_URL_SECONDS: u32 = 24 * 3600;
 
 /// What the artefact endpoint answers.
@@ -575,7 +575,7 @@ pub async fn submit_answers(
         {
             return Err(AppError::Validation(format!(
                 "{max_attempts} attempts used. The lab reopens at {}. Go back \
-                 to the artefact — the questions have not changed",
+                 to the artefact - the questions have not changed",
                 ready_at.to_rfc3339()
             )));
         }

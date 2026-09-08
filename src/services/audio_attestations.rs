@@ -9,7 +9,7 @@
 //! nothing.
 //!
 //! The difference is the licence gate. In every other domain a provenance
-//! problem makes work weaker; here it makes it unusable — one untraced loop
+//! problem makes work weaker; here it makes it unusable - one untraced loop
 //! means a client cannot ship the track, and finds out months later. So a
 //! composition and a sound pack are not attested until the author has declared
 //! that the source list is complete. Refusing to issue is the honest
@@ -19,7 +19,7 @@
 //! A voice reel, an adaptive system and a programming contribution are not
 //! gated, and deliberately: none of them redistributes third-party material by
 //! nature, and gating them would make the declaration a formality people click
-//! through — which is exactly how a gate stops meaning anything.
+//! through - which is exactly how a gate stops meaning anything.
 //!
 //! ## `audio_project_credited` is issued by hand
 //!
@@ -127,7 +127,7 @@ async fn issue(
 
 /// Put the attestation on the public feed, if the person allows it.
 ///
-/// Best-effort and never fatal. The address is the one the work already had —
+/// Best-effort and never fatal. The address is the one the work already had -
 /// the public hosting URL when the author named one, the deliverable's own
 /// otherwise. A feed line with nothing to open is the fabricated social proof
 /// migration 0203 exists to replace, and in this domain "nothing to open"
@@ -182,7 +182,7 @@ async fn announce(
             subject_type: "user",
             subject_id: user_id,
             subject_label: &username,
-            headline: format!("{title} — {username}"),
+            headline: format!("{title} - {username}"),
             artifact_url: url,
             repository: None,
             amount: None,
@@ -221,7 +221,7 @@ async fn sources_are_declared(db: &PgPool, slice_id: Uuid) -> Result<bool, AppEr
 /// Issue whatever the verified work on this slice earns.
 ///
 /// Returns the bases actually issued, which is empty on a second pass and
-/// empty for work that earns none — both normal, neither an error.
+/// empty for work that earns none - both normal, neither an error.
 pub async fn issue_for_slice(db: &PgPool, slice_id: Uuid) -> Result<Vec<String>, AppError> {
     // The verified, unrevoked deliverable is the evidence. Without one there
     // is nothing to attest, whatever the slice claims about itself.
@@ -279,7 +279,7 @@ pub async fn issue_for_slice(db: &PgPool, slice_id: Uuid) -> Result<Vec<String>,
 /// Called from the proof orchestrator rather than from the point a slice is
 /// verified, and deliberately: the licence declaration usually arrives *after*
 /// verification, and hooking the verification alone would leave every
-/// composition permanently unattested — the dormant-engine failure P19 exists
+/// composition permanently unattested - the dormant-engine failure P19 exists
 /// to end.
 ///
 /// Bounded: somebody with more audio artefacts than this has a profile that
@@ -325,7 +325,7 @@ pub async fn issue_for_user(db: &PgPool, user_id: Uuid) -> Result<Vec<String>, A
 ///
 /// `allows_stored_objects` is FALSE even though audio deliverables are
 /// routinely five-gigabyte session files with no free home elsewhere. A
-/// featuring does not point at a session file — it points at where the work
+/// featuring does not point at a session file - it points at where the work
 /// can be heard, and an `s3://` link would mean the proof is a copy we made.
 const EDITORIAL: crate::services::artefact_attestations::Domain =
     crate::services::artefact_attestations::Domain {
@@ -342,7 +342,7 @@ const EDITORIAL: crate::services::artefact_attestations::Domain =
 /// the weekly featuring recorded the row and fell through to a match arm that
 /// did nothing. So an audio creator put forward by the community got the
 /// announcement and no attestation, and the term on their profile stayed at
-/// zero — visible only as an absence, which is why it survived two domains.
+/// zero - visible only as an absence, which is why it survived two domains.
 pub async fn featured_audio_creator(
     db: &PgPool,
     user_id: Uuid,
@@ -378,7 +378,7 @@ pub async fn featured_audio_creator(
 /// only way to know is that a person followed the link. `evidence_url` is that
 /// link, and it is stored on the attestation so a reader can follow it too.
 ///
-/// The caller is responsible for the permission check — this is reached
+/// The caller is responsible for the permission check - this is reached
 /// through an endpoint guarded by `audio_reviewer:*`.
 pub async fn issue_credit(
     db: &PgPool,

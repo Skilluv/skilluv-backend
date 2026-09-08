@@ -1,4 +1,4 @@
-//! P26 v2 Phase D — validator workflow for `project_slices`.
+//! P26 v2 Phase D - validator workflow for `project_slices`.
 //!
 //! The validation step advances a challenge from CI-green PR to Skilluv
 //! success. A validator (holder of `challenge_validator:{domain}`, see
@@ -15,7 +15,7 @@
 //! - Approve is idempotent from the validator's perspective: calling it
 //!   twice with the same holder is a no-op; changing holder mid-flight
 //!   fails.
-//! - Reject records the reason but does not persist a history table —
+//! - Reject records the reason but does not persist a history table -
 //!   the last reason is enough for the frontend to render feedback; a
 //!   fuller audit table would be over-engineering for Phase 1 dogfooding.
 
@@ -30,12 +30,12 @@ use crate::models::ProjectSlice;
 
 type HmacSha256 = Hmac<Sha256>;
 
-/// SKI-90 — SHA-256-HMAC over the approval tuple. `JWT_SECRET`-keyed so
+/// SKI-90 - SHA-256-HMAC over the approval tuple. `JWT_SECRET`-keyed so
 /// the hash cannot be forged from DB read-only access.
 ///
 /// Kept pure (no I/O) for easy unit-testing. `validated_at` is the
 /// timestamp the caller decided on (usually `Utc::now()` inside
-/// `approve`) — the same input must be persisted alongside the hash to
+/// `approve`) - the same input must be persisted alongside the hash to
 /// keep verification deterministic later.
 pub fn compute_attestation_hash(
     jwt_secret: &str,
@@ -124,7 +124,7 @@ pub async fn approve(
     // Compute now() ONCE so the hash matches the row's validated_at.
     let now = chrono::Utc::now();
 
-    // Load the URL first — the hash needs it and we want to fail early
+    // Load the URL first - the hash needs it and we want to fail early
     // if the slice is not in a shape we can attest.
     let existing: Option<(Option<String>,)> =
         sqlx::query_as("SELECT submitted_pr_url FROM project_slices WHERE id = $1")
@@ -165,7 +165,7 @@ pub async fn approve(
         )
     })?;
 
-    // SKI-114 (M-08) — append-only decision journal. Enables exact
+    // SKI-114 (M-08) - append-only decision journal. Enables exact
     // approve/reject counts and per-decision latency without relying on
     // the mutable pickup fields on the slice.
     let _ = sqlx::query(
@@ -180,7 +180,7 @@ pub async fn approve(
     .execute(db)
     .await;
 
-    // SKI-91 — trigger the proof engine for the challenger so ranks,
+    // SKI-91 - trigger the proof engine for the challenger so ranks,
     // capabilities, and badges recompute against the freshly validated
     // challenge. Best-effort: a hook failure must not roll back the
     // approval itself (the challenger's success is already persisted).
@@ -273,7 +273,7 @@ pub async fn reject(
         )
     })?;
 
-    // SKI-114 (M-08) — journal the reject with the reason.
+    // SKI-114 (M-08) - journal the reject with the reason.
     let _ = sqlx::query(
         r#"
         INSERT INTO slice_validation_decisions

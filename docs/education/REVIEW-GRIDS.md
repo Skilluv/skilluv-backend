@@ -30,7 +30,7 @@ genuinely differ, so there are three onboarding guides and two grids, and both
 are right.
 
 Curriculum design does not merge into teaching, because a programme is judged
-on whether somebody *else* could run it — a question a reviewer answers by
+on whether somebody *else* could run it - a question a reviewer answers by
 reading facilitator notes rather than by watching anybody teach.
 
 `education_reviewer:all` reaches both families.
@@ -50,7 +50,7 @@ Two of the eight can refuse a delivery on their own:
   separately and is never offered as evidence.
 - **Learner data handled.** Names, faces, marks and messages anonymised or
   carrying explicit consent, and nothing identifiable about a minor at all. A
-  delivery that exposes a learner is refused whatever else it does — this is
+  delivery that exposes a learner is refused whatever else it does - this is
   not a score, it is a condition of publication.
 
 The other six: objectives stated and met; the level was right; learners did
@@ -68,7 +68,7 @@ sequence as somebody who does not know the subject.
 
 **Evidence that is not a proxy.** Attendance is not learning. Hours taught is
 not learning. A satisfaction average is not learning. The criterion asks for a
-before and after, a completed project, or a measured assessment — and asks how
+before and after, a completed project, or a measured assessment - and asks how
 it was measured.
 
 **Whether a second person could deliver it.** Timings, what to cut when it
@@ -82,7 +82,7 @@ handed in says so, and that is a return rather than a low score.
 
 A grid is not a mark out of ten. Each criterion is read against what the
 `looks_like` text describes, and a reviewer says what they saw. A submission
-that meets every criterion but one is not "almost validated" — it is a
+that meets every criterion but one is not "almost validated" - it is a
 submission with one thing to fix, named.
 
 The score exists to make a review arguable. Two assessors reading the same

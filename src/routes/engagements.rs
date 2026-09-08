@@ -1,11 +1,11 @@
-//! Teams for hire — studios, engagements, milestones, beta programmes.
+//! Teams for hire - studios, engagements, milestones, beta programmes.
 //!
 //! Three audiences again, and the split is load-bearing:
 //!
 //!   * the **client** briefs, follows milestones, and accepts them;
 //!   * **Skilluv** staffs the team, reviews before the client sees anything,
 //!     and closes;
-//!   * the **talent** answers for themselves — a share is an offer, and
+//!   * the **talent** answers for themselves - a share is an offer, and
 //!     nobody is put on paid work without saying yes.
 //!
 //! Milestone review is the one step with no client-facing route at all. It
@@ -27,7 +27,7 @@ use crate::services::{beta_programs, engagements};
 
 pub fn engagement_routes() -> Router<AppState> {
     Router::new()
-        // Public — what a client can see before signing anything.
+        // Public - what a client can see before signing anything.
         .route("/studios", get(list_studios))
         .route("/studios/{id}", get(read_studio))
         .route("/beta-programs/open", get(open_programs))
@@ -54,7 +54,7 @@ pub fn engagement_routes() -> Router<AppState> {
             "/enterprise/beta-programs/{id}/testers/{user_id}/review",
             post(review_feedback),
         )
-        // Talent — their own answer, through their own session.
+        // Talent - their own answer, through their own session.
         .route("/engagements/{id}/respond", post(respond))
         .route("/beta-programs/{id}/join", post(join_program))
         .route("/beta-programs/{id}/feedback", post(submit_feedback))
@@ -456,7 +456,7 @@ pub async fn staff(
     let engagement = engagements::by_id(&state.db, id).await?;
     let studio_id = engagement.studio_id.ok_or_else(|| {
         AppError::Validation(
-            "no studio is attached to this engagement — add the members individually, or \
+            "no studio is attached to this engagement - add the members individually, or \
              book a studio"
                 .into(),
         )

@@ -7,13 +7,13 @@ that were asked for and are not built.
 
 ## What is hosted: one Juice Shop, shared
 
-`ctf.skill-uv.com` — one OWASP Juice Shop instance, shared, reset nightly.
+`ctf.skill-uv.com` - one OWASP Juice Shop instance, shared, reset nightly.
 
 ### Why one and not one per person
 
 Because one is a container and per-person is a system. The per-person version
 needs a Docker socket mounted into an application container, dynamic Traefik
-routing, a wildcard certificate, a spawn quota, network isolation and a reaper —
+routing, a wildcard certificate, a spawn quota, network isolation and a reaper -
 which is a fortnight of somebody's time and a permanent operational surface, for
 a range whose whole purpose is to be broken.
 
@@ -30,7 +30,7 @@ Shared has two real costs, and both are acceptable:
 
 | | |
 |---|---|
-| Image | `bkimminich/juice-shop` — pin a tag, do not track `latest` |
+| Image | `bkimminich/juice-shop` - pin a tag, do not track `latest` |
 | Port | 3000 internal, published through Traefik on 443 |
 | Domain | `ctf.skill-uv.com`, CNAME through Cloudflare |
 | Certificate | Traefik ACME, HTTP-01 |
@@ -38,7 +38,7 @@ Shared has two real costs, and both are acceptable:
 | CPU | 0.5 |
 | Restart | `unless-stopped` |
 
-**Environment**: none required. Do not set `NODE_ENV=production` — Juice Shop
+**Environment**: none required. Do not set `NODE_ENV=production` - Juice Shop
 disables some challenges when it is set.
 
 ### The nightly reset
@@ -51,7 +51,7 @@ docker restart skilluv-juice-shop
 
 A restart is enough: Juice Shop keeps its state in an in-memory database that
 is rebuilt on boot. Progress is per browser session, so a reset costs anybody
-mid-way through a challenge their session — which is why it runs at 04:00 and
+mid-way through a challenge their session - which is why it runs at 04:00 and
 is written on the range's own page.
 
 ### Isolation, which is the part not to skip
@@ -95,13 +95,13 @@ Not built. The proposal was JupyterHub with Wireshark, Volatility and pandas
 preinstalled, so that somebody with nothing installed could start.
 
 It is a good idea and it is a second authentication surface, a second thing to
-patch, and per-user containers again — for a barrier that is real but lower
+patch, and per-user containers again - for a barrier that is real but lower
 than it looks: the defensive labs are text and captures, and `tshark` plus
 Python is a ten-minute install on any operating system.
 
 The intermediate step, which is built: the onboarding wizard asks what somebody
 can actually run (`security_lab_setup`), and `browser_only` is one of the
-answers. What that unlocks today is the hosted material — the PortSwigger
+answers. What that unlocks today is the hosted material - the PortSwigger
 Academy, TryHackMe, the reading. What it does not unlock is the defensive labs,
 and that is a real gap, stated rather than papered over.
 
@@ -123,7 +123,7 @@ challenges. Two requirements:
 2. **You know the flags**, because you planted them. See `CTF-AUTHORING.md` for
    why this is the line that decides everything else.
 
-Anything you do *not* host — a retired machine, a public dataset — is linked and
+Anything you do *not* host - a retired machine, a public dataset - is linked and
 carries a human-checked challenge instead. Do not rehost somebody else's
 licensed material to make the verification easier.
 
@@ -133,7 +133,7 @@ Two things worth an alert:
 
 - **The range being down**, because a challenge with an unreachable target
   looks like a broken platform. `/api/health` on the backend does not cover
-  it — check the range's own root separately.
+  it - check the range's own root separately.
 - **The range's egress**, if you can. Traffic from that container to anywhere
   other than the public internet means the isolation has broken.
 

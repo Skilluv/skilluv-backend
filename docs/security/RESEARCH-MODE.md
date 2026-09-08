@@ -26,8 +26,8 @@ curl -X POST https://api.skill-uv.com/api/security/research-token \
 API key is: a dump of that table must not hand somebody else the raised
 ceiling.
 
-You have one live token at a time. Asking for another replaces it — recorded as
-`superseded` — because two live tokens means a revocation that does not stop the
+You have one live token at a time. Asking for another replaces it - recorded as
+`superseded` - because two live tokens means a revocation that does not stop the
 traffic, which is the one thing this is for.
 
 ## Use it
@@ -100,7 +100,7 @@ one that never fires. The cost of a false positive is one request:
 curl -X POST https://api.skill-uv.com/api/security/research-token …
 ```
 
-If you are hitting it repeatedly, tell us — either the threshold is wrong for
+If you are hitting it repeatedly, tell us - either the threshold is wrong for
 what you are doing, or what you are doing is a load test.
 
 ## Revoking it yourself
@@ -109,7 +109,7 @@ what you are doing, or what you are doing is a load test.
 curl -X DELETE https://api.skill-uv.com/api/security/research-token -b "$COOKIE"
 ```
 
-Do this if you think the token has leaked — into a shared Burp project file, a
+Do this if you think the token has leaked - into a shared Burp project file, a
 screenshot, a paste. It is not a credential to your account and it is still
 attributable to you, which means somebody else's traffic under your token is
 your name in the log.
@@ -117,7 +117,7 @@ your name in the log.
 ## What we see
 
 Every request under a token is logged with `security_research=true`, your user
-id, and the handle you declared. Use is counted in batches — the count on the
+id, and the handle you declared. Use is counted in batches - the count on the
 token row is approximate on purpose, because the whole point of the token is to
 permit a great many requests and an exact figure would mean a database write
 per request.
@@ -128,12 +128,12 @@ for a reason other than volume, you will hear why.
 
 ## Where the implementation is
 
-- `src/services/security_research.rs` — issue, verify, revoke, the volume rule.
-- `src/middleware/security_research.rs` — the request-scoped resolution.
-- `src/middleware/rate_limit.rs` — where the multiplier is applied.
+- `src/services/security_research.rs` - issue, verify, revoke, the volume rule.
+- `src/middleware/security_research.rs` - the request-scoped resolution.
+- `src/middleware/rate_limit.rs` - where the multiplier is applied.
 
 It is resolved through a task-local rather than a request extension, because
 `RateLimiter::check` is called from a hundred handlers and never sees a request.
 Threading an extractor through all of them would be ninety-nine correct edits
-and one that gets forgotten — and the one that gets forgotten keeps the low
+and one that gets forgotten - and the one that gets forgotten keeps the low
 ceiling silently.

@@ -48,7 +48,7 @@ impl SessionService {
 
     /// If the incoming request already carries a `refresh_token` cookie for
     /// this user, revoke that prior session. Called from every login handler
-    /// before minting a new session — otherwise the browser overwrites the
+    /// before minting a new session - otherwise the browser overwrites the
     /// cookie but the DB row stays `revoked_at IS NULL`, and every fresh
     /// login for the same account visibly accumulates a ghost row in the
     /// user's "active sessions" list.
@@ -139,7 +139,7 @@ impl SessionService {
         if let Some(prev) = previous
             && constant_time_eq(&presented_hash, &prev)
         {
-            // REUSE — a token we already rotated away has just been replayed.
+            // REUSE - a token we already rotated away has just been replayed.
             // Best defense: revoke the whole family of sessions for this user.
             sqlx::query(
                 "UPDATE user_sessions SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL",

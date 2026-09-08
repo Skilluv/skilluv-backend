@@ -1,12 +1,12 @@
 //! Routes HTTP pour les tracks + eligibility (Phase P3).
 //!
 //! Endpoints :
-//!   GET   /api/tracks                        — liste des tracks actifs (public)
-//!   GET   /api/tracks/{slug}                 — détail d'un track (public)
-//!   POST  /api/tracks/{slug}/enroll          — s'enroller (auth requis)
-//!   GET   /api/tracks/{slug}/progress        — progression du user courant (auth)
-//!   GET   /api/users/me/tracks               — tous les tracks d'un user (auth)
-//!   GET   /api/challenges/{id}/eligibility   — le user courant peut-il start ? (auth)
+//!   GET   /api/tracks                        - liste des tracks actifs (public)
+//!   GET   /api/tracks/{slug}                 - détail d'un track (public)
+//!   POST  /api/tracks/{slug}/enroll          - s'enroller (auth requis)
+//!   GET   /api/tracks/{slug}/progress        - progression du user courant (auth)
+//!   GET   /api/users/me/tracks               - tous les tracks d'un user (auth)
+//!   GET   /api/challenges/{id}/eligibility   - le user courant peut-il start ? (auth)
 //!
 //! Voir docs/challenges-target-model-and-roadmap.md sections 5.5 et B.10-11.
 
@@ -56,7 +56,7 @@ pub struct TrackProgressResponse {
     pub progress: TrackProgress,
 }
 
-/// Enriched view of a user's track — the `slug` / `title` are joined
+/// Enriched view of a user's track - the `slug` / `title` are joined
 /// from the `tracks` table so the front doesn't need an N+1 lookup to
 /// render the "My tracks" dashboard tile.
 #[derive(Debug, Serialize, ToSchema)]
@@ -83,7 +83,7 @@ pub struct EligibilityResponse {
 // Tracks : lecture publique
 // ═══════════════════════════════════════════════════════════════════
 
-/// List every active track. Public — no auth required.
+/// List every active track. Public - no auth required.
 #[utoipa::path(
     get,
     path = "/api/tracks",
@@ -228,7 +228,7 @@ pub async fn my_tracks(
 // Éligibilité pour démarrer un challenge (DAG check)
 // ═══════════════════════════════════════════════════════════════════
 
-/// Check whether the current user can start a given challenge — walks
+/// Check whether the current user can start a given challenge - walks
 /// the prerequisite DAG and reports missing required + recommended
 /// prerequisites separately.
 #[utoipa::path(

@@ -36,8 +36,8 @@ use crate::errors::AppError;
 /// Which basis a quality artefact supports, from what it is.
 ///
 /// `a11y_audit` has its own rather than folding into the usability one. They
-/// are different methods against different references — one is a protocol with
-/// participants, the other is a standard with numbered criteria — and the only
+/// are different methods against different references - one is a protocol with
+/// participants, the other is a standard with numbered criteria - and the only
 /// thing they share is that a person did the work rather than a tool.
 pub fn basis_for_subtype(subtype: &str) -> Option<&'static str> {
     match subtype {
@@ -153,7 +153,7 @@ async fn issue(
 /// Best-effort and never fatal. A feed line with nothing behind it is the
 /// fabricated social proof migration 0203 exists to replace, and in this
 /// domain "nothing to open" would mean a claim about testing that a reader
-/// cannot check — which is the one thing this domain sells against.
+/// cannot check - which is the one thing this domain sells against.
 async fn announce(
     db: &PgPool,
     user_id: Uuid,
@@ -198,7 +198,7 @@ async fn announce(
             subject_type: "user",
             subject_id: user_id,
             subject_label: &username,
-            headline: format!("{title} — {username}"),
+            headline: format!("{title} - {username}"),
             artifact_url: url,
             repository: None,
             amount: None,
@@ -220,7 +220,7 @@ async fn announce(
 /// Issue whatever the verified work on this slice earns.
 ///
 /// Returns the bases actually issued, which is empty on a second pass and
-/// empty for work that earns none — both normal, neither an error.
+/// empty for work that earns none - both normal, neither an error.
 pub async fn issue_for_slice(db: &PgPool, slice_id: Uuid) -> Result<Vec<String>, AppError> {
     // The verified, unrevoked deliverable is the evidence. Without one there
     // is nothing to attest, whatever the slice claims about itself.
@@ -279,7 +279,7 @@ pub async fn issue_for_slice(db: &PgPool, slice_id: Uuid) -> Result<Vec<String>,
 /// Called from the proof orchestrator rather than from the point a slice is
 /// verified, and deliberately: a fix confirmation usually arrives *after*
 /// verification, and hooking the verification alone would leave every
-/// confirmed defect permanently unattested — the dormant-engine failure P19
+/// confirmed defect permanently unattested - the dormant-engine failure P19
 /// exists to end.
 ///
 /// Bounded: somebody with more quality artefacts than this has a profile that
@@ -371,7 +371,7 @@ mod tests {
     fn every_subtype_the_schema_allows_earns_something() {
         // The list is migration 0450's CHECK. A subtype added there and
         // forgotten here would produce artefacts that verify and never attest
-        // — silently, and only visible as a profile that stays empty.
+        // - silently, and only visible as a profile that stays empty.
         for subtype in [
             "test_plan",
             "test_automation",

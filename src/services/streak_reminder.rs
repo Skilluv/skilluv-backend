@@ -8,7 +8,7 @@
 //! ## What "at risk" means
 //!
 //! A streak breaks when a day passes with no contribution. So the reminder
-//! goes to people whose last activity was *yesterday* — they still have a
+//! goes to people whose last activity was *yesterday* - they still have a
 //! streak, and today is the day it ends. Someone active today needs
 //! nothing; someone whose last activity was two days ago has already lost
 //! it, and being told so is a notification about a failure, which nobody
@@ -35,7 +35,7 @@ const MAX_PER_RUN: usize = 100_000;
 
 #[derive(Debug, Default, Clone, serde::Serialize)]
 pub struct ReminderReport {
-    /// True when the ceiling was hit — people at risk who were not told.
+    /// True when the ceiling was hit - people at risk who were not told.
     pub truncated: bool,
     pub at_risk: usize,
     pub sent: usize,
@@ -92,7 +92,7 @@ pub async fn run(db: &PgPool) -> Result<ReminderReport, AppError> {
             // Database only: the reminder is a push and an in-app record, and
             // the sweep has no email service. A person who opted the email on
             // explicitly gets it from the delivery below only if a context with
-            // one is supplied — which is why this runs from the app, not a
+            // one is supplied - which is why this runs from the app, not a
             // standalone binary.
             let outcome = crate::services::notify::send(
                 crate::services::notify::Ctx::db_only(db),

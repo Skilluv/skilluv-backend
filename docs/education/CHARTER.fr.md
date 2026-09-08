@@ -32,7 +32,7 @@ Non admissible :
 - un parcours que personne n'a animé ;
 - quoi que ce soit qui nomme un apprenant.
 
-La différence n'est pas la difficulté. C'est la vérifiabilité — et, dans ce
+La différence n'est pas la difficulté. C'est la vérifiabilité - et, dans ce
 domaine, la possibilité même de publier.
 
 ## 2. Il faut que quelqu'un ait appris quelque chose
@@ -61,13 +61,13 @@ l'enseignement.
 
 Les règles, et elles ne se négocient pas :
 
-- **Anonymiser à la source.** Pas avant de publier — avant d'écrire. Un
+- **Anonymiser à la source.** Pas avant de publier - avant d'écrire. Un
   document qui a contenu des noms et dont on les a retirés est un document où
   quelqu'un doit être certain de les avoir tous eus.
 - **Agréger.** Un chiffre de complétion est un décompte. Une ligne n'est
   jamais une personne.
 - **Consentement écrit pour tout ce qui est attribué.** Un témoignage sans
-  consentement ne peut pas être stocké — le schéma de la plateforme le refuse,
+  consentement ne peut pas être stocké - le schéma de la plateforme le refuse,
   plutôt que de compter sur la mémoire de quiconque.
 - **Mineurs : rien.** Pas de nom, pas d'image, pas de voix, pas
   d'échantillon de travail, pas d'évaluation. Un apprenant de moins de 18 ans

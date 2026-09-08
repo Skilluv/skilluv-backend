@@ -1,4 +1,4 @@
-//! P15.1 — Mobile push (FCM + APNS) sur user_push_tokens.
+//! P15.1 - Mobile push (FCM + APNS) sur user_push_tokens.
 //!
 //! Complète le Web Push existant (services/push_sender.rs pour VAPID browsers).
 //! Le trait est similaire au pattern mobile_money : impls concrètes stubbed
@@ -207,7 +207,7 @@ fn get_provider(platform: Platform) -> Box<dyn MobilePushProvider> {
 
 /// Push best-effort à tous les devices d'un user. Retourne les outcomes par device.
 ///
-/// Appelé par [`crate::services::notify`] en background — les échecs n'impactent
+/// Appelé par [`crate::services::notify`] en background - les échecs n'impactent
 /// pas la notification DB principale.
 pub async fn push_to_user_mobile(
     db: &PgPool,

@@ -42,7 +42,7 @@ has been executed as written.
 
 **Everything borrowed is attributed.** Text, screenshots, data, code excerpts,
 figures. With a reachable link. An unattributed paragraph is not a weaker
-piece — it is one the platform cannot publish, in the same way an untraced
+piece - it is one the platform cannot publish, in the same way an untraced
 sample makes an audio delivery unusable.
 
 **A paid partnership is declared at the top.** Not in a footer, not in a
@@ -59,7 +59,7 @@ audio. Contrast that survives a phone in daylight.
 
 A resource part of your audience cannot consume was not published for that
 audience. On a platform built for a continent where most people read on a
-phone over an unreliable connection, this is not an accommodation — it is the
+phone over an unreliable connection, this is not an accommodation - it is the
 main case.
 
 ## 4. Generative tools
@@ -89,8 +89,8 @@ would be a statement about its speakers rather than about the translation.
 ## 6. What ownership means here
 
 You keep the rights to what you write, unless a commission says otherwise in
-writing before the work starts. A mission states its licensing scope — what
-the client may do with it — separately from its IP terms, because a writer who
+writing before the work starts. A mission states its licensing scope - what
+the client may do with it - separately from its IP terms, because a writer who
 keeps the copyright still has to know whether the client may syndicate it or
 run it under somebody else's byline.
 
@@ -103,6 +103,6 @@ published before you submit; you can read it, and you should.
 
 What a validation says is narrow and exact: this person produced this
 artefact, and a competent reader of the trade found it sound. It does not say
-the piece was popular, and it never will — an audience figure is a portfolio
+the piece was popular, and it never will - an audience figure is a portfolio
 entry, marked as fetched or declared, and it is not what an attestation rests
 on.

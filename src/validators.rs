@@ -15,7 +15,7 @@ pub const MAX_AVATAR_BYTES: usize = 2 * 1024 * 1024;
 ///
 /// The authority is the `skill_domains` table (migration 0500), and this is a
 /// mirror of the rows where `is_active`. It exists because eight modules
-/// validated a domain against a list of their own — three of which had gone
+/// validated a domain against a list of their own - three of which had gone
 /// stale, so `ai` was accepted by the skill tree and refused by the explore
 /// filter for a year.
 ///
@@ -45,7 +45,7 @@ pub const SKILL_DOMAINS: &[&str] = &[
 /// The guard below stays a `&[&str]`: it runs on the request path against a
 /// string that arrived as a string, and converting to an enum to compare would
 /// buy nothing. This exists for the document, which described every one of
-/// these parameters as `string` — so a generated client offered no completion,
+/// these parameters as `string` - so a generated client offered no completion,
 /// and the contract fuzzer read a correct 400 as a defect, because by the
 /// document `"0"` was a valid domain.
 ///
@@ -73,7 +73,7 @@ pub enum SkillDomain {
 /// A body field cannot borrow the enum's schema the way a query parameter
 /// does: the handler reads the value as a `String` and hands it to
 /// [`validate_skill_domain`], so the type stays `String` and only the document
-/// needs the list. Written by hand it was a fourth copy — and it had gone
+/// needs the list. Written by hand it was a fourth copy - and it had gone
 /// stale at the original four domains, so the published contract refused
 /// `audio`, `leadership` and five others the server accepts. Emitting the
 /// values from the constant is what stops the fifth copy from existing.
@@ -274,7 +274,7 @@ pub fn check_range_opt(
 ///   - character count (not byte length) between `min` and `max`.
 ///
 /// Every field whose OpenAPI schema declares that pattern MUST route
-/// through this helper — otherwise `negative_data_rejection` will catch
+/// through this helper - otherwise `negative_data_rejection` will catch
 /// the drift (server accepts what the schema rejects) and
 /// `positive_data_acceptance` will catch over-strict server rules.
 pub fn validate_bounded_line(
@@ -304,7 +304,7 @@ pub fn validate_bounded_line(
     Ok(())
 }
 
-/// Optional variant of `validate_bounded_line` — skips checks when the
+/// Optional variant of `validate_bounded_line` - skips checks when the
 /// field is `None`, applies them when `Some`.
 pub fn validate_bounded_line_opt(
     value: Option<&str>,
@@ -355,7 +355,7 @@ mod tests {
     //
     // It used to read a CHECK constraint out of migration 0243 at compile
     // time. Migration 0400 made the domains rows, and a domain becomes active
-    // in whichever later migration gives it a catalogue — 0401 for audio — so
+    // in whichever later migration gives it a catalogue - 0401 for audio - so
     // no single file holds the answer any more. A compile-time test reading
     // one of them is worse than none: it fails for the wrong reason and gets
     // silenced.
@@ -512,7 +512,7 @@ mod tests {
             .collect();
         assert_eq!(
             documented, SKILL_DOMAINS,
-            "SkillDomain and SKILL_DOMAINS have drifted — a parameter now              documents a value the guard refuses, or refuses one it documents"
+            "SkillDomain and SKILL_DOMAINS have drifted - a parameter now              documents a value the guard refuses, or refuses one it documents"
         );
 
         // And each one really deserializes, which is what proves the snake_case

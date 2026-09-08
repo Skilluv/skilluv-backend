@@ -1,4 +1,4 @@
-//! Enterprise B2B SSO — OIDC config CRUD + login flow.
+//! Enterprise B2B SSO - OIDC config CRUD + login flow.
 //!
 //! Endpoints:
 //! - POST   /api/enterprise/sso/config           (owner) upsert IdP config
@@ -292,7 +292,7 @@ type SsoClient = CoreClient<
 /// Shared reqwest client for OIDC discovery + token exchange (openidconnect 4).
 fn oidc_http_client() -> Result<openidconnect::reqwest::Client, AppError> {
     openidconnect::reqwest::ClientBuilder::new()
-        // Follow redirects only when explicit — protects against SSRF via 3xx.
+        // Follow redirects only when explicit - protects against SSRF via 3xx.
         .redirect(openidconnect::reqwest::redirect::Policy::none())
         .build()
         .map_err(|e| AppError::Internal(format!("oidc http client init: {e}")))
@@ -363,7 +363,7 @@ pub async fn start(
         pkce_verifier: pkce_verifier.secret().to_string(),
         nonce: nonce.secret().to_string(),
     };
-    // We key our Redis state by the CSRF token — the IdP echoes it back on callback.
+    // We key our Redis state by the CSRF token - the IdP echoes it back on callback.
     let mut redis = state.redis.clone();
     let key_token = csrf.secret().to_string();
     let payload = serde_json::to_string(&login_state)
@@ -438,7 +438,7 @@ pub async fn callback(
         .ok_or_else(|| AppError::Validation("IdP did not return an email claim".into()))?
         .to_string();
 
-    // Refuse unverified emails — critical: matches how we treat OAuth signups.
+    // Refuse unverified emails - critical: matches how we treat OAuth signups.
     if !claims.email_verified().unwrap_or(false) {
         return Err(AppError::Forbidden);
     }

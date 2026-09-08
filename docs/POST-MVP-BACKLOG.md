@@ -1,4 +1,4 @@
-# Post-MVP backlog — enhancements & product moats
+# Post-MVP backlog - enhancements & product moats
 
 **Statut au 2026-07-15**
 
@@ -7,17 +7,17 @@ Backend architecturalement complet (25 phases livrées). Ce doc liste les
 MVP / lancement bêta**, mais qui peuvent transformer Skilluv d'un
 "backend complet" en **plateforme différenciante** post-lancement.
 
-**Chaque item est déjà scoppé pour être livrable en ≤ 1 sprint (5-10j)** — pas
+**Chaque item est déjà scoppé pour être livrable en ≤ 1 sprint (5-10j)** - pas
 de refactor architectural nécessaire, tout branche sur les 3 axes user
 existants (skills / orientations / capabilities).
 
 ## Comment lire ce backlog
 
-- **Tier 1 — Quick wins engagement** : petits ajouts, gros retour engagement.
+- **Tier 1 - Quick wins engagement** : petits ajouts, gros retour engagement.
   Idéal M+1 à M+3 post-lancement pour prouver l'itération produit.
-- **Tier 2 — Product moats** : effort moyen, transforme un utilisateur "de
+- **Tier 2 - Product moats** : effort moyen, transforme un utilisateur "de
   passage" en "engagé long-terme". Cible M+3 à M+9.
-- **Tier 3 — Ambitious** : nécessitent design produit + parfois DB
+- **Tier 3 - Ambitious** : nécessitent design produit + parfois DB
   refactor. Cible M+9 à M+18, dépend d'analytics utilisateurs.
 
 Chaque entrée porte un **contract testable** : "après avoir livré, un
@@ -25,14 +25,14 @@ utilisateur peut faire X et le système démontre Y".
 
 ---
 
-## Tier 1 — Quick wins engagement
+## Tier 1 - Quick wins engagement
 
 ### 1.1 Bookmarks / favoris
 
 **Effort** : 2-3 jours. **Valeur** : ***
 
 **Contract** : un user peut sauvegarder challenges, projets, users
-(mentors), teams, deliverables inspirants — accès via `/api/users/me/bookmarks`.
+(mentors), teams, deliverables inspirants - accès via `/api/users/me/bookmarks`.
 
 **Design** :
 - Table polymorphe `bookmarks(user_id, target_type, target_id, folder_slug, notes, created_at)`.
@@ -93,7 +93,7 @@ plateformes similaires (Duolingo streak-goals, Strava challenges).
 
 ---
 
-### 1.4 Historique d'apprentissage — timeline visuelle
+### 1.4 Historique d'apprentissage - timeline visuelle
 
 **Effort** : 2-3 jours (backend), + design frontend. **Valeur** : **
 
@@ -117,7 +117,7 @@ lisible au portfolio statique.
 
 ---
 
-## Tier 2 — Product moats
+## Tier 2 - Product moats
 
 ### 2.1 Cohorts / groupes d'étude temporaires
 
@@ -133,7 +133,7 @@ collectives.
   max_members, orientation_slug, created_by, is_public)`.
 - `cohort_members(cohort_id, user_id, joined_at, role IN
   ('member','organizer'))`.
-- `cohort_milestones(cohort_id, title, target_date, description)` —
+- `cohort_milestones(cohort_id, title, target_date, description)` -
   livrables collectifs.
 - Chat de groupe : réutilise `dm` étendu à group_dm (`group_id` nullable
   sur messages).
@@ -186,7 +186,7 @@ Learning / Coursera qui sont isolés.
 **Effort** : 8-10 jours. **Valeur** : *** (avec risque)
 
 **Contract** : un user peut lier son GitHub / Medium / talks passés à
-son profil Skilluv comme **signaux externes** — visibles mais
+son profil Skilluv comme **signaux externes** - visibles mais
 **clairement distincts** des preuves Skilluv (immuables).
 
 **Design** :
@@ -196,7 +196,7 @@ son profil Skilluv comme **signaux externes** — visibles mais
   + user confirmation pour blogs.
 - **Rendu UI distinct** : "Preuves Skilluv" (badges P17 immuables) vs
   "Signaux externes" (soft evidence, verifiable manually).
-- **NE PAS** compter vers `weighted_proven_count` ou rank promotion —
+- **NE PAS** compter vers `weighted_proven_count` ou rank promotion -
   la règle "prouvé sur Skilluv" reste sacrée.
 
 **Prérequis** : GitHub OAuth (existant), design UX pour distinguer les
@@ -238,7 +238,7 @@ savoir → pas de célébration = pas d'attachement.
 
 ---
 
-## Tier 3 — Ambitious (product design nécessaire avant)
+## Tier 3 - Ambitious (product design nécessaire avant)
 
 ### 3.1 IA compagnon d'apprentissage disclosed
 
@@ -247,7 +247,7 @@ savoir → pas de célébration = pas d'attachement.
 **Contract** : un user peut demander à l'IA Skilluv (via
 `skilluv-ia` gRPC) : "explique-moi cette PR review", "génère 3
 exercices sur ce skill", "revois mon code avant que je le soumette
-en review" — le tout **loggé** dans `deliverables.verification_signal`
+en review" - le tout **loggé** dans `deliverables.verification_signal`
 si code final soumis.
 
 **Design** :
@@ -270,16 +270,16 @@ Autant l'intégrer proprement.
 **Risques** :
 - Dépendance forte à skilluv-ia (Python service).
 - Coûts LLM peuvent exploser.
-- Ligne fine entre "aide" et "triche" — dépend du cadre disclosure.
+- Ligne fine entre "aide" et "triche" - dépend du cadre disclosure.
 
 ---
 
-### 3.2 Marketplace inversé — talents proposent leur temps
+### 3.2 Marketplace inversé - talents proposent leur temps
 
 **Effort** : 2-3 semaines. **Valeur** : ***
 
 **Contract** : un talent (rank ≥ Artisan) peut afficher "je propose
-2h/semaine pour du pair-programming Rust senior" — visible aux users
+2h/semaine pour du pair-programming Rust senior" - visible aux users
 qui cherchent ce skill, gratuit ou payant selon config.
 
 **Design** :
@@ -302,7 +302,7 @@ du revenu passif pour les Artisans+.
 
 **Effort** : 3-4 semaines. **Valeur** : **
 
-**Contract** : un user Doyen peut "vouch" pour un junior — mettre sa
+**Contract** : un user Doyen peut "vouch" pour un junior - mettre sa
 propre rank en jeu ("si ce user commet une fraude dans les 6 mois, je
 perds une rank temporairement"). Vouching visible = accélère la
 crédibilité du junior.
@@ -316,7 +316,7 @@ crédibilité du junior.
 **Prérequis** : mentor capability P18, rank system P17.4, admin
 process anti-abus.
 
-**Pourquoi ça compte** : résout le cold-start problem des juniors —
+**Pourquoi ça compte** : résout le cold-start problem des juniors -
 comment un utilisateur zéro-preuve peut-il être crédible ? Solution :
 un senior met sa peau au jeu. Signal fort pour recruteurs.
 
@@ -349,14 +349,14 @@ Diablo).
 
 ## Ce qu'on ne fera JAMAIS (par design produit)
 
-- **Certifications payantes** — contredit "talents ne payent pas".
-- **NFT / crypto attestations** — attestations Skilluv sont
+- **Certifications payantes** - contredit "talents ne payent pas".
+- **NFT / crypto attestations** - attestations Skilluv sont
   vérifiables cryptographiquement mais restent hors-chain.
-- **Sponsored content dans le feed** — le feed est piloté par
+- **Sponsored content dans le feed** - le feed est piloté par
   pertinence, pas par $$.
-- **AI-only auto-grading** sans peer/mentor review — contredit
+- **AI-only auto-grading** sans peer/mentor review - contredit
   "human_verified > auto".
-- **Multi-account allowed** — un user = une identité (anti-fraude
+- **Multi-account allowed** - un user = une identité (anti-fraude
   P14.4).
 
 ---

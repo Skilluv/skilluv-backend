@@ -1,8 +1,8 @@
 //! Game jams (migration 0581).
 //!
 //! A jam is a tournament with a theme, a deadline and community voting across
-//! several axes. It reuses the tournament machinery — participants, ranks, the
-//! podium — rather than reinventing it, and adds only what a jam needs on top:
+//! several axes. It reuses the tournament machinery - participants, ranks, the
+//! podium - rather than reinventing it, and adds only what a jam needs on top:
 //! the theme and its axes, the axis votes, and the post-mortem a submission
 //! carries. Concluding a jam ranks it through [`crate::services::tournament`]
 //! and then issues the jam attestations.
@@ -232,7 +232,7 @@ pub async fn submit(
     Ok(submission_id)
 }
 
-/// Cast — or change — a vote on one axis of one submission. One vote per person
+/// Cast - or change - a vote on one axis of one submission. One vote per person
 /// per axis (migration 0581); a second overwrites the first.
 pub async fn vote(
     db: &PgPool,
@@ -300,7 +300,7 @@ pub struct FinalizeReport {
 
 /// Close a jam: score every submission by its average vote, rank the field
 /// through the tournament layer, and issue the jam attestations. Idempotent
-/// enough to re-run — scoring and attestations both converge — but the
+/// enough to re-run - scoring and attestations both converge - but the
 /// tournament refuses a second conclusion, which is caught and treated as done.
 pub async fn finalize(db: &PgPool, jam_id: Uuid) -> Result<FinalizeReport, AppError> {
     let jam = get(db, jam_id).await?;
@@ -340,7 +340,7 @@ pub async fn finalize(db: &PgPool, jam_id: Uuid) -> Result<FinalizeReport, AppEr
         .await?;
     }
 
-    // Rank the field. A jam already concluded is not an error here — the
+    // Rank the field. A jam already concluded is not an error here - the
     // attestations below are idempotent and worth re-running.
     match tournament::conclude_tournament(db, jam.tournament_id).await {
         Ok(_) => {}
@@ -351,7 +351,7 @@ pub async fn finalize(db: &PgPool, jam_id: Uuid) -> Result<FinalizeReport, AppEr
     let issued = crate::services::game_attestations::finalize_jam_attestations(db, jam_id).await?;
 
     // Recompute the proof of everyone who took part, so ranks and badges follow
-    // the jam in the same pass — best-effort per participant.
+    // the jam in the same pass - best-effort per participant.
     for s in &scored {
         let members = participant_members(db, &s.participant_type, s.participant_id).await?;
         for m in members {

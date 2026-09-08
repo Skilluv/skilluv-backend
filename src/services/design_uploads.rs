@@ -9,7 +9,7 @@
 //!
 //! The bytes never pass through this process. Five gigabytes through an axum
 //! handler on a small VPS is how an API falls over, and it falls over for
-//! everybody at once — one upload holds a connection and a buffer for as long
+//! everybody at once - one upload holds a connection and a buffer for as long
 //! as somebody's rural connection takes to push a Blender scene.
 //!
 //! It is also what makes the upload resumable without any bookkeeping: a part
@@ -19,7 +19,7 @@
 //! ## Deployment requirement: the bucket must expose the ETag (SKI-309)
 //!
 //! `complete` needs the ETag the store returned for each part. The PUT goes
-//! straight from the browser to the object store — cross-origin — and a browser
+//! straight from the browser to the object store - cross-origin - and a browser
 //! can only read a response header the store lists in `Access-Control-Expose-
 //! Headers`. If `ETag` is not in that list, `response.headers.get('ETag')` is
 //! `null` even though the part uploaded perfectly, and `complete` can never be
@@ -52,7 +52,7 @@
 //! machine this project cannot afford, to produce a still frame that the
 //! person who made the file could pick better than any heuristic.
 //!
-//! The backlog already concedes the principle for After Effects — nothing can
+//! The backlog already concedes the principle for After Effects - nothing can
 //! parse an `.aep`, so a preview MP4 is required alongside. [`REQUIRES_PREVIEW`]
 //! applies that rule to every subtype whose source a browser cannot open.
 
@@ -78,7 +78,7 @@ pub const PART_SIZE: i64 = 16 * 1024 * 1024;
 
 /// The most parts S3 allows in one multipart upload.
 ///
-/// Checked at `init`, and it never fires at the ceilings above — even the
+/// Checked at `init`, and it never fires at the ceilings above - even the
 /// five-gigabyte ones are three hundred parts. It is here because the
 /// ceilings are ours to change and this limit is not.
 pub const MAX_PARTS: i64 = 10_000;
@@ -87,7 +87,7 @@ pub const MAX_PARTS: i64 = 10_000;
 ///
 /// Six hours. Long enough for a large file on a slow connection, short enough
 /// that a URL found in a log tomorrow is worthless. A client that runs out
-/// asks for the remaining parts again — which is the same call it makes to
+/// asks for the remaining parts again - which is the same call it makes to
 /// resume.
 pub const PART_URL_TTL_SECONDS: u32 = 6 * 60 * 60;
 
@@ -196,8 +196,8 @@ fn part_count_for(bytes: i64) -> i64 {
 /// Where the object lands.
 ///
 /// Under the private bucket rather than a new public one. A design deliverable
-/// can be under NDA — `docs/design/DATA-GOVERNANCE.md` describes the private
-/// deliverable case — so the default has to be "readable through a presigned
+/// can be under NDA - `docs/design/DATA-GOVERNANCE.md` describes the private
+/// deliverable case - so the default has to be "readable through a presigned
 /// URL", which is what the private bucket already is. A second bucket would
 /// have added a configuration knob whose only correct value is the same
 /// policy.
@@ -212,8 +212,8 @@ fn preview_key_for(session_id: Uuid) -> String {
 /// Strip anything that would let a filename escape its prefix or confuse a
 /// content-disposition header.
 ///
-/// Not a security boundary on its own — the key is built from a UUID we chose
-/// — but a filename containing `../` or a newline is a filename that will
+/// Not a security boundary on its own - the key is built from a UUID we chose -
+/// but a filename containing `../` or a newline is a filename that will
 /// eventually be interpolated somewhere it should not be.
 fn sanitise(filename: &str) -> String {
     let cleaned: String = filename
@@ -539,8 +539,8 @@ pub async fn download_url(
 /// The upload, for somebody entitled to read it.
 ///
 /// Its owner, or a reviewer of a deliverable that references it. "Reviewer"
-/// means the same thing here as it does on a verdict — `admin`, `mentor`, or
-/// `domain_curator` for the task's domain — because a link handed to anybody
+/// means the same thing here as it does on a verdict - `admin`, `mentor`, or
+/// `domain_curator` for the task's domain - because a link handed to anybody
 /// who can name a UUID is not a gate, and because the whole reason to widen
 /// this is the review queue.
 ///
@@ -747,7 +747,7 @@ mod tests {
                 subtype.as_str()
             );
         }
-        // Sixteen megabytes is not what keeps us under the limit — five would
+        // Sixteen megabytes is not what keeps us under the limit - five would
         // too, at four times the round trips. It is the round trips.
         let five_gb = 5i64 * 1024 * 1024 * 1024;
         assert_eq!(part_count_for(five_gb), 320);
@@ -765,7 +765,7 @@ mod tests {
     fn a_filename_cannot_escape_its_prefix() {
         // The property, not the exact spelling: what matters is that nothing
         // survives that could climb out of the prefix or split a header.
-        // `../../etc/passwd` comes back as `_.._etc_passwd` — ugly and inert,
+        // `../../etc/passwd` comes back as `_.._etc_passwd` - ugly and inert,
         // which is the right trade.
         for hostile in [
             "../../etc/passwd",

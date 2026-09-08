@@ -521,7 +521,7 @@ digest:
 #
 # The community is francophone and anglophone both, and the bot used to be
 # neither on purpose: mostly English with four French strings that had drifted
-# in. Every message it sends now goes through here, resolved per person —
+# in. Every message it sends now goes through here, resolved per person -
 # their stored `preferred_language` when the account is linked, otherwise the
 # locale Discord attaches to the interaction.
 discord:
@@ -544,13 +544,13 @@ discord:
   no_contests: "No contest is open right now."
   no_featured: "Nobody has been featured here yet."
   no_profile: "No public profile called `{username}`."
-  # Slash command descriptions. Registered in both languages at once —
-  # `description_localized("fr", ...)` — so `/skilluv craft` explains itself in
+  # Slash command descriptions. Registered in both languages at once -
+  # `description_localized("fr", ...)` - so `/skilluv craft` explains itself in
   # French in the Discord menu without anybody switching a setting.
   #
   # Discord's 100-character limit applies to EVERY localisation, not only the
   # default. French runs 15-20% longer than English, so a translation that fits
-  # in English can still fail the whole registration — and `set_commands`
+  # in English can still fail the whole registration - and `set_commands`
   # replaces the entire tree, so one long string takes all of it down. That is
   # not hypothetical: it happened on this bot two days ago and left it serving
   # three subcommands out of nine. `every_command_description_fits_discord`

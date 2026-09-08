@@ -4,20 +4,20 @@
 //! rule that runs through all of them: **a claim about other people is
 //! checkable, or it is refused.**
 //!
-//!   * **redaction** — what can be shown of a document written inside an
+//!   * **redaction** - what can be shown of a document written inside an
 //!     organisation, declared by its author and confirmed by somebody else;
-//!   * **retrospectives** — not the hour in the room, the action items that
+//!   * **retrospectives** - not the hour in the room, the action items that
 //!     were still being closed three months later;
-//!   * **coordination** — what a document commits, and whether the people it
+//!   * **coordination** - what a document commits, and whether the people it
 //!     commits have said so;
-//!   * **cohorts** — who joined, who finished, and the denominator travelling
+//!   * **cohorts** - who joined, who finished, and the denominator travelling
 //!     with the rate.
 //!
 //! ## Why so much of this is somebody else's act
 //!
 //! Every other domain's proof can be produced alone: write the code, ship the
 //! module, find the defect. Leadership's cannot, and a domain that let it be
-//! would be a domain of unfalsifiable claims — which is what leadership
+//! would be a domain of unfalsifiable claims - which is what leadership
 //! credentials mostly are elsewhere.
 //!
 //! So the confirmations here are all done by a second person: the reviewer
@@ -107,7 +107,7 @@ pub async fn declare_redaction(db: &PgPool, user_id: Uuid, slice_id: Uuid) -> Re
 
     if updated.rows_affected() == 0 {
         return Err(AppError::Validation(
-            "declaring a redaction needs an anonymised leadership artefact you hold — \
+            "declaring a redaction needs an anonymised leadership artefact you hold - \
              a public document has nothing to declare and a confidential one publishes \
              nothing"
                 .into(),
@@ -153,7 +153,7 @@ pub async fn confirm_redaction(
 
 /// Record that an organisation took the proposal up.
 ///
-/// Only on a written decision, and only by the person who holds the slice —
+/// Only on a written decision, and only by the person who holds the slice -
 /// they are the one who can point at where it landed. The evidence URL is
 /// required unless the artefact is confidential, which the schema enforces
 /// and this repeats so the message is readable.
@@ -195,8 +195,8 @@ pub async fn record_adoption(
 
     if updated.rows_affected() == 0 {
         return Err(AppError::Validation(
-            "recording an adoption needs a written decision of yours, and — unless it \
-             is confidential — a link to where it landed"
+            "recording an adoption needs a written decision of yours, and - unless it \
+             is confidential - a link to where it landed"
                 .into(),
         ));
     }
@@ -232,7 +232,7 @@ const RETRO_SELECT: &str = r#"
 #[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 pub struct RetrospectiveInput {
     /// The slice this is filed under, when it is being submitted for review.
-    /// Absent for a retrospective recorded to carry its actions — somebody
+    /// Absent for a retrospective recorded to carry its actions - somebody
     /// tracking their own team's follow-through, which is a use worth
     /// allowing.
     #[serde(default)]
@@ -271,21 +271,21 @@ pub async fn record_retrospective(
             .is_empty()
     {
         return Err(AppError::Validation(
-            "an 'other' format says which — the shape decides what the notes can \
+            "an 'other' format says which - the shape decides what the notes can \
              contain, and a synthesis across two shapes compares different things"
                 .into(),
         ));
     }
     if !(2..=200).contains(&input.participants_count) {
         return Err(AppError::Validation(
-            "participants must be between 2 and 200 — a retrospective of one is a note \
+            "participants must be between 2 and 200 - a retrospective of one is a note \
              to self"
                 .into(),
         ));
     }
     if input.insights_md.trim().chars().count() < MIN_INSIGHTS_LEN {
         return Err(AppError::Validation(format!(
-            "the notes have to be at least {MIN_INSIGHTS_LEN} characters — a heading and \
+            "the notes have to be at least {MIN_INSIGHTS_LEN} characters - a heading and \
              three bullet points is a meeting that happened, not a retrospective that \
              was facilitated"
         )));
@@ -390,7 +390,7 @@ pub async fn add_action(
             .is_empty()
     {
         return Err(AppError::Validation(
-            "an action item has an owner — with nobody on it, it is an intention".into(),
+            "an action item has an owner - with nobody on it, it is an intention".into(),
         ));
     }
 
@@ -422,7 +422,7 @@ pub async fn add_action(
 /// Close an action item, or drop it with a reason.
 ///
 /// Dropping is not a lesser outcome. Deciding not to do something, in
-/// writing, with a reason, is a decision — the follow-through view counts it
+/// writing, with a reason, is a decision - the follow-through view counts it
 /// as resolved, because a rule that punished it would teach people to leave
 /// action items open forever instead.
 pub async fn resolve_action(
@@ -559,7 +559,7 @@ pub async fn link_project(
         .filter(|n| !n.is_empty());
     if matches!(input.link_kind.as_str(), "commits" | "depends_on") && note.is_none() {
         return Err(AppError::Validation(
-            "say what is being committed or depended on — a commitment nobody wrote \
+            "say what is being committed or depended on - a commitment nobody wrote \
              down is a commitment nobody can dispute"
                 .into(),
         ));
@@ -637,7 +637,7 @@ pub async fn acknowledge_link(
 
     updated.ok_or_else(|| {
         AppError::Validation(
-            "acknowledging needs a commitment somebody else's document makes — a weak \
+            "acknowledging needs a commitment somebody else's document makes - a weak \
              link asks nothing of you, and you cannot acknowledge your own"
                 .into(),
         )
@@ -916,7 +916,7 @@ mod tests {
     fn every_subtype_the_schema_allows_is_listed_here() {
         // `SUBTYPES` is what the reference endpoint publishes. A subtype in
         // the schema and not here is one no client offers, so nobody files
-        // it — and one here that earns nothing is worse.
+        // it - and one here that earns nothing is worse.
         for subtype in SUBTYPES {
             assert!(
                 crate::services::leadership_attestations::basis_for_subtype(subtype).is_some(),

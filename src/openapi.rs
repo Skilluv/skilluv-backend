@@ -4,10 +4,10 @@
 //! `#[utoipa::path(...)]` across the codebase and every DTO annotated with
 //! `#[derive(ToSchema)]`. The schema is exposed at :
 //!
-//!   - `GET  /api/openapi.json`  — raw JSON (consumed by schemathesis in CI)
-//!   - `GET  /api/docs`          — Swagger UI (interactive exploration)
+//!   - `GET  /api/openapi.json`  - raw JSON (consumed by schemathesis in CI)
+//!   - `GET  /api/docs`          - Swagger UI (interactive exploration)
 //!
-//! Contract testing lives in `.github/workflows/contract-test.yml` — it
+//! Contract testing lives in `.github/workflows/contract-test.yml` - it
 //! boots the API against a real Postgres, fetches `/api/openapi.json` and
 //! runs schemathesis property-based fuzzing to catch payload contract
 //! drifts between backend and front.
@@ -18,7 +18,7 @@
 //! 2. Ensure every request/response struct derives `utoipa::ToSchema`.
 //! 3. Register the handler in `paths(...)` and any bespoke DTOs in
 //!    `components(schemas(...))` below.
-//! 4. `cargo check` — the derive will yell about anything missing.
+//! 4. `cargo check` - the derive will yell about anything missing.
 //!
 //! Shared envelope types (`ApiResponse<T>`, `ErrorResponse`) live in
 //! `crate::api_response` and are pre-registered here.
@@ -34,7 +34,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
 
 /// Root OpenAPI document. Every route module contributes its own set of
 /// `#[utoipa::path]` handlers here via the `paths(...)` and `components(...)`
-/// arguments. Kept intentionally short — the real work happens in the
+/// arguments. Kept intentionally short - the real work happens in the
 /// per-handler annotations spread across `src/routes/`.
 #[derive(OpenApi)]
 #[openapi(
@@ -48,7 +48,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
     servers(
         // Paths in the spec already carry the `/api/` prefix (utoipa
         // `path = "/api/..."` on every handler). Base URLs here must NOT
-        // duplicate it — schemathesis / Swagger UI concatenate base + path
+        // duplicate it - schemathesis / Swagger UI concatenate base + path
         // literally, so `/api` here yielded `/api/api/...` 404s.
         (url = "/", description = "Same-origin (typical Coolify deploy)"),
         (url = "http://localhost:3001", description = "Local dev"),
@@ -93,7 +93,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         // ─── i18n ─────────────────────────────────────────────────
         crate::routes::i18n::list_locales,
         // ─── email preferences ────────────────────────────────────
-        // SKI-293 — the v2 routes under /users/me were shipped in SKI-287 and
+        // SKI-293 - the v2 routes under /users/me were shipped in SKI-287 and
         // never registered here, so the document advertised only the legacy
         // /auth/me pair, with a different payload shape. That is why the front
         // reported "two routes, two shapes".
@@ -256,8 +256,8 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         // them are the same ones whose reads were missing too.
         crate::routes::ai_companion::ask,
         // Admin and moderation surfaces added by SKI-295..301. They shipped
-        // with handlers and no OpenAPI entry, so the generated document — and
-        // any client built from it — omitted them; the read-endpoint sweep
+        // with handlers and no OpenAPI entry, so the generated document - and
+        // any client built from it - omitted them; the read-endpoint sweep
         // caught it once the suite actually ran.
         crate::routes::ai_companion::admin_stats,
         crate::routes::ai_companion::admin_user_interactions,
@@ -323,7 +323,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::vouchings::list_for_user,
         crate::routes::vouchings::list_mine,
         // And the forty with no annotation at all that the same widening
-        // turned up — reads and writes together, since the guard stopped
+        // turned up - reads and writes together, since the guard stopped
         // caring which verb a hidden route was hidden behind.
         crate::routes::apprentice_verifications::pick_questions,
         crate::routes::apprentice_verifications::submit,
@@ -649,7 +649,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::attestations::verify_attestation,
         crate::routes::attestations::issue_compagnonnage,
         crate::routes::attestations::revoke_attestation,
-        // SKI-292 — share card. Documented so the front knows the URL to put
+        // SKI-292 - share card. Documented so the front knows the URL to put
         // in `og:image` without reading the router.
         crate::routes::attestations_public::verify_og_card,
         // ─── push notifications ───────────────────────────────────
@@ -1221,7 +1221,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::admin_projects::get_project,
         crate::routes::admin_projects::patch_project,
         crate::routes::admin_projects::archive_project,
-        // SKI-111 — was absent from the spec entirely.
+        // SKI-111 - was absent from the spec entirely.
         crate::routes::admin_projects::project_stats,
         // ─── contact (interest + conversations) ──────────────────
         crate::routes::contact::send_interest,
@@ -1314,7 +1314,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::guild::kick_member,
         crate::routes::guild::leave_guild,
         crate::routes::guild::list_applications,
-        // SKI-289 — revocation was absent from the document entirely, which
+        // SKI-289 - revocation was absent from the document entirely, which
         // is why the front reported it as a missing endpoint.
         crate::routes::guild::revoke_invitation,
         crate::routes::guild::revoke_guild_invitation,
@@ -1444,12 +1444,12 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
             MetaInfo,
             SimpleMessage,
             ApiResponse<SimpleMessage>,
-            // SKI-291 — the profile page reads `github_repo_owner` /
+            // SKI-291 - the profile page reads `github_repo_owner` /
             // `github_repo_name` off these, so the shape has to be published.
             crate::services::projects::Project,
             crate::routes::projects::UserProjectsData,
             crate::routes::projects::UserProjectsResponse,
-            // SKI-293 — the decide contract was untyped, so the only way to
+            // SKI-293 - the decide contract was untyped, so the only way to
             // find the field name was to probe the running API.
             crate::routes::notification_preferences::KindPreference,
             crate::routes::notification_preferences::PreferencesData,
@@ -1462,7 +1462,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
             crate::routes::guild::DecidedApplicationData,
             crate::routes::guild::DecidedApplicationResponse,
             crate::services::guild::GuildApplication,
-            // SKI-293 — mention inbox, shipped in SKI-286 without a schema.
+            // SKI-293 - mention inbox, shipped in SKI-286 without a schema.
             crate::services::mentions::Mention,
             crate::services::mentions::MentionAuthor,
             crate::routes::mentions::MentionListResponse,
@@ -2050,7 +2050,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         (name = "enterprise",   description = "B2B credits, invoices, KYC, SSO"),
         (name = "wallet",       description = "Talent payouts (Stripe Connect, Momo)"),
         (name = "moderation",   description = "Community moderation surface"),
-        (name = "admin",        description = "Admin panel — requires 2FA + admin origin"),
+        (name = "admin",        description = "Admin panel - requires 2FA + admin origin"),
         (name = "webhooks",     description = "Inbound webhooks (Stripe, GitHub, Brevo)"),
         (name = "health",       description = "Liveness, readiness, metrics"),
     ),
@@ -2060,10 +2060,10 @@ pub struct ApiDoc;
 /// Security-scheme modifier. Registers the two auth mechanisms used across
 /// the API:
 ///
-/// - **`cookie_auth`**  — the HttpOnly `access_token` cookie set by
+/// - **`cookie_auth`**  - the HttpOnly `access_token` cookie set by
 ///   `/api/auth/login` and refreshed by `/api/auth/refresh`. Used by both
 ///   frontends (skilluv-frontend, skilluv-admin).
-/// - **`bearer_auth`** — API-key bearer token used by third parties on the
+/// - **`bearer_auth`** - API-key bearer token used by third parties on the
 ///   public API surface (`/api/v1/*`).
 ///
 /// Individual handlers reference these via `security(("cookie_auth" = []))`
@@ -2090,14 +2090,14 @@ impl Modify for CommonErrorResponsesAddon {
     fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
         use utoipa::openapi::response::ResponseBuilder;
 
-        // (status, description) — description bien lue par les IDE Swagger,
+        // (status, description) - description bien lue par les IDE Swagger,
         // pas critique pour la conformité schemathesis.
         const COMMON_ERRORS: &[(&str, &str)] = &[
             ("400", "Validation error / bad request payload"),
             ("401", "Authentication required or token invalid"),
-            ("403", "Forbidden — caller lacks the required capability"),
+            ("403", "Forbidden - caller lacks the required capability"),
             ("404", "Resource not found"),
-            ("409", "Conflict — resource state prevents the operation"),
+            ("409", "Conflict - resource state prevents the operation"),
             ("422", "Semantic validation error (well-formed but invalid)"),
             ("429", "Rate limit exceeded"),
             ("500", "Internal server error"),
@@ -2151,7 +2151,7 @@ impl Modify for SecurityAddon {
 ///
 /// SKI-57 (2026-08-10): default changed from "hidden in release" to
 /// "exposed by default, hide-out via `SKILLUV_HIDE_SWAGGER=1`". Skilluv
-/// wants a documented public API surface — external integrators land on
+/// wants a documented public API surface - external integrators land on
 /// `/api/docs` and read the schema. The old behaviour (hidden by default
 /// in release) meant no human could reach the UI in prod without an
 /// env-var change, which defeats the purpose of shipping utoipa.
@@ -2167,13 +2167,13 @@ where
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
     // Back-compat: old `SKILLUV_EXPOSE_SWAGGER=0` also hides. Silent
-    // migration — no deployer needs to change their env.
+    // migration - no deployer needs to change their env.
     let legacy_hide = std::env::var("SKILLUV_EXPOSE_SWAGGER")
         .map(|v| v == "0" || v.eq_ignore_ascii_case("false"))
         .unwrap_or(false);
     let expose_swagger = !(hide_swagger || legacy_hide);
 
-    // Only ONE of the two branches registers /api/openapi.json — either via
+    // Only ONE of the two branches registers /api/openapi.json - either via
     // SwaggerUi.url() (which serves both the UI and the spec) OR via a manual
     // route (spec only, no UI). Registering both simultaneously causes axum
     // to panic with 'Overlapping method route' the first time any test calls
@@ -2192,7 +2192,7 @@ where
 ///
 /// axum's `Json` extractor answers **415** when a request arrives without
 /// `Content-Type: application/json`, in our own error shape. No handler
-/// declares it, because no handler writes it — utoipa only sees what the
+/// declares it, because no handler writes it - utoipa only sees what the
 /// annotations say. So every endpoint taking a JSON body published a set of
 /// statuses it could step outside of, and a contract fuzzer is exactly the
 /// thing that notices: schemathesis 4.26.0 started reporting it on
@@ -2250,7 +2250,7 @@ mod tests {
     /// after the handler's function name, and neither is unique in a codebase
     /// this size: 51 structs collapsed onto 18 component names and 126
     /// handlers onto 56 operation ids, each collision quietly overwriting the
-    /// last. Nothing failed — the spec simply described the wrong endpoint,
+    /// last. Nothing failed - the spec simply described the wrong endpoint,
     /// and a client generated from it called something else.
     ///
     /// Both are one `#[schema(as = ...)]` or `operation_id = "..."` away from
@@ -2274,7 +2274,7 @@ mod tests {
         let clashes: Vec<_> = seen.iter().filter(|(_, v)| v.len() > 1).collect();
         assert!(
             seen.len() > 700,
-            "only {} operation ids read — the document is not being walked",
+            "only {} operation ids read - the document is not being walked",
             seen.len()
         );
         assert!(
@@ -2350,7 +2350,7 @@ mod tests {
 
         assert!(
             checked >= 4,
-            "only {checked} incoming `skill_domain` fields read — the document is not being walked"
+            "only {checked} incoming `skill_domain` fields read - the document is not being walked"
         );
         assert!(
             wrong.is_empty(),
@@ -2406,7 +2406,7 @@ mod tests {
     }
 
     /// The same defect on the schema side is invisible from the document
-    /// alone — the loser of a collision is simply absent. What is checkable is
+    /// alone - the loser of a collision is simply absent. What is checkable is
     /// that every component another part of the document points at exists.
     #[test]
     fn every_referenced_schema_is_defined() {

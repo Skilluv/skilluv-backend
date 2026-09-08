@@ -1,15 +1,15 @@
-//! P26 v2 SKI-120 — maintainer weekly digest.
+//! P26 v2 SKI-120 - maintainer weekly digest.
 //!
 //! External-repo maintainers can subscribe (double opt-in) to receive a
 //! weekly summary of Skilluv activity on their repos. Zero-spam policy:
 //!   - self-serve subscribe (no auto-subscription even when we detect
-//!     shadow contributions on their repo — see community-first policy)
+//!     shadow contributions on their repo - see community-first policy)
 //!   - confirm email must be clicked
 //!   - unsubscribe token in every digest email
 //!
 //! Background task runs every hour and picks all confirmed subscriptions
 //! whose `last_digest_at` is > 7 days old (or NULL). One-hour tick is
-//! precise enough — a maintainer subscribed on Wednesday can get their
+//! precise enough - a maintainer subscribed on Wednesday can get their
 //! first digest by Wednesday of the following week at the same hour.
 
 use sqlx::PgPool;
@@ -235,7 +235,7 @@ async fn render_and_send(
         .unwrap_or((0, 0, 0));
 
         sections.push(format!(
-            "<li><strong>{repo}</strong> — {} claimed, {} submitted, {} validated in the last {} days.</li>",
+            "<li><strong>{repo}</strong> - {} claimed, {} submitted, {} validated in the last {} days.</li>",
             stats.0, stats.1, stats.2, DIGEST_PERIOD_DAYS,
         ));
     }

@@ -1,4 +1,4 @@
-//! Corporate ambassadors — people who speak for a company under their own
+//! Corporate ambassadors - people who speak for a company under their own
 //! name.
 //!
 //! The thing being sold is somebody's credibility, which is why two rules
@@ -10,7 +10,7 @@
 //! posting.
 //!
 //! **Their own answer, always.** Nobody is entered into an ambassadorship on
-//! their behalf — not by an admin, not by the company. Lending a name is not
+//! their behalf - not by an admin, not by the company. Lending a name is not
 //! something a third party can consent to.
 //!
 //! ## The stipend
@@ -48,7 +48,7 @@ pub fn rank_clears(rank: &str, floor: &str) -> bool {
 
 /// What a month is worth, given what was delivered.
 ///
-/// Full when the expected number was met or exceeded — over-delivering does
+/// Full when the expected number was met or exceeded - over-delivering does
 /// not earn more, because the stipend is for being an ambassador and not for
 /// piece work. Below that, pro-rated: two of three pieces is two thirds.
 ///
@@ -246,7 +246,7 @@ pub async fn ambassadors(db: &PgPool, program_id: Uuid) -> Result<Vec<Ambassador
     Ok(rows)
 }
 
-/// Invite somebody. Checks the rank, and stops there — the answer is theirs.
+/// Invite somebody. Checks the rank, and stops there - the answer is theirs.
 pub async fn invite(db: &PgPool, program_id: Uuid, user_id: Uuid) -> Result<(), AppError> {
     let program = by_id(db, program_id).await?;
     if program.status != "recruiting" {
@@ -386,7 +386,7 @@ pub async fn activate(db: &PgPool, program_id: Uuid) -> Result<BigDecimal, AppEr
 
     // `renews_at` is the programme's own end date. `corporate_ambassador` is a
     // recurring product, and 0206 refuses a recurring row that does not say
-    // when — a renewal nobody was told to ask for is one that lapses because
+    // when - a renewal nobody was told to ask for is one that lapses because
     // nobody asked. The programme already knows the date; not passing it was
     // how the activation 500'd.
     let product_id: Uuid = sqlx::query_scalar(
@@ -584,7 +584,7 @@ pub async fn pay_month(
         .fetch_one(db)
         .await?;
 
-        // Charged once per month, on the first stipend paid for it — not once
+        // Charged once per month, on the first stipend paid for it - not once
         // per ambassador, which would multiply the fee by the cohort size.
         if already <= 1 {
             sqlx::query(
@@ -594,7 +594,7 @@ pub async fn pay_month(
             )
             .bind(program.enterprise_id)
             .bind(&program.management_monthly_fee)
-            .bind(format!("gestion {} — {month}", program.name))
+            .bind(format!("gestion {} - {month}", program.name))
             .execute(db)
             .await?;
         }

@@ -1,4 +1,4 @@
-//! SKI-44 (Post-MVP T3-01) — disclosed AI learning companion.
+//! SKI-44 (Post-MVP T3-01) - disclosed AI learning companion.
 //!
 //! See migration 0149 for why disclosure lives in its own table rather
 //! than in `ai_call_log`.
@@ -9,7 +9,7 @@
 //! independent ways, each covering a case the others miss:
 //!
 //!   * a **daily quota** per user ([`DAILY_QUOTA`]), counted from
-//!     `ai_interactions` — the durable record, so a Redis flush cannot
+//!     `ai_interactions` - the durable record, so a Redis flush cannot
 //!     hand someone a fresh allowance;
 //!   * a **burst limit** via the Redis rate limiter, so the daily quota
 //!     cannot be spent in ten seconds by a script;
@@ -21,7 +21,7 @@
 //! ## Availability
 //!
 //! `skilluv-ia` is a separate service and is a stub in some environments.
-//! Every failure mode — worker not connected, `Unimplemented`, timeout —
+//! Every failure mode - worker not connected, `Unimplemented`, timeout -
 //! is reported as [`AppError::ServiceUnavailable`] with the interaction
 //! still recorded, so the reason a learner got no answer is visible in the
 //! ledger rather than only in a log line.
@@ -82,7 +82,7 @@ pub struct AiInteraction {
     pub disclosed_on_deliverable_id: Option<Uuid>,
     pub disclosed_at: Option<chrono::DateTime<chrono::Utc>>,
     pub request_hash: Option<String>,
-    /// True when the answer came from the response cache — no worker call,
+    /// True when the answer came from the response cache - no worker call,
     /// no tokens. Migration 0444 explains why this is stored rather than
     /// inferred from `tokens_used`.
     pub cached: bool,
@@ -100,7 +100,7 @@ pub struct CompanionAnswer {
     pub items: Vec<CompanionItem>,
     pub disclosure_label: String,
     pub model_version: Option<String>,
-    /// True when served from cache — no LLM call was made and no quota was
+    /// True when served from cache - no LLM call was made and no quota was
     /// consumed.
     pub cached: bool,
     /// Companion calls left in the current 24h window.
@@ -231,8 +231,8 @@ impl<'a> RecordParams<'a> {
 }
 
 /// Record an interaction in the disclosure ledger. Best-effort on the
-/// caller's side is not acceptable here — an undisclosed AI interaction is
-/// exactly what this table exists to prevent — so errors propagate.
+/// caller's side is not acceptable here - an undisclosed AI interaction is
+/// exactly what this table exists to prevent - so errors propagate.
 pub async fn record(
     db: &PgPool,
     user_id: Uuid,
@@ -370,7 +370,7 @@ pub(crate) fn decode_cache(
     ))
 }
 
-/// SKI-298 (T3-01b) — operational projection of the companion.
+/// SKI-298 (T3-01b) - operational projection of the companion.
 ///
 /// The ticket's premise is that a feature whose cost can explode has no
 /// business shipping without a way to watch the cost. Everything here is
@@ -384,14 +384,14 @@ pub struct AdminStats {
     /// Requests that actually reached the worker and were billed.
     pub billed_calls: i64,
     pub cache_hits: i64,
-    /// Hits over (hits + billed calls). `None` when neither happened —
+    /// Hits over (hits + billed calls). `None` when neither happened -
     /// a rate of 0.0 on an empty window would read as "the cache is
     /// broken" rather than "nothing was asked".
     pub cache_hit_rate: Option<f64>,
     pub tokens_total: i64,
     pub refused_burst: i64,
     pub refused_daily_quota: i64,
-    /// Worker unreachable or erroring — the gRPC side of the story.
+    /// Worker unreachable or erroring - the gRPC side of the story.
     pub worker_failures: i64,
     pub distinct_users: i64,
     pub by_interaction_type: std::collections::BTreeMap<String, i64>,
@@ -544,7 +544,7 @@ mod unit {
         let b = request_hash("explain", "what is a borrow?", "", "", "", "fr");
         assert_eq!(a, b, "whitespace and casing must not split the cache");
 
-        // Code layout is meaningful — two differently-indented snippets are
+        // Code layout is meaningful - two differently-indented snippets are
         // different questions.
         let c1 = request_hash("pre_review", "check", "fn a() {}", "rust", "", "fr");
         let c2 = request_hash("pre_review", "check", "fn a() { }", "rust", "", "fr");
@@ -587,7 +587,7 @@ mod unit {
 
     #[test]
     fn hash_is_not_user_scoped() {
-        // Two learners asking the same question share one cache entry —
+        // Two learners asking the same question share one cache entry -
         // that is where the saving comes from.
         let a = request_hash("explain", "same question", "", "", "", "fr");
         let b = request_hash("explain", "SAME QUESTION", "", "", "", "fr");

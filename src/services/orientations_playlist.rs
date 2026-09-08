@@ -1,4 +1,4 @@
-//! P16.5 — Playlist d'onboarding pour une orientation.
+//! P16.5 - Playlist d'onboarding pour une orientation.
 //!
 //! Quand un user vient de choisir une orientation (P16.3), on veut lui
 //! proposer immédiatement une "prochaine étape" pertinente : un mini-parcours
@@ -81,7 +81,7 @@ pub async fn playlist_for(
           AND ct.status = 'published'
           -- Never the entry rite. It is `is_training` and published like any
           -- exercise, but it is the way in rather than something to be
-          -- suggested — and anybody reading a playlist has already done
+          -- suggested - and anybody reading a playlist has already done
           -- theirs. Before the twelve rites existed this filter had nothing to
           -- exclude, which is why it was not here.
           AND ct.is_onboarding = FALSE

@@ -1,10 +1,10 @@
-# Security — Discord structure
+# Security - Discord structure
 
 Backlog: security/O-04. The rows that make the routing work live in
 `discord_channels`, keyed on `skill_domains` since migration 0440, so a
 mistyped domain no longer routes an announcement nowhere.
 
-The channel ids are filled in by whoever creates the channels — this document is
+The channel ids are filled in by whoever creates the channels - this document is
 the plan and the reasoning, not the configuration.
 
 ---
@@ -29,8 +29,8 @@ the plan and the reasoning, not the configuration.
 | `#security-governance` | `security-governance` | `governance` |
 | `#security-purple` | `security-purple-team` | `purple-team` |
 
-Five channels for five trades. Unusual — most domains group by reviewer family
-and end up with fewer rooms than trades — and here the two coincide, for the
+Five channels for five trades. Unusual - most domains group by reviewer family
+and end up with fewer rooms than trades - and here the two coincide, for the
 reason the grids give: no two of these are read by the same person.
 
 ### Practice

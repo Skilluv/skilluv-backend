@@ -7,7 +7,7 @@
 
 ## En une phrase
 
-Un designer arrive avec un métier — n'importe lequel des vingt-six —, prend un
+Un designer arrive avec un métier - n'importe lequel des vingt-six -, prend un
 brief réel, le rend, reçoit une critique argumentée, le reprend, et repart avec
 une preuve qu'un inconnu peut vérifier.
 
@@ -28,7 +28,7 @@ Quatre conséquences, visibles dans les documents qui suivent :
 3. **Le droit de relire est accordé par famille.** Un typographe ne juge pas un
    brief de motion, et le code le refuse.
 4. **Les concours dotés séquestrent l'argent avant d'ouvrir.** C'est une
-   contrainte de base de données, pas une bonne intention — c'est la seule
+   contrainte de base de données, pas une bonne intention - c'est la seule
    chose qui sépare un concours du travail spéculatif.
 
 ## Les documents
@@ -46,7 +46,7 @@ Quatre conséquences, visibles dans les documents qui suivent :
 | [Vérifications automatiques](AUTO-CHECKS.md) | Ce que la machine dit d'une version, et ce qu'elle ne dira jamais. |
 | [Gouvernance](GOVERNANCE.md) | Qui décide quoi, et comment on conteste. |
 | [Propriété intellectuelle](IP-AND-COPYRIGHT.md) | Qui possède quoi. Concours, droit moral, éléments tiers, données personnelles. |
-| [Données personnelles](DATA-GOVERNANCE.md) | Ce qui est stocké, publié, supprimé — et ce qu'on peut mettre dans un portfolio. |
+| [Données personnelles](DATA-GOVERNANCE.md) | Ce qui est stocké, publié, supprimé - et ce qu'on peut mettre dans un portfolio. |
 | [Salons Discord](DISCORD-STRUCTURE.md) | La structure communautaire. |
 | [Lettre mensuelle](NEWSLETTER.md) | Le plan éditorial, et ce qui l'alimente. |
 
@@ -88,7 +88,7 @@ le contexte est public, et on peut voir la chose qu'on redessine sans demander
 un accès à personne.
 
 Trois des dix briefs Skilluv sont posés en concours plutôt qu'en travail
-individuel — le design system, le PDF d'attestation et la page de confiance —
+individuel - le design system, le PDF d'attestation et la page de confiance -
 parce que ce sont les trois où plusieurs réponses valent la peine d'être
 comparées.
 
@@ -98,7 +98,7 @@ comparées.
   n'entre dans aucun score. Un score qu'on peut faire monter en important une
   page cesse de vouloir dire « prouvé ici ».
 - **Noter automatiquement une proposition.** Des vérifications partielles
-  existent — contraste, poids, formats — et ne décident jamais d'un verdict.
+  existent - contraste, poids, formats - et ne décident jamais d'un verdict.
 - **Prendre une commission sur une dotation de concours.** Les entreprises
   payent, les talents non ; une commission prélevée sur un prix est de l'argent
   pris au lauréat.

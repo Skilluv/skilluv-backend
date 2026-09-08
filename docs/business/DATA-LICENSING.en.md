@@ -24,7 +24,7 @@ by name, never tied to an identifiable employer.
 
 **Individual profiles: only with the explicit consent** of the person
 concerned, with a share of the revenue for them (§4). Without that consent no
-profile leaves — not anonymised, not pseudonymised, not at all.
+profile leaves - not anonymised, not pseudonymised, not at all.
 
 ### The fourth category, the one that does not exist
 
@@ -40,14 +40,14 @@ innocuous.
 
 For anything touching an individual profile:
 
-- **explicit** — a box unticked by default, never consent inferred from
+- **explicit** - a box unticked by default, never consent inferred from
   signing up;
-- **informed** — the person sees which data, to which kind of buyer, and what
+- **informed** - the person sees which data, to which kind of buyer, and what
   they receive;
 - **revocable at any time**, with effect on licences in force: a buyer
   receiving updates stops receiving that row, and is contractually bound to
   delete it within thirty days;
-- **logged** — every licence granted is recorded and the person concerned is
+- **logged** - every licence granted is recorded and the person concerned is
   notified.
 
 Consent to a data licence is never a condition of access to anything else. A
@@ -59,7 +59,7 @@ talent who refuses keeps exactly the same functionality.
 
 ### Acceptable buyers
 
-- **Academic and public research** — free, in exchange for publishing the
+- **Academic and public research** - free, in exchange for publishing the
   results.
 - **Recruitment software vendors**, to enrich a product, with no resale.
 - **Financial institutions**, for aggregated market analysis.
@@ -70,11 +70,11 @@ talent who refuses keeps exactly the same functionality.
 
 Without discussion, and the list is in the contract:
 
-- **mass surveillance** — any purpose involving tracking people who are not
+- **mass surveillance** - any purpose involving tracking people who are not
   suspects;
-- **discrimination** — any use aimed at excluding on origin, nationality,
+- **discrimination** - any use aimed at excluding on origin, nationality,
   gender, age, health, orientation or membership;
-- **identification for a coercive measure** — immigration enforcement,
+- **identification for a coercive measure** - immigration enforcement,
   applying criminal law from skills data;
 - **resale**, in any form;
 - **training models** without specific and separate consent.
@@ -93,7 +93,7 @@ The rate depends on granularity: the more individual the data, the higher the
 share. A statistic where one person is one thousandth pays little; a profile
 named in a recruitment dataset pays more.
 
-The amounts are small — saying so is more honest than presenting it as an
+The amounts are small - saying so is more honest than presenting it as an
 income. What matters is not the sum, it is that **somebody's data never earns
 for the platform alone.**
 
@@ -116,7 +116,7 @@ In practice:
   is told to the person **before** they consent, not after they ask;
 - the public attestation is the exception: it is an issued proof whose whole
   point is verifiability. Its holder can revoke it, which makes it
-  unverifiable — but not retroactively erased from the places it was shown.
+  unverifiable - but not retroactively erased from the places it was shown.
 
 ---
 
@@ -157,7 +157,7 @@ delivered set.
 
 **A floor of thirty people.** No report, licence or statistic may rest on a
 smaller population. A "skills gap in Cotonou" chart drawn from four people
-names those four whatever its title says — and the commercial pressure runs
+names those four whatever its title says - and the commercial pressure runs
 exactly that way, which is why the floor is in the code and not in a style
 guide.
 
@@ -168,7 +168,7 @@ for a public research dataset; it is not for a sale.
 band published in section 4 remains 0.5–2%. The ceiling exists so a
 negotiation cannot write an absurd number, not to be reached.
 
-**The public API says nothing about somebody who agreed to nothing** — and
+**The public API says nothing about somebody who agreed to nothing** - and
 answers "not found" rather than "private". A directory built from refusals
 would be a directory of everybody who declined, which is still information
 they did not agree to share.

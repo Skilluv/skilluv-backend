@@ -4,8 +4,8 @@ La suite d'intégration n'a jamais eu besoin de Docker : elle a besoin d'un
 PostgreSQL et d'un Redis joignables. Le `docker-compose.yml` est une façon
 commode de les fournir, pas une dépendance.
 
-Sur une machine où Docker Desktop coûte cher — mémoire de pagination saturée,
-build tué en plein milieu — les services natifs font le même travail pour
+Sur une machine où Docker Desktop coûte cher - mémoire de pagination saturée,
+build tué en plein milieu - les services natifs font le même travail pour
 beaucoup moins.
 
 ---
@@ -26,7 +26,7 @@ des suites.
 ## Postgres natif
 
 Le harnais se connecte à une base `skilluv` avec le rôle `skilluv`, puis crée
-et supprime une base par test — il lui faut donc `CREATEDB`.
+et supprime une base par test - il lui faut donc `CREATEDB`.
 
 Une fois, en superutilisateur :
 
@@ -58,7 +58,7 @@ Pour ne pas le refaire à chaque session :
   'User')
 ```
 
-La variable existe précisément pour ça — le port par défaut est facile à
+La variable existe précisément pour ça - le port par défaut est facile à
 masquer, et le harnais fait des `CREATE DATABASE` / `DROP DATABASE` sur ce qui
 répond. Le pointer explicitement ne doit pas demander de modifier du code.
 

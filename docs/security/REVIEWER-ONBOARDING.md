@@ -6,7 +6,7 @@ confirmation is a public claim about somebody else's system.
 
 ## The two jobs, and why they are separate
 
-**Triage** — `security_triager`. You read the incoming queue and decide what is
+**Triage** - `security_triager`. You read the incoming queue and decide what is
 worth a reviewer's afternoon. Thirty reports a week, most of them not
 vulnerabilities: scanner output, out-of-scope hosts, missing headers with no
 impact, reports nobody could follow. You refuse them with a reason, and you pass
@@ -15,7 +15,7 @@ on the ones that are worth reproducing.
 You may **not** confirm a finding. Triage decides whether something deserves an
 hour; confirming asserts publicly that a vulnerability is real.
 
-**Review** — `security_reviewer:{family}`, one per trade. You reproduce, you
+**Review** - `security_reviewer:{family}`, one per trade. You reproduce, you
 confirm or refuse on the merits, you argue severity, you open rounds. Your name
 is on the confirmation.
 
@@ -30,8 +30,8 @@ not senior enough to judge a vulnerability. Both are worse than two grants.
 
 Evidence that you can tell a report from a complaint. In practice:
 
-- **Ten reports of your own**, filed anywhere — here, HackerOne, a project's
-  issue tracker — of which some were refused, with the refusals. The refusals
+- **Ten reports of your own**, filed anywhere - here, HackerOne, a project's
+  issue tracker - of which some were refused, with the refusals. The refusals
   matter more than the acceptances: somebody who has been told why their report
   was thin knows what thin looks like.
 - Or **experience triaging** in a programme, described concretely: roughly how
@@ -56,7 +56,7 @@ counts and needs a link.
 
 ### What is not asked
 
-An OSCP, a CISSP, a CEH, a degree, or five years. If you hold one, say so — it
+An OSCP, a CISSP, a CEH, a degree, or five years. If you hold one, say so - it
 is a real signal and it is not the gate. The gate is work somebody can read.
 
 ## How to apply
@@ -74,8 +74,8 @@ decision that appoints them.
 
 There is one per family, public before anybody submits
 (`docs/security/REVIEW-GRIDS.md`). Read the submission against it, in order.
-Every grid has at least one line that is a **check** rather than a judgement —
-does it replay, does the query fire, does the path hold — and doing that check
+Every grid has at least one line that is a **check** rather than a judgement -
+does it replay, does the query fire, does the path hold - and doing that check
 is most of the job.
 
 ### Write the reason
@@ -87,7 +87,7 @@ report next week, and is right to.
 ### Do not review what you are too close to
 
 If you reported it, you do not confirm it. If it is in code you wrote, say so
-and pass it on. The platform does not check this — it cannot — and it is the one
+and pass it on. The platform does not check this - it cannot - and it is the one
 thing that makes the whole record worth anything.
 
 ### Argue severity on the vector
@@ -99,8 +99,8 @@ An unexplained downgrade is the thing researchers leave a platform over.
 
 ### Open a proof file carefully
 
-Proof uploads are refused if they look executable — on the extension and on the
-first bytes — and **nothing is scanned for malware**. That is stated plainly
+Proof uploads are refused if they look executable - on the extension and on the
+first bytes - and **nothing is scanned for malware**. That is stated plainly
 rather than implied.
 
 Treat a proof file the way you would treat anything that arrived from a
@@ -111,7 +111,7 @@ PDF and a memory image are not text.
 ### Keep the embargo
 
 You will read details of unfixed vulnerabilities in live systems, including
-this one. They do not leave the review queue — not in a talk, not in a blog
+this one. They do not leave the review queue - not in a talk, not in a blog
 post, not in a private message to a friend who works there. The embargo is a
 promise the platform made the reporter, and you are the person keeping it.
 
@@ -127,4 +127,4 @@ keep doing it.
 You can hand it back at any time. It is revoked if you confirm something you
 reported, if you disclose something under embargo, or if the reasons you write
 stop being reasons. Each of those is a decision by an administrator, recorded
-with its own reason — the same standard as everything else here.
+with its own reason - the same standard as everything else here.

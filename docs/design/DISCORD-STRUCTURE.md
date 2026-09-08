@@ -1,4 +1,4 @@
-# Salons Discord — domaine Design
+# Salons Discord - domaine Design
 
 *Structure proposée pour la partie design du serveur. Elle suit celle du
 domaine code (`docs/code/DISCORD-STRUCTURE.md`) : mêmes conventions, mêmes
@@ -80,7 +80,7 @@ la personne concernée transforme une critique en tribunal.
 | --- | --- |
 | `Designer` | Toute personne ayant déclaré un métier design. |
 | `Relecteur design` | Détenteur d'une capacité `design_reviewer:*`. |
-| `Relecteur — {famille}` | Un rôle par famille, pour mentionner les bonnes personnes. |
+| `Relecteur - {famille}` | Un rôle par famille, pour mentionner les bonnes personnes. |
 | `Jury` | Détenteur de `jury_tournament`. |
 
 Les rôles suivent les capacités de la plateforme et ne s'accordent pas
@@ -98,8 +98,8 @@ Peu de choses, et jamais en mention automatique de tout le monde :
 
 **Ce que le bot n'annonce pas :** chaque version rendue, chaque validation,
 chaque badge. Un serveur où le bot parle plus que les gens est un serveur que
-les gens quittent. Les notifications individuelles ont déjà leurs canaux —
-in-app, e-mail, push — et Discord n'a pas à les répéter.
+les gens quittent. Les notifications individuelles ont déjà leurs canaux -
+in-app, e-mail, push - et Discord n'a pas à les répéter.
 
 ## Ce qu'on ne fait pas ici
 

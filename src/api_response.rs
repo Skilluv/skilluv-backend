@@ -3,15 +3,15 @@
 //! Every JSON handler in the codebase wraps its payload in `{ data, meta }`
 //! via a local `build_response()` helper. To make that envelope machine
 //! -documentable (schemathesis needs the *exact* response shape), we expose
-//! two generic wrappers here — `ApiResponse<T>` for 2xx and `ErrorResponse`
-//! for non-2xx — both deriving `utoipa::ToSchema`.
+//! two generic wrappers here - `ApiResponse<T>` for 2xx and `ErrorResponse`
+//! for non-2xx - both deriving `utoipa::ToSchema`.
 //!
 //! Handlers should return `Json<ApiResponse<MyPayload>>` (or refactored to
 //! typed payloads); their `#[utoipa::path]` annotation then references
 //! `body = ApiResponse<MyPayload>` and `body = ErrorResponse` on failure
 //! branches. See docs/BE-P1-CONTRACT-brief.md §5.
 //!
-//! Design choice: **Option A** from the brief — one generic envelope reused
+//! Design choice: **Option A** from the brief - one generic envelope reused
 //! everywhere, so the schema stays DRY and drift-proof.
 
 use serde::Serialize;
@@ -42,7 +42,7 @@ impl<T: ToSchema + Serialize> ApiResponse<T> {
 /// Envelope wrapper for every non-2xx JSON response emitted by `AppError`.
 ///
 /// Kept in sync with the shape produced by
-/// `impl IntoResponse for AppError` in `src/errors/codes.rs` — any change
+/// `impl IntoResponse for AppError` in `src/errors/codes.rs` - any change
 /// there must be mirrored here (contract tests will catch drift immediately).
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ErrorResponse {
@@ -51,7 +51,7 @@ pub struct ErrorResponse {
 }
 
 /// Machine-stable error payload. `code` is the canonical string documented
-/// in `docs/errors.md` (`AUTH_INVALID_CREDENTIALS`, `RATE_LIMITED`, …) —
+/// in `docs/errors.md` (`AUTH_INVALID_CREDENTIALS`, `RATE_LIMITED`, …) -
 /// frontends key their i18n and UX branching off it, so it must never
 /// break silently.
 #[derive(Debug, Serialize, ToSchema)]
@@ -59,7 +59,7 @@ pub struct ErrorObject {
     /// Stable business error code (see `AppError::error_code`).
     #[schema(example = "AUTH_INVALID_CREDENTIALS")]
     pub code: String,
-    /// Human-readable message. NOT to be shown verbatim to end users —
+    /// Human-readable message. NOT to be shown verbatim to end users -
     /// front performs i18n keyed on `code`.
     #[schema(example = "Invalid credentials")]
     pub message: String,
@@ -88,7 +88,7 @@ impl MetaInfo {
     }
 }
 
-/// SKI-111 — pagination block shared by every admin list endpoint.
+/// SKI-111 - pagination block shared by every admin list endpoint.
 ///
 /// The admin surface agreed on `{data, pagination, meta}` long ago (see
 /// `docs/OPENAPI_TYPING.md`); this is that block as a real schema, so the
@@ -107,7 +107,7 @@ pub struct Pagination {
     pub total_pages: Option<i64>,
 }
 
-/// SKI-111 — result of an admin action that changes state without
+/// SKI-111 - result of an admin action that changes state without
 /// returning a resource (publish, archive, revoke, rebuild…).
 ///
 /// Deliberately permissive: these handlers historically answered a small

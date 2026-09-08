@@ -1,10 +1,10 @@
-//! Playtests — the game domain's first-class evidence (migration 0580).
+//! Playtests - the game domain's first-class evidence (migration 0580).
 //!
 //! Every other domain validates on a reviewer's judgement and a passing build.
 //! Game does not accept "it runs and I like it": a game slice reaches
 //! `validated` only after real players have touched it. This module owns that
-//! rule — the gate of at least three playtests with an average fun score of
-//! three — because the same moment that meets it must also create the verified
+//! rule - the gate of at least three playtests with an average fun score of
+//! three - because the same moment that meets it must also create the verified
 //! deliverable, credit the fragments and issue the attestation, and a database
 //! trigger could do none of those.
 //!
@@ -75,7 +75,7 @@ pub struct OpenRecruitmentInput {
 }
 
 /// Open a call for playtesters on a slice. The build URL defaults to the
-/// slice's own playable URL. One open recruitment per slice at a time — the
+/// slice's own playable URL. One open recruitment per slice at a time - the
 /// exclusion constraint in 0580 enforces it; this turns the raw error into a
 /// sentence.
 pub async fn open_recruitment(
@@ -85,7 +85,7 @@ pub async fn open_recruitment(
 ) -> Result<Recruitment, AppError> {
     if input.brief_md.trim().is_empty() {
         return Err(AppError::Validation(
-            "tell testers what to look for — a recruitment needs a brief".into(),
+            "tell testers what to look for - a recruitment needs a brief".into(),
         ));
     }
     let wanted = input.testers_wanted.unwrap_or(3);
@@ -179,7 +179,7 @@ pub struct SubmitInput {
     pub would_play_again: bool,
 }
 
-/// Submit — or edit — a verdict on a slice. One per person per slice; a second
+/// Submit - or edit - a verdict on a slice. One per person per slice; a second
 /// submission updates the first, because a verdict is a verdict, not a ballot.
 /// A creator may not playtest their own slice.
 pub async fn submit(db: &PgPool, tester: Uuid, input: SubmitInput) -> Result<Playtest, AppError> {
@@ -245,7 +245,7 @@ pub async fn submit(db: &PgPool, tester: Uuid, input: SubmitInput) -> Result<Pla
 
     // Giving a playtest can cross the playtest-hero milestone and moves the
     // tester's own craft score (playtests_contributed). Recompute so it does
-    // not wait for the next sweep — best-effort.
+    // not wait for the next sweep - best-effort.
     if let Err(e) = crate::services::game_attestations::issue_playtest_hero(db, tester).await {
         tracing::warn!(user = %tester, error = %e, "playtest hero check failed");
     }
@@ -318,7 +318,7 @@ fn artifact_type_for_subtype(subtype: &str) -> &'static str {
 }
 
 /// Validate a game slice: the gate is met, a reviewer signs off, and the slice
-/// becomes a verified deliverable — fragments credited, skills propagated,
+/// becomes a verified deliverable - fragments credited, skills propagated,
 /// `game_artifact_validated` issued, the creator's proof recomputed. The same
 /// shape design uses (a reviewer's approval creates the verified deliverable),
 /// with the playtest gate in front of it.
@@ -363,7 +363,7 @@ pub async fn validate_slice(
     };
     let Some(creator) = slice.creator else {
         return Err(AppError::Validation(
-            "this is a team slice — validate it through the team composition flow".into(),
+            "this is a team slice - validate it through the team composition flow".into(),
         ));
     };
     if creator == reviewer_id {
@@ -376,7 +376,7 @@ pub async fn validate_slice(
     if !gate.meets_gate {
         return Err(AppError::Validation(format!(
             "a game slice needs at least {MIN_PLAYTESTS} playtests with an average fun \
-             score of {MIN_FUN_AVERAGE} before it is validated — it has {} at {:.1}",
+             score of {MIN_FUN_AVERAGE} before it is validated - it has {} at {:.1}",
             gate.playtests, gate.average_fun
         )));
     }
@@ -442,7 +442,7 @@ pub async fn validate_slice(
 
     tx.commit().await?;
 
-    // Attest and recompute — best-effort, outside the transaction, so a proof
+    // Attest and recompute - best-effort, outside the transaction, so a proof
     // hiccup never rolls back a validation that genuinely happened.
     if let Err(e) = crate::services::game_attestations::issue_for_slice(db, slice_id).await {
         tracing::warn!(slice = %slice_id, error = %e, "slice attestation failed after validate");

@@ -1,11 +1,11 @@
-//! P26.4 — Routes HTTP du sas compagnonnage débutant.
+//! P26.4 - Routes HTTP du sas compagnonnage débutant.
 //!
 //! Endpoints :
-//!   GET  /api/beginner/verifications/questions/{template_id}  — apprenti tire N questions
-//!   POST /api/beginner/verifications                          — apprenti soumet answers
-//!   GET  /api/beginner/verifications/mine                     — apprenti voit sa progression
-//!   GET  /api/beginner/verifications/queue                    — compagnon lit la file (cap-gated)
-//!   POST /api/beginner/verifications/{id}/verdict             — compagnon rend verdict (cap-gated)
+//!   GET  /api/beginner/verifications/questions/{template_id}  - apprenti tire N questions
+//!   POST /api/beginner/verifications                          - apprenti soumet answers
+//!   GET  /api/beginner/verifications/mine                     - apprenti voit sa progression
+//!   GET  /api/beginner/verifications/queue                    - compagnon lit la file (cap-gated)
+//!   POST /api/beginner/verifications/{id}/verdict             - compagnon rend verdict (cap-gated)
 
 use axum::extract::{Path, Query, State};
 use axum::routing::{get, post};
@@ -43,7 +43,7 @@ fn wrap(data: Value) -> Value {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Apprenti — tire N questions
+// Apprenti - tire N questions
 // ═══════════════════════════════════════════════════════════════════
 
 /// The questions drawn for one template. Drawn per request, so two
@@ -67,7 +67,7 @@ pub async fn pick_questions(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Apprenti — soumet answers
+// Apprenti - soumet answers
 // ═══════════════════════════════════════════════════════════════════
 
 /// Submit answers for a compagnon to look at.
@@ -92,7 +92,7 @@ pub async fn submit(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Apprenti — voit sa progression
+// Apprenti - voit sa progression
 // ═══════════════════════════════════════════════════════════════════
 
 /// The verifications the caller asked for, whatever state they reached.
@@ -109,7 +109,7 @@ pub async fn mine(State(state): State<AppState>, auth: AuthUser) -> Result<Json<
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Compagnon — file d'attente
+// Compagnon - file d'attente
 // ═══════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
@@ -149,7 +149,7 @@ pub async fn queue(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Compagnon — rend un verdict
+// Compagnon - rend un verdict
 // ═══════════════════════════════════════════════════════════════════
 
 /// Record a compagnon's verdict on a verification request.

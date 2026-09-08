@@ -73,7 +73,7 @@ fn build_refresh_cookie(session_id: Uuid, token: &str) -> String {
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct RegisterStartRequest {
-    /// Optional user-facing label ("MacBook Touch ID", "Yubikey 5C") — persisted at finish.
+    /// Optional user-facing label ("MacBook Touch ID", "Yubikey 5C") - persisted at finish.
     #[schema(max_length = 10000)]
     pub label: Option<String>,
 }
@@ -146,7 +146,7 @@ pub struct RegisterFinishRequest {
     #[schema(min_length = 20, max_length = 128)]
     pub ceremony_handle: String,
     /// WebAuthn attestation produced by the browser (fido2/webauthn spec).
-    /// Type serde_json::Value pour la meme raison que LoginFinishRequest —
+    /// Type serde_json::Value pour la meme raison que LoginFinishRequest -
     /// on parse manuellement dans le handler pour mapper les erreurs
     /// de deserialisation sur 401 plutot que 422.
     pub credential: serde_json::Value,
@@ -387,7 +387,7 @@ pub async fn login_start(
         .start_passkey_authentication(&passkeys)
         .map_err(|e| AppError::Internal(format!("start_passkey_authentication: {e}")))?;
 
-    // Bind the ceremony to this user_id — we look it up again at finish, we don't trust the client.
+    // Bind the ceremony to this user_id - we look it up again at finish, we don't trust the client.
     let mut redis = state.redis.clone();
     let handle = wa_state::stash_authentication(&mut redis, &auth_state).await?;
     let () = redis::AsyncCommands::set_ex(
@@ -513,7 +513,7 @@ pub async fn login_finish(
     let ua = headers.get("user-agent").and_then(|v| v.to_str().ok());
     // Label the session as webauthn so the JWT claim + user_sessions row
     // reflect the actual factor. Downstream gates (require_enterprise,
-    // AuthUserComplete) can then decide policy per method — today they treat
+    // AuthUserComplete) can then decide policy per method - today they treat
     // webauthn like password, but the labeling is a prerequisite for changing
     // that later without an audit rewrite.
     let access_token = AuthService::generate_access_token_with_method(

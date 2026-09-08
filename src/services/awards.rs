@@ -1,7 +1,7 @@
 //! The Skilluv Code Awards (migration 0190).
 //!
-//! An edition runs through four states — draft, nominations, voting,
-//! concluded — and each one permits exactly one thing. The rules that matter
+//! An edition runs through four states - draft, nominations, voting,
+//! concluded - and each one permits exactly one thing. The rules that matter
 //! (a nominee must be shortlisted, a vote must land in the right category, an
 //! edition must be open) live in triggers, because they are true regardless
 //! of which code path reaches the table. What lives here is the part a
@@ -59,7 +59,7 @@ pub struct Nominee {
 }
 
 /// The active award categories. With `domain`, the family's own categories
-/// plus the cross-cutting ones (`skill_domain IS NULL`) — a design page wants
+/// plus the cross-cutting ones (`skill_domain IS NULL`) - a design page wants
 /// both its awards and the platform-wide ones. Without it, everything.
 pub async fn categories(db: &PgPool, domain: Option<&str>) -> Result<Vec<Category>, AppError> {
     let rows = sqlx::query_as::<_, Category>(
@@ -153,14 +153,14 @@ pub async fn nominate(
         .ok_or_else(|| AppError::NotFound("edition not found".into()))?;
     if status != "nominations" {
         return Err(AppError::Validation(format!(
-            "this edition is {status} — nominations are closed"
+            "this edition is {status} - nominations are closed"
         )));
     }
 
     let citation = input.citation.trim();
     if citation.is_empty() {
         return Err(AppError::Validation(
-            "a nomination must say why — voters cannot weigh a name".into(),
+            "a nomination must say why - voters cannot weigh a name".into(),
         ));
     }
     crate::validators::check_max_len(citation, "citation", 2000)?;
@@ -245,7 +245,7 @@ pub async fn shortlist(db: &PgPool, nominee_ids: &[Uuid]) -> Result<u64, AppErro
 /// Cast a vote.
 ///
 /// The ballot is decided here, from the voter's capabilities at this moment,
-/// and then frozen on the row. A juror votes on both ballots — they are also
+/// and then frozen on the row. A juror votes on both ballots - they are also
 /// a member of the community, and pretending otherwise would silently remove
 /// eight people from the community count.
 pub async fn vote(

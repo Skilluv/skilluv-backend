@@ -2,7 +2,7 @@
 //!
 //! The Stripe transfer helper and the three Mobile Money implementations
 //! already existed; what was missing was a shared shape and a single place
-//! that decides which one to call. These adapters add no payment logic —
+//! that decides which one to call. These adapters add no payment logic -
 //! they translate, and nothing else.
 //!
 //! Adding FedaPay, FeexPay or PayPal means one more struct here plus a row in
@@ -143,8 +143,8 @@ impl PayoutProvider for MomoPayout {
                 // now and confirms later, over a webhook.
                 PayoutStatus::Pending => PayoutState::Pending,
                 PayoutStatus::Completed => PayoutState::Completed,
-                // `Unconfigured` never arrives here — the provider returns an
-                // error rather than a result when it holds no credentials —
+                // `Unconfigured` never arrives here - the provider returns an
+                // error rather than a result when it holds no credentials -
                 // but treating it as a rejection is the safe reading if it
                 // ever does.
                 PayoutStatus::Failed | PayoutStatus::Unconfigured => PayoutState::Rejected,
@@ -214,7 +214,7 @@ impl PayoutProvider for FedaPayPayout {
             status: match payout.status.as_str() {
                 "sent" => PayoutState::Completed,
                 "failed" => PayoutState::Rejected,
-                // `pending`, `started`, `processing` — accepted, settling.
+                // `pending`, `started`, `processing` - accepted, settling.
                 _ => PayoutState::Pending,
             },
             message: payout.message,
@@ -226,7 +226,7 @@ impl PayoutProvider for FedaPayPayout {
         Ok(Some(match status.as_str() {
             "sent" => PayoutState::Completed,
             "failed" => PayoutState::Rejected,
-            // `pending`, `started`, `processing` — still in flight.
+            // `pending`, `started`, `processing` - still in flight.
             _ => PayoutState::Pending,
         }))
     }
@@ -243,7 +243,7 @@ fn to_minor_units(amount: &BigDecimal, currency: Currency) -> Result<i64, AppErr
         Currency::Xof => {
             if amount.fractional_digit_count() > 0 && amount != &amount.with_scale(0) {
                 return Err(AppError::Validation(
-                    "XOF has no minor unit — amount must be a whole number of francs".into(),
+                    "XOF has no minor unit - amount must be a whole number of francs".into(),
                 ));
             }
             amount.clone()

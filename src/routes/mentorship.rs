@@ -1,4 +1,4 @@
-//! Mentorship — Phase 5.11.
+//! Mentorship - Phase 5.11.
 
 use axum::extract::{Path, Query, State};
 use axum::routing::{get, post, put};
@@ -38,7 +38,7 @@ pub fn mentorship_routes() -> Router<AppState> {
         .route("/mentorship/sessions/{id}/cancel", post(cancel_session))
         .route("/mentorship/sessions/{id}/complete", post(mark_completed))
         // The student's side of the same event. The mentor says "done", the
-        // student says "yes, it happened" — and that second word is what
+        // student says "yes, it happened" - and that second word is what
         // pays them without waiting out the week.
         .route("/mentorship/sessions/{id}/confirm", post(confirm_session))
         .route("/mentorship/sessions/{id}/review", post(submit_review))
@@ -224,7 +224,7 @@ pub async fn upsert_my_mentor_profile(
     let currency = body.currency.as_deref().unwrap_or("EUR").to_uppercase();
     if !matches!(currency.as_str(), "EUR" | "XOF") {
         return Err(AppError::Validation(
-            "currency must be EUR or XOF — the two the ledger settles".into(),
+            "currency must be EUR or XOF - the two the ledger settles".into(),
         ));
     }
     sqlx::query(
@@ -423,12 +423,12 @@ pub async fn book_session(
 
     // Which way of taking money reaches this payer, decided before anything is
     // written down. The session used to be inserted first and routed after, so
-    // a corridor we hold no credentials for left a `pending` row behind — and
+    // a corridor we hold no credentials for left a `pending` row behind - and
     // `pending` is one of the statuses the collision check above refuses to
     // book over. A payment we never took would quietly hold the mentor's hour.
     //
     // A card goes through Stripe; Mobile Money through FedaPay for the franc
-    // zone, which Stripe cannot serve at all — and which is how most people in
+    // zone, which Stripe cannot serve at all - and which is how most people in
     // Benin hold money.
     //
     // This used to build a fake `Pack` with a `Box::leak`ed slug, to squeeze
@@ -447,7 +447,7 @@ pub async fn book_session(
 
     // The mentor's own currency, which is what they announced and what they
     // will be paid. Everything below routes on it: XOF plus a phone number
-    // reaches Mobile Money, EUR reaches a card — which is the point of routing
+    // reaches Mobile Money, EUR reaches a card - which is the point of routing
     // on the currency rather than on a provider name.
     let currency: crate::services::ledger::Currency = mentor_currency.parse()?;
     let method = if currency == crate::services::ledger::Currency::Xof && phone.is_some() {
@@ -480,7 +480,7 @@ pub async fn book_session(
     .bind(platform_cut)
     // The mentor's own, not a hardcoded 'EUR'. Routing already reads the
     // mentor's currency, so a franc session was being charged in francs and
-    // recorded in euros — the same number meaning 12 000 F to the provider and
+    // recorded in euros - the same number meaning 12 000 F to the provider and
     // 120,00 € to every report that reads the row afterwards.
     .bind(currency.as_str())
     .bind(&body.mentee_notes)
@@ -508,7 +508,7 @@ pub async fn book_session(
             subject_id: inserted.0,
             amount: &amount,
             currency,
-            description: "Skilluv — session de mentorat",
+            description: "Skilluv - session de mentorat",
             success_url: &success_url,
             cancel_url: &cancel_url,
             idempotency_key: &idempotency_key,
@@ -662,7 +662,7 @@ pub async fn cancel_session(
                 tracing::warn!(
                     session_id = %id,
                     error = %e,
-                    "stripe refund failed — marking session cancelled anyway"
+                    "stripe refund failed - marking session cancelled anyway"
                 );
             }
         }
@@ -711,7 +711,7 @@ pub async fn start_connect_onboarding(
             .fetch_optional(&state.db)
             .await?
             .ok_or(AppError::NotFound(
-                "mentor profile not found — create one first".into(),
+                "mentor profile not found - create one first".into(),
             ))?;
     let existing_account: Option<String> = profile.get("stripe_connect_account_id");
 
@@ -797,14 +797,14 @@ pub async fn connect_status(
 /// ## Minor units
 ///
 /// `price_*_cents` is a hundredth of the currency, which is right for EUR and
-/// meaningless for XOF — the franc CFA has no subdivision. Dividing an XOF
+/// meaningless for XOF - the franc CFA has no subdivision. Dividing an XOF
 /// price by a hundred would pay a mentor one percent of what they earned, so
 /// the conversion is explicit per currency rather than a blanket `/ 100`.
 /// A price in the smallest unit of `currency`, as the amount a payment provider
 /// is handed.
 ///
 /// `price_*_cents` is a hundredth of the currency, which is right for EUR and
-/// meaningless for XOF — the franc CFA has no subdivision. A blanket `/ 100`
+/// meaningless for XOF - the franc CFA has no subdivision. A blanket `/ 100`
 /// billed a Beninese mentee one percent of the price and paid the mentor one
 /// percent of their fee.
 fn major_units(currency: crate::services::ledger::Currency, minor: i64) -> BigDecimal {
@@ -819,7 +819,7 @@ async fn capture_session_funds(
     state: &AppState,
     session_id: Uuid,
     mentor_id: Uuid,
-    // The student. They paid, so they are the one who may dispute — the
+    // The student. They paid, so they are the one who may dispute - the
     // release window is their recourse and it needs to know whose it is.
     mentee_id: Uuid,
     mentor_cents: i64,
@@ -922,7 +922,7 @@ pub async fn mark_completed(
     //
     // It used to be: complete the session, wire the mentor immediately. That
     // paid people before the student had any chance to say the session never
-    // happened, and it only worked for mentors Stripe can reach — everyone
+    // happened, and it only worked for mentors Stripe can reach - everyone
     // else silently got nothing at all.
     //
     // Now the amount lands in the mentor's `pending` account and waits out
@@ -1003,10 +1003,10 @@ pub async fn mark_completed(
     .execute(&state.db)
     .await?;
 
-    // P20.2 — Best-effort recompute proof engines pour le mentor : la 3ᵉ
+    // P20.2 - Best-effort recompute proof engines pour le mentor : la 3ᵉ
     // session complétée peut débloquer la capability `mentor`
     // (capabilities_engine seuil).
-    // SKI-43 — live variant: AppState is available here, so the mentor is
+    // SKI-43 - live variant: AppState is available here, so the mentor is
     // notified in real time as well as durably.
     let db_clone = state.db.clone();
     let mut redis_clone = state.redis.clone();
@@ -1083,7 +1083,7 @@ pub async fn confirm_session(
     let status: String = row.get("status");
     if status != "completed" {
         return Err(AppError::Validation(format!(
-            "session is '{status}' — there is nothing to confirm until the \
+            "session is '{status}' - there is nothing to confirm until the \
              mentor marks it complete"
         )));
     }

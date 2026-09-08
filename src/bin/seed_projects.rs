@@ -1,4 +1,4 @@
-//! skilluv-seed-projects — provision the repositories Skilluv draws work from.
+//! skilluv-seed-projects - provision the repositories Skilluv draws work from.
 //!
 //! The catalogue itself lives in `services::seed::projects`, because the server
 //! seeds itself on boot and a binary's private constant is not reachable from
@@ -74,7 +74,7 @@ async fn main() -> Result<()> {
 
     println!();
     println!("═══════════════════════════════════════════════════════════");
-    println!("  Projects seeded — {detail}");
+    println!("  Projects seeded - {detail}");
     println!("  Owner: {owner_email}");
     println!();
     println!("  Ecosystem projects carry no labels on purpose: their issue");

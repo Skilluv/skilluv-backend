@@ -41,7 +41,7 @@ pub struct ChallengeTemplate {
     /// de { role_slug, role_display_name?, required_skill_slug?, min_proficiency_level, count }.
     /// NULL = pas de contrainte, team libre-forme.
     pub team_composition: Option<serde_json::Value>,
-    /// The security discipline a cyber challenge is — ctf_flag, defensive_lab,
+    /// The security discipline a cyber challenge is - ctf_flag, defensive_lab,
     /// machine_walkthrough, training_ground, analysis_exercise, audit_exercise
     /// (migration on `challenge_templates`). NULL for every non-security
     /// challenge. Serialized so a client can tell a CTF target from a lab
@@ -50,13 +50,13 @@ pub struct ChallengeTemplate {
     /// The cyber difficulty tier, alongside `security_kind`. NULL off-domain.
     pub security_difficulty_tier: Option<String>,
     /// Where a capture-the-flag challenge's target actually lives, and what
-    /// shape its flag has — `SKILLUV{lower_snake_case}`. Both NULL off-domain
+    /// shape its flag has - `SKILLUV{lower_snake_case}`. Both NULL off-domain
     /// and on every kind but `ctf_flag`.
     ///
     /// Serialised because a CTF page without them is a page that says "find
     /// the flag" and names neither the range nor the format. The format in
     /// particular is what stops somebody burning their ten attempts an hour on
-    /// a well-solved challenge submitted in the wrong shape — `submit_flag`
+    /// a well-solved challenge submitted in the wrong shape - `submit_flag`
     /// already returns that hint on a wrong answer, and announcing it up front
     /// is strictly better than teaching it by refusal (SKI-339).
     ///
@@ -64,12 +64,12 @@ pub struct ChallengeTemplate {
     /// the answer, and a hash of a short flag is a wordlist away from it.
     pub security_target_url: Option<String>,
     pub security_flag_format: Option<String>,
-    /// The questions of a defensive lab, as a client may see them —
+    /// The questions of a defensive lab, as a client may see them -
     /// `[{ id, kind, question, choices, case_sensitive }]`, NULL off-lab.
     ///
     /// Stored with an `expected_answer_hash` and an author's `hint` per
     /// question; neither leaves this struct. The hash is stripped because a
-    /// hash of a short answer — a port number, a process name, an address — is
+    /// hash of a short answer - a port number, a process name, an address - is
     /// a plaintext answer to anybody with a wordlist, and publishing it would
     /// end the lab for everybody. The hint is stripped because it is what a
     /// wrong answer buys: `security_practice::LabOutcome.hints` returns the
@@ -90,11 +90,11 @@ pub struct ChallengeTemplate {
     pub security_lab_pass_percent: Option<i16>,
     /// Attempts before the cooling-off period, for the same reason.
     pub security_lab_max_attempts: Option<i16>,
-    /// P26 — Sas compagnonnage débutant. NULL = challenge non-beginner.
+    /// P26 - Sas compagnonnage débutant. NULL = challenge non-beginner.
     /// 'sas' = review humaine du process ; 'free' = mode libre réservé
     /// aux verified_apprentice (voir migration 0118 + gate submit_challenge).
     pub beginner_stage: Option<String>,
-    /// TRUE on the one template that is this domain's Bonjour Skilluv rite —
+    /// TRUE on the one template that is this domain's Bonjour Skilluv rite -
     /// the first gesture asked of a new account (migration 0607). Broader than
     /// it looks next to `is_onboarding`, which also marks the fifteen
     /// per-starter variants of the code fork gesture; this one is unique per
@@ -127,7 +127,7 @@ impl ChallengeTemplate {
     /// A missing translation leaves the base text in place. That is the whole
     /// fallback: 404 of the catalogue is French-only and 254 English-only, so
     /// half of any bilingual reader's requests land on a language they did not
-    /// ask for — and reading it is better than reading nothing while somebody
+    /// ask for - and reading it is better than reading nothing while somebody
     /// translates 658 challenges.
     pub fn localise(&mut self, locale: &str) {
         fn pick(field: &serde_json::Value, locale: &str) -> Option<String> {
@@ -170,7 +170,7 @@ impl ChallengeTemplate {
 /// [`serialize_public_lab_questions`], which is the single place the shape is
 /// produced. This type is what the OpenAPI document says that shape is, so a
 /// generated client has `question` and `choices` as fields rather than an
-/// untyped object — and so the day somebody widens the projection, the
+/// untyped object - and so the day somebody widens the projection, the
 /// document is a compile-adjacent reminder rather than silently stale.
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct PublicLabQuestion {
@@ -225,7 +225,7 @@ where
     public.serialize(serializer)
 }
 
-/// P9.1 : `code|stdout|stderr` retirés (mig 0072) — le contenu de la submission
+/// P9.1 : `code|stdout|stderr` retirés (mig 0072) - le contenu de la submission
 /// vit désormais dans `deliverables.artifact_metadata` (règle A.4 : immuabilité
 /// des preuves). La ligne `challenge_submissions` sert de trace de progression
 /// (status, fragments_earned, timestamps) uniquement.

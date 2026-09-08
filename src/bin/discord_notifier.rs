@@ -5,7 +5,7 @@
 //! and marks them sent.
 //!
 //! Deliberately does NOT implement Discord "gateway bot" semantics
-//! (welcome DM, slash commands) — those require a persistent WebSocket
+//! (welcome DM, slash commands) - those require a persistent WebSocket
 //! connection and a heavier framework like `serenity`. Ticket follow-up
 //! can add them once we're sure the notification queue works end-to-end.
 //!
@@ -44,7 +44,7 @@ async fn main() -> Result<()> {
     let annonces_url = std::env::var("DISCORD_ANNONCES_WEBHOOK_URL").ok();
     if promotions_url.is_none() && annonces_url.is_none() {
         tracing::warn!(
-            "no Discord webhook URLs configured — bot will poll but never post. \
+            "no Discord webhook URLs configured - bot will poll but never post. \
              Set DISCORD_PROMOTIONS_WEBHOOK_URL and/or DISCORD_ANNONCES_WEBHOOK_URL."
         );
     }
@@ -103,9 +103,9 @@ async fn tick(
             // has not wired: mark it sent, so the queue does not swell against
             // a channel that will never exist.
             //
-            // An event type it does not know — `contest_opened`,
+            // An event type it does not know - `contest_opened`,
             // `contest_won`, `talent_featured`, `mission_posted`, added by
-            // migration 0257 — belongs to `skilluv-discord-bot`, which routes
+            // migration 0257 - belongs to `skilluv-discord-bot`, which routes
             // on `target_channel_id`. Marking those sent here silently
             // destroys them: this binary is the v1 fallback, and a fallback
             // that eats the successor's messages is worse than one that does
@@ -154,8 +154,8 @@ async fn tick(
 
 /// The event types this binary can route, and the only ones it may mark sent.
 ///
-/// Anything else is a later addition — migration 0257's contest and mission
-/// announcements — and belongs to `skilluv-discord-bot`, which routes on
+/// Anything else is a later addition - migration 0257's contest and mission
+/// announcements - and belongs to `skilluv-discord-bot`, which routes on
 /// `target_channel_id` rather than on two hard-coded webhooks. Both binaries
 /// poll the same queue, so this list is what keeps the v1 fallback from
 /// consuming rows only v2 can deliver.
@@ -182,7 +182,7 @@ async fn post_to_discord(webhook_url: &str, event_type: &str, payload: &Value) -
     Ok(())
 }
 
-/// Format a queue row into the message text posted to Discord. Pure fn —
+/// Format a queue row into the message text posted to Discord. Pure fn -
 /// unit tests below cover each event type.
 fn render_message(event_type: &str, payload: &Value) -> String {
     match event_type {
@@ -201,7 +201,7 @@ fn render_message(event_type: &str, payload: &Value) -> String {
             let title = payload["challenge_title"].as_str().unwrap_or("a challenge");
             let hash = payload["attestation_hash"].as_str().unwrap_or("");
             format!(
-                "**{username}** just validated **{title}** — verify: https://skill-uv.com/verify/{hash}"
+                "**{username}** just validated **{title}** - verify: https://skill-uv.com/verify/{hash}"
             )
         }
         "slice_validated" => {

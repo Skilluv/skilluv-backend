@@ -1,12 +1,12 @@
-//! P26 v2 SKI-87 / SKI-88 — CI signal handling for submitted slices.
+//! P26 v2 SKI-87 / SKI-88 - CI signal handling for submitted slices.
 //!
 //! Two entry points converge on the same state transition
 //! `submitted → ci_green`:
 //!
-//! - SKI-87 (webhook)  — `check_run.completed` event arrives; if it
+//! - SKI-87 (webhook)  - `check_run.completed` event arrives; if it
 //!   references a PR we know (via `submitted_pr_url`) and its conclusion
 //!   is `success`, advance the slice.
-//! - SKI-88 (poller)   — periodic fallback that scans slices stuck in
+//! - SKI-88 (poller)   - periodic fallback that scans slices stuck in
 //!   `submitted` and asks GitHub whether the head commit's checks are
 //!   all green. Guards against webhook delivery loss without needing
 //!   the webhook to be configured on every repo.
@@ -67,7 +67,7 @@ pub enum CiWebhookDecision {
     Ignored,
     /// Completed but not a success conclusion.
     NotSuccessful,
-    /// Success but no PRs referenced — likely a branch build, ignore.
+    /// Success but no PRs referenced - likely a branch build, ignore.
     NoPr,
     /// Matched N slices and advanced them to `ci_green`.
     Advanced { slice_count: usize },
@@ -75,7 +75,7 @@ pub enum CiWebhookDecision {
     Unmatched,
 }
 
-/// SKI-87 — handle a `check_run` webhook payload.
+/// SKI-87 - handle a `check_run` webhook payload.
 pub async fn handle_check_run_event(
     db: &PgPool,
     event: CheckRunEvent,
@@ -128,7 +128,7 @@ async fn advance_to_ci_green_by_url(db: &PgPool, pr_url: &str) -> Result<bool, A
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SKI-89 — pull_request merged bonus
+// SKI-89 - pull_request merged bonus
 // ═══════════════════════════════════════════════════════════════════
 
 /// Minimal shape of the GitHub `pull_request` event. Only the `closed`
@@ -162,7 +162,7 @@ pub enum MergeBonusDecision {
     Awarded { pr_url: String },
 }
 
-/// SKI-89 — handle a `pull_request` webhook payload.
+/// SKI-89 - handle a `pull_request` webhook payload.
 pub async fn handle_pull_request_event(
     db: &PgPool,
     event: PullRequestEvent,
@@ -196,7 +196,7 @@ pub async fn handle_pull_request_event(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SKI-88 — poll fallback
+// SKI-88 - poll fallback
 // ═══════════════════════════════════════════════════════════════════
 
 /// Age (minutes) a slice must sit in `submitted` before the poller
@@ -323,7 +323,7 @@ async fn check_pr_is_green(bot_token: &str, pr_url: &str) -> Result<bool, AppErr
         .map_err(|e| AppError::Internal(format!("check-runs decode failed: {e}")))?;
 
     if checks.total_count == 0 {
-        // No CI configured on this repo — treat as green so the workflow
+        // No CI configured on this repo - treat as green so the workflow
         // doesn't stall. Operators can layer stricter rules by adding a
         // required check on the repo side (canonical GitHub pattern).
         return Ok(true);

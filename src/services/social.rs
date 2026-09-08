@@ -1,4 +1,4 @@
-//! Social primitives (Phase 2 Sprint 1) — comments, reactions, tags, mentions.
+//! Social primitives (Phase 2 Sprint 1) - comments, reactions, tags, mentions.
 //!
 //! All entities are **polymorphic** : they attach to any other entity via
 //! `(target_type, target_id)`. The list of valid target types is enforced in code,
@@ -117,7 +117,7 @@ pub async fn create_comment(
     .fetch_one(db)
     .await?;
 
-    // SKI-286 — @username mentions in the body.
+    // SKI-286 - @username mentions in the body.
     crate::services::mentions::record_and_notify(
         db,
         author_id,

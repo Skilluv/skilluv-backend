@@ -2,8 +2,8 @@
 //!
 //! ## Deliberately small
 //!
-//! Ticket 14-08 asks for a CRM. There is no sales team — three volunteers, no
-//! users, no revenue — and building a Salesforce would be building for a
+//! Ticket 14-08 asks for a CRM. There is no sales team - three volunteers, no
+//! users, no revenue - and building a Salesforce would be building for a
 //! company we are not. What is here is the part that does not depend on
 //! headcount: who we are talking to, what was said, what is due to renew.
 //!
@@ -15,7 +15,7 @@
 //!
 //! Every recurring product already knows when it lapses. A renewal date here
 //! would be a copy of six other columns, wrong the first time one of them
-//! moved — so `upcoming_renewals` is a view over the products themselves.
+//! moved - so `upcoming_renewals` is a view over the products themselves.
 
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};

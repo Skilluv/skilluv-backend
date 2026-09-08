@@ -19,13 +19,13 @@ An earlier version of SKI-132 asked for `POST /api/admin/security/writeups`
 committing through `SKILLUV_BOT_GITHUB_TOKEN`. That was dropped, for three
 reasons worth keeping written down:
 
-- it would give the production backend a write token on its own repository —
+- it would give the production backend a write token on its own repository -
   a surface worth more than the convenience it buys, on a platform whose
   disclosure programme invites people to attack it;
 - it would couple publishing a finding to GitHub being up: the API returns 500
   and the finding stays `confirmed` while its embargo has already expired;
 - a write-up is an editorial document. It wants a reading, so it wants a pull
-  request, which is the ordinary gesture — not a commit made by a server.
+  request, which is the ordinary gesture - not a commit made by a server.
 
 So: write the file, open the PR, paste the path into `writeup_url`. The column
 accepts a relative path for exactly this reason, and says so.
@@ -43,7 +43,7 @@ and what would have caught it earlier.
 
 **Out:** anything that identifies a person other than the reporter who agreed
 to be credited, and anything still exploitable elsewhere. A write-up is
-published *after* the fix ships — but the same class of defect may be live in
+published *after* the fix ships - but the same class of defect may be live in
 somebody else's code, so reproduction steps are written to teach the pattern,
 not to hand over a working exploit against a third party.
 

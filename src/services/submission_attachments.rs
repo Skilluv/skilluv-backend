@@ -1,6 +1,6 @@
 //! What a submission hands in besides its text.
 //!
-//! `POST /challenges/{id}/submit` takes `{ code, language }` — a text field.
+//! `POST /challenges/{id}/submit` takes `{ code, language }` - a text field.
 //! That is the whole contract, and it is enough for the domains whose artifact
 //! *is* text. It is not enough for a screen or for twenty seconds of sound: a
 //! designer uploads through `POST /design/uploads`, a sound engineer through
@@ -11,7 +11,7 @@
 //! An attachment is a reference to something already uploaded, never a URL the
 //! client invents. Two reasons. A free-text URL is an open redirect and an
 //! SSRF invitation the moment anything fetches it, and it lets somebody attach
-//! a file they do not own — including one belonging to another candidate.
+//! a file they do not own - including one belonging to another candidate.
 //! Referencing rows the platform already stores means ownership is checkable,
 //! and it is checked here.
 
@@ -104,7 +104,7 @@ pub async fn validate_owned(
                 }
             }
             Attachment::AudioFile(id) => {
-                // `audio_artifact_files` carries no uploader of its own — it
+                // `audio_artifact_files` carries no uploader of its own - it
                 // hangs off a slice, and the slice's claimant is who delivered
                 // it. That is the ownership this checks.
                 let owned: bool = sqlx::query_scalar(

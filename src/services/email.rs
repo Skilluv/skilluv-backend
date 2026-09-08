@@ -53,7 +53,7 @@ impl EmailService {
     }
 
     /// Direct send without `email_log` bookkeeping (used when the recipient has no
-    /// user row yet — e.g. magic-link signup).
+    /// user row yet - e.g. magic-link signup).
     pub async fn send_direct(
         &self,
         to_email: &str,
@@ -173,7 +173,7 @@ impl EmailService {
                 "Brevo API error"
             );
             return Err(AppError::Internal(format!(
-                "Brevo API error: {status} — {error_body}"
+                "Brevo API error: {status} - {error_body}"
             )));
         }
 
@@ -212,7 +212,7 @@ impl EmailService {
 
         self.send(to_email, to_name, subject, html).await?;
 
-        // Best-effort logging — never fail the send because logging failed.
+        // Best-effort logging - never fail the send because logging failed.
         if let Err(err) =
             sqlx::query("INSERT INTO email_log (user_id, kind, subject) VALUES ($1, $2, $3)")
                 .bind(user_id)
@@ -228,14 +228,14 @@ impl EmailService {
 
     // ─── Email shell ─────────────────────────────────────────────
 
-    /// Wraps a template body in the shared Skilluv shell — brand wordmark,
+    /// Wraps a template body in the shared Skilluv shell - brand wordmark,
     /// consistent typography, framed card on a soft neutral background, and
     /// a footer. `preheader` is the short teaser Gmail / Outlook show under
     /// the subject in the inbox (kept hidden in the body).
     ///
     /// Values are inline styles because CSS classes are stripped or ignored
     /// by most inbox rendering engines. Font stack starts with Space Grotesk
-    /// (loaded on the web app) and falls back to a robust system stack —
+    /// (loaded on the web app) and falls back to a robust system stack -
     /// most clients will render with the fallback since custom fonts don't
     /// load reliably in email.
     fn shell(&self, preheader: &str, body: &str) -> String {
@@ -273,7 +273,7 @@ impl EmailService {
         <tr>
             <td style="padding:16px 32px 20px;border-top:1px solid {BORDER};background:{SURFACE_BG};">
                 <p style="margin:0;color:{TEXT_MUTED};font-size:11px;line-height:1.4;">
-                    Skilluv © {year} — Prouve ce que tu sais faire.<br />
+                    Skilluv © {year} - Prouve ce que tu sais faire.<br />
                     Tu reçois cet email parce qu'une action a été effectuée sur ton compte. Si ce n'est pas toi, ignore et supprime.
                 </p>
             </td>
@@ -284,7 +284,7 @@ impl EmailService {
         )
     }
 
-    /// Standard CTA button — inline-styled so it survives Gmail / Outlook.
+    /// Standard CTA button - inline-styled so it survives Gmail / Outlook.
     fn cta_button(label: &str, href: &str) -> String {
         const ACCENT: &str = "#ea580c";
         format!(
@@ -392,7 +392,7 @@ impl EmailService {
         self.send(
             email,
             display_name,
-            &format!("Sécurité — {event_title}"),
+            &format!("Sécurité - {event_title}"),
             &html,
         )
         .await
@@ -421,7 +421,7 @@ impl EmailService {
             </p>
             <p style="margin:24px 0;">{button}</p>
             <p style="margin:24px 0 0;color:#78716c;font-size:13px;line-height:1.5;">
-                L'invitation expire dans 7 jours. Elle est liée à cette adresse email uniquement — connecte-toi (ou crée un compte) avec la même pour l'accepter.
+                L'invitation expire dans 7 jours. Elle est liée à cette adresse email uniquement - connecte-toi (ou crée un compte) avec la même pour l'accepter.
             </p>
             "#
         );
@@ -458,7 +458,7 @@ impl EmailService {
                 </div>
             </div>
             <p style="margin:24px 0 0;color:#78716c;font-size:13px;line-height:1.5;">
-                Le code expire dans 10 minutes. Personne de chez Skilluv ne te le demandera jamais — ne le communique à personne.
+                Le code expire dans 10 minutes. Personne de chez Skilluv ne te le demandera jamais - ne le communique à personne.
             </p>
             "#
         );

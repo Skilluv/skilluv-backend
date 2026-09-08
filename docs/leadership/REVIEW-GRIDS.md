@@ -30,7 +30,7 @@ first well says nothing about reading the second.
 
 ## The three refusals
 
-At the top of the domain grid. Not criteria to score — nothing in the rest of a
+At the top of the domain grid. Not criteria to score - nothing in the rest of a
 submission compensates.
 
 1. **Somebody identifiable who did not agree to be.** Including by a detail
@@ -47,7 +47,7 @@ Each criterion is marked out of five, and `craft_score_weights` counts the
 average from **3** (`review_grid_average`, `offset_scaled`, baseline 3.0).
 
 Three is a reviewer saying "this is fine" and is worth nothing. Points come
-from being better than fine, and below three costs points — a domain where
+from being better than fine, and below three costs points - a domain where
 nothing can lower a score is one where the review is decorative.
 
 Somebody nobody has reviewed has the term skipped rather than scored zero.
@@ -72,7 +72,7 @@ Four, in `revision_round_limits`, with six kinds in `revision_round_kinds`:
 | `leadership_prioritisation_disputed` | Settled by naming what is given up, not by reordering until objections stop |
 | `leadership_actions_vague` | Sentiments rather than items with an owner and a date |
 | `leadership_redaction_incomplete` | The document still identifies somebody. The only round that blocks publication outright |
-| `leadership_measurement_missing` | Nothing will move if it works — or worse, nothing will move if it does not |
+| `leadership_measurement_missing` | Nothing will move if it works - or worse, nothing will move if it does not |
 
 A round is closed by the person who **asked** for the change.
 
@@ -82,7 +82,7 @@ They are separate acts and the guards differ.
 
 **Reviewing** an artefact needs the capability for its family. **Confirming a
 redaction** needs any leadership review capability, because what is being
-confirmed is not domain expertise — it is that a careful reader could not work
+confirmed is not domain expertise - it is that a careful reader could not work
 out who this is about.
 
 Both refuse the author. A self-confirmed redaction is a tickbox, and the whole
@@ -98,5 +98,5 @@ back.
 
 Through `validator_applications`, per family. What is looked at is whether the
 applicant's own submissions show the three refusals applied to their own work
-— somebody who has never written down what they were giving up will not ask
+- somebody who has never written down what they were giving up will not ask
 others to.

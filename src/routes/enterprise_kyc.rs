@@ -1,4 +1,4 @@
-//! Enterprise KYC — Phase 4.5.
+//! Enterprise KYC - Phase 4.5.
 //!
 //! Threshold-based gating:
 //!   - Level `none`  : ≤ 100 €/month spend (equivalent)
@@ -163,7 +163,7 @@ pub async fn upload_document(
                 .map_err(|e| AppError::Validation(format!("multipart bytes: {e}")))?;
             if bytes.len() > KYC_DOC_MAX_SIZE {
                 return Err(AppError::Validation(format!(
-                    "file too large — max {} bytes",
+                    "file too large - max {} bytes",
                     KYC_DOC_MAX_SIZE
                 )));
             }
@@ -359,7 +359,7 @@ pub async fn admin_decide(
         }
     }
 
-    // BE-F — audit log unifié.
+    // BE-F - audit log unifié.
     crate::services::audit::record(
         &state.db,
         crate::services::audit::AuditEntry {

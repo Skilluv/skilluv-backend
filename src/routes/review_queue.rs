@@ -1,13 +1,13 @@
 //! Routes HTTP pour la file d'attente de review humaine (Phase P2.2).
 //!
 //! Endpoints publics (auth requis) :
-//!   GET   /api/review-queue                   — liste des tasks open éligibles
-//!   POST  /api/review-queue/{task_id}/claim   — claim une task (soft-lock 2h)
-//!   POST  /api/deliverables/{id}/reviews      — soumet un verdict
+//!   GET   /api/review-queue                   - liste des tasks open éligibles
+//!   POST  /api/review-queue/{task_id}/claim   - claim une task (soft-lock 2h)
+//!   POST  /api/deliverables/{id}/reviews      - soumet un verdict
 //!
 //! **Cold start (12 premiers mois)** : ces endpoints devraient être restreints
 //! aux rôles admin/steward. Cette itération P2.2 les rend accessibles à tous
-//! les users authentifiés — restriction à ajouter en Phase P3 quand la
+//! les users authentifiés - restriction à ajouter en Phase P3 quand la
 //! réputation reviewer commence à se construire (voir H.2 cold start policy).
 
 use std::str::FromStr;

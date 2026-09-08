@@ -1,4 +1,4 @@
-//! SKI-45 (Post-MVP T3-02) — reverse marketplace endpoints.
+//! SKI-45 (Post-MVP T3-02) - reverse marketplace endpoints.
 //!
 //! Endpoints:
 //!   POST   /api/talent-offers          (auth, Artisan+)
@@ -132,7 +132,7 @@ pub struct BrowseQuery {
     #[serde(default)]
     #[param(value_type = Option<OfferKind>)]
     pub offer_type: Option<String>,
-    /// Filter by skill slug (not id — this is a public browse surface).
+    /// Filter by skill slug (not id - this is a public browse surface).
     #[serde(default)]
     pub skill: Option<String>,
     /// Only free offers.
@@ -283,21 +283,21 @@ pub async fn remove(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SKI-296 (T3-02b) — admin moderation
+// SKI-296 (T3-02b) - admin moderation
 // ═══════════════════════════════════════════════════════════════════
 //
 // The owner-scoped surface left one abusive offer with no proportionate
 // answer. `PATCH` and `DELETE` both filter on `user_id = $auth`, and the
 // public browse only shows compliant offers, so an offer nobody could
 // inspect was also an offer nobody could pull. The available lever was to
-// ban the author or let them fall below Artisan — which takes down five
+// ban the author or let them fall below Artisan - which takes down five
 // offers to deal with one.
 //
 // So: a hold on the single offer, kept readable, plus a listing that can
 // see what the browse hides. Both under `admin_gate`.
 
 /// Capabilities allowed to moderate an offer. Same family as cohorts and
-/// external signals — an offer description is user content.
+/// external signals - an offer description is user content.
 const OFFER_MODERATOR_CAPS: &[&str] = &["admin", "community_moderator"];
 
 /// Mounted behind `admin_gate` in `lib.rs`.

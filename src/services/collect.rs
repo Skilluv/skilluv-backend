@@ -1,4 +1,4 @@
-//! Collecting money — the mirror of [`crate::services::payout`].
+//! Collecting money - the mirror of [`crate::services::payout`].
 //!
 //! Payouts got a trait, a routing table as data, and one adapter per
 //! provider; adding FedaPay cost one file. Collection got none of it.
@@ -8,18 +8,18 @@
 //!
 //! That is not a matter of taste. Stripe cannot collect Mobile Money in
 //! Benin, and Mobile Money is how roughly seventy percent of adults in the
-//! franc zone hold money — against about a quarter with a bank account. A
+//! franc zone hold money - against about a quarter with a bank account. A
 //! Beninese enterprise could not pay for credits at all, and fixing it
 //! meant editing three route files.
 //!
 //! ## Same shape, deliberately
 //!
-//! * [`CollectionProvider`] — what a way of taking money must do.
-//! * [`routes`] — which provider serves which country, currency and method,
+//! * [`CollectionProvider`] - what a way of taking money must do.
+//! * [`routes`] - which provider serves which country, currency and method,
 //!   as rows. Opening a corridor is an INSERT.
-//! * [`start`] — the one entry point. Records the attempt, asks the
+//! * [`start`] - the one entry point. Records the attempt, asks the
 //!   provider, hands back somewhere to send the payer.
-//! * [`refund`] — gives it back, at the provider and in the books.
+//! * [`refund`] - gives it back, at the provider and in the books.
 //!
 //! ## Why `refund` is here and not in the ledger
 //!
@@ -114,14 +114,14 @@ pub struct Checkout {
     /// The provider's identifier for this checkout.
     pub session_id: String,
     /// Where the payer completes the payment. Every method has one, card or
-    /// Mobile Money — the operator's confirmation page counts.
+    /// Mobile Money - the operator's confirmation page counts.
     pub redirect_url: String,
 }
 
 /// A checkout, plus the row we wrote for it.
 ///
 /// Separate from [`Checkout`] because a provider cannot fill `payment_id`
-/// in — it names a row that [`start`] creates. Giving the provider type
+/// in - it names a row that [`start`] creates. Giving the provider type
 /// that field would mean every implementation returning a placeholder, and
 /// one of them eventually escaping.
 ///
@@ -246,7 +246,7 @@ impl CollectionRegistry {
         // Two failures wearing one status code, until now.
         //
         // No route at all means this corridor is not one we serve, and the
-        // payer is entitled to be told so — that is a 400. Routes that
+        // payer is entitled to be told so - that is a 400. Routes that
         // matched but resolved to nothing means the table names a provider
         // this deployment holds no credentials for: our fault, not theirs,
         // and answering "your request is invalid" would send an operator
@@ -288,7 +288,7 @@ pub async fn start(
 ) -> Result<StartedPayment, AppError> {
     // The merchant reference is ours and travels to the provider, so a
     // payment can be asked about even when the response carrying their
-    // identifier is the thing that got lost — which is exactly what a
+    // identifier is the thing that got lost - which is exactly what a
     // closed browser tab produces.
     let payment_id: Uuid = sqlx::query_scalar(
         "INSERT INTO payments
@@ -385,7 +385,7 @@ pub struct Payment {
 
 /// Give money back, at the provider and in our records.
 ///
-/// Returns `Ok(None)` when there is nothing to refund at a provider — a
+/// Returns `Ok(None)` when there is nothing to refund at a provider - a
 /// charge we never recorded, from before this table existed. The caller
 /// still moves its own books; what it must not do is report success as
 /// though a card had been credited.
@@ -400,7 +400,7 @@ pub async fn refund(
         tracing::warn!(
             subject = subject_type,
             id = %subject_id,
-            "refunding something with no recorded charge — the books move, the payer does not get a card refund"
+            "refunding something with no recorded charge - the books move, the payer does not get a card refund"
         );
         return Ok(None);
     };
@@ -409,7 +409,7 @@ pub async fn refund(
         tracing::error!(
             payment = %payment.id,
             provider = %payment.provider,
-            "a succeeded payment with no provider reference cannot be refunded — reconcile it by hand"
+            "a succeeded payment with no provider reference cannot be refunded - reconcile it by hand"
         );
         return Ok(None);
     };

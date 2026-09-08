@@ -1,12 +1,12 @@
-//! Public entry points into code work — sections T-03 and T-05.
+//! Public entry points into code work - sections T-03 and T-05.
 //!
 //! Two questions somebody arriving with no account should be able to answer
 //! without one:
 //!
 //!   * "what could I work on right now, in the trade I am learning?"
-//!     — `GET /api/code/first-issues`
+//!     - `GET /api/code/first-issues`
 //!   * "where do the people who write this language actually talk?"
-//!     — `GET /api/code/ecosystems`
+//!     - `GET /api/code/ecosystems`
 //!
 //! Both are public and both are cached. The first is an aggregate over every
 //! curated repository, recomputed at most once an hour: the underlying issues
@@ -52,7 +52,7 @@ pub struct FirstIssuesQuery {
     /// Filters on the languages recorded on the slice or the repository.
     #[param(max_length = 40)]
     pub language: Option<String>,
-    /// Hardest difficulty to include, 1..5. Defaults to 3 — this is a
+    /// Hardest difficulty to include, 1..5. Defaults to 3 - this is a
     /// first-issue feed, not the whole backlog.
     #[param(minimum = 1, maximum = 5)]
     pub max_difficulty: Option<i16>,
@@ -124,8 +124,8 @@ pub async fn first_issues(
     }
 
     // Namespaced by database. A Redis instance shared between two deployments
-    // — staging and production on one managed instance is the normal cheap
-    // setup — would otherwise serve one's feed to the other, and the symptom
+    // - staging and production on one managed instance is the normal cheap
+    // setup - would otherwise serve one's feed to the other, and the symptom
     // would be issues from repositories the reader's deployment never seeded.
     let cache_key = format!(
         "code:first-issues:{}:{}:{}:{}:{}",

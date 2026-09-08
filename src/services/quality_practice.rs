@@ -6,7 +6,7 @@
 //!
 //!   * a **defect report** carries reproduction, environment and severity as
 //!     columns, so what makes it usable does not depend on how carefully it
-//!     was written out — and it becomes a proof only when the fix has shipped
+//!     was written out - and it becomes a proof only when the fix has shipped
 //!     and the reporter has gone back to look;
 //!   * a **test run** is imported from whatever tool produced it, into one
 //!     shape, because a reviewer needs the same four things from all five
@@ -131,7 +131,7 @@ pub struct BugReportInput {
 
 /// File a defect report against a slice of quality work.
 ///
-/// The slice must be the caller's own and must be a `bug_report` slice — the
+/// The slice must be the caller's own and must be a `bug_report` slice - the
 /// database enforces the second, and this enforces the first. Without the
 /// ownership check somebody could file reports under another person's slice
 /// and hand them the attestation.
@@ -158,7 +158,7 @@ pub async fn file_bug_report(
 
     if !owns_slice {
         return Err(AppError::Validation(
-            "a defect report is filed against a slice you hold — claim it first".into(),
+            "a defect report is filed against a slice you hold - claim it first".into(),
         ));
     }
 
@@ -203,7 +203,7 @@ fn validate_bug_input(input: &BugReportInput) -> Result<(), AppError> {
 
     if input.repro_steps_md.trim().chars().count() < MIN_REPRO_LEN {
         return Err(AppError::Validation(format!(
-            "reproduction steps have to be at least {MIN_REPRO_LEN} characters — \
+            "reproduction steps have to be at least {MIN_REPRO_LEN} characters - \
              a report a stranger cannot follow is not a report"
         )));
     }
@@ -215,7 +215,7 @@ fn validate_bug_input(input: &BugReportInput) -> Result<(), AppError> {
     if !input.environment.is_object() || input.environment.as_object().is_some_and(|o| o.is_empty())
     {
         return Err(AppError::Validation(
-            "the environment has to say where this happened — a defect nobody can \
+            "the environment has to say where this happened - a defect nobody can \
              situate cannot be reproduced by somebody who does not already share it"
                 .into(),
         ));
@@ -253,7 +253,7 @@ pub async fn link_fix(
     crate::validators::validate_url(fix_url, "fix_url", 500)?;
     if !fix_url.starts_with("https://") {
         return Err(AppError::Validation(
-            "the fix has to be a public https link — a fix nobody can open proves nothing".into(),
+            "the fix has to be a public https link - a fix nobody can open proves nothing".into(),
         ));
     }
 
@@ -344,7 +344,7 @@ pub struct ReviewDecision {
 
 /// Record a reviewer's decision on a defect report.
 ///
-/// The caller has already been checked against the trade behind the slice —
+/// The caller has already been checked against the trade behind the slice -
 /// see [`reviewer_orientation_for_slice`]. This does not re-derive the
 /// permission, it records the outcome.
 pub async fn review_bug_report(
@@ -370,7 +370,7 @@ pub async fn review_bug_report(
         .filter(|r| !r.is_empty());
     if rejecting && reason.is_none() {
         return Err(AppError::Validation(
-            "a rejection says why — otherwise the person who has to act on it cannot".into(),
+            "a rejection says why - otherwise the person who has to act on it cannot".into(),
         ));
     }
     if let Some(sev) = decision.severity_adjusted_to.as_deref()
@@ -440,7 +440,7 @@ pub async fn unreviewed_bug_reports(db: &PgPool) -> Result<Vec<BugReport>, AppEr
 ///
 /// Reads the orientation on the slice, not the subtype. The subtype says what
 /// the artefact is; the orientation says which family of reviewer can judge
-/// it, and they are not the same question — a defect report against a game
+/// it, and they are not the same question - a defect report against a game
 /// build and one against an API are both `bug_report`, and the two people who
 /// can read them are different.
 ///
@@ -571,7 +571,7 @@ pub async fn import_test_run(
     crate::validators::validate_url(&input.report_url, "report_url", 500)?;
     if !input.report_url.starts_with("https://") {
         return Err(AppError::Validation(
-            "the report has to be a public https link — a figure with no source is \
+            "the report has to be a public https link - a figure with no source is \
              the claim this replaces, not a smaller version of it"
                 .into(),
         ));
@@ -596,7 +596,7 @@ pub async fn import_test_run(
     // coverage percentage rather than a test count.
     //
     // A failure to read is not a failure to import. A CI artefact expires, a
-    // link rots, a runner is behind a login — none of that makes the run
+    // link rots, a runner is behind a login - none of that makes the run
     // untrue, and refusing would push people towards the sources that are
     // never checked at all. What it does mean is that the row says
     // `declared`, and a reviewer sees that.
@@ -625,7 +625,7 @@ pub async fn import_test_run(
             if declared_something && disagrees {
                 return Err(AppError::Validation(format!(
                     "the report says {} tests, {} failed and {} skipped; the import says \
-                     {}, {} and {}. The report is the one that counts — send its figures, \
+                     {}, {} and {}. The report is the one that counts - send its figures, \
                      or send none and they will be read",
                     parsed.tests_total,
                     parsed.tests_failed,

@@ -3,7 +3,7 @@
 //! ## The scenario
 //!
 //! Someone opens a Mobile Money payment, confirms the prompt on their
-//! phone, and refreshes the page — or their connection drops, or they
+//! phone, and refreshes the page - or their connection drops, or they
 //! simply close the tab because the money has left their account and as far
 //! as they are concerned it is done. FedaPay has the payment. If the
 //! webhook is lost, delayed, or retried into an endpoint that answered
@@ -16,7 +16,7 @@
 //! ## What this does
 //!
 //! Every minute, it takes the payments that are still open and asks their
-//! provider what became of them — by our own `merchant_reference`, so it
+//! provider what became of them - by our own `merchant_reference`, so it
 //! works even when the response that would have given us their id was the
 //! thing that got lost. Anything approved goes through the same delivery
 //! path a webhook would have taken.
@@ -27,7 +27,7 @@
 //! twenty minutes old is almost certainly abandoned, and asking about it
 //! every minute for a day is a request per minute per abandoned checkout.
 //! The interval widens with the payment's age, and stops entirely at the
-//! provider's own expiry — FedaPay expires an unfinished transaction after
+//! provider's own expiry - FedaPay expires an unfinished transaction after
 //! twenty-four hours, and after that there is nothing to ask about.
 
 use sqlx::PgPool;
@@ -170,7 +170,7 @@ pub async fn poll(db: &PgPool) -> Result<PollReport, AppError> {
                             report.settled += 1;
                             tracing::info!(
                                 payment = %payment.id,
-                                "payment confirmed by polling — no webhook was needed"
+                                "payment confirmed by polling - no webhook was needed"
                             );
                         }
                         Ok(false) => {}
@@ -386,7 +386,7 @@ pub fn start_payment_poller(db: PgPool) {
                 Ok(_) => {}
                 Err(e) => tracing::error!(
                     error = %e,
-                    "payment poll failed — payments confirmed at the provider stayed unconfirmed here"
+                    "payment poll failed - payments confirmed at the provider stayed unconfirmed here"
                 ),
             }
         }

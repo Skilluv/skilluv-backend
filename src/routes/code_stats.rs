@@ -25,7 +25,7 @@ pub fn code_stats_routes() -> Router<AppState> {
 pub struct LanguageCount {
     pub language: String,
     /// Verified artefacts touching this language. A slice spanning two
-    /// languages counts once for each — it is one piece of work, and both
+    /// languages counts once for each - it is one piece of work, and both
     /// statements about it are true.
     pub artifacts: i64,
 }

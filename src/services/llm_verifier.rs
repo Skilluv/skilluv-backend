@@ -1,4 +1,4 @@
-//! P15.2 — LLM evaluation d'un deliverable via skilluv-ia (gRPC).
+//! P15.2 - LLM evaluation d'un deliverable via skilluv-ia (gRPC).
 //!
 //! On NE recode PAS le modèle LLM ici : skilluv-ia expose déjà
 //! `code_reviewer.py` (proto: CodeReviewService.review_code). Ce module
@@ -10,7 +10,7 @@
 //!      en ajoutant le rapport LLM dans `verification_signal`.
 //!
 //! Sans `AiClient` connecté (grpc_ai_url absent en dev), on log un warning
-//! et laisse le deliverable en 'pending_manual_review' — safe fallback.
+//! et laisse le deliverable en 'pending_manual_review' - safe fallback.
 
 use serde_json::json;
 use sqlx::PgPool;
@@ -76,7 +76,7 @@ pub async fn evaluate_deliverable(
 
     if code.trim().is_empty() {
         return Err(AppError::Validation(
-            "artifact_metadata.code_content is empty — nothing to evaluate".into(),
+            "artifact_metadata.code_content is empty - nothing to evaluate".into(),
         ));
     }
 
@@ -148,7 +148,7 @@ pub async fn evaluate_deliverable(
             new_status: "pending_manual_review".into(),
             score: None,
             llm_reachable: false,
-            notes: Some("AI client not connected — deliverable flagged for manual review".into()),
+            notes: Some("AI client not connected - deliverable flagged for manual review".into()),
         });
     };
 
@@ -163,7 +163,7 @@ pub async fn evaluate_deliverable(
             difficulty as i32,
         )
         .await;
-    // IA-D — log audit trail de l'appel.
+    // IA-D - log audit trail de l'appel.
     let mv = result.as_ref().ok().map(|r| r.model_version.clone());
     crate::services::ai_log::record(
         db,
@@ -178,7 +178,7 @@ pub async fn evaluate_deliverable(
     match result {
         Ok(resp) => {
             // Score attendu dans [0.0, 1.0]. Le proto expose des champs
-            // score/feedback via CodeReviewResponse — on lit permissivement.
+            // score/feedback via CodeReviewResponse - on lit permissivement.
             let score: f64 = extract_score(&resp);
             let feedback = extract_feedback(&resp);
             let (new_status, notes) = if score >= AUTO_VERIFY_THRESHOLD {
@@ -189,7 +189,7 @@ pub async fn evaluate_deliverable(
             } else {
                 (
                     "pending_manual_review",
-                    format!("LLM score {score:.2} < {AUTO_VERIFY_THRESHOLD} — flagged for review"),
+                    format!("LLM score {score:.2} < {AUTO_VERIFY_THRESHOLD} - flagged for review"),
                 )
             };
             let signal = json!({
@@ -234,7 +234,7 @@ pub async fn evaluate_deliverable(
         Err(status) => {
             tracing::warn!(
                 error = %status, deliverable_id = %deliverable_id,
-                "LLM evaluation gRPC call failed — falling back to manual review"
+                "LLM evaluation gRPC call failed - falling back to manual review"
             );
             sqlx::query(
                 "UPDATE deliverables

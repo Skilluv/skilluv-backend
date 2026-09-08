@@ -11,7 +11,7 @@ use crate::errors::AppError;
 use crate::middleware::api_key::ApiKeyAuth;
 use crate::models::{BadgeWithEarnedAt, SkillFragment};
 
-/// Public API v1 routes — authenticated via API key.
+/// Public API v1 routes - authenticated via API key.
 pub fn public_api_routes() -> Router<AppState> {
     Router::new()
         .route("/v1/users/{username}", get(get_user_profile))
@@ -19,7 +19,7 @@ pub fn public_api_routes() -> Router<AppState> {
         .route("/v1/users/{username}/skills", get(get_user_skills))
 }
 
-/// v1 envelope — {data, meta{api_version: "v1"}}. Distinct from the
+/// v1 envelope - {data, meta{api_version: "v1"}}. Distinct from the
 /// internal ApiResponse<T> because third parties depend on the
 /// `api_version` marker for version-negotiation without an extra
 /// request.
@@ -51,7 +51,7 @@ struct PublicUser {
     id: Uuid,
     username: String,
     display_name: String,
-    /// Nullable since migration 0049 — see the note on the profile route.
+    /// Nullable since migration 0049 - see the note on the profile route.
     skill_domain: Option<String>,
     title: String,
     golden_stars: i32,

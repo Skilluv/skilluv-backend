@@ -17,7 +17,7 @@ use crate::services::digest::{self, DigestRunReport};
 
 pub fn email_prefs_routes() -> Router<AppState> {
     Router::new()
-        // SKI-287 — the contract the front end consumes. Flat `data`, and a
+        // SKI-287 - the contract the front end consumes. Flat `data`, and a
         // PUT that replaces all three flags at once.
         .route(
             "/users/me/email-preferences",
@@ -25,7 +25,7 @@ pub fn email_prefs_routes() -> Router<AppState> {
         )
         // One-click unsubscribe with the token in the path (RFC 8058 style).
         .route("/email/unsubscribe/{token}", get(unsubscribe_by_path))
-        // SKI-293 — `/auth/me/email-preferences` removed. It answered the
+        // SKI-293 - `/auth/me/email-preferences` removed. It answered the
         // same question as the `/users/me` pair above with a different shape
         // (`data.preferences` versus flat `data`) and partial-update
         // semantics, and it was the one the OpenAPI document advertised. No
@@ -61,7 +61,7 @@ pub struct AdminDigestResponse {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SKI-287 — /users/me/email-preferences
+// SKI-287 - /users/me/email-preferences
 // ═══════════════════════════════════════════════════════════════════
 
 /// Read the caller's email preferences.
@@ -71,7 +71,7 @@ pub struct AdminDigestResponse {
 /// which is a perfectly good answer to "what are my preferences".
 ///
 /// The payload is the preference object itself rather than
-/// `{ preferences: … }` — the shape the settings screen consumes.
+/// `{ preferences: … }` - the shape the settings screen consumes.
 #[utoipa::path(
     get,
     path = "/api/users/me/email-preferences",
@@ -94,7 +94,7 @@ pub async fn get_prefs_v2(
 /// The three categories, computed from the catalogue.
 ///
 /// `user_email_preferences` used to hold these as columns, and the digest
-/// and drip services read that table while `notify` read the catalogue —
+/// and drip services read that table while `notify` read the catalogue -
 /// two answers to "may we email this person", and the marketing one won by
 /// accident. There is one now; this is a narrower view of it, kept because
 /// the settings screen and the unsubscribe links already delivered speak in
@@ -206,7 +206,7 @@ fn parse_replace_prefs(raw: &serde_json::Value) -> Result<ReplacePrefsRequest, A
             Some(serde_json::Value::Bool(b)) => Ok(*b),
             Some(_) => Err(AppError::Validation(format!("{key} must be a boolean"))),
             None => Err(AppError::Validation(format!(
-                "{key} is required — this endpoint replaces all three \
+                "{key} is required - this endpoint replaces all three \
                  categories at once"
             ))),
         }
@@ -218,7 +218,7 @@ fn parse_replace_prefs(raw: &serde_json::Value) -> Result<ReplacePrefsRequest, A
 
     if let Some(unknown) = obj.keys().find(|k| !EMAIL_CATEGORIES.contains(&k.as_str())) {
         return Err(AppError::Validation(format!(
-            "unknown field '{unknown}' — expected exactly: {}",
+            "unknown field '{unknown}' - expected exactly: {}",
             EMAIL_CATEGORIES.join(", ")
         )));
     }
@@ -295,7 +295,7 @@ pub async fn replace_prefs(
 /// one-click flows send no parameters of their own.
 ///
 /// Deliberately no expiry. A footer link in a two-year-old email must
-/// still work — a dead unsubscribe link is what turns into a spam
+/// still work - a dead unsubscribe link is what turns into a spam
 /// complaint, which is the outcome this endpoint exists to prevent.
 /// Revocation, if ever needed, is a secret rotation.
 #[utoipa::path(
@@ -319,7 +319,7 @@ pub async fn unsubscribe_by_path(
     apply_unsubscribe(&state, user_id, &kind).await
 }
 
-/// Turn one category off for one user. Idempotent — unsubscribing twice
+/// Turn one category off for one user. Idempotent - unsubscribing twice
 /// is a normal consequence of a mail client prefetching the link.
 async fn apply_unsubscribe(
     state: &AppState,
@@ -371,7 +371,7 @@ fn unsubscribe_confirmation_html(kind: &str) -> String {
     };
     format!(
         r#"<!doctype html>
-<html lang="fr"><head><meta charset="utf-8"><title>Désinscrit·e — Skilluv</title>
+<html lang="fr"><head><meta charset="utf-8"><title>Désinscrit·e - Skilluv</title>
 <style>body{{font-family:system-ui;max-width:540px;margin:80px auto;padding:0 24px;color:#1a1a2e}}h1{{color:#6c5ce7}}</style>
 </head><body>
 <h1>C'est fait</h1>
@@ -393,7 +393,7 @@ pub struct UnsubscribeQuery {
 /// One-click unsubscribe. No login required. Token is HMAC-signed;
 /// only the targeted user can land here (or admin with full secret
 /// access). Returns a plain HTML confirmation suitable for showing in
-/// a browser — **not** JSON, so this endpoint is intentionally left
+/// a browser - **not** JSON, so this endpoint is intentionally left
 /// out of the ApiResponse envelope.
 #[utoipa::path(
     get,
@@ -455,10 +455,10 @@ pub async fn brevo_webhook(
 ) -> Result<StatusCode, AppError> {
     // BREVO_WEBHOOK_TOKEN absent (dev/CI/deployments sans Brevo) : ack
     // silencieusement le webhook avec 200. Best-practice pour webhooks
-    // externes — un non-200 declenche des retries indefinis. On log
+    // externes - un non-200 declenche des retries indefinis. On log
     // pour observabilite.
     let Ok(expected) = std::env::var("BREVO_WEBHOOK_TOKEN") else {
-        tracing::warn!("Brevo webhook received but BREVO_WEBHOOK_TOKEN not set — acking silently");
+        tracing::warn!("Brevo webhook received but BREVO_WEBHOOK_TOKEN not set - acking silently");
         return Ok(StatusCode::OK);
     };
     if q.token != expected {
@@ -483,7 +483,7 @@ pub async fn brevo_webhook(
         .fetch_optional(&state.db)
         .await?;
     let Some((user_id,)) = user_id else {
-        // Not our user — Brevo can send events for other senders; ignore.
+        // Not our user - Brevo can send events for other senders; ignore.
         return Ok(StatusCode::OK);
     };
 

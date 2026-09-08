@@ -8,7 +8,7 @@
 //! ## Who may do what
 //!
 //! Recording is for whoever produced the work. Reproducing is for a reviewer
-//! of that trade — and never for the author. Somebody confirming their own
+//! of that trade - and never for the author. Somebody confirming their own
 //! measurement is the exact thing a reproduction is supposed to rule out, and
 //! the check is in the handler rather than in the documentation.
 
@@ -124,7 +124,7 @@ pub async fn list_benchmarks(
 /// Record a measurement on a slice you worked on.
 ///
 /// The database refuses a benchmark with no baseline, no method or no code,
-/// so this handler does not restate those rules — it checks the one thing SQL
+/// so this handler does not restate those rules - it checks the one thing SQL
 /// cannot: that the caller is the person whose work this is.
 #[utoipa::path(
     post, path = "/api/slices/{slice_id}/benchmarks", tag = "slices",
@@ -264,8 +264,8 @@ pub(crate) async fn author_of(state: &AppState, slice_id: Uuid) -> Result<Option
 /// Refuse anybody who did not do the work.
 ///
 /// Either they claimed the slice or they have a deliverable on it. Both,
-/// because a slice can be delivered without ever being claimed — an ingested
-/// issue somebody solved and submitted — and requiring only the claim would
+/// because a slice can be delivered without ever being claimed - an ingested
+/// issue somebody solved and submitted - and requiring only the claim would
 /// lock those people out of describing their own results.
 pub(crate) async fn require_worked_on(
     state: &AppState,
@@ -331,7 +331,7 @@ pub(crate) async fn require_reviewer_of_someone_elses_work(
     let Some(slug) = orientation_slug else {
         return Err(AppError::Validation(
             "this slice belongs to no trade, so review rights cannot be \
-             checked for it — set its orientation first"
+             checked for it - set its orientation first"
                 .into(),
         ));
     };

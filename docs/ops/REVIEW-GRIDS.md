@@ -1,4 +1,4 @@
-# Grilles de relecture — ops
+# Grilles de relecture - ops
 
 Cinq familles, cinq grilles. Chacune dit ce qu'un relecteur regarde et,
 surtout, ce qui fait échouer une relecture quel que soit le reste.
@@ -15,17 +15,17 @@ Trois refus sans discussion, quel que soit le contexte invoqué :
 
 1. **un secret en clair** dans un dépôt, un manifeste, une variable
    d'environnement commitée, une capture d'écran ;
-2. **un accès plus large que nécessaire** « en attendant » — un rôle
+2. **un accès plus large que nécessaire** « en attendant » - un rôle
    administrateur, un groupe de sécurité ouvert à 0.0.0.0/0, un compte de
    service partagé ;
-3. **rien qui permette de revenir en arrière** — pas de plan de retour, pas de
+3. **rien qui permette de revenir en arrière** - pas de plan de retour, pas de
    sauvegarde vérifiée avant une migration destructive.
 
 Ces trois-là ne se compensent pas par la qualité du reste.
 
 ---
 
-## 1. Infra — `ops_reviewer:infra`
+## 1. Infra - `ops_reviewer:infra`
 
 Modules Terraform, manifestes Kubernetes, charts, pipelines.
 
@@ -40,7 +40,7 @@ Modules Terraform, manifestes Kubernetes, charts, pipelines.
 
 **Refus spécifique** : un `apply` qui ne peut être joué qu'une fois.
 
-## 2. Fiabilité — `ops_reviewer:reliability`
+## 2. Fiabilité - `ops_reviewer:reliability`
 
 Objectifs de service, runbooks, post-mortems, tests de résilience.
 
@@ -55,7 +55,7 @@ Objectifs de service, runbooks, post-mortems, tests de résilience.
 
 **Refus spécifique** : un runbook qui commence par « demander à ».
 
-## 3. Cloud — `ops_reviewer:cloud`
+## 3. Cloud - `ops_reviewer:cloud`
 
 Conception, coûts, multi-région.
 
@@ -70,7 +70,7 @@ Conception, coûts, multi-région.
 **Refus spécifique** : un schéma multi-région dont la base de données est
 mono-région sans que ce soit dit.
 
-## 4. Observabilité — `ops_reviewer:observability`
+## 4. Observabilité - `ops_reviewer:observability`
 
 Métriques, journaux, traces, alertes, tableaux de bord.
 
@@ -86,7 +86,7 @@ Métriques, journaux, traces, alertes, tableaux de bord.
 **Refus spécifique** : une alerte sur un seuil de ressource sans lien avec un
 symptôme utilisateur.
 
-## 5. Données — `ops_reviewer:data`
+## 5. Données - `ops_reviewer:data`
 
 Réplication, réglage, migrations, reprise.
 
@@ -105,7 +105,7 @@ Réplication, réglage, migrations, reprise.
 
 ## Comment se passe une relecture
 
-1. le relecteur appartient à la famille concernée — la capability est
+1. le relecteur appartient à la famille concernée - la capability est
    `ops_reviewer:{famille}` ;
 2. il lit contre la grille et écrit ses constats, chacun avec ce sur quoi il
    repose ;

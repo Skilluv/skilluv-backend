@@ -15,7 +15,7 @@
 //! ## Where the expiry notice fits
 //!
 //! Sent once, thirty days before, and only for credentials that were
-//! verified — nagging somebody about a claim nobody checked would be asking
+//! verified - nagging somebody about a claim nobody checked would be asking
 //! them to renew something the platform never counted.
 
 use chrono::NaiveDate;
@@ -91,7 +91,7 @@ pub async fn declare(
 ) -> Result<Credential, AppError> {
     if !ISSUERS.contains(&input.issuer.as_str()) {
         return Err(AppError::Validation(format!(
-            "'{}' is not an issuer we record — use 'other' and name it in the \
+            "'{}' is not an issuer we record - use 'other' and name it in the \
              title if it is a smaller programme",
             input.issuer
         )));
@@ -110,7 +110,7 @@ pub async fn declare(
     crate::validators::check_max_len(&input.name, "name", 160)?;
     if !input.evidence_url.starts_with("https://") {
         return Err(AppError::Validation(
-            "a public https link to the credential page — a certification \
+            "a public https link to the credential page - a certification \
              nobody can open is a line on a CV"
                 .into(),
         ));
@@ -195,7 +195,7 @@ pub async fn verify(
 ) -> Result<(), AppError> {
     if note.trim().len() < 20 {
         return Err(AppError::Validation(
-            "say what you opened and what it said — twenty characters at \
+            "say what you opened and what it said - twenty characters at \
              least, because 'OK' is not a record of a check"
                 .into(),
         ));
@@ -226,7 +226,7 @@ pub async fn verify(
 /// Refuse a claimed credential, and say why to the person who claimed it.
 ///
 /// Deleted rather than flagged. A refused credential is one the platform has
-/// no reason to keep — unlike a revoked attestation, which Skilluv issued and
+/// no reason to keep - unlike a revoked attestation, which Skilluv issued and
 /// therefore owes a public record of.
 pub async fn refuse(db: &PgPool, credential_id: Uuid, reason: &str) -> Result<Uuid, AppError> {
     if reason.trim().len() < 20 {
@@ -269,7 +269,7 @@ pub async fn expiring_soon(db: &PgPool) -> Result<Vec<(Uuid, String, NaiveDate)>
 ///
 /// Run daily. Exactly one day of the window is selected rather than a range,
 /// so a sweep that runs every day sends one notice per credential rather than
-/// thirty. A day the process is down costs that day's notices — accepted,
+/// thirty. A day the process is down costs that day's notices - accepted,
 /// because the alternative is a range and a `notified_at` column to keep it
 /// from repeating, and the failure mode of the column is worse: a bug there
 /// silences the notice permanently instead of once.

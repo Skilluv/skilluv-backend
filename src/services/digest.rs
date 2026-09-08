@@ -62,7 +62,7 @@ impl<'a> DigestService<'a> {
         // Walked a page at a time. This read every active account into one
         // `Vec` before sending anything, which works until the day the
         // process is killed part-way through and nobody gets a digest at
-        // all — with a restart in the logs rather than a cause.
+        // all - with a restart in the logs rather than a cause.
         let mut walk = crate::services::batch::Walk::new("digest_weekly", MAX_PER_RUN);
         let mut page_len;
 
@@ -161,7 +161,7 @@ impl<'a> DigestService<'a> {
         .execute()
         .await?;
 
-        // A refusal is the preference working, not a failure — but it is not
+        // A refusal is the preference working, not a failure - but it is not
         // a send either, and counting it as one would have the report say the
         // digest went out when it did not.
         if delivery.email == 0 {

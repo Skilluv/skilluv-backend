@@ -24,9 +24,9 @@ Toutes se changent ensuite. Aucune ne se voit sur votre profil public.
 ## 2. Les vingt-six métiers, et pourquoi vous n'en verrez que huit au départ
 
 Le catalogue contient vingt-six métiers design. La communication publique
-commence par les huit les plus proches du reste de la plateforme — produit,
+commence par les huit les plus proches du reste de la plateforme - produit,
 système, web éditorial, mobile, iconographie, écriture d'interface, dataviz,
-design ops — parce que ce sont ceux où il y a déjà des relecteurs et des
+design ops - parce que ce sont ceux où il y a déjà des relecteurs et des
 projets réels.
 
 Les dix-huit autres existent en base et sont ouverts. Ce qui manque n'est pas
@@ -43,7 +43,7 @@ Vous pouvez en déclarer jusqu'à trois. La limite est volontaire : quelqu'un qu
 en déclare douze ne dit rien, et le tri ne trie plus.
 
 Déclarer n'est pas prouver. Ce qui prouve, c'est un livrable validé dans ce
-métier — et le score de métier compte séparément **dans combien de métiers
+métier - et le score de métier compte séparément **dans combien de métiers
 différents** vous avez été validé, parce que c'est la seule chose que le volume
 ne peut pas acheter.
 
@@ -82,7 +82,7 @@ Trois réflexes utiles :
   réponse ; la note qui l'accompagne dit ce que vous avez changé et ce que vous
   avez choisi de ne pas changer.
 - **Contester quand vous avez raison.** Un relecteur peut se tromper. Le dire,
-  argumenté, est normal — et un désaccord persistant s'arbitre.
+  argumenté, est normal - et un désaccord persistant s'arbitre.
 
 ## 6. Le premier mois, honnêtement
 
@@ -95,7 +95,7 @@ Semaine 3 : lire les critiques reçues par d'autres. Elles sont publiques, et
 c'est l'usage le plus rentable de la plateforme.
 
 Semaine 4 : un concours, si vous en avez envie. Ou un troisième challenge dans
-un métier voisin — la largeur compte.
+un métier voisin - la largeur compte.
 
 Ce qu'il ne faut **pas** viser le premier mois : une mission payée. Les
 missions vont à des profils qui ont des livrables validés derrière eux, et

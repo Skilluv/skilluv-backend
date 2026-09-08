@@ -4,7 +4,7 @@
 //!
 //! Four of these tickets sell a name: certified reviewer, certified partner,
 //! certified studio, certified team. What is actually being sold is Skilluv's
-//! word, spent on somebody else — and the person it misleads if the word is
+//! word, spent on somebody else - and the person it misleads if the word is
 //! wrong is not the buyer. It is the contributor who took the job because the
 //! badge said the company pays fairly.
 //!
@@ -36,7 +36,7 @@ pub const LICENSE_TYPES: &[&str] = &["personal_use", "commercial", "extended_com
 /// Twenty per cent below twenty euros, fifteen above. The cost of taking a
 /// payment, hosting the files and handling a dispute barely moves with the
 /// price, so a flat rate would make small items cost more to process than
-/// they earn — and small items are the ones that make a marketplace worth
+/// they earn - and small items are the ones that make a marketplace worth
 /// browsing.
 pub fn commission_percent(price: &BigDecimal) -> BigDecimal {
     if price < &BigDecimal::from(20) {
@@ -71,12 +71,12 @@ pub const DOWNLOAD_WINDOW_HOURS: i64 = 48;
 /// low enough to be visible on a share.
 pub const DOWNLOAD_LIMIT: i16 = 10;
 
-/// How long a redeemed download URL stays valid. Short — the 48-hour token and
+/// How long a redeemed download URL stays valid. Short - the 48-hour token and
 /// the ten-download limit are the access control, and a signed URL only needs
 /// to outlive the click that saves the file (SKI-330).
 pub const DOWNLOAD_URL_TTL_SECONDS: u32 = 900;
 
-/// How long a marketplace upload URL stays valid — long enough to push a large
+/// How long a marketplace upload URL stays valid - long enough to push a large
 /// asset over a slow line (SKI-330).
 pub const UPLOAD_URL_TTL_SECONDS: u32 = 3600;
 
@@ -199,7 +199,7 @@ pub async fn request_certification(
     };
     if named.iter().filter(|n| **n).count() != 1 || !named[expected] {
         return Err(AppError::Validation(format!(
-            "the {} programme certifies a {} — name exactly that",
+            "the {} programme certifies a {} - name exactly that",
             program.label, program.subject_kind
         )));
     }
@@ -384,7 +384,7 @@ pub async fn audit(
             .bind(cert.subject_user_id)
             .bind(cert.subject_enterprise_id)
             .bind(&cert.fee)
-            .bind(format!("{} — score {score}", program.label))
+            .bind(format!("{} - score {score}", program.label))
             .execute(&mut *tx)
             .await?;
         }
@@ -703,7 +703,7 @@ pub async fn redeem_download(
 
     let (purchase_id, item_id, used) = row.ok_or_else(|| {
         AppError::NotFound(
-            "this link has expired. Ask us and we will issue another — you paid for the \
+            "this link has expired. Ask us and we will issue another - you paid for the \
              files, not for the link."
                 .into(),
         )
@@ -739,7 +739,7 @@ pub async fn redeem_download(
     .await?;
 
     // A raw storage key is not something a browser can open. Hand back a
-    // short-lived signed URL per file — the bucket stays private, and the
+    // short-lived signed URL per file - the bucket stays private, and the
     // token window plus the download limit remain the access control.
     let mut files = Vec::with_capacity(keys.len());
     for key in keys {
@@ -758,7 +758,7 @@ pub async fn redeem_download(
 
 /// A presigned target for depositing one marketplace file. The creator PUTs the
 /// bytes to `upload_url`, then names `key` in `file_keys` when creating the
-/// item (SKI-330) — the marketplace had no equivalent of `/design/uploads`, so
+/// item (SKI-330) - the marketplace had no equivalent of `/design/uploads`, so
 /// nothing could produce those keys from the front.
 pub async fn upload_target(
     storage: &crate::services::storage::StorageService,
@@ -766,7 +766,7 @@ pub async fn upload_target(
     filename: &str,
 ) -> Result<UploadTarget, AppError> {
     // A slug of the name for readability, but the id is what makes the key
-    // unique and unguessable — two files called "kit.zip" never collide, and
+    // unique and unguessable - two files called "kit.zip" never collide, and
     // the key carries nothing about who uploaded it beyond their own id.
     let safe: String = filename
         .chars()

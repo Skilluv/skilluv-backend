@@ -1,4 +1,4 @@
-//! skilluv-seed — populate a database with deterministic fake data for staging / dev.
+//! skilluv-seed - populate a database with deterministic fake data for staging / dev.
 //!
 //! Idempotent : safe to run multiple times. Records flagged with `email` ending in
 //! `@seed.skilluv.local` are reserved for seed.
@@ -189,7 +189,7 @@ async fn seed_challenges(db: &PgPool, count: usize, report: &mut SeedReport) -> 
 
         // P8.3 : prerequisite_fragments retiré, la progression est gérée via
         // challenge_prerequisites (DAG) + tracks. Les seeds restent sans DAG
-        // pour l'instant — à populer manuellement par un admin si besoin.
+        // pour l'instant - à populer manuellement par un admin si besoin.
         let inserted: (Uuid,) = sqlx::query_as(
             r#"
             INSERT INTO challenge_templates (

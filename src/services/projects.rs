@@ -38,7 +38,7 @@ pub struct Project {
     #[serde(default)]
     #[schema(value_type = Option<f64>)]
     pub health_score: Option<BigDecimal>,
-    /// SKI-291 — the GitHub coordinates have existed since migration 0055 but
+    /// SKI-291 - the GitHub coordinates have existed since migration 0055 but
     /// were never declared here, so `SELECT *` read them and this struct
     /// dropped them on the floor. The profile page needs them to render one
     /// badge per maintained repository.
@@ -198,7 +198,7 @@ pub async fn list_curated(db: &PgPool, limit: i64) -> Result<Vec<Project>, AppEr
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// P12.1 — Recommandations projets pour un user
+// P12.1 - Recommandations projets pour un user
 // ═══════════════════════════════════════════════════════════════════
 
 /// Recommendation avec le score de match et les domaines qui matchent.
@@ -320,7 +320,7 @@ pub async fn recommend_for_user(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// P12.2 — Marque d'intérêt user → project (onboarding + feed for-you)
+// P12.2 - Marque d'intérêt user → project (onboarding + feed for-you)
 // ═══════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -333,7 +333,7 @@ pub struct UserProjectInterest {
 }
 
 /// Marque un projet comme intéressant pour le user (onboarding step).
-/// Score par défaut 50 ; upsert idempotent — un click répété = même score.
+/// Score par défaut 50 ; upsert idempotent - un click répété = même score.
 pub async fn mark_interested(
     db: &PgPool,
     user_id: Uuid,

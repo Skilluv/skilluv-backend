@@ -2,7 +2,7 @@
 //!
 //! The same editorial recognition every domain has, with the extras a game
 //! landing page wants: a short bio, the games put forward, optional itch
-//! embeds and a short interview. One row per week — the unique on
+//! embeds and a short interview. One row per week - the unique on
 //! `week_starts_at` makes two featurings for the same week impossible, which is
 //! the whole point of "of the week". Publishing a row issues the
 //! `featured_game_creator` attestation and recomputes the person's proof.
@@ -41,11 +41,11 @@ pub struct FeatureInput {
 }
 
 /// Feature a creator for a week. The bio is the citation the attestation
-/// carries — an editorial choice has to say why.
+/// carries - an editorial choice has to say why.
 pub async fn feature(db: &PgPool, input: FeatureInput) -> Result<Featured, AppError> {
     if input.bio_md.trim().is_empty() {
         return Err(AppError::Validation(
-            "a featuring says why — write the bio".into(),
+            "a featuring says why - write the bio".into(),
         ));
     }
     if input.week_ends_at < input.week_starts_at {
@@ -73,7 +73,7 @@ pub async fn feature(db: &PgPool, input: FeatureInput) -> Result<Featured, AppEr
     .fetch_one(db)
     .await
     .map_err(|e| {
-        // The unique on the week is the common failure — say what it means.
+        // The unique on the week is the common failure - say what it means.
         if e.to_string().contains("week_starts_at") {
             AppError::Validation("a creator is already featured for that week".into())
         } else {
@@ -81,7 +81,7 @@ pub async fn feature(db: &PgPool, input: FeatureInput) -> Result<Featured, AppEr
         }
     })?;
 
-    // Issue the attestation and recompute proof — best-effort, so a proof
+    // Issue the attestation and recompute proof - best-effort, so a proof
     // hiccup never undoes a featuring that was published.
     let profile_url = format!("{PUBLIC_SITE_URL}/game/creators/{}", input.user_id);
     if let Err(e) = crate::services::game_attestations::featured_game_creator(
@@ -111,7 +111,7 @@ pub async fn of_week(db: &PgPool, week_starts_at: NaiveDate) -> Result<Option<Fe
     )
 }
 
-/// The most recent featurings, newest first — for the landing page.
+/// The most recent featurings, newest first - for the landing page.
 pub async fn recent(db: &PgPool, limit: i64) -> Result<Vec<Featured>, AppError> {
     Ok(
         sqlx::query_as("SELECT * FROM game_featured ORDER BY week_starts_at DESC LIMIT $1")

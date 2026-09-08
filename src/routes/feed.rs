@@ -1,4 +1,4 @@
-//! Personal feed — Phase 2 Sprint 2.
+//! Personal feed - Phase 2 Sprint 2.
 //!
 //! Aggregates the user's own recent activity (submissions, comments) + mentions received,
 //! ordered by time. Sprint 4 will extend with guild activity and Sprint 2.S2.5 with
@@ -21,7 +21,7 @@ use crate::services::analytics::events;
 pub fn feed_routes() -> Router<AppState> {
     Router::new()
         .route("/feed/me", get(my_feed))
-        // P12.3 — feed personnalisé "pour toi"
+        // P12.3 - feed personnalisé "pour toi"
         .route("/feed/for-you", get(for_you_feed))
 }
 
@@ -34,7 +34,7 @@ struct FeedItem {
 
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
 pub struct FeedQuery {
-    /// Max items — clamped to `[1, 100]`. Defaults to 30.
+    /// Max items - clamped to `[1, 100]`. Defaults to 30.
     pub limit: Option<i64>,
 }
 
@@ -167,7 +167,7 @@ pub async fn my_feed(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// P12.3 — Feed "pour toi" : mix slices favoris + recos + tracks + attestations
+// P12.3 - Feed "pour toi" : mix slices favoris + recos + tracks + attestations
 // ═══════════════════════════════════════════════════════════════════
 
 /// GET /api/feed/for-you?limit=30
@@ -181,7 +181,7 @@ pub async fn my_feed(
 ///
 /// Chaque item porte un `weight` et un `happened_at` ; le tri final est
 /// pondéré (score = weight × recency_penalty). Limit clampé à [1,100].
-/// P12.3 — "For you" feed: personalised mix of open slices in
+/// P12.3 - "For you" feed: personalised mix of open slices in
 /// favourite projects, slice recommendations near a level-up, new
 /// challenges in enrolled tracks, and recent community attestations.
 #[utoipa::path(

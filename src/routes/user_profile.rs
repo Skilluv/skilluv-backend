@@ -92,7 +92,7 @@ pub struct PrivacySettings {
 
 // ─── Routes ─────────────────────────────────────────────────────
 
-// PUT /api/profile/me — update bio, social links, country
+// PUT /api/profile/me - update bio, social links, country
 /// Update the caller's profile (bio + social links + geo).
 #[utoipa::path(
     put, path = "/api/profile/me", tag = "profile",
@@ -197,7 +197,7 @@ pub async fn update_profile(
     Ok(Json(build_response(json!({ "user": private }))))
 }
 
-// POST /api/profile/me/avatar — upload avatar (multipart)
+// POST /api/profile/me/avatar - upload avatar (multipart)
 /// Upload avatar (multipart, max 2 MB).
 #[utoipa::path(
     post, path = "/api/profile/me/avatar", tag = "profile",

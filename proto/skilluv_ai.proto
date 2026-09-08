@@ -18,7 +18,7 @@ package skilluv.ai.v2;
 // ---------------------------------------------------------------------------
 
 // ===========================================================================
-// 1. CodeReviewService — utilisé par backend P15.2 llm_verifier
+// 1. CodeReviewService - utilisé par backend P15.2 llm_verifier
 // ===========================================================================
 service CodeReviewService {
   rpc ReviewCode (CodeReviewRequest) returns (CodeReviewResponse);
@@ -84,7 +84,7 @@ message GenerateVariantRequest {
   string variant_type = 2;             // 'harder' | 'easier' | 'different_lang' | 'shorter' | 'longer'
   string target_param = 3;             // ex: 'python' pour different_lang, '30' pour shorter
   // Contexte original fourni par le backend (source de vérité : Postgres).
-  // L'IA reste stateless — pas de dépendance à un cache inter-appels.
+  // L'IA reste stateless - pas de dépendance à un cache inter-appels.
   GeneratedChallenge original = 4;
 }
 
@@ -121,7 +121,7 @@ message TestCase {
 }
 
 // ===========================================================================
-// 3. TalentDetectionService — nouveau, backend attend ce contrat
+// 3. TalentDetectionService - nouveau, backend attend ce contrat
 // ===========================================================================
 service TalentDetectionService {
   rpc AnalyzePerformance (AnalyzePerformanceRequest) returns (AnalyzePerformanceResponse);
@@ -227,7 +227,7 @@ message OrientationSuggestion {
 }
 
 // ===========================================================================
-// 4. PlagiarismService — utilisé par backend P14.3
+// 4. PlagiarismService - utilisé par backend P14.3
 // ===========================================================================
 service PlagiarismService {
   rpc CheckPlagiarism (CheckPlagiarismRequest) returns (CheckPlagiarismResponse);
@@ -267,15 +267,15 @@ message MatchedRange {
 }
 
 // ===========================================================================
-// 5. LearningCompanionService — SKI-44 (Post-MVP T3-01)
+// 5. LearningCompanionService - SKI-44 (Post-MVP T3-01)
 // ===========================================================================
 //
 // A single `Ask` RPC typed by `interaction_type`, rather than four narrow
 // RPCs. The four interactions differ only in the prompt the worker
 // selects: same inputs (a question, optionally some code and context),
 // same output (an answer plus optional structured items). Four RPCs would
-// mean four near-identical messages and a proto change — coordinated
-// across two repositories — every time an interaction is added.
+// mean four near-identical messages and a proto change - coordinated
+// across two repositories - every time an interaction is added.
 //
 // Every response carries `disclosure_label`. The backend stores it in
 // `ai_interactions` and copies it onto the next submitted deliverable's

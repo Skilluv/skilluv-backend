@@ -1,17 +1,17 @@
-//! SKI-36 (Post-MVP T1-01) — polymorphic bookmarks.
+//! SKI-36 (Post-MVP T1-01) - polymorphic bookmarks.
 //!
 //! Endpoints:
-//!   POST   /api/bookmarks                 (auth) — create or update
-//!   DELETE /api/bookmarks/{id}            (auth) — owner only
-//!   GET    /api/users/me/bookmarks        (auth) — filter by type / folder
-//!   GET    /api/users/me/bookmarks/folders(auth) — folder facets
+//!   POST   /api/bookmarks                 (auth) - create or update
+//!   DELETE /api/bookmarks/{id}            (auth) - owner only
+//!   GET    /api/users/me/bookmarks        (auth) - filter by type / folder
+//!   GET    /api/users/me/bookmarks/folders(auth) - folder facets
 //!
 //! POST is an upsert on `(user_id, target_type, target_id)`: bookmarking is
 //! set membership, so a second POST on the same target re-files it (new
 //! folder / notes) instead of erroring or stacking a duplicate. That also
 //! makes the front-end "save" button idempotent under double-click.
 //!
-//! Listing joins nothing at the SQL level — targets live in six different
+//! Listing joins nothing at the SQL level - targets live in six different
 //! tables. `saved_items::resolve_labels` batch-resolves them afterwards,
 //! and rows whose target has since been deleted are dropped from the
 //! response.
@@ -30,7 +30,7 @@ use crate::errors::AppError;
 use crate::middleware::AuthUser;
 use crate::services::saved_items;
 
-/// Hard cap on a single page. Bookmarks are a personal list, not a feed —
+/// Hard cap on a single page. Bookmarks are a personal list, not a feed -
 /// nobody legitimately pages 500 at a time.
 const MAX_LIMIT: i64 = 100;
 const DEFAULT_LIMIT: i64 = 50;
@@ -204,7 +204,7 @@ pub struct ListQuery {
 }
 
 /// Sentinel folder value selecting bookmarks that have no folder. `unfiled`
-/// is a legal slug, so this shadows a real folder of that name — an
+/// is a legal slug, so this shadows a real folder of that name - an
 /// acceptable trade for keeping the filter a single flat query param.
 const UNFILED: &str = "unfiled";
 

@@ -204,7 +204,7 @@ pub async fn my_challenges(
     Ok(Json(build_response(json!({ "challenges": challenges }))))
 }
 
-/// Edit a community challenge — only allowed while in draft or review.
+/// Edit a community challenge - only allowed while in draft or review.
 #[utoipa::path(
     put,
     path = "/api/community/challenges/{id}",

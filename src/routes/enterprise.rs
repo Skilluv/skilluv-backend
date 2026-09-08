@@ -25,7 +25,7 @@ use crate::services::{AuthService, SessionService};
 /// Redis payload for an enterprise recruiter invitation.
 ///
 /// The membership row is created only when the invite is consumed (accept_invite
-/// or OAuth callback carrying the invite_token) — this lets us invite emails that
+/// or OAuth callback carrying the invite_token) - this lets us invite emails that
 /// don't yet have a Skilluv account.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EnterpriseInvitePayload {
@@ -150,7 +150,7 @@ pub async fn require_enterprise(state: &AppState, auth: &AuthUser) -> Result<Ent
 
     // Verified email is required for every enterprise route: an unverified
     // owner shouldn't be able to configure SSO, invite recruiters, or move
-    // billing. SSO-authenticated sessions bypass this — the IdP already
+    // billing. SSO-authenticated sessions bypass this - the IdP already
     // asserted email ownership.
     if !email_verified && auth.login_method != "sso" {
         return Err(AppError::EmailVerificationRequired);
@@ -159,7 +159,7 @@ pub async fn require_enterprise(state: &AppState, auth: &AuthUser) -> Result<Ent
     // Mandatory 2FA for enterprise/recruiter roles. The user satisfies this
     // in one of two ways: (a) the session was minted with a strong factor
     // (SSO / WebAuthn passkey), or (b) the account has at least one strong
-    // factor enrolled — either TOTP or a passkey — for future logins.
+    // factor enrolled - either TOTP or a passkey - for future logins.
     // If neither is true we send them to the onboarding wizard where they
     // pick and complete a method.
     let strong_factor_session = matches!(auth.login_method.as_str(), "sso" | "webauthn");
@@ -354,9 +354,9 @@ struct RegisterAndAcceptRequest {
 
 // POST /api/enterprise/register
 //
-// Mirrors the shape of the candidate register handler in `routes::auth` —
+// Mirrors the shape of the candidate register handler in `routes::auth` -
 // same rate-limit budget, same validators, same terms + verification-email +
-// CSRF + audit + analytics wiring — with enterprise-specific fields laid on
+// CSRF + audit + analytics wiring - with enterprise-specific fields laid on
 // top (company profile + owner-tier membership).
 /// Register a new enterprise account (owner + company).
 #[utoipa::path(
@@ -385,7 +385,7 @@ pub async fn register_enterprise(
         ));
     }
 
-    // Same policy as the candidate register — see `routes::auth::validate_*`.
+    // Same policy as the candidate register - see `routes::auth::validate_*`.
     validate_email(&body.email)?;
     validate_username(&body.username)?;
     crate::routes::auth::validate_password_pub(&body.password)?;
@@ -487,7 +487,7 @@ pub async fn register_enterprise(
     .execute(&state.db)
     .await?;
 
-    // Email verification — same 24 h Redis-backed token as the candidate flow.
+    // Email verification - same 24 h Redis-backed token as the candidate flow.
     let verify_token = format!("{}{}", Uuid::new_v4(), Uuid::new_v4()).replace('-', "");
     let mut redis = state.redis.clone();
     let () = redis
@@ -497,7 +497,7 @@ pub async fn register_enterprise(
             24 * 60 * 60,
         )
         .await?;
-    // Best-effort — a mail transport failure shouldn't roll back an otherwise
+    // Best-effort - a mail transport failure shouldn't roll back an otherwise
     // successful signup (the user can hit /auth/resend-verification later).
     if let Err(err) = state
         .email
@@ -679,7 +679,7 @@ pub async fn update_profile(
     Ok(Json(build_response(json!({ "enterprise": updated }))))
 }
 
-// POST /api/enterprise/logo — upload company logo (multipart)
+// POST /api/enterprise/logo - upload company logo (multipart)
 /// Upload the enterprise logo (multipart).
 #[utoipa::path(
     post, path = "/api/enterprise/logo", tag = "enterprise",
@@ -905,7 +905,7 @@ pub async fn accept_invite(
 // GET /api/enterprise/invite/preview?token=...
 //
 // Public: the token IS the secret. Returns just enough to render the landing
-// page ("Join {company_name} as {email}") — no membership state, no user info,
+// page ("Join {company_name} as {email}") - no membership state, no user info,
 // no PII beyond the invited email itself.
 /// Preview a recruiter invitation (public, token-gated).
 #[utoipa::path(
@@ -929,7 +929,7 @@ pub async fn invite_preview(
         .map(|c| c.0)
         .ok_or(AppError::NotFound("Enterprise not found".to_string()))?;
 
-    // Flag whether the invited email already has an account — the frontend uses
+    // Flag whether the invited email already has an account - the frontend uses
     // it to swap "Rejoindre" (create + accept) for "Se connecter" (log in +
     // accept) so we don't waste a user's time on the register form.
     let account_exists: bool =
@@ -949,7 +949,7 @@ pub async fn invite_preview(
 //
 // Public: consumes the invite token, creates a recruiter account for the
 // invited email, and attaches the membership in a single transaction. Email is
-// marked verified because the invite was delivered by us to that inbox — the
+// marked verified because the invite was delivered by us to that inbox - the
 // user proving they received the token IS the verification. The invite token
 // is deleted only after the membership is committed.
 /// Register a new recruiter and accept invitation in one call.
@@ -979,7 +979,7 @@ pub async fn invite_register_and_accept(
     let payload = peek_enterprise_invite(&mut redis, &body.token).await?;
     let email_lower = payload.email.trim().to_lowercase();
 
-    // Refuse if an account already exists for that email — the frontend flows
+    // Refuse if an account already exists for that email - the frontend flows
     // this case to the "j'ai déjà un compte" login path instead.
     let existing: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM users WHERE email = $1")
         .bind(&email_lower)
@@ -992,7 +992,7 @@ pub async fn invite_register_and_accept(
     }
 
     // Auto-generate a username from the email local-part. Retry with a numeric
-    // suffix on collision — usernames must be unique but the invitee never
+    // suffix on collision - usernames must be unique but the invitee never
     // picked one, so we don't want to fail the whole flow on it.
     let base = email_lower
         .split('@')
@@ -1033,7 +1033,7 @@ pub async fn invite_register_and_accept(
     let password_hash = AuthService::hash_password(&body.password)?;
     let display_name = format!("{} {}", body.first_name.trim(), body.last_name.trim());
 
-    // role='recruiter' up-front — the invite acceptance path never applies to
+    // role='recruiter' up-front - the invite acceptance path never applies to
     // an existing candidate here (we bailed above), so we don't need
     // attach_recruiter_to_enterprise's role-guard. email_verified=true because
     // receiving the invite email is proof of ownership.
@@ -1055,7 +1055,7 @@ pub async fn invite_register_and_accept(
     .fetch_one(&state.db)
     .await?;
 
-    // Insert membership directly — no role mutation needed since we just
+    // Insert membership directly - no role mutation needed since we just
     // created the user with role='recruiter'.
     sqlx::query(
         r#"
@@ -1298,7 +1298,7 @@ pub async fn switch_enterprise(
         return Err(AppError::Forbidden);
     }
 
-    // 7-day TTL matches the refresh token — the switcher shouldn't reset every
+    // 7-day TTL matches the refresh token - the switcher shouldn't reset every
     // time the access token renews. Path=/ so it flows to every enterprise
     // route (including SSR /api/* calls from the frontend).
     let cookie = format!(

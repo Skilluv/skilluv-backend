@@ -42,7 +42,7 @@ fn build_response(data: Value) -> Value {
 /// The enterprise this person acts for.
 ///
 /// An ATS call from somebody with no company is not an authorisation problem
-/// to be logged — it is a person on the wrong page, and the message says so.
+/// to be logged - it is a person on the wrong page, and the message says so.
 async fn enterprise_of(state: &AppState, auth: &AuthUser) -> Result<Uuid, AppError> {
     sqlx::query_scalar("SELECT id FROM enterprises WHERE owner_id = $1")
         .bind(auth.user_id)

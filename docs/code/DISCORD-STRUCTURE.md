@@ -1,4 +1,4 @@
-# Discord — code
+# Discord - code
 
 The structure the code side of the community runs on, and the reasoning
 behind it. Written down because a server that grows one channel at a time
@@ -29,7 +29,7 @@ recovers. Better to close it than to let it rot.
 
 ## Families
 
-One per reviewer group — the same eight the guides, the review grids and the
+One per reviewer group - the same eight the guides, the review grids and the
 reviewer capabilities already use. Anything else would mean somebody has to
 learn a second map.
 
@@ -49,7 +49,7 @@ These overlap with the families on purpose: people identify with a language
 before they identify with a trade, and the language channel is often where
 somebody speaks for the first time.
 
-`#lang-other` is not a leftovers bin — it is where the next channel gets
+`#lang-other` is not a leftovers bin - it is where the next channel gets
 proposed. Watch it.
 
 ## Events

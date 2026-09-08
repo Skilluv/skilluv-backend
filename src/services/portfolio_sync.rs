@@ -2,8 +2,8 @@
 //!
 //! ## What this is and what `code_portfolio` is
 //!
-//! [`crate::services::code_portfolio`] fetches the code forges — GitHub,
-//! GitLab, Codeberg — where the figures are repositories, stars and a
+//! [`crate::services::code_portfolio`] fetches the code forges - GitHub,
+//! GitLab, Codeberg - where the figures are repositories, stars and a
 //! contribution graph, and where one of them can actually be *verified*
 //! against an OAuth identity. It stays as it is.
 //!
@@ -17,7 +17,7 @@
 //! A row starts declared: somebody typed what they read on their own
 //! dashboard, and `figures_are_declared` is true. When a fetch succeeds the
 //! figures are overwritten and the flag is cleared, which is what makes the
-//! craft scores count them in full instead of at half — migration 0507 and
+//! craft scores count them in full instead of at half - migration 0507 and
 //! `communication_profile::reach` are the two ends of that.
 //!
 //! A fetch that fails leaves the numbers and the flag alone and writes
@@ -30,7 +30,7 @@
 //! implemented, and their rows say `has_public_api = FALSE` so nothing here
 //! ever looks at them: Medium (nothing machine-readable since 2019), Twitch
 //! (needs an application registration this deployment does not have), Spotify
-//! and Apple Podcasts, Crowdin, and every education platform — Udemy,
+//! and Apple Podcasts, Crowdin, and every education platform - Udemy,
 //! Coursera, LinkedIn Learning, Teachable, OpenClassrooms, Exercism.
 //!
 //! That last group is worth saying out loud: almost nothing in education can
@@ -46,8 +46,8 @@ use crate::errors::AppError;
 
 /// How old a row has to be before a sweep touches it again.
 ///
-/// A week. These figures move slowly — an article's reaction count a week late
-/// is a fine answer — and every one of these services is somebody else's, run
+/// A week. These figures move slowly - an article's reaction count a week late
+/// is a fine answer - and every one of these services is somebody else's, run
 /// for free.
 const STALE_AFTER_DAYS: i64 = 7;
 
@@ -64,10 +64,10 @@ const PER_PASS: i64 = 200;
 /// the platform does not say, which must never be stored as zero.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct AccountStats {
-    /// Articles, videos, translations — whatever the platform's `items_label`
+    /// Articles, videos, translations - whatever the platform's `items_label`
     /// calls them.
     pub items: Option<i32>,
-    /// Readers, viewers, reactions — whatever `reach_label` calls them.
+    /// Readers, viewers, reactions - whatever `reach_label` calls them.
     pub reach: Option<i64>,
 }
 
@@ -128,8 +128,8 @@ async fn fetch_dev_to(client: &reqwest::Client, handle: &str) -> Result<AccountS
         .await
         .map_err(|e| AppError::Internal(format!("dev.to sent something unexpected: {e}")))?;
 
-    // Reactions and comments are two counts of the same thing — somebody
-    // bothered — and the column is one.
+    // Reactions and comments are two counts of the same thing - somebody
+    // bothered - and the column is one.
     let reach: i64 = articles
         .iter()
         .map(|a| {
@@ -246,7 +246,7 @@ async fn fetch_hashnode(client: &reqwest::Client, handle: &str) -> Result<Accoun
 ///
 /// Pure, so the trade-off is testable without a network.
 pub fn count_feed_entries(feed: &str) -> Option<i32> {
-    // `<item>` and `<item ` — an attribute is legal and rare. `</item>` must
+    // `<item>` and `<item ` - an attribute is legal and rare. `</item>` must
     // not match, which is why the prefix includes the `<`.
     let count = |open: &str, with_attrs: &str| {
         feed.matches(open).count() + feed.matches(with_attrs).count()
@@ -264,7 +264,7 @@ pub fn count_feed_entries(feed: &str) -> Option<i32> {
 /// A personal blog, by the address of its feed.
 ///
 /// The `handle` for this platform is the feed URL, because a personal blog has
-/// no username — which is the whole reason it needs a row of its own rather
+/// no username - which is the whole reason it needs a row of its own rather
 /// than being filed under one of the hosted platforms.
 ///
 /// No feed publishes readership, so `reach` is always absent. The item count
@@ -274,7 +274,7 @@ async fn fetch_feed(_client: &reqwest::Client, feed_url: &str) -> Result<Account
     // Through `services::outbound`, not the shared client. This address is
     // typed by a member and this is the sweep that goes and reads it, so it
     // was the one place in this codebase that would fetch whatever it was
-    // pointed at — including `https://` names resolving to a metadata
+    // pointed at - including `https://` names resolving to a metadata
     // endpoint. It checked the scheme and nothing else.
     let body = crate::services::outbound::get_text(feed_url).await?;
 
@@ -323,7 +323,7 @@ async fn fetch_youtube(client: &reqwest::Client, handle: &str) -> Result<Account
     let Ok(key) = std::env::var("YOUTUBE_API_KEY") else {
         tracing::debug!(
             channel = handle,
-            "YOUTUBE_API_KEY absent — channel not fetched"
+            "YOUTUBE_API_KEY absent - channel not fetched"
         );
         return Ok(AccountStats::default());
     };
@@ -417,8 +417,8 @@ async fn fetch_weblate(client: &reqwest::Client, handle: &str) -> Result<Account
 /// Ask one platform about one account.
 ///
 /// A platform with no branch here returns nothing rather than an error. The
-/// row should not have reached this function at all — `sync_enabled` is set
-/// from `has_public_api` — and a platform that arrives anyway is a seeding
+/// row should not have reached this function at all - `sync_enabled` is set
+/// from `has_public_api` - and a platform that arrives anyway is a seeding
 /// mistake worth a log line, not a failure that would blank the figures.
 /// The platforms this module can read.
 ///

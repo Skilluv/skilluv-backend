@@ -58,7 +58,7 @@ INSERT INTO projects (
     ARRAY['Rust','search','embeddings'],
     true, true, 'user', $1,
     true, false, NULL,
-    'Sujet embeddings/vector search très porteur pour talents IA africains. Doc en cours de traduction FR — porte d''entrée non-code également.'
+    'Sujet embeddings/vector search très porteur pour talents IA africains. Doc en cours de traduction FR - porte d''entrée non-code également.'
 ),
 (
     'coolify', 'Coolify',
@@ -121,7 +121,7 @@ INSERT INTO projects (
     ARRAY['Rust','ECS','game engine','WGPU'],
     true, true, 'user', $1,
     true, false, NULL,
-    'Passion Jérémie (carnet). PAS moteur Skilluv — flag "orientation game-dev optionnelle". Doc PR super soignée, bonne école de code Rust idiomatique.'
+    'Passion Jérémie (carnet). PAS moteur Skilluv - flag "orientation game-dev optionnelle". Doc PR super soignée, bonne école de code Rust idiomatique.'
 )
 ON CONFLICT (slug) DO NOTHING;
 

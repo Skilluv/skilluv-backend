@@ -5,7 +5,7 @@
 //!
 //! The toolkit, the onboarding guides, the brief templates and the writeup
 //! templates. They are `content_guides` rows and
-//! `/api/guides?domain=communication` already serves them — a second endpoint
+//! `/api/guides?domain=communication` already serves them - a second endpoint
 //! would be the mistake `routes::guides` was written to undo.
 //!
 //! The challenge catalogue, the contests, the missions and the badges are the
@@ -90,7 +90,7 @@ pub async fn user_communication_profile(
 //
 // Declared, never proven, and migration 0516 says why: nothing here can test
 // somebody's Swahili, and a quiz would produce a number that looks like
-// evidence. What the declaration buys is accountability — it is signed, and
+// evidence. What the declaration buys is accountability - it is signed, and
 // every review made under it carries it.
 
 #[derive(Debug, Serialize, sqlx::FromRow, ToSchema)]
@@ -228,7 +228,7 @@ pub async fn drop_review_language(
 ///
 /// Deliberately shallow: two or three letters, then optional subtags. It
 /// rejects a sentence and accepts a language nobody has heard of, which is the
-/// right way round — the alternative is a list of the languages the platform
+/// right way round - the alternative is a list of the languages the platform
 /// has decided exist.
 fn is_language_tag(s: &str) -> bool {
     let mut parts = s.split('-');
@@ -296,9 +296,9 @@ pub struct ReviewTranslationBody {
 
 /// Validate a translation, in a language you have declared you read.
 ///
-/// The capability is checked here; everything else — that the slice is a
+/// The capability is checked here; everything else - that the slice is a
 /// translation, that it targets this language, that the caller is not the
-/// translator, that they declared the language — is checked in
+/// translator, that they declared the language - is checked in
 /// [`communication_attestations::validate_translation`], which is the only
 /// door to the basis.
 #[utoipa::path(

@@ -1,14 +1,14 @@
-//! Dev-mode-only helper endpoints — gated by `SKILLUV_DEV_MODE=true` env var.
+//! Dev-mode-only helper endpoints - gated by `SKILLUV_DEV_MODE=true` env var.
 //!
 //! Purpose : let e2e test tooling (Playwright, curl scripts) programmatically
-//! read state that would normally require an email client — e.g. the current
+//! read state that would normally require an email client - e.g. the current
 //! email verification token for a freshly-registered user, so a test can call
 //! `GET /api/auth/verify-email?token=<...>` without scraping Gmail.
 //!
 //! **NEVER** enable `SKILLUV_DEV_MODE=true` in prod. The health of these
 //! endpoints assumes the caller is trusted (they can bypass email ownership).
 //! `assert_production_secrets` refuses to boot if `SKILLUV_DEV_MODE=true` AND
-//! `ENVIRONMENT=prod` — see src/config/app.rs.
+//! `ENVIRONMENT=prod` - see src/config/app.rs.
 
 use axum::extract::{Path, State};
 use axum::routing::get;
@@ -27,15 +27,15 @@ pub fn dev_routes() -> Router<AppState> {
 /// GET /api/dev/verify-tokens/{email}
 ///
 /// Look up the current pending email-verify token for the given email
-/// address. Iterates Redis keys `email_verify:*` (SCAN, not KEYS — the
+/// address. Iterates Redis keys `email_verify:*` (SCAN, not KEYS - the
 /// deprecated blocking variant), matches the user_id stored under each key
 /// against the user_id of the given email, returns the first match.
 ///
 /// Responses :
-/// - 200 `{ token, user_id, ttl_seconds }` — token found
-/// - 404 — no pending token (either the user doesn't exist, is already
+/// - 200 `{ token, user_id, ttl_seconds }` - token found
+/// - 404 - no pending token (either the user doesn't exist, is already
 ///   verified, or the token expired)
-/// - 403 `AUTH_FORBIDDEN` — SKILLUV_DEV_MODE isn't `true`
+/// - 403 `AUTH_FORBIDDEN` - SKILLUV_DEV_MODE isn't `true`
 async fn get_verify_token(
     State(state): State<AppState>,
     Path(email): Path<String>,
@@ -44,7 +44,7 @@ async fn get_verify_token(
         return Err(AppError::Forbidden);
     }
 
-    // Fetch user_id from email — case-insensitive to match /auth/register.
+    // Fetch user_id from email - case-insensitive to match /auth/register.
     let user_id: Option<Uuid> =
         sqlx::query_scalar("SELECT id FROM users WHERE LOWER(email) = LOWER($1)")
             .bind(&email)

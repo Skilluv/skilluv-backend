@@ -2,7 +2,7 @@
 //!
 //! Each knows three things and nothing else: how the provider signs, where
 //! it puts its event id, and which of its event names mean a payout
-//! settled or failed. None of them touches the ledger — that is
+//! settled or failed. None of them touches the ledger - that is
 //! [`crate::services::payment_webhooks::receive`]'s job, and keeping the
 //! split is what stops a provider from inventing its own way to move money.
 
@@ -176,8 +176,8 @@ impl Source for FedaPaySource {
             },
 
             // Money coming in. `transferred` is FedaPay moving an approved
-            // transaction onto the merchant balance — the same money, one
-            // step later — so both mean the payer has paid.
+            // transaction onto the merchant balance - the same money, one
+            // step later - so both mean the payer has paid.
             "transaction.approved" | "transaction.transferred" => Event::PaymentSucceeded {
                 reference,
                 merchant_reference,

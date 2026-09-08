@@ -1,4 +1,4 @@
-//! P14.3 — Détection de plagiat cross-user via cosine similarity sur embeddings.
+//! P14.3 - Détection de plagiat cross-user via cosine similarity sur embeddings.
 //!
 //! Design :
 //! - Chaque deliverable a un embedding (FLOAT4[]) stocké dans

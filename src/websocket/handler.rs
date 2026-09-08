@@ -14,7 +14,7 @@ pub fn ws_routes() -> Router<AppState> {
     Router::new().route("/ws", get(ws_upgrade))
 }
 
-/// WebSocket upgrade handler — authenticates via cookie
+/// WebSocket upgrade handler - authenticates via cookie
 async fn ws_upgrade(
     State(state): State<AppState>,
     ws: WebSocketUpgrade,
@@ -49,13 +49,13 @@ struct WsClientMessage {
 ///
 /// Room names are client-supplied strings, so anything broadcast to a room
 /// is readable by anyone who guesses its name. Rooms carrying private
-/// content therefore need an explicit membership check here — the
+/// content therefore need an explicit membership check here - the
 /// broadcast side cannot filter per-recipient.
 ///
-/// * `cohort:<uuid>` (SKI-40) — members only. A cohort's existence may be
+/// * `cohort:<uuid>` (SKI-40) - members only. A cohort's existence may be
 ///   public while its conversation is not, so this checks membership, not
 ///   the cohort's `is_public` flag.
-/// * every other prefix — unrestricted, as before. Those rooms carry
+/// * every other prefix - unrestricted, as before. Those rooms carry
 ///   content that is already public on its own endpoint.
 ///
 /// Fails closed: an unparseable id or a database error refuses the join
@@ -83,7 +83,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Option<Uuid>
     let user_id = match user_id {
         Some(id) => id,
         None => {
-            // Not authenticated — close connection
+            // Not authenticated - close connection
             let (mut sink, _) = socket.split();
             let _ = sink
                 .send(Message::Text(

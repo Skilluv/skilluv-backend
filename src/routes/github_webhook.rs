@@ -1,9 +1,9 @@
-//! SKI-73 (P26 v2 B-02) — GitHub webhook receiver for reverse sync.
+//! SKI-73 (P26 v2 B-02) - GitHub webhook receiver for reverse sync.
 //!
 //! Route: `POST /webhooks/github` (mounted OUTSIDE `/api`, same rationale
-//! as the internal-tracker receiver — see `routes/linear_webhook.rs`).
+//! as the internal-tracker receiver - see `routes/linear_webhook.rs`).
 //!
-//! Env vars (soft-required — 503 if any is missing):
+//! Env vars (soft-required - 503 if any is missing):
 //!   GITHUB_WEBHOOK_SECRET      HMAC-SHA256 secret configured in GH webhook
 //!   LINEAR_API_KEY             upstream API key with issue-update rights
 //!   LINEAR_DONE_STATE_ID       workflow state UUID to move closed tickets to
@@ -82,7 +82,7 @@ async fn receive(
             ))
         }
         "check_run" => {
-            // SKI-87 — advance submitted → ci_green on successful CI. LINEAR_*
+            // SKI-87 - advance submitted → ci_green on successful CI. LINEAR_*
             // secrets are not used on this path; only the shared HMAC secret.
             let event: CheckRunEvent = serde_json::from_slice(&body).map_err(|e| {
                 AppError::Validation(format!("check_run payload parse failed: {e}"))
@@ -98,7 +98,7 @@ async fn receive(
             ))
         }
         "pull_request" => {
-            // SKI-89 — validated → merged bonus when the upstream maintainer
+            // SKI-89 - validated → merged bonus when the upstream maintainer
             // merges the PR. Silent no-op for slices that never reached
             // `validated` (upstream can merge without Skilluv validating).
             let event: PullRequestEvent = serde_json::from_slice(&body).map_err(|e| {
@@ -114,7 +114,7 @@ async fn receive(
             ))
         }
         _ => {
-            // Politely 202 anything else — GitHub disables endpoints that
+            // Politely 202 anything else - GitHub disables endpoints that
             // return non-2xx repeatedly. `ping` (delivery test) lands here too.
             Ok((StatusCode::ACCEPTED, Json(json!({"decision": "Skipped"}))))
         }

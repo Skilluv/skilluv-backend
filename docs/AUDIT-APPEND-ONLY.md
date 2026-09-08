@@ -1,16 +1,16 @@
-# Audit log — append-only, rétention 7 ans, export S3
+# Audit log - append-only, rétention 7 ans, export S3
 
 **Statut au 2026-08-26** : migration 0099 livrée (REVOKE UPDATE/DELETE + rôle `audit_admin`). Cron export S3 non implémenté (stub documenté ci-dessous).
 
 ## Ce qui est en place
 
 - **Tables**:
-  - `admin_audit_log` (0014) — actions admin (bans, revokes, KYC decisions, etc.).
-  - `audit_log` (0024) — audit générique (actor_type peut être system/enterprise/user).
+  - `admin_audit_log` (0014) - actions admin (bans, revokes, KYC decisions, etc.).
+  - `audit_log` (0024) - audit générique (actor_type peut être system/enterprise/user).
 - **Append-only** : REVOKE UPDATE, DELETE sur les 2 tables. Effectif en prod avec rôle NOSUPERUSER.
 - **Rôle read-only `audit_admin`** : SELECT-only sur audit tables. À utiliser par SOC / SRE / DPO.
 - **Env vars** :
-  - `SKILLUV_AUDIT_RETENTION_DAYS` (default 2555 = 7 ans) — non utilisé au MVP (cron pas actif).
+  - `SKILLUV_AUDIT_RETENTION_DAYS` (default 2555 = 7 ans) - non utilisé au MVP (cron pas actif).
 
 ## Quelles routes écrivent, et où (SKI-299)
 
@@ -25,7 +25,7 @@ La règle est désormais explicite :
 
 **Toute nouvelle instrumentation passe par `services::audit`.** C'est la table
 que 0099 durcit, et dupliquer chaque entrée dans les deux donnerait deux copies
-qui finiraient par diverger — pire qu'un seul trou.
+qui finiraient par diverger - pire qu'un seul trou.
 
 `GET /api/admin/audit-log` lit donc l'union des deux depuis SKI-299, en
 projetant `metadata → details` et `ip → ip_address`, et en n'y prenant que les
@@ -70,7 +70,7 @@ de proxies suppriment le corps d'un DELETE pour qu'un champ obligatoire y
 
 Même règle sur `POST /api/admin/cohorts/{id}/archive` et
 `POST /api/admin/talent-offers/{id}/deactivate` (motif dans le body, 8
-caractères minimum) — et sur `talent_offers.moderation_reason` la contrainte
+caractères minimum) - et sur `talent_offers.moderation_reason` la contrainte
 est portée par la base (`talent_offers_moderation_coherent`, migration 0443).
 
 ### Le bandeau `/fraud`
@@ -163,13 +163,13 @@ pub async fn export_and_prune(db: &PgPool, s3: &S3Client) -> Result<Report> {
 | Rôle | Peut faire |
 |---|---|
 | `skilluv` (superuser dev) | tout (bypass REVOKE) |
-| `skilluv_app` (NOSUPERUSER prod) | INSERT + SELECT sur audit — pas UPDATE ni DELETE |
+| `skilluv_app` (NOSUPERUSER prod) | INSERT + SELECT sur audit - pas UPDATE ni DELETE |
 | `audit_admin` (read-only) | SELECT sur audit_log + admin_audit_log |
 | Migrations | tourner sous `skilluv` (superuser) pour ATTACH/DETACH policies |
 | Cron export S3 | tourner sous rôle dédié `audit_exporter` avec DELETE sur audit tables + PUT S3 |
 
 ## Conformité
 
-- **GDPR Art. 30** (registre des traitements) — les logs admin_audit_log documentent chaque action sur les données personnelles.
-- **SOC 2 CC7.2** (log de sécurité) — append-only + rétention 7 ans + accès restreint.
-- **ISO 27001 A.12.4** (event logging) — même contract.
+- **GDPR Art. 30** (registre des traitements) - les logs admin_audit_log documentent chaque action sur les données personnelles.
+- **SOC 2 CC7.2** (log de sécurité) - append-only + rétention 7 ans + accès restreint.
+- **ISO 27001 A.12.4** (event logging) - même contract.

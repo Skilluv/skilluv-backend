@@ -1,4 +1,4 @@
-//! P10.2 — Service pour gérer les slots de rôles multidisciplinaires sur teams.
+//! P10.2 - Service pour gérer les slots de rôles multidisciplinaires sur teams.
 //!
 //! Trois opérations principales :
 //! - `create_slot` : un membre de la team définit un rôle à pourvoir.
@@ -15,7 +15,7 @@ use crate::models::TeamRoleSlot;
 
 pub struct TeamRolesService;
 
-/// P15.3 — Vue enrichie d'un slot pour le marketplace public.
+/// P15.3 - Vue enrichie d'un slot pour le marketplace public.
 #[derive(Debug, Clone, sqlx::FromRow, serde::Serialize)]
 pub struct MarketplaceSlot {
     pub slot_id: Uuid,
@@ -31,7 +31,7 @@ pub struct MarketplaceSlot {
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
-/// Paramètres de création d'un slot. `required_skill_slug` optionnel — si set,
+/// Paramètres de création d'un slot. `required_skill_slug` optionnel - si set,
 /// on résout le skill_id via `skill_nodes.slug`.
 #[derive(Debug, Clone)]
 pub struct CreateSlotParams<'a> {
@@ -56,7 +56,7 @@ impl TeamRolesService {
         Ok(rows)
     }
 
-    /// Slots ouverts (non-remplis) filtré par rôle — marketplace « teams cherchent musicien ».
+    /// Slots ouverts (non-remplis) filtré par rôle - marketplace « teams cherchent musicien ».
     pub async fn find_open_slots_by_role(
         db: &PgPool,
         role_slug: &str,
@@ -220,7 +220,7 @@ impl TeamRolesService {
         Ok(slot)
     }
 
-    /// P15.3 — Marketplace : liste globale des slots ouverts, enrichis avec
+    /// P15.3 - Marketplace : liste globale des slots ouverts, enrichis avec
     /// team.name + challenge_template.title, filtrable par rôle et skill.
     pub async fn marketplace_open_slots(
         db: &PgPool,
@@ -261,7 +261,7 @@ impl TeamRolesService {
         Ok(rows)
     }
 
-    /// P15.3 — Notifie les users éligibles (skill + proficiency match) qu'un
+    /// P15.3 - Notifie les users éligibles (skill + proficiency match) qu'un
     /// slot vient d'être ouvert. Insère une ligne dans `notifications` par user.
     /// Best-effort : push mobile via `push_to_user_mobile` (silencieux si absent).
     /// Retourne le nombre de users notifiés.
@@ -349,7 +349,7 @@ impl TeamRolesService {
     }
 
     /// Delete un slot vide (nettoyage par le créateur de la team).
-    /// Refuse si le slot est déjà rempli — utiliser leave_slot d'abord.
+    /// Refuse si le slot est déjà rempli - utiliser leave_slot d'abord.
     pub async fn delete_slot(db: &PgPool, slot_id: Uuid) -> Result<(), AppError> {
         let res =
             sqlx::query("DELETE FROM team_role_slots WHERE id = $1 AND filled_by_user_id IS NULL")

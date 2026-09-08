@@ -1,4 +1,4 @@
-# Code — licences, intellectual property, and AI disclosure
+# Code - licences, intellectual property, and AI disclosure
 
 What Skilluv enforces, what it warns about, and where it stops and a lawyer
 starts.
@@ -16,7 +16,7 @@ rather than choosing a comfortable answer.
 
 An enterprise publishes a mission: extend this repository, we own the result.
 The repository is GPL. The enterprise does not own the result and cannot,
-whatever anybody signed. Nobody involved finds out until a lawyer does —
+whatever anybody signed. Nobody involved finds out until a lawyer does -
 usually after the work is delivered and paid for, and the person who pays for
 it is the contractor, because they are the one who promised something they
 could not deliver.
@@ -45,13 +45,13 @@ one.
 | Strong copyleft | The whole derivative work carries the licence. | GPL-2.0, GPL-3.0 |
 | Network copyleft | Strong copyleft that also triggers on running it as a service. | AGPL-3.0 |
 | Source available | Readable, not freely usable. | BSL, SSPL |
-| Proprietary | Only what the contract grants. | — |
+| Proprietary | Only what the contract grants. | - |
 
 ### Attribution
 
 Almost every licence here requires it, and it is the obligation forgotten most
 often. Apache-2.0 in particular requires the `NOTICE` file to travel with the
-distribution — not only the licence text.
+distribution - not only the licence text.
 
 **A contribution that strips or omits attribution is refused in review**, and
 that is one of the things the review grid's correctness criterion covers.
@@ -71,7 +71,7 @@ Two traps worth naming, because they are the two that catch people:
 ## 2. Intellectual property on missions
 
 Four terms, stated on the mission before anybody applies, never negotiated
-after the work exists — at which point the person who did it has no leverage
+after the work exists - at which point the person who did it has no leverage
 left.
 
 | Term | Who owns what |
@@ -107,7 +107,7 @@ substantial there should be one.
 Using an assistant is fine. Hiding it is not.
 
 The reasoning is practical rather than moral. A maintainer who does not know
-where a contribution came from cannot review it properly — the failure modes
+where a contribution came from cannot review it properly - the failure modes
 of generated code are different from the failure modes of hand-written code,
 and a reviewer who knows which they are looking at reviews better. A client
 who does not know cannot judge their own copyright exposure.
@@ -117,10 +117,10 @@ who does not know cannot judge their own copyright exposure.
 Declared on the deliverable:
 
 - `none`
-- `autocomplete` — the assistant completed lines you were already writing.
-- `pair_programming` — you worked with it, and reviewed everything.
-- `generated_then_refactored` — it produced a first version you reworked.
-- `generated_as_is` — it produced what was submitted.
+- `autocomplete` - the assistant completed lines you were already writing.
+- `pair_programming` - you worked with it, and reviewed everything.
+- `generated_then_refactored` - it produced a first version you reworked.
+- `generated_as_is` - it produced what was submitted.
 
 None of these is disqualifying. `generated_as_is` on a trivial fix is
 reasonable; on a security-sensitive change it is something a reviewer will
@@ -128,13 +128,13 @@ want to talk about, which is exactly the conversation this makes possible.
 
 ### How it is enforced
 
-Not by a database constraint. The obvious implementation — "a verified
-deliverable states a level" — would break the main path, because a merged pull
+Not by a database constraint. The obvious implementation - "a verified
+deliverable states a level" - would break the main path, because a merged pull
 request is verified by a GitHub webhook and a webhook has nobody to ask.
 
 Instead: when an artefact is verified with nothing declared, the author is
 prompted and given fourteen days. Past the deadline with nothing declared, the
-artefact **stops counting** — it is not revoked, because somebody on holiday
+artefact **stops counting** - it is not revoked, because somebody on holiday
 is not somebody hiding something, but it is not credited towards the craft
 score or shown as proof either.
 
@@ -179,7 +179,7 @@ Some clients will ask for more than a licence check.
 - **Finance and banking**: SOC 2, ISO 27001. Usually the client's certification
   rather than yours, but it constrains what you may access and from where.
 - **Health**: HIPAA in the United States, GDPR strictly applied in Europe.
-  Both restrict handling real data — the usual consequence is that you develop
+  Both restrict handling real data - the usual consequence is that you develop
   against synthetic data and never see production.
 - **Public sector**: national data residency rules, which may forbid a
   contractor from accessing the system from outside the country.
@@ -206,7 +206,7 @@ these is provisional and should be reviewed:
 4. **The Unlicense** and public-domain dedications generally, whose validity
    in civil-law jurisdictions is disputed.
 5. **Skilluv's own liability** as an intermediary when a mission's terms turn
-   out to be unenforceable — the platform states the terms and refuses the
+   out to be unenforceable - the platform states the terms and refuses the
    obvious contradictions, which may or may not make it a party to the
    arrangement.
 

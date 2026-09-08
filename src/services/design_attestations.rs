@@ -10,7 +10,7 @@
 //!
 //! Design has no upstream. Nobody merges a brand identity. The validation
 //! *is* the outcome, and what makes it worth anything is that it came after a
-//! critique conversation a stranger can read — the rounds, the reasons, the
+//! critique conversation a stranger can read - the rounds, the reasons, the
 //! version that finally passed. That is what this attestation points at.
 //!
 //! ## What is checked and what is trusted
@@ -110,7 +110,7 @@ pub async fn issue(
 ///
 /// `design_system_adopted` is deliberately absent. Delivering a design system
 /// is not the same as another team building on it, and the platform records
-/// no adoption — issuing it on validation would make the attestation claim
+/// no adoption - issuing it on validation would make the attestation claim
 /// something nobody has observed. It stays issuable only by hand, which is
 /// what "adopted" is: somebody's observation.
 fn basis_for_subtype(subtype: Option<&str>) -> &'static str {
@@ -214,7 +214,7 @@ pub struct PodiumReport {
 ///   1. a verified `deliverables` row, so the win moves the rank, the badges
 ///      and the public portfolio like every other proof;
 ///   2. a `design_contest_won` attestation, which needs that deliverable to
-///      exist — migration 0507 refuses an artefact basis without one.
+///      exist - migration 0507 refuses an artefact basis without one.
 ///
 /// Idempotent by construction: the unique index of migration 0511 means a
 /// second run writes no deliverable, and no attestation follows.
@@ -361,7 +361,7 @@ pub async fn award_contest_podium(
 ///
 /// No client name and no figure. The client is often under an agreement the
 /// platform is not party to, and what a piece of work paid is the
-/// contractor's business — the same rule the public feed already follows.
+/// contractor's business - the same rule the public feed already follows.
 /// What is public is that the work happened and that somebody accepted it.
 ///
 /// Only design missions for now: `design_mission_delivered` is the only

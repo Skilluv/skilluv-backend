@@ -61,7 +61,7 @@ pub mod design_uploads;
 pub mod education;
 pub mod featured;
 pub mod series;
-// PR #39 — dev helper endpoints (verify-token peek), gated by SKILLUV_DEV_MODE
+// PR #39 - dev helper endpoints (verify-token peek), gated by SKILLUV_DEV_MODE
 pub mod admin_game;
 pub mod ats;
 pub mod code_profile;

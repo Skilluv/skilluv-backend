@@ -1,15 +1,15 @@
-//! SKI-44 (Post-MVP T3-01) — disclosed AI learning companion.
+//! SKI-44 (Post-MVP T3-01) - disclosed AI learning companion.
 //!
 //! Endpoints:
 //!   POST /api/assistant/ask                  (auth)
-//!   GET  /api/users/me/assistant-interactions (auth — my disclosure ledger)
+//!   GET  /api/users/me/assistant-interactions (auth - my disclosure ledger)
 //!   GET  /api/users/me/assistant-quota       (auth)
 //!
 //! Order of operations in `ask` is deliberate:
 //!
-//!   1. validate — reject a malformed request before spending anything;
-//!   2. cache lookup — a hit costs nothing and consumes no quota;
-//!   3. burst limit, then daily quota — cheap check before expensive one;
+//!   1. validate - reject a malformed request before spending anything;
+//!   2. cache lookup - a hit costs nothing and consumes no quota;
+//!   3. burst limit, then daily quota - cheap check before expensive one;
 //!   4. gRPC call;
 //!   5. record the interaction, always, including on failure.
 //!
@@ -118,7 +118,7 @@ pub async fn ask(
     let mut redis = state.redis.clone();
 
     // Cache hit: no LLM call, no quota consumed. The interaction is still
-    // recorded — the learner received the help either way, so it is still
+    // recorded - the learner received the help either way, so it is still
     // disclosable.
     let cached: Option<String> = redis.get(ai_companion::cache_key(&hash)).await.ok();
     if let Some(raw) = cached
@@ -152,7 +152,7 @@ pub async fn ask(
         }))));
     }
 
-    // Burst limit first — cheapest rejection.
+    // Burst limit first - cheapest rejection.
     //
     // Both guard rails record the refusal before returning (SKI-298). A
     // rate-limited row does not count towards the quota (`used_today`
@@ -198,7 +198,7 @@ pub async fn ask(
         )
         .await?;
         return Err(AppError::Validation(format!(
-            "daily AI companion quota reached ({} per 24h) — it resets on a rolling window",
+            "daily AI companion quota reached ({} per 24h) - it resets on a rolling window",
             ai_companion::DAILY_QUOTA
         )));
     }
@@ -255,7 +255,7 @@ pub async fn ask(
         Ok(r) => r,
         Err(status) => {
             // `Unimplemented` means the worker is running but has not
-            // shipped this RPC yet — the deployment state this ticket
+            // shipped this RPC yet - the deployment state this ticket
             // explicitly lists as a prerequisite. Reported as 503, same as
             // an outage, because from the caller's side it is one.
             let recorded_status = match status.code() {
@@ -291,7 +291,7 @@ pub async fn ask(
         .collect();
 
     // A worker that returns no label still produces a disclosed
-    // interaction — we supply the default rather than storing an empty
+    // interaction - we supply the default rather than storing an empty
     // disclosure.
     let disclosure_label = if resp.disclosure_label.trim().is_empty() {
         format!(
@@ -449,15 +449,15 @@ pub async fn quota(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SKI-298 (T3-01b) — admin projection
+// SKI-298 (T3-01b) - admin projection
 // ═══════════════════════════════════════════════════════════════════
 //
 // Two surfaces, two different questions:
 //
 //   * `GET /api/admin/assistant/stats` answers "what is this costing us
-//     and are the guard rails holding" — aggregates only, no prompt text.
+//     and are the guard rails holding" - aggregates only, no prompt text.
 //   * `GET /api/admin/users/{id}/assistant-interactions` answers "was this
-//     specific piece of work assisted" — the disclosure ledger of one user,
+//     specific piece of work assisted" - the disclosure ledger of one user,
 //     which is exactly what instructing a disclosure dispute requires, and
 //     which nothing but the user themselves could read before.
 //

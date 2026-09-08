@@ -2,7 +2,7 @@
 //!
 //! The release window is a promise: for seven days after a session, the
 //! person who paid can say it did not happen. Everything needed to keep
-//! that promise existed — the frozen state, the refund, the notification —
+//! that promise existed - the frozen state, the refund, the notification -
 //! and nothing could reach it, because no endpoint called
 //! `release::dispute`. The window was seven days during which nothing could
 //! be done.
@@ -26,7 +26,7 @@
 //!
 //! ## Money moves once
 //!
-//! Raising a dispute freezes the hold — the money leaves the recipient's
+//! Raising a dispute freezes the hold - the money leaves the recipient's
 //! pending balance for a `disputed` account and stays there until the
 //! outcome. Nothing can release it in the meantime: the sweep skips
 //! disputed holds, and `release_now` refuses one outright.
@@ -68,8 +68,8 @@ pub struct Dispute {
     pub resolved_at: Option<chrono::DateTime<chrono::Utc>>,
     /// Which side of this dispute the caller is on: `payer` or `recipient`.
     ///
-    /// The two sides have different moves — the payer can withdraw, the
-    /// recipient can concede or contest — so a list that does not say which
+    /// The two sides have different moves - the payer can withdraw, the
+    /// recipient can concede or contest - so a list that does not say which
     /// one you are forces the client to infer it, and a client that infers
     /// wrong offers someone a button that will be refused.
     pub viewer_role: String,
@@ -100,7 +100,7 @@ pub async fn raise(
 ) -> Result<Uuid, AppError> {
     if reason.trim().chars().count() < 10 {
         return Err(AppError::Validation(
-            "say what went wrong — the recipient has to be able to answer it".into(),
+            "say what went wrong - the recipient has to be able to answer it".into(),
         ));
     }
 
@@ -133,7 +133,7 @@ pub async fn raise(
     // they are too late or simply not the right person.
     if hold.released_at.is_some() {
         return Err(AppError::Validation(
-            "these funds were released before this was raised — this is now a \
+            "these funds were released before this was raised - this is now a \
              refund request, which support handles"
                 .into(),
         ));
@@ -148,7 +148,7 @@ pub async fn raise(
     }
 
     // Freeze first. If the row below fails, the money is frozen with no
-    // dispute attached — visible and correctable. The other order would
+    // dispute attached - visible and correctable. The other order would
     // leave a dispute over money that is still on its way out.
     crate::services::release::dispute(db, subject_type, subject_id).await?;
 
@@ -173,7 +173,7 @@ pub async fn raise(
         subject = subject_type,
         payer = %raised_by,
         recipient = %hold.beneficiary_id,
-        "payment disputed — funds frozen"
+        "payment disputed - funds frozen"
     );
 
     Ok(id)
@@ -228,7 +228,7 @@ pub async fn contest(
 ) -> Result<(), AppError> {
     if response.trim().chars().count() < 10 {
         return Err(AppError::Validation(
-            "say why you disagree — an operator has to decide between two accounts".into(),
+            "say why you disagree - an operator has to decide between two accounts".into(),
         ));
     }
 
@@ -285,7 +285,7 @@ pub async fn decide(
 ) -> Result<(), AppError> {
     if note.trim().chars().count() < 10 {
         return Err(AppError::Validation(
-            "both parties read this decision — say what it is based on".into(),
+            "both parties read this decision - say what it is based on".into(),
         ));
     }
 
@@ -328,7 +328,7 @@ async fn settle(
             // At the provider first. `refund_from_dispute` writes entries
             // saying the money has left the provider's float; if nothing
             // tells the provider, the books say refunded and the card was
-            // never credited — the one accounting error a customer notices
+            // never credited - the one accounting error a customer notices
             // before we do.
             //
             // A provider that cannot refund returns an error, and the
@@ -345,14 +345,14 @@ async fn settle(
             .await?;
 
             if refunded.is_none() {
-                // No recorded charge — a payment from before `payments`
+                // No recorded charge - a payment from before `payments`
                 // existed. The books still have to move, because the money
                 // is certainly not the recipient's, but somebody has to
                 // give it back by hand.
                 tracing::error!(
                     dispute = %hold.dispute_id,
                     subject = %hold.subject_type,
-                    "refunded in the books with no provider charge to reverse — refund this by hand"
+                    "refunded in the books with no provider charge to reverse - refund this by hand"
                 );
                 metrics::counter!("skilluv_dispute_manual_refund_needed_total").increment(1);
             }
@@ -393,7 +393,7 @@ async fn settle(
     .await?;
 
     // The hold is finished either way. Stamping `released_at` keeps the
-    // sweep from ever looking at it again, whichever side won — the money
+    // sweep from ever looking at it again, whichever side won - the money
     // has already moved here, and a second release would move it twice.
     sqlx::query(
         "UPDATE pending_releases SET released_at = NOW(), disputed_at = NULL WHERE id = $1",

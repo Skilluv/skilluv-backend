@@ -17,7 +17,7 @@
 //!
 //! ## Why the shares must total a hundred
 //!
-//! A set of shares summing to ninety does not leave a tenth unallocated — it
+//! A set of shares summing to ninety does not leave a tenth unallocated - it
 //! quietly pays everybody ninety per cent of what they agreed. The check is
 //! here and at the moment work starts, because the number is only wrong once
 //! somebody adds a member and forgets to rebalance.
@@ -212,7 +212,7 @@ pub async fn open(
     }
     if input.title.trim().is_empty() || input.brief_md.trim().is_empty() {
         return Err(AppError::Validation(
-            "a title and a brief are required — an engagement with neither cannot be \
+            "a title and a brief are required - an engagement with neither cannot be \
              staffed or priced"
                 .into(),
         ));
@@ -231,7 +231,7 @@ pub async fn open(
             Some("active") => {}
             Some(other) => {
                 return Err(AppError::Validation(format!(
-                    "that studio is {other} — only an active one can take work"
+                    "that studio is {other} - only an active one can take work"
                 )));
             }
             None => return Err(AppError::NotFound("studio not found".into())),
@@ -304,7 +304,7 @@ fn shape_error(e: sqlx::Error) -> AppError {
         ),
         (
             "fractional_is_one_person",
-            "a fractional placement is one person for part of their week — say how many \
+            "a fractional placement is one person for part of their week - say how many \
              days, and set the team size to one",
         ),
         (
@@ -314,7 +314,7 @@ fn shape_error(e: sqlx::Error) -> AppError {
         ),
         (
             "a_sprint_is_short",
-            "a sprint runs between one and twelve weeks — beyond that it is an \
+            "a sprint runs between one and twelve weeks - beyond that it is an \
              outsourcing project, and should be one",
         ),
         (
@@ -511,7 +511,7 @@ pub async fn start(db: &PgPool, engagement_id: Uuid) -> Result<Engagement, AppEr
         let total: f64 = shares.iter().sum();
         return Err(AppError::Validation(format!(
             "the shares total {total:.2}%, not 100%. A set summing to less does not leave \
-             a remainder unallocated — it quietly pays everybody less than they agreed."
+             a remainder unallocated - it quietly pays everybody less than they agreed."
         )));
     }
 
@@ -592,7 +592,7 @@ pub async fn add_milestone(
 ) -> Result<Uuid, AppError> {
     if input.acceptance_criteria.trim().is_empty() {
         return Err(AppError::Validation(
-            "say what done means for this checkpoint — a milestone defined afterwards is \
+            "say what done means for this checkpoint - a milestone defined afterwards is \
              a milestone argued about"
                 .into(),
         ));
@@ -622,7 +622,7 @@ pub async fn add_milestone(
 ///
 /// The step that distinguishes this from a freelance marketplace, and the
 /// reason the margin is what it is. A milestone cannot reach the client
-/// without passing here — the database refuses it.
+/// without passing here - the database refuses it.
 pub async fn review(
     db: &PgPool,
     milestone_id: Uuid,
@@ -681,7 +681,7 @@ pub async fn accept_milestone(
 
     if status != "submitted" {
         return Err(AppError::Validation(format!(
-            "this milestone is {status} — only a reviewed and submitted one can be accepted"
+            "this milestone is {status} - only a reviewed and submitted one can be accepted"
         )));
     }
 
@@ -732,8 +732,8 @@ pub async fn accept_milestone(
     tx.commit().await?;
 
     // The ledger movements happen after the milestone is marked, so a failure
-    // here leaves an accepted milestone with no payment — visible and
-    // repairable — rather than a payment with no milestone, which is not.
+    // here leaves an accepted milestone with no payment - visible and
+    // repairable - rather than a payment with no milestone, which is not.
     let currency: crate::services::ledger::Currency = currency.parse()?;
     let mut settled = Vec::new();
     for (member, amount) in team.iter().zip(paid.iter()) {
@@ -787,7 +787,7 @@ const STUDIO_SELECT: &str = r#"
       FROM studios
 "#;
 
-/// A studio's slug is a public name — it appears in the URL a client is sent
+/// A studio's slug is a public name - it appears in the URL a client is sent
 /// and in the credit line on delivered work, so it is held to the shape a URL
 /// can carry without escaping.
 fn check_slug(slug: &str) -> Result<(), AppError> {
@@ -826,7 +826,7 @@ pub async fn create_studio(
     check_slug(&input.slug)?;
     if input.specialization.trim().is_empty() {
         return Err(AppError::Validation(
-            "say what this studio is for — a studio that does everything is a job board \
+            "say what this studio is for - a studio that does everything is a job board \
              with a name"
                 .into(),
         ));
@@ -949,7 +949,7 @@ pub async fn activate_studio(
     let team = studio_members(db, studio_id).await?;
     if team.len() < 2 {
         return Err(AppError::Validation(
-            "a studio is at least two people — one person is a freelancer, and Skilluv \
+            "a studio is at least two people - one person is a freelancer, and Skilluv \
              has a place for that already"
                 .into(),
         ));
@@ -1042,7 +1042,7 @@ mod tests {
 
     #[test]
     fn shares_that_do_not_add_up_are_refused() {
-        // A set summing to ninety does not leave a tenth unallocated — it
+        // A set summing to ninety does not leave a tenth unallocated - it
         // quietly pays everybody ninety per cent of what they agreed.
         assert!(!shares_are_whole(&[45.0, 45.0]));
         assert!(!shares_are_whole(&[60.0, 60.0]));

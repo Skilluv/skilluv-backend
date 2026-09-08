@@ -12,7 +12,7 @@
 //!
 //! Most bounty reports are never published. A queue that accepts them fills up
 //! with claims nobody can ever act on, and a queue nobody can work is a queue
-//! nobody opens — after which the ones that *could* have been verified sit in it
+//! nobody opens - after which the ones that *could* have been verified sit in it
 //! too. So the link is required at submission and a claim whose page has gone
 //! is refused with that as the reason.
 
@@ -162,7 +162,7 @@ pub async fn awaiting_review(db: &PgPool, limit: i64) -> Result<Vec<serde_json::
 /// Accept a claim, at the severity the reviewer settled on.
 ///
 /// The attestation is issued here rather than by the sweep, because this is the
-/// only moment anybody knows the claim is good — there is no row anywhere else
+/// only moment anybody knows the claim is good - there is no row anywhere else
 /// for a later pass to read.
 pub async fn verify(
     db: &PgPool,
@@ -205,7 +205,7 @@ pub async fn verify(
         &crate::services::artefact_attestations::Evidence {
             url: report_url,
             title,
-            description: format!("{description}\n\n{organisation} — {platform}, {severity}"),
+            description: format!("{description}\n\n{organisation} - {platform}, {severity}"),
             deliverable_id: None,
             project_id: None,
             skill_node_ids: Vec::new(),

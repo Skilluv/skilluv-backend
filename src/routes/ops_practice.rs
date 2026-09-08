@@ -419,8 +419,8 @@ pub struct ArtefactAttestationBody {
 
 /// Attest an ops artefact somebody delivered.
 ///
-/// The basis and the artefact's subtype have to agree — a migration
-/// attestation cannot be issued from a dashboard — which is checked in the
+/// The basis and the artefact's subtype have to agree - a migration
+/// attestation cannot be issued from a dashboard - which is checked in the
 /// service rather than here, because it is a statement about the domain and
 /// not about the request.
 #[utoipa::path(

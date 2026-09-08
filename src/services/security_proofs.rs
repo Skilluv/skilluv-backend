@@ -3,8 +3,8 @@
 //! ## Why these go in the private bucket and never come out with a stable URL
 //!
 //! A screenshot of an unfixed vulnerability is the vulnerability. Put it in the
-//! public bucket and the embargo is decorative: anybody who guesses the key —
-//! or finds it in a browser history, a chat log, a shared link — has the
+//! public bucket and the embargo is decorative: anybody who guesses the key -
+//! or finds it in a browser history, a chat log, a shared link - has the
 //! disclosure, and there is no way to take it back.
 //!
 //! So: private bucket, a key rather than a URL in the report, and a signed URL
@@ -28,7 +28,7 @@
 //! ## The orphan sweep
 //!
 //! An upload that no report references after thirty days is deleted. Uploads
-//! happen before submission — that is the shape of the form — so an abandoned
+//! happen before submission - that is the shape of the form - so an abandoned
 //! draft leaves files behind, and a bucket that only grows is a bucket that
 //! eventually holds somebody's proof of something they never reported.
 
@@ -77,7 +77,7 @@ pub fn content_type_for(extension: &str) -> Option<&'static str> {
 /// Whether the first bytes say something the extension did not.
 ///
 /// Catches the ordinary case: an executable renamed to `.png`. Not a general
-/// content sniffer and not presented as one — it refuses the four signatures
+/// content sniffer and not presented as one - it refuses the four signatures
 /// that matter and lets text through, which is the shape of every proof format
 /// on the list above that is not already checked by its own magic bytes.
 pub fn looks_executable(bytes: &[u8]) -> bool {
@@ -95,7 +95,7 @@ pub fn looks_executable(bytes: &[u8]) -> bool {
 /// Store one proof file, and return the key that goes in the report.
 ///
 /// The key contains the uploader's id, which is what makes the ownership check
-/// on download a string comparison rather than a lookup — and what makes an
+/// on download a string comparison rather than a lookup - and what makes an
 /// orphaned file attributable when the sweep finds it.
 pub async fn store(
     storage: &StorageService,
@@ -142,7 +142,7 @@ pub async fn store(
 /// Who may read a proof.
 ///
 /// Four people: the reporter who uploaded it, a triager, a reviewer of this
-/// domain, and an administrator. Not the owner of the system under test — they
+/// domain, and an administrator. Not the owner of the system under test - they
 /// are told about the finding through the disclosure, and handing them the
 /// reporter's raw evidence is a decision for the reporter.
 pub async fn may_read(db: &sqlx::PgPool, viewer: Uuid, key: &str) -> Result<bool, AppError> {
@@ -198,8 +198,8 @@ pub async fn signed_url(storage: &StorageService, key: &str) -> Result<String, A
 ///
 /// The listing comes from the bucket rather than from a table of uploads,
 /// deliberately: a table would be a second record of what exists, and the
-/// question this sweep answers — "what is in the bucket that nothing points
-/// at" — is answered wrongly by anything except the bucket.
+/// question this sweep answers - "what is in the bucket that nothing points
+/// at" - is answered wrongly by anything except the bucket.
 pub async fn sweep_orphans(
     db: &sqlx::PgPool,
     storage: &StorageService,

@@ -1,4 +1,4 @@
-# Leadership — Discord structure
+# Leadership - Discord structure
 
 Backlog: leadership/O-03. The routing rows live in `discord_channels`, which
 has a foreign key onto `skill_domains` since migration 0440.
@@ -31,7 +31,7 @@ everything they need is public.
 | `#lead-mentor` | `lead-mentor` | `teaching` |
 
 Six channels, five review families. `#lead-product` and `#lead-project` share a
-reviewer and not a room — the conversations are different even where the
+reviewer and not a room - the conversations are different even where the
 competence is one.
 
 ### Practice
@@ -74,7 +74,7 @@ that happening before somebody has checked it.
 Assigned by the bot from the database. `Cohort Lead` is the one that expires
 on its own: it is derived from `cohorts.concluded_at IS NULL`, so somebody who
 finishes a run loses the role rather than keeping a title that no longer
-describes anything — which is the same argument the whole domain makes about
+describes anything - which is the same argument the whole domain makes about
 titles.
 
 ---

@@ -27,7 +27,7 @@ and is not: the competence is defined by what the reviewer has to be able to
 *open*, and no two of these are opened by the same person.
 
 `quality_reviewer:all` reaches every family. It is granted sparingly, and
-holding it is not the same as being able to judge everything — it means being
+holding it is not the same as being able to judge everything - it means being
 trusted to know which reports to leave to somebody else.
 
 ## The three refusals
@@ -50,7 +50,7 @@ Each criterion is marked out of five. The average lands in
 `review_grid_scores.average`, and `craft_score_weights` counts it from **3**,
 not from 0 (`review_grid_average`, `offset_scaled`, baseline 3.0).
 
-That means three out of five is worth nothing and is not a failure — it is the
+That means three out of five is worth nothing and is not a failure - it is the
 line where a reviewer is saying "this is fine". Points come from being better
 than fine, and a submission below three costs points, which is deliberate: a
 domain where nothing can lower a score is a domain where the review is
@@ -66,7 +66,7 @@ from their total, which would say something false about them.
 
 It is in the domain grid and it recurs, worded for the family, in all five.
 It is the most common reason a submission comes back and the thing most new
-contributors omit — not through dishonesty, but because a report feels finished
+contributors omit - not through dishonesty, but because a report feels finished
 when the findings are in it.
 
 A report that lets a reader assume full coverage converts an absence of
@@ -78,7 +78,7 @@ checked" costs a line.
 Four, set in `revision_round_limits` for this domain, with five named kinds in
 `revision_round_kinds`:
 
-- `quality_repro_insufficient` — the most frequent, and the only one that
+- `quality_repro_insufficient` - the most frequent, and the only one that
   invalidates the report if it does not converge.
 - `quality_evidence_missing`
 - `quality_severity_disputed`
@@ -87,7 +87,7 @@ Four, set in `revision_round_limits` for this domain, with five named kinds in
 
 Four rather than audio's five. A fourth round on substance usually means the
 two people disagree about what the product should do, and that is not a testing
-question — it goes back to whoever owns the product.
+question - it goes back to whoever owns the product.
 
 A round is closed by the person who **asked** for the change, not by the person
 who made it. A counter the author can run down alone is not a count both sides
@@ -97,5 +97,5 @@ agree on.
 
 Through `validator_applications`, in the ordinary way, per family. What is
 looked at is not seniority but whether the applicant's own submissions show the
-three refusals being applied to their own work — somebody who has never written
+three refusals being applied to their own work - somebody who has never written
 down what they did not test will not ask others to.

@@ -1,4 +1,4 @@
-//! P19.1 — Orchestrateur des 3 engines proof-driven.
+//! P19.1 - Orchestrateur des 3 engines proof-driven.
 //!
 //! Contrat : `recompute_all_for_user(db, user_id)` appelle en séquence :
 //!   1. `capabilities_engine::recompute_capabilities_for_user` (auto-promotion
@@ -8,7 +8,7 @@
 //!   3. `ranks::recompute_rank_for_user` (Apprenti→Doyen).
 //!
 //! Best-effort : chaque étape est encapsulée. Si une échoue, on log tracing::warn
-//! et on continue — pas de rollback global. La cohérence viendra du prochain
+//! et on continue - pas de rollback global. La cohérence viendra du prochain
 //! recompute (idempotent).
 //!
 //! Retourne un rapport agrégé pour l'observabilité (metrics + admin dashboard).
@@ -21,9 +21,9 @@ use uuid::Uuid;
 use crate::errors::AppError;
 use crate::services::{badge_engine, capabilities_engine, ranks};
 
-/// P19.3 — Sweep interval par défaut (7 jours = 604 800 secondes).
+/// P19.3 - Sweep interval par défaut (7 jours = 604 800 secondes).
 const DEFAULT_SWEEP_INTERVAL_SECS: u64 = 60 * 60 * 24 * 7;
-/// Fenêtre de "user actif" (30 jours) — évite de recomputer tout le monde.
+/// Fenêtre de "user actif" (30 jours) - évite de recomputer tout le monde.
 const DEFAULT_SWEEP_WINDOW_DAYS: i32 = 30;
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -40,7 +40,7 @@ pub struct ProofRecomputeReport {
     pub errors: Vec<String>,
 }
 
-/// SKI-43 — recompute, then notify through the durable channel only.
+/// SKI-43 - recompute, then notify through the durable channel only.
 ///
 /// This is the signature every existing caller uses, and most of them are
 /// service-layer functions holding nothing but a `PgPool`. The resulting
@@ -55,7 +55,7 @@ pub async fn recompute_all_for_user(
     recompute_inner(db, user_id, None).await
 }
 
-/// SKI-43 — recompute and notify through every channel.
+/// SKI-43 - recompute and notify through every channel.
 ///
 /// Identical to [`recompute_all_for_user`] plus live delivery (Redis
 /// unread counter, WebSocket, mobile push). Live delivery is best-effort:
@@ -179,7 +179,7 @@ async fn recompute_inner(
     //
     // Seven blocks doing the same thing with a different function is where this
     // stops scaling. The eighth domain should turn them into a list of
-    // generators rather than an eighth block and an eighth Latin ordinal —
+    // generators rather than an eighth block and an eighth Latin ordinal -
     // each one is `fn(&PgPool, Uuid) -> Result<Vec<String>>`, which is a
     // shape a slice of function pointers can hold.
     match crate::services::education_attestations::issue_for_user(db, user_id).await {
@@ -248,7 +248,7 @@ async fn recompute_inner(
             }
         };
 
-    // P19.4 — Metrics granulaires.
+    // P19.4 - Metrics granulaires.
     metrics::counter!(
         "skilluv_proof_hook_recompute_total",
         "result" => if errors.is_empty() { "ok" } else { "partial" },
@@ -296,7 +296,7 @@ async fn recompute_inner(
         errors,
     };
 
-    // SKI-43 — celebrate at the psychological moment. Best-effort like
+    // SKI-43 - celebrate at the psychological moment. Best-effort like
     // every other step here: a notification failure is logged into the
     // report's errors and never masks the promotion itself.
     let mut report = report;
@@ -309,7 +309,7 @@ async fn recompute_inner(
     //
     // Hooked here rather than at each of the three call sites that change a
     // capability, a badge or a rank, because this function is where all three
-    // already converge — and because `sweep_active_users` calls it, which
+    // already converge - and because `sweep_active_users` calls it, which
     // gives the nightly drift-catcher for free rather than as a second loop to
     // write and keep in step.
     //
@@ -332,7 +332,7 @@ async fn recompute_inner(
     Ok(report)
 }
 
-/// P19.3 — Sweep : recompute pour tous les users ayant eu de l'activité
+/// P19.3 - Sweep : recompute pour tous les users ayant eu de l'activité
 /// récente (deliverable verified OU attestation reçue dans la fenêtre).
 /// Retourne la liste des user_ids traités.
 pub async fn sweep_active_users(db: &PgPool, within_days: i32) -> Result<Vec<Uuid>, AppError> {
@@ -355,7 +355,7 @@ pub async fn sweep_active_users(db: &PgPool, within_days: i32) -> Result<Vec<Uui
 
     let mut processed = Vec::with_capacity(user_ids.len());
     for uid in user_ids {
-        // Best-effort par user — un échec n'arrête pas le sweep.
+        // Best-effort par user - un échec n'arrête pas le sweep.
         match recompute_all_for_user(db, uid).await {
             Ok(_) => processed.push(uid),
             Err(e) => tracing::warn!(user_id = %uid, error = %e, "sweep skip"),
@@ -364,7 +364,7 @@ pub async fn sweep_active_users(db: &PgPool, within_days: i32) -> Result<Vec<Uui
     Ok(processed)
 }
 
-/// P19.3 — Task de fond : sweep hebdomadaire des users actifs.
+/// P19.3 - Task de fond : sweep hebdomadaire des users actifs.
 ///
 /// Contrôlée par env :
 ///   - `SKILLUV_PROOF_SWEEP_ENABLED=1` pour activer (default OFF en dev).

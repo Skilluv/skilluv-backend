@@ -4,7 +4,7 @@
 //!
 //! A posting is a claim on the attention of every company on the platform,
 //! and the argument for reversing the direction is that the person's work
-//! speaks for itself — which requires that some of it exists.
+//! speaks for itself - which requires that some of it exists.
 //!
 //! The rank is the platform's existing answer to "has this person done enough
 //! to be taken at their word". Inventing a separate threshold would mean two
@@ -104,7 +104,7 @@ pub async fn post(
     talent_user_id: Uuid,
     input: PostingInput,
 ) -> Result<Posting, AppError> {
-    // Absent means nothing has been computed yet, which is `apprenti` — the
+    // Absent means nothing has been computed yet, which is `apprenti` - the
     // rank everybody starts at, and below the bar either way.
     let rank: Option<String> = sqlx::query_scalar("SELECT rank FROM user_ranks WHERE user_id = $1")
         .bind(talent_user_id)
@@ -114,7 +114,7 @@ pub async fn post(
     let rank = rank.unwrap_or_else(|| "apprenti".into());
     if !RANKS_ALLOWED.contains(&rank.as_str()) {
         return Err(AppError::Validation(format!(
-            "posting here needs the rank of {MIN_RANK} — the argument for companies \
+            "posting here needs the rank of {MIN_RANK} - the argument for companies \
              coming to you is that your work speaks for itself, which needs some of it \
              to exist first. You are {rank}."
         )));
@@ -122,7 +122,7 @@ pub async fn post(
 
     if input.title.trim().is_empty() || input.desired_role.trim().is_empty() {
         return Err(AppError::Validation(
-            "say what you are looking for — a posting with no role is a posting nobody \
+            "say what you are looking for - a posting with no role is a posting nobody \
              can answer"
                 .into(),
         ));
@@ -349,7 +349,7 @@ fn pitch_error(e: sqlx::Error) -> AppError {
     }
     if matches!(&e, sqlx::Error::Database(db) if db.code().as_deref() == Some("23505")) {
         return AppError::Validation(
-            "you have already pitched for this posting — a second one is a follow-up, \
+            "you have already pitched for this posting - a second one is a follow-up, \
              which belongs in a conversation rather than in a new pitch"
                 .into(),
         );
@@ -412,7 +412,7 @@ pub async fn respond(
 /// Mark a pitch read, once.
 ///
 /// Recorded because a company that spent credits is owed the knowledge that
-/// their argument was at least opened — which is not the same as an answer,
+/// their argument was at least opened - which is not the same as an answer,
 /// and is deliberately not presented as one.
 pub async fn mark_read(db: &PgPool, pitch_id: Uuid, talent_user_id: Uuid) -> Result<(), AppError> {
     sqlx::query(

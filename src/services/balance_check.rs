@@ -5,7 +5,7 @@
 //! poller chases any charge that never landed. Nothing compares the totals.
 //!
 //! That gap matters because the failures the two sweeps catch are the loud
-//! ones — a specific transfer, a specific charge. The failure they cannot
+//! ones - a specific transfer, a specific charge. The failure they cannot
 //! see is systematic: a fee we never booked, a currency conversion applied
 //! twice, a refund the provider took that our books show as still ours.
 //! Each of those leaves every individual record looking correct while the
@@ -47,7 +47,7 @@ pub struct Position {
     pub currency: String,
     /// What our ledger says is held there.
     pub ours: String,
-    /// What the provider says. `None` when they cannot be asked — which is
+    /// What the provider says. `None` when they cannot be asked - which is
     /// itself worth reporting, because a position nobody can verify is one
     /// nobody is verifying.
     pub theirs: Option<String>,
@@ -101,13 +101,13 @@ pub async fn check(db: &PgPool) -> Result<CheckReport, AppError> {
         tracing::error!(
             accounts = internal.len(),
             details = ?internal,
-            "a ledger snapshot disagrees with its own entries — every balance              derived from it is suspect"
+            "a ledger snapshot disagrees with its own entries - every balance              derived from it is suspect"
         );
     }
     report.snapshot_drift = internal;
 
     for position in ours {
-        // `psp:stripe:settlement:EUR` — the provider is the middle segment.
+        // `psp:stripe:settlement:EUR` - the provider is the middle segment.
         let provider = position
             .account_code
             .split(':')
@@ -231,7 +231,7 @@ pub fn start_balance_check(db: PgPool) {
                     if report.unverifiable > 0 {
                         tracing::warn!(
                             count = report.unverifiable,
-                            "positions that cannot be checked against the provider — \
+                            "positions that cannot be checked against the provider - \
                              these are verified by hand or not at all"
                         );
                     }
@@ -272,7 +272,7 @@ mod unit {
 
     #[test]
     fn a_small_float_is_not_measured_in_percentages() {
-        // On five hundred francs, one percent is five — every rounding
+        // On five hundred francs, one percent is five - every rounding
         // looks like drift, and the alarm is useless.
         assert!(within("500", "450"));
     }

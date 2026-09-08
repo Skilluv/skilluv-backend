@@ -5,7 +5,7 @@
 //! Somebody attacks the platform, the finding is confirmed and fixed, and the
 //! traffic that produced it is the most useful teaching material a defensive
 //! exercise could have: a real attack on a real system, with a known answer.
-//! Ticket B-03 asked for that, and it is worth having — a blue-team catalogue
+//! Ticket B-03 asked for that, and it is worth having - a blue-team catalogue
 //! built only from other people's published datasets teaches somebody else's
 //! incidents.
 //!
@@ -14,8 +14,8 @@
 //! It does not read logs. The request log lives in the reverse proxy and the
 //! container's standard output, not in this database, and a service that
 //! claimed to extract it would be a service that returned an empty artefact and
-//! said nothing. So the export is an operator's step — the person who has the
-//! logs runs the export, redacts it, and uploads it — and this module does
+//! said nothing. So the export is an operator's step - the person who has the
+//! logs runs the export, redacts it, and uploads it - and this module does
 //! everything after that: the challenge, its questions, and the answers that
 //! are known because the finding is on the record.
 //!
@@ -28,7 +28,7 @@
 //! Every generated question is answerable from the artefact *and* known from
 //! the finding row: the endpoint that was targeted, the weakness class, the
 //! date, the severity a validator settled on. Nothing is invented, which is the
-//! failure mode 0558 refuses at length — a question whose expected answer the
+//! failure mode 0558 refuses at length - a question whose expected answer the
 //! author guessed is a question nobody can ever get right.
 //!
 //! ## The challenge arrives as a draft
@@ -231,7 +231,7 @@ pub async fn draft_from_finding(
     }
 
     // The difficulty follows the severity, because a critical leaves more in
-    // the logs and is easier to spot — the exercise is harder when the attack
+    // the logs and is easier to spot - the exercise is harder when the attack
     // was quieter, not when it was worse.
     let difficulty: i16 = match f.severity_tier.as_str() {
         "critical" => 2,
@@ -261,7 +261,7 @@ pub async fn draft_from_finding(
          anything identifying a person who was not part of the attack are \
          not.\n\n\
          ## Where it came from\n\n\
-         Generated from a confirmed finding — \"{}\" — after its fix shipped. \
+         Generated from a confirmed finding - \"{}\" - after its fix shipped. \
          The reporter is credited on the hall of fame; this exercise is the \
          other half of what their report produced.",
         f.title

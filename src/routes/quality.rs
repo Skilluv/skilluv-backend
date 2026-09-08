@@ -5,7 +5,7 @@
 //!
 //! Not `require_admin`. A defect report is judged by somebody who can read the
 //! kind of system it is about, and that is
-//! `quality_reviewer:{reviewer_group}` — derived from the trade on the slice
+//! `quality_reviewer:{reviewer_group}` - derived from the trade on the slice
 //! by migration 0404's trigger. Routing on the trade rather than on the
 //! subtype is deliberate: a defect report against a game build and one against
 //! an API are both `bug_report`, and the two people who can read them are
@@ -269,7 +269,7 @@ pub async fn review_bug(
         .await?
         .ok_or_else(|| {
             AppError::Validation(
-                "this report hangs off a slice with no quality trade on it — nobody can \
+                "this report hangs off a slice with no quality trade on it - nobody can \
                  be said to be able to review it"
                     .into(),
             )
@@ -326,7 +326,7 @@ pub async fn review_queue(
 ///
 /// Built from `REVIEWER_GROUPS` rather than written out, so a sixth family
 /// added to the catalogue reaches this guard without anybody remembering to
-/// edit it — the drift migration 0404 exists to stop, in its request-path
+/// edit it - the drift migration 0404 exists to stop, in its request-path
 /// form.
 async fn require_any_quality_reviewer(state: &AppState, auth: &AuthUser) -> Result<(), AppError> {
     let mut caps: Vec<String> = quality_practice::REVIEWER_GROUPS

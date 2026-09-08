@@ -17,7 +17,7 @@ pub struct LocaleEntry {
     /// BCP-47 language subtag (`en`, `fr`, `ar`).
     #[schema(example = "fr")]
     pub code: &'static str,
-    /// Endonym — the language name written in its own script.
+    /// Endonym - the language name written in its own script.
     #[schema(example = "Français")]
     pub name: &'static str,
     /// `"ltr"` or `"rtl"`. Front uses it to flip layout direction.

@@ -1,4 +1,4 @@
-//! P14.4 — Fingerprinting utilisateur pour détection multi-account.
+//! P14.4 - Fingerprinting utilisateur pour détection multi-account.
 //!
 //! Design :
 //! - À chaque login, `record_fingerprint(user_id, ip, ua, canvas)` insère
@@ -53,8 +53,8 @@ pub struct SuspectGroup {
     pub user_ids: Vec<Uuid>,
 }
 
-/// Détecte les groupes de user_ids qui partagent (ip_hash, ua_hash) — les 2
-/// features les plus stables — dans la fenêtre glissante. Retourne les groupes
+/// Détecte les groupes de user_ids qui partagent (ip_hash, ua_hash) - les 2
+/// features les plus stables - dans la fenêtre glissante. Retourne les groupes
 /// de taille > `min_group_size` (défaut 3).
 ///
 /// Marque en même temps `users.suspected_multi_account = TRUE` pour chaque

@@ -30,13 +30,13 @@ pub fn well_known_routes() -> Router<AppState> {
 // ─── security.txt (RFC 9116) ─────────────────────────────────────
 
 /// RFC 9116 security.txt. Served as `text/plain` at both `/.well-known/`
-/// (canonical) and `/security.txt` for legacy scanners. Not JSON —
+/// (canonical) and `/security.txt` for legacy scanners. Not JSON -
 /// intentionally omitted from the OpenAPI schema.
 async fn security_txt() -> impl IntoResponse {
     let one_year_ahead = chrono::Utc::now() + chrono::Duration::days(365);
     // The two URLs point at the pages that exist. They used to point at
     // `/legal/security` and an anchor on it, written before the disclosure
-    // programme had a scope page or a hall of fame — and a `Policy:` line
+    // programme had a scope page or a hall of fame - and a `Policy:` line
     // leading somewhere that is not the policy is worse than none, because a
     // scanner reports it as present.
     let body = format!(
@@ -62,7 +62,7 @@ pub struct AccountingQuery {
 }
 
 /// Admin only: export the month's invoices as a semicolon-separated
-/// CSV suitable for the French accountant's import. Not JSON — the
+/// CSV suitable for the French accountant's import. Not JSON - the
 /// OpenAPI entry documents the CSV content-type.
 #[utoipa::path(
     get,
@@ -88,7 +88,7 @@ pub async fn admin_accounting_export(
         r#"
         -- `i.billing_country`, not `e.country`: `enterprises` has no country
         -- column, so this export answered 500 to every request an accountant
-        -- has ever made of it. The invoice is the right source anyway — VAT
+        -- has ever made of it. The invoice is the right source anyway - VAT
         -- follows where the customer was when they were billed, and a company
         -- that has since moved must not retroactively change last year's
         -- return.

@@ -12,8 +12,8 @@
 //! to customers while the system is still down. Somebody who has never held a
 //! pager can teach Terraform perfectly well and cannot teach that.
 //!
-//! So a mentee heading for paid work — where on-call arrives whether or not
-//! they went looking for it — is matched only against mentors who have
+//! So a mentee heading for paid work - where on-call arrives whether or not
+//! they went looking for it - is matched only against mentors who have
 //! actually done it, and the reason is shown to them. The alternative is
 //! matching on skill alone and letting both find out an hour into a paid
 //! session.
@@ -108,7 +108,7 @@ pub async fn matches_for(
 
             if needs_oncall && has_held_a_pager(mentor_oncall_experience.as_deref()) {
                 m.because.push(
-                    "A vraiment été d'astreinte — la moitié de ce qu'il y a à apprendre \
+                    "A vraiment été d'astreinte - la moitié de ce qu'il y a à apprendre \
                      ici ne s'enseigne pas autrement."
                         .into(),
                 );

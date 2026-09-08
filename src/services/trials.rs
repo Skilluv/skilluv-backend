@@ -123,7 +123,7 @@ pub fn split(
 pub async fn start(db: &PgPool, enterprise_id: Uuid, input: StartInput) -> Result<Trial, AppError> {
     if !(1..=8).contains(&input.duration_weeks) {
         return Err(AppError::Validation(
-            "a trial runs between one and eight weeks — beyond that it is a job, and \
+            "a trial runs between one and eight weeks - beyond that it is a job, and \
              should be one"
                 .into(),
         ));
@@ -165,7 +165,7 @@ pub async fn start(db: &PgPool, enterprise_id: Uuid, input: StartInput) -> Resul
 fn overlap_error(e: sqlx::Error) -> AppError {
     if matches!(&e, sqlx::Error::Database(db) if db.code().as_deref() == Some("23505")) {
         return AppError::Validation(
-            "this person is already on a trial with you — a second one at the same time \
+            "this person is already on a trial with you - a second one at the same time \
              would double the hours and halve the point"
                 .into(),
         );
@@ -237,7 +237,7 @@ pub async fn log_hours(
 
     if summary.trim().is_empty() {
         return Err(AppError::Validation(
-            "say what you did — it is what the client approves against, and what you \
+            "say what you did - it is what the client approves against, and what you \
              point at when an entry is questioned"
                 .into(),
         ));

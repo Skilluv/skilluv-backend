@@ -4,13 +4,13 @@
 
 This page is the scope of Skilluv's disclosure programme. It is the document
 `SECURITY.md` points at, and it is served in machine-readable form at
-`GET /api/security/scope` — unauthenticated, on purpose, because a researcher
+`GET /api/security/scope` - unauthenticated, on purpose, because a researcher
 decides what to touch before they have an account.
 
 The list of hosts here is a copy. **The authoritative one is
 `DEFAULT_SCOPE_HOSTS` in `src/services/security_findings.rs`**, which is what
 refuses a submission. If the two ever disagree, the code is right and this page
-is out of date — tell us.
+is out of date - tell us.
 
 ---
 
@@ -33,7 +33,7 @@ déployé relève de cette page.
 
 ### Hors périmètre
 
-- `docs.skill-uv.com` — statique, hébergé par un tiers.
+- `docs.skill-uv.com` - statique, hébergé par un tiers.
 - Le serveur Discord et tout ce qui y est lié.
 - Les comptes et l'infrastructure de tiers : Brevo, Stripe, GitHub, Cloudflare,
   Coolify, Hetzner. Signalez-leur directement.
@@ -59,7 +59,7 @@ débit (à documenter, pas à exploiter).
 - Ingénierie sociale, hameçonnage, appels aux utilisateurs ou à l'équipe.
 - Attaques physiques.
 - En-têtes de sécurité manquants, sans impact démontré. Signalez-les groupés
-  comme « durcissement » — ils sont utiles et ils ne sont pas des
+  comme « durcissement » - ils sont utiles et ils ne sont pas des
   vulnérabilités.
 - Vulnérabilités dans une dépendance sans preuve d'atteignabilité ici. Une
   entrée d'avis dans l'arbre de dépendances n'est pas une découverte.
@@ -87,7 +87,7 @@ débit (à documenter, pas à exploiter).
 
 - **Accusé de réception immédiat**, automatique, à la soumission.
 - **Tri sous 7 jours** par une personne, avec une raison écrite dans tous les
-  cas — y compris le refus.
+  cas - y compris le refus.
 - **Pas de poursuite** contre quiconque respecte cette page de bonne foi. Si
   vous dépassez le périmètre par accident et nous le dites, cela reste couvert.
   C'est le sens de l'engagement : il vaut aussi quand vous vous êtes trompé.
@@ -102,7 +102,7 @@ débit (à documenter, pas à exploiter).
 `POST /api/security/reports`, depuis un compte. Le rapport demande une
 reproduction, un impact et de préférence un vecteur CVSS. Les captures
 s'envoient d'abord à `POST /api/security/reports/uploads`, qui rend une clé à
-mettre dans `proof_keys` — ce ne sont pas des URL publiques, parce que la
+mettre dans `proof_keys` - ce ne sont pas des URL publiques, parce que la
 preuve d'une faille non corrigée n'est pas un document public.
 
 Si vous ne voulez pas de compte : `security@skill-uv.com`.
@@ -128,7 +128,7 @@ is about.
 
 ### Out of scope
 
-- `docs.skill-uv.com` — static, third-party hosted.
+- `docs.skill-uv.com` - static, third-party hosted.
 - The Discord server and anything reached through it.
 - Third-party accounts and infrastructure: Brevo, Stripe, GitHub, Cloudflare,
   Coolify, Hetzner. Report to them directly.
@@ -148,7 +148,7 @@ the API or the logs, rate-limit bypass (documented, not exploited).
 - **Denial of service of any kind.** Including load testing, including "just to
   see how much it takes". This is the one prohibition whose breach ends the
   relationship immediately.
-- Brute force beyond the published limits — see research mode below.
+- Brute force beyond the published limits - see research mode below.
 - Social engineering, phishing, calling users or staff.
 - Physical attacks.
 - Missing security headers with no demonstrated impact. Send them together as
@@ -177,7 +177,7 @@ the API or the logs, rate-limit bypass (documented, not exploited).
 ### What we commit to
 
 - **Immediate automated acknowledgement** on submission.
-- **Triage within 7 days** by a person, with a written reason in every case —
+- **Triage within 7 days** by a person, with a written reason in every case -
   including a refusal.
 - **No legal action** against anybody following this page in good faith. If you
   cross the boundary by accident and tell us, that stays covered. That is what
@@ -198,7 +198,7 @@ POST /api/security/research-token
 ```
 
 returns a token. Send it as `X-Security-Research-Token` and your rate ceiling is
-multiplied by ten. It grants nothing else — no capability, no data, no route —
+multiplied by ten. It grants nothing else - no capability, no data, no route -
 and it does **not** remove the limit, because denial of service is out of scope
 in fact and not only in this document.
 
@@ -210,7 +210,7 @@ Re-issuing is one request. See `docs/security/RESEARCH-MODE.md`.
 `POST /api/security/reports`, from an account. The report asks for a
 reproduction, an impact and preferably a CVSS vector. Screenshots go first to
 `POST /api/security/reports/uploads`, which returns a key to put in
-`proof_keys` — these are not public URLs, because proof of an unfixed
+`proof_keys` - these are not public URLs, because proof of an unfixed
 vulnerability is not a public document.
 
 If you would rather not have an account: `security@skill-uv.com`.

@@ -1,15 +1,15 @@
-//! SKI-45 (Post-MVP T3-02) — reverse marketplace.
+//! SKI-45 (Post-MVP T3-02) - reverse marketplace.
 //!
 //! See migration 0147 for how an offer differs from a mentor profile.
 //!
 //! Two gates live here rather than in the schema, because both depend on
 //! state that changes independently of the offer row:
 //!
-//!   * **Rank** — publishing requires Artisan or above. Rank is derived, so
+//!   * **Rank** - publishing requires Artisan or above. Rank is derived, so
 //!     a snapshot in the row would go stale; it is checked on write and
 //!     re-checked on read, which means an offer from someone since demoted
 //!     stops being listed without any cleanup job.
-//!   * **Payout readiness** — a priced offer requires a verified Stripe
+//!   * **Payout readiness** - a priced offer requires a verified Stripe
 //!     Connect account. Advertising a price the platform could not pay out
 //!     is a promise we cannot keep.
 
@@ -29,7 +29,7 @@ pub const OFFER_TYPES: &[&str] = &[
 ];
 
 /// Minimum rank required to publish. Artisan means 11 verified
-/// deliverables and an attestation — enough of a track record that the
+/// deliverables and an attestation - enough of a track record that the
 /// offer means something.
 pub const MIN_RANK: &str = ranks::RANK_ARTISAN;
 
@@ -48,7 +48,7 @@ pub struct TalentOffer {
     pub description: String,
     pub active: bool,
     /// Set when moderation took the offer off the marketplace. Distinct
-    /// from `active`, which is the author's own pause switch — see
+    /// from `active`, which is the author's own pause switch - see
     /// migration 0443.
     pub moderation_held_at: Option<chrono::DateTime<chrono::Utc>>,
     pub moderation_reason: Option<String>,
@@ -102,7 +102,7 @@ fn validate_shape(params: &CreateOfferParams<'_>) -> Result<(), AppError> {
 /// Assert the user may publish offers at all.
 ///
 /// Reads the effective rank (SKI-46), so someone serving a vouching
-/// penalty loses publishing rights for its duration — which is the point
+/// penalty loses publishing rights for its duration - which is the point
 /// of the penalty.
 pub async fn assert_can_publish(db: &PgPool, user_id: Uuid) -> Result<String, AppError> {
     let rank = ranks::effective_rank(db, user_id).await?;
@@ -162,7 +162,7 @@ pub async fn create(
     .await?;
     if count >= MAX_OFFERS_PER_USER {
         return Err(AppError::Validation(format!(
-            "at most {MAX_OFFERS_PER_USER} live offers — pause one first"
+            "at most {MAX_OFFERS_PER_USER} live offers - pause one first"
         )));
     }
 
@@ -214,8 +214,8 @@ pub struct OfferListing {
 ///
 /// Returns `(eligible, eligible_if_penalised)`:
 ///
-/// * `eligible` — raw ranks that clear [`MIN_RANK`] on their own;
-/// * `eligible_if_penalised` — raw ranks that still clear it *after* the
+/// * `eligible` - raw ranks that clear [`MIN_RANK`] on their own;
+/// * `eligible_if_penalised` - raw ranks that still clear it *after* the
 ///   one-step vouching penalty, i.e. one notch higher.
 ///
 /// Derived from `ranks::rank_order()` so the ladder is defined in exactly
@@ -358,7 +358,7 @@ pub async fn update(
         assert_can_publish(db, user_id).await?;
 
         // A moderation hold is not the author's to lift. The browse query
-        // already filters on it, so this check changes no listing — it
+        // already filters on it, so this check changes no listing - it
         // replaces a request that appears to succeed while showing nothing
         // with an answer that says what actually happened.
         let held: Option<Option<chrono::DateTime<chrono::Utc>>> = sqlx::query_scalar(
@@ -442,7 +442,7 @@ pub struct AdminBrowseFilter<'a> {
     pub offset: i64,
 }
 
-/// SKI-296 — the admin listing.
+/// SKI-296 - the admin listing.
 ///
 /// The public browse could not serve moderation: it filters on `active`,
 /// on the author being visible, and on the author still clearing the rank
@@ -566,7 +566,7 @@ pub async fn moderation_hold(
     let reason = reason.trim();
     if reason.chars().count() < MIN_HOLD_REASON_CHARS {
         return Err(AppError::Validation(format!(
-            "reason must be at least {MIN_HOLD_REASON_CHARS} characters — \
+            "reason must be at least {MIN_HOLD_REASON_CHARS} characters - \
              an offer pulled without a recorded motive cannot be appealed"
         )));
     }
@@ -600,7 +600,7 @@ pub async fn moderation_hold(
     Ok(updated)
 }
 
-/// Lift a hold. Admin-only, and never reachable by the author — that
+/// Lift a hold. Admin-only, and never reachable by the author - that
 /// asymmetry is the whole point of the column.
 pub async fn moderation_release(db: &PgPool, offer_id: Uuid) -> Result<TalentOffer, AppError> {
     let updated: Option<TalentOffer> = sqlx::query_as(

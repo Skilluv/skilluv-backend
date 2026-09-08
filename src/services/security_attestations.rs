@@ -5,25 +5,25 @@
 //! Every other domain attests one thing: a verified deliverable on a slice.
 //! This one attests four, and they are genuinely different objects:
 //!
-//!   * a **slice** — an audit, a threat model, a policy set. The ordinary case,
+//!   * a **slice** - an audit, a threat model, a policy set. The ordinary case,
 //!     and the only one the other domains have.
-//!   * a **finding** — a reported vulnerability. Confirmed, then published, then
+//!   * a **finding** - a reported vulnerability. Confirmed, then published, then
 //!     possibly co-credited: three bases from one row, at three moments.
-//!   * a **challenge** — a captured flag, a passed lab. No deliverable by
+//!   * a **challenge** - a captured flag, a passed lab. No deliverable by
 //!     design (migration 0546), so the uniqueness key is the challenge itself.
-//!   * a **mission** — a paid engagement, which the mission machinery closes.
+//!   * a **mission** - a paid engagement, which the mission machinery closes.
 //!
 //! ## What is redacted, and why the attestation still means something
 //!
 //! A confirmed finding is usually under embargo when its attestation is issued.
 //! The evidence URL points at the finding's public card, which during an embargo
 //! shows the severity, the weakness class, the date and the reporter and
-//! withholds the reproduction. That is not a weaker proof — it is what a
+//! withholds the reproduction. That is not a weaker proof - it is what a
 //! coordinated disclosure looks like from outside, and it is exactly what a
 //! recruiter needs: somebody found a critical in March and the details are not
 //! yours to read yet.
 //!
-//! The alternative — waiting for publication before attesting — would mean a
+//! The alternative - waiting for publication before attesting - would mean a
 //! researcher whose finding is embargoed for ninety days has nothing to show for
 //! three months, and findings on systems that are never patched would never be
 //! attested at all.
@@ -75,7 +75,7 @@ pub const SECURITY: Domain = Domain {
         "security_competition_won",
         "security_mission_delivered",
     ],
-    // False. Security evidence is a public page, a repository or a write-up —
+    // False. Security evidence is a public page, a repository or a write-up -
     // never a file in our own bucket. A proof of an unfixed vulnerability
     // living behind a signed URL of ours would be a proof only we can show.
     allows_stored_objects: false,
@@ -113,7 +113,7 @@ pub fn basis_for_challenge_kind(kind: &str) -> Option<&'static str> {
 }
 
 /// The public card of a finding. Readable while the finding is embargoed, with
-/// the reproduction withheld — see the module header.
+/// the reproduction withheld - see the module header.
 fn finding_url(finding_id: Uuid) -> String {
     format!("{PUBLIC_SITE_URL}/security/findings/{finding_id}")
 }
@@ -211,9 +211,9 @@ async fn skill_nodes_for_slice(db: &PgPool, slice_id: Uuid) -> Result<Vec<Uuid>,
 /// after every transition that could not. Three bases can come out of one row
 /// over its life, and each is issued once:
 ///
-///   * `security_finding_confirmed` — as soon as somebody reproduced it.
-///   * `security_finding_published` — when it goes public with a write-up.
-///   * `security_finding_co_credit` — instead of the first two, when it was
+///   * `security_finding_confirmed` - as soon as somebody reproduced it.
+///   * `security_finding_published` - when it goes public with a write-up.
+///   * `security_finding_co_credit` - instead of the first two, when it was
 ///     ruled a duplicate.
 pub async fn issue_for_finding(db: &PgPool, finding_id: Uuid) -> Result<Vec<String>, AppError> {
     #[derive(sqlx::FromRow)]
@@ -253,13 +253,13 @@ pub async fn issue_for_finding(db: &PgPool, finding_id: Uuid) -> Result<Vec<Stri
         .as_deref()
         .map(|c| format!(" ({c})"))
         .unwrap_or_default();
-    let subject = format!("{} — {}{}", f.title, f.severity_tier, class);
+    let subject = format!("{} - {}{}", f.title, f.severity_tier, class);
 
     let mut issued = Vec::new();
 
     // A duplicate earns the co-credit and nothing else. It has no fix of its
     // own and no deliverable, and pretending otherwise would pay twice for one
-    // vulnerability — which is the thing first-to-file exists to prevent.
+    // vulnerability - which is the thing first-to-file exists to prevent.
     if f.dedup_state == "duplicate_confirmed" {
         let basis = "security_finding_co_credit";
         let (title, description) = crate::services::attestations::basis_wording(db, basis).await;
@@ -332,7 +332,7 @@ pub async fn issue_for_finding(db: &PgPool, finding_id: Uuid) -> Result<Vec<Stri
         let url = if url.starts_with("https://") {
             url
         } else {
-            // A relative path — a write-up committed to this repository. Made
+            // A relative path - a write-up committed to this repository. Made
             // absolute so the attestation carries something a stranger can
             // open, which is the whole test the shared issuer applies.
             format!(
@@ -412,7 +412,7 @@ pub async fn issue_for_challenge(
     }
 
     let (title, description) = crate::services::attestations::basis_wording(db, basis).await;
-    let tier_text = tier.map(|t| format!(" — {t}")).unwrap_or_default();
+    let tier_text = tier.map(|t| format!(" - {t}")).unwrap_or_default();
 
     let out = artefact_attestations::issue_linked(
         db,
@@ -510,7 +510,7 @@ pub async fn issue_for_user(db: &PgPool, user_id: Uuid) -> Result<Vec<String>, A
 /// Editorial, like every other domain's featuring: no formula, a person's
 /// judgement, and an attestation that says so. The basis is declared in the
 /// `SECURITY` domain and counted by the `featured_times` craft-score weight,
-/// so the featuring has to actually issue it — a declared basis with no arm is
+/// so the featuring has to actually issue it - a declared basis with no arm is
 /// a profile term stuck at zero, which is the exact failure
 /// `every_domain_that_declares_a_featuring_basis_issues_it` guards against.
 pub async fn featured_security_researcher(

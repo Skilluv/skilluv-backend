@@ -1,7 +1,7 @@
 //! Who the platform puts forward, and who decides.
 //!
-//! Four endpoints. Three are public — a featuring nobody can read is a
-//! distinction nobody can check — and one is the editorial act itself.
+//! Four endpoints. Three are public - a featuring nobody can read is a
+//! distinction nobody can check - and one is the editorial act itself.
 //!
 //! Nothing is posted to a social network from here. [`card`] returns
 //! everything a post needs; who presses send is a person. Publishing
@@ -148,7 +148,7 @@ pub struct FeatureBody {
 
 /// Put somebody forward for a week.
 ///
-/// One per domain per week — two people featured in one week means neither
+/// One per domain per week - two people featured in one week means neither
 /// was, and the scarcity is the whole value.
 #[utoipa::path(
     post, path = "/api/admin/featured", tag = "admin",

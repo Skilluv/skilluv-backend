@@ -40,18 +40,18 @@ pub fn admin_routes() -> Router<AppState> {
         // /admin/audit-log/generic = Phase 1.18 generic audit_log table.
         // /admin/audit-log (in admin_moderation.rs) reads the legacy admin_audit_log table.
         .route("/admin/audit-log/generic", get(list_audit_log))
-        // Enterprise B2B SSO — visibility on active IdP-authenticated sessions.
+        // Enterprise B2B SSO - visibility on active IdP-authenticated sessions.
         .route("/admin/sso/sessions", get(list_sso_sessions))
         .route("/admin/sso/sessions/{id}/revoke", post(revoke_sso_session))
-        // BE-B — reset 2FA d'un user (TOTP + WebAuthn credentials wiped).
+        // BE-B - reset 2FA d'un user (TOTP + WebAuthn credentials wiped).
         // Réservé à admin, log audit obligatoire.
         .route("/admin/users/{id}/reset-2fa", post(admin_reset_2fa))
-        // IA-C.1 — Générer une variante d'un challenge (harder/easier au MVP).
+        // IA-C.1 - Générer une variante d'un challenge (harder/easier au MVP).
         .route(
             "/admin/challenges/{id}/variant",
             post(admin_generate_variant),
         )
-        // ADM-M3.1 — CRUD orientations + orientation_skill_map.
+        // ADM-M3.1 - CRUD orientations + orientation_skill_map.
         .merge(crate::routes::admin_orientation_routes())
         // Editorial: who the platform puts forward, one per domain per week.
         .merge(crate::routes::admin_featured_routes())
@@ -77,20 +77,20 @@ pub fn admin_routes() -> Router<AppState> {
         .merge(crate::routes::admin_credential_routes())
         .merge(crate::routes::admin_event_routes())
         .merge(crate::routes::admin_talent_line_routes())
-        // ADM-M3.2 — CRUD badge_rules (proof engine editor).
+        // ADM-M3.2 - CRUD badge_rules (proof engine editor).
         .merge(crate::routes::admin_badge_rule_routes())
-        // ADM-M4 — Enterprise type manager.
+        // ADM-M4 - Enterprise type manager.
         .merge(crate::routes::admin_enterprise_routes())
-        // ADM-M5 — Recompute proofs + rank override + orientations peek.
+        // ADM-M5 - Recompute proofs + rank override + orientations peek.
         .merge(crate::routes::admin_user_routes())
-        // ADM-M5+ — proof-hooks sweep + admin-triggered GDPR export.
+        // ADM-M5+ - proof-hooks sweep + admin-triggered GDPR export.
         .merge(crate::routes::admin_ops_routes())
-        // MVP.md #14 — Skill nodes catalog CRUD.
+        // MVP.md #14 - Skill nodes catalog CRUD.
         .merge(crate::routes::admin_skill_routes())
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// BE-B — POST /admin/users/{id}/reset-2fa
+// BE-B - POST /admin/users/{id}/reset-2fa
 // ═══════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Deserialize)]
@@ -100,7 +100,7 @@ struct Reset2faBody {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SKI-111 — response schemas
+// SKI-111 - response schemas
 // ═══════════════════════════════════════════════════════════════════
 
 /// Payload of `POST /admin/users/{id}/reset-2fa`.
@@ -125,7 +125,7 @@ pub struct GenericAuditEntry {
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
-/// Pagination of the generic audit log — reports what came back rather
+/// Pagination of the generic audit log - reports what came back rather
 /// than a total, because the underlying query is unbounded.
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct AuditLogPagination {
@@ -232,7 +232,7 @@ pub async fn admin_reset_2fa(
 ) -> Result<Json<serde_json::Value>, AppError> {
     crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await?;
 
-    // BE-D — rate-limit destructif (10/min, 100/heure).
+    // BE-D - rate-limit destructif (10/min, 100/heure).
     crate::middleware::admin_destructive::enforce_admin_destructive(&state, auth.user_id).await?;
 
     if body.reason.trim().len() < 8 {
@@ -241,7 +241,7 @@ pub async fn admin_reset_2fa(
         ));
     }
 
-    // BE-D — dry-run : log l'intention et return sans écrire.
+    // BE-D - dry-run : log l'intention et return sans écrire.
     if crate::middleware::admin_destructive::is_admin_dry_run() {
         tracing::info!(
             admin_id = %auth.user_id, target_id = %target_user_id,
@@ -305,7 +305,7 @@ pub async fn admin_reset_2fa(
     .execute(&mut *tx)
     .await?;
 
-    // 5. Audit log (schéma legacy admin_audit_log — la migration append-only
+    // 5. Audit log (schéma legacy admin_audit_log - la migration append-only
     //    et le rôle audit_admin arriveront en BE-E).
     sqlx::query(
         "INSERT INTO admin_audit_log
@@ -503,7 +503,7 @@ fn build_response(data: serde_json::Value) -> serde_json::Value {
 
 // P21.1 : délègue à la source de vérité canonique (user_capabilities).
 // Backfill 0094 garantit que tout users.role='admin' historique a la
-// capability. Fait fallback nul — plus de query users.role directe.
+// capability. Fait fallback nul - plus de query users.role directe.
 pub async fn require_admin(state: &AppState, auth: &AuthUser) -> Result<(), AppError> {
     crate::middleware::capabilities::require_capability(&state.db, auth.user_id, "admin").await
 }
@@ -639,7 +639,7 @@ fn default_challenge_per_page() -> i64 {
 /// List challenges (any status), filtered and paginated.
 ///
 /// It used to `SELECT *` the whole table with no filters and no limit, and
-/// report `pagination.total` as the length of what it had just returned — a
+/// report `pagination.total` as the length of what it had just returned - a
 /// number that agreed with itself and with nothing else. A curator opening a
 /// domain's challenges was served every challenge on the platform.
 #[utoipa::path(
@@ -710,7 +710,7 @@ pub async fn list_all_challenges(
     .fetch_all(&state.db)
     .await?;
 
-    // Trello rQLFhAmG — flat `{data: T[], pagination}` convention (comme
+    // Trello rQLFhAmG - flat `{data: T[], pagination}` convention (comme
     // MshrIOYf pour /admin/sso/sessions). L'ancienne shape
     // `{data: {challenges: [...], total: N}}` est droppée.
     Ok(Json(json!({
@@ -949,7 +949,7 @@ pub struct SsoSessionsQuery {
 
 /// One active SSO session, as returned by `GET /admin/sso/sessions`.
 ///
-/// SKI-111 — typed because this endpoint is the reason the ticket exists:
+/// SKI-111 - typed because this endpoint is the reason the ticket exists:
 /// it once answered `{data: {sessions: […]}}` instead of `{data: […]}` and
 /// broke the admin table silently (SKI-58). An empty `serde_json::Value`
 /// schema cannot catch that; this struct can.
@@ -991,7 +991,7 @@ pub struct AdminSsoSessionList {
     pub meta: crate::api_response::MetaInfo,
 }
 
-/// GET /api/admin/sso/sessions — list active SSO-authenticated sessions.
+/// GET /api/admin/sso/sessions - list active SSO-authenticated sessions.
 ///
 /// Joins `user_sessions` × `users` × `enterprise_members` × `enterprises` so
 /// operators can see who is currently logged in via an external IdP, from
@@ -1090,7 +1090,7 @@ pub async fn list_sso_sessions(
         )
         .collect();
 
-    // Trello MshrIOYf — front admin attend `{data: T[], pagination}` comme
+    // Trello MshrIOYf - front admin attend `{data: T[], pagination}` comme
     // convention de toutes les listes admin. Anciennement enveloppé dans
     // `{data: {sessions: [...]}}`, ce qui cassait la table front sans erreur.
     Ok(Json(json!({
@@ -1107,7 +1107,7 @@ pub async fn list_sso_sessions(
     })))
 }
 
-/// POST /api/admin/sso/sessions/{id}/revoke — kill a specific SSO session.
+/// POST /api/admin/sso/sessions/{id}/revoke - kill a specific SSO session.
 #[utoipa::path(
     post, path = "/api/admin/sso/sessions/{id}/revoke", tag = "admin",
     params(("id" = Uuid, Path)),
@@ -1137,7 +1137,7 @@ pub async fn revoke_sso_session(
         ));
     }
 
-    // BE-F — audit log unifié.
+    // BE-F - audit log unifié.
     crate::services::audit::record(
         &state.db,
         crate::services::audit::AuditEntry {
@@ -1156,11 +1156,11 @@ pub async fn revoke_sso_session(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// IA-C.1 — POST /admin/challenges/{id}/variant
+// IA-C.1 - POST /admin/challenges/{id}/variant
 // ═══════════════════════════════════════════════════════════════════
 //
 // Génère une variante d'un challenge existant via IA (skilluv-ai
-// GenerateVariant). Le nouveau challenge est créé en `status='draft'` —
+// GenerateVariant). Le nouveau challenge est créé en `status='draft'` -
 // l'admin devra le review + publier via l'endpoint existant.
 //
 // MVP scope : `variant_type ∈ {harder, easier}` uniquement (voir doc IA-C.1).
@@ -1333,6 +1333,6 @@ pub async fn admin_generate_variant(
         "original_challenge_id": original_id,
         "variant_type": body.variant_type,
         "status": "draft",
-        "message": "Variant generated in draft — review and publish separately."
+        "message": "Variant generated in draft - review and publish separately."
     }))))
 }

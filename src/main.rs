@@ -21,7 +21,7 @@ fn main() {
     config.assert_production_secrets();
 
     // Init Sentry *before* the Tokio runtime so panic capture is wired immediately.
-    // The returned guard must outlive the program — held by `_sentry_guard`.
+    // The returned guard must outlive the program - held by `_sentry_guard`.
     let _sentry_guard = observability::init_sentry(&config);
 
     let fmt_layer = tracing_subscriber::fmt::layer().json().with_target(true);
@@ -66,11 +66,11 @@ async fn async_main(config: AppConfig) {
         .await
         .expect("Failed to run database migrations");
 
-    // Phase 4.4 — FX rate refresher (ECB reference every 6h).
+    // Phase 4.4 - FX rate refresher (ECB reference every 6h).
     //
     // After the migrations, not before them. It reads and writes `fx_rates`,
     // and on a database being built from scratch that table does not exist
-    // until the chain has run — the first refresh failed on every fresh
+    // until the chain has run - the first refresh failed on every fresh
     // deployment, quietly, because the failure is only a warning.
     skilluv_backend::services::fx::start_fx_refresher(db.clone());
 
@@ -84,7 +84,7 @@ async fn async_main(config: AppConfig) {
     //
     // Every step is idempotent and the ledger skips the ones already applied,
     // so on an up-to-date database this is a single SELECT. Set
-    // `SKILLUV_SEED_ON_BOOT=0` to turn it off — for a replica that should not
+    // `SKILLUV_SEED_ON_BOOT=0` to turn it off - for a replica that should not
     // race the primary, or for a restore being inspected before it is trusted.
     if std::env::var("SKILLUV_SEED_ON_BOOT").as_deref() != Ok("0") {
         tracing::info!("Applying seed catalogue...");
@@ -135,7 +135,7 @@ async fn async_main(config: AppConfig) {
     );
 
     // Compares our books against what each provider says it holds. Daily,
-    // and it never corrects anything — a discrepancy in real money is for a
+    // and it never corrects anything - a discrepancy in real money is for a
     // person to resolve, not a background job.
     skilluv_backend::services::balance_check::start_balance_check(db.clone());
 
@@ -144,11 +144,11 @@ async fn async_main(config: AppConfig) {
     // tab cost nothing.
     skilluv_backend::services::payment_poller::start_payment_poller(db.clone());
 
-    // Drains what failed on its channel, every minute — the shortest
+    // Drains what failed on its channel, every minute - the shortest
     // backoff, so a first retry waits for the backoff rather than the tick.
     skilluv_backend::services::outbox::start_outbox_worker(db.clone(), email.clone());
 
-    // Drip sequences (Phase 3.15) — hourly background task, idempotent via email_log.
+    // Drip sequences (Phase 3.15) - hourly background task, idempotent via email_log.
     skilluv_backend::services::drip::start_drip_task(
         db.clone(),
         email.clone(),
@@ -159,25 +159,25 @@ async fn async_main(config: AppConfig) {
     // The streak reminder the settings screen has promised since phase 1.7.
     skilluv_backend::services::streak_reminder::start_streak_reminder_task(db.clone());
 
-    // P19.3 — Proof engine sweep (weekly by default). Filet de sécurité qui
+    // P19.3 - Proof engine sweep (weekly by default). Filet de sécurité qui
     // rattrape les évolutions de seuils/rules et les hooks inline en échec.
     // Activation via SKILLUV_PROOF_SWEEP_ENABLED=1.
     skilluv_backend::services::proof_hooks::start_proof_sweep_task(db.clone());
 
-    // SKI-38 — weekly sweep stamping achieved goals and archiving settled
+    // SKI-38 - weekly sweep stamping achieved goals and archiving settled
     // ones. Env-gated (SKILLUV_GOAL_ARCHIVAL_ENABLED=1), off by default.
     skilluv_backend::services::goals::start_goal_archival_task(db.clone());
 
-    // P26 v2 SKI-88 — fallback poller that catches missed CI webhooks.
+    // P26 v2 SKI-88 - fallback poller that catches missed CI webhooks.
     // Silently no-ops when SKILLUV_BOT_GITHUB_TOKEN is unset.
     skilluv_backend::services::ci_sync::start_ci_poll_task(db.clone());
 
-    // P26 v2 SKI-111 — external repo refresh poller.
+    // P26 v2 SKI-111 - external repo refresh poller.
     // Detects upstream issue edits, closures, and PR merge/close on
     // repos where we can't install a webhook. No-op if bot token unset.
     skilluv_backend::services::external_refresh::start_external_refresh_task(db.clone());
 
-    // P26 v2 SKI-120 — maintainer digest weekly task. Every hour scans
+    // P26 v2 SKI-120 - maintainer digest weekly task. Every hour scans
     // for confirmed subscriptions due (last_digest_at > 7d) and emails.
     skilluv_backend::services::maintainer_digest::start_maintainer_digest_task(
         db.clone(),
@@ -185,7 +185,7 @@ async fn async_main(config: AppConfig) {
         config.base_url.clone(),
     );
 
-    // Connect to AI service (optional — backend works without it)
+    // Connect to AI service (optional - backend works without it)
     let ai = if let Some(ref grpc_url) = config.grpc_ai_url {
         tracing::info!("Connecting to AI service at {grpc_url}...");
         match AiClient::connect(grpc_url).await {
@@ -194,12 +194,12 @@ async fn async_main(config: AppConfig) {
                 Some(Arc::new(client))
             }
             None => {
-                tracing::warn!("AI service unavailable — running without AI features");
+                tracing::warn!("AI service unavailable - running without AI features");
                 None
             }
         }
     } else {
-        tracing::info!("No GRPC_AI_URL configured — AI features disabled");
+        tracing::info!("No GRPC_AI_URL configured - AI features disabled");
         None
     };
 
@@ -230,7 +230,7 @@ async fn async_main(config: AppConfig) {
 
     let webauthn = Arc::new(
         skilluv_backend::services::WebauthnService::new(&config.base_url)
-            .expect("Failed to build WebAuthn service — check BASE_URL"),
+            .expect("Failed to build WebAuthn service - check BASE_URL"),
     );
 
     let state = AppState {
@@ -254,7 +254,7 @@ async fn async_main(config: AppConfig) {
         webauthn,
     };
 
-    // Startup tasks — services background lances a interval fixe. Chacun est
+    // Startup tasks - services background lances a interval fixe. Chacun est
     // gate par un env-var pour eviter les surprises en dev. En staging/prod,
     // activer avec :
     //   SKILLUV_HELLO_WALL_MIRROR_ENABLED=1
@@ -291,7 +291,7 @@ async fn async_main(config: AppConfig) {
 /// pending sur `skilluv-community/hello-wall`.
 ///
 /// Requiert `SKILLUV_HELLO_WALL_MIRROR_ENABLED=1` + `SKILLUV_BOT_GITHUB_TOKEN`.
-/// Sans le token, la tache log un warning au demarrage puis dort — permet
+/// Sans le token, la tache log un warning au demarrage puis dort - permet
 /// d'ajouter le token plus tard sans redemarrer.
 /// Releases money whose hold has expired.
 ///
@@ -300,8 +300,8 @@ async fn async_main(config: AppConfig) {
 /// and a mentor waiting forever. A deployment that forgets to enable it would
 /// look healthy and quietly stop paying people.
 ///
-/// Runs every ten minutes. The precision that matters is hours — nobody
-/// notices their money arriving at 14:07 instead of 14:00 — and a short
+/// Runs every ten minutes. The precision that matters is hours - nobody
+/// notices their money arriving at 14:07 instead of 14:00 - and a short
 /// interval keeps the backlog small enough that one failing hold cannot bury
 /// the rest.
 /// Erases applicant records past their retention date.
@@ -363,11 +363,11 @@ fn spawn_credential_expiry_worker(state: skilluv_backend::AppState) {
 /// It never publishes anything. An expired embargo becomes
 /// `partially_disclosed` and waits for an administrator, because publishing a
 /// vulnerability is irreversible and a cron job is the wrong thing to be
-/// holding that decision — the argument `sweep_embargoes` makes in full.
+/// holding that decision - the argument `sweep_embargoes` makes in full.
 /// Deletes proof uploads no report references, once a day.
 ///
-/// Uploads happen before a report is submitted — that is the shape of the form
-/// — so an abandoned draft leaves files behind. A bucket that only grows is one
+/// Uploads happen before a report is submitted - that is the shape of the form
+/// - so an abandoned draft leaves files behind. A bucket that only grows is one
 /// that eventually holds somebody's proof of a vulnerability they never
 /// reported, which is the worst thing in it to be keeping.
 ///
@@ -539,7 +539,7 @@ fn spawn_release_sweep_worker(state: skilluv_backend::AppState) {
 ///
 /// Not behind a feature flag, for the same reason as the release sweep: a
 /// deployment that forgets to enable it looks healthy while holding payouts
-/// that are `pending` forever — the recipient's balance debited, the money
+/// that are `pending` forever - the recipient's balance debited, the money
 /// somewhere nobody can name.
 ///
 /// Every fifteen minutes. The sweep only looks at payouts older than its own
@@ -577,7 +577,7 @@ fn spawn_payout_reconciliation_worker(state: skilluv_backend::AppState) {
 /// Refresh download figures for published libraries, once a day.
 ///
 /// The sweep itself only touches rows older than a week, so a daily tick
-/// spreads the work rather than doing it all on one day — and a deployment
+/// spreads the work rather than doing it all on one day - and a deployment
 /// that was down on sync day is not a week behind.
 ///
 /// Off unless asked for: it calls three third-party services, and a
@@ -673,7 +673,7 @@ fn spawn_audio_analysis_worker(state: skilluv_backend::AppState) {
 ///
 /// An abandoned multipart upload keeps the parts already sent, and the object
 /// store bills for them whether or not anybody ever completes it. Nightly,
-/// because the sessions live a week and nothing is urgent — but it is the only
+/// because the sessions live a week and nothing is urgent - but it is the only
 /// thing standing between a slow month and a storage invoice nobody can
 /// explain.
 fn spawn_design_upload_sweeper(state: skilluv_backend::AppState) {

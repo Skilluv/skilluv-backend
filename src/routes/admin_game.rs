@@ -1,7 +1,7 @@
 //! The game domain's reviewer and admin surface.
 //!
 //! Not gated on `admin` alone. A game slice is validated and a mod is confirmed
-//! by a game reviewer — the derived `game_reviewer:{family}` capabilities, or
+//! by a game reviewer - the derived `game_reviewer:{family}` capabilities, or
 //! `game_reviewer:all`, or an administrator. Finalising a jam and featuring a
 //! creator are editorial acts reserved to administrators. The split mirrors
 //! security: the people who judge the work are not the same as the people who
@@ -172,7 +172,7 @@ pub async fn jam_create(
     auth: AuthUser,
     Json(input): Json<game_jams::CreateJamInput>,
 ) -> Result<Json<ApiResponse<Value>>, AppError> {
-    // An organiser is an administrator or a game reviewer of any family — the
+    // An organiser is an administrator or a game reviewer of any family - the
     // person who created it earns the `game_jam_organized` badge.
     require_any_capability(&state.db, auth.user_id, GAME_REVIEWER_CAPS).await?;
     let jam = game_jams::create(&state.db, auth.user_id, input).await?;
@@ -225,7 +225,7 @@ pub async fn issue_shipped_title(
         &body.title,
     )
     .await?;
-    // The attestation feeds the score and the rank — recompute now.
+    // The attestation feeds the score and the rank - recompute now.
     let _ = crate::services::proof_hooks::recompute_all_for_user(&state.db, body.user_id).await;
     Ok(Json(ApiResponse::new(json!({ "attestation": issued }))))
 }

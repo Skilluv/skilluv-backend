@@ -1,4 +1,4 @@
-//! The Skilluv Code Awards — public reading, member nominations and votes,
+//! The Skilluv Code Awards - public reading, member nominations and votes,
 //! curator shortlisting.
 //!
 //! Everything readable is public: the categories, the shortlist, the citation
@@ -97,7 +97,7 @@ pub struct NominateBody {
     #[schema(max_length = 60)]
     pub category_slug: String,
     pub subject_id: Uuid,
-    /// Why this deserves it. Required — voters cannot weigh a name.
+    /// Why this deserves it. Required - voters cannot weigh a name.
     #[schema(max_length = 2000)]
     pub citation: String,
 }

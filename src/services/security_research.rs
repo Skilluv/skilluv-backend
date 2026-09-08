@@ -246,7 +246,7 @@ pub async fn revoke_by_id(db: &PgPool, token_id: Uuid, reason: &str) -> Result<(
 
 /// Look a presented token up.
 ///
-/// `None` for anything that is not a live token — wrong prefix, unknown hash,
+/// `None` for anything that is not a live token - wrong prefix, unknown hash,
 /// expired, revoked. Never an error: a bad token means the request is treated
 /// as ordinary traffic, and answering 401 to it would turn this header into an
 /// oracle for whether a token exists.

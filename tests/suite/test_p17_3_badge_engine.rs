@@ -402,3 +402,84 @@ async fn onboarding_bonjour_completed_awards_badge() {
     db.close().await;
     cleanup_test_db(&name).await;
 }
+
+/// Two recomputes at once award the badge once, instead of one of them dying.
+///
+/// `recompute_all_for_user` is spawned from every approved verdict, so two can
+/// run for the same person at the same time. The award was a read followed by
+/// a separate insert: both saw no badge, both inserted, and
+/// `uniq_user_badges_by_rule` refused the second. That error propagated with
+/// `?`, aborting the whole pass, so the loser of the race silently dropped
+/// every badge it had not evaluated yet.
+///
+/// The race does not reproduce on every run, which is what let it ship. This
+/// test cannot fail spuriously: before the fix it failed sometimes, after it,
+/// never.
+#[tokio::test]
+async fn two_recomputes_at_once_award_once() {
+    let (db, name) = setup_test_db().await;
+    let u = create_user(&db).await;
+
+    insert_rule(
+        &db,
+        "bonjour_skilluv",
+        serde_json::json!({
+            "proof_types": ["onboarding_bonjour_completed"],
+            "min_count": 1
+        }),
+        "common",
+    )
+    .await;
+
+    // A submission rite, which is the shape eleven of the twelve domains use
+    // and the one with no GitHub anything: `onboarding_bonjour_fork_shape`
+    // wants a pull request number on a completed fork rite, and this test is
+    // about the badge and not about forks.
+    sqlx::query(
+        "INSERT INTO onboarding_bonjour_skilluv
+            (user_id, rite_form, skill_domain, status, completed_at)
+         VALUES ($1, 'submission', 'design', 'completed', NOW())",
+    )
+    .bind(u)
+    .execute(&db)
+    .await
+    .unwrap();
+
+    let (a, b) = tokio::join!(
+        badge_engine::recompute_badges_for_user(&db, u),
+        badge_engine::recompute_badges_for_user(&db, u),
+    );
+    assert!(
+        a.is_ok(),
+        "the first recompute must not die of the second: {a:?}"
+    );
+    assert!(
+        b.is_ok(),
+        "the second recompute must not die of the first: {b:?}"
+    );
+
+    let rows: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM user_badges ub
+           JOIN badge_rules r ON r.id = ub.rule_id
+          WHERE ub.user_id = $1 AND r.slug = 'bonjour_skilluv'",
+    )
+    .bind(u)
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(rows, 1, "one badge, however many passes computed it");
+
+    let revoked: bool = sqlx::query_scalar(
+        "SELECT revoked_at IS NOT NULL FROM user_badges ub
+           JOIN badge_rules r ON r.id = ub.rule_id
+          WHERE ub.user_id = $1 AND r.slug = 'bonjour_skilluv'",
+    )
+    .bind(u)
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert!(!revoked, "losing a race must not leave the badge revoked");
+
+    db.close().await;
+    cleanup_test_db(&name).await;
+}

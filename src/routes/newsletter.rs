@@ -117,6 +117,7 @@ fn looks_like_an_address(email: &str) -> bool {
 /// POST /api/newsletter/subscriptions
 #[utoipa::path(
     post, path = "/api/newsletter/subscriptions", tag = "newsletter",
+    operation_id = "newsletterSubscribe",
     request_body = SubscribeBody,
     responses(
         (status = 202, description = "Accepted. The same answer whether or not the address was known."),
@@ -250,6 +251,7 @@ fn confirmation_mail(locale: &str, link: &str) -> (String, String) {
 /// GET /api/newsletter/confirm/{token}
 #[utoipa::path(
     get, path = "/api/newsletter/confirm/{token}", tag = "newsletter",
+    operation_id = "newsletterConfirm",
     params(("token" = String, Path, description = "Opaque token from the confirmation mail")),
     responses(
         (status = 200, description = "Confirmed, or already confirmed"),
@@ -295,6 +297,7 @@ pub async fn confirm(
 /// GET /api/newsletter/unsubscribe/{token}
 #[utoipa::path(
     get, path = "/api/newsletter/unsubscribe/{token}", tag = "newsletter",
+    operation_id = "newsletterUnsubscribe",
     params(("token" = String, Path, description = "Opaque token from any newsletter mail")),
     responses(
         (status = 200, description = "Unsubscribed, or already unsubscribed"),

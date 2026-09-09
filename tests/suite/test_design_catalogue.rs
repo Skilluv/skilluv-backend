@@ -424,15 +424,33 @@ async fn seeded_challenges_are_drafts_and_carry_their_grid() {
     // past archived rows - migration 0607 retired the 2024 "Premier pas" seed
     // and an archived row reaches nobody, which is the whole point of the
     // status. The catalogue seeded here is what must stay in draft.
-    let published_seeds: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM challenge_templates
+    //
+    // Migration 0626 publishes six on purpose, and they are named here rather
+    // than excluded by a flag: what this test protects is that nothing else
+    // slips out of draft, and a filter that says "except the reviewed ones"
+    // would pass for a seventh nobody read. The six are the design ladder.
+    let published_seeds: Vec<String> = sqlx::query_scalar(
+        "SELECT title FROM challenge_templates
           WHERE skill_domain = 'design' AND is_training = TRUE
-            AND is_onboarding = FALSE AND status NOT IN ('draft', 'archived')",
+            AND is_onboarding = FALSE AND status NOT IN ('draft', 'archived')
+          ORDER BY title",
     )
-    .fetch_one(&app.db)
+    .fetch_all(&app.db)
     .await
     .unwrap();
-    assert_eq!(published_seeds, 0);
+    let mut expected = vec![
+        "A poster for one Skilluv event",
+        "One icon for the Skilluv set",
+        "One screen redrawn, and why",
+        "The screen when there is nothing yet",
+        "Three error messages somebody can act on",
+        "Ten seconds of motion, inside a budget",
+    ];
+    expected.sort_unstable();
+    assert_eq!(
+        published_seeds, expected,
+        "something left draft that the ladder did not put there"
+    );
 
     // And each carries a rubric, so verification never runs with no
     // statement of what good means.

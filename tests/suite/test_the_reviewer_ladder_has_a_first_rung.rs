@@ -233,10 +233,12 @@ async fn a_rite_reviewer_cannot_read_ordinary_work() {
 
     // An ordinary design deliverable, attached to no rite template.
     app.register_user("workhand").await;
-    // An ordinary design brief, written here rather than looked up: the test
-    // template only seeds the onboarding challenges, so a query for a
-    // published design template that is not the rite returns nothing and the
-    // deliverable lands with a null parent.
+    // An ordinary design brief, written here rather than looked up.
+    //
+    // Migration 0626 has since published six, so a lookup would now find one.
+    // Writing it here anyway keeps this test about the gate: what it needs is
+    // a deliverable that is not a rite, and depending on the ladder's contents
+    // would make a change to that ladder able to break this.
     let brief: uuid::Uuid = sqlx::query_scalar(
         "INSERT INTO challenge_templates
              (title, description, instructions, skill_domain, difficulty,

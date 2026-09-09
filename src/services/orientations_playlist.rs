@@ -60,7 +60,7 @@ pub async fn playlist_for(
     let (ori_id, primary_domain, secondary_domains) = ori
         .ok_or_else(|| AppError::NotFound(format!("orientation '{orientation_slug}' not found")))?;
 
-    let mut all_domains = vec![primary_domain];
+    let mut all_domains = vec![primary_domain.clone()];
     all_domains.extend(secondary_domains);
 
     // 2. Skills core de l'orientation (pour les slots).
@@ -92,12 +92,27 @@ pub async fn playlist_for(
                 AND d.user_id = $2
                 AND d.verification_status = 'verified'
           )
-        ORDER BY ct.difficulty ASC, ct.created_at DESC
+        -- The trade somebody declared comes before the trades next to it.
+        --
+        -- `all_domains` is the orientation's primary domain plus its
+        -- secondaries, and the ordering ignored the difference. So the moment
+        -- a domain published exercises that were newer than another's, three
+        -- slots out of three went to a neighbouring trade: a frontend
+        -- developer opening their playlist the day the design ladder shipped
+        -- was offered an icon, an empty state and a poster, and no code at
+        -- all. Nothing was wrong with the rows; the query had no opinion
+        -- about whose playlist it was.
+        --
+        -- Secondary domains still appear, which is the point of carrying
+        -- them, but after the primary rather than instead of it.
+        ORDER BY (ct.skill_domain = $3) DESC,
+                 ct.difficulty ASC, ct.created_at DESC
         LIMIT 3
         "#,
     )
     .bind(&all_domains)
     .bind(user_id)
+    .bind(&primary_domain)
     .fetch_all(db)
     .await?;
 

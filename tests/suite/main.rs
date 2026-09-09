@@ -204,6 +204,7 @@ mod test_p8_6_skills_fallback;
 mod test_p8_6c_leaderboard_agg;
 mod test_payment_fulfilment;
 mod test_payment_webhooks;
+mod test_payout_reconciliation_resilience;
 mod test_payout_routing;
 mod test_phase5_bounties;
 mod test_phase5_certifications;

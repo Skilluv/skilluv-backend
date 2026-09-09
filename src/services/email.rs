@@ -183,18 +183,14 @@ impl EmailService {
         subject: &str,
         html_content: &str,
     ) -> Result<(), AppError> {
-        let body = json!({
-            "sender": {
-                "name": self.from_name,
-                "email": self.from_email,
-            },
-            "to": [{
-                "email": to_email,
-                "name": to_name,
-            }],
-            "subject": subject,
-            "htmlContent": html_content,
-        });
+        let body = brevo_payload(
+            &self.from_name,
+            &self.from_email,
+            to_email,
+            to_name,
+            subject,
+            html_content,
+        );
 
         let client = reqwest::Client::new();
         let response = client
@@ -556,9 +552,90 @@ fn strip_html(html: &str) -> String {
     out.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
+/// The Brevo request body, built where it can be read and tested.
+///
+/// `name` is omitted when it is empty rather than sent as `""`. Brevo refuses
+/// the empty string with `{"code":"missing_parameter","message":"name is
+/// missing in to"}`, a 400 on every send, and the whole point of
+/// `send_direct` is a recipient with no user row and therefore no name to
+/// give: the newsletter confirmation passes `""` because there is nobody to
+/// name yet.
+///
+/// So every newsletter confirmation mail failed at the provider, was logged
+/// and reported, and the caller still got its 202 because the failure is
+/// deliberately not told to the person subscribing. Four Sentry events and an
+/// endpoint that looked like it worked.
+///
+/// Fixed here and not at the call site: no caller should have to know that
+/// this provider dislikes an empty string, and the next one to pass `""`
+/// would have reintroduced it.
+fn brevo_payload(
+    from_name: &str,
+    from_email: &str,
+    to_email: &str,
+    to_name: &str,
+    subject: &str,
+    html_content: &str,
+) -> serde_json::Value {
+    let mut recipient = json!({ "email": to_email });
+    if !to_name.trim().is_empty() {
+        recipient["name"] = json!(to_name);
+    }
+    json!({
+        "sender": { "name": from_name, "email": from_email },
+        "to": [recipient],
+        "subject": subject,
+        "htmlContent": html_content,
+    })
+}
+
 #[cfg(test)]
 mod tests {
-    use super::EmailService;
+    use super::{EmailService, brevo_payload};
+
+    /// A recipient with no name carries no `name` key at all.
+    ///
+    /// Sending `"name": ""` is a 400 from Brevo on every message:
+    /// `{"code":"missing_parameter","message":"name is missing in to"}`. That
+    /// is what every newsletter confirmation mail hit. `send_direct` exists
+    /// precisely for a recipient with no user row and therefore no name, so
+    /// the empty string is the normal case for it, not an edge one.
+    #[test]
+    fn a_recipient_with_no_name_is_sent_without_the_field() {
+        let body = brevo_payload(
+            "Skilluv",
+            "no-reply@skill-uv.com",
+            "somebody@example.com",
+            "",
+            "Skilluv: confirm your subscription",
+            "<p>hi</p>",
+        );
+        let to = &body["to"][0];
+        assert_eq!(to["email"], "somebody@example.com");
+        assert!(
+            to.get("name").is_none(),
+            "an empty name has to be absent, not empty: {body}"
+        );
+
+        // Whitespace is the same case wearing a disguise.
+        let padded = brevo_payload("S", "f@x.co", "t@x.co", "   ", "s", "<p>h</p>");
+        assert!(padded["to"][0].get("name").is_none());
+    }
+
+    /// And a real name still travels.
+    #[test]
+    fn a_named_recipient_keeps_their_name() {
+        let body = brevo_payload(
+            "Skilluv",
+            "no-reply@skill-uv.com",
+            "ama@example.com",
+            "Ama",
+            "Welcome",
+            "<p>hi</p>",
+        );
+        assert_eq!(body["to"][0]["name"], "Ama");
+        assert_eq!(body["sender"]["name"], "Skilluv");
+    }
 
     /// A deployment with no mail transport says so instead of saying nothing.
     ///

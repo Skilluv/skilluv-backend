@@ -175,3 +175,66 @@ async fn the_identifiers_a_client_maps_to_logos_are_pinned() {
         );
     }
 }
+
+/// The backfill stops being code-only.
+///
+/// 0619 built the registry as a general thing and filled it for one domain, so
+/// `/api/orientations` answered a developer with their languages and everybody
+/// else with an empty array. Migration 0625 applies 0619's own rule to the
+/// other eleven catalogues: a stack is written only where the orientation's
+/// description names the tool outright.
+///
+/// Seven orientations qualified, which is few and is the point. This pins them
+/// by slug, because the value of the rule is that it produced a short list.
+#[tokio::test]
+async fn the_stack_reaches_past_the_code_catalogue() {
+    let app = TestApp::spawn().await;
+
+    let expected: [(&str, &[&str]); 7] = [
+        ("design-motion-ui", &["lottie", "rive"]),
+        ("design-motion-3d", &["cinema-4d", "blender"]),
+        ("audio-music-implementer", &["fmod", "wwise"]),
+        ("game-engine-programmer", &["godot", "bevy"]),
+        ("game-animator-3d", &["unity", "unreal-engine"]),
+        ("game-vfx-artist", &["godot"]),
+        ("kubernetes-specialist", &["kubernetes"]),
+    ];
+
+    for (slug, tools) in expected {
+        let stack: Vec<String> =
+            sqlx::query_scalar("SELECT stack FROM orientations WHERE slug = $1")
+                .bind(slug)
+                .fetch_one(&app.db)
+                .await
+                .unwrap_or_else(|e| panic!("{slug} is not in the catalogue: {e}"));
+        assert_eq!(
+            stack, tools,
+            "{slug} does not carry the tools its own description names"
+        );
+    }
+}
+
+/// Nothing was written for a trade whose description names no tool.
+///
+/// `quality` mentions Playwright and `ops` mentions Terraform and Prometheus,
+/// but only in the migrations' comments about artefact kinds. Reading those as
+/// stacks would be the invention the rule exists to refuse, and the refusal is
+/// worth a test because it is the tempting half of the work.
+#[tokio::test]
+async fn a_tool_named_only_in_a_comment_is_not_a_stack() {
+    let app = TestApp::spawn().await;
+
+    let leaked: Vec<String> = sqlx::query_scalar(
+        "SELECT o.slug FROM orientations o, unnest(o.stack) AS t
+          WHERE t IN ('playwright', 'terraform', 'prometheus', 'pulumi', 'helm')",
+    )
+    .fetch_all(&app.db)
+    .await
+    .unwrap();
+
+    assert!(
+        leaked.is_empty(),
+        "these stacks were derived from a migration comment, not from a trade's \
+         own description: {leaked:?}"
+    );
+}

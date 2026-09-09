@@ -1922,7 +1922,7 @@ pub async fn totp_disable(
 ) -> Result<Json<ApiResponse<SimpleMessage>>, AppError> {
     let body: TotpDisableRequest = serde_json::from_value(raw).map_err(|_| {
         AppError::Validation(
-            "Disabling TOTP requires both `password` and a live 6-digit              `code`. Holding a session is not enough to drop a second              factor, so the account password is re-checked here."
+            "Disabling TOTP requires both `password` and a live 6-digit `code`. Holding a session is not enough to drop a second factor, so the account password is re-checked here."
                 .into(),
         )
     })?;

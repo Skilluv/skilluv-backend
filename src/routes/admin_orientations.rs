@@ -541,7 +541,7 @@ fn refuse_reserved_slug(slug: &str, tolerates_fixtures: bool) -> Result<(), AppE
     {
         // Naming the prefix, so a suite author reads why rather than guessing.
         return Err(AppError::Validation(format!(
-            "slug prefix `{prefix}` is reserved for test fixtures and cannot be              created on a deployed environment; reserved prefixes are              {RESERVED_SLUG_PREFIXES:?}"
+            "slug prefix `{prefix}` is reserved for test fixtures and cannot be created on a deployed environment; reserved prefixes are {RESERVED_SLUG_PREFIXES:?}"
         )));
     }
     Ok(())

@@ -1092,7 +1092,7 @@ async fn the_only_thing_an_individual_can_buy_is_a_replay() {
         let slug = plan["slug"].as_str().unwrap();
         assert!(
             AN_INDIVIDUAL_MAY_BUY.contains(&slug),
-            "'{slug}' is sold to individuals and nobody has said what it sells:              if it is attention, ranking or access to work, it does not belong here"
+            "'{slug}' is sold to individuals and nobody has said what it sells: if it is attention, ranking or access to work, it does not belong here"
         );
     }
     assert!(

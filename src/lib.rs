@@ -15,6 +15,7 @@ pub mod errors;
 pub mod grpc;
 pub mod middleware;
 pub mod models;
+mod no_collapsed_continuations;
 mod no_em_dashes;
 pub mod observability;
 pub mod openapi;

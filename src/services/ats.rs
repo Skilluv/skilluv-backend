@@ -608,7 +608,7 @@ pub async fn gaps(db: &PgPool, opening_id: Uuid) -> Result<Vec<OpeningGap>, AppE
     if has_range == Some(false) {
         gaps.push(OpeningGap {
             code: "no_salary_range",
-            note: "Aucune fourchette de rémunération n'est renseignée. Ce poste                    n'est visible que par vous, donc rien ne l'exige - mais un                    candidat qui négocie sans fourchette négocie en aveugle, et                    c'est ce qui fait qu'on paie moins les gens qui viennent de                    loin.",
+            note: "Aucune fourchette de rémunération n'est renseignée. Ce poste n'est visible que par vous, donc rien ne l'exige - mais un candidat qui négocie sans fourchette négocie en aveugle, et c'est ce qui fait qu'on paie moins les gens qui viennent de loin.",
         });
     }
     Ok(gaps)

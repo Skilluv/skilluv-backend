@@ -1179,7 +1179,7 @@ pub async fn mentor_matches(
 ) -> Result<Json<ApiResponse<serde_json::Value>>, AppError> {
     let rules = crate::services::mentorship_matching::rules_for(&domain).ok_or_else(|| {
         AppError::Validation(format!(
-            "no mentorship rules for domain `{domain}` - how many mentees somebody              can carry and what their tools are called differ per domain, and              guessing them would match people badly rather than not at all"
+            "no mentorship rules for domain `{domain}` - how many mentees somebody can carry and what their tools are called differ per domain, and guessing them would match people badly rather than not at all"
         ))
     })?;
 

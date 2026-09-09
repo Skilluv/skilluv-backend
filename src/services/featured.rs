@@ -360,7 +360,7 @@ async fn warn_if_the_domain_expected_one(db: &PgPool, domain: &str) {
     if let Ok(Some(basis)) = basis {
         tracing::error!(
             domain, %basis,
-            "this domain declares a featuring basis and no generator issues it -              the featuring was recorded and the attestation was not, which shows              up only as a profile term stuck at zero"
+            "this domain declares a featuring basis and no generator issues it - the featuring was recorded and the attestation was not, which shows up only as a profile term stuck at zero"
         );
     }
 }

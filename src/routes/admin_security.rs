@@ -1169,7 +1169,7 @@ pub async fn lab_from_finding(
     Ok(Json(ApiResponse::new(json!({
         "challenge_id": challenge_id,
         "status": "draft",
-        "note": "Read the artefact and check that every question is answerable                  from it before publishing. A redaction that removed an answer                  is only visible from the other side.",
+        "note": "Read the artefact and check that every question is answerable from it before publishing. A redaction that removed an answer is only visible from the other side.",
     }))))
 }
 

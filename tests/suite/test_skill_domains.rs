@@ -233,7 +233,7 @@ async fn a_slug_column_uses_one_separator() {
 
         assert!(
             snake == 0 || kebab == 0,
-            "{table} holds {snake} snake_case slugs and {kebab} kebab-case ones,              and a reader of a URL cannot tell which one a given row will be"
+            "{table} holds {snake} snake_case slugs and {kebab} kebab-case ones, and a reader of a URL cannot tell which one a given row will be"
         );
     }
 }

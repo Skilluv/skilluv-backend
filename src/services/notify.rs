@@ -922,7 +922,7 @@ impl<'a> Builder<'a> {
             tracing::error!(
                 kind = self.kind,
                 user = %user_id,
-                "email channel requested but this context carries no email                  service - the message was not sent"
+                "email channel requested but this context carries no email service - the message was not sent"
             );
             return Ok(false);
         };

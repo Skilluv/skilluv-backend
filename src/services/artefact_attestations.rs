@@ -260,7 +260,7 @@ pub async fn issue_linked(
                 // than the uniqueness rules, and saying so is better than
                 // returning something invented.
                 return Err(AppError::Internal(format!(
-                    "a {basis} attestation was refused and no existing one                      explains why"
+                    "a {basis} attestation was refused and no existing one explains why"
                 )));
             };
             // Not counted in the metric: nothing was issued.

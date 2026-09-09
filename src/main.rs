@@ -123,6 +123,7 @@ async fn async_main(config: AppConfig) {
         config.brevo_api_key.clone(),
         &config.email_from,
         &config.email_from_name,
+        &config.environment,
     ));
     // Installed before any background task can emit: the proof engine, the
     // mention recorder and the reconciliation sweep hold only a `PgPool`,

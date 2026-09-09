@@ -85,6 +85,16 @@ impl AppStateConfig {
     pub fn tolerates_test_fixtures(&self) -> bool {
         matches!(self.environment.as_str(), "dev" | "test" | "local")
     }
+
+    /// Whether this process is serving people who are not us.
+    ///
+    /// The same question as above, asked the way a caller who is not talking
+    /// about fixtures needs to ask it, so that nobody spells "is this prod"
+    /// a third way. Used by the deep health check to decide whether a missing
+    /// mail transport is a broken deployment or an ordinary laptop.
+    pub fn is_a_real_deployment(&self) -> bool {
+        !self.tolerates_test_fixtures()
+    }
 }
 
 pub fn build_router(state: AppState) -> Router {

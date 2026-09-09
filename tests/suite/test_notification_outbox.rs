@@ -15,7 +15,7 @@ use uuid::Uuid;
 /// The same service the app builds: no Brevo key, so it logs rather than
 /// sends. What is under test is the queue, not the provider.
 fn mailer() -> EmailService {
-    EmailService::new(None, "test@skill-uv.com", "Skilluv Test")
+    EmailService::new(None, "test@skill-uv.com", "Skilluv Test", "test")
 }
 
 async fn person(app: &TestApp, username: &str) -> Uuid {

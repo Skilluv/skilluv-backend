@@ -286,10 +286,15 @@ async fn opening_a_trade_needs_the_domains_curation() {
 async fn the_seeded_design_catalogue_knows_which_trade_each_belongs_to() {
     let app = TestApp::spawn().await;
 
+    // Scoped to drafts, which is what "the seeded catalogue" means here: the
+    // 130 rows migration 0606 attached to a trade are all `draft`. Counting
+    // every design row instead made this an assertion that the domain never
+    // gains a published exercise, and migration 0626 added six.
     let (attached, trades): (i64, i64) = sqlx::query_as(
         "SELECT count(*), count(DISTINCT orientation_id)
            FROM challenge_templates
-          WHERE skill_domain = 'design' AND orientation_id IS NOT NULL",
+          WHERE skill_domain = 'design' AND orientation_id IS NOT NULL
+            AND status = 'draft'",
     )
     .fetch_one(&app.db)
     .await

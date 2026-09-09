@@ -284,3 +284,46 @@ async fn playlist_excludes_slots_from_own_team() {
     db.close().await;
     cleanup_test_db(&name).await;
 }
+
+/// A playlist offers the trade somebody declared before the ones beside it.
+///
+/// `playlist_for` searches the orientation's primary domain plus its
+/// secondaries, and the ordering did not tell them apart. So the day a
+/// neighbouring domain published exercises newer than the primary's, all
+/// three slots went to the neighbour: a frontend developer was offered an
+/// icon, an empty state and a poster, and no code at all. Nothing was wrong
+/// with the rows, the query had no opinion about whose playlist it was.
+///
+/// Found when the design ladder shipped and this file's own fixtures stopped
+/// appearing in a `code` playlist.
+#[tokio::test]
+async fn the_declared_trade_comes_before_the_ones_beside_it() {
+    let (db, name) = setup_test_db().await;
+    let u = create_user(&db).await;
+
+    // Newer than the code one, and easier, which is exactly the shape that
+    // used to win every slot.
+    let neighbour = insert_training_challenge(&db, "A neighbouring exercise", "design").await;
+    let own = insert_training_challenge(&db, "An exercise of the declared trade", "code").await;
+
+    let pl = orientations_playlist::playlist_for(&db, u, "dev-frontend")
+        .await
+        .expect("playlist");
+    let ids: Vec<Uuid> = pl.training_challenges.iter().map(|c| c.id).collect();
+
+    assert!(
+        ids.contains(&own),
+        "the declared trade has to be offered: {ids:?}"
+    );
+    if ids.contains(&neighbour) {
+        let own_at = ids.iter().position(|i| *i == own).unwrap();
+        let neighbour_at = ids.iter().position(|i| *i == neighbour).unwrap();
+        assert!(
+            own_at < neighbour_at,
+            "a neighbouring domain came before the trade somebody declared"
+        );
+    }
+
+    db.close().await;
+    cleanup_test_db(&name).await;
+}

@@ -899,7 +899,7 @@ pub async fn claim_bounty(
     Ok(Json(ApiResponse::new(json!({
         "id": id,
         "state": "waiting",
-        "note": "A reviewer will open the disclosure and check that it exists,                  that it names you, and that its severity is what you said.                  That is everything anybody can check from outside, and the                  attestation says as much.",
+        "note": "A reviewer will open the disclosure and check that it exists, that it names you, and that its severity is what you said. That is everything anybody can check from outside, and the attestation says as much.",
     }))))
 }
 

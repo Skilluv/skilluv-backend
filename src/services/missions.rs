@@ -416,7 +416,7 @@ pub async fn create(
             }
             if t == "client_custom" && input.nda_document_url.is_none() {
                 return Err(AppError::Validation(
-                    "a client's own agreement says where it is - and it has to be                      uploaded here rather than linked, because an agreement this                      platform cannot read is one it cannot hash"
+                    "a client's own agreement says where it is - and it has to be uploaded here rather than linked, because an agreement this platform cannot read is one it cannot hash"
                         .into(),
                 ));
             }
@@ -1132,7 +1132,7 @@ async fn check_application_gates(
         };
         if have < need {
             return Err(AppError::Validation(format!(
-                "this mission is open from {required} upwards. What raises a rank                  is verified work, and the mission board is not the place it                  starts"
+                "this mission is open from {required} upwards. What raises a rank is verified work, and the mission board is not the place it starts"
             )));
         }
     }
@@ -1155,7 +1155,7 @@ async fn check_application_gates(
 
         if !missing.is_empty() {
             return Err(AppError::Validation(format!(
-                "this mission asks for {}. Declare it on your profile first -                  declared is enough to apply, and the enterprise is told which                  of your credentials anybody has checked",
+                "this mission asks for {}. Declare it on your profile first - declared is enough to apply, and the enterprise is told which of your credentials anybody has checked",
                 missing.join(", ")
             )));
         }
@@ -1174,7 +1174,7 @@ async fn check_application_gates(
         .await?;
         if !signed {
             return Err(AppError::Validation(
-                "this mission requires a confidentiality agreement. Sign it                  first: most of what makes an engagement like this describable                  is what the client has agreed you may say"
+                "this mission requires a confidentiality agreement. Sign it first: most of what makes an engagement like this describable is what the client has agreed you may say"
                     .into(),
             ));
         }

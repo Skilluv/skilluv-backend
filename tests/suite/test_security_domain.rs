@@ -1770,7 +1770,7 @@ async fn a_distinct_finding(
     let mut report = a_report(title);
     report["affected_endpoint"] = json!(endpoint);
     report["description_md"] = json!(format!(
-        "On {endpoint}, {what}. A caller who controls that value controls what          the server does with it, and nothing downstream re-checks."
+        "On {endpoint}, {what}. A caller who controls that value controls what the server does with it, and nothing downstream re-checks."
     ));
     report["reproduction_steps_md"] = json!(format!(
         "1. Sign in as any account

@@ -60,7 +60,7 @@ impl EmailService {
         } else {
             tracing::error!(
                 environment = environment,
-                "No SMTP_HOST and no BREVO_API_KEY on a deployment that serves real                  people. Every send will fail loudly rather than be dropped quietly.                  Nothing that depends on mail works until one of them is set:                  email verification, password reset, invitations, the newsletter                  confirmation link."
+                "No SMTP_HOST and no BREVO_API_KEY on a deployment that serves real people. Every send will fail loudly rather than be dropped quietly. Nothing that depends on mail works until one of them is set: email verification, password reset, invitations, the newsletter confirmation link."
             );
         }
         Self {

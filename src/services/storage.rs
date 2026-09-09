@@ -372,7 +372,7 @@ impl StorageService {
         // the status is checked rather than assumed.
         if response.status_code() >= 300 {
             return Err(AppError::Validation(format!(
-                "the object store refused the assembly ({}) - usually a part                  that was never uploaded, or one under the five-megabyte floor",
+                "the object store refused the assembly ({}) - usually a part that was never uploaded, or one under the five-megabyte floor",
                 response.status_code()
             )));
         }

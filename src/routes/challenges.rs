@@ -856,7 +856,7 @@ pub async fn submit_challenge(
         // Said plainly, because the alternative reading of a response that
         // awards nothing is "it failed" - and it did not.
         response["message"] = json!(
-            "Received. Nothing here can score this one, so a reviewer will read              it; fragments are awarded on their verdict."
+            "Received. Nothing here can score this one, so a reviewer will read it; fragments are awarded on their verdict."
         );
     }
 

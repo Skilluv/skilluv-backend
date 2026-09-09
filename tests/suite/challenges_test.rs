@@ -109,7 +109,7 @@ async fn test_start_and_submit_challenge() {
     );
     assert_eq!(
         body["data"]["user"]["profile_active"], false,
-        "handing work in is not the same as having it read: the profile goes          live when a reviewer settles the deliverable (services/reviews.rs),          which is what test_code_newcomer_path drives end to end"
+        "handing work in is not the same as having it read: the profile goes live when a reviewer settles the deliverable (services/reviews.rs), which is what test_code_newcomer_path drives end to end"
     );
 }
 

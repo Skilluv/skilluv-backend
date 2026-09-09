@@ -863,7 +863,7 @@ pub async fn featured_ops_engineer(
 ) -> Result<crate::services::artefact_attestations::Issued, AppError> {
     if citation.trim().len() < 40 {
         return Err(AppError::Validation(
-            "say why in a sentence somebody outside the decision would              understand - at least forty characters"
+            "say why in a sentence somebody outside the decision would understand - at least forty characters"
                 .into(),
         ));
     }

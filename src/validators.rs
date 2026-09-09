@@ -512,7 +512,7 @@ mod tests {
             .collect();
         assert_eq!(
             documented, SKILL_DOMAINS,
-            "SkillDomain and SKILL_DOMAINS have drifted - a parameter now              documents a value the guard refuses, or refuses one it documents"
+            "SkillDomain and SKILL_DOMAINS have drifted - a parameter now documents a value the guard refuses, or refuses one it documents"
         );
 
         // And each one really deserializes, which is what proves the snake_case

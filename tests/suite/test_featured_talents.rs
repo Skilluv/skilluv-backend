@@ -286,7 +286,7 @@ async fn every_domain_that_declares_a_featuring_basis_issues_it() {
 
     assert!(
         missing.is_empty(),
-        "a featuring was recorded and no attestation followed - the symptom is a          profile term stuck at zero, which is why this is checked here: {missing:?}"
+        "a featuring was recorded and no attestation followed - the symptom is a profile term stuck at zero, which is why this is checked here: {missing:?}"
     );
 }
 

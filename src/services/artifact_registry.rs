@@ -782,7 +782,7 @@ async fn fetch_youtube(client: &reqwest::Client, id: &str) -> Result<PackageStat
 
     let body: YouTubeList = client
         .get(format!(
-            "https://www.googleapis.com/youtube/v3/videos             ?part=statistics,snippet&id={id}&key={key}"
+            "https://www.googleapis.com/youtube/v3/videos ?part=statistics,snippet&id={id}&key={key}"
         ))
         .send()
         .await

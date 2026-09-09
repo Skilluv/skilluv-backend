@@ -100,7 +100,7 @@ async fn async_main(config: AppConfig) {
                     // the administrator is should still come up. It is loud
                     // because a half-seeded database found later is worse.
                     tracing::warn!(
-                        "part of the seed catalogue was skipped: this database has no                          administrator. Set SEED_ADMIN_PASSWORD (12+ characters) and restart,                          or run `skilluv-seed-all`."
+                        "part of the seed catalogue was skipped: this database has no administrator. Set SEED_ADMIN_PASSWORD (12+ characters) and restart, or run `skilluv-seed-all`."
                     );
                 }
             }
@@ -404,7 +404,7 @@ fn spawn_security_proof_sweeper(state: skilluv_backend::AppState) {
                 Ok(_) => {}
                 Err(e) => tracing::error!(
                     error = %e,
-                    "proof sweep failed - unreferenced evidence of unfixed                      vulnerabilities is still in the bucket"
+                    "proof sweep failed - unreferenced evidence of unfixed vulnerabilities is still in the bucket"
                 ),
             }
         }
@@ -422,7 +422,7 @@ fn spawn_security_embargo_worker(state: skilluv_backend::AppState) {
                     if !sweep.expired.is_empty() {
                         tracing::warn!(
                             count = sweep.expired.len(),
-                            "embargoes ran out - these findings are waiting on a                              publication decision nobody has taken"
+                            "embargoes ran out - these findings are waiting on a publication decision nobody has taken"
                         );
                     }
                     for (finding_id, days) in &sweep.reminded {
@@ -489,7 +489,7 @@ fn spawn_security_dedup_worker(state: skilluv_backend::AppState) {
                 Ok(_) => {}
                 Err(e) => tracing::error!(
                     error = %e,
-                    "similarity sweep failed - triagers will be reading without                      duplicate candidates"
+                    "similarity sweep failed - triagers will be reading without duplicate candidates"
                 ),
             }
         }
@@ -509,7 +509,7 @@ fn spawn_release_sweep_worker(state: skilluv_backend::AppState) {
                             failed = report.failed.len(),
                             examined = report.examined,
                             details = ?report.failed,
-                            "release sweep could not release every due hold -                              people are owed money they cannot reach"
+                            "release sweep could not release every due hold - people are owed money they cannot reach"
                         );
                     }
                 }

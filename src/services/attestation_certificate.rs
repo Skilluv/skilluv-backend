@@ -486,7 +486,7 @@ pub fn build_certificate_svg(data: &CertificateData, detail: SheetDetail) -> Str
             )
         })
         .collect::<Vec<_>>()
-        .join("\n    ");
+        .join("\n ");
 
     // The footing, plus the sentence education attestations have to carry.
     // "Certified trainer" is a protected term in several of the jurisdictions
@@ -510,7 +510,7 @@ pub fn build_certificate_svg(data: &CertificateData, detail: SheetDetail) -> Str
             )
         })
         .collect::<Vec<_>>()
-        .join("\n    ");
+        .join("\n ");
 
     let date_line = data
         .issued_on
@@ -628,7 +628,7 @@ fn build_evidence_svg(data: &CertificateData, detail: SheetDetail) -> String {
                     )
                 })
                 .collect::<Vec<_>>()
-                .join("\n    ")
+                .join("\n ")
         })
         .unwrap_or_default();
 

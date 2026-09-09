@@ -46,7 +46,7 @@ async fn an_unconvertible_currency_is_quoted_in_euros() {
         );
         assert_eq!(
             pack["fx_rate_applied"], 1.0,
-            "euros into euros, at one: the figure describes what was actually              done rather than pointing at a rate we never had"
+            "euros into euros, at one: the figure describes what was actually done rather than pointing at a rate we never had"
         );
     }
 }

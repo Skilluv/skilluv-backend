@@ -1055,7 +1055,7 @@ async fn count_distinct_dimension(
     }
     if dimension != "challenge_language" {
         return Err(AppError::Internal(format!(
-            "badge rule asks to count distinct '{dimension}', which nothing              implements. Known dimensions: {}",
+            "badge rule asks to count distinct '{dimension}', which nothing implements. Known dimensions: {}",
             DISTINCT_DIMENSIONS.join(", ")
         )));
     }

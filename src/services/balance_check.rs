@@ -101,7 +101,7 @@ pub async fn check(db: &PgPool) -> Result<CheckReport, AppError> {
         tracing::error!(
             accounts = internal.len(),
             details = ?internal,
-            "a ledger snapshot disagrees with its own entries - every balance              derived from it is suspect"
+            "a ledger snapshot disagrees with its own entries - every balance derived from it is suspect"
         );
     }
     report.snapshot_drift = internal;

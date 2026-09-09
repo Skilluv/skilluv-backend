@@ -110,8 +110,16 @@ pub async fn deep_health(State(state): State<AppState>) -> impl IntoResponse {
     let brevo_status = check_brevo();
     let (ws_connections, ws_rooms, ws_users) = state.ws.stats().await;
 
+    // A deployment with no mail transport reported `healthy`, because this
+    // field was rendered and never read. Everything that needs mail is down
+    // in that state: email verification, password reset, invitations, the
+    // newsletter confirmation link. Degraded and not unhealthy, deliberately:
+    // the platform still serves everything else, and returning 503 would take
+    // a box out of rotation over something a restart cannot fix.
+    let mail_down = brevo_status == "none" && state.config.is_a_real_deployment();
+
     let critical_ok = pg_status == "ok" && redis_status == "ok";
-    let all_ok = critical_ok && minio_status == "ok";
+    let all_ok = critical_ok && minio_status == "ok" && !mail_down;
     let (overall, http_code) = if all_ok {
         ("healthy", StatusCode::OK)
     } else if critical_ok {
@@ -186,19 +194,69 @@ async fn check_minio(state: &AppState) -> (&'static str, Option<u64>) {
     }
 }
 
+/// Which transport mail actually leaves by, if any.
+///
+/// It read `BREVO_API_KEY` alone, so a deployment sending happily over SMTP
+/// was reported as `disabled` while a deployment sending nothing at all was
+/// reported the same way. Two opposite states behind one word, on the page an
+/// operator reads to find out whether mail works.
+///
+/// `EmailService::new` picks SMTP first and falls back to the Brevo API, and
+/// this answers in that same order for the same reason: the report has to
+/// name the transport that would actually be used.
 fn check_brevo() -> &'static str {
-    if std::env::var("BREVO_API_KEY")
-        .ok()
-        .filter(|s| !s.is_empty())
-        .is_some()
-    {
-        "configured"
-    } else {
-        "disabled"
+    let read = |name: &str| std::env::var(name).ok().filter(|s| !s.is_empty());
+    mail_transport(
+        read("SMTP_HOST").as_deref(),
+        read("BREVO_API_KEY").as_deref(),
+    )
+}
+
+/// The decision, separated from the environment so it can be tested.
+///
+/// Reading the variables inline meant the only way to exercise this was to
+/// mutate the process environment, which is racy across parallel tests, so
+/// the bug below shipped with nothing able to catch it. The wrapper reads,
+/// this decides.
+fn mail_transport(smtp_host: Option<&str>, brevo_key: Option<&str>) -> &'static str {
+    match (smtp_host, brevo_key) {
+        (Some(_), _) => "smtp",
+        (None, Some(_)) => "brevo",
+        // Named for what it costs rather than for what is missing. On a real
+        // deployment every send now fails, so this is not a disabled optional
+        // feature: email verification, password reset, invitations and the
+        // newsletter confirmation link are all down.
+        (None, None) => "none",
     }
 }
 
 fn uptime_seconds() -> u64 {
     static START: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
     START.get_or_init(Instant::now).elapsed().as_secs()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::mail_transport;
+
+    /// Two opposite states used to share one word.
+    ///
+    /// This read `BREVO_API_KEY` alone and answered `disabled` otherwise, so
+    /// a box sending happily over SMTP and a box sending nothing at all were
+    /// reported identically, on the page an operator opens to find out
+    /// whether mail works.
+    #[test]
+    fn the_report_names_the_transport_that_would_actually_be_used() {
+        assert_eq!(mail_transport(Some("smtp.example.com"), None), "smtp");
+        assert_eq!(mail_transport(None, Some("xkeysib-...")), "brevo");
+        assert_eq!(mail_transport(None, None), "none");
+
+        // SMTP first, because `EmailService::new` picks it first. A report
+        // naming the transport that would not be used is worse than none.
+        assert_eq!(
+            mail_transport(Some("smtp.example.com"), Some("xkeysib-...")),
+            "smtp",
+            "both configured means SMTP is the one that sends"
+        );
+    }
 }

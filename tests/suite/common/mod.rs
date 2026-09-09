@@ -372,6 +372,7 @@ impl TestApp {
                 None,
                 "test@skill-uv.com",
                 "Skilluv Test",
+                "test",
             )),
             "http://localhost:5173".to_string(),
             "test-secret-key-for-testing".to_string(),
@@ -396,6 +397,7 @@ impl TestApp {
                 None, // No Brevo in tests - dev mode (logging only)
                 "test@skilluv.com",
                 "Skilluv Test",
+                "test",
             )),
             ai: None,
             queue,

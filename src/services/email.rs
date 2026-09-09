@@ -15,6 +15,11 @@ pub struct EmailService {
     smtp: Option<AsyncSmtpTransport<Tokio1Executor>>,
     from_email: String,
     from_name: String,
+    /// Whether a missing transport is allowed to be silent.
+    ///
+    /// TRUE only for `dev`, `test` and `local`. Anywhere else, a send with no
+    /// transport configured is an error rather than a log line: see `send`.
+    logs_instead_of_sending: bool,
 }
 
 /// Paramètres pour [`EmailService::send_with_log`].
@@ -29,8 +34,17 @@ pub struct SendWithLogParams<'a> {
 }
 
 impl EmailService {
-    pub fn new(api_key: Option<String>, from_email: &str, from_name: &str) -> Self {
+    /// `environment` is `AppConfig::environment`, the same string
+    /// `assert_production_secrets` reads, so that "is this a real
+    /// deployment" is decided in one place and not spelled a second way here.
+    pub fn new(
+        api_key: Option<String>,
+        from_email: &str,
+        from_name: &str,
+        environment: &str,
+    ) -> Self {
         let smtp = build_smtp_from_env();
+        let logs_instead_of_sending = matches!(environment, "dev" | "test" | "local");
 
         if smtp.is_some() {
             tracing::info!(
@@ -39,9 +53,14 @@ impl EmailService {
             );
         } else if api_key.is_some() {
             tracing::info!("Email service initialized with Brevo API");
-        } else {
+        } else if logs_instead_of_sending {
             tracing::warn!(
                 "Email service in dev mode (logging only, no SMTP_HOST or BREVO_API_KEY)"
+            );
+        } else {
+            tracing::error!(
+                environment = environment,
+                "No SMTP_HOST and no BREVO_API_KEY on a deployment that serves real                  people. Every send will fail loudly rather than be dropped quietly.                  Nothing that depends on mail works until one of them is set:                  email verification, password reset, invitations, the newsletter                  confirmation link."
             );
         }
         Self {
@@ -49,6 +68,7 @@ impl EmailService {
             smtp,
             from_email: from_email.to_string(),
             from_name: from_name.to_string(),
+            logs_instead_of_sending,
         }
     }
 
@@ -81,13 +101,36 @@ impl EmailService {
                 self.send_brevo(key, to_email, to_name, subject, html_content)
                     .await
             }
-            None => {
+            // No transport at all.
+            //
+            // This used to log `[DEV] Email would be sent` and return `Ok(())`
+            // in every environment, which made an unconfigured provider in
+            // production indistinguishable from a successful send: the caller
+            // got its success, the code got its `Ok`, and nothing anywhere
+            // said a mail had been dropped. Somebody subscribing to the
+            // newsletter got a 202 and never heard from us, and the platform
+            // had no way to know.
+            //
+            // The log line stays where it is true, which is a machine with no
+            // mail provider on purpose. Anywhere else it is an error, so that
+            // the caller can decide and Sentry sees it.
+            None if self.logs_instead_of_sending => {
                 tracing::info!(
                     to = to_email,
                     subject = subject,
                     "[DEV] Email would be sent"
                 );
                 Ok(())
+            }
+            None => {
+                tracing::error!(
+                    to = to_email,
+                    subject = subject,
+                    "Mail dropped: no SMTP_HOST and no BREVO_API_KEY on this deployment"
+                );
+                Err(AppError::Internal(
+                    "No mail transport is configured on this deployment".to_string(),
+                ))
             }
         }
     }
@@ -140,18 +183,14 @@ impl EmailService {
         subject: &str,
         html_content: &str,
     ) -> Result<(), AppError> {
-        let body = json!({
-            "sender": {
-                "name": self.from_name,
-                "email": self.from_email,
-            },
-            "to": [{
-                "email": to_email,
-                "name": to_name,
-            }],
-            "subject": subject,
-            "htmlContent": html_content,
-        });
+        let body = brevo_payload(
+            &self.from_name,
+            &self.from_email,
+            to_email,
+            to_name,
+            subject,
+            html_content,
+        );
 
         let client = reqwest::Client::new();
         let response = client
@@ -511,4 +550,145 @@ fn strip_html(html: &str) -> String {
         }
     }
     out.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// The Brevo request body, built where it can be read and tested.
+///
+/// `name` is omitted when it is empty rather than sent as `""`. Brevo refuses
+/// the empty string with `{"code":"missing_parameter","message":"name is
+/// missing in to"}`, a 400 on every send, and the whole point of
+/// `send_direct` is a recipient with no user row and therefore no name to
+/// give: the newsletter confirmation passes `""` because there is nobody to
+/// name yet.
+///
+/// So every newsletter confirmation mail failed at the provider, was logged
+/// and reported, and the caller still got its 202 because the failure is
+/// deliberately not told to the person subscribing. Four Sentry events and an
+/// endpoint that looked like it worked.
+///
+/// Fixed here and not at the call site: no caller should have to know that
+/// this provider dislikes an empty string, and the next one to pass `""`
+/// would have reintroduced it.
+fn brevo_payload(
+    from_name: &str,
+    from_email: &str,
+    to_email: &str,
+    to_name: &str,
+    subject: &str,
+    html_content: &str,
+) -> serde_json::Value {
+    let mut recipient = json!({ "email": to_email });
+    if !to_name.trim().is_empty() {
+        recipient["name"] = json!(to_name);
+    }
+    json!({
+        "sender": { "name": from_name, "email": from_email },
+        "to": [recipient],
+        "subject": subject,
+        "htmlContent": html_content,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{EmailService, brevo_payload};
+
+    /// A recipient with no name carries no `name` key at all.
+    ///
+    /// Sending `"name": ""` is a 400 from Brevo on every message:
+    /// `{"code":"missing_parameter","message":"name is missing in to"}`. That
+    /// is what every newsletter confirmation mail hit. `send_direct` exists
+    /// precisely for a recipient with no user row and therefore no name, so
+    /// the empty string is the normal case for it, not an edge one.
+    #[test]
+    fn a_recipient_with_no_name_is_sent_without_the_field() {
+        let body = brevo_payload(
+            "Skilluv",
+            "no-reply@skill-uv.com",
+            "somebody@example.com",
+            "",
+            "Skilluv: confirm your subscription",
+            "<p>hi</p>",
+        );
+        let to = &body["to"][0];
+        assert_eq!(to["email"], "somebody@example.com");
+        assert!(
+            to.get("name").is_none(),
+            "an empty name has to be absent, not empty: {body}"
+        );
+
+        // Whitespace is the same case wearing a disguise.
+        let padded = brevo_payload("S", "f@x.co", "t@x.co", "   ", "s", "<p>h</p>");
+        assert!(padded["to"][0].get("name").is_none());
+    }
+
+    /// And a real name still travels.
+    #[test]
+    fn a_named_recipient_keeps_their_name() {
+        let body = brevo_payload(
+            "Skilluv",
+            "no-reply@skill-uv.com",
+            "ama@example.com",
+            "Ama",
+            "Welcome",
+            "<p>hi</p>",
+        );
+        assert_eq!(body["to"][0]["name"], "Ama");
+        assert_eq!(body["sender"]["name"], "Skilluv");
+    }
+
+    /// A deployment with no mail transport says so instead of saying nothing.
+    ///
+    /// The `None` arm returned `Ok(())` everywhere, logging "[DEV] Email
+    /// would be sent". On a real deployment that made an unconfigured
+    /// provider indistinguishable from a successful send: the caller got its
+    /// success, the code got its `Ok`, and a person who subscribed to the
+    /// newsletter got a 202 and never heard from us.
+    ///
+    /// The test cannot assert a mail was sent, since sending needs a
+    /// provider. It asserts the one thing that was wrong: silence.
+    #[tokio::test]
+    async fn a_real_deployment_without_a_transport_fails_loudly() {
+        // SMTP_HOST is read from the environment by `build_smtp_from_env`, so
+        // this only holds where it is unset, which is where this test runs.
+        if std::env::var("SMTP_HOST").is_ok_and(|v| !v.is_empty()) {
+            return;
+        }
+
+        let service = EmailService::new(None, "no-reply@skill-uv.com", "Skilluv", "prod");
+        let sent = service
+            .send_direct("somebody@example.com", "", "Confirm", "<p>hi</p>")
+            .await;
+
+        assert!(
+            sent.is_err(),
+            "a send with no transport on a real deployment has to be an error, \
+             not a log line nobody reads"
+        );
+    }
+
+    /// And a laptop keeps its log line.
+    ///
+    /// The dev behaviour is the reason the arm was written and it is correct
+    /// where it is true: a machine with no provider on purpose should not
+    /// fail every signup. `dev`, `test` and `local` are the three names
+    /// `AppStateConfig::tolerates_test_fixtures` already uses, so there is
+    /// one spelling of "not a real deployment" and not two.
+    #[tokio::test]
+    async fn a_development_machine_still_only_logs() {
+        if std::env::var("SMTP_HOST").is_ok_and(|v| !v.is_empty()) {
+            return;
+        }
+
+        for environment in ["dev", "test", "local"] {
+            let service = EmailService::new(None, "no-reply@skill-uv.com", "Skilluv", environment);
+            let sent = service
+                .send_direct("somebody@example.com", "", "Confirm", "<p>hi</p>")
+                .await;
+            assert!(
+                sent.is_ok(),
+                "{environment} must keep logging rather than failing every send"
+            );
+        }
+    }
 }

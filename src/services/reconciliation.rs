@@ -64,6 +64,24 @@ pub struct SweepReport {
     pub escalated: usize,
     /// Webhook events that were stored but failed to apply, retried here.
     pub replayed_events: usize,
+    /// Rows this sweep could not finish, and left for the next one.
+    ///
+    /// Not the same as `failed`, which is a payout the provider says failed.
+    /// This is the sweep failing, on one row, for a reason that is ours.
+    pub errored: usize,
+}
+
+/// One unconfirmed payout, as the sweep reads it.
+///
+/// At module scope rather than inside `sweep`, because `reconcile_one` takes
+/// one and a type declared inside a function cannot be named from outside it.
+#[derive(sqlx::FromRow)]
+struct StalePayout {
+    id: Uuid,
+    provider: String,
+    provider_reference: Option<String>,
+    check_count: i32,
+    age_hours: f64,
 }
 
 /// Ask about every payout still unconfirmed, and retry what failed to apply.
@@ -73,16 +91,7 @@ pub async fn sweep(db: &PgPool, registry: &PayoutRegistry) -> Result<SweepReport
         ..Default::default()
     };
 
-    #[derive(sqlx::FromRow)]
-    struct Row {
-        id: Uuid,
-        provider: String,
-        provider_reference: Option<String>,
-        check_count: i32,
-        age_hours: f64,
-    }
-
-    let stale: Vec<Row> = sqlx::query_as(
+    let stale: Vec<StalePayout> = sqlx::query_as(
         "SELECT id, provider, provider_reference, check_count,
                 (EXTRACT(EPOCH FROM (NOW() - created_at)) / 3600)::float8 AS age_hours
            FROM payouts
@@ -112,95 +121,42 @@ pub async fn sweep(db: &PgPool, registry: &PayoutRegistry) -> Result<SweepReport
         );
     }
 
+    // One row at a time, and a row that fails does not take the others with
+    // it.
+    //
+    // Every database call below used `?`, so a single failure returned from
+    // the whole sweep and every payout behind it in the page was left
+    // unexamined until the next tick. A transient error recovers from that.
+    // A row that fails every time does not: it would abort at the same place
+    // every fifteen minutes and the payouts after it would never be
+    // reconciled at all, which is money left `pending` with a debited
+    // balance and nobody able to name where it is. That is the exact
+    // sentence in `main.rs` this sweep exists to avoid printing.
+    //
+    // The initial query stays fatal, because a sweep that cannot read the
+    // page has nothing to iterate.
     for row in stale {
         report.checked += 1;
-
-        sqlx::query(
-            "UPDATE payouts
-                SET last_checked_at = NOW(), check_count = check_count + 1
-              WHERE id = $1",
-        )
-        .bind(row.id)
-        .execute(db)
-        .await?;
-
-        // No reference means the provider never answered, so there is
-        // nothing to ask about. Straight to a human.
-        let Some(reference) = row.provider_reference.as_deref() else {
-            escalate(
-                db,
-                &row.provider,
-                row.id,
-                "the provider never returned a reference",
-            )
-            .await?;
-            report.escalated += 1;
-            continue;
-        };
-
-        let Some(provider) = registry.get(&row.provider) else {
-            // The deployment running the sweep does not hold this
-            // provider's credentials. Not an error - but not something to
-            // count as checked either.
-            tracing::debug!(
-                provider = %row.provider,
-                "sweep skipped a payout for an unconfigured provider"
-            );
-            continue;
-        };
-
-        match provider.status(reference).await {
-            Ok(Some(state)) => {
-                let event = payment_webhooks::state_to_event(state, reference);
-                match &event {
-                    Event::PayoutSettled { .. } => report.settled += 1,
-                    Event::PayoutFailed { .. } => report.failed += 1,
-                    // Collection events never come from a payout status.
-                    Event::Ignored { .. }
-                    | Event::PaymentSucceeded { .. }
-                    | Event::PaymentFailed { .. } => report.still_pending += 1,
-                }
-                payment_webhooks::apply_event(db, &row.provider, &event).await?;
-            }
-
-            // This rail only ever pushes. Waiting is the only option, and
-            // past the deadline waiting is no longer an option.
-            Ok(None) => {
-                if row.age_hours > ESCALATE_AFTER_HOURS as f64 {
-                    escalate(
-                        db,
-                        &row.provider,
-                        row.id,
-                        "this rail cannot be polled and has sent no callback",
-                    )
-                    .await?;
-                    report.escalated += 1;
-                } else {
-                    report.still_pending += 1;
-                }
-            }
-
+        match reconcile_one(db, registry, &row, &mut report).await {
+            Ok(()) => {}
             Err(e) => {
-                tracing::warn!(
+                report.errored += 1;
+                tracing::error!(
+                    payout_id = %row.id,
                     provider = %row.provider,
-                    reference = %reference,
                     error = %e,
-                    "could not read a payout's status from its provider"
+                    "could not reconcile one payout, continuing with the rest"
                 );
-                if row.check_count + 1 >= MAX_CHECKS {
-                    escalate(
-                        db,
-                        &row.provider,
-                        row.id,
-                        &format!("asked {MAX_CHECKS} times without a usable answer: {e}"),
-                    )
-                    .await?;
-                    report.escalated += 1;
-                } else {
-                    report.still_pending += 1;
-                }
             }
         }
+    }
+
+    if report.errored > 0 {
+        tracing::error!(
+            errored = report.errored,
+            checked = report.checked,
+            "payouts the sweep could not finish, left for the next cycle"
+        );
     }
 
     if report.escalated > 0 || report.failed > 0 {
@@ -345,6 +301,107 @@ async fn escalate(db: &PgPool, provider: &str, payout_id: Uuid, why: &str) -> Re
     .execute()
     .await?;
 
+    Ok(())
+}
+
+/// One payout, asked about and settled or handed on.
+///
+/// Split out of the loop so that a failure here is one payout the sweep
+/// could not finish rather than every payout it had not reached yet. The
+/// provider errors were already caught inside; the database calls were not,
+/// and those are the ones that abort.
+async fn reconcile_one(
+    db: &PgPool,
+    registry: &PayoutRegistry,
+    row: &StalePayout,
+    report: &mut SweepReport,
+) -> Result<(), AppError> {
+    sqlx::query(
+        "UPDATE payouts
+            SET last_checked_at = NOW(), check_count = check_count + 1
+          WHERE id = $1",
+    )
+    .bind(row.id)
+    .execute(db)
+    .await?;
+
+    // No reference means the provider never answered, so there is
+    // nothing to ask about. Straight to a human.
+    let Some(reference) = row.provider_reference.as_deref() else {
+        escalate(
+            db,
+            &row.provider,
+            row.id,
+            "the provider never returned a reference",
+        )
+        .await?;
+        report.escalated += 1;
+        return Ok(());
+    };
+
+    let Some(provider) = registry.get(&row.provider) else {
+        // The deployment running the sweep does not hold this
+        // provider's credentials. Not an error - but not something to
+        // count as checked either.
+        tracing::debug!(
+            provider = %row.provider,
+            "sweep skipped a payout for an unconfigured provider"
+        );
+        return Ok(());
+    };
+
+    match provider.status(reference).await {
+        Ok(Some(state)) => {
+            let event = payment_webhooks::state_to_event(state, reference);
+            match &event {
+                Event::PayoutSettled { .. } => report.settled += 1,
+                Event::PayoutFailed { .. } => report.failed += 1,
+                // Collection events never come from a payout status.
+                Event::Ignored { .. }
+                | Event::PaymentSucceeded { .. }
+                | Event::PaymentFailed { .. } => report.still_pending += 1,
+            }
+            payment_webhooks::apply_event(db, &row.provider, &event).await?;
+        }
+
+        // This rail only ever pushes. Waiting is the only option, and
+        // past the deadline waiting is no longer an option.
+        Ok(None) => {
+            if row.age_hours > ESCALATE_AFTER_HOURS as f64 {
+                escalate(
+                    db,
+                    &row.provider,
+                    row.id,
+                    "this rail cannot be polled and has sent no callback",
+                )
+                .await?;
+                report.escalated += 1;
+            } else {
+                report.still_pending += 1;
+            }
+        }
+
+        Err(e) => {
+            tracing::warn!(
+                provider = %row.provider,
+                reference = %reference,
+                error = %e,
+                "could not read a payout's status from its provider"
+            );
+            if row.check_count + 1 >= MAX_CHECKS {
+                escalate(
+                    db,
+                    &row.provider,
+                    row.id,
+                    &format!("asked {MAX_CHECKS} times without a usable answer: {e}"),
+                )
+                .await?;
+                report.escalated += 1;
+            } else {
+                report.still_pending += 1;
+            }
+        }
+    }
     Ok(())
 }
 

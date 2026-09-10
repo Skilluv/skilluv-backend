@@ -251,6 +251,7 @@ mod test_talent_search_v4;
 mod test_the_design_rite_says_hello;
 mod test_the_first_design_ladder;
 mod test_the_reviewer_ladder_has_a_first_rung;
+mod test_the_wall_of_hellos;
 mod test_tournament_series;
 mod test_unknown_query_params;
 mod test_validation_rounds;

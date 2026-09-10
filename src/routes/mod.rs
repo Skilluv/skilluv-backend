@@ -60,6 +60,7 @@ pub mod design_profile;
 pub mod design_uploads;
 pub mod education;
 pub mod featured;
+pub mod hello_wall;
 pub mod series;
 // PR #39 - dev helper endpoints (verify-token peek), gated by SKILLUV_DEV_MODE
 pub mod admin_game;
@@ -265,6 +266,7 @@ pub use goals::goal_routes;
 pub use guides::guide_routes;
 pub use guild::guild_routes;
 pub use health::health_routes;
+pub use hello_wall::hello_wall_routes;
 pub use i18n::{i18n_routes, resolve_from_accept_language};
 pub use leaderboard::leaderboard_routes;
 pub use leadership::leadership_routes;

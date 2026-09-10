@@ -1010,6 +1010,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::design::review,
         crate::routes::design::reviewer_queue,
         crate::routes::design_profile::design_profile,
+        crate::routes::hello_wall::wall,
         crate::routes::design_profile::recompute_mine,
         crate::routes::design_profile::list_tiers,
         // ─── deliverables ─────────────────────────────────────────

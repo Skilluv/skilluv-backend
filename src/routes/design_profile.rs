@@ -109,6 +109,12 @@ pub async fn design_profile(
     // that a fresh number is cheaper than explaining a stale one.
     let score = design_craft_score::compute(&state.db, header.id).await?;
 
+    // Resolved through the same rule the wall reads, so a HELLO cannot be
+    // published on one surface and withheld on the other.
+    let hello =
+        crate::services::hello_wall::for_user(&state.db, &state.storage, header.id, "design")
+            .await?;
+
     let artefacts: Vec<DesignArtefact> = sqlx::query_as(
         r#"
         SELECT d.id AS deliverable_id,
@@ -327,6 +333,15 @@ pub async fn design_profile(
             "day_rate_range": a.day_rate_range,
             "available_from": a.available_from,
         })),
+        // Their HELLO, beside the artefacts rather than inside them.
+        //
+        // A rite is not a critiqued piece: `rounds` and `grid_average` are
+        // meaningless for it, and folding it into `artefacts` would make that
+        // list heterogeneous to save one field. It was invisible here until
+        // now, excluded twice by a query that joins `project_slices` and
+        // filters `artifact_type = 'design_artifact'`, on the one page whose
+        // job is to show what somebody has done.
+        "hello": hello,
         "artefacts": artefacts,
         "contests": contests
             .into_iter()

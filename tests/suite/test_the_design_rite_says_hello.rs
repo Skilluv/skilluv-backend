@@ -163,3 +163,38 @@ async fn the_catalogue_promises_what_the_brief_asks() {
         "the catalogue must point at the rewritten rite"
     );
 }
+
+/// The brief says where the artefact will end up, before it is uploaded.
+///
+/// A `design_upload_sessions` row is private: its owner reads it, and a
+/// reviewer only while the review task is open. The wall of HELLOs breaks
+/// that for one kind of artefact, which is defensible because a self
+/// introduction is made to be seen, and indefensible in silence. Somebody who
+/// uploads a file to a platform that told them uploads are private has not
+/// agreed to publish it.
+#[tokio::test]
+async fn the_rite_says_the_artefact_will_be_shown_publicly() {
+    let app = TestApp::spawn().await;
+
+    for (locale, expected) in [
+        (
+            "fr",
+            vec!["mur des HELLO", "sous ton nom", "appartienne à un client"],
+        ),
+        (
+            "en",
+            vec!["wall of HELLOs", "under your name", "belongs to a client"],
+        ),
+    ] {
+        let rite = design_rite(&app, &format!("warned{locale}"), locale).await;
+        let instructions = rite["data"]["challenge"]["instructions"]
+            .as_str()
+            .expect("instructions");
+        for phrase in expected {
+            assert!(
+                instructions.contains(phrase),
+                "the {locale} brief does not warn: {phrase} missing from {instructions}"
+            );
+        }
+    }
+}

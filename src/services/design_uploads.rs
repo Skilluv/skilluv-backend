@@ -160,6 +160,7 @@ pub struct Session {
     pub part_count: i32,
     pub storage_key: String,
     pub preview_key: Option<String>,
+    pub cover_key: Option<String>,
     pub status: String,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub completed_at: Option<chrono::DateTime<chrono::Utc>>,
@@ -207,6 +208,15 @@ fn key_for(session_id: Uuid, filename: &str) -> String {
 
 fn preview_key_for(session_id: Uuid) -> String {
     format!("design/{session_id}/preview")
+}
+
+/// Where the author supplied still image lands.
+///
+/// Its own object beside the preview rather than a second use of that key: a
+/// motion piece has both, an MP4 a reviewer opens and a frame a grid shows,
+/// and they are not the same picture.
+fn cover_key_for(session_id: Uuid) -> String {
+    format!("design/{session_id}/cover")
 }
 
 /// Strip anything that would let a filename escape its prefix or confuse a
@@ -475,7 +485,7 @@ pub async fn complete(
          WHERE id = $1 AND status = 'pending'
      RETURNING id, user_id, slice_id, design_subtype, filename, content_type,
                declared_bytes, stored_bytes, part_size, part_count, storage_key,
-               preview_key, status, created_at, completed_at, expires_at
+               preview_key, cover_key, status, created_at, completed_at, expires_at
         "#,
     )
     .bind(session_id)
@@ -503,6 +513,35 @@ pub async fn preview_upload_url(
     let key = preview_key_for(session.id);
 
     sqlx::query("UPDATE design_upload_sessions SET preview_key = $2 WHERE id = $1")
+        .bind(session_id)
+        .bind(&key)
+        .execute(db)
+        .await?;
+
+    storage.presign_put_url(&key, PART_URL_TTL_SECONDS).await
+}
+
+/// A presigned PUT for the still image a grid will show.
+///
+/// The same shape as `preview_upload_url`, and separate for the same reason:
+/// a cover can be replaced without touching the file or the preview.
+///
+/// Wanted on every subtype, not only the four that require a preview. The
+/// ceilings here are for the work, and a wall of two dozen tiles cannot serve
+/// a 200 MB brand kit to somebody on a phone. It is not required, because a
+/// missing cover costs a picture rather than an entry: `services::hello_wall`
+/// falls back to the preview, then to the file while the file is small enough
+/// to be a tile.
+pub async fn cover_upload_url(
+    db: &PgPool,
+    storage: &StorageService,
+    user_id: Uuid,
+    session_id: Uuid,
+) -> Result<String, AppError> {
+    let session = load(db, user_id, session_id).await?;
+    let key = cover_key_for(session.id);
+
+    sqlx::query("UPDATE design_upload_sessions SET cover_key = $2 WHERE id = $1")
         .bind(session_id)
         .bind(&key)
         .execute(db)
@@ -595,7 +634,7 @@ async fn load_any_owner(db: &PgPool, session_id: Uuid) -> Result<Session, AppErr
         r#"
         SELECT id, user_id, slice_id, design_subtype, filename, content_type,
                declared_bytes, stored_bytes, part_size, part_count, storage_key,
-               preview_key, status, created_at, completed_at, expires_at
+               preview_key, cover_key, status, created_at, completed_at, expires_at
           FROM design_upload_sessions
          WHERE id = $1
         "#,
@@ -611,7 +650,7 @@ async fn load(db: &PgPool, user_id: Uuid, session_id: Uuid) -> Result<Session, A
         r#"
         SELECT id, user_id, slice_id, design_subtype, filename, content_type,
                declared_bytes, stored_bytes, part_size, part_count, storage_key,
-               preview_key, status, created_at, completed_at, expires_at
+               preview_key, cover_key, status, created_at, completed_at, expires_at
           FROM design_upload_sessions
          WHERE id = $1 AND user_id = $2
         "#,

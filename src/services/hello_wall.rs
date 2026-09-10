@@ -47,6 +47,17 @@ use crate::services::storage::StorageService;
 /// a URL that keeps working for whoever wrote it down.
 const URL_TTL_SECONDS: u32 = 15 * 60;
 
+/// The largest source file the wall will serve when nothing smaller exists.
+///
+/// A grid asks for two dozen at once and most of the people it is built for
+/// are on a phone paying for the data, so the arithmetic is the constraint:
+/// at this ceiling a full screen costs about six megabytes, and one step up
+/// stops being something anybody would wait for.
+///
+/// It is generous for what it is meant to let through, an icon set as SVG or
+/// a small export. A brand kit at 200 MB is not meant to pass, and does not.
+const MAX_TILE_BYTES: i64 = 256 * 1024;
+
 /// One person's HELLO, as the wall shows it.
 #[derive(Debug, Serialize, ToSchema)]
 pub struct WallEntry {
@@ -187,6 +198,22 @@ pub async fn for_user(
     Ok(found.pop())
 }
 
+/// The upload behind a HELLO, as the wall needs to read it.
+///
+/// A named row rather than a tuple of six: at that width a reader has to
+/// count positions to know which `Option<String>` is the cover and which is
+/// the preview, and getting that pair the wrong way round would hand a source
+/// file to a grid where a thumbnail was meant.
+#[derive(sqlx::FromRow)]
+struct Artefact {
+    design_subtype: String,
+    storage_key: String,
+    preview_key: Option<String>,
+    cover_key: Option<String>,
+    status: String,
+    stored_bytes: Option<i64>,
+}
+
 /// The first upload attached to a HELLO, resolved to something showable.
 ///
 /// Best effort on purpose: a signing failure or a half finished upload makes
@@ -202,8 +229,8 @@ async fn resolve_artefact(
         return (None, None, false);
     };
 
-    let session: Option<(String, String, Option<String>, String)> = sqlx::query_as(
-        "SELECT design_subtype, storage_key, preview_key, status
+    let found: Option<Artefact> = sqlx::query_as(
+        "SELECT design_subtype, storage_key, preview_key, cover_key, status, stored_bytes
            FROM design_upload_sessions WHERE id = $1",
     )
     .bind(reference)
@@ -211,19 +238,32 @@ async fn resolve_artefact(
     .await
     .unwrap_or(None);
 
-    let Some((subtype, storage_key, preview_key, status)) = session else {
+    let Some(a) = found else {
         return (None, None, false);
     };
-    if status != "completed" {
+    let subtype = a.design_subtype;
+    if a.status != "completed" {
         return (Some(subtype), None, false);
     }
 
-    // The author's preview when there is one, the file itself otherwise. The
-    // four subtypes a browser cannot open are exactly the four that require a
-    // preview, so this is the same rule read from the other side.
-    let (key, is_preview) = match preview_key.as_deref() {
-        Some(k) => (k.to_string(), true),
-        None => (storage_key, false),
+    // Three steps down, and the last one refuses.
+    //
+    //   the cover      what the author chose a grid to show
+    //   the preview    what a reviewer opens, for the four a browser cannot
+    //   the file       only while it is small enough to be a tile
+    //
+    // The refusal is the point of the ceiling. Serving a 200 MB brand kit as
+    // a thumbnail is not a worse tile, it is a page nobody on a phone can
+    // load, and the entry still carries its text.
+    let (key, is_preview) = match (a.cover_key.as_deref(), a.preview_key.as_deref()) {
+        (Some(k), _) => (k.to_string(), false),
+        (None, Some(k)) => (k.to_string(), true),
+        (None, None) => {
+            if a.stored_bytes.unwrap_or(i64::MAX) > MAX_TILE_BYTES {
+                return (Some(subtype), None, false);
+            }
+            (a.storage_key, false)
+        }
     };
 
     match storage.presigned_get_url(&key, URL_TTL_SECONDS).await {

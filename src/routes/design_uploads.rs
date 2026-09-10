@@ -36,6 +36,7 @@ pub fn design_upload_routes() -> Router<AppState> {
         .route("/design/uploads/{id}/parts", get(parts))
         .route("/design/uploads/{id}/complete", post(complete))
         .route("/design/uploads/{id}/preview-url", post(preview_url))
+        .route("/design/uploads/{id}/cover-url", post(cover_url))
         .route("/design/uploads/{id}/download-url", get(download_url))
 }
 
@@ -75,6 +76,39 @@ pub async fn init(
         StatusCode::CREATED,
         Json(wrap(json!({ "upload": started }))),
     ))
+}
+
+/// A URL to PUT the still image a grid will show.
+///
+/// Wanted on every subtype, not only the four that require a preview. The
+/// ceilings are for the work: a copy deck may be 100 MB and an interface file
+/// 500 MB, and the wall of HELLOs shows two dozen at once to people who are
+/// mostly on a phone paying for the data.
+///
+/// Nothing here renders one, for the same reason nothing renders a preview.
+/// Generating it would mean decoding somebody else's file in our process,
+/// which is a decompression bomb waiting to be sent, and it would answer the
+/// only question that matters - which frame, which crop - worse than the
+/// person who made the thing.
+///
+/// Not required. A missing cover costs a picture, not an entry.
+#[utoipa::path(
+    post, path = "/api/design/uploads/{id}/cover-url", tag = "design",
+    operation_id = "designUploadCoverUrl",
+    params(("id" = Uuid, Path, description = "upload session id")),
+    responses(
+        (status = 200, description = "a presigned PUT for the cover image"),
+        (status = 404, description = "no such upload", body = crate::api_response::ErrorResponse),
+    ),
+    security(("cookie_auth" = [])),
+)]
+pub async fn cover_url(
+    State(state): State<AppState>,
+    auth: AuthUserComplete,
+    Path(id): Path<Uuid>,
+) -> Result<impl IntoResponse, AppError> {
+    let url = design_uploads::cover_upload_url(&state.db, &state.storage, auth.user_id, id).await?;
+    Ok(Json(wrap(json!({ "url": url }))))
 }
 
 #[derive(Debug, Deserialize, IntoParams)]

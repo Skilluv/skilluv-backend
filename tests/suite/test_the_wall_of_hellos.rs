@@ -284,3 +284,137 @@ async fn a_profile_without_a_hello_says_null_rather_than_pretending() {
         "a profile invented a HELLO: {body}"
     );
 }
+
+/// Writes a completed upload and attaches it to a HELLO.
+async fn with_an_upload(
+    app: &TestApp,
+    username: &str,
+    subtype: &str,
+    stored_bytes: i64,
+    preview: bool,
+    cover: bool,
+) -> Uuid {
+    let deliverable = a_published_hello(app, username, "Here it is.").await;
+    let session: Uuid = sqlx::query_scalar(
+        "INSERT INTO design_upload_sessions
+             (user_id, design_subtype, filename, content_type, declared_bytes,
+              stored_bytes, part_size, part_count, storage_key, s3_upload_id,
+              preview_key, cover_key, status, completed_at, expires_at)
+         SELECT id, $2, 'thing.png', 'image/png', $3, $3,
+                5 * 1024 * 1024, 1, 'design/x/source', 'test-multipart-id',
+                CASE WHEN $4 THEN 'design/x/preview' END,
+                CASE WHEN $5 THEN 'design/x/cover' END,
+                'completed', NOW(), NOW() + INTERVAL '1 day'
+           FROM users WHERE username = $1
+         RETURNING id",
+    )
+    .bind(username)
+    .bind(subtype)
+    .bind(stored_bytes)
+    .bind(preview)
+    .bind(cover)
+    .fetch_one(&app.db)
+    .await
+    .unwrap_or_else(|e| panic!("could not write an upload for {username}: {e}"));
+
+    sqlx::query(
+        "UPDATE deliverables
+            SET artifact_metadata = artifact_metadata
+                || jsonb_build_object('attachments',
+                     jsonb_build_array('design_upload:' || $2::text))
+          WHERE id = $1",
+    )
+    .bind(deliverable)
+    .bind(session)
+    .execute(&app.db)
+    .await
+    .unwrap();
+
+    session
+}
+
+async fn entry_of(app: &TestApp, username: &str) -> serde_json::Value {
+    wall(app, "design")
+        .await
+        .into_iter()
+        .find(|e| e["username"] == username)
+        .unwrap_or_else(|| panic!("{username} is not on the wall"))
+}
+
+/// The cover wins, because it is the one picture chosen to be a tile.
+#[tokio::test]
+async fn the_cover_is_what_a_grid_shows() {
+    let app = TestApp::spawn().await;
+    with_an_upload(&app, "coverhand", "motion", 400 * 1024 * 1024, true, true).await;
+
+    let mine = entry_of(&app, "coverhand").await;
+    assert!(mine["preview_url"].is_string(), "nothing was shown");
+    assert_eq!(
+        mine["is_preview"], false,
+        "a cover is not a preview: the front decides what element to render from this"
+    );
+}
+
+/// Without a cover, the preview: it is what a reviewer opens for the four
+/// subtypes a browser cannot.
+#[tokio::test]
+async fn the_preview_is_the_fallback_and_says_so() {
+    let app = TestApp::spawn().await;
+    with_an_upload(
+        &app,
+        "previewhand",
+        "motion",
+        400 * 1024 * 1024,
+        true,
+        false,
+    )
+    .await;
+
+    let mine = entry_of(&app, "previewhand").await;
+    assert!(mine["preview_url"].is_string());
+    assert_eq!(mine["is_preview"], true);
+}
+
+/// A small file is its own tile.
+#[tokio::test]
+async fn a_small_file_needs_no_cover() {
+    let app = TestApp::spawn().await;
+    with_an_upload(&app, "smallhand", "icon_set", 64 * 1024, false, false).await;
+
+    let mine = entry_of(&app, "smallhand").await;
+    assert!(
+        mine["preview_url"].is_string(),
+        "an icon set of 64 kB is a perfectly good tile"
+    );
+    assert_eq!(mine["is_preview"], false);
+}
+
+/// And a large one is not, cover or nothing.
+///
+/// This is the refusal the ceiling exists for. Serving a 200 MB brand kit as
+/// a thumbnail is not a worse tile, it is a page nobody on a phone can load.
+/// The entry stays, with its text and no picture.
+#[tokio::test]
+async fn a_source_too_large_to_be_a_tile_is_not_served_as_one() {
+    let app = TestApp::spawn().await;
+    with_an_upload(
+        &app,
+        "heavyhand",
+        "brand_kit",
+        200 * 1024 * 1024,
+        false,
+        false,
+    )
+    .await;
+
+    let mine = entry_of(&app, "heavyhand").await;
+    assert!(
+        mine["preview_url"].is_null(),
+        "a 200 MB source was handed to a grid"
+    );
+    assert_eq!(
+        mine["subtype"], "brand_kit",
+        "the entry still says what it is, so the front can show a placeholder of its own"
+    );
+    assert!(mine["said"].is_string(), "and it still carries its text");
+}

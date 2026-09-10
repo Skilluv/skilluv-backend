@@ -48,7 +48,7 @@ pub struct WallQuery {
     params(WallQuery),
     responses(
         (status = 200, description = "The HELLOs of one domain, newest first", body = serde_json::Value),
-        (status = 400, description = "No such domain", body = crate::api_response::ErrorResponse),
+        (status = 400, description = "No such domain, or a limit outside 1 to 60", body = crate::api_response::ErrorResponse),
     ),
 )]
 pub async fn wall(
@@ -56,7 +56,12 @@ pub async fn wall(
     Query(query): Query<WallQuery>,
 ) -> Result<axum::Json<Value>, AppError> {
     crate::validators::check_skill_domain(&query.domain, "domain")?;
-    let limit = query.limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT);
+    // Refused rather than clamped. The annotation above documents a minimum
+    // and a maximum, and a handler that quietly rounds `limit=0` up to one is
+    // answering 200 to a request its own contract says is invalid. That gap
+    // is exactly what the contract fuzzer reads, and it was right to.
+    crate::validators::check_range_opt(query.limit, "limit", 1, MAX_LIMIT)?;
+    let limit = query.limit.unwrap_or(DEFAULT_LIMIT);
 
     let entries = hello_wall::entries(&state.db, &state.storage, &query.domain, limit).await?;
 

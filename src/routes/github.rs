@@ -138,8 +138,9 @@ pub struct CallbackQuery {
     get, path = "/api/auth/github/callback", tag = "auth",
     params(CallbackQuery),
     responses(
-        (status = 302, description = "Redirect back to skill-uv.com"),
+        (status = 302, description = "Redirect back to skill-uv.com - carries `?github_error=<code>` when the link failed and the flow said where home is"),
         (status = 400, body = crate::api_response::ErrorResponse),
+        (status = 409, description = "That GitHub account is already linked to another Skilluv profile", body = crate::api_response::ErrorResponse),
     ),
     operation_id = "githubCallback",
 )]
@@ -148,7 +149,6 @@ pub async fn callback(
     headers: HeaderMap,
     Query(q): Query<CallbackQuery>,
 ) -> Result<axum::response::Response, AppError> {
-    let (client_id, client_secret, redirect_uri) = github_oauth_env()?;
     let mut redis = state.redis.clone();
     let key = format!("gh_oauth_state:{}", q.state);
     let stored: Option<String> = redis.get(&key).await?;
@@ -160,8 +160,77 @@ pub async fn callback(
     };
     let user_id = Uuid::parse_str(&user_id_str).map_err(|_| AppError::Unauthorized)?;
 
+    let outcome = link_account(&state, &headers, user_id, &q.code, return_to.as_deref()).await;
+
+    // A failure is a browser navigation too.
+    //
+    // The happy path already sends the browser home, and that redirect was
+    // added precisely because landing on `api.skill-uv.com` with no navbar
+    // leaves somebody with the back button as their only exit. Every `?` above
+    // this line used to skip it: whoever hit an error got the one outcome the
+    // redirect exists to prevent, which is the outcome they are most likely to
+    // need help getting out of.
+    //
+    // The path goes back with a machine-readable `github_error`, not a
+    // sentence: the frontend owns the wording and owns both languages. A raw
+    // error is still returned when the flow never said where home is, so a
+    // programmatic caller keeps the status code and the message.
+    let err = match outcome {
+        Ok(response) => return Ok(response),
+        Err(err) => err,
+    };
+    let Some(path) = return_to
+        .as_deref()
+        .and_then(crate::routes::oauth::sanitise_return_path)
+    else {
+        return Err(err);
+    };
+
+    tracing::warn!(%user_id, error = %err, "github link failed");
+    metrics::counter!(
+        "skilluv_github_link_failures_total",
+        "reason" => github_error_code(&err),
+    )
+    .increment(1);
+
+    let separator = if path.contains('?') { '&' } else { '?' };
+    let target = format!(
+        "{}{path}{separator}github_error={}",
+        state.config.frontend_url.trim_end_matches('/'),
+        github_error_code(&err),
+    );
+    Ok(axum::response::Redirect::to(&target).into_response())
+}
+
+/// What the frontend is told went wrong, in one stable token.
+///
+/// Short, lowercase, and part of the contract with the frontend - it keys the
+/// FR/EN wording there. `already_linked` is the one a person can act on
+/// themselves; the rest mean "try again or tell us".
+fn github_error_code(err: &AppError) -> &'static str {
+    match err {
+        AppError::Conflict(_) => "already_linked",
+        AppError::Unauthorized | AppError::Forbidden => "expired",
+        AppError::Validation(_) => "invalid_request",
+        AppError::NotFound(_) => "unavailable",
+        _ => "failed",
+    }
+}
+
+/// Exchange the code, store the connection, and say where the browser goes.
+///
+/// Split out of `callback` so that every `?` in it is a failure `callback` can
+/// still put somewhere sensible.
+async fn link_account(
+    state: &AppState,
+    headers: &HeaderMap,
+    user_id: Uuid,
+    code: &str,
+    return_to: Option<&str>,
+) -> Result<axum::response::Response, AppError> {
+    let (client_id, client_secret, redirect_uri) = github_oauth_env()?;
     let (token, scopes) =
-        github::exchange_code(&client_id, &client_secret, &redirect_uri, &q.code).await?;
+        github::exchange_code(&client_id, &client_secret, &redirect_uri, code).await?;
     let gh_user = github::fetch_user(&token).await?;
 
     let (encrypted, nonce) = github::encrypt_token(&state.config.jwt_secret, &token)?;
@@ -226,7 +295,7 @@ pub async fn callback(
         }
     });
 
-    if analytics_consent(&headers) {
+    if analytics_consent(headers) {
         state.analytics.track(
             user_id,
             events::GITHUB_CONNECTED,
@@ -254,10 +323,7 @@ pub async fn callback(
     // The JSON stays when no path was given, so a programmatic caller reading
     // the body is unaffected. It is a fallback, not a contract: a browser
     // should always send `return_to`.
-    if let Some(path) = return_to
-        .as_deref()
-        .and_then(crate::routes::oauth::sanitise_return_path)
-    {
+    if let Some(path) = return_to.and_then(crate::routes::oauth::sanitise_return_path) {
         let target = format!(
             "{}{}",
             state.config.frontend_url.trim_end_matches('/'),

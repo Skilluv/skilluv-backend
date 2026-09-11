@@ -189,32 +189,17 @@ pub async fn callback(
     tracing::warn!(%user_id, error = %err, "github link failed");
     metrics::counter!(
         "skilluv_github_link_failures_total",
-        "reason" => github_error_code(&err),
+        "reason" => crate::routes::oauth::oauth_error_code(&err),
     )
     .increment(1);
 
-    let separator = if path.contains('?') { '&' } else { '?' };
-    let target = format!(
-        "{}{path}{separator}github_error={}",
-        state.config.frontend_url.trim_end_matches('/'),
-        github_error_code(&err),
+    let target = crate::routes::oauth::error_return_url(
+        &state.config.frontend_url,
+        &path,
+        "github",
+        crate::routes::oauth::oauth_error_code(&err),
     );
     Ok(axum::response::Redirect::to(&target).into_response())
-}
-
-/// What the frontend is told went wrong, in one stable token.
-///
-/// Short, lowercase, and part of the contract with the frontend - it keys the
-/// FR/EN wording there. `already_linked` is the one a person can act on
-/// themselves; the rest mean "try again or tell us".
-fn github_error_code(err: &AppError) -> &'static str {
-    match err {
-        AppError::Conflict(_) => "already_linked",
-        AppError::Unauthorized | AppError::Forbidden => "expired",
-        AppError::Validation(_) => "invalid_request",
-        AppError::NotFound(_) => "unavailable",
-        _ => "failed",
-    }
 }
 
 /// Exchange the code, store the connection, and say where the browser goes.

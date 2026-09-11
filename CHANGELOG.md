@@ -5,6 +5,46 @@ All notable changes to the Skilluv backend are documented here.
 The format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project will follow semantic versioning once 1.0 is reached.
 
+## [0.2.0](https://github.com/Skilluv/skilluv-backend/compare/v0.1.0...v0.2.0) (2026-09-11)
+
+
+### Features
+
+* **admin:** the lists behind the buttons, and four smaller repairs ([#108](https://github.com/Skilluv/skilluv-backend/issues/108)) ([cba5fc0](https://github.com/Skilluv/skilluv-backend/commit/cba5fc03761f3d4dc086d24b7f97a35789cce2d8))
+* api key scopes, the derived CTF catalogue, and the moment a trade opens ([#109](https://github.com/Skilluv/skilluv-backend/issues/109)) ([93f57fb](https://github.com/Skilluv/skilluv-backend/commit/93f57fb266a891fee6ba5a7c9a2afeaf0afed3c5))
+* **design:** six exercises a new design account can actually do ([#144](https://github.com/Skilluv/skilluv-backend/issues/144)) ([6fa66ed](https://github.com/Skilluv/skilluv-backend/commit/6fa66ed90e07ddf8391fbe26df529a78da099960))
+* **discord:** a server this repository declares, and the capability catalogue the admin panel could not hold ([#102](https://github.com/Skilluv/skilluv-backend/issues/102)) ([678d98b](https://github.com/Skilluv/skilluv-backend/commit/678d98b8e7c2ef1b915fa3a72c2fa9e6cbb89813))
+* **discord:** the link that makes every role on the server possible ([#107](https://github.com/Skilluv/skilluv-backend/issues/107)) ([98aa199](https://github.com/Skilluv/skilluv-backend/commit/98aa19920575194e5ff25fd87223051ae2328e27))
+* five domains open, and the surfaces the front end could not reach ([#94](https://github.com/Skilluv/skilluv-backend/issues/94)) ([2cccfa2](https://github.com/Skilluv/skilluv-backend/commit/2cccfa207e32c180b1af086386a58d19bd111680))
+* five unreachable surfaces, the cyber and design rooms, and the lint that never saw the bot ([#110](https://github.com/Skilluv/skilluv-backend/issues/110)) ([934ac34](https://github.com/Skilluv/skilluv-backend/commit/934ac342f244f1ae28dc26f9a9f99327e9c0359d))
+* **onboarding:** a HELLO that is not a pull request is still seen ([#148](https://github.com/Skilluv/skilluv-backend/issues/148)) ([d88d7de](https://github.com/Skilluv/skilluv-backend/commit/d88d7de6c4da74c1aa93194311881bd17edc2752))
+* **onboarding:** the code rite tells somebody what to do ([#134](https://github.com/Skilluv/skilluv-backend/issues/134)) ([a7bae55](https://github.com/Skilluv/skilluv-backend/commit/a7bae55a8421a004750263452e8e041a28546307))
+* **onboarding:** the newcomer path runs end to end ([#120](https://github.com/Skilluv/skilluv-backend/issues/120)) ([0aaf180](https://github.com/Skilluv/skilluv-backend/commit/0aaf180bd62234d032f8f28657164ed8a21af8f1))
+* **onboarding:** whoever passed the entrance may witness the next ([#141](https://github.com/Skilluv/skilluv-backend/issues/141)) ([c4fbbaa](https://github.com/Skilluv/skilluv-backend/commit/c4fbbaac61186cddd16b223227f88472e58bf9b3))
+* **slices:** the open pool answers for the twelve trades, not for code ([#150](https://github.com/Skilluv/skilluv-backend/issues/150)) ([105b8ab](https://github.com/Skilluv/skilluv-backend/commit/105b8ab7c6524230dd440b47391d18985f5f911d))
+* the game domain, a deployment that seeds itself, and the admin surfaces the front could not reach ([#98](https://github.com/Skilluv/skilluv-backend/issues/98)) ([a8fca0e](https://github.com/Skilluv/skilluv-backend/commit/a8fca0ec300f69ec53761c8a669ce83bdf0ad60b))
+* the game domain, and the backend halves of the front-end feedback batch ([#96](https://github.com/Skilluv/skilluv-backend/issues/96)) ([a28e879](https://github.com/Skilluv/skilluv-backend/commit/a28e879bea1f4cee44237f81bcbd5b195caea9fd))
+
+
+### Bug Fixes
+
+* **attestations:** tell four kinds of claim apart on the printed sheet ([#101](https://github.com/Skilluv/skilluv-backend/issues/101)) ([679d731](https://github.com/Skilluv/skilluv-backend/commit/679d731800a67a9e32bb11d58053cf5630847909))
+* **ci:** make the nightly stack, fuzz, and smoke actually run ([#100](https://github.com/Skilluv/skilluv-backend/issues/100)) ([536903b](https://github.com/Skilluv/skilluv-backend/commit/536903b9bba391a3ffbfb4bad8a6cdc216715afd))
+* **discord:** the slash commands the bot could not register ([#106](https://github.com/Skilluv/skilluv-backend/issues/106)) ([16dbbe4](https://github.com/Skilluv/skilluv-backend/commit/16dbbe4b7ff02395ae94a7c651e50a4139e6ba9d))
+* **docker:** warm the dependency cache with the features the build uses ([#105](https://github.com/Skilluv/skilluv-backend/issues/105)) ([e8f9666](https://github.com/Skilluv/skilluv-backend/commit/e8f9666ae8fff5bc1b735dd5cceb9e786841a8bf))
+* **email:** the newsletter confirmation mail was rejected at the provider on every send ([#145](https://github.com/Skilluv/skilluv-backend/issues/145)) ([bd33987](https://github.com/Skilluv/skilluv-backend/commit/bd339878708537705551e3f1e4bfb67f673747bb))
+* four production defects, and a CI that tested every tree twice ([#122](https://github.com/Skilluv/skilluv-backend/issues/122)) ([d794fdc](https://github.com/Skilluv/skilluv-backend/commit/d794fdc377d833c5e6e4a4b052f814486e1f3194))
+* **github:** a GitHub account already taken says so instead of returning a 500 ([#149](https://github.com/Skilluv/skilluv-backend/issues/149)) ([8f40f76](https://github.com/Skilluv/skilluv-backend/commit/8f40f76374839293f24a692c7461c1619a8ee208))
+* **messages:** a message a person reads does not carry a run of spaces ([#147](https://github.com/Skilluv/skilluv-backend/issues/147)) ([4040c3f](https://github.com/Skilluv/skilluv-backend/commit/4040c3f28d1c2d1cb988bcb4a53cd354761c082c))
+* **migration:** unblock the staging deploy, and two things it exposed ([#121](https://github.com/Skilluv/skilluv-backend/issues/121)) ([9f45325](https://github.com/Skilluv/skilluv-backend/commit/9f45325fe12eb2b80fa116ed44c5508849c3f8d6))
+* **orientations:** the stack backfill reached one domain out of twelve ([#142](https://github.com/Skilluv/skilluv-backend/issues/142)) ([2319934](https://github.com/Skilluv/skilluv-backend/commit/231993458442a043f513f51d9db6f1d213cd8577))
+* **payouts:** one stuck payout no longer strands the ones behind it ([#146](https://github.com/Skilluv/skilluv-backend/issues/146)) ([63eb5dc](https://github.com/Skilluv/skilluv-backend/commit/63eb5dcece2523e70e2a70d316aeef94a0ddfb31))
+
+
+### Performance Improvements
+
+* **ci:** lint is a pure function of the source, so skip it on a tree already linted ([#123](https://github.com/Skilluv/skilluv-backend/issues/123)) ([20d8c1d](https://github.com/Skilluv/skilluv-backend/commit/20d8c1d2c2f111e94d42459599f27b737b0cb0c2))
+
 ## [Unreleased]
 
 ### Added

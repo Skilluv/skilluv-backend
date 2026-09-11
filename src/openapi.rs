@@ -2350,8 +2350,22 @@ mod tests {
                     .into_iter()
                     .flatten()
                 {
-                    if param.get("name").and_then(|n| n.as_str()) == Some("skill_domain")
-                        && let Some(schema) = param.get("schema")
+                    // `domain` as well as `skill_domain`. The two names mean
+                    // the same thing on a query string - `slices`, `explore`,
+                    // `awards` and a dozen others spell it the short way - and
+                    // checking only the long one left the short one free to
+                    // drift. It did: `GET /api/open-slices` shipped `domain`
+                    // as a bounded string, the contract promised any thirty
+                    // characters, and the fuzzer sent thirty zeroes and got a
+                    // 400 back for a request the document said was valid.
+                    //
+                    // Names that merely end in `domain` stay out: `subdomain`
+                    // and `custom_domain` are hostnames, and `target_domain`
+                    // and `scored_domain` are checked where they are declared.
+                    if matches!(
+                        param.get("name").and_then(|n| n.as_str()),
+                        Some("skill_domain") | Some("domain")
+                    ) && let Some(schema) = param.get("schema")
                     {
                         inspect(&owner, schema);
                     }

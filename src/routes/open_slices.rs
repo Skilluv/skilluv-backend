@@ -57,7 +57,13 @@ pub fn open_slice_routes() -> Router<AppState> {
 #[serde(deny_unknown_fields)]
 pub struct OpenSlicesQuery {
     /// One of the platform's skill domains. Absent means every trade.
-    #[param(max_length = 30)]
+    ///
+    /// Declared as the enum rather than as a bounded string, because the
+    /// handler checks it against `validators::SKILL_DOMAINS` and a contract
+    /// that only says "a short string" promises something the server refuses.
+    /// The fuzzer is what noticed: it generated a schema-compliant value and
+    /// got a 400 back.
+    #[param(value_type = Option<crate::validators::SkillDomain>)]
     pub domain: Option<String>,
     /// One surface, by its `slice_types` slug - narrower than a domain, which
     /// usually holds several.

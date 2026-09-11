@@ -78,9 +78,11 @@ pub enum SkillDomain {
 /// `audio`, `leadership` and five others the server accepts. Emitting the
 /// values from the constant is what stops the fifth copy from existing.
 ///
-/// `every_documented_skill_domain_field_lists_the_whole_guard`, in
-/// `openapi.rs`, walks the built document and fails when a `skill_domain`
-/// field somewhere describes anything but this list.
+/// `every_skill_domain_a_request_carries_lists_the_whole_guard`, in
+/// `openapi.rs`, walks the built document and fails when a field carrying a
+/// domain describes anything but this list - a request body property named
+/// `skill_domain`, or a query parameter named either `skill_domain` or
+/// `domain`, which is how most of the listings spell it.
 pub fn skill_domain_schema() -> utoipa::openapi::schema::Object {
     use utoipa::openapi::schema::{ObjectBuilder, Type};
     ObjectBuilder::new()

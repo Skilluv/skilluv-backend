@@ -352,7 +352,19 @@ mod tests {
             &json!({"level": "staff", "goal": "find_paid_work", "main_tools": ["rust"]}),
         );
         assert!(out.headline.contains("missions"), "{}", out.headline);
-        assert!(out.feed_query.contains("language=rust"));
+        // The pool names this filter `tag`, not `language`: it is whatever a
+        // trade tags its work with, and code's happens to be a language. What
+        // the assertion is for is that the answer reaches the query at all.
+        assert!(
+            out.feed_query.contains("tag=rust"),
+            "the language they gave has to narrow the feed: {}",
+            out.feed_query
+        );
+        assert!(
+            out.feed_query.starts_with("/api/open-slices?domain=code"),
+            "the feed is the open pool, filtered to code: {}",
+            out.feed_query
+        );
     }
 
     #[test]

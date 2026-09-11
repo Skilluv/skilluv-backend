@@ -31,7 +31,7 @@ pub fn code_routes() -> Router<AppState> {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// GET /code/first-issues — deprecated
+// GET /code/first-issues - deprecated
 // ═══════════════════════════════════════════════════════════════════
 //
 // The query this used to hold was never about code. It read `project_slices`

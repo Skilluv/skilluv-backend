@@ -91,8 +91,10 @@ fn code(answers: &Value) -> Recommendation {
     // A language narrows the feed usefully; a family does not, because the
     // feed filters on trades and a family is eight of them.
     let feed_query = match &language {
-        Some(language) => format!("/api/code/first-issues?language={language}&max_difficulty=3"),
-        None => "/api/code/first-issues?max_difficulty=3".to_string(),
+        Some(language) => format!(
+            "/api/open-slices?domain=code&slice_type=github_issue&tag={language}&max_difficulty=3"
+        ),
+        None => "/api/open-slices?domain=code&slice_type=github_issue&max_difficulty=3".to_string(),
     };
 
     let experienced = matches!(level.as_str(), "senior" | "staff");

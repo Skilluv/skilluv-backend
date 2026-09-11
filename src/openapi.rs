@@ -870,6 +870,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         crate::routes::opportunities::withdraw_opportunity,
         crate::routes::domain_profile::list_questions,
         crate::routes::code::first_issues,
+        crate::routes::open_slices::list_open_slices,
         crate::routes::code::language_ecosystems,
         crate::routes::guides::list_guides,
         crate::routes::guides::get_guide,
@@ -1829,6 +1830,8 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
             crate::routes::awards::NominateBody,
             crate::routes::awards::ShortlistBody,
             crate::routes::awards::VoteAccepted,
+            crate::routes::open_slices::OpenSliceRow,
+            crate::routes::open_slices::OpenSlicesResponse,
             crate::routes::code::FirstIssueRow,
             crate::routes::code::FirstIssuesResponse,
             crate::routes::code::EcosystemRow,
@@ -2049,6 +2052,7 @@ use crate::api_response::{ApiResponse, ErrorObject, ErrorResponse, MetaInfo, Sim
         (name = "profile",      description = "Public + private user profile"),
         (name = "challenges",   description = "Challenges, submissions, review queue"),
         (name = "projects",     description = "Real OSS projects → slices → deliverables"),
+        (name = "slices",       description = "The open pool: unclaimed work, in any trade"),
         (name = "forum",        description = "Q&A forum with accepted answers"),
         (name = "dm",           description = "Direct messages"),
         (name = "social",       description = "Follows, contact requests, blocks"),
@@ -2346,8 +2350,22 @@ mod tests {
                     .into_iter()
                     .flatten()
                 {
-                    if param.get("name").and_then(|n| n.as_str()) == Some("skill_domain")
-                        && let Some(schema) = param.get("schema")
+                    // `domain` as well as `skill_domain`. The two names mean
+                    // the same thing on a query string - `slices`, `explore`,
+                    // `awards` and a dozen others spell it the short way - and
+                    // checking only the long one left the short one free to
+                    // drift. It did: `GET /api/open-slices` shipped `domain`
+                    // as a bounded string, the contract promised any thirty
+                    // characters, and the fuzzer sent thirty zeroes and got a
+                    // 400 back for a request the document said was valid.
+                    //
+                    // Names that merely end in `domain` stay out: `subdomain`
+                    // and `custom_domain` are hostnames, and `target_domain`
+                    // and `scored_domain` are checked where they are declared.
+                    if matches!(
+                        param.get("name").and_then(|n| n.as_str()),
+                        Some("skill_domain") | Some("domain")
+                    ) && let Some(schema) = param.get("schema")
                     {
                         inspect(&owner, schema);
                     }

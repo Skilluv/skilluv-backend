@@ -91,8 +91,10 @@ fn code(answers: &Value) -> Recommendation {
     // A language narrows the feed usefully; a family does not, because the
     // feed filters on trades and a family is eight of them.
     let feed_query = match &language {
-        Some(language) => format!("/api/code/first-issues?language={language}&max_difficulty=3"),
-        None => "/api/code/first-issues?max_difficulty=3".to_string(),
+        Some(language) => format!(
+            "/api/open-slices?domain=code&slice_type=github_issue&tag={language}&max_difficulty=3"
+        ),
+        None => "/api/open-slices?domain=code&slice_type=github_issue&max_difficulty=3".to_string(),
     };
 
     let experienced = matches!(level.as_str(), "senior" | "staff");
@@ -350,7 +352,19 @@ mod tests {
             &json!({"level": "staff", "goal": "find_paid_work", "main_tools": ["rust"]}),
         );
         assert!(out.headline.contains("missions"), "{}", out.headline);
-        assert!(out.feed_query.contains("language=rust"));
+        // The pool names this filter `tag`, not `language`: it is whatever a
+        // trade tags its work with, and code's happens to be a language. What
+        // the assertion is for is that the answer reaches the query at all.
+        assert!(
+            out.feed_query.contains("tag=rust"),
+            "the language they gave has to narrow the feed: {}",
+            out.feed_query
+        );
+        assert!(
+            out.feed_query.starts_with("/api/open-slices?domain=code"),
+            "the feed is the open pool, filtered to code: {}",
+            out.feed_query
+        );
     }
 
     #[test]

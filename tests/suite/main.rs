@@ -117,6 +117,7 @@ mod test_forum_search;
 mod test_forum_sorting;
 mod test_frontend_feedback;
 mod test_game_domain;
+mod test_github_link_claimed;
 mod test_ia_b_deep_plagiarism;
 mod test_ia_c_ai_coach;
 mod test_ia_d_ai_call_log;

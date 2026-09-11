@@ -579,6 +579,25 @@ pub async fn upsert_connection(
     encrypted_token: &[u8],
     nonce: &[u8],
 ) -> Result<GithubConnection, AppError> {
+    // `github_connections` carries two unique constraints, and the upsert below
+    // names only one of them.
+    //
+    // `ON CONFLICT (user_id)` handles the ordinary case - the same person
+    // reconnecting, a token being refreshed. It cannot handle the other one:
+    // `github_user_id` is UNIQUE too, so a *second* Skilluv account finishing
+    // the OAuth dance with a GitHub identity that already belongs to a first
+    // one produces no conflict on `user_id` at all, and Postgres rejects the
+    // insert on `github_connections_github_user_id_key` instead. That reached
+    // the person as a 500 DATABASE_ERROR, at the end of a browser redirect,
+    // inside onboarding where the frontend removes the navbar.
+    //
+    // The constraint is right and it stays. One GitHub account proves one
+    // person; the code rite, the contribution graph and every rank derived
+    // from them would mean nothing if two profiles could claim the same
+    // commits. What was missing is the sentence that says so.
+    crate::services::oauth::refuse_if_claimed(db, user_id, "github", &github_user_id.to_string())
+        .await?;
+
     let conn: GithubConnection = sqlx::query_as(
         r#"
         INSERT INTO github_connections

@@ -100,17 +100,21 @@ pub async fn upsert_link(
     //
     // This guard used to sit below, and it never ran: `user_oauth_providers`
     // carries its own unique index on (provider, provider_user_id), so a
-    // second account claiming the same Discord identity was refused by that
-    // one first, and what reached the person was `la valeur d'une clé
+    // second account claiming the same identity was refused by that one
+    // first, and what reached the person was `la valeur d'une clé
     // dupliquée rompt la contrainte unique
     // « user_oauth_providers_provider_provider_user_id_key »`.
     //
     // Both constraints are right and both stay. What changes is which one
     // speaks first, and therefore what somebody trying to link their account
     // actually reads.
-    if profile.provider == "discord" {
-        refuse_if_claimed(db, user_id, &profile.provider_user_id).await?;
-    }
+    //
+    // It ran for Discord only at first, because Discord is where the symptom
+    // was found. The index it guards has never been provider-specific: a
+    // Google or GitHub identity already claimed elsewhere hit exactly the same
+    // raw violation, and a person linking GitHub during onboarding read a 500
+    // in a flow with the navbar removed.
+    refuse_if_claimed(db, user_id, profile.provider, &profile.provider_user_id).await?;
 
     let row: LinkedProvider = sqlx::query_as(
         r#"
@@ -157,40 +161,70 @@ pub async fn upsert_link(
     Ok(row)
 }
 
-/// Refuse a Discord identity that already belongs to somebody else, in words.
+/// The provider's own name, as the person who uses it would write it.
 ///
-/// One Discord account belongs to at most one Skilluv account. Two constraints
-/// already say so - the unique index of migration 0138 on
-/// `users.discord_user_id`, and `user_oauth_providers`' own index on (provider,
-/// provider_user_id) - and both are right: roles are derived from proof, so
-/// letting two accounts share a Discord identity would let somebody wear a rank
-/// they did not earn.
+/// Only ever reaches a human, in the refusal below. An unknown provider is not
+/// worth a panic here - the CHECK of migration 0603 and `VALID_PROVIDERS` have
+/// already had that argument - so it falls back to the slug.
+fn provider_label(provider: &str) -> &str {
+    match provider {
+        "discord" => "Discord",
+        "github" => "GitHub",
+        "google" => "Google",
+        "linkedin" => "LinkedIn",
+        other => other,
+    }
+}
+
+/// Refuse an external identity that already belongs to somebody else, in words.
 ///
-/// What neither constraint can do is explain itself. This runs first so the
-/// person reads a sentence they can act on instead of a Postgres error.
-async fn refuse_if_claimed(db: &PgPool, user_id: Uuid, snowflake: &str) -> Result<(), AppError> {
-    // Both tables, because either can hold the claim: `users` carries the
-    // snowflake the bot matches on, `user_oauth_providers` carries the link
-    // row, and a half-applied earlier attempt could leave one without the
-    // other.
+/// One external account belongs to at most one Skilluv account. Several
+/// constraints already say so - `user_oauth_providers`' unique index on
+/// (provider, provider_user_id), migration 0138's index on
+/// `users.discord_user_id`, migration 0029's on
+/// `github_connections.github_user_id` - and every one of them is right: ranks
+/// and roles are derived from proof, so letting two accounts share one identity
+/// would let somebody wear a rank they did not earn.
+///
+/// What no constraint can do is explain itself. This runs first so the person
+/// reads a sentence they can act on instead of a Postgres error. It is
+/// `pub(crate)` because `services::github` writes a table of its own and has to
+/// ask the same question before it does.
+pub(crate) async fn refuse_if_claimed(
+    db: &PgPool,
+    user_id: Uuid,
+    provider: &str,
+    provider_user_id: &str,
+) -> Result<(), AppError> {
+    // Every table that can hold the claim, because any one of them can hold it
+    // alone: `user_oauth_providers` carries the link row, `users` carries the
+    // snowflake the Discord bot matches on, `github_connections` carries the
+    // encrypted token - and a half-applied earlier attempt leaves one without
+    // the others. The provider-specific arms are gated on `$3`, so this stays
+    // one round trip whoever calls it.
     let claimed: Option<Uuid> = sqlx::query_scalar(
-        "SELECT id FROM users WHERE discord_user_id = $1 AND id <> $2
+        "SELECT user_id FROM user_oauth_providers
+          WHERE provider = $3 AND provider_user_id = $1 AND user_id <> $2
          UNION
-         SELECT user_id FROM user_oauth_providers
-          WHERE provider = 'discord' AND provider_user_id = $1 AND user_id <> $2
+         SELECT id FROM users
+          WHERE $3 = 'discord' AND discord_user_id = $1 AND id <> $2
+         UNION
+         SELECT user_id FROM github_connections
+          WHERE $3 = 'github' AND github_user_id::text = $1 AND user_id <> $2
          LIMIT 1",
     )
-    .bind(snowflake)
+    .bind(provider_user_id)
     .bind(user_id)
+    .bind(provider)
     .fetch_optional(db)
     .await?;
 
     if claimed.is_some() {
-        return Err(AppError::Validation(
-            "That Discord account is already linked to another Skilluv profile. \
-             Unlink it there first, or sign in with the account that holds it."
-                .into(),
-        ));
+        return Err(AppError::Conflict(format!(
+            "That {} account is already linked to another Skilluv profile. \
+             Unlink it there first, or sign in with the account that holds it.",
+            provider_label(provider)
+        )));
     }
     Ok(())
 }
@@ -270,6 +304,29 @@ pub async fn find_user_for_profile(
     .await?;
     if let Some((uid,)) = by_link {
         return Ok(Some(uid));
+    }
+
+    // A GitHub identity can be proved without ever creating a link row.
+    //
+    // `/auth/github/start` - the repo-sync flow - writes `github_connections`
+    // and nothing else. So somebody who connected GitHub from their settings
+    // and later pressed "Sign in with GitHub" was not found here, and GitHub's
+    // `/user` gives us no email to fall back on: the flow created them a second
+    // account instead, silently, with none of their proof attached to it.
+    //
+    // That row is the same proof as a link row - an OAuth exchange this
+    // deployment performed - so it answers the same question.
+    if profile.provider == "github"
+        && let Ok(github_user_id) = profile.provider_user_id.parse::<i64>()
+    {
+        let by_connection: Option<(Uuid,)> =
+            sqlx::query_as("SELECT user_id FROM github_connections WHERE github_user_id = $1")
+                .bind(github_user_id)
+                .fetch_optional(db)
+                .await?;
+        if let Some((uid,)) = by_connection {
+            return Ok(Some(uid));
+        }
     }
     if profile.email_verified
         && let Some(email) = &profile.email

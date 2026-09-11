@@ -387,20 +387,36 @@ pub async fn github_login_callback(
     let mut redis = state.redis.clone();
     let oauth_state = oauth::consume_state(&mut redis, &q.state).await?;
 
-    let (token, _scopes) =
-        crate::services::github::exchange_code(&client_id, &client_secret, &redirect_uri, &q.code)
-            .await?;
-    let gh_user = crate::services::github::fetch_user(&token).await?;
-    let profile = OAuthProfile {
-        provider: "github",
-        provider_user_id: gh_user.id.to_string(),
-        email: None, // GitHub /user endpoint may hide it ; consider a second call to /user/emails
-        email_verified: false,
-        display_name: gh_user.name.clone(),
-        avatar_url: gh_user.avatar_url,
-        username: Some(gh_user.login.clone()),
-    };
-    finalise_login_or_link(&state, &oauth_state, profile).await
+    // Same shape as `handle_callback`: everything after the state is consumed
+    // is a failure this route can still put somewhere sensible. It does not go
+    // through that helper only because GitHub's exchange lives in
+    // `services::github` rather than behind an `OAuthProfile` fetcher.
+    let outcome = async {
+        let (token, _scopes) = crate::services::github::exchange_code(
+            &client_id,
+            &client_secret,
+            &redirect_uri,
+            &q.code,
+        )
+        .await?;
+        let gh_user = crate::services::github::fetch_user(&token).await?;
+        let profile = OAuthProfile {
+            provider: "github",
+            provider_user_id: gh_user.id.to_string(),
+            email: None, // GitHub /user may hide it ; consider a second call to /user/emails
+            email_verified: false,
+            display_name: gh_user.name.clone(),
+            avatar_url: gh_user.avatar_url,
+            username: Some(gh_user.login.clone()),
+        };
+        finalise_login_or_link(&state, &oauth_state, profile).await
+    }
+    .await;
+
+    match outcome {
+        Ok(response) => Ok(response),
+        Err(err) => refuse_and_return_home(&state, &oauth_state, err),
+    }
 }
 
 // ─── Common flow helpers ─────────────────────────────────────────
@@ -452,6 +468,90 @@ async fn start_flow(
     Ok(Redirect::to(&url))
 }
 
+/// What the frontend is told went wrong, in one stable token.
+///
+/// Short, lowercase, and part of the contract with the frontend - it keys the
+/// FR/EN wording there, and the frontend falls back to `failed` for a code it
+/// does not know, so adding one here does not arrive as silence.
+///
+/// `already_linked` is the one a person can act on themselves: the account is
+/// attached to another profile, and no amount of retrying changes that.
+pub(crate) fn oauth_error_code(err: &AppError) -> &'static str {
+    match err {
+        AppError::Conflict(_) => "already_linked",
+        AppError::Unauthorized | AppError::Forbidden => "expired",
+        AppError::Validation(_) => "invalid_request",
+        AppError::NotFound(_) => "unavailable",
+        _ => "failed",
+    }
+}
+
+/// Where to send a browser whose link or sign-in just failed.
+///
+/// `?<provider>_error=<code>` on the path the flow set out from, because that
+/// is the page that knows what the person was trying to do and can say so in
+/// their language. Namespaced by provider so a settings page showing four
+/// connect buttons can tell which one refused.
+pub(crate) fn error_return_url(
+    frontend_url: &str,
+    path: &str,
+    provider: &str,
+    code: &str,
+) -> String {
+    let separator = if path.contains('?') { '&' } else { '?' };
+    format!(
+        "{}{path}{separator}{provider}_error={code}",
+        frontend_url.trim_end_matches('/'),
+    )
+}
+
+/// Put the browser back where it came from, or hand the error on.
+///
+/// A failure is a browser navigation too. The happy paths already redirect,
+/// and they were given that treatment precisely because finishing on
+/// `api.skill-uv.com` leaves somebody with the back button as their only exit.
+/// Every `?` on the way there skipped it, so whoever hit an error got the one
+/// outcome the redirect exists to prevent - and a refused link is far more
+/// likely to need a way out than a successful one.
+///
+/// The raw error still surfaces when the flow never said where home is, so a
+/// programmatic caller keeps the status code and the message.
+fn refuse_and_return_home(
+    state: &AppState,
+    oauth_state: &OAuthState,
+    err: AppError,
+) -> Result<axum::response::Response, AppError> {
+    let Some(path) = oauth_state
+        .redirect_after
+        .as_deref()
+        .and_then(sanitise_return_path)
+    else {
+        return Err(err);
+    };
+
+    let code = oauth_error_code(&err);
+    tracing::warn!(
+        provider = %oauth_state.provider,
+        intent = %oauth_state.intent,
+        error = %err,
+        "oauth flow refused"
+    );
+    metrics::counter!(
+        "skilluv_oauth_failures_total",
+        "provider" => oauth_state.provider.clone(),
+        "reason" => code,
+    )
+    .increment(1);
+
+    let target = error_return_url(
+        &state.config.frontend_url,
+        &path,
+        &oauth_state.provider,
+        code,
+    );
+    Ok(Redirect::to(&target).into_response())
+}
+
 async fn handle_callback<F, Fut>(
     state: &AppState,
     provider: &'static str,
@@ -468,8 +568,14 @@ where
     if oauth_state.provider != provider {
         return Err(AppError::Unauthorized);
     }
-    let profile = fetch(code).await?;
-    finalise_login_or_link(state, &oauth_state, profile).await
+    let outcome = match fetch(code).await {
+        Ok(profile) => finalise_login_or_link(state, &oauth_state, profile).await,
+        Err(err) => Err(err),
+    };
+    match outcome {
+        Ok(response) => Ok(response),
+        Err(err) => refuse_and_return_home(state, &oauth_state, err),
+    }
 }
 
 async fn finalise_login_or_link(
@@ -717,7 +823,8 @@ async fn create_user_from_profile(
 
 #[cfg(test)]
 mod tests {
-    use super::sanitise_return_path;
+    use super::{error_return_url, oauth_error_code, sanitise_return_path};
+    use crate::errors::AppError;
 
     /// The filter that stands between a consent screen and an open redirect,
     /// which had no test at all until this branch made a second flow depend
@@ -756,5 +863,131 @@ mod tests {
         // Length ceiling.
         let long = format!("/{}", "a".repeat(512));
         assert_eq!(sanitise_return_path(&long), None);
+    }
+
+    /// The five tokens the frontend keys its wording off.
+    ///
+    /// This list is a contract with another repository: `GithubLinkError`
+    /// renders each one in French and English, and falls back to `failed` for
+    /// anything it does not recognise. Adding a code here is therefore safe;
+    /// renaming one silently is not, because the frontend would start showing
+    /// the generic sentence for a case it has specific words for.
+    #[test]
+    fn every_refusal_maps_to_a_token_the_frontend_renders() {
+        assert_eq!(
+            oauth_error_code(&AppError::Conflict("taken".into())),
+            "already_linked"
+        );
+        assert_eq!(oauth_error_code(&AppError::Unauthorized), "expired");
+        assert_eq!(oauth_error_code(&AppError::Forbidden), "expired");
+        assert_eq!(
+            oauth_error_code(&AppError::Validation("bad".into())),
+            "invalid_request"
+        );
+        assert_eq!(
+            oauth_error_code(&AppError::NotFound("off".into())),
+            "unavailable"
+        );
+
+        // Anything unmapped is `failed` rather than a leaked internal string:
+        // the code travels in a URL a person can read.
+        assert_eq!(
+            oauth_error_code(&AppError::Internal("boom".into())),
+            "failed"
+        );
+        assert_eq!(oauth_error_code(&AppError::RateLimited(30)), "failed");
+    }
+
+    /// A code is never a sentence.
+    ///
+    /// It rides in a query string, so a space or an accent would arrive
+    /// percent-encoded and the frontend would match on nothing.
+    #[test]
+    fn a_code_is_url_safe_and_lowercase() {
+        for err in [
+            AppError::Conflict("x".into()),
+            AppError::Unauthorized,
+            AppError::Validation("x".into()),
+            AppError::NotFound("x".into()),
+            AppError::Internal("x".into()),
+        ] {
+            let code = oauth_error_code(&err);
+            assert!(
+                code.chars().all(|c| c.is_ascii_lowercase() || c == '_'),
+                "{code} would not survive a query string intact"
+            );
+        }
+    }
+
+    /// The provider names the parameter, so a settings page with four connect
+    /// buttons can tell which one refused.
+    #[test]
+    fn the_parameter_is_namespaced_by_provider() {
+        assert_eq!(
+            error_return_url(
+                "https://skill-uv.com",
+                "/settings/security",
+                "github",
+                "already_linked"
+            ),
+            "https://skill-uv.com/settings/security?github_error=already_linked"
+        );
+        assert_eq!(
+            error_return_url(
+                "https://skill-uv.com",
+                "/settings/security",
+                "discord",
+                "expired"
+            ),
+            "https://skill-uv.com/settings/security?discord_error=expired"
+        );
+    }
+
+    /// A return path may already carry a query of its own - the onboarding rite
+    /// passes its step in one. Appending with `?` a second time would make the
+    /// whole thing unparseable and lose both values.
+    #[test]
+    fn a_path_that_already_has_a_query_gets_an_ampersand() {
+        assert_eq!(
+            error_return_url(
+                "https://skill-uv.com",
+                "/onboarding?step=3",
+                "github",
+                "failed"
+            ),
+            "https://skill-uv.com/onboarding?step=3&github_error=failed"
+        );
+    }
+
+    /// The frontend origin is configured with or without a trailing slash
+    /// depending on the deployment, and `//settings` is a protocol-relative
+    /// URL - the exact shape `sanitise_return_path` exists to refuse.
+    #[test]
+    fn a_trailing_slash_on_the_origin_does_not_double_up() {
+        assert_eq!(
+            error_return_url("https://skill-uv.com/", "/settings", "google", "failed"),
+            "https://skill-uv.com/settings?google_error=failed"
+        );
+    }
+
+    /// Both halves of the redirect agree about what a path is.
+    ///
+    /// `refuse_and_return_home` only ever calls `error_return_url` with what
+    /// `sanitise_return_path` returned, so a value the filter accepts must
+    /// still produce a URL on our own origin once the parameter is appended.
+    #[test]
+    fn an_accepted_path_still_lands_on_our_own_origin() {
+        for raw in ["/settings/security", "/onboarding?step=3", "/u/kofi"] {
+            let path = sanitise_return_path(raw).expect("the filter accepts this");
+            let url = error_return_url("https://skill-uv.com", &path, "github", "failed");
+            assert!(
+                url.starts_with("https://skill-uv.com/"),
+                "{url} left the origin"
+            );
+            assert!(
+                !url.starts_with("https://skill-uv.com//"),
+                "{url} reads as protocol-relative"
+            );
+        }
     }
 }

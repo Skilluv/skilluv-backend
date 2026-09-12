@@ -61,6 +61,7 @@ pub mod design_uploads;
 pub mod education;
 pub mod featured;
 pub mod hello_wall;
+pub mod open_slices;
 pub mod series;
 // PR #39 - dev helper endpoints (verify-token peek), gated by SKILLUV_DEV_MODE
 pub mod admin_game;
@@ -286,6 +287,7 @@ pub use notification_preferences::notification_preferences_routes;
 pub use notifications::notification_routes;
 pub use oauth::oauth_routes;
 pub use onboarding::onboarding_routes;
+pub use open_slices::open_slice_routes;
 pub use opportunities::opportunity_routes;
 pub use ops_practice::{admin_ops_practice_routes, ops_routes};
 pub use orientations::orientation_routes;

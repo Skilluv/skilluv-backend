@@ -157,6 +157,7 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api", routes::guide_routes())
         .nest("/api", routes::award_routes())
         .nest("/api", routes::code_routes())
+        .nest("/api", routes::open_slice_routes())
         .nest("/api", routes::mission_routes())
         .nest("/api", routes::code_profile_routes())
         .nest("/api", routes::public_feed_routes())

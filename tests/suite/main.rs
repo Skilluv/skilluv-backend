@@ -136,6 +136,7 @@ mod test_notification_outbox;
 mod test_notifications;
 mod test_onboarding_rites;
 mod test_onboarding_wizard;
+mod test_open_slices;
 mod test_ops_domain;
 mod test_ops_missions;
 mod test_ops_onboarding;

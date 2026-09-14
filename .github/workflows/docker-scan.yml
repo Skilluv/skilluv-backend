@@ -49,11 +49,21 @@ jobs:
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e  # v4.3.0
 
+      # Today's date, as the apt layer's cache key. Without it buildx serves
+      # a months-old apt layer and the Dockerfile's `apt-get upgrade` never
+      # runs, which is how seven HIGH/CRITICAL Debian findings reached a scan
+      # of an image that upgrades its packages on paper.
+      - name: Date for the apt layer
+        id: apt_snapshot
+        run: echo "value=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
       - name: Build image (local load, no push)
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a  # v7.3.0
         with:
           context: .
           load: true
+          build-args: |
+            APT_SNAPSHOT=${{ steps.apt_snapshot.outputs.value }}
           # Fixed local tag ; not published.
           tags: skilluv-backend:scan
           # Reuse the buildx cache from the publish workflow so the Rust

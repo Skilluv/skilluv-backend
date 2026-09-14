@@ -703,11 +703,19 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Same apt cache key as the scan workflow. It matters more here: without
+      # it we would scan a freshly-patched image and publish a stale one.
+      - name: Date for the apt layer
+        id: apt_snapshot
+        run: echo "value=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
       - name: Build & push
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a  # v7.3.0
         with:
           context: .
           file: Dockerfile
+          build-args: |
+            APT_SNAPSHOT=${{ steps.apt_snapshot.outputs.value }}
           push: true
           tags: |
             ghcr.io/skilluv/skilluv-backend:master

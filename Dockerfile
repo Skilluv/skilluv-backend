@@ -88,7 +88,23 @@ FROM debian:trixie-slim
 # the scan failed on fixes Debian had already published and this image had
 # simply not taken. It costs a layer and makes the build non-reproducible
 # across days, which is the point: a rebuild should pick up patches.
-RUN apt-get update \
+#
+# Except it had stopped picking them up. Both workflows that build this image
+# use `cache-from: type=gha`, and the cache key for a RUN layer is the command
+# text, which never changes - so buildx served an apt layer from whenever it
+# was first built and the upgrade above had not actually run in weeks. The
+# scan caught it when Debian published fixes for perl-base, libssh2 and
+# libsqlite3: seven HIGH and CRITICAL findings in an image whose Dockerfile
+# says, right here, that it upgrades.
+#
+# `APT_SNAPSHOT` is what the cache key was missing. CI passes today's date, so
+# the layer is rebuilt once a day and every later layer with it. A local
+# `docker build` with no build-arg keeps the default and stays cached, which
+# is the right trade for somebody iterating on the Rust below.
+ARG APT_SNAPSHOT=unpinned
+
+RUN echo "apt snapshot ${APT_SNAPSHOT}" \
+    && apt-get update \
     && apt-get upgrade -y --no-install-recommends \
     && apt-get install -y --no-install-recommends \
         ca-certificates \

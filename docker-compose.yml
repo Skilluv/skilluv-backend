@@ -72,8 +72,14 @@ services:
 
   # MinIO - S3-compatible object storage (avatars). Required: the test
   # harness provisions a bucket per suite.
+  #
+  # Pulled from quay.io, not Docker Hub. `minio/minio` was withdrawn from
+  # Docker Hub - the repository now answers "object not found" - and every CI
+  # job that starts this service died on the pull, before a single test ran.
+  # quay.io is MinIO's own registry and carries the identical tag, so this is
+  # the same image by a different route. Do not "tidy" the prefix away.
   minio:
-    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
     container_name: skilluv-minio
     ports:
       - "9004:9000"

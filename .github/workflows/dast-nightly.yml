@@ -80,7 +80,7 @@ jobs:
           docker run -d --name minio -p 9004:9000 \
             -e MINIO_ROOT_USER=skilluv \
             -e MINIO_ROOT_PASSWORD=skilluv_secret \
-            minio/minio:RELEASE.2025-09-07T16-13-09Z server /data
+            quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z server /data
 
       - name: Log in to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4.6.0

@@ -414,9 +414,14 @@ jobs:
           --health-retries 10
 
       # MinIO n'est PAS declare comme service GHA : les services ne supportent
-      # pas de champ `command`, et l'image minio/minio requiert `server /data`
+      # pas de champ `command`, et l'image MinIO requiert `server /data`
       # en argument (sans ca, elle affiche l'usage et sort). On la lance en step
       # (voir "Start MinIO container" plus bas).
+      #
+      # L'image vient de quay.io et non du Docker Hub : `minio/minio` y a ete
+      # retire - le depot repond "object not found" - et tous les shards sont
+      # morts au `docker run`, avant le moindre test. quay.io est le registre
+      # de MinIO et porte le tag identique. Ne pas "simplifier" le prefixe.
 
     env:
       # sccache installed via sccache-action below (matches check job pattern).
@@ -507,7 +512,7 @@ jobs:
             -p 9004:9000 \
             -e MINIO_ROOT_USER=skilluv \
             -e MINIO_ROOT_PASSWORD=skilluv_secret \
-            minio/minio:RELEASE.2025-09-07T16-13-09Z \
+            quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z \
             server /data
 
       - name: Wait for MinIO to be ready

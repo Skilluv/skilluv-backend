@@ -102,17 +102,15 @@ async fn main() -> Result<()> {
     let maintenance_url = target.to_string();
 
     let host = target.host_str().unwrap_or("?");
+    let redis_note = if cli.keep_redis {
+        "left alone (--keep-redis)"
+    } else {
+        "flushed"
+    };
     println!();
-    println!("  database    {db_name} on {host}");
-    println!("  environment {environment}");
-    println!(
-        "  redis       {}",
-        if cli.keep_redis {
-            "left alone (--keep-redis)"
-        } else {
-            "flushed"
-        }
-    );
+    println!("  {:<11} {db_name} on {host}", "database");
+    println!("  {:<11} {environment}", "environment");
+    println!("  {:<11} {redis_note}", "redis");
     println!();
     println!("  Everything in it is destroyed. There is no undo.");
     println!();

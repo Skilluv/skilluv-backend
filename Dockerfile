@@ -76,7 +76,8 @@ RUN touch src/main.rs src/lib.rs && cargo build --release --features discord-bot
     --bin skilluv-github-ingest \
     --bin skilluv-seed \
     --bin skilluv-seed-admin \
-    --bin skilluv-seed-projects
+    --bin skilluv-seed-projects \
+    --bin skilluv-reset
 
 # ═══════════════════════════════════════════════════════════════════
 # Stage 2 : Runtime
@@ -141,6 +142,10 @@ COPY --from=builder /app/target/release/skilluv-seed-admin    /usr/local/bin/ski
 COPY --from=builder /app/target/release/skilluv-seed-projects /usr/local/bin/skilluv-seed-projects
 COPY --from=builder /app/target/release/skilluv-backup        /usr/local/bin/skilluv-backup
 COPY --from=builder /app/target/release/skilluv-github-ingest /usr/local/bin/skilluv-github-ingest
+# The one way to rebuild this deployment's database from the only shell
+# Coolify offers, which is inside this container: no psql, no docker, no
+# repository. Ships here so a staging reset needs no SSH.
+COPY --from=builder /app/target/release/skilluv-reset         /usr/local/bin/skilluv-reset
 
 USER skilluv:skilluv
 

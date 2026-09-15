@@ -185,6 +185,10 @@ name = "skilluv-seed-all"
 path = "src/bin/seed_all.rs"
 
 [[bin]]
+name = "skilluv-reset"
+path = "src/bin/reset.rs"
+
+[[bin]]
 name = "skilluv-seed-admin"
 path = "src/bin/seed_admin.rs"
 

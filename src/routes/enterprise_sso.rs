@@ -501,7 +501,7 @@ pub async fn callback(
         15 * 60
     );
     let refresh_cookie = format!(
-        "refresh_token={session_id}:{refresh}; HttpOnly; Secure; SameSite=Strict; Path=/api/auth; Max-Age={}",
+        "refresh_token={session_id}:{refresh}; HttpOnly; Secure; SameSite=Lax; Path=/api/auth; Max-Age={}",
         7 * 24 * 60 * 60
     );
 

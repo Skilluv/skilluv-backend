@@ -1,8 +1,17 @@
 //! Double-submit CSRF token middleware.
 //!
-//! Auth cookies are already `SameSite=Strict`, which blocks the classic CSRF attack path in modern
-//! browsers. This layer is defense-in-depth for the frontends that will run in the same site but
-//! want an additional check, and for any future relaxation to `SameSite=Lax`.
+//! Auth cookies are `SameSite=Lax`. That still blocks the classic CSRF attack
+//! path - a cross-site POST never carries them - but it no longer blocks a
+//! cross-site top-level GET, which `Strict` did.
+//!
+//! They were `Strict` until an OAuth return proved it unworkable: a browser
+//! withholds a `Strict` cookie on a navigation another site began, and every
+//! provider return is exactly that. The session survived the round trip and
+//! the person landed signed out, which reads as "linking GitHub does not
+//! work" and is not.
+//!
+//! So this layer is no longer belt-and-braces. It is the thing that has to
+//! hold, and the relaxation this file anticipated has happened.
 //!
 //! Contract:
 //! - Server emits a `csrf_token` cookie (NOT httpOnly - the JS frontend must be able to read it).
@@ -19,9 +28,23 @@
 //! Leaving the check unmounted -- where it sat for months, written and tested
 //! and wired to nothing -- means it protects nothing and no one notices.
 //! Mounting it enforcing, before every client is known to send the header,
-//! 403s every write in production: a total outage, from a defence that was
-//! not needed that day, because `SameSite=Strict` on the auth cookies already
-//! blocks the classic attack path.
+//! 403s every write in production: a total outage, from a defence nothing was
+//! yet sending the header for.
+//!
+//! The balance has moved. While the cookies were `Strict` the default-off was
+//! nearly free, because `Strict` was doing the work. It is not free now:
+//! `Lax` leaves cross-site top-level GET carrying the session, and this layer
+//! is what stands in for the difference. `CSRF_ENFORCE` should be turned on
+//! once `skilluv_csrf_would_reject_total` has sat at zero across a real week,
+//! and that is an environment change rather than a deploy, so it is immediate
+//! to undo if it turns out to be premature.
+//!
+//! What makes the gap narrow in the meantime: this check bypasses GET, and so
+//! does the risk - a `Lax` cookie rides a cross-site GET, and a GET is not
+//! supposed to change anything. The endpoints that do accept a cross-site GET
+//! and change state are the OAuth callbacks, and they authenticate on a Redis
+//! `state` token bound to the user, which is the OAuth mechanism for exactly
+//! this and does not depend on the cookie at all.
 //!
 //! So it runs on every request and, while `CSRF_ENFORCE` is off, records what
 //! it *would* have refused as `skilluv_csrf_would_reject_total` and lets the
@@ -76,7 +99,7 @@ fn domain_attr() -> String {
 pub fn build_csrf_cookie(value: &str, path: &str, max_age_secs: i64) -> String {
     // NOT httpOnly: the SPA reads it from JS to echo in the request header.
     format!(
-        "{CSRF_COOKIE_NAME}={value}; Secure; SameSite=Strict;{} Path={path}; Max-Age={max_age_secs}",
+        "{CSRF_COOKIE_NAME}={value}; Secure; SameSite=Lax;{} Path={path}; Max-Age={max_age_secs}",
         domain_attr()
     )
 }
@@ -92,7 +115,7 @@ pub fn build_csrf_cookie_with_prefix(
     max_age_secs: i64,
 ) -> String {
     format!(
-        "{prefix}{CSRF_COOKIE_NAME}={value}; Secure; SameSite=Strict;{} Path={path}; Max-Age={max_age_secs}",
+        "{prefix}{CSRF_COOKIE_NAME}={value}; Secure; SameSite=Lax;{} Path={path}; Max-Age={max_age_secs}",
         domain_attr()
     )
 }

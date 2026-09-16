@@ -153,9 +153,82 @@ fn constant_time_eq(a: &str, b: &str) -> bool {
     diff == 0
 }
 
+/// Does this request carry a session at all?
+///
+/// CSRF is forgery of an *authenticated* action: the attack is a page the
+/// victim did not write, making the victim's browser spend the victim's
+/// session. A request that carries no session spends nothing, so there is
+/// nothing to forge and no reason to demand a token for it.
+///
+/// This is what lets `POST /auth/register` and `POST /auth/login` through
+/// without a list of paths to maintain. At that point in the flow no
+/// `csrf_token` cookie exists yet - the response to that very request is what
+/// creates it - so a check that demanded one would refuse every registration
+/// and every sign-in on the platform the moment enforcement was turned on.
+///
+/// It is a rule rather than a list because a list is the thing that drifts.
+/// A new pre-session endpoint is exempt by being pre-session, and an endpoint
+/// that starts carrying a session starts being checked, both without anybody
+/// remembering to edit this file.
+///
+/// The failure direction is the safe one. Somebody holding a session but no
+/// `csrf_token` - a response that set one without the other - is not exempt,
+/// so they are refused rather than waved through, and that shows up as
+/// `no_cookie` in the counter before it ever shows up as a hole.
+fn carries_a_session(headers: &HeaderMap) -> bool {
+    let Some(raw) = headers.get("cookie").and_then(|v| v.to_str().ok()) else {
+        return false;
+    };
+    raw.split(';').map(str::trim).any(|c| {
+        c.starts_with("access_token=")
+            || c.starts_with("admin_access_token=")
+            || c.starts_with("refresh_token=")
+    })
+}
+
+/// The endpoints that establish a session rather than spend one.
+///
+/// Each of these authenticates on a credential carried in the request itself -
+/// a password, a token in the body, the rotating refresh cookie - and not on
+/// the session cookie. Forging one does not spend the victim's session, which
+/// is what CSRF is about.
+///
+/// They have to be named, because "carries no session" is not enough on its
+/// own. `refresh_token` lasts a week and `csrf_token` fifteen minutes, so
+/// somebody who comes back the next day arrives holding a session cookie and
+/// no CSRF cookie - and would be refused at the login form. A test caught
+/// that; the rule alone looked right and was not.
+///
+/// `/auth/refresh` is here for a second reason: the client sends it outside
+/// the wrapper that attaches the header, because by the time it runs the
+/// access token it would have paired with has usually expired. Refusing it
+/// would break silent refresh everywhere - failing closed, and looking exactly
+/// like the signed-out symptom this session spent two days on. What stands in
+/// for the check is the refresh token itself: it rotates on every use and a
+/// replayed one revokes the whole session tree (see
+/// `auth_test::test_refresh_reuse_detection_revokes_all_sessions`), so a
+/// forged refresh costs an attacker the session rather than winning one.
+///
+/// Both mount paths, because this middleware sits under `/api` and the routes
+/// are declared without it.
+fn establishes_a_session(path: &str) -> bool {
+    let path = path.strip_prefix("/api").unwrap_or(path);
+    matches!(
+        path,
+        "/auth/register"
+            | "/auth/login"
+            | "/auth/refresh"
+            | "/auth/forgot-password"
+            | "/auth/reset-password"
+            | "/auth/email-2fa/verify"
+    )
+}
+
 pub async fn require_csrf(req: Request, next: Next) -> Result<Response, AppError> {
     match *req.method() {
         Method::GET | Method::HEAD | Method::OPTIONS => Ok(next.run(req).await),
+        _ if !carries_a_session(req.headers()) => Ok(next.run(req).await),
+        _ if establishes_a_session(req.uri().path()) => Ok(next.run(req).await),
         _ => {
             let headers = req.headers();
             let verdict = match (
@@ -182,5 +255,125 @@ pub async fn require_csrf(req: Request, next: Next) -> Result<Response, AppError
             }
             Ok(next.run(req).await)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::HeaderValue;
+
+    fn headers_with(cookie: &str) -> HeaderMap {
+        let mut h = HeaderMap::new();
+        if !cookie.is_empty() {
+            h.insert("cookie", HeaderValue::from_str(cookie).unwrap());
+        }
+        h
+    }
+
+    /// The whole reason the exemption is a rule and not a path list.
+    ///
+    /// At `POST /auth/register` there is no `csrf_token` cookie, because the
+    /// response to that request is what creates it. Demanding one would refuse
+    /// every registration and every sign-in the moment `CSRF_ENFORCE` was
+    /// turned on - a total outage produced by the defence, which is the exact
+    /// failure this module's header says the default-off exists to avoid.
+    #[test]
+    fn a_request_with_no_session_is_not_asked_for_a_token() {
+        assert!(!carries_a_session(&headers_with("")));
+        assert!(!carries_a_session(&headers_with("theme=dark; locale=fr")));
+        // The cookie the browser holds on the way to signing in.
+        assert!(!carries_a_session(&headers_with("csrf_token=abc")));
+    }
+
+    #[test]
+    fn a_request_that_spends_a_session_is_checked() {
+        assert!(carries_a_session(&headers_with("access_token=x")));
+        assert!(carries_a_session(&headers_with("admin_access_token=x")));
+        assert!(carries_a_session(&headers_with("refresh_token=s:t")));
+        assert!(carries_a_session(&headers_with(
+            "theme=dark; access_token=x; csrf_token=y"
+        )));
+    }
+
+    /// A name that merely ends in one of ours is not one of ours.
+    ///
+    /// `my_access_token=` would have matched a substring search, and the cost
+    /// of that mistake is an exemption rather than a refusal - the direction
+    /// that fails open.
+    #[test]
+    fn a_lookalike_cookie_name_does_not_count_as_a_session() {
+        assert!(!carries_a_session(&headers_with("my_access_token=x")));
+        assert!(!carries_a_session(&headers_with("not_refresh_token=x")));
+    }
+
+    /// Every endpoint that hands out a session, under both mount paths.
+    ///
+    /// The one that matters most is `/auth/login`. `refresh_token` lasts a
+    /// week and `csrf_token` fifteen minutes, so somebody returning the next
+    /// day arrives holding a session cookie and no CSRF cookie - and without
+    /// this, enforcement would refuse them at the login form.
+    #[test]
+    fn session_establishing_endpoints_are_exempt_under_both_mount_paths() {
+        for p in [
+            "/auth/register",
+            "/auth/login",
+            "/auth/refresh",
+            "/auth/forgot-password",
+            "/auth/reset-password",
+            "/auth/email-2fa/verify",
+        ] {
+            assert!(establishes_a_session(p), "{p}");
+            assert!(establishes_a_session(&format!("/api{p}")), "/api{p}");
+        }
+    }
+
+    /// Everything that spends a session is still checked.
+    #[test]
+    fn an_authenticated_write_is_not_exempt() {
+        for p in [
+            "/api/auth/logout",
+            "/api/auth/change-password",
+            "/api/auth/account",
+            "/api/auth/sessions/revoke-all",
+            "/api/users/me/orientations",
+            "/api/auth/refresh/extra",
+        ] {
+            assert!(!establishes_a_session(p), "{p} must still be checked");
+        }
+    }
+
+    #[test]
+    fn the_token_comparison_is_length_and_content() {
+        assert!(constant_time_eq("abc", "abc"));
+        assert!(!constant_time_eq("abc", "abd"));
+        assert!(!constant_time_eq("abc", "abcd"));
+        assert!(!constant_time_eq("", "a"));
+    }
+
+    /// Admin first, public second - the same order the auth cookie parser
+    /// uses. Both live in the jar once somebody has signed into the admin app,
+    /// and reading the wrong one refuses every admin write.
+    #[test]
+    fn the_admin_token_wins_when_both_are_present() {
+        let h = headers_with("csrf_token=public; admin_csrf_token=admin");
+        assert_eq!(extract_csrf_cookie(&h).as_deref(), Some("admin"));
+        let h = headers_with("csrf_token=public");
+        assert_eq!(extract_csrf_cookie(&h).as_deref(), Some("public"));
+    }
+
+    /// The cookie the SPA has to read must be readable from the app's origin.
+    ///
+    /// Issued host-only from `api.skill-uv.com`, `document.cookie` on
+    /// `skill-uv.com` cannot see it, and the frontend could never echo a value
+    /// it was never able to learn.
+    #[test]
+    fn the_csrf_cookie_is_lax_and_not_http_only() {
+        let c = build_csrf_cookie("v", "/api", 900);
+        assert!(c.contains("SameSite=Lax"), "{c}");
+        assert!(
+            !c.to_lowercase().contains("httponly"),
+            "the SPA has to read this one: {c}"
+        );
     }
 }

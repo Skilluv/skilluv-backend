@@ -451,10 +451,24 @@ pub async fn start_bonjour_skilluv(
     // enough for every mechanism above, and asking a person who has just
     // arrived to name three trades from a catalogue of 150 is asking them to
     // decide before they can.
+    // A trade that has been chosen, in either mode.
+    //
+    // This asked for `mode = 'active'`, and migration 0089 is explicit about
+    // what that word means here: `learning` is "I want to learn X" and
+    // `active` is "I have proved X - at least one artifact on a core skill".
+    // So the rite required proof of the trade before letting somebody do the
+    // rite that proves it, and answered "Choose a trade first" to people who
+    // had chosen one three steps earlier.
+    //
+    // It is not a check that can be satisfied honestly either: nothing in this
+    // codebase promotes `learning` to `active`, so the only way to hold
+    // `active` is to declare it, and `active` is what recruiter search returns
+    // by default. A gate that can only be passed by overclaiming is worse than
+    // no gate.
     let has_trade: bool = sqlx::query_scalar(
         "SELECT EXISTS (
            SELECT 1 FROM user_orientations
-            WHERE user_id = $1 AND ended_at IS NULL AND mode = 'active')",
+            WHERE user_id = $1 AND ended_at IS NULL)",
     )
     .bind(auth.user_id)
     .fetch_one(&state.db)
@@ -559,7 +573,12 @@ async fn start_fork_rite(
             SELECT o.slug, o.reviewer_group, o.primary_domain
             FROM user_orientations uo
             JOIN orientations o ON o.id = uo.orientation_id
-            WHERE uo.user_id = $1 AND uo.is_primary = TRUE AND uo.mode = 'active'
+            -- Either mode, for the reason the gate above gives: `active`
+            -- means proved, and nobody has proved anything yet at this point
+            -- in onboarding. Requiring it sent everybody the broad-appeal
+            -- default starter instead of their trade's - the exact failure
+            -- the gate's own comment describes.
+            WHERE uo.user_id = $1 AND uo.is_primary = TRUE
             LIMIT 1
             "#,
         )

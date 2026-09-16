@@ -538,6 +538,32 @@ pub async fn fork_repo(access_token: &str, source_full_name: &str) -> Result<For
         // 202 Accepted is actually valid - GitHub returned the fork data before
         // it's fully created. But `is_success()` covers 200-299, so we should
         // never enter this branch on 202. This handles 4xx/5xx.
+
+        // One refusal is worth naming, because the raw text does not say what
+        // to do and it cost two days of onboarding to work out.
+        //
+        // "Resource not accessible by integration" is what GitHub answers a
+        // **GitHub App** token. This whole flow is written for a classic OAuth
+        // App: `build_authorize_url` asks for `read:user public_repo`, which a
+        // GitHub App ignores entirely - its permissions come from the App's own
+        // configuration, not from the authorize URL. So the token is valid, the
+        // call is correct, and the permission was never grantable this way.
+        //
+        // Which is a configuration answer, not a code one: either register a
+        // classic OAuth App (client id is 20 hex characters; `Iv23li...` and
+        // `Iv1.` are GitHub App ids), or keep the App, give it the permissions
+        // a fork needs, and have every user install it first.
+        if body.contains("not accessible by integration") {
+            return Err(AppError::Internal(format!(
+                "github refused the fork with \"not accessible by integration\", which is \
+                 what it answers a GitHub App token. This flow is built for a classic \
+                 OAuth App - check whether GITHUB_CLIENT_ID is a GitHub App id \
+                 (`Iv23li...` or `Iv1.`) rather than a 20-character hex OAuth App id. \
+                 Raw: {}",
+                &body[..body.len().min(200)]
+            )));
+        }
+
         return Err(AppError::Internal(format!(
             "github fork status {status}: {}",
             &body[..body.len().min(200)]

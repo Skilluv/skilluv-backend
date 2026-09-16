@@ -231,3 +231,57 @@ async fn a_google_identity_claimed_elsewhere_is_refused_in_words() {
         "the provider is named the way the person writes it: {err}"
     );
 }
+
+/// A link somebody makes is a link every endpoint can see.
+///
+/// The repo-sync callback wrote `github_connections`,
+/// `user_external_portfolios` and `users.github`, and never
+/// `user_oauth_providers` - which is the table `/auth/me/oauth-providers`
+/// reads. So an account linked from settings was linked everywhere except
+/// where a caller asks, and the frontend concluded a successful link had not
+/// happened.
+///
+/// This holds the two tables together. It drives the same service calls the
+/// callback makes, in the same order, because the exchange with GitHub is
+/// GitHub's and is not what can break here.
+#[tokio::test]
+async fn linking_for_repo_sync_is_visible_to_the_providers_endpoint() {
+    let app = TestApp::spawn().await;
+    app.register_user("gh_registry").await;
+    let uid = user_id(&app, "gh_registry").await;
+
+    connect(&app.db, uid, 606060, "ama-registry").await.unwrap();
+    oauth::upsert_link(&app.db, uid, &github_profile(606060, "ama-registry"))
+        .await
+        .expect("the link row is what /auth/me/oauth-providers reads");
+
+    let listed = oauth::list_for_user(&app.db, uid).await.unwrap();
+    let json = serde_json::to_value(&listed).unwrap();
+    let text = json.to_string();
+    assert!(
+        text.contains("github"),
+        "a linked GitHub account has to appear in the provider list: {text}"
+    );
+
+    // And the two rows name the same identity, which is the whole point of
+    // writing both.
+    let from_connection: i64 =
+        sqlx::query_scalar("SELECT github_user_id FROM github_connections WHERE user_id = $1")
+            .bind(uid)
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
+    let from_registry: String = sqlx::query_scalar(
+        "SELECT provider_user_id FROM user_oauth_providers
+          WHERE user_id = $1 AND provider = 'github'",
+    )
+    .bind(uid)
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert_eq!(
+        from_connection.to_string(),
+        from_registry,
+        "the two tables must not drift on who this is"
+    );
+}

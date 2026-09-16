@@ -121,6 +121,96 @@ async fn cannot_register_more_than_three_active_orientations() {
     assert_eq!(over.status().as_u16(), 400, "cap 3 enforced");
 }
 
+/// At three trades, you can still change one of your own.
+///
+/// The ceiling counted the row the upsert was about to update, so re-posting
+/// one of your own three looked like a fourth and was refused - with "end one
+/// first", about a trade you already had. At three trades that made the whole
+/// `DO UPDATE` branch unreachable: no mode change, no moving `is_primary`, no
+/// un-ending.
+///
+/// Onboarding is where it surfaced. The frontend replays the trades picked
+/// before the account existed; every replay was refused, so the step concluded
+/// nothing had been declared and asked again, five times in a row.
+#[tokio::test]
+async fn at_the_ceiling_you_can_still_change_a_trade_you_already_hold() {
+    let app = TestApp::spawn().await;
+    app.register_user("kim16r_reupsert").await;
+    app.login("kim16r_reupsert").await;
+
+    for slug in [
+        "web-frontend-developer",
+        "web-backend-developer",
+        "design-web",
+    ] {
+        let r = app
+            .post("/api/users/me/orientations", &json!({ "slug": slug }))
+            .await;
+        assert_eq!(r.status().as_u16(), 201, "slug {slug} should succeed");
+    }
+
+    // The same trade again, with a different mode: the update branch.
+    let again = app
+        .post(
+            "/api/users/me/orientations",
+            &json!({ "slug": "design-web", "mode": "active" }),
+        )
+        .await;
+    let status = again.status().as_u16();
+    let body: serde_json::Value = again.json().await.unwrap();
+    assert_eq!(
+        status, 201,
+        "re-posting one of your own three is an update, not a fourth: {body}"
+    );
+    assert_eq!(body["data"]["mode"], "active", "the update has to land");
+
+    // And it is still three, not four.
+    let live: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM user_orientations uo
+           JOIN users u ON u.id = uo.user_id
+          WHERE u.username = 'kim16r_reupsert' AND uo.ended_at IS NULL",
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    assert_eq!(live, 3, "an update must not add a row");
+}
+
+/// Un-ending one of your own, at the ceiling, is the same upsert.
+///
+/// Somebody who ends a trade and changes their mind has three live again, and
+/// the path back is `POST` with the slug they left - which the old count read
+/// as a fourth.
+#[tokio::test]
+async fn a_trade_you_ended_can_be_taken_up_again_at_the_ceiling() {
+    let app = TestApp::spawn().await;
+    app.register_user("kim16r_unend").await;
+    app.login("kim16r_unend").await;
+
+    for slug in [
+        "web-frontend-developer",
+        "web-backend-developer",
+        "design-web",
+    ] {
+        app.post("/api/users/me/orientations", &json!({ "slug": slug }))
+            .await;
+    }
+    let gone = app.delete("/api/users/me/orientations/design-web").await;
+    assert!(gone.status().is_success(), "ending a trade should work");
+
+    let back = app
+        .post(
+            "/api/users/me/orientations",
+            &json!({ "slug": "design-web" }),
+        )
+        .await;
+    assert_eq!(
+        back.status().as_u16(),
+        201,
+        "taking a trade back up is an update of the ended row"
+    );
+}
+
 #[tokio::test]
 async fn delete_orientation_historises_but_keeps_row() {
     let app = TestApp::spawn().await;

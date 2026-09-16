@@ -587,15 +587,28 @@ pub async fn register_orientation(
         ));
     }
 
-    // Cap : max MAX_ACTIVE_ORIENTATIONS non-ended.
-    let active_count: i64 = sqlx::query_scalar(
+    // The ceiling counts the other trades, not this one.
+    //
+    // The insert below is an upsert: posting a trade somebody already holds
+    // takes the `DO UPDATE` branch and changes its mode, its primary flag or
+    // un-ends it. Counting the row that branch is about to update made a
+    // re-post of one of your own three look like a fourth, so at three trades
+    // the update branch could never run - no mode change, no moving
+    // `is_primary`, no un-ending. The refusal even said "end one first", about
+    // a trade the caller already had.
+    //
+    // Onboarding found it: the frontend replays the trades picked before the
+    // account existed, every replay was refused, and the step concluded
+    // nothing had been declared and asked again.
+    let other_active: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM user_orientations
-         WHERE user_id = $1 AND ended_at IS NULL",
+         WHERE user_id = $1 AND ended_at IS NULL AND orientation_id <> $2",
     )
     .bind(auth.user_id)
+    .bind(orientation_id)
     .fetch_one(&state.db)
     .await?;
-    if active_count >= MAX_ACTIVE_ORIENTATIONS {
+    if other_active >= MAX_ACTIVE_ORIENTATIONS {
         return Err(AppError::Validation(format!(
             "max {MAX_ACTIVE_ORIENTATIONS} active orientations reached - end one first or prove more artifacts to unlock more"
         )));
@@ -612,8 +625,10 @@ pub async fn register_orientation(
         .execute(&mut *tx)
         .await?;
     }
-    // Si aucun primary et c'est la 1re orientation, on l'auto-promeut primary.
-    let final_is_primary = body.is_primary || active_count == 0;
+    // No other active trade means this is the only one, so it is the primary.
+    // The count excludes this orientation now, which is the same statement for
+    // the first registration this was written for.
+    let final_is_primary = body.is_primary || other_active == 0;
 
     let inserted: (String, String) = sqlx::query_as(
         r#"

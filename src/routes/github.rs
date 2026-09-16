@@ -230,6 +230,44 @@ async fn link_account(
     )
     .await?;
 
+    // The link row, so `/auth/me/oauth-providers` tells the whole truth.
+    //
+    // This callback wrote `github_connections`, `user_external_portfolios` and
+    // `users.github`, and never `user_oauth_providers` - the table that
+    // endpoint reads. So a GitHub account linked from settings was linked
+    // everywhere except in the place a caller asks. The frontend found it the
+    // hard way: it read that endpoint, saw nothing, and concluded a successful
+    // link had not happened.
+    //
+    // `upsert_link` runs the same claimed-identity guard `upsert_connection`
+    // just ran, which is the right order: whichever refuses first refuses with
+    // the same sentence, and by here the identity is already ours.
+    //
+    // Best effort, like the two writes below it. The connection row is what
+    // the code rite and the token load read; failing the whole callback over
+    // the registry would take a working link away from somebody because a
+    // secondary row did not land.
+    if let Err(err) = crate::services::oauth::upsert_link(
+        &state.db,
+        user_id,
+        &crate::services::oauth::OAuthProfile {
+            provider: "github",
+            provider_user_id: gh_user.id.to_string(),
+            // `/user` does not return one for an account that hides it, and
+            // this flow never asked for `user:email`. Left absent rather than
+            // guessed: the row is an identity, not a contact.
+            email: None,
+            email_verified: false,
+            display_name: gh_user.name.clone(),
+            avatar_url: gh_user.avatar_url.clone(),
+            username: Some(gh_user.login.clone()),
+        },
+    )
+    .await
+    {
+        tracing::warn!(%user_id, error = %err, "github oauth link row not recorded");
+    }
+
     // The one place a portfolio account becomes verified: OAuth just proved
     // this person controls it. Everything else somebody types is a claim.
     if let Err(err) = crate::services::code_portfolio::record_verified(

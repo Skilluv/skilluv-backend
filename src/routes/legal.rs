@@ -106,10 +106,28 @@ pub async fn record_consent(
         .and_then(|v| v.to_str().ok())
         .map(String::from);
 
+    // The user id is resolved through `users` rather than bound straight in.
+    //
+    // A signed access token outlives the row it names. Nothing here checks
+    // that the subject still exists - `OptionalAuth` verifies the signature
+    // and parses the id, which is the whole point of a stateless token and
+    // costs no query. So for the fifteen minutes a token stays valid, a
+    // request can arrive naming a user who is gone: an account deleted, or a
+    // staging database rebuilt under an open tab.
+    //
+    // That used to be a 500. `consent_log_user_id_fkey` refused the insert,
+    // and a cookie banner - the first thing a page does, before anything has
+    // signed in - answered DATABASE_ERROR.
+    //
+    // The column is `REFERENCES users(id) ON DELETE SET NULL` and nullable,
+    // so the schema already says a consent event may belong to nobody. The
+    // sub-select says the same thing at write time: the id when the user is
+    // there, NULL when they are not, which is the anonymous consent this
+    // endpoint accepts anyway. One statement, no extra round trip.
     sqlx::query(
         r#"
         INSERT INTO consent_log (user_id, version, analytics, marketing, ip, user_agent)
-        VALUES ($1, $2, $3, $4, $5, $6)
+        VALUES ((SELECT id FROM users WHERE id = $1), $2, $3, $4, $5, $6)
         "#,
     )
     .bind(user_id)

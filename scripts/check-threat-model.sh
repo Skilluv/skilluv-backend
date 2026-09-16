@@ -53,19 +53,32 @@ if hits=$(grep -rnE '\.(unwrap|expect)\s*\(' src/routes/ --include='*.rs' 2>/dev
   note "WARN - ${count} .unwrap()/.expect() under src/routes/ (a panic is a 500). Not failing the build; triage with clippy::unwrap_used once a compile is affordable."
 fi
 
-# -- D) Auth cookies stay SameSite=Strict (the actual CSRF defense) --------
-# The double-submit require_csrf middleware exists but is deliberately unwired:
-# access_token is HttpOnly; Secure; SameSite=Strict, which blocks the classic
-# CSRF path in modern browsers (see src/middleware/csrf.rs's header). Weakening
-# a cookie to SameSite=None would silently remove that defense, so it is refused.
+# -- D) Auth cookies stay SameSite=Lax, and HttpOnly; Secure -----------------
+# They were Strict, and this gate said so. Strict turned out to be unworkable:
+# a browser withholds a Strict cookie on a navigation another site began, and
+# every OAuth provider return is exactly that - so people landed signed out of
+# sessions that had worked the whole way, which read as "linking GitHub does
+# not work" for two days.
+#
+# Lax is the floor now. It still refuses a cross-site POST, which is the
+# classic CSRF path; what it no longer refuses is a cross-site top-level GET,
+# and require_csrf covers that - see src/middleware/csrf.rs's header for why
+# CSRF_ENFORCE matters more than it did.
+#
+# None is still refused outright: it sends the cookie on cross-site POST too,
+# which removes the defence entirely rather than narrowing it.
+#
+# src/no_strict_session_cookies.rs holds the other direction - that no cookie
+# drifts back to Strict - because a test can name the file and line and this
+# cannot.
 if hits=$(grep -rniE 'SameSite=None' src/ --include='*.rs' 2>/dev/null); then
-  note "FAIL - a cookie is SameSite=None, which reopens CSRF. Auth cookies must stay SameSite=Strict."
+  note "FAIL - a cookie is SameSite=None, which reopens CSRF. Auth cookies must stay SameSite=Lax."
   printf '%s
 ' "$hits" | sed 's/^/  /'
   fail=1
 fi
-if ! grep -rqE 'HttpOnly; Secure; SameSite=Strict' src/routes/auth.rs 2>/dev/null; then
-  note "FAIL - the auth cookie builder no longer sets HttpOnly; Secure; SameSite=Strict (CSRF defense)."
+if ! grep -rqE 'HttpOnly; Secure; SameSite=Lax' src/routes/auth.rs 2>/dev/null; then
+  note "FAIL - the auth cookie builder no longer sets HttpOnly; Secure; SameSite=Lax."
   fail=1
 fi
 
@@ -83,6 +96,6 @@ if hits=$(grep -rnE '\bauth\.role\s*(==|!=)\s*"admin"' src/routes/ --include='*.
 fi
 
 if [ "$fail" -eq 0 ]; then
-  note "ok - no dynamic SQL, no console prints, auth cookies SameSite=Strict, admin via capability"
+  note "ok - no dynamic SQL, no console prints, auth cookies SameSite=Lax, admin via capability"
 fi
 exit "$fail"

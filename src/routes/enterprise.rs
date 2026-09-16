@@ -529,11 +529,10 @@ pub async fn register_enterprise(
     )
     .await?;
 
-    let access_cookie = format!(
-        "access_token={access_token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=900"
-    );
+    let access_cookie =
+        format!("access_token={access_token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=900");
     let refresh_cookie = format!(
-        "refresh_token={session_id}:{refresh_token}; HttpOnly; Secure; SameSite=Strict; Path=/api/auth; Max-Age={}",
+        "refresh_token={session_id}:{refresh_token}; HttpOnly; Secure; SameSite=Lax; Path=/api/auth; Max-Age={}",
         7 * 24 * 60 * 60
     );
     let csrf = generate_csrf_token();
@@ -1089,11 +1088,10 @@ pub async fn invite_register_and_accept(
     )
     .await?;
 
-    let access_cookie = format!(
-        "access_token={access_token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=900"
-    );
+    let access_cookie =
+        format!("access_token={access_token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=900");
     let refresh_cookie = format!(
-        "refresh_token={session_id}:{refresh_token}; HttpOnly; Secure; SameSite=Strict; Path=/api/auth; Max-Age={}",
+        "refresh_token={session_id}:{refresh_token}; HttpOnly; Secure; SameSite=Lax; Path=/api/auth; Max-Age={}",
         7 * 24 * 60 * 60
     );
     let csrf = generate_csrf_token();
@@ -1302,7 +1300,7 @@ pub async fn switch_enterprise(
     // time the access token renews. Path=/ so it flows to every enterprise
     // route (including SSR /api/* calls from the frontend).
     let cookie = format!(
-        "active_enterprise={enterprise_id}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age={}",
+        "active_enterprise={enterprise_id}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age={}",
         7 * 24 * 60 * 60
     );
 

@@ -59,12 +59,12 @@ fn envelope(data: serde_json::Value) -> serde_json::Value {
 }
 
 fn build_access_cookie(access_token: &str) -> String {
-    format!("access_token={access_token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=900")
+    format!("access_token={access_token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=900")
 }
 
 fn build_refresh_cookie(session_id: Uuid, token: &str) -> String {
     format!(
-        "refresh_token={session_id}:{token}; HttpOnly; Secure; SameSite=Strict; Path=/api/auth; Max-Age={}",
+        "refresh_token={session_id}:{token}; HttpOnly; Secure; SameSite=Lax; Path=/api/auth; Max-Age={}",
         7 * 24 * 60 * 60
     )
 }

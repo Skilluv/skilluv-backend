@@ -17,6 +17,7 @@ pub mod middleware;
 pub mod models;
 mod no_collapsed_continuations;
 mod no_em_dashes;
+mod no_strict_session_cookies;
 pub mod observability;
 pub mod openapi;
 pub mod routes;

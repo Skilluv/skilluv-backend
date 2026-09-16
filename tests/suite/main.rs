@@ -125,6 +125,7 @@ mod test_juice_shop_ctf_seed;
 mod test_leadership_domain;
 mod test_ledger;
 mod test_ledger_snapshots;
+mod test_legal_consent;
 mod test_lifecycle_email;
 mod test_mentor_currency;
 mod test_mentoring_products;

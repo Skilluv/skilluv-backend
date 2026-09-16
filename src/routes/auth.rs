@@ -606,13 +606,11 @@ pub fn validate_name(name: &str, field: &str) -> Result<(), AppError> {
 }
 
 fn build_cookie(name: &str, value: &str, max_age_secs: i64, path: &str) -> String {
-    format!(
-        "{name}={value}; HttpOnly; Secure; SameSite=Strict; Path={path}; Max-Age={max_age_secs}"
-    )
+    format!("{name}={value}; HttpOnly; Secure; SameSite=Lax; Path={path}; Max-Age={max_age_secs}")
 }
 
 fn clear_cookie(name: &str, path: &str) -> String {
-    format!("{name}=; HttpOnly; Secure; SameSite=Strict; Path={path}; Max-Age=0")
+    format!("{name}=; HttpOnly; Secure; SameSite=Lax; Path={path}; Max-Age=0")
 }
 
 const REFRESH_COOKIE_PATH: &str = "/api/auth";
@@ -1412,11 +1410,11 @@ pub async fn logout(
     // reason), and leaving one orphaned would let a stale token linger.
     let clear_access = clear_cookie("access_token", "/");
     let clear_refresh = clear_cookie("refresh_token", REFRESH_COOKIE_PATH);
-    let clear_csrf = "csrf_token=; Secure; SameSite=Strict; Path=/api; Max-Age=0".to_string();
+    let clear_csrf = "csrf_token=; Secure; SameSite=Lax; Path=/api; Max-Age=0".to_string();
     let clear_admin_access = clear_cookie("admin_access_token", "/");
     let clear_admin_refresh = clear_cookie("admin_refresh_token", REFRESH_COOKIE_PATH);
     let clear_admin_csrf =
-        "admin_csrf_token=; Secure; SameSite=Strict; Path=/api; Max-Age=0".to_string();
+        "admin_csrf_token=; Secure; SameSite=Lax; Path=/api; Max-Age=0".to_string();
 
     Ok((
         AppendHeaders([
@@ -2196,11 +2194,11 @@ pub async fn delete_account(
 
     let clear_access = clear_cookie("access_token", "/");
     let clear_refresh = clear_cookie("refresh_token", REFRESH_COOKIE_PATH);
-    let clear_csrf = "csrf_token=; Secure; SameSite=Strict; Path=/api; Max-Age=0".to_string();
+    let clear_csrf = "csrf_token=; Secure; SameSite=Lax; Path=/api; Max-Age=0".to_string();
     let clear_admin_access = clear_cookie("admin_access_token", "/");
     let clear_admin_refresh = clear_cookie("admin_refresh_token", REFRESH_COOKIE_PATH);
     let clear_admin_csrf =
-        "admin_csrf_token=; Secure; SameSite=Strict; Path=/api; Max-Age=0".to_string();
+        "admin_csrf_token=; Secure; SameSite=Lax; Path=/api; Max-Age=0".to_string();
 
     let deleted_at = chrono::Utc::now();
     tracing::info!(

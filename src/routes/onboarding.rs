@@ -378,6 +378,16 @@ struct OnboardingRow {
     started_at: chrono::DateTime<chrono::Utc>,
     pr_opened_at: Option<chrono::DateTime<chrono::Utc>>,
     completed_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// Why the automatic entrance check refused, in words to show somebody.
+    ///
+    /// Without this the refusal would be a log line and a page that stops
+    /// moving - which is the exact shape of the failure this flow spent two
+    /// days being: work done correctly, nothing visibly happening, no way to
+    /// tell "it is broken" from "you missed a step".
+    ///
+    /// Always `None` for the eleven rites a person decides.
+    check_refused_reason: Option<String>,
+    check_ran_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// Kick off the Bonjour Skilluv rite for the caller's domain.
@@ -518,7 +528,8 @@ pub async fn start_bonjour_skilluv(
                 VALUES ($1, $2, 'submission', $3, 'started')
                 RETURNING user_id, skill_domain, rite_form, challenge_id, submission_id,
                           starter_slug, fork_full_name, fork_html_url, github_fork_id,
-                          status, pr_number, pr_url, started_at, pr_opened_at, completed_at
+                          status, pr_number, pr_url, started_at, pr_opened_at, completed_at,
+                          check_refused_reason, check_ran_at
                 "#,
             )
             .bind(auth.user_id)
@@ -652,7 +663,8 @@ async fn start_fork_rite(
         VALUES ($1, $2, 'fork', $3, $4, $5, $6, $7, 'forked')
         RETURNING user_id, skill_domain, rite_form, challenge_id, submission_id,
                   starter_slug, fork_full_name, fork_html_url, github_fork_id,
-                  status, pr_number, pr_url, started_at, pr_opened_at, completed_at
+                  status, pr_number, pr_url, started_at, pr_opened_at, completed_at,
+                  check_refused_reason, check_ran_at
         "#,
     )
     .bind(user_id)
@@ -810,7 +822,8 @@ async fn load_row(db: &sqlx::PgPool, user_id: Uuid) -> Result<Option<OnboardingR
         r#"
         SELECT user_id, skill_domain, rite_form, challenge_id, submission_id,
                starter_slug, fork_full_name, fork_html_url, github_fork_id,
-               status, pr_number, pr_url, started_at, pr_opened_at, completed_at
+               status, pr_number, pr_url, started_at, pr_opened_at, completed_at,
+               check_refused_reason, check_ran_at
         FROM onboarding_bonjour_skilluv
         WHERE user_id = $1
         "#,
@@ -898,15 +911,16 @@ pub async fn handle_bonjour_skilluv_pr_event(
     }
 
     // Load the onboarding row by fork_full_name.
-    let onboarding: Option<(Uuid, String, String, Option<Uuid>)> = sqlx::query_as(
-        "SELECT user_id, status, skill_domain, challenge_id
+    let onboarding: Option<(Uuid, String, String, Option<Uuid>, String)> = sqlx::query_as(
+        "SELECT user_id, status, skill_domain, challenge_id, starter_slug
          FROM onboarding_bonjour_skilluv WHERE fork_full_name = $1",
     )
     .bind(fork_full_name)
     .fetch_optional(&state.db)
     .await?;
 
-    let Some((user_id, current_status, skill_domain, tracked_challenge)) = onboarding else {
+    let Some((user_id, current_status, skill_domain, tracked_challenge, starter_slug)) = onboarding
+    else {
         // Not a tracked Bonjour Skilluv fork - nothing to do.
         return Ok(());
     };
@@ -975,6 +989,100 @@ pub async fn handle_bonjour_skilluv_pr_event(
         hasher.update(hello_content.as_bytes());
         hex::encode(hasher.finalize())
     };
+
+    // ── The entrance is decided here ─────────────────────────────────
+    //
+    // Every other rite ends in a person reading the work, and that is the
+    // platform's whole claim. This one does not, and the exception is
+    // narrow on purpose: the entrance asserts "I can fork, edit and open a
+    // pull request", which is mechanically true or false. A reviewer opening
+    // a diff that adds one sentence under a heading was acknowledging
+    // receipt, not judging - and charging somebody a wait for an
+    // acknowledgement is the wrong first impression for a platform whose
+    // subject is doing.
+    //
+    // The template is ours, so we read it and compare. See
+    // `services::hello_check` for why the comparison is the diff rather than
+    // the file, and why the structural check is loose.
+    let template = crate::services::github::fetch_file_content(
+        &access_token,
+        &format!("{STARTER_ORG}/{starter_slug}"),
+        "HELLO.md",
+        "main",
+    )
+    .await
+    .unwrap_or_default();
+
+    let pr_author = pr
+        .get("user")
+        .and_then(|u| u.get("login"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+
+    let rite_owner_login: String =
+        sqlx::query_scalar("SELECT github_login FROM github_connections WHERE user_id = $1")
+            .bind(user_id)
+            .fetch_optional(&state.db)
+            .await?
+            .unwrap_or_default();
+
+    let changed: Vec<String> = files.iter().map(|f| f.filename.clone()).collect();
+
+    // An empty template means GitHub would not tell us what ours says, and
+    // deciding against nothing would refuse everybody. Fall back to the
+    // reviewer rather than to a guess.
+    let verdict = if template.is_empty() {
+        tracing::warn!(
+            %user_id,
+            starter_slug,
+            "entrance template unreadable - leaving this rite to a person"
+        );
+        None
+    } else {
+        Some(crate::services::hello_check::judge(
+            &template,
+            &hello_content,
+            &changed,
+            pr_author,
+            &rite_owner_login,
+        ))
+    };
+
+    // A refusal is "not yet", never "no". The row stays at `pr_opened`, the
+    // reason is where `/status` can return it, and the next push runs the
+    // checks again against the new head.
+    if let Some(crate::services::hello_check::HelloVerdict::Refused { reason }) = &verdict {
+        sqlx::query(
+            "UPDATE onboarding_bonjour_skilluv
+                SET check_refused_reason = $1, check_ran_at = NOW()
+              WHERE user_id = $2",
+        )
+        .bind(reason)
+        .bind(user_id)
+        .execute(&state.db)
+        .await?;
+        tracing::info!(%user_id, reason, "entrance refused by the automatic check");
+    }
+
+    // What the wall shows is what they wrote, not our instructions. The whole
+    // file used to be stored, so every entry was ninety-five per cent the
+    // same template repeated once per member.
+    let wall_text = match &verdict {
+        Some(crate::services::hello_check::HelloVerdict::Accepted { introduction }) => {
+            introduction.clone()
+        }
+        _ => crate::services::hello_check::extract_introduction(&template, &hello_content),
+    };
+    let hello_content = if wall_text.is_empty() {
+        hello_content
+    } else {
+        wall_text
+    };
+
+    let auto_passed = matches!(
+        verdict,
+        Some(crate::services::hello_check::HelloVerdict::Accepted { .. })
+    );
 
     // Transaction: update onboarding row + insert hello_wall_entries row.
     let mut tx = state.db.begin().await?;
@@ -1070,13 +1178,13 @@ pub async fn handle_bonjour_skilluv_pr_event(
         INSERT INTO deliverables (
             challenge_id, user_id,
             artifact_type, artifact_url, artifact_hash, artifact_metadata,
-            verifiable_by, verification_status,
+            verifiable_by, verification_status, verified_at,
             fragments_awarded, public, submitted_at, created_at
         )
         VALUES (
             $1, $2,
             'other', $3, $4, $5,
-            'human_review', 'pending',
+            $6, $7, CASE WHEN $7 = 'verified' THEN NOW() END,
             0, TRUE, NOW(), NOW()
         )
         ON CONFLICT (user_id, artifact_hash) WHERE artifact_hash IS NOT NULL DO NOTHING
@@ -1093,6 +1201,23 @@ pub async fn handle_bonjour_skilluv_pr_event(
         "pr_number": pr_number,
         "hello_markdown": hello_content,
     }))
+    // Born verified when the check passed, pending when it did not.
+    //
+    // A deliverable that says `human_review` and `pending` is a promise to
+    // somebody that a person will read it. Making that promise and then
+    // completing the rite without anybody reading would be the platform
+    // lying in its own audit trail - the one place it cannot afford to.
+    //
+    // `automated_diff` rather than a new value: the schema already has it
+    // (migration 0087), and it is exactly what this is - an automatic check
+    // on a diff. `verified_at` goes with it, because a deliverable born
+    // verified without a verification time is two columns disagreeing.
+    .bind(if auto_passed {
+        "automated_diff"
+    } else {
+        "human_review"
+    })
+    .bind(if auto_passed { "verified" } else { "pending" })
     .fetch_optional(&mut *tx)
     .await?;
 
@@ -1103,14 +1228,40 @@ pub async fn handle_bonjour_skilluv_pr_event(
             .execute(&mut *tx)
             .await?;
 
-        crate::services::ReviewQueueService::create_task_for_deliverable(
-            &mut tx,
-            id,
-            &skill_domain,
-            3,
-            "any",
-        )
-        .await?;
+        // A rite the check passed is finished here, not queued.
+        //
+        // Queueing it would put a task in front of a reviewer whose only
+        // available action is to agree with arithmetic already done. The
+        // same function a person's verdict calls finishes it, so the two
+        // paths cannot drift on what finishing means.
+        if auto_passed {
+            sqlx::query(
+                "UPDATE onboarding_bonjour_skilluv
+                    SET check_refused_reason = NULL, check_ran_at = NOW()
+                  WHERE user_id = $1",
+            )
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;
+
+            crate::services::reviews::complete_fork_rite(&mut tx, id).await?;
+            sqlx::query(
+                "UPDATE users SET profile_active = TRUE, updated_at = NOW()
+                  WHERE id = $1 AND profile_active = FALSE",
+            )
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;
+        } else {
+            crate::services::ReviewQueueService::create_task_for_deliverable(
+                &mut tx,
+                id,
+                &skill_domain,
+                3,
+                "any",
+            )
+            .await?;
+        }
     }
 
     tx.commit().await?;

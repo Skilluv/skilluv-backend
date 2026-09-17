@@ -100,6 +100,20 @@ pub async fn recompute_capabilities_for_user(
     .await
     .unwrap_or_default();
     for domain in passed_rites {
+        // Code is not on this ladder any more.
+        //
+        // The code entrance is decided by `services::hello_check` rather than
+        // by a person, so passing it no longer means anybody read anything -
+        // and a capability to witness others that is granted without a witness
+        // is a chain of trust anchored to nothing. The eleven rites that still
+        // end in a human verdict keep their rung; this one has no verdict to
+        // inherit from.
+        //
+        // The gate in `services::reviews` refuses `rite_reviewer:code` as
+        // well, so a capability granted before this cannot be spent either.
+        if domain == "code" {
+            continue;
+        }
         grant_if_missing(
             db,
             user_id,

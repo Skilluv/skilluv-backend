@@ -75,7 +75,18 @@ pub fn decrypt_token(
 /// Build the authorization URL for the GitHub OAuth flow.
 pub fn build_authorize_url(client_id: &str, redirect_uri: &str, state: &str) -> String {
     let qs = format!(
-        "client_id={}&redirect_uri={}&scope=read:user%20public_repo&state={}",
+        // `admin:repo_hook` is what lets the rite finish.
+        //
+        // A person opens their pull request from their own fork's `main` to
+        // their own fork's `showcase`, so it lives entirely inside their
+        // account. `skilluv-community` never sees it, and a webhook on the
+        // upstream repository cannot fire for it - there is nothing for it to
+        // fire on. The rite could not complete for anybody.
+        //
+        // So the fork gets its own webhook, created with the token this scope
+        // buys, immediately after the fork exists. See
+        // `create_fork_webhook` below.
+        "client_id={}&redirect_uri={}&scope=read:user%20public_repo%20admin:repo_hook&state={}",
         urlencoding(client_id),
         urlencoding(redirect_uri),
         urlencoding(state)
@@ -544,8 +555,9 @@ pub async fn fork_repo(access_token: &str, source_full_name: &str) -> Result<For
         //
         // "Resource not accessible by integration" is what GitHub answers a
         // **GitHub App** token. This whole flow is written for a classic OAuth
-        // App: `build_authorize_url` asks for `read:user public_repo`, which a
-        // GitHub App ignores entirely - its permissions come from the App's own
+        // App: `build_authorize_url` asks for `read:user public_repo
+        // admin:repo_hook`, which a GitHub App ignores entirely - its
+        // permissions come from the App's own
         // configuration, not from the authorize URL. So the token is valid, the
         // call is correct, and the permission was never grantable this way.
         //
@@ -581,6 +593,88 @@ pub async fn fork_repo(access_token: &str, source_full_name: &str) -> Result<For
         html_url: fork.html_url,
         default_branch: fork.default_branch,
     })
+}
+
+/// Put a webhook on a freshly created fork.
+///
+/// The Bonjour Skilluv rite ends in a pull request from the fork's `main` to
+/// the fork's `showcase`, both inside the person's own account. Nothing about
+/// that reaches `skilluv-community`, so the organisation's webhook has no
+/// event to deliver and the platform would never learn the rite was done.
+///
+/// This is the missing half: the fork tells us directly. It is created with
+/// the person's own token, which is why `build_authorize_url` asks for
+/// `admin:repo_hook`.
+///
+/// Best effort by design. A fork that exists with no webhook is a rite that
+/// completes late rather than one that cannot start, and the caller has
+/// already spent the expensive half of the operation. The error is returned
+/// so the caller can record it, not so it can abort.
+///
+/// Idempotent: GitHub answers 422 when a hook with the same config already
+/// exists on the repository, which is the right outcome for a retry and not a
+/// failure worth reporting.
+pub async fn create_fork_webhook(
+    access_token: &str,
+    fork_full_name: &str,
+    callback_url: &str,
+    secret: &str,
+) -> Result<(), AppError> {
+    let body = serde_json::json!({
+        "name": "web",
+        "active": true,
+        // Only the event the rite turns on. A fork is somebody's personal
+        // repository and this is the least it can be asked to report.
+        "events": ["pull_request"],
+        "config": {
+            "url": callback_url,
+            "content_type": "json",
+            "secret": secret,
+            "insecure_ssl": "0",
+        }
+    });
+
+    let resp = reqwest::Client::new()
+        .post(format!("{GITHUB_API}/repos/{fork_full_name}/hooks"))
+        .bearer_auth(access_token)
+        .header("User-Agent", USER_AGENT)
+        .header("Accept", "application/vnd.github+json")
+        .header("X-GitHub-Api-Version", "2022-11-28")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("github hook request failed: {e}")))?;
+
+    let status = resp.status();
+    if status.is_success() {
+        return Ok(());
+    }
+
+    let text = resp.text().await.unwrap_or_default();
+
+    // 422 with "Hook already exists" is a retry landing on its own earlier
+    // success.
+    if status.as_u16() == 422 && text.contains("already exists") {
+        return Ok(());
+    }
+
+    // The other refusal worth naming. A token minted before the scope was
+    // added carries `read:user public_repo` and nothing else, so this call
+    // fails for every account that linked GitHub earlier - and the fix is for
+    // that person to link again, not for anybody to debug.
+    if status.as_u16() == 404 || text.contains("not accessible by integration") {
+        return Err(AppError::Internal(format!(
+            "github refused the webhook on {fork_full_name} ({status}). The token \
+             most likely predates the `admin:repo_hook` scope - reconnecting \
+             GitHub mints one that carries it. Raw: {}",
+            &text[..text.len().min(200)]
+        )));
+    }
+
+    Err(AppError::Internal(format!(
+        "github hook status {status}: {}",
+        &text[..text.len().min(200)]
+    )))
 }
 
 // ─── Storage ─────────────────────────────────────────────────────
@@ -822,8 +916,33 @@ mod tests {
     fn authorize_url_includes_required_params() {
         let url = build_authorize_url("CID", "https://app.skilluv.com/cb", "rand-state");
         assert!(url.contains("client_id=CID"));
-        assert!(url.contains("scope=read:user%20public_repo"));
         assert!(url.contains("state=rand-state"));
         assert!(url.contains("redirect_uri=https%3A%2F%2Fapp.skilluv.com%2Fcb"));
+    }
+
+    /// Every scope, named, and the exact string.
+    ///
+    /// This asserted `scope=read:user%20public_repo` as a substring, which
+    /// kept passing when `admin:repo_hook` was appended - a test that agrees
+    /// with whatever it is shown is not holding anything. Each scope is named
+    /// separately, and the whole value is pinned, so adding or dropping one is
+    /// a decision somebody makes here rather than a diff nobody reads.
+    #[test]
+    fn the_authorize_url_asks_for_the_three_scopes_the_rite_needs() {
+        let url = build_authorize_url("CID", "https://app.skilluv.com/cb", "s");
+
+        // Reading who somebody is, so the callback can name the account.
+        assert!(url.contains("read:user"), "{url}");
+        // Forking a public starter.
+        assert!(url.contains("public_repo"), "{url}");
+        // Putting a webhook on that fork. Without it the rite's pull request -
+        // which lives entirely inside the person's own account - reaches
+        // nothing, and the platform never learns it happened.
+        assert!(url.contains("admin:repo_hook"), "{url}");
+
+        assert!(
+            url.contains("scope=read:user%20public_repo%20admin:repo_hook"),
+            "the scope string changed shape: {url}"
+        );
     }
 }

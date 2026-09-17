@@ -21,11 +21,19 @@
 --
 -- ## Why it is not an error state
 --
--- The row stays at `pr_opened`. Nothing is lost and nothing is closed: the
--- person pushes another commit, the webhook fires again, and the checks run
--- against the new head. A refusal here is "not yet", never "no".
+-- The row stays at `forked`, with the reason beside it, and nothing else is
+-- written: no Hello Wall entry, no deliverable, no review task. The person
+-- pushes another commit - the webhook listens for `synchronize` as well as
+-- `opened` - and the checks run from the start against the new head. A
+-- refusal here is "not yet", never "no".
 --
--- Cleared on acceptance, so a stale reason cannot sit under a completed rite.
+-- An earlier draft moved the row to `pr_opened` on refusal. That was final
+-- in practice: the webhook stops listening at `pr_opened`, so a refused
+-- person could never retry, while their refused introduction went up on the
+-- wall anyway. Staying at `forked` is what makes "not yet" true.
+--
+-- Cleared by the `pr_opened` transition that every non-refused path takes, so
+-- a reason from an earlier attempt cannot sit under a rite that has moved on.
 
 ALTER TABLE onboarding_bonjour_skilluv
     ADD COLUMN IF NOT EXISTS check_refused_reason TEXT,

@@ -76,6 +76,17 @@ pub struct OnboardingProgress {
     pub started_at: String,
     pub pr_opened_at: Option<String>,
     pub completed_at: Option<String>,
+    /// Why the automatic check refused the pull request, in a sentence meant
+    /// for the person who opened it. `None` when it passed, has not run, or
+    /// the rite is one a person decides.
+    ///
+    /// Present while `status` is still `forked`: a refusal leaves the rite
+    /// there so the next push is evaluated again. Show it, and the page tells
+    /// somebody what to fix instead of simply not moving.
+    pub check_refused_reason: Option<String>,
+    /// When the check last ran, RFC 3339. Lets a page tell "not checked yet"
+    /// from "checked, and here is why not".
+    pub check_ran_at: Option<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -173,6 +184,8 @@ fn row_to_progress(row: &OnboardingRow) -> OnboardingProgress {
         started_at: row.started_at.to_rfc3339(),
         pr_opened_at: row.pr_opened_at.map(|d| d.to_rfc3339()),
         completed_at: row.completed_at.map(|d| d.to_rfc3339()),
+        check_refused_reason: row.check_refused_reason.clone(),
+        check_ran_at: row.check_ran_at.map(|d| d.to_rfc3339()),
     }
 }
 
@@ -853,36 +866,69 @@ fn validate_starter_slug(slug: &str) -> Result<(), AppError> {
 // Webhook handler - called from bounties.rs::handle_pull_request_event
 // ═══════════════════════════════════════════════════════════════════
 
+/// The webhook reacts to a pull request being opened, or pushed to.
+///
+/// `synchronize` is the one that matters for a refusal. The code entrance is
+/// decided automatically, and a refused person fixes HELLO.md and pushes to
+/// the same pull request - which GitHub reports as `synchronize`, not
+/// `opened`. Listening to `opened` alone made every refusal final.
+fn reacts_to_action(action: &str) -> bool {
+    matches!(action, "opened" | "synchronize")
+}
+
+/// Whether a rite in this state should still be evaluated.
+///
+/// `forked` is open: nothing has been decided, or the check refused and left
+/// the row there on purpose so the next push runs from the start.
+///
+/// `pr_opened` is not: the check handed the rite to a person, who has not
+/// ruled yet, and re-running the check under them would race their verdict.
+/// `completed` is not: it is done.
+fn still_open_to_the_check(status: &str) -> bool {
+    !matches!(status, "pr_opened" | "completed")
+}
+
 /// Handle a `pull_request` event on a fork we're tracking for Bonjour Skilluv.
 ///
 /// Trigger conditions:
-///   - action = "opened"
-///   - The repo full_name matches an existing `onboarding_bonjour_skilluv.fork_full_name`
-///   - The PR modifies `HELLO.md`
+///   - action is `opened` or `synchronize` (see `reacts_to_action`)
+///   - the repo full_name matches an `onboarding_bonjour_skilluv.fork_full_name`
+///   - the rite is still open (see `still_open_to_the_check`)
+///   - the PR modifies `HELLO.md`
 ///
-/// Actions taken:
-///   1. Transition onboarding_bonjour_skilluv.status from `forked` to `pr_opened`,
-///      set pr_number and pr_url, timestamp pr_opened_at
-///   2. Fetch the HELLO.md content from the fork at the PR head sha
-///   3. Insert a hello_wall_entries row so the user's Hello Wall page renders
-///   4. Log the event for observability
+/// What happens then depends on `services::hello_check`:
 ///
-/// Badge unlock is NOT triggered here - that's the proof engine's job (P17-P19),
-/// which reads the transition and unlocks the "Bonjour Skilluv" badge based on
-/// a badge_rules entry (to be seeded separately).
+///   - **refused** - the reason is recorded on the row for `/status` to return,
+///     and nothing else is written. The row stays at `forked`, so the next push
+///     is evaluated from the start.
+///   - **accepted** - the row moves to `pr_opened` and straight on to
+///     `completed` through `reviews::complete_fork_rite`, the deliverable is
+///     born `verified`, and what the person wrote - not the template - goes on
+///     the Hello Wall.
+///   - **undecided** (the upstream template could not be read) - the rite goes
+///     to a person, as every rite used to.
 ///
-/// Idempotence: if the onboarding row already has status = 'pr_opened' or
-/// 'completed', this handler is a no-op. Multiple webhook deliveries for the
-/// same PR won't create duplicate hello_wall_entries (protected by UNIQUE
-/// user_id on hello_wall_entries).
+/// Idempotence: a completed or person-pending rite is left alone, and a
+/// redelivery of the same content writes nothing new (`hello_wall_entries` is
+/// unique on `user_id`, `deliverables` on `(user_id, artifact_hash)`).
 pub async fn handle_bonjour_skilluv_pr_event(
     state: &crate::AppState,
     payload: &Value,
 ) -> Result<(), AppError> {
     let action = payload.get("action").and_then(|v| v.as_str()).unwrap_or("");
-    // Only react to the initial "opened" action. Later actions on the same PR
-    // (synchronize, closed, reopened) don't change the onboarding status here.
-    if action != "opened" {
+    // `opened`, and `synchronize` - a push to a pull request already open.
+    //
+    // The code entrance is decided automatically and a refusal is meant to be
+    // "not yet": the person fixes HELLO.md, pushes, and the checks run again.
+    // Listening to `opened` alone made that impossible, because a push to the
+    // same pull request arrives as `synchronize`. Somebody told "your
+    // introduction is too short" could only have retried by closing the pull
+    // request and opening another, which nothing tells them to do.
+    //
+    // A rite that already passed, or is waiting on a person, is still left
+    // alone by the status guard below - `synchronize` re-runs only what a
+    // refusal left open.
+    if !reacts_to_action(action) {
         return Ok(());
     }
 
@@ -925,8 +971,8 @@ pub async fn handle_bonjour_skilluv_pr_event(
         return Ok(());
     };
 
-    // Idempotence: already at pr_opened or completed = skip.
-    if matches!(current_status.as_str(), "pr_opened" | "completed") {
+    // Idempotence: a rite that passed, or is waiting on a person, is left alone.
+    if !still_open_to_the_check(&current_status) {
         return Ok(());
     }
 
@@ -1062,6 +1108,22 @@ pub async fn handle_bonjour_skilluv_pr_event(
         .execute(&state.db)
         .await?;
         tracing::info!(%user_id, reason, "entrance refused by the automatic check");
+
+        // And stop here.
+        //
+        // Falling through used to run the whole transaction below: the status
+        // moved to `pr_opened`, the refused introduction went up on the Hello
+        // Wall, and the pull request was queued for a person to review. Then
+        // the guard above skipped every later delivery, because `pr_opened`
+        // is where it stops listening - so a refusal was final, a refused
+        // entrance was public, and a reviewer was asked to read something the
+        // machine had already declined.
+        //
+        // Returning leaves the row at `forked` with the reason beside it. That
+        // is what makes "not yet" true: the next push or the next pull request
+        // is evaluated from the start, and nothing a refusal produced has to be
+        // taken back.
+        return Ok(());
     }
 
     // What the wall shows is what they wrote, not our instructions. The whole
@@ -1093,7 +1155,12 @@ pub async fn handle_bonjour_skilluv_pr_event(
         SET status = 'pr_opened',
             pr_number = $1,
             pr_url = $2,
-            pr_opened_at = NOW()
+            pr_opened_at = NOW(),
+            -- Refusals return before this, so reaching it means the check
+            -- passed or handed the rite to a person. Either way a reason left
+            -- by an earlier attempt no longer describes anything.
+            check_refused_reason = NULL,
+            check_ran_at = NOW()
         WHERE user_id = $3
         "#,
     )
@@ -1235,15 +1302,6 @@ pub async fn handle_bonjour_skilluv_pr_event(
         // same function a person's verdict calls finishes it, so the two
         // paths cannot drift on what finishing means.
         if auto_passed {
-            sqlx::query(
-                "UPDATE onboarding_bonjour_skilluv
-                    SET check_refused_reason = NULL, check_ran_at = NOW()
-                  WHERE user_id = $1",
-            )
-            .bind(user_id)
-            .execute(&mut *tx)
-            .await?;
-
             crate::services::reviews::complete_fork_rite(&mut tx, id).await?;
             sqlx::query(
                 "UPDATE users SET profile_active = TRUE, updated_at = NOW()
@@ -1281,6 +1339,43 @@ pub async fn handle_bonjour_skilluv_pr_event(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A push to an open pull request is a retry, and it has to be heard.
+    ///
+    /// The first version of the automatic entrance listened to `opened`
+    /// alone. A refused person pushes a fix to the same pull request, which
+    /// arrives as `synchronize`, and was ignored - so "not yet" meant "no".
+    #[test]
+    fn a_push_to_an_open_pull_request_is_heard() {
+        assert!(reacts_to_action("opened"));
+        assert!(reacts_to_action("synchronize"));
+        // The rest change nothing the entrance cares about.
+        for other in ["closed", "reopened", "edited", "labeled", "assigned", ""] {
+            assert!(!reacts_to_action(other), "{other}");
+        }
+    }
+
+    /// The story a refusal has to be able to tell, in the states it passes
+    /// through.
+    ///
+    /// A refused rite stays at `forked`, and `forked` is still open, so the
+    /// next push is evaluated. A passed one is `completed`, and a rite handed
+    /// to a person is `pr_opened` - neither is reopened by a later delivery.
+    /// The earlier draft moved refusals to `pr_opened`, where the guard stops
+    /// listening, which is how a refusal became permanent.
+    #[test]
+    fn a_refused_rite_stays_open_and_a_decided_one_does_not() {
+        assert!(
+            still_open_to_the_check("forked"),
+            "a refusal leaves it here"
+        );
+        assert!(still_open_to_the_check("hello_committed"));
+        assert!(
+            !still_open_to_the_check("pr_opened"),
+            "a person is deciding"
+        );
+        assert!(!still_open_to_the_check("completed"), "already passed");
+    }
 
     #[test]
     fn orientation_maps_to_expected_starter() {

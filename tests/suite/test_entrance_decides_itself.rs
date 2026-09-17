@@ -199,3 +199,56 @@ async fn the_rung_survives_for_a_rite_a_person_decided() {
     .unwrap();
     assert_eq!(held, 1, "a rite somebody read still earns its rung");
 }
+
+/// A refusal is visible where the person looks, not only in the table.
+///
+/// The reason was first added to the row the handler reads and not to the
+/// response `/status` returns, so it was recorded and never shown - the exact
+/// "work done, page does not move, no way to tell why" this column exists to
+/// end. This reads it through the API, because the API is where it was lost.
+#[tokio::test]
+async fn status_shows_why_the_entrance_was_refused() {
+    let app = crate::common::TestApp::spawn().await;
+    app.register_user("auto_refused").await;
+    app.login("auto_refused").await;
+    let uid = user_id(&app, "auto_refused").await;
+
+    // What a refusal leaves behind: still `forked`, no pull request recorded,
+    // the reason beside it.
+    sqlx::query(
+        "INSERT INTO onboarding_bonjour_skilluv
+            (user_id, skill_domain, rite_form, starter_slug, fork_full_name,
+             fork_html_url, github_fork_id, status,
+             check_refused_reason, check_ran_at)
+         VALUES ($1, 'code', 'fork', 'starter-fullstack-node',
+                 'auto_refused/starter-fullstack-node',
+                 'https://github.com/auto_refused/starter-fullstack-node',
+                 910004, 'forked',
+                 'the introduction is 2 characters; 30 is the least this asks for.',
+                 NOW())",
+    )
+    .bind(uid)
+    .execute(&app.db)
+    .await
+    .unwrap();
+
+    let body: serde_json::Value = app
+        .get("/api/onboarding/bonjour-skilluv/status")
+        .await
+        .json()
+        .await
+        .unwrap();
+
+    let onboarding = &body["data"]["onboarding"];
+    assert_eq!(onboarding["status"], "forked", "a refusal leaves it open");
+    assert!(
+        onboarding["check_refused_reason"]
+            .as_str()
+            .is_some_and(|r| r.contains("30 is the least")),
+        "the person has to be able to read why: {onboarding}"
+    );
+    assert!(
+        onboarding["check_ran_at"].is_string(),
+        "and when, so a page can tell refused from not-yet-checked: {onboarding}"
+    );
+}

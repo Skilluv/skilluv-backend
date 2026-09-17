@@ -599,6 +599,51 @@ async fn start_fork_rite(
     let source_full_name = format!("{STARTER_ORG}/{starter_slug}");
     let fork = gh::fork_repo(&access_token, &source_full_name).await?;
 
+    // The fork has to be able to tell us the rite is done.
+    //
+    // The pull request this ends in goes from the fork's `main` to the fork's
+    // `showcase` - both inside the person's own account - so nothing about it
+    // reaches `skilluv-community`, and the organisation's webhook has no event
+    // to deliver. Without a hook on the fork itself the platform never learns
+    // anything happened, and `/status` polls a row that nobody will update.
+    //
+    // Best effort, and loudly. A fork with no webhook is a rite that finishes
+    // late rather than one that cannot start: the row below still records the
+    // fork, the person still does the work, and a later reconnection or a
+    // sweep can pick it up. Failing the whole start would take away the part
+    // that works because the part that reports it did not.
+    //
+    // `BASE_URL` rather than the frontend origin: this address is for GitHub,
+    // not for a person.
+    match (
+        std::env::var("GITHUB_WEBHOOK_SECRET")
+            .ok()
+            .filter(|s| !s.is_empty()),
+        state.config.base_url.trim_end_matches('/'),
+    ) {
+        (Some(secret), base) if !base.is_empty() => {
+            let callback = format!("{base}/api/webhooks/github");
+            if let Err(err) =
+                gh::create_fork_webhook(&access_token, &fork.full_name, &callback, &secret).await
+            {
+                tracing::error!(
+                    %user_id,
+                    fork = %fork.full_name,
+                    error = %err,
+                    "fork webhook not created - this rite will not complete on its own"
+                );
+            }
+        }
+        _ => {
+            tracing::warn!(
+                %user_id,
+                fork = %fork.full_name,
+                "GITHUB_WEBHOOK_SECRET is unset, so the fork carries no webhook and \
+                 the rite cannot report itself"
+            );
+        }
+    }
+
     let row: OnboardingRow = sqlx::query_as(
         r#"
         INSERT INTO onboarding_bonjour_skilluv

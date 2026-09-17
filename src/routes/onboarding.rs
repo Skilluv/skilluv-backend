@@ -986,9 +986,23 @@ pub async fn handle_bonjour_skilluv_pr_event(
         )
             })?;
 
-    // List files changed in the PR. Skip if HELLO.md not in the diff.
-    let files =
-        crate::services::github::list_pr_files(&access_token, fork_full_name, pr_number).await?;
+    // What the person changed, measured against the upstream starter rather
+    // than against `showcase`: see `files_changed_since_upstream` for why the
+    // PR's own file list over-counts.
+    let head = pr.get("head");
+    let head_sha = head
+        .and_then(|h| h.get("sha"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("main");
+    let fork_owner = fork_full_name.split('/').next().unwrap_or_default();
+    let files = crate::services::github::files_changed_since_upstream(
+        &access_token,
+        &format!("{STARTER_ORG}/{starter_slug}"),
+        "main",
+        fork_owner,
+        head_sha,
+    )
+    .await?;
     let hello_touched = files
         .iter()
         .any(|f| f.filename == "HELLO.md" && matches!(f.status.as_str(), "added" | "modified"));
@@ -1007,16 +1021,13 @@ pub async fn handle_bonjour_skilluv_pr_event(
 
     // Fetch the current HELLO.md content on the PR's head branch. This lets us
     // snapshot what the user actually wrote for archival on the Hello Wall.
-    let head_ref = pr
-        .get("head")
-        .and_then(|h| h.get("ref"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("main");
+    // Read at the exact commit that was compared, so a push landing between
+    // the two calls cannot make them describe different trees.
     let hello_content = crate::services::github::fetch_file_content(
         &access_token,
         fork_full_name,
         "HELLO.md",
-        head_ref,
+        head_sha,
     )
     .await
     .unwrap_or_else(|e| {

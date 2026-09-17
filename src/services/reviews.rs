@@ -97,6 +97,40 @@ pub struct SubmitOutcome {
     pub reviewer_fragments_awarded: i32,
 }
 
+/// Move a fork rite past `pr_opened`, and say whose it was.
+///
+/// The fork rite has no `challenge_submissions` row - its artifact is a pull
+/// request, and the webhook attaches the deliverable directly. So it is keyed
+/// on the deliverable rather than on a submission, and this is the only thing
+/// that moves it on.
+///
+/// Nothing did, once: the code rite stopped at `pr_opened` for good, and
+/// `badge_rules.bonjour_skilluv` fires on `completed_at IS NOT NULL`, so the
+/// platform's founding badge was unreachable on the one path that shipped.
+///
+/// There are two callers now - a person's verdict, and the automatic one in
+/// `routes::onboarding` for the code entrance. One function rather than two
+/// copies, because the second copy is where the badge stops firing again and
+/// nobody notices for a month.
+///
+/// Idempotent through the `status = 'pr_opened'` predicate: a redelivered
+/// webhook or a second verdict updates nothing and returns `None`.
+pub async fn complete_fork_rite(
+    tx: &mut Transaction<'_, Postgres>,
+    deliverable_id: Uuid,
+) -> Result<Option<Uuid>, AppError> {
+    let completed: Option<Uuid> = sqlx::query_scalar(
+        "UPDATE onboarding_bonjour_skilluv
+         SET status = 'completed', completed_at = NOW()
+         WHERE deliverable_id = $1 AND status = 'pr_opened'
+         RETURNING user_id",
+    )
+    .bind(deliverable_id)
+    .fetch_optional(&mut **tx)
+    .await?;
+    Ok(completed)
+}
+
 impl ReviewsService {
     // ═══════════════════════════════════════════════════════════════════
     // Point d'entrée : submit_verdict
@@ -219,7 +253,16 @@ impl ReviewsService {
         .bind(&domain)
         .fetch_one(&mut *tx)
         .await?;
-        if is_domain_rite {
+        // Code is decided without a reviewer, so it has no reviewer rung.
+        //
+        // `services::hello_check` reads the code entrance mechanically: the
+        // claim it makes is "I can fork, edit and open a pull request", which
+        // is true or false rather than good or bad. Nobody passes it by being
+        // read, so nobody earns the right to read the next one by passing it.
+        //
+        // Checked here as well as at the grant, because a capability already
+        // held has to stop working rather than merely stop being issued.
+        if is_domain_rite && domain != "code" {
             allowed.push(format!("rite_reviewer:{domain}"));
         }
 
@@ -449,24 +492,9 @@ impl ReviewsService {
             .await?;
         }
 
-        // The fork rite has no `challenge_submissions` row - its artifact is a
-        // pull request, and the webhook attaches the deliverable directly. So
-        // it is keyed on the deliverable rather than on a submission, and this
-        // is the only thing that ever moves it past `pr_opened`.
-        //
-        // Nothing did, before: the code rite stopped at `pr_opened` for good,
-        // and `badge_rules.bonjour_skilluv` fires on `completed_at IS NOT
-        // NULL`, so the platform's founding badge was unreachable on the one
-        // path that had shipped.
-        let fork_rite_completed: Option<Uuid> = sqlx::query_scalar(
-            "UPDATE onboarding_bonjour_skilluv
-             SET status = 'completed', completed_at = NOW()
-             WHERE deliverable_id = $1 AND status = 'pr_opened'
-             RETURNING user_id",
-        )
-        .bind(deliverable_id)
-        .fetch_optional(&mut **tx)
-        .await?;
+        // Finished by a shared function, because there are two ways to finish
+        // a fork rite now and they must not drift.
+        let fork_rite_completed = complete_fork_rite(tx, deliverable_id).await?;
 
         if settled.is_some() || fork_rite_completed.is_some() {
             sqlx::query(

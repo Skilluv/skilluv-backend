@@ -109,6 +109,7 @@ mod test_email_preview;
 mod test_engagements;
 mod test_enterprise_contests;
 mod test_enterprise_products;
+mod test_entrance_decides_itself;
 mod test_fe_m1_public_orientations;
 mod test_fe_m9_moderation;
 mod test_featured_talents;

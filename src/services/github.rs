@@ -305,52 +305,55 @@ pub struct PrFile {
     pub deletions: u32,
 }
 
-/// List the files changed in a Pull Request.
+/// List the files a fork changed on top of the upstream branch it came from.
 ///
-/// Used by the Bonjour Skilluv webhook to check whether a PR touches
-/// `HELLO.md` on a tracked starter fork.
+/// Used by the Bonjour Skilluv webhook to decide what the person actually
+/// touched. The pull request's own file list is the wrong question: the PR
+/// goes `main` -> `showcase` on the fork, so its diff also carries every
+/// upstream commit `showcase` had not caught up with when the fork was made.
+/// On 2026-09-17 every starter's `showcase` was 2 to 8 commits behind `main`,
+/// and a PR adding one line to HELLO.md listed twelve files.
 ///
-/// The endpoint returns at most 30 files per page by default; we cap at
-/// 3 pages (90 files) to bound work - a Bonjour Skilluv PR should only
-/// touch 1-2 files, so a paginated fetch of the whole diff is overkill.
+/// A three-dot compare against the upstream starts from the merge base, so
+/// it lists only the fork's own commits, whatever state either branch is in
+/// and however far upstream `main` has moved since. GitHub caps the file list
+/// at 300, far beyond anything an entrance PR should touch.
 ///
-/// See https://docs.github.com/en/rest/pulls/pulls#list-pull-requests-files
-pub async fn list_pr_files(
+/// See https://docs.github.com/en/rest/commits/commits#compare-two-commits
+pub async fn files_changed_since_upstream(
     access_token: &str,
-    fork_full_name: &str,
-    pr_number: i32,
+    upstream_full_name: &str,
+    upstream_ref: &str,
+    fork_owner: &str,
+    head_sha: &str,
 ) -> Result<Vec<PrFile>, AppError> {
-    let client = reqwest::Client::new();
-    let mut all = Vec::new();
-    for page in 1..=3 {
-        let resp = client
-            .get(format!(
-                "{GITHUB_API}/repos/{fork_full_name}/pulls/{pr_number}/files?per_page=100&page={page}"
-            ))
-            .bearer_auth(access_token)
-            .header("User-Agent", USER_AGENT)
-            .header("Accept", "application/vnd.github+json")
-            .header("X-GitHub-Api-Version", "2022-11-28")
-            .send()
-            .await
-            .map_err(|e| AppError::Internal(format!("github pr files fetch failed: {e}")))?;
-        if !resp.status().is_success() {
-            return Err(AppError::Internal(format!(
-                "github pr files status {}",
-                resp.status()
-            )));
-        }
-        let batch: Vec<PrFile> = resp
-            .json()
-            .await
-            .map_err(|e| AppError::Internal(format!("github pr files decode failed: {e}")))?;
-        let was_full = batch.len() == 100;
-        all.extend(batch);
-        if !was_full {
-            break;
-        }
+    #[derive(Debug, Deserialize)]
+    struct Comparison {
+        #[serde(default)]
+        files: Vec<PrFile>,
     }
-    Ok(all)
+    let resp = reqwest::Client::new()
+        .get(format!(
+            "{GITHUB_API}/repos/{upstream_full_name}/compare/{upstream_ref}...{fork_owner}:{head_sha}"
+        ))
+        .bearer_auth(access_token)
+        .header("User-Agent", USER_AGENT)
+        .header("Accept", "application/vnd.github+json")
+        .header("X-GitHub-Api-Version", "2022-11-28")
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("github compare failed: {e}")))?;
+    if !resp.status().is_success() {
+        return Err(AppError::Internal(format!(
+            "github compare status {}",
+            resp.status()
+        )));
+    }
+    let comparison: Comparison = resp
+        .json()
+        .await
+        .map_err(|e| AppError::Internal(format!("github compare decode failed: {e}")))?;
+    Ok(comparison.files)
 }
 
 /// Fetch the raw content of a file at a specific commit ref from GitHub.

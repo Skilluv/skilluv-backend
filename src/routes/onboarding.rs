@@ -1105,7 +1105,7 @@ pub async fn handle_bonjour_skilluv_pr_event(
         ))
     };
 
-    // A refusal is "not yet", never "no". The row stays at `pr_opened`, the
+    // A refusal is "not yet", never "no". The row stays at `forked`, the
     // reason is where `/status` can return it, and the next push runs the
     // checks again against the new head.
     if let Some(crate::services::hello_check::HelloVerdict::Refused { reason }) = &verdict {

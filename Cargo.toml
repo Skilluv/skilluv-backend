@@ -163,7 +163,7 @@ serenity = { version = "0.12", default-features = false, features = ["client", "
 # openapi.json feeds schemathesis in CI for property-based contract fuzzing.
 utoipa = { version = "5", features = ["axum_extras", "chrono", "uuid", "decimal"] }
 utoipa-swagger-ui = { version = "9", features = ["axum"] }
-utoipa-axum = "0.2"
+utoipa-axum = "0.3"
 resvg = { version = "0.48.1", default-features = false, features = ["text", "system-fonts", "memmap-fonts"] }
 serde_norway = "0.9.42"
 chrono-tz = { version = "0.10.4", default-features = false }

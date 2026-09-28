@@ -161,7 +161,7 @@ serenity = { version = "0.12", default-features = false, features = ["client", "
 # utoipa builds a rustc-verified OpenAPI 3.1 schema from #[utoipa::path]
 # annotations. utoipa-swagger-ui serves the interactive docs UI. The generated
 # openapi.json feeds schemathesis in CI for property-based contract fuzzing.
-utoipa = { version = "5", features = ["axum_extras", "chrono", "uuid", "decimal"] }
+utoipa = { version = "6", features = ["axum_extras", "chrono", "uuid", "decimal"] }
 utoipa-swagger-ui = { version = "9", features = ["axum"] }
 utoipa-axum = "0.2"
 resvg = { version = "0.48.1", default-features = false, features = ["text", "system-fonts", "memmap-fonts"] }

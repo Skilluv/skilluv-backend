@@ -48,12 +48,13 @@ pub struct Rite {
     /// The loop this trade *continues* into once the rite is passed - the
     /// design critique, the playtest verdicts, the disclosure programme.
     ///
-    /// Not where the rite itself is read. Every rite, all twelve, is read in
-    /// the generic human review queue (`review_tasks` + `reviews`), and this
-    /// field used to be called `review_loop`, which said otherwise. It named a
-    /// routing that does not exist and would have had a front announcing
-    /// "three design reviewers are looking at this" when one task was sitting
-    /// in one queue.
+    /// Not where the rite itself is read. The eleven submission rites are read
+    /// in the generic human review queue (`review_tasks` + `reviews`); the code
+    /// rite is decided by `services::hello_check` when the pull request opens,
+    /// and reaches nobody's queue at all. This field used to be called
+    /// `review_loop`, which said otherwise. It named a routing that does not
+    /// exist and would have had a front announcing "three design reviewers are
+    /// looking at this" when one task was sitting in one queue.
     ///
     /// It stays because it is worth telling somebody where their trade goes
     /// next. It is documentation, and now it is named like documentation.
